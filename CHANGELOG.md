@@ -5,6 +5,17 @@ What changed in WittyMediaClient, newest first. What changed before it had a rep
 
 ## Unreleased
 
+- **Android: nothing the server does is a dead end now.** Music, audiobooks, podcasts, radio, books, comics, photos, disc menus, games, the TV guide, collections
+  and settings open in the server's own page inside the app, signed in, instead of "open it in a web browser". On a TV it's the big screen version, and Back
+  closes what's open on the page first. A page can go full screen, choose a file to upload, and save a file to Downloads. A device whose web view is too old says so.
+- **Android: a better look.** A row of songs shows each album once. Long titles get two lines. Item and show pages have a picture behind them, and episodes one of their own,
+  with how far through they are. On a TV the server list sits beside its heading rather than scrolling it away. On a phone, what scrolls under the clock fades out, and on
+  its side, rows run to the edge rather than stop short of the camera. Profile says who's signed in.
+- **Apple: the same, not yet compiled.** On iPhone and iPad everything else opens in the server's page. Apple TV has no web view, so it gets screens for music, photos and
+  live channels, and says plainly what it can't show. The apps are now called WittyMediaClient. `apple/scripts/check-on-mac.sh` is the first check on a Mac.
+- **Desktop:** what has its own Back on a TV is read from the server's page, with the old list for older servers, so the two can't drift apart.
+- `docs/PLATFORMS.md` now has what every server feature does on every client, and how far each was seen.
+
 - The desktop app is now called WittyMediaClient everywhere: `WittyMediaClient.exe` on Windows, `WittyMediaClient.app` on macOS
   and the `wittymediaclient` command and package on Linux. Its data folder is named the same.
 - Windows gets a normal setup wizard: for one person or for everyone, in the folder you choose, with shortcuts and an entry in

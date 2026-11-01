@@ -397,7 +397,7 @@ fun ShowScreen(nav: Nav, s: Map<String, String>, id: Long) {
                 Box(Modifier.fillMaxWidth().height(BACKDROP_HEIGHT).background(Brush.verticalGradient(0.2f to Color.Transparent, 1f to MaterialTheme.colorScheme.background)))
                 LazyColumn(
                     Modifier.safeDrawingPadding(),
-                    contentPadding = PaddingValues(horizontal = metrics.gutter, vertical = Space.S4),
+                    contentPadding = PaddingValues(horizontal = metrics.gutter, vertical = if (metrics.tv) metrics.edge else Space.S4),
                     verticalArrangement = Arrangement.spacedBy(Space.S2),
                 ) {
                     item {
