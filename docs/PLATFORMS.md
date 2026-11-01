@@ -107,7 +107,7 @@ One APK carries all four. Checked by opening a real one built from this branch, 
 | `native-code` as Android reads it | `arm64-v8a`, `armeabi-v7a`, `x86`, `x86_64` |
 | Lowest Android | 6.0, API 23 |
 | 16 KB memory pages | Aligned, by `zipalign -c -P 16` |
-| Size | 2.9 MB |
+| Size | About 3 MB |
 
 **Why Android 6 is the lowest claim.** Media3, Activity, Core and Lifecycle, 23 libraries in all, need API 23 and won't build below it, so it's a
 hard floor. Android's own lint reads every call against that version, and CI now runs it. It found the player's network watcher calling something from
