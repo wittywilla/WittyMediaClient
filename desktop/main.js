@@ -66,7 +66,7 @@ async function postReport(to, body) {
 
 // Only what the main process sees: the server's page reports its own errors.
 const log = createClientLog({
-  dir: path.join(app.getPath('userData'), 'logs'), app: 'WittyMedia desktop', version: app.getVersion(), device: DEVICE,
+  dir: path.join(app.getPath('userData'), 'logs'), app: 'WittyMediaClient desktop', version: app.getVersion(), device: DEVICE,
   target: reportTarget, post: postReport,
 })
 
@@ -313,7 +313,7 @@ async function redeem(url, code) {
   let res, answer
   try {
     res = await postJson(found.url + API + '/pair/redeem', {
-      code, device: `${os.hostname()} (WittyMedia)`.slice(0, 60), platform: OS_NAME,
+      code, device: `${os.hostname()} (WittyMediaClient)`.slice(0, 60), platform: OS_NAME,
     })
     answer = await guards.readJson(res)
   } catch (err) {
@@ -423,7 +423,7 @@ function createWindow() {
   const size = saved.window || {}
   win = new BaseWindow({
     width: size.width || 1280, height: size.height || 800, minWidth: 480, minHeight: 360, fullscreen: TV,
-    frame: false, backgroundColor: '#0f1115', title: 'WittyMedia', show: true,
+    frame: false, backgroundColor: '#0f1115', title: 'WittyMediaClient', show: true,
   })
   win.setMenu(null)
 
@@ -563,8 +563,10 @@ else {
   app.whenReady().then(() => {
     saved = state.load(stateFile())
     servePages()
-    // The spell checker can fetch dictionaries from a third party. Nothing here uses it.
+    // The spell checker can fetch dictionaries from a third party. Nothing here uses it. Turning
+    // it off isn't enough to stop that: it still fetches for the languages it has.
     session.defaultSession.setSpellCheckerEnabled(false)
+    if (process.platform !== 'darwin') session.defaultSession.setSpellCheckerLanguages([])
     // Pages may go fullscreen and copy text, and the server's own may lock the mouse for a
     // game. Camera, location and the rest stay off. WebRTC to receive a stream and the
     // Gamepad API don't ask for anything.

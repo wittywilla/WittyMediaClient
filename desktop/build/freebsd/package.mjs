@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// Builds WittyMedia for FreeBSD: `npm run package:freebsd`, on FreeBSD.
+// Builds WittyMediaClient for FreeBSD: `npm run package:freebsd`, on FreeBSD.
 //
 // Electron publishes nothing for FreeBSD, and electron-builder has no way to make a package
 // there, but FreeBSD's ports tree builds Electron itself. So this package holds only the app, and
@@ -8,7 +8,7 @@
 //
 // `--stage-only` stops before `pkg create`, for a look at what would go in. It works anywhere.
 import { spawnSync } from 'node:child_process'
-import { chmodSync, cpSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { chmodSync, cpSync, mkdirSync, readdirSync, readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs'
 import { createRequire } from 'node:module'
 import { dirname, join, relative, sep } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -16,10 +16,13 @@ import { fileURLToPath } from 'node:url'
 const require = createRequire(import.meta.url)
 const here = dirname(fileURLToPath(import.meta.url))
 const desktop = join(here, '..', '..')
-const out = join(desktop, 'out', 'freebsd')
-const stage = join(out, 'stage')
+const out = join(desktop, 'out')
+const work = join(out, 'freebsd')
+const stage = join(work, 'stage')
 const pkg = JSON.parse(readFileSync(join(desktop, 'package.json'), 'utf8'))
 const stageOnly = process.argv.includes('--stage-only')
+const NAME = pkg.build.linux.executableName
+const USER_DATA = '~/.config/WittyMediaClient ~/.config/WittyMedia'
 
 function run(command, args, options = {}) {
   const result = spawnSync(command, args, { stdio: 'inherit', ...options })
@@ -43,15 +46,17 @@ function freebsdAbi() {
   return spawnSync('pkg', ['config', 'ABI'], { encoding: 'utf8' }).stdout.trim()
 }
 
+const fileArch = (abi) => (abi.endsWith(':aarch64') ? 'arm64' : abi.split(':').pop())
+
 function writeDesktopEntry(to) {
-  const { category, description, desktop } = pkg.build.linux
-  const fields = { ...desktop.entry, Comment: description, Categories: category }
-  const lines = ['[Desktop Entry]', 'Type=Application', 'Exec=wittymedia %U', 'Icon=wittymedia', ...Object.entries(fields).map(([k, v]) => `${k}=${v}`)]
+  const { category, description, desktop: { entry } } = pkg.build.linux
+  const fields = { ...entry, Comment: description, Categories: category }
+  const lines = ['[Desktop Entry]', 'Type=Application', `Exec=${NAME} %U`, `Icon=${NAME}`, ...Object.entries(fields).map(([k, v]) => `${k}=${v}`)]
   writeFileSync(to, `${lines.join('\n')}\n`)
 }
 
 function buildAppArchive(to) {
-  const app = join(out, 'app')
+  const app = join(work, 'app')
   rmSync(app, { recursive: true, force: true })
   mkdirSync(app, { recursive: true })
   for (const item of pkg.build.files) {
@@ -73,42 +78,54 @@ function listFiles(root) {
     .map((entry) => relative(root, join(entry.parentPath, entry.name)).split(sep).join('/'))
 }
 
-rmSync(out, { recursive: true, force: true })
+rmSync(work, { recursive: true, force: true })
 const prefix = join(stage, 'usr', 'local')
-const shareDir = join(prefix, 'share', 'wittymedia')
+const shareDir = join(prefix, 'share', NAME)
 for (const dir of [shareDir, join(prefix, 'bin'), join(prefix, 'share', 'applications'), join(prefix, 'share', 'icons', 'hicolor', '512x512', 'apps')]) mkdirSync(dir, { recursive: true })
 
 const port = electronPort()
 await buildAppArchive(join(shareDir, 'app.asar'))
-const launcher = readFileSync(join(here, 'wittymedia.sh'), 'utf8').replaceAll('%%ELECTRON%%', port)
-writeFileSync(join(prefix, 'bin', 'wittymedia'), launcher)
-chmodSync(join(prefix, 'bin', 'wittymedia'), 0o755)
-writeDesktopEntry(join(prefix, 'share', 'applications', 'wittymedia.desktop'))
-cpSync(join(desktop, 'build', 'icon.png'), join(prefix, 'share', 'icons', 'hicolor', '512x512', 'apps', 'wittymedia.png'))
+const launcher = readFileSync(join(here, `${NAME}.sh`), 'utf8').replaceAll('%%ELECTRON%%', port)
+writeFileSync(join(prefix, 'bin', NAME), launcher)
+chmodSync(join(prefix, 'bin', NAME), 0o755)
+cpSync(join(here, 'uninstall.sh'), join(shareDir, 'uninstall.sh'))
+chmodSync(join(shareDir, 'uninstall.sh'), 0o755)
+writeDesktopEntry(join(prefix, 'share', 'applications', `${NAME}.desktop`))
+cpSync(join(desktop, 'build', 'icon.png'), join(prefix, 'share', 'icons', 'hicolor', '512x512', 'apps', `${NAME}.png`))
 cpSync(join(desktop, '..', 'LICENSE'), join(shareDir, 'LICENSE'))
 cpSync(join(desktop, '..', 'NOTICE'), join(shareDir, 'NOTICE'))
 
+const abi = freebsdAbi()
+const version = pkg.version.replaceAll('-', '.')
 const manifest = {
-  name: 'wittymedia',
-  origin: 'multimedia/wittymedia',
-  version: pkg.version.replaceAll('-', '.'),
+  name: NAME,
+  origin: `multimedia/${NAME}`,
+  version,
   comment: pkg.build.linux.synopsis,
   desc: 'WittyMediaClient: a window around the web interface of a WittyMediaServer that you run yourself.',
   maintainer: 'wittywilla@users.noreply.github.com',
-  www: 'https://github.com/wittywilla/WittyMediaClient',
-  abi: freebsdAbi(),
+  www: pkg.homepage,
+  abi,
   prefix: '/usr/local',
+  licenselogic: 'single',
   licenses: ['APACHE20'],
   categories: ['multimedia'],
   deps: { [port]: { origin: `devel/${port}`, version: '*' } },
+  messages: [
+    { message: `WittyMediaClient is installed. Start it from your desktop's menu, or with: ${NAME}\nTo remove it, and choose what happens to your settings: ${NAME} --uninstall\n`, type: 'install' },
+    { message: `WittyMediaClient has been removed.\nA package can't reach home folders, so your settings, saved sign-ins, logs and caches are still there.\nTo remove your own, run:\n  rm -rf ${USER_DATA}\nElectron stays, as other programs may use it. To remove it if nothing else needs it: pkg autoremove\n`, type: 'remove' },
+  ],
 }
-writeFileSync(join(out, 'manifest.json'), JSON.stringify(manifest, null, 2))
-const plist = listFiles(stage).map((file) => `/${file}`).join('\n')
-writeFileSync(join(out, 'plist'), `${plist}\n`)
+writeFileSync(join(work, 'manifest.json'), JSON.stringify(manifest, null, 2))
+const plist = [...listFiles(stage).map((file) => `/${file}`), `@dir /usr/local/share/${NAME}`].join('\n')
+writeFileSync(join(work, 'plist'), `${plist}\n`)
 
 if (stageOnly) {
   console.log(`Staged for ${port} in ${stage}`)
 } else {
-  run('pkg', ['create', '--verbose', '-M', join(out, 'manifest.json'), '-r', stage, '-p', join(out, 'plist'), '-o', out])
-  console.log(`Built in ${out}, depending on ${port}. Install with: sudo pkg install ./wittymedia-${manifest.version}.pkg`)
+  run('pkg', ['create', '-M', join(work, 'manifest.json'), '-r', stage, '-p', join(work, 'plist'), '-o', work])
+  const target = join(out, `${NAME}-${pkg.version}-freebsd-${fileArch(abi)}.pkg`)
+  renameSync(join(work, `${NAME}-${version}.pkg`), target)
+  rmSync(work, { recursive: true, force: true })
+  console.log(`Built ${target}, depending on ${port}.`)
 }

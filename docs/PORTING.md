@@ -92,19 +92,21 @@ app under the GPL, published on its own terms, is the only way to do better, and
 **Electron has no official FreeBSD builds, and electron-builder can't make a FreeBSD package without them.** FreeBSD's ports tree
 builds Electron itself instead. As of November 2026 the tree has `devel/electron41` to `electron44`, and `electron42` is the one seen with a package, for amd64 on FreeBSD 14 and 15. So:
 
-- **The package holds only the app:** `app.asar`, a launcher, the desktop entry and an icon, 91 KB in all. It depends on one Electron
+- **The package holds only the app:** `app.asar`, a launcher, an uninstaller, the desktop entry and an icon, under 100 KB in all. It depends on one Electron
   port. One codebase, and Electron's security updates come through `pkg upgrade`. A native shell around a system web view, the other
   way to get here, would have meant a second window and security layer to keep right.
 - **`npm run package:freebsd`** runs on FreeBSD, finds the newest Electron with a package, and builds with `pkg create`. CI does this free of
   charge in a virtual machine on GitHub's Linux runners, with `vmactions/freebsd-vm`.
-- **The launcher, `desktop/packaging/freebsd/wittymedia.sh`,** sorts out what the app can't:
+- **The launcher, `desktop/build/freebsd/wittymediaclient.sh`,** sorts out what the app can't:
   - **Sound.** This Electron plays through a sound server, and a video it can't open sound for never starts its clock. FreeBSD runs none by default, so the
-    launcher starts `sndiod` for this user if nothing is running. With no sound card, it asks Chromium for no sound, and the picture plays.
+    launcher starts `sndiod` for as long as the app is open if nothing is running. With no sound card, it asks Chromium for no sound, and the picture plays.
   - **Settings.** It clears `ELECTRON_RUN_AS_NODE` and `NODE_OPTIONS`, which the fuses switch off in the other builds.
 - `app.isPackaged` is false there, as a shared Electron starts the app from the outside. The app looks at whether it's in an archive instead, to keep developer tools off.
 - Moonlight is found on `PATH`, as on Linux.
 
-To put it in the ports tree, it would need a `multimedia/wittymedia` port. That's a small one, as `package.mjs` already does what it needs, and it's for the owner to submit.
+**Removing it** asks in plain words, removes only what's the app's, and says what's left, as on the other systems: [INSTALLING.md](INSTALLING.md#freebsd). `scripts/test/installers-freebsd.sh` proves that in a throwaway virtual machine.
+
+To put it in the ports tree, it would need a `multimedia/wittymediaclient` port. That's a small one, as `package.mjs` already does what it needs, and it's for the owner to submit.
 
 ## Plasma Bigscreen
 

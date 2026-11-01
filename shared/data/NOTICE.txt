@@ -9,7 +9,7 @@ the server its user chooses.
 
 Third-party components, by the app that ships them:
 
-Desktop (Windows, Linux, FreeBSD)
+Desktop (Windows, macOS, Linux, FreeBSD)
   Electron                MIT           https://www.electronjs.org
     bundles Chromium and FFmpeg. Their licences ship with every build, in
     LICENSE.electron.txt and LICENSES.chromium.html. On FreeBSD it isn't part

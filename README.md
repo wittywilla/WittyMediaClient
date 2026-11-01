@@ -7,15 +7,21 @@ never been run. Most of this is early, and the native apps have not been compile
 
 | Folder | What it is |
 |---|---|
-| [`desktop/`](desktop) | Windows, Linux, FreeBSD and KDE's Plasma Bigscreen: a frameless window around the server's web interface |
+| [`desktop/`](desktop) | Windows, macOS, Linux, FreeBSD and KDE's Plasma Bigscreen: a frameless window around the server's web interface |
 | [`android/`](android) | Android TV, Google TV, Fire TV, phones and tablets, one APK for ARM and x86, 32-bit and 64-bit (Kotlin, Compose, Media3) |
 | [`apple/`](apple) | Apple TV, iPhone, iPad and Mac (SwiftUI, AVPlayer) |
 | [`shared/`](shared) | What every app shares, as plain data: themes, wording, button meanings and test cases |
-| [`docs/`](docs) | [Design](docs/DESIGN.md), [status](docs/PLATFORMS.md), [porting to TVs](docs/PORTING.md), [what the owner needs to do](docs/OWNER-STEPS.md) |
+| [`docs/`](docs) | [Installing and removing](docs/INSTALLING.md), [design](docs/DESIGN.md), [status](docs/PLATFORMS.md), [porting to TVs](docs/PORTING.md), [what the owner needs to do](docs/OWNER-STEPS.md) |
 
 The native apps talk to the API described in [`docs/CLIENT-API.md`](https://github.com/wittywilla/WittyMediaServer/blob/master/docs/CLIENT-API.md) in the server's repository.
 
-## Trying the desktop app
+## Installing the desktop app
+
+[The releases page](https://github.com/wittywilla/WittyMediaClient/releases) has a setup for Windows, a disk image for
+macOS, and a `.deb`, `.rpm` and AppImage for Linux. Each one upgrades in place and removes cleanly, down to your settings if
+you ask: [docs/INSTALLING.md](docs/INSTALLING.md) has the steps and every folder involved.
+
+## Trying the desktop app from source
 
 You need [Node.js](https://nodejs.org) 22.12 or newer, and a WittyMediaServer to connect to.
 
@@ -28,13 +34,9 @@ npm start
 Tab moves around the page. **F6** moves between the page and the title bar, where the arrow keys move along the bar and
 Escape goes back to the page. **Change server** signs out of the server you're leaving.
 
-### Packages
+### Installing, and removing
 
-| System | Build it with | Install it with |
-|---|---|---|
-| Windows | `npm run package:win` | The installer in `desktop/out` |
-| Linux | `npm run package:linux`, which needs `rpm` and `bsdtar` | The `.AppImage`, `.deb`, `.rpm` or `.pacman` in `desktop/out` |
-| FreeBSD | `npm ci --ignore-scripts`, then `npm run package:freebsd`, on FreeBSD | `sudo pkg install ./desktop/out/freebsd/wittymedia-*.pkg` |
+[docs/INSTALLING.md](docs/INSTALLING.md) has every system: Windows, macOS, Linux, FreeBSD and Plasma Bigscreen, and what each one leaves behind when it's removed.
 
 The FreeBSD package holds only the app, under a megabyte, and uses the system's Electron from the ports tree, which
 `pkg` installs with it. See [docs/PORTING.md](docs/PORTING.md#freebsd).
@@ -45,7 +47,7 @@ In a [Plasma Bigscreen](https://plasma-bigscreen.org) session, the Linux app ope
 screen, no title bar, the server's big screen mode, and everything reachable with arrows, Enter and Back. Install a `.deb`,
 `.rpm` or `.pacman` so it appears in the launcher. An AppImage doesn't add itself to any launcher.
 
-Anywhere else, `wittymedia --tv` asks for the same, and `--no-tv` turns it off inside Bigscreen. Back at the top of
+Anywhere else, `wittymediaclient --tv` asks for the same, and `--no-tv` turns it off inside Bigscreen. Back at the top of
 the app opens a small menu with Change server and Quit.
 
 ## Logs

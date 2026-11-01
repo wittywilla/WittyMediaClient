@@ -5,14 +5,26 @@ What changed in WittyMediaClient, newest first. What changed before it had a rep
 
 ## Unreleased
 
+- The desktop app is now called WittyMediaClient everywhere: `WittyMediaClient.exe` on Windows, `WittyMediaClient.app` on macOS
+  and the `wittymediaclient` command and package on Linux. Its data folder is named the same.
+- Windows gets a normal setup wizard: for one person or for everyone, in the folder you choose, with shortcuts and an entry in
+  Add or Remove Programs. It upgrades in place and has `/S` for scripts.
+- The Windows uninstaller removes exactly what was installed, and asks whether to delete your settings, saved sign-ins, logs and
+  caches too. Silently it keeps them, unless given `/RemoveData`. Something of your own in the program's folder stays.
+- macOS gets a `.dmg` and a `.zip`, with an uninstaller that lists what it would remove from your Library and asks first.
+- Linux gets an `.rpm` beside the AppImage and `.deb`. The packages now declare every library the app needs, remove everything
+  of theirs from the system, and say what's left in your home folder and how to remove it.
+- The portable Windows `.exe` is gone: it couldn't be uninstalled, and the setup needs no administrator for one person.
+- The program can't be run as a bare Node interpreter or be given Node options, and nothing it installs is writable by everyone.
 - WittyMediaClient is now a project of its own, developed and released from this repository.
 
-### Desktop app 0.2.1
+### Desktop app 0.2.2
 
 **New systems**
-- **FreeBSD:** a package of its own, on the system's Electron from the ports tree. It has been run in a FreeBSD 15.1 virtual machine, with picture and sound seen.
+- **FreeBSD:** a package of its own, on the system's Electron from the ports tree. `wittymediaclient --uninstall` asks about the program and your settings separately, removes only what's the app's, and says what's left.
 - **KDE Plasma Bigscreen:** the Linux app appears in its launcher and opens as a TV app by itself. It has been run in the real shell, in a virtual machine.
 - `--tv` and `--no-tv` ask for that anywhere else, or turn it off.
+- Linux gets a `.pacman` package too, for Arch and its relatives.
 
 **On a TV**
 - The whole screen, no title bar, and the server's big screen mode.
@@ -24,7 +36,6 @@ What changed in WittyMediaClient, newest first. What changed before it had a rep
 **Everywhere**
 - Back can't walk out of a server's first page to the connect screen any more.
 - The app has an icon. It had Electron's until now.
-- Linux packages can be built at all: `.deb` and `.rpm` were failing for want of a homepage. `.rpm` and `.pacman` are new.
 - `npm run test:real` runs the real app against a real server with key presses alone, and plays a video.
 
 ### Android app

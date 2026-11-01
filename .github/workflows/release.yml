@@ -1,5 +1,5 @@
-# A version tag builds the desktop apps and the Android sideload build, and publishes them with a
-# checksum list. The apps aren't installed through a server, so this holds no module key. Signing
+# A version tag builds the desktop apps for each system and the Android sideload build, and publishes
+# them with a checksum list. The apps aren't installed through a server, so this holds no module key. Signing
 # them for each platform is a step for its owner: docs/OWNER-STEPS.md.
 name: release
 on:
@@ -16,6 +16,7 @@ jobs:
         include:
           - { os: ubuntu-latest, target: --linux }
           - { os: windows-latest, target: --win }
+          - { os: macos-latest, target: --mac }
     runs-on: ${{ matrix.os }}
     permissions:
       contents: read
@@ -33,6 +34,9 @@ jobs:
         run: |
           want="$(sed -n 's/.*"version": *"\([^"]*\)".*/\1/p' desktop/package.json | head -1)"
           [ "v$want" = "$GITHUB_REF_NAME" ] || { echo "desktop/package.json says $want, and the tag is $GITHUB_REF_NAME"; exit 1; }
+      - name: The tools that make the .rpm and .pacman
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y rpm libarchive-tools
       - name: Package
         working-directory: desktop
         env:
@@ -40,8 +44,6 @@ jobs:
         run: |
           npm ci --ignore-scripts --no-audit --no-fund
           npm test
-          # Making rpm and pacman packages needs these on Linux.
-          if [ "$RUNNER_OS" = Linux ]; then sudo apt-get install -y rpm libarchive-tools; fi
           npm run sync && npx electron-builder ${{ matrix.target }}
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
         with:
@@ -52,6 +54,8 @@ jobs:
             desktop/out/*.deb
             desktop/out/*.rpm
             desktop/out/*.pacman
+            desktop/out/*.dmg
+            desktop/out/*.zip
           if-no-files-found: error
 
   desktop-freebsd:
@@ -77,7 +81,7 @@ jobs:
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
         with:
           name: desktop-freebsd
-          path: desktop/out/freebsd/*.pkg
+          path: desktop/out/*.pkg
           if-no-files-found: error
 
   android:

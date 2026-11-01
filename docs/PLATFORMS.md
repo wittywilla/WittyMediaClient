@@ -23,8 +23,9 @@ ever run**, on a device or an emulator.
 
 | Platform | Status | Notes |
 |---|---|---|
-| Windows 10 and later | **Ran** | From source and as a packaged app. Installers are configured but not built yet. |
-| Linux | **Ran** | On Ubuntu 26.04 from source, and on Fedora 44 as an installed `.rpm`. `.deb`, `.pacman` and AppImage build, and haven't been installed. See [below](#freebsd-plasma-bigscreen-and-linux). |
+| Windows 10 and later | **Ran** | From source and as a packaged app. The setup and uninstaller ran under Wine, not yet on a real Windows. |
+| macOS | **Written** | The desktop app builds for it in CI, and has never been launched. Its uninstaller only ran on Linux with a stand-in home folder. |
+| Linux | **Ran** | `.deb` and `.rpm` installed, opened on a virtual screen, upgraded and removed in containers. `.pacman` the same. The `.rpm` also ran on Fedora 44 in a virtual machine, and from source on Ubuntu 26.04. See [below](#freebsd-plasma-bigscreen-and-linux). |
 | FreeBSD 15.1, amd64 | **Ran** | In a virtual machine, as an installed package: picture and sound seen. Needs the system's Electron from the ports tree. See [below](#freebsd-plasma-bigscreen-and-linux). |
 | FreeBSD 14, aarch64, i386 | **Not run** | The same package should work where FreeBSD has an Electron package. At the time of writing that means amd64 on 14 and 15, and only by building Electron from ports on the others. |
 | KDE Plasma Bigscreen | **Ran** | The real shell 6.8.2 on Fedora 44, in a virtual machine: listed in its launcher, opened from it, video and sound seen, keys through the real input stack. Never on a TV or with a real remote. See [below](#freebsd-plasma-bigscreen-and-linux). |
@@ -92,8 +93,6 @@ its own keyboard or X, unless it says otherwise.
   first time someone signs in. So a TV uses Chromium's plain store, in a folder only that user can read.
 - **FreeBSD's ports retire each Electron within months.** The launcher falls back to the newest one present, and the build picks the
   newest one with a package. The code has to keep working across Electron versions. It's now run on 42 and 45.
-- Removing or reinstalling the `.rpm` over itself drops the `/usr/bin/wittymedia` link, which is how electron-builder's scripts work.
-  The launcher entry doesn't use the link. `rpm -e` followed by a fresh install puts it back.
 - A real shell needs more than Fedora's `plasma-bigscreen` package installs. Without `plasma-nm` and `kscreen`, it stops at an error screen. That's
   for its packagers, and is noted in [PORTING.md](PORTING.md#plasma-bigscreen).
 
@@ -318,10 +317,12 @@ checked package, no `file://` privileges):
 
 - **Sound.** Nothing here listens to it.
 - **Game controllers** and real TV remotes. Key presses were simulated.
+- **Linux** on a real computer. It ran in containers and virtual machines.
+- **macOS** at all.
 - **The network search with real sockets** on this version: it would ask the Windows firewall.
 - The package check failing as it should when the package is changed.
 - A server asking for a client certificate, which needs one in the system's store.
-- Installers, updating from an old version, and very low-end hardware.
+- Installers on a real Windows, and very low-end hardware.
 - Screen readers. Roles, labels and live regions are checked as they appear in the page, but no screen reader has read them.
 - Audio and subtitle tracks, and everything else marked "not checked here" above. They are the web
   interface's own features, displayed unchanged.
