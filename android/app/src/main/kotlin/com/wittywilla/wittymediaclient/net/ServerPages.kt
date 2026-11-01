@@ -1,5 +1,7 @@
 package com.wittywilla.wittymediaclient.net
 
+import android.view.KeyEvent
+
 // Which things have this app's own screens, and which open the server's own page inside the app.
 // Video is built here. Everything else the server does, from music to books, photos, disc menus,
 // the TV guide and its settings, is the server's page, so nothing it offers is out of reach and
@@ -43,6 +45,24 @@ fun pageAddress(path: String, isTv: Boolean): String {
     if (!isTv) return path
     return path + (if ('?' in path) '&' else '?') + "tv=1"
 }
+
+// Android names a controller's buttons by where they sit, so a Nintendo pad's A, on the right, arrives as
+// BUTTON_B, and its B, at the bottom, as BUTTON_A. Every other pad has its confirm button at the bottom. So on
+// this app's own screens these say what the words printed on that pad mean. The server's page does the same for itself.
+const val NINTENDO_VENDOR = 0x057e
+
+fun nintendoKey(keyCode: Int): Int? = when (keyCode) {
+    KeyEvent.KEYCODE_BUTTON_B -> KeyEvent.KEYCODE_DPAD_CENTER
+    KeyEvent.KEYCODE_BUTTON_A -> KeyEvent.KEYCODE_BACK
+    KeyEvent.KEYCODE_BUTTON_Y -> KeyEvent.KEYCODE_BUTTON_X
+    KeyEvent.KEYCODE_BUTTON_X -> KeyEvent.KEYCODE_BUTTON_Y
+    else -> null
+}
+
+// Where the page goes when Back has nothing left to go back through. It's never loaded: the web view catches it.
+// A controller's buttons stay inside a web view, so this is the only way its B can leave one.
+const val APP_BACK_PATH = "/.wittymedia-app-back"
+const val OFFER_APP_BACK = "document.documentElement.dataset.appBack='$APP_BACK_PATH'"
 
 // The server's big screen mode is drawn for a screen 1920 wide, whatever a TV's density makes of it.
 const val TV_VIEWPORT = "(function(){var m=document.querySelector('meta[name=viewport]');if(m)m.content='width=1920'})()"

@@ -4,6 +4,8 @@ import android.os.Bundle
 import android.view.KeyEvent
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
+import com.wittywilla.wittymediaclient.net.NINTENDO_VENDOR
+import com.wittywilla.wittymediaclient.net.nintendoKey
 import com.wittywilla.wittymediaclient.ui.AppRoot
 import com.wittywilla.wittymediaclient.ui.showSystemBars
 
@@ -21,6 +23,13 @@ class MainActivity : ComponentActivity() {
         if (event.keyCode == KeyEvent.KEYCODE_GUIDE) {
             if (event.action == KeyEvent.ACTION_DOWN) (application as WittyApp).onGuideKey?.invoke()
             return true
+        }
+        if (!(application as WittyApp).showingPage && event.device?.vendorId == NINTENDO_VENDOR) {
+            nintendoKey(event.keyCode)?.let { meaning ->
+                val said = KeyEvent(event.downTime, event.eventTime, event.action, meaning, event.repeatCount, event.metaState, event.deviceId, event.scanCode, event.flags, event.source)
+                super.dispatchKeyEvent(said)
+                return true // or Android would go on to act on the button's own name as well
+            }
         }
         return super.dispatchKeyEvent(event)
     }

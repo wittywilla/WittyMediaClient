@@ -34,6 +34,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.DateRange
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.Search
@@ -134,8 +135,15 @@ fun Shell(nav: Nav, content: @Composable () -> Unit) {
                 ) {
                     TABS.forEach { TabButton(nav, it, wide = true) }
                     if (nav.hasGuide) {
-                        FocusBox({ nav.push(Route.Page(GUIDE_PATH)) }, label = "TV guide", focusKey = "tab-guide", shape = Radius.FULL) {
-                            Text("TV guide", color = MaterialTheme.colorScheme.onSurface, style = MaterialTheme.typography.labelLarge, modifier = Modifier.padding(horizontal = Space.S5, vertical = Space.S3))
+                        FocusBox({ nav.push(Route.Page(GUIDE_PATH)) }, focusKey = "tab-guide", shape = Radius.FULL) {
+                            Row(
+                                Modifier.padding(horizontal = Space.S5, vertical = Space.S3),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(Space.S2),
+                            ) {
+                                Icon(Icons.Filled.DateRange, contentDescription = null, tint = MaterialTheme.colorScheme.onSurface)
+                                Text("TV guide", color = MaterialTheme.colorScheme.onSurface, style = MaterialTheme.typography.labelLarge)
+                            }
                         }
                     }
                 }

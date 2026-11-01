@@ -8,6 +8,7 @@ import com.wittywilla.wittymediaclient.net.albumsOnce
 import com.wittywilla.wittymediaclient.net.channelPath
 import com.wittywilla.wittymediaclient.net.fraction
 import com.wittywilla.wittymediaclient.net.minutesLeft
+import com.wittywilla.wittymediaclient.net.nintendoKey
 import com.wittywilla.wittymediaclient.net.onNow
 import com.wittywilla.wittymediaclient.net.programmeAt
 import com.wittywilla.wittymediaclient.net.hasOwnScreen
@@ -71,6 +72,14 @@ class ServerPagesTest {
     fun aChannelsKeyIsOnePieceOfTheAddress() {
         assertEquals("/tv/watch/lib-1", channelPath("lib-1"))
         assertEquals("/tv/watch/..%2Fsettings", channelPath("../settings"))
+    }
+
+    @Test
+    fun aNintendoPadsButtonsMeanWhatsPrintedOnThem() {
+        assertEquals(android.view.KeyEvent.KEYCODE_DPAD_CENTER, nintendoKey(android.view.KeyEvent.KEYCODE_BUTTON_B))
+        assertEquals(android.view.KeyEvent.KEYCODE_BACK, nintendoKey(android.view.KeyEvent.KEYCODE_BUTTON_A))
+        assertEquals(android.view.KeyEvent.KEYCODE_BUTTON_X, nintendoKey(android.view.KeyEvent.KEYCODE_BUTTON_Y))
+        assertEquals(null, nintendoKey(android.view.KeyEvent.KEYCODE_BUTTON_L1))
     }
 
     @Test

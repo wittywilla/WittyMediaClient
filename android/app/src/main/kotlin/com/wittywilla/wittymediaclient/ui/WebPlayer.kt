@@ -52,7 +52,9 @@ import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
 import com.wittywilla.wittymediaclient.diag.ClientLog
+import com.wittywilla.wittymediaclient.net.APP_BACK_PATH
 import com.wittywilla.wittymediaclient.net.ASK_OWN_BACK
+import com.wittywilla.wittymediaclient.net.OFFER_APP_BACK
 import com.wittywilla.wittymediaclient.net.Api
 import com.wittywilla.wittymediaclient.net.TV_VIEWPORT
 import com.wittywilla.wittymediaclient.net.isWebLink
@@ -78,17 +80,23 @@ private class PageClient(
     private val onPath: (String) -> Unit,
     private val onFail: () -> Unit,
     private val onShowing: () -> Unit,
+    private val onAppBack: () -> Unit,
     private val isTv: Boolean,
 ) : WebViewClient() {
     override fun onPageCommitVisible(view: WebView, url: String) {
         // A TV counts its pixels in twos, which would give the page half the room a big screen has.
         if (isTv) view.evaluateJavascript(TV_VIEWPORT, null)
+        view.evaluateJavascript(OFFER_APP_BACK, null)
         onShowing()
     }
 
     override fun shouldOverrideUrlLoading(view: WebView, request: WebResourceRequest): Boolean {
         val url = request.url.toString()
-        if (sameServer(url, base)) return false
+        if (sameServer(url, base)) {
+            if (request.url.path != APP_BACK_PATH) return false
+            onAppBack()
+            return true
+        }
         if (request.isForMainFrame && isWebLink(url)) {
             try {
                 view.context.startActivity(Intent(Intent.ACTION_VIEW, url.toUri()))
@@ -203,9 +211,10 @@ fun ServerPageScreen(nav: Nav, route: Route, path: String, keptToGames: Boolean)
     val web = remember { if (tooOld) null else runCatching { pageWebView(context, if (keptToGames) Color.BLACK else background, nav.app.isTv && !keptToGames) }.getOrNull() }
 
     DisposableEffect(web) {
+        nav.app.showingPage = true
         if (web == null) {
             failed = if (tooOld) OLD_WEB_VIEW else NO_WEB_VIEW
-            return@DisposableEffect onDispose { }
+            return@DisposableEffect onDispose { nav.app.showingPage = false }
         }
         var gone = false
         web.webViewClient = PageClient(
@@ -219,6 +228,7 @@ fun ServerPageScreen(nav: Nav, route: Route, path: String, keptToGames: Boolean)
             },
             onFail = { failed = CANT_OPEN },
             onShowing = { showing = true },
+            onAppBack = { if (nav.current == route) nav.pop() },
             isTv = nav.app.isTv && !keptToGames,
         )
         web.webChromeClient = PageChrome(
@@ -253,6 +263,7 @@ fun ServerPageScreen(nav: Nav, route: Route, path: String, keptToGames: Boolean)
         web.requestFocus()
 
         onDispose {
+            nav.app.showingPage = false
             gone = true
             web.stopLoading()
             (web.parent as? ViewGroup)?.removeView(web)

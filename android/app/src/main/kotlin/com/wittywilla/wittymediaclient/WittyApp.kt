@@ -28,6 +28,10 @@ class WittyApp : Application(), SingletonImageLoader.Factory {
     // What a remote's Guide button does, while the app's screens are up.
     var onGuideKey: (() -> Unit)? = null
 
+    // While the server's page is up, a controller's buttons are the page's to read.
+    @Volatile
+    var showingPage = false
+
     // For work that must outlive the screen that started it.
     val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
 
