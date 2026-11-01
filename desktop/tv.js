@@ -14,12 +14,13 @@ function wanted(argv = [], env = {}) {
 
 // What a TV needs from Chromium. The sign-in cookie is kept in the system's keyring, whose first
 // use opens a set-up wizard over the app, and a TV has nobody with a keyboard to get through
-// it. So a TV keeps the cookie in the app's own folder, readable only by this user.
+// it. So a TV keeps the cookie in the app's own folder, readable only by this user. The feature
+// is the second way Chromium reaches the keyring, through the desktop portal.
 //
 // Chromium only talks to an on-screen keyboard on Wayland when asked to, and a remote has
 // nothing else to type an address with. Version 3 is the one Plasma's keyboard speaks.
 function switches(env = {}) {
-  const needed = [['password-store', 'basic']]
+  const needed = [['password-store', 'basic'], ['disable-features', 'DbusSecretPortal']]
   if (env.XDG_SESSION_TYPE !== 'wayland' && !env.WAYLAND_DISPLAY) return needed
   return [...needed, ['enable-wayland-ime'], ['wayland-text-input-version', '3']]
 }

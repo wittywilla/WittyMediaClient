@@ -31,7 +31,11 @@ test('the on-screen keyboard is only asked for on Wayland', () => {
 })
 
 test('a TV never opens the keyring's set-up wizard', () => {
-  for (const env of [{}, { XDG_SESSION_TYPE: 'wayland' }]) assert.ok(switches(env).some(([name, value]) => name === 'password-store' && value === 'basic'))
+  for (const env of [{}, { XDG_SESSION_TYPE: 'wayland' }]) {
+    const asked = new Map(switches(env))
+    assert.strictEqual(asked.get('password-store'), 'basic')
+    assert.strictEqual(asked.get('disable-features'), 'DbusSecretPortal')
+  }
 })
 
 test('the big screen address keeps the server and what was asked for', () => {
