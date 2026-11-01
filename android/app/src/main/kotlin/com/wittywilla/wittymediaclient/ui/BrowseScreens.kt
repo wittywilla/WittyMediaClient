@@ -62,6 +62,7 @@ import com.wittywilla.wittymediaclient.net.Item
 import com.wittywilla.wittymediaclient.net.Library
 import com.wittywilla.wittymediaclient.net.Show
 import com.wittywilla.wittymediaclient.net.ShowDetail
+import com.wittywilla.wittymediaclient.net.albumsOnce
 import com.wittywilla.wittymediaclient.net.hasOwnScreen
 import com.wittywilla.wittymediaclient.net.isRigGame
 import com.wittywilla.wittymediaclient.net.isRigGames
@@ -80,7 +81,10 @@ fun episodeLabel(it: Item): String {
     return if (season == 0) "Special · $ep" else "S$season · $ep"
 }
 
-private fun itemSubtitle(it: Item) = episodeLabel(it).ifEmpty { it.year?.toString().orEmpty() }
+private fun itemSubtitle(it: Item) = when {
+    it.kind == MUSIC_KIND -> it.albumArtist.ifEmpty { it.artist }
+    else -> episodeLabel(it).ifEmpty { it.year?.toString().orEmpty() }
+}
 
 private fun progressOf(it: Item): Float? {
     val p = it.progress ?: return null
@@ -279,7 +283,7 @@ fun HomeScreen(nav: Nav, s: Map<String, String>) {
                         contentPadding = PaddingValues(horizontal = metrics.gutter, vertical = Space.S1),
                         horizontalArrangement = Arrangement.spacedBy(Space.S3),
                     ) {
-                        items(hub.items.distinctBy { it.id }, key = { "i${it.id}" }) { ItemCard(nav, it, scope = hub.key) }
+                        items(albumsOnce(hub.items.distinctBy { it.id }), key = { "i${it.id}" }) { ItemCard(nav, it, scope = hub.key) }
                         items(hub.shows.distinctBy { it.id }, key = { "s${it.id}" }) { ShowCard(nav, it, scope = hub.key) }
                     }
                 }
@@ -434,7 +438,7 @@ fun ShowScreen(nav: Nav, s: Map<String, String>, id: Long) {
 private fun runtimeText(sec: Double): String {
     if (sec <= 0) return ""
     val h = (sec / 3600).toInt()
-    val m = ((sec % 3600) / 60).toInt()
+    val m = ((sec % 3600 + 30) / 60).toInt()
     return if (h > 0) "$h h $m min" else "$m min"
 }
 
@@ -462,14 +466,19 @@ fun ItemScreen(nav: Nav, s: Map<String, String>, id: Long) {
         when {
             it == null && error.isNotEmpty() -> LoadFailed(nav, error) { attempt++ }
             it == null -> Loading()
-            else -> FlowRow(
-                Modifier.fillMaxSize().verticalScroll(rememberScrollState()).safeDrawingPadding().padding(horizontal = metrics.gutter, vertical = Space.S6),
-                horizontalArrangement = Arrangement.spacedBy(Space.S6),
+            else -> Box(Modifier.fillMaxSize().verticalScroll(rememberScrollState())) {
+                // The picture behind, fading into the page, as on Home.
+                ServerImage(nav.app.api.backdropUrl(it), 960.dp, 16f / 9f, Modifier.fillMaxWidth().height(BACKDROP_HEIGHT).alpha(0.4f))
+                Box(Modifier.fillMaxWidth().height(BACKDROP_HEIGHT).background(Brush.verticalGradient(0.2f to Color.Transparent, 1f to MaterialTheme.colorScheme.background)))
+                val upright = !metrics.tv && LocalConfiguration.current.screenWidthDp < UPRIGHT_BELOW_DP
+                FlowRow(
+                Modifier.fillMaxWidth().safeDrawingPadding().padding(horizontal = metrics.gutter, vertical = Space.S6),
+                horizontalArrangement = Arrangement.spacedBy(Space.S6, if (upright) Alignment.CenterHorizontally else Alignment.Start),
                 verticalArrangement = Arrangement.spacedBy(Space.S4),
             ) {
                 // Beside the words where there's room, above them on a phone held upright.
                 ServerImage(nav.app.api.posterUrl(it), metrics.cardWidth * 1.4f, 2f / 3f, Modifier.width(metrics.cardWidth * 1.4f).aspectRatio(2f / 3f).clip(Radius.LG), placeholder = it.title)
-                Column(Modifier.widthIn(min = 280.dp, max = 640.dp).weight(1f, fill = false), verticalArrangement = Arrangement.spacedBy(Space.S3)) {
+                Column((if (upright) Modifier.fillMaxWidth() else Modifier.widthIn(min = 280.dp, max = 640.dp).weight(1f, fill = false)), verticalArrangement = Arrangement.spacedBy(Space.S3)) {
                     if (!it.showTitle.isNullOrEmpty()) Secondary("${it.showTitle} · ${episodeLabel(it)}")
                     Heading(it.title)
                     Secondary(listOfNotNull(it.year?.toString(), runtimeText(it.runtimeSec).ifEmpty { null }, it.contentRating.ifEmpty { null }).joinToString(" · "))
@@ -491,6 +500,10 @@ fun ItemScreen(nav: Nav, s: Map<String, String>, id: Long) {
                     if (it.overview.isNotEmpty()) Text(it.overview, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
             }
+            }
         }
     }
 }
+
+private val BACKDROP_HEIGHT = 340.dp
+private const val UPRIGHT_BELOW_DP = 600

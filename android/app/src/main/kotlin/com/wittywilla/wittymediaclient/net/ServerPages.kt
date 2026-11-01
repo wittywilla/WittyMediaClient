@@ -11,6 +11,16 @@ val Library.hasOwnScreen: Boolean get() = type in OWN_SCREEN_LIBRARIES || isRigG
 
 val Item.hasOwnScreen: Boolean get() = kind == "video" || isRigGame
 
+// A row of songs or chapters shows each album or book once, under its own name.
+fun albumsOnce(items: List<Item>): List<Item> {
+    val seen = HashSet<String>()
+    return items.mapNotNull { item ->
+        if (item.kind != "audio" || item.album.isEmpty()) return@mapNotNull item
+        val key = item.albumArtist.ifEmpty { item.artist } + "|" + item.album
+        if (seen.add(key)) item.copy(title = item.album) else null
+    }
+}
+
 fun Library.pagePath() = "/library/$id"
 fun Item.pagePath() = "/item/$id"
 

@@ -255,7 +255,7 @@ fun PosterCard(
                 }
             }
             // Inset, so the focus ring doesn't run through the words.
-            Text(title, color = scheme.onBackground, maxLines = 1, overflow = TextOverflow.Ellipsis, style = MaterialTheme.typography.titleSmall, modifier = Modifier.padding(horizontal = Space.S1))
+            Text(title, color = scheme.onBackground, maxLines = 2, overflow = TextOverflow.Ellipsis, style = MaterialTheme.typography.titleSmall, modifier = Modifier.padding(horizontal = Space.S1))
             if (subtitle.isNotEmpty()) Text(subtitle, color = scheme.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis, style = MaterialTheme.typography.bodySmall, modifier = Modifier.padding(horizontal = Space.S1))
         }
     }

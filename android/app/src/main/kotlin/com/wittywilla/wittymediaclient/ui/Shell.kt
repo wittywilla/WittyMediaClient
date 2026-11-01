@@ -16,6 +16,7 @@ import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.WindowInsetsSides
+import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.imePadding
@@ -25,7 +26,8 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.layout.safeDrawingPadding
 import androidx.compose.foundation.layout.statusBarsPadding
-import androidx.compose.foundation.layout.windowInsetsPadding
+import androidx.compose.foundation.layout.statusBars
+import androidx.compose.foundation.layout.windowInsetsTopHeight
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.rememberScrollState
@@ -52,6 +54,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.InputMode
@@ -63,6 +66,7 @@ import androidx.compose.ui.input.key.type
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalInputModeManager
+import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.role
@@ -133,10 +137,15 @@ fun Shell(nav: Nav, content: @Composable () -> Unit) {
             }
         } else {
             Box(Modifier.fillMaxSize()) {
-            // A phone on its side has its navigation bar and any camera cut-out at the sides.
-            Box(Modifier.windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Horizontal))) {
-                CompositionLocalProvider(LocalBottomRoom provides PILL_ROOM) { content() }
-            }
+            // A phone on its side has its navigation bar and any camera cut-out at the sides. The margins
+            // make room for them, and rows of cards still run to the edge of the screen rather than stop short.
+            val sides = WindowInsets.safeDrawing.only(WindowInsetsSides.Horizontal).asPaddingValues()
+            val direction = LocalLayoutDirection.current
+            val clear = maxOf(sides.calculateLeftPadding(direction), sides.calculateRightPadding(direction))
+            CompositionLocalProvider(LocalBottomRoom provides PILL_ROOM, LocalMetrics provides metrics.copy(gutter = metrics.gutter + clear)) { content() }
+            // What scrolls under the clock and the battery fades out, so they can still be read.
+            val page = MaterialTheme.colorScheme.background
+            Box(Modifier.fillMaxWidth().windowInsetsTopHeight(WindowInsets.statusBars).background(Brush.verticalGradient(0f to page.copy(alpha = 0.92f), 1f to page.copy(alpha = 0f))))
             Row(
                 Modifier
                     .align(Alignment.BottomCenter)
@@ -223,6 +232,8 @@ fun ProfileScreen(nav: Nav, s: Map<String, String>) {
     val metrics = LocalMetrics.current
     val context = LocalContext.current
     val server = nav.server
+    var who by remember { mutableStateOf("") }
+    LaunchedEffect(Unit) { who = runCatching { nav.app.api.status().user?.name.orEmpty() }.getOrDefault("") }
     val version = remember { runCatching { context.packageManager.getPackageInfo(context.packageName, 0).versionName }.getOrNull().orEmpty() }
     Column(
         Modifier
@@ -235,6 +246,7 @@ fun ProfileScreen(nav: Nav, s: Map<String, String>) {
     ) {
         Heading("Profile")
         ErrorText(nav.notice)
+        if (who.isNotEmpty()) Secondary("Signed in as $who")
         if (server != null) {
             SectionTitle(server.name)
             Secondary(server.url)

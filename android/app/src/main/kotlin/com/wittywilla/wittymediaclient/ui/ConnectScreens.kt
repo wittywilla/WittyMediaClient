@@ -223,8 +223,33 @@ fun ConnectScreen(nav: Nav, s: Map<String, String>, message: String) {
         }
     }
 
-    Centred {
-        if (showForm) {
+    val words: @Composable () -> Unit = {
+        Heading(s["findTitle"].orEmpty())
+        Secondary(s["legalConnect"].orEmpty())
+        ErrorText(error)
+        if (busy) Secondary(s["connecting"].orEmpty())
+    }
+    // The first server found takes focus, until the person has moved themselves.
+    val servers: @Composable () -> Unit = {
+        Secondary(s["foundServers"].orEmpty())
+        if (found.isEmpty()) Secondary(if (searchedLong) s["findNone"].orEmpty() else s["findSearching"].orEmpty())
+        found.forEachIndexed { i, server ->
+            key(server.id) { ServerRow(server.name, server.url, i == 0 && !moved) { connect(server.url) } }
+        }
+        val others = recent.filter { r -> found.none { it.url == r.url || it.id == r.serverId } }
+        if (others.isNotEmpty()) Secondary(s["recentServers"].orEmpty())
+        others.forEachIndexed { i, server ->
+            key(server.url) { ServerRow(server.name, server.url, found.isEmpty() && i == 0 && !moved) { connect(server.url) } }
+        }
+        ActionButton(s["enterAddress"].orEmpty(), { showForm = true; error = "" }, Modifier.fillMaxWidth(), requestFocus = found.isEmpty() && others.isEmpty())
+    }
+    val notesMoved = Modifier.onPreviewKeyEvent {
+        if (it.type == KeyEventType.KeyDown && it.key.nativeKeyCode in ARROWS) moved = true
+        false
+    }
+
+    when {
+        showForm -> Centred {
             LaunchedEffect(Unit) { runCatching { fieldFocus.requestFocus() } }
             Heading(s["addressTitle"].orEmpty())
             Secondary(s["addressHint"].orEmpty())
@@ -233,30 +258,15 @@ fun ConnectScreen(nav: Nav, s: Map<String, String>, message: String) {
             ActionButton(if (busy) s["connecting"].orEmpty() else s["connect"].orEmpty(), ::submit, Modifier.fillMaxWidth(), primary = true, enabled = !busy)
             ActionButton(s["back"].orEmpty(), { showForm = false; error = "" }, Modifier.fillMaxWidth())
             Secondary(s["legalConnect"].orEmpty())
-        } else {
-            // The first server found takes focus, until the person has moved themselves.
-            Column(
-                Modifier.onPreviewKeyEvent {
-                    if (it.type == KeyEventType.KeyDown && it.key.nativeKeyCode in ARROWS) moved = true
-                    false
-                },
-                verticalArrangement = Arrangement.spacedBy(12.dp),
-            ) {
-                Heading(s["findTitle"].orEmpty())
-                Secondary(s["legalConnect"].orEmpty())
-                ErrorText(error)
-                if (busy) Secondary(s["connecting"].orEmpty())
-                Secondary(s["foundServers"].orEmpty())
-                if (found.isEmpty()) Secondary(if (searchedLong) s["findNone"].orEmpty() else s["findSearching"].orEmpty())
-                found.forEachIndexed { i, server ->
-                    key(server.id) { ServerRow(server.name, server.url, i == 0 && !moved) { connect(server.url) } }
-                }
-                val others = recent.filter { r -> found.none { it.url == r.url || it.id == r.serverId } }
-                if (others.isNotEmpty()) Secondary(s["recentServers"].orEmpty())
-                others.forEachIndexed { i, server ->
-                    key(server.url) { ServerRow(server.name, server.url, found.isEmpty() && i == 0 && !moved) { connect(server.url) } }
-                }
-                ActionButton(s["enterAddress"].orEmpty(), { showForm = true; error = "" }, Modifier.fillMaxWidth(), requestFocus = found.isEmpty() && others.isEmpty())
+        }
+        // Side by side, so that a long list of servers doesn't scroll the words out of sight.
+        LocalMetrics.current.tv -> SideBySide(words = words, actions = {
+            Column(notesMoved.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(12.dp)) { servers() }
+        })
+        else -> Centred {
+            Column(notesMoved, verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                words()
+                servers()
             }
         }
     }

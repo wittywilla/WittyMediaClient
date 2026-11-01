@@ -81,6 +81,9 @@ data class Item(
     // Worked out by the server from its list of formats, so no client keeps a list of its own.
     val audioDirect: Boolean = false,
     val reader: String = "",
+    val album: String = "",
+    val albumArtist: String = "",
+    val artist: String = "",
 )
 
 @Serializable
