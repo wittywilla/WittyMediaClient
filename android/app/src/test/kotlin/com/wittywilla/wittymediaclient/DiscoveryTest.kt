@@ -63,6 +63,32 @@ class DiscoveryTest {
     }
 
     @Test
+    fun aServerOnlyGoesOnceItHasStayedLostForTheWholeWait() {
+        val list = ServerList()
+        list.add(FoundServer(id, "Home", "http://10.0.0.2:9797", "Home (0123)"))
+        list.markLost("Home (0123)", 1000)
+        assertFalse("too soon", list.dropLost(1000 + 44_000, 45_000))
+        assertEquals(1, list.list().size)
+        list.heard("Home (0123)")
+        assertFalse("it came back", list.dropLost(1000 + 90_000, 45_000))
+        assertEquals(1, list.list().size)
+        list.markLost("Home (0123)", 200_000)
+        list.markLost("Home (0123)", 240_000) // saying so again doesn't restart the wait
+        assertTrue(list.dropLost(245_000, 45_000))
+        assertTrue(list.list().isEmpty())
+    }
+
+    @Test
+    fun serversWithTheSameNameKeepTheirPlaceHoweverTheyWereHeard() {
+        val first = FoundServer("1", "Home", "http://10.0.0.1:9797")
+        val second = FoundServer("2", "Home", "http://10.0.0.2:9797")
+        val heardOneWay = ServerList().apply { add(first); add(second) }
+        val heardTheOther = ServerList().apply { add(second); add(first) }
+        assertEquals(listOf(first, second), heardOneWay.list())
+        assertEquals(heardOneWay.list(), heardTheOther.list())
+    }
+
+    @Test
     fun theListIsSortedAndCanNotGrowWithoutLimit() {
         val list = ServerList()
         list.add(FoundServer("2", "beta", "http://10.0.0.2"))

@@ -1,20 +1,31 @@
 package com.wittywilla.wittymediaclient.ui
 
+import android.view.KeyEvent
+import androidx.compose.foundation.ScrollState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.focusable
+import androidx.compose.foundation.gestures.animateScrollBy
+import androidx.compose.foundation.gestures.scrollBy
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsFocusedAsState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.WindowInsetsSides
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.foundation.layout.only
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.layout.safeDrawingPadding
 import androidx.compose.foundation.layout.statusBarsPadding
-import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.rememberScrollState
@@ -35,13 +46,23 @@ import androidx.compose.runtime.compositionLocalOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.input.InputMode
+import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.ui.input.key.key
+import androidx.compose.ui.input.key.nativeKeyCode
+import androidx.compose.ui.input.key.onPreviewKeyEvent
+import androidx.compose.ui.input.key.type
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalInputModeManager
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.role
@@ -52,7 +73,9 @@ import com.wittywilla.wittymediaclient.net.Item
 import com.wittywilla.wittymediaclient.net.Show
 import com.wittywilla.wittymediaclient.net.problemWords
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 import java.io.File
 
 // The room the floating bar takes at the bottom of a phone's screen, which lists leave clear.
@@ -75,6 +98,9 @@ private fun TabButton(nav: Nav, tab: Tab, modifier: Modifier = Modifier, wide: B
     FocusBox(
         { if (!active) nav.reset(tab.route) }, modifier,
         label = tab.label, state = if (active) "Selected" else null, selected = active,
+        // A remote that has just chosen a tab stays on it, one press from what's below. Home has its
+        // own first focus on Play. Elsewhere nothing would have focus, and the next press would land on Home.
+        requestFocus = active && tab.route != Route.Home && LocalMetrics.current.tv,
         focusKey = "tab-${tab.label}", filled = if (active) scheme.primary else androidx.compose.ui.graphics.Color.Transparent, shape = Radius.FULL,
     ) {
         Row(
@@ -97,7 +123,7 @@ fun Shell(nav: Nav, content: @Composable () -> Unit) {
         if (metrics.tv) {
             Column(Modifier.fillMaxSize()) {
                 Row(
-                    Modifier.fillMaxWidth().padding(start = metrics.gutter, end = metrics.gutter, top = metrics.edge, bottom = Space.S2),
+                    Modifier.fillMaxWidth().padding(start = metrics.gutter, end = metrics.gutter, top = metrics.edge, bottom = Space.S2).remoteRow(),
                     horizontalArrangement = Arrangement.spacedBy(Space.S3),
                 ) {
                     TABS.forEach { TabButton(nav, it, wide = true) }
@@ -106,7 +132,10 @@ fun Shell(nav: Nav, content: @Composable () -> Unit) {
             }
         } else {
             Box(Modifier.fillMaxSize()) {
-            CompositionLocalProvider(LocalBottomRoom provides PILL_ROOM) { content() }
+            // A phone on its side has its navigation bar and any camera cut-out at the sides.
+            Box(Modifier.windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Horizontal))) {
+                CompositionLocalProvider(LocalBottomRoom provides PILL_ROOM) { content() }
+            }
             Row(
                 Modifier
                     .align(Alignment.BottomCenter)
@@ -171,7 +200,7 @@ fun SearchScreen(nav: Nav, s: Map<String, String>) {
         if (list != null && list.isEmpty()) Secondary("Nothing found for that.", Modifier.semantics { contentDescription = "Nothing found" })
         if (!list.isNullOrEmpty()) {
             LazyVerticalGrid(
-                GridCells.Adaptive(metrics.cardWidth + Space.S2),
+                posterColumns(),
                 contentPadding = PaddingValues(bottom = LocalBottomRoom.current + Space.S4),
                 horizontalArrangement = Arrangement.spacedBy(Space.S2),
                 verticalArrangement = Arrangement.spacedBy(Space.S3),
@@ -210,19 +239,37 @@ fun ProfileScreen(nav: Nav, s: Map<String, String>) {
             Secondary(server.url)
             if (server.fingerprint.isNotEmpty()) Secondary("${s["fingerprintLabel"]}: ${server.fingerprint}")
         }
-        ActionButton("Switch profile", nav::signOut, Modifier.fillMaxWidth(), focusKey = "switch", requestFocus = metrics.tv)
+        ActionButton("Sign out", nav::signOut, Modifier.fillMaxWidth(), focusKey = "switch")
         ActionButton(s["changeServer"].orEmpty(), nav::changeServer, Modifier.fillMaxWidth(), focusKey = "server")
         SectionTitle("About this app")
-        Secondary("WittyMedia $version")
+        Secondary("WittyMediaClient $version")
         ActionButton("Licences", { nav.push(Route.Notices) }, Modifier.fillMaxWidth(), focusKey = "notices")
         ActionButton("This app's log", { nav.push(Route.Logs) }, Modifier.fillMaxWidth(), focusKey = "logs")
         Secondary(s["legalConnect"].orEmpty())
     }
 }
 
+// Up and down scroll the words while there are more that way. Up from the top leaves, for Back.
+private fun textScrollKey(key: Int, scroll: ScrollState, stepPx: Float, scope: CoroutineScope, reduce: Boolean): Boolean {
+    val by = when {
+        key == KeyEvent.KEYCODE_DPAD_DOWN -> stepPx
+        key == KeyEvent.KEYCODE_DPAD_UP && scroll.canScrollBackward -> -stepPx
+        else -> return false
+    }
+    scope.launch { if (reduce) scroll.scrollBy(by) else scroll.animateScrollBy(by) }
+    return true
+}
+
 @Composable
 private fun TextPage(nav: Nav, title: String, body: String) {
     val metrics = LocalMetrics.current
+    val scroll = rememberScrollState()
+    val scope = rememberCoroutineScope()
+    val interaction = remember { MutableInteractionSource() }
+    val focused by interaction.collectIsFocusedAsState()
+    val keyboardMode = LocalInputModeManager.current.inputMode == InputMode.Keyboard
+    val stepPx = with(LocalDensity.current) { TEXT_STEP.toPx() }
+    val reduce = LocalReduceMotion.current
     Screen {
         Column(
             Modifier.fillMaxSize().safeDrawingPadding().padding(horizontal = metrics.gutter, vertical = Space.S4),
@@ -230,11 +277,19 @@ private fun TextPage(nav: Nav, title: String, body: String) {
         ) {
             Heading(title)
             ActionButton("Back", nav::back, requestFocus = true)
-            // A remote scrolls this because the box itself can take focus.
-            FocusBox({}, Modifier.fillMaxWidth().weight(1f), label = title) {
-                Box(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(Space.S2)) {
-                    Text(body, color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodyMedium)
-                }
+            // It takes focus so that a remote can get to it and scroll it.
+            Box(
+                Modifier
+                    .fillMaxWidth()
+                    .weight(1f)
+                    .onPreviewKeyEvent { it.type == KeyEventType.KeyDown && textScrollKey(it.key.nativeKeyCode, scroll, stepPx, scope, reduce) }
+                    .focusable(interactionSource = interaction)
+                    .border(metrics.focusRing, if (focused && keyboardMode) MaterialTheme.colorScheme.onBackground else Color.Transparent, Radius.MD)
+                    .padding(metrics.focusRing)
+                    .verticalScroll(scroll)
+                    .padding(Space.S2),
+            ) {
+                Text(body, color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodyMedium)
             }
         }
     }
@@ -248,6 +303,7 @@ fun NoticesScreen(nav: Nav) {
 }
 
 private const val LOG_LINES = 200
+private val TEXT_STEP = 160.dp
 
 // What the app has written about itself on this device. It is cleaned as it's written, and nothing
 // leaves the device from here.

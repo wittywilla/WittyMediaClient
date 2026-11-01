@@ -7,14 +7,16 @@ plugins {
 android {
     namespace = "com.wittywilla.wittymediaclient"
     compileSdk = 37
+    // Named here so a machine with only these tools doesn't go looking for the plugin's own default.
+    buildToolsVersion = "37.0.0"
 
     defaultConfig {
         applicationId = "com.wittywilla.wittymediaclient"
         minSdk = 23
         // Target 37 adds a local-network permission: raise this with discovery tested on a device.
         targetSdk = 36
-        versionCode = 2
-        versionName = "0.2.0"
+        versionCode = 3
+        versionName = "0.2.1"
         // One APK for every Android device. 32-bit ARM stays, for old TV sticks and phones.
         // scripts/check-abis.sh fails if a native library is missing for any of these.
         ndk {

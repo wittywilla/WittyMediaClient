@@ -10,6 +10,7 @@ import android.view.ViewGroup
 import android.webkit.CookieManager
 import android.webkit.RenderProcessGoneDetail
 import android.webkit.WebStorage
+import androidx.annotation.RequiresApi
 import android.webkit.WebChromeClient
 import android.webkit.WebResourceError
 import android.webkit.WebResourceRequest
@@ -52,7 +53,11 @@ private class PlayerClient(
     private val base: String,
     private val onLeave: () -> Unit,
     private val onFail: () -> Unit,
+    private val onShowing: () -> Unit,
 ) : WebViewClient() {
+    override fun onPageCommitVisible(view: WebView, url: String) = onShowing()
+
+
     override fun shouldOverrideUrlLoading(view: WebView, request: WebResourceRequest): Boolean {
         val url = request.url.toString()
         if (sameServer(url, base)) return false
@@ -76,7 +81,8 @@ private class PlayerClient(
         if (request.isForMainFrame) onFail()
     }
 
-    // Without this, the page's process dying takes the whole app with it.
+    // Without this, the page's process dying takes the whole app with it. Android 8 is the first to ask.
+    @RequiresApi(26)
     override fun onRenderProcessGone(view: WebView, detail: RenderProcessGoneDetail): Boolean {
         ClientLog.warn("player", "The game player's page stopped: ${if (detail.didCrash()) "it crashed" else "the system ended it"}")
         onFail()
@@ -115,6 +121,8 @@ fun WebPlayerScreen(nav: Nav, route: Route.Web) {
     val context = LocalContext.current
     val api = nav.app.api
     var failed by remember { mutableStateOf("") }
+    // A web view takes seconds to start the first time, and until then it's only black.
+    var showing by remember { mutableStateOf(false) }
     // Some devices have a missing or broken web view, and creating one is where that shows.
     val web = remember { runCatching { playerWebView(context) }.getOrNull() }
 
@@ -128,7 +136,7 @@ fun WebPlayerScreen(nav: Nav, route: Route.Web) {
         val bars = window?.let { WindowCompat.getInsetsController(it, web) }
         bars?.systemBarsBehavior = WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
         bars?.hide(WindowInsetsCompat.Type.systemBars())
-        web.webViewClient = PlayerClient(api.base, onLeave = { if (nav.current == route) nav.pop() }, onFail = { failed = CANT_OPEN })
+        web.webViewClient = PlayerClient(api.base, onLeave = { if (nav.current == route) nav.pop() }, onFail = { failed = CANT_OPEN }, onShowing = { showing = true })
 
         val cookies = CookieManager.getInstance()
         val cookie = sessionCookie(api.token, api.base.startsWith("https:", ignoreCase = true))
@@ -169,6 +177,7 @@ fun WebPlayerScreen(nav: Nav, route: Route.Web) {
             }
         } else {
             AndroidView(factory = { web }, modifier = Modifier.fillMaxSize().imePadding())
+            if (!showing) Loading()
         }
     }
 }

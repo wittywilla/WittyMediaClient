@@ -8,7 +8,10 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.safeDrawingPadding
 import androidx.compose.foundation.layout.padding
@@ -124,6 +127,32 @@ private fun Centred(content: @Composable () -> Unit) {
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
             Column(Modifier.widthIn(max = 560.dp).fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(12.dp)) { content() }
+        }
+    }
+}
+
+// What to read and what to press. Side by side on a TV, where a tall screen would scroll its
+// beginning out of sight. One above the other everywhere else.
+@Composable
+private fun SideBySide(modifier: Modifier = Modifier, words: @Composable () -> Unit, actions: @Composable () -> Unit) {
+    val metrics = LocalMetrics.current
+    if (metrics.tv) {
+        Screen {
+            Row(
+                modifier.fillMaxSize().padding(horizontal = metrics.gutter, vertical = metrics.edge),
+                horizontalArrangement = Arrangement.spacedBy(Space.S12),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(12.dp)) { words() }
+                Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(12.dp)) { actions() }
+            }
+        }
+    } else {
+        Centred {
+            Column(modifier, verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                words()
+                actions()
+            }
         }
     }
 }
@@ -248,7 +277,7 @@ private fun PadKey(key: Int, keys: List<FocusRequester>, label: String, small: B
         requestFocus = key == 0,
         filled = MaterialTheme.colorScheme.surfaceVariant,
     ) {
-        Box(Modifier.fillMaxWidth().padding(vertical = 13.dp), contentAlignment = Alignment.Center) {
+        Box(Modifier.fillMaxWidth().height(LocalMetrics.current.minTarget + Space.S2), contentAlignment = Alignment.Center) {
             Text(label, color = MaterialTheme.colorScheme.onSurface, style = if (small) MaterialTheme.typography.labelLarge else MaterialTheme.typography.headlineSmall)
         }
     }
@@ -298,20 +327,20 @@ fun CodeScreen(nav: Nav, s: Map<String, String>, server: SavedServer) {
         }
     }
 
-    Centred {
-        Column(
-            Modifier.onPreviewKeyEvent {
-                if (it.type != KeyEventType.KeyDown) return@onPreviewKeyEvent false
-                when (val code = it.key.nativeKeyCode) {
-                    in KeyEvent.KEYCODE_0..KeyEvent.KEYCODE_9 -> { press('0' + (code - KeyEvent.KEYCODE_0)); true }
-                    in KeyEvent.KEYCODE_NUMPAD_0..KeyEvent.KEYCODE_NUMPAD_9 -> { press('0' + (code - KeyEvent.KEYCODE_NUMPAD_0)); true }
-                    KeyEvent.KEYCODE_DEL -> { entry = entry.erased(); true }
-                    else -> false
-                }
-            },
-            verticalArrangement = Arrangement.spacedBy(12.dp),
-        ) {
+    SideBySide(
+        Modifier.onPreviewKeyEvent {
+            if (it.type != KeyEventType.KeyDown) return@onPreviewKeyEvent false
+            when (val code = it.key.nativeKeyCode) {
+                in KeyEvent.KEYCODE_0..KeyEvent.KEYCODE_9 -> { press('0' + (code - KeyEvent.KEYCODE_0)); true }
+                in KeyEvent.KEYCODE_NUMPAD_0..KeyEvent.KEYCODE_NUMPAD_9 -> { press('0' + (code - KeyEvent.KEYCODE_NUMPAD_0)); true }
+                KeyEvent.KEYCODE_DEL -> { entry = entry.erased(); true }
+                else -> false
+            }
+        },
+        words = {
             Heading(s["codeTitle"].orEmpty())
+            // Several servers can look alike in the list: this says which one the code goes to.
+            Secondary("${server.name} · ${server.url}")
             Secondary(s["codeHint"].orEmpty())
             Text(
                 entry.shown,
@@ -321,13 +350,18 @@ fun CodeScreen(nav: Nav, s: Map<String, String>, server: SavedServer) {
                     contentDescription = "${s["codeLabel"]}: ${entry.digits.length} ${s["codeEntered"]}"
                 },
             )
-            if (entry.busy) Secondary(s["connecting"].orEmpty()) else ErrorText(problem)
+            // Room is kept for the message, or the keys would move under a finger as it comes and goes.
+            Box(Modifier.heightIn(min = MaterialTheme.typography.bodyLarge.lineHeight.value.dp * 2)) {
+                if (entry.busy) Secondary(s["connecting"].orEmpty()) else ErrorText(problem)
+            }
+            Secondary("${s["fingerprintLabel"]}: ${server.fingerprint}")
+        },
+        actions = {
             NumberPad(s["codeDelete"].orEmpty(), ::press) { entry = entry.erased() }
             ActionButton(s["usePassword"].orEmpty(), { nav.signInTo(server, SignInWay.Password) }, Modifier.fillMaxWidth())
             ActionButton(s["showCodeInstead"].orEmpty(), { nav.signInTo(server, SignInWay.ShownCode) }, Modifier.fillMaxWidth())
-            Secondary("${s["fingerprintLabel"]}: ${server.fingerprint}")
-        }
-    }
+        },
+    )
 }
 
 // Another machine is answering for a server we know. Only the person can decide,
@@ -420,22 +454,28 @@ private fun PairPanel(nav: Nav, s: Map<String, String>, onUsePassword: () -> Uni
         }
     }
 
-    Heading(s["pairTitle"].orEmpty())
-    if (code.isNotEmpty()) {
-        Secondary(s["pairHint"].orEmpty())
-        Text(approveAt, color = MaterialTheme.colorScheme.onBackground)
-        Text(code, color = MaterialTheme.colorScheme.onBackground, style = MaterialTheme.typography.displayMedium, modifier = Modifier.semantics { contentDescription = code.toList().joinToString(" ") })
-        Secondary(if (waiting) s["errLost"].orEmpty() else s["pairWaiting"].orEmpty())
-        if (scan.isNotEmpty()) {
-            Secondary(s["pairScan"].orEmpty())
-            QrCode(scan, Modifier.semantics { contentDescription = s["pairScan"].orEmpty() })
-        }
-    }
-    ErrorText(problem)
-    if (code.isEmpty() && problem.isNotEmpty()) ActionButton(s["pairNew"].orEmpty(), { round++ }, Modifier.fillMaxWidth(), primary = true, requestFocus = true)
-    TypedCodeButton(nav, s)
-    ActionButton(s["usePassword"].orEmpty(), onUsePassword, Modifier.fillMaxWidth(), requestFocus = code.isNotEmpty())
-    ActionButton(s["changeServer"].orEmpty(), nav::changeServer, Modifier.fillMaxWidth())
+    SideBySide(
+        words = {
+            Heading(s["pairTitle"].orEmpty())
+            if (code.isNotEmpty()) {
+                Secondary(s["pairHint"].orEmpty())
+                Text(approveAt, color = MaterialTheme.colorScheme.onBackground)
+                Text(code, color = MaterialTheme.colorScheme.onBackground, style = MaterialTheme.typography.displayMedium, modifier = Modifier.semantics { contentDescription = code.toList().joinToString(" ") })
+                Secondary(if (waiting) s["errLost"].orEmpty() else s["pairWaiting"].orEmpty())
+            }
+            ErrorText(problem)
+        },
+        actions = {
+            if (code.isNotEmpty() && scan.isNotEmpty()) {
+                Secondary(s["pairScan"].orEmpty())
+                QrCode(scan, Modifier.semantics { contentDescription = s["pairScan"].orEmpty() })
+            }
+            if (code.isEmpty() && problem.isNotEmpty()) ActionButton(s["pairNew"].orEmpty(), { round++ }, Modifier.fillMaxWidth(), primary = true, requestFocus = true)
+            TypedCodeButton(nav, s)
+            ActionButton(s["usePassword"].orEmpty(), onUsePassword, Modifier.fillMaxWidth(), requestFocus = code.isNotEmpty())
+            ActionButton(s["changeServer"].orEmpty(), nav::changeServer, Modifier.fillMaxWidth())
+        },
+    )
 }
 
 @OptIn(ExperimentalLayoutApi::class)
@@ -480,10 +520,13 @@ fun SignInScreen(nav: Nav, s: Map<String, String>, way: SignInWay) {
         }
     }
 
+    if (useCode) {
+        PairPanel(nav, s) { useCode = false }
+        return
+    }
     val list = profiles
     Centred {
         when {
-            useCode -> PairPanel(nav, s) { useCode = false }
             list == null -> Loading()
             chosen != null -> {
                 val who = chosen!!

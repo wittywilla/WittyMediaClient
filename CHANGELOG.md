@@ -38,14 +38,47 @@ What changed in WittyMediaClient, newest first. What changed before it had a rep
 - The app has an icon. It had Electron's until now.
 - `npm run test:real` runs the real app against a real server with key presses alone, and plays a video.
 
-### Android app
+### Android app 0.2.1
 
+**The first version made into an APK and used.** On emulators only, against a real server: Android 16 as a phone and as a TV, and
+Android 6, the oldest it supports. [What was and wasn't seen](docs/PLATFORMS.md#android-as-of-021). Everything below was found that way.
+
+**On a TV**
+- Search and Profile can be used with a remote. Nothing had focus on them, so the next press landed on Home and OK left again.
+- Profile no longer opens with Sign out highlighted.
+- The security code and the TV sign-in fit on the screen, side by side. They used to scroll their own instructions out of sight, among
+  them the address to open.
+- Left and right stay within a row. Pressing past the end jumped to whatever was up and to the side.
+- Skip intro comes up by itself, and OK takes it. It only existed among the controls, which have hidden by the time an intro starts.
+- Closing a list of tracks goes back to the button that opened it.
+- Licences and the log scroll with a remote. They never did, whatever the code said.
+- The focus ring no longer runs through a card's title.
+
+**On a phone**
+- The status bar can be read, as its icons were dark on a dark page, and three-button navigation has no white bar across the screen.
+- The poster at the top of Home sits in the middle, and turned on its side a phone gets the wide picture with its title and Play beside it.
+- Three posters across rather than two, and a poster on an item's page.
+- The keys on the number pad stay still when a message appears or goes.
+
+**Everywhere**
+- The app is called WittyMediaClient.
+- The progress bar on a card can be seen. It had no height.
+- A server only leaves the list after 45 seconds of being gone, and servers of the same name keep their order. Rows used to disappear
+  and take focus with them each time Android reported one lost.
+- The security code screen says which server it's for.
+- After the next episode starts, Back goes to that episode, not the one just finished. Back during the countdown leaves, as Cancel does.
+- Next up says which episode. Profile's Switch profile is now Sign out, which is what it does. Text subtitles don't list their file format.
+- The web view shows it's working while it starts, which takes seconds the first time and used to be a black screen.
+- Android 6 hears a network coming back. The call used before starts at Android 7, so it silently never did.
+- The build names its build tools, and lint is clean of errors, so a build can't look for a version that isn't installed.
+
+**Processors**
 - One APK names all four processors, 32-bit ARM and x86 included, and CI fails if a native library is missing for one.
 - Android's own lint now runs in CI, which is what lets the app claim Android 6.
 
 ### Android app 0.2.0
 
-Compiled against Android's own classes, and its logic and network calls tested. **It has not been made into an APK or run.**
+Compiled against Android's own classes, and its logic and network calls tested. It wasn't made into an APK or run: 0.2.1 was.
 
 **Security**
 - Nothing leaves by device-to-device transfer now: `allowBackup=false` doesn't stop that on Android 12 and later.

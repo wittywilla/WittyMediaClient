@@ -45,7 +45,7 @@ class WittyApp : Application(), SingletonImageLoader.Factory {
         super.onCreate()
         val version = runCatching { packageManager.getPackageInfo(packageName, 0).versionName }.getOrNull().orEmpty()
         // Reports go only to the server this app is signed in to.
-        ClientLog.start(filesDir.resolve("logs"), "WittyMedia $platformName", version, "$deviceName, Android ${Build.VERSION.RELEASE}", scope) {
+        ClientLog.start(filesDir.resolve("logs"), "WittyMediaClient $platformName", version, "$deviceName, Android ${Build.VERSION.RELEASE}", scope) {
             val using = api
             if (using.base.isEmpty() || using.token.isEmpty()) null
             else ReportTarget(using.token) { body -> Api(using.base, using.token, quick = true).sendClientLog(body) }

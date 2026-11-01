@@ -143,6 +143,7 @@ data class Track(
     val channels: Int = 0,
     val delivery: String = "",
     val url: String = "",
+    val text: Boolean = false,
 )
 
 @Serializable
