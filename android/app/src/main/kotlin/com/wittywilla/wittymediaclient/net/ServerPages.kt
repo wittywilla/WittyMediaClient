@@ -37,6 +37,18 @@ fun pageAddress(path: String, isTv: Boolean): String {
 // The server's big screen mode is drawn for a screen 1920 wide, whatever a TV's density makes of it.
 const val TV_VIEWPORT = "(function(){var m=document.querySelector('meta[name=viewport]');if(m)m.content='width=1920'})()"
 
+// The oldest web view the server's pages are built for (`target` in its web/vite.config.ts). On anything older
+// they're simply blank. Android 6 comes with version 44, and only an update changes that.
+const val OLDEST_WEB_VIEW = 87
+
+private val CHROME_VERSION = Regex("""Chrome/(\d+)\.""")
+
+// From what a web view calls itself. One that doesn't say is given the benefit of the doubt.
+fun webViewTooOld(userAgent: String): Boolean {
+    val version = CHROME_VERSION.find(userAgent)?.groupValues?.get(1)?.toIntOrNull() ?: return false
+    return version < OLDEST_WEB_VIEW
+}
+
 private val FILLS_THE_SCREEN = listOf("/play/", "/read/", "/tv/watch/", "/game/", "/couch-rig/", "/big")
 
 // A player, a book or a game has the whole screen, and keeps it awake. The rest sits between the system's bars.

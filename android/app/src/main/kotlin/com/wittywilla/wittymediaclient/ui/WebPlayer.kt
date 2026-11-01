@@ -59,12 +59,14 @@ import com.wittywilla.wittymediaclient.net.isWebLink
 import com.wittywilla.wittymediaclient.net.pageAddress
 import com.wittywilla.wittymediaclient.net.pageFillsScreen
 import com.wittywilla.wittymediaclient.net.sameServer
+import com.wittywilla.wittymediaclient.net.webViewTooOld
 import com.wittywilla.wittymediaclient.net.sessionCookie
 import com.wittywilla.wittymediaclient.net.staysInWebPlayer
 import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 
 private const val CANT_OPEN = "This page couldn't open. Check the server is on, then try again."
 private const val NO_WEB_VIEW = "This device has no working web view, which this page needs."
+private const val OLD_WEB_VIEW = "This page needs a newer Android System WebView than this device has. Update it from the Play Store if you can. Films and shows still play in this app, and this page opens in any up-to-date browser on another device."
 private const val NEEDS_BROWSER = "This download only works in a web browser. Open your server's address on a computer."
 private const val NO_DOWNLOADS = "This device can't save downloads."
 private const val NO_FILE_PICKER = "This device has no way to choose a file."
@@ -197,11 +199,12 @@ fun ServerPageScreen(nav: Nav, route: Route, path: String, keptToGames: Boolean)
         waitingForFile = null
     }
     // Some devices have a missing or broken web view, and creating one is where that shows.
-    val web = remember { runCatching { pageWebView(context, if (keptToGames) Color.BLACK else background, nav.app.isTv && !keptToGames) }.getOrNull() }
+    val tooOld = remember { runCatching { webViewTooOld(WebSettings.getDefaultUserAgent(context)) }.getOrDefault(false) }
+    val web = remember { if (tooOld) null else runCatching { pageWebView(context, if (keptToGames) Color.BLACK else background, nav.app.isTv && !keptToGames) }.getOrNull() }
 
     DisposableEffect(web) {
         if (web == null) {
-            failed = NO_WEB_VIEW
+            failed = if (tooOld) OLD_WEB_VIEW else NO_WEB_VIEW
             return@DisposableEffect onDispose { }
         }
         var gone = false

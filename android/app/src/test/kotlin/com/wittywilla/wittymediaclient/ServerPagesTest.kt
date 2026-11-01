@@ -7,6 +7,7 @@ import com.wittywilla.wittymediaclient.net.hasOwnScreen
 import com.wittywilla.wittymediaclient.net.pageAddress
 import com.wittywilla.wittymediaclient.net.pageFillsScreen
 import com.wittywilla.wittymediaclient.net.pagePath
+import com.wittywilla.wittymediaclient.net.webViewTooOld
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
@@ -40,6 +41,13 @@ class ServerPagesTest {
     fun aPlayerABookAndAGameHaveTheWholeScreen() {
         for (path in listOf("/play/1", "/read/1", "/tv/watch/lib-1", "/game/1", "/couch-rig/1", "/big", "/couch/1/play/2")) assertTrue(path, pageFillsScreen(path))
         for (path in listOf("/", "/library/1", "/item/1", "/tv", "/settings", "/couch", "/couch/1")) assertFalse(path, pageFillsScreen(path))
+    }
+
+    @Test
+    fun anOldWebViewIsToldApartFromANewOne() {
+        assertTrue(webViewTooOld("Mozilla/5.0 (Linux; Android 6.0) AppleWebKit/537.36 Chrome/44.0.2403.119 Mobile Safari/537.36"))
+        assertFalse(webViewTooOld("Mozilla/5.0 (Linux; Android 16) AppleWebKit/537.36 Chrome/143.0.7499.24 Mobile Safari/537.36"))
+        assertFalse(webViewTooOld("Something that doesn't say"))
     }
 
     @Test
