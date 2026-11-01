@@ -39,7 +39,7 @@ class ServerList {
     // "Gone" is only believed after a while. Multicast is often dropped for a moment, and a row that
     // blinks out takes the remote's focus with it.
     fun markLost(instance: String, nowMs: Long) {
-        if (servers.values.any { it.instance == instance }) lostAt.putIfAbsent(instance, nowMs)
+        if (instance !in lostAt && servers.values.any { it.instance == instance }) lostAt[instance] = nowMs
     }
 
     fun heard(instance: String) {
