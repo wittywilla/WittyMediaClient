@@ -1,6 +1,6 @@
 # Porting to TVs
 
-How WittyMediaClient reaches Apple TV and Android TV, what is done, and what is left. The aim is that a TV
+How WittyMediaClient reaches Apple TV, Android TV, Plasma Bigscreen and FreeBSD, what is done, and what is left. The aim is that a TV
 port is a matter of building and testing, not a redesign. [PLATFORMS.md](PLATFORMS.md) says how far each claim
 has been checked; this page says what the plan is.
 
@@ -86,6 +86,75 @@ app under the GPL, published on its own terms, is the only way to do better, and
 - **Stream tokens** let a player with no way to set headers open media. AVPlayer is that player, so every media route a
   TV needs has to accept one. Live channels didn't, and now do: `GET /tv/{key}/tune?streamToken=1`.
 - **`/playback`** takes the device's real abilities and answers with the decision, and `explain` in plain words.
+
+## FreeBSD
+
+**Electron has no official FreeBSD builds, and electron-builder can't make a FreeBSD package without them.** FreeBSD's ports tree
+builds Electron itself instead (`devel/electron42` to `electron44`, as of November 2026), with packages for amd64. So:
+
+- **The package holds only the app:** `app.asar`, a launcher, the desktop entry and an icon, 91 KB in all. It depends on one Electron
+  port. One codebase, and Electron's security updates come through `pkg upgrade`. A native shell around a system web view, the other
+  way to get here, would have meant a second window and security layer to keep right, and FreeBSD's web views play less.
+- **`npm run package:freebsd`** runs on FreeBSD, finds the newest Electron with a package, and builds with `pkg create`. CI does this free of
+  charge in a virtual machine on GitHub's Linux runners, with `vmactions/freebsd-vm`.
+- **The launcher, `desktop/packaging/freebsd/wittymedia.sh`,** sorts out what the app can't:
+  - **Sound.** This Electron plays through a sound server, and a video it can't open sound for never starts its clock. FreeBSD runs none by default, so the
+    launcher starts `sndiod` for this user if nothing is running. With no sound card, it asks Chromium for no sound, and the picture plays.
+  - **Settings.** It clears `ELECTRON_RUN_AS_NODE` and `NODE_OPTIONS`, which the fuses switch off in the other builds.
+- `app.isPackaged` is false there, as a shared Electron starts the app from the outside. The app looks at whether it's in an archive instead, to keep developer tools off.
+- Moonlight is found on `PATH`, as on Linux.
+
+To put it in the ports tree, it would need a `multimedia/wittymedia` port. That's a small one, as `package.mjs` already does what it needs, and it's for the owner to submit.
+
+## Plasma Bigscreen
+
+KDE's TV shell, released with Plasma, for HTPCs and small boards. Packaged for Fedora, Arch, Debian's next release and others. What it does, read from its source
+(`invent.kde.org/plasma/plasma-bigscreen`) and then checked by running 6.8.2:
+
+| Question | Answer |
+|---|---|
+| How does the launcher choose apps? | `applicationlistmodel.cpp` lists every application that isn't hidden, isn't run in a terminal, and isn't on its blocklist. **No special key or category.** `Categories=Game` puts it in a row for games |
+| Wayland? | Yes. It's a Wayland session, `plasma-bigscreen-wayland`, with XWayland beside it. Electron 45 picks Wayland by itself there |
+| Flatpak? | Optional. Its site suggests Flathub as one source of apps, and nothing needs it |
+| How can an app tell? | The session sets `PLASMA_PLATFORM=mediacenter` and `PLASMA_DEFAULT_SHELL=org.kde.plasma.bigscreen`, and the app reads them |
+| Full screen? | KWin maximises every window with no border anyway. The app asks for the whole screen |
+| Text input | `plasma-keyboard`, which takes arrows and Enter. Chromium only talks to it with `--enable-wayland-ime`, which the app asks for |
+| Keyring | Using it opens the wallet's set-up wizard over the app. A TV doesn't use it. Chromium reaches it two ways, so both are shut |
+
+**How input reaches an app.** `plasma-bigscreen-inputhandler` turns remotes and controllers into ordinary key presses:
+
+| Source | Button | The page sees |
+|---|---|---|
+| HDMI-CEC | Up, Down, Left, Right, Select | Arrows, Enter |
+| HDMI-CEC | Back, Exit | **Escape**, which KDE says many TVs keep for themselves |
+| HDMI-CEC | Home, Clear | Goes to the shell, and the app isn't told |
+| Controller | D-pad, left stick, A | Arrows, Enter |
+| Controller | B | Escape |
+| Controller | Select | `BrowserBack` |
+| Controller | Guide | The shell's home overlay |
+
+**A controller goes to the page, not through this.** The handler stops translating when another program opens the device, and Chromium does for the
+Gamepad API, so the page's own controller code in `web/src/tv.ts` takes over. That was seen happening, and it's why presses aren't handled twice.
+
+**Back is the one the app had to add.** The server's page goes back a page on `BrowserBack` and `GoBack`, and on Escape it only closes what's open. A CEC remote's Back
+is Escape. So in TV mode, `desktop/preload.js` waits until the page's own listeners have run, and if nothing used the Escape and nothing is open, the app goes back
+a page. At the top of the app it opens the menu instead. The list of what counts as open is copied from `web/src/tv.ts`, so if that changes, this has to as well.
+
+**The interface is the server's own big screen mode.** The app adds `?tv=1` to the address, which is the same mode a TV browser gets. There's no second interface to keep up.
+
+**Packages:** `.deb`, `.rpm` and `.pacman` add the entry a launcher needs. An AppImage doesn't. **There's no Flatpak**, on purpose for now: Bigscreen's own distributions use
+their package managers, an unattended Flatpak of Electron needs its own sandbox helper, and one that hasn't been seen working isn't worth offering. Flathub
+is the place to add it when someone wants it.
+
+**For Bigscreen's packagers:** on Fedora 44, `plasma-bigscreen` alone stops at an error screen, as the launcher needs `plasma-nm`, and displays need `kscreen`.
+
+To try it in a virtual machine: Fedora's cloud image, then `dnf install plasma-bigscreen plasma-nm kscreen sddm`, with `Session=plasma-bigscreen-wayland` in SDDM's
+autologin, and `-device virtio-vga,xres=1920,yres=1080` in QEMU. Its kernel leaves out sound, so add `kernel-modules`.
+
+## Android's processors
+
+The one APK carries `armeabi-v7a`, `arm64-v8a`, `x86` and `x86_64`, named in `android/app/build.gradle.kts`. It costs very little: only one native library is in it. A
+dependency that brings in a library missing for one of them fails `android/scripts/check-abis.sh` in CI. [PLATFORMS.md](PLATFORMS.md#androids-processors) has what was checked.
 
 ## Not started, on either TV app
 

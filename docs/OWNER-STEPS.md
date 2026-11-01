@@ -162,3 +162,17 @@ local network and needs local network access. The reason is that home media serv
 
 **Consoles.** PlayStation, Xbox and Nintendo all need you to apply to and be accepted by a developer
 programme, usually as a company. Nothing can be built until then.
+
+## FreeBSD and Plasma Bigscreen, on real hardware
+
+Both have run in virtual machines here, so this is the part that hasn't: [PLATFORMS.md](PLATFORMS.md#freebsd-plasma-bigscreen-and-linux).
+
+**A TV box running Plasma Bigscreen:** install the `.rpm` or `.deb`, and try it from the sofa with the TV's own remote.
+
+1. Is it readable from where you sit? Is anything cut off at the edges of the TV?
+2. Does the remote's Back button work at all? KDE warns that many TVs keep Back and Home for themselves.
+3. Is video smooth? Nothing here has tried hardware decoding.
+
+**A FreeBSD desktop:** `sudo pkg install ./wittymedia-*.pkg`, then start WittyMedia from your desktop's menu. Does it play with sound?
+
+**To list it in FreeBSD's own packages,** someone would need to submit a port, and to list it on Flathub, someone would need to make and submit a Flatpak. Neither needs doing first.

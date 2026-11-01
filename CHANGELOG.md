@@ -7,6 +7,31 @@ What changed in WittyMediaClient, newest first. What changed before it had a rep
 
 - WittyMediaClient is now a project of its own, developed and released from this repository.
 
+### Desktop app 0.2.1
+
+**New systems**
+- **FreeBSD:** a package of its own, on the system's Electron from the ports tree. It has been run in a FreeBSD 15.1 virtual machine, with picture and sound seen.
+- **KDE Plasma Bigscreen:** the Linux app appears in its launcher and opens as a TV app by itself. It has been run in the real shell, in a virtual machine.
+- `--tv` and `--no-tv` ask for that anywhere else, or turn it off.
+
+**On a TV**
+- The whole screen, no title bar, and the server's big screen mode.
+- Back works with a remote that calls it Escape, as HDMI-CEC remotes do.
+- Back at the top of the app opens a menu, for Change server and Quit, which a remote had no way to reach.
+- The on-screen keyboard works on Wayland, so an address can be typed with a remote.
+- No keyring wizard over the app when signing in.
+
+**Everywhere**
+- Back can't walk out of a server's first page to the connect screen any more.
+- The app has an icon. It had Electron's until now.
+- Linux packages can be built at all: `.deb` and `.rpm` were failing for want of a homepage. `.rpm` and `.pacman` are new.
+- `npm run test:real` runs the real app against a real server with key presses alone, and plays a video.
+
+### Android app
+
+- One APK names all four processors, 32-bit ARM and x86 included, and CI fails if a native library is missing for one.
+- Android's own lint now runs in CI, which is what lets the app claim Android 6.
+
 ### Android app 0.2.0
 
 Compiled against Android's own classes, and its logic and network calls tested. **It has not been made into an APK or run.**

@@ -24,7 +24,14 @@ ever run**, on a device or an emulator.
 | Platform | Status | Notes |
 |---|---|---|
 | Windows 10 and later | **Ran** | From source and as a packaged app. Installers are configured but not built yet. |
-| Linux | **Written** | Same code as Windows and CI packages it, but it has never been launched. |
+| Linux | **Ran** | On Ubuntu 26.04 from source, and on Fedora 44 as an installed `.rpm`. `.deb`, `.pacman` and AppImage build, and haven't been installed. See [below](#freebsd-plasma-bigscreen-and-linux). |
+| FreeBSD 15.1, amd64 | **Ran** | In a virtual machine, as an installed package: picture and sound seen. Needs the system's Electron from the ports tree. See [below](#freebsd-plasma-bigscreen-and-linux). |
+| FreeBSD 14, aarch64, i386 | **Not run** | The same package should work where FreeBSD has an Electron package. At the time of writing that means amd64 on 14 and 15, and only by building Electron from ports on the others. |
+| KDE Plasma Bigscreen | **Ran** | The real shell 6.8.2 on Fedora 44, in a virtual machine: listed in its launcher, opened from it, video and sound seen, keys through the real input stack. Never on a TV or with a real remote. See [below](#freebsd-plasma-bigscreen-and-linux). |
+| Android ARM, 64-bit | **Compiled** | In the same APK, from Android 6. Not run here: the emulators are x86. |
+| Android ARM, 32-bit | **Compiled** | In the same APK, from Android 6. Not run here: see [Android's processors](#androids-processors). |
+| Android x86, 64-bit | Same APK | The emulators run this one, so it's the build the Android rows above were seen on. |
+| Android x86, 32-bit | **Compiled** | In the same APK, from Android 6. Not run here. |
 | Android TV, Google TV | **Type-checked** | Never run. Same APK as phones. |
 | Fire TV | **Type-checked** | Never run. Needs Fire OS 6 or later: the first Fire TV Sticks are too old for Compose. |
 | Android phones, tablets | **Type-checked** | Never run. |
@@ -36,6 +43,82 @@ ever run**, on a device or an emulator.
 | Roku | **Not started** | Needs its own app in BrightScript. |
 | Browsers | Works today | The server's own web interface. Installing it as an app needs HTTPS. |
 | PlayStation, Xbox, Nintendo | **Blocked** | These need approved developer programmes. |
+
+## FreeBSD, Plasma Bigscreen and Linux
+
+All of this ran on this development machine, in QEMU with KVM, against a real WittyMediaServer 0.6.0 with a generated test clip
+(H.264 and AAC, with a 330 Hz tone). The displays in the pictures came from the virtual machine's own screen, and key presses from
+its own keyboard or X, unless it says otherwise.
+
+| | FreeBSD 15.1 | Plasma Bigscreen 6.8.2, Fedora 44 | Ubuntu 26.04 |
+|---|---|---|---|
+| How it was installed | `pkg install` of the package, with Electron 42.11.10 from FreeBSD's repository | `dnf install` of the `.rpm`, with its own Electron 45.2.1 | From source, under a virtual display |
+| Display | X11, on the VESA driver | Wayland, native, in the real KWin | Xvfb |
+| `npm run test:real`, with `--tv` and on the desktop | 11 of 11, and 8 of 8 | Not used: the same journey was done with real keys and pictures | 11 of 11 |
+| The clock moves and frames decode | Yes | Yes: the frame counter on the clip reached 10.8 seconds | Yes |
+| Sound | Yes: the VM's sound card recorded the clip's tone, at 334 Hz by a rough count | Yes: 330 Hz recorded | Not checked |
+| Finding servers with real packets | Found this machine's four servers, through the VM's network | Found four | Found one |
+| Security code and sign-in | Real server | Real server | Real server |
+| Leaving the player, and the menu at the top | Yes | Yes | Yes |
+| Quit | Yes | Yes, back to the launcher | Not checked |
+| Change server from the menu, signing out | Yes | Not checked | Yes |
+
+**Seen only on Plasma Bigscreen:**
+
+- It's listed in the launcher, with its icon and description, from an ordinary desktop entry.
+- Opened from the launcher with no flags, it recognises the session and opens as a TV app.
+- The on-screen keyboard appears for the address box, the page moves up to make room, and arrows and Enter typed into it.
+- A virtual Xbox pad, made with `uinput`: as soon as the app opened it, the shell's input handler stopped turning it
+  into key presses. Each press moved focus one step, and B opened the menu, so presses aren't handled twice.
+- A sign-in made from the launcher is still there after restarting the app. No keyring wizard appears.
+
+**Not seen, on any of these:**
+
+- A real TV, a real remote, and HDMI-CEC. Key presses were real to the system, but a real remote may send other keys.
+- Readability from across a real room. Body text is 18.75px at 1080p, from the server's big screen mode, which is how a TV browser looks too.
+- Hardware video decoding. All of this was software, on a machine with plenty of power to spare.
+- A real FreeBSD desktop. X11 was bare, with one small window manager. Wayland on FreeBSD hasn't been tried.
+- Installing the `.deb`, `.pacman` and AppImage, though all three build.
+- Flatpak. No package exists: see [PORTING.md](PORTING.md#plasma-bigscreen).
+- CI's FreeBSD job. Its commands ran by hand in the VM, but the job itself needs a push to run.
+
+**Known limits:**
+
+- **FreeBSD's Electron is shared, so this package can't set Electron's fuses.** The launcher clears the variables those fuses
+  would ignore, and developer tools stay off in an installed copy. Still, the sign-in cookie isn't encrypted on disk there. It's
+  protected only by being in a folder of that user's. The package's contents aren't checked against tampering either, which
+  matters less for files only root can change.
+- **On a TV, the cookie isn't kept in the keyring**, on any system. Chromium's use of the keyring opens KDE's wallet wizard over the app the
+  first time someone signs in. So a TV uses Chromium's plain store, in a folder only that user can read.
+- **FreeBSD's ports retire each Electron within months.** The launcher falls back to the newest one present, and the build picks the
+  newest one with a package. The code has to keep working across Electron versions. It's now run on 42 and 45.
+- Electron 42 has **no H.265** or other codecs beyond the web's: the server converts those, as it does for a browser.
+- Removing or reinstalling the `.rpm` over itself drops the `/usr/bin/wittymedia` link, which is how electron-builder's scripts work.
+  The launcher entry doesn't use the link. `rpm -e` followed by a fresh install puts it back.
+- A real shell needs more than Fedora's `plasma-bigscreen` package installs. Without `plasma-nm` and `kscreen`, it stops at an error screen. That's
+  for its packagers, and is noted in [PORTING.md](PORTING.md#plasma-bigscreen).
+
+## Android's processors
+
+One APK carries all four. Checked by opening a real one built from this branch, with `android/scripts/check-abis.sh` and `aapt2`:
+
+| | |
+|---|---|
+| Native libraries | One: `libandroidx.graphics.path.so`, from Jetpack Compose, in all four |
+| `native-code` as Android reads it | `arm64-v8a`, `armeabi-v7a`, `x86`, `x86_64` |
+| Lowest Android | 6.0, API 23 |
+| 16 KB memory pages | Aligned, by `zipalign -c -P 16` |
+| Size | 2.9 MB |
+
+**Why Android 6 is the lowest claim.** 23 of the libraries, Compose, Activity, Core and Media3 among them, won't build below API 23, so it's a hard
+floor. Android's own lint reads every call against that version, and CI now runs it. It found two real problems and one missing annotation. The
+first was the one playback's network watcher, whose fix is on the `android-real` branch, and lint is only clean with that merged. `check-abis.sh`
+and `lintSideload` both run in CI.
+
+**ARM from before `armeabi-v7a` isn't possible.** Android's tools dropped ARMv5 and ARMv6 in 2018, and Android 6 itself needs a v7 processor or newer.
+
+**Not seen:** this app running on any ARM device or any 32-bit build. Android's emulators on this x86 machine don't run ARM at a usable speed, and
+it hasn't been run on a 32-bit x86 image or on Android 6. A cheap 32-bit ARM TV stick is the check that matters most.
 
 ## Connecting
 
@@ -236,7 +319,6 @@ checked package, no `file://` privileges):
 
 - **Sound.** Nothing here listens to it.
 - **Game controllers** and real TV remotes. Key presses were simulated.
-- **Linux** running. A Linux package builds, with its fuses set, but has never been started here.
 - **The network search with real sockets** on this version: it would ask the Windows firewall.
 - The package check failing as it should when the package is changed.
 - A server asking for a client certificate, which needs one in the system's store.
@@ -256,7 +338,8 @@ added, and the cause is unknown. It could be the test or the screen.
 - Cookies don't go by port, so two servers at one address (the same computer on two ports) share the desktop app's
   sign-in cookie: signing in to one signs the other out, and the other is sent that sign-in if it's opened. Each
   server having a session of its own would solve it.
-- The title bar can be reached by keyboard (F6), but not by a remote or a controller alone.
+- The title bar can be reached by keyboard (F6), but not by a remote or a controller alone. In TV mode it's hidden, and Back at
+  the top of the app opens a menu with what a TV needs from it.
 - `shared/data/themes.json` is generated. Merging the interface overhaul changes theme colours, so it
   must be regenerated at that point, or CI fails on purpose.
 - Plain HTTP stays enabled on Android because its rules can't name "private addresses only". The app's

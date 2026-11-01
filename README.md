@@ -7,8 +7,8 @@ never been run. Most of this is early, and the native apps have not been compile
 
 | Folder | What it is |
 |---|---|
-| [`desktop/`](desktop) | Windows and Linux: a frameless window around the server's web interface |
-| [`android/`](android) | Android TV, Google TV, Fire TV, phones and tablets (Kotlin, Compose, Media3) |
+| [`desktop/`](desktop) | Windows, Linux, FreeBSD and KDE's Plasma Bigscreen: a frameless window around the server's web interface |
+| [`android/`](android) | Android TV, Google TV, Fire TV, phones and tablets, one APK for ARM and x86, 32-bit and 64-bit (Kotlin, Compose, Media3) |
 | [`apple/`](apple) | Apple TV, iPhone, iPad and Mac (SwiftUI, AVPlayer) |
 | [`shared/`](shared) | What every app shares, as plain data: themes, wording, button meanings and test cases |
 | [`docs/`](docs) | [Design](docs/DESIGN.md), [status](docs/PLATFORMS.md), [porting to TVs](docs/PORTING.md), [what the owner needs to do](docs/OWNER-STEPS.md) |
@@ -27,6 +27,26 @@ npm start
 
 Tab moves around the page. **F6** moves between the page and the title bar, where the arrow keys move along the bar and
 Escape goes back to the page. **Change server** signs out of the server you're leaving.
+
+### Packages
+
+| System | Build it with | Install it with |
+|---|---|---|
+| Windows | `npm run package:win` | The installer in `desktop/out` |
+| Linux | `npm run package:linux`, which needs `rpm` and `bsdtar` | The `.AppImage`, `.deb`, `.rpm` or `.pacman` in `desktop/out` |
+| FreeBSD | `npm ci --ignore-scripts`, then `npm run package:freebsd`, on FreeBSD | `sudo pkg install ./desktop/out/freebsd/wittymedia-*.pkg` |
+
+The FreeBSD package holds only the app, under a megabyte, and uses the system's Electron from the ports tree, which
+`pkg` installs with it. See [docs/PORTING.md](docs/PORTING.md#freebsd).
+
+### On a TV
+
+In a [Plasma Bigscreen](https://plasma-bigscreen.org) session, the Linux app opens as a TV app by itself: the whole
+screen, no title bar, the server's big screen mode, and everything reachable with arrows, Enter and Back. Install a `.deb`,
+`.rpm` or `.pacman` so it appears in the launcher. An AppImage doesn't add itself to any launcher.
+
+Anywhere else, `wittymedia --tv` asks for the same, and `--no-tv` turns it off inside Bigscreen. Back at the top of
+the app opens a small menu with Change server and Quit.
 
 ## Logs
 
@@ -61,6 +81,17 @@ npm run test:app  # the real app against a stand-in server on 127.0.0.1, with a 
 `test:app` replaces the network search, so the Windows firewall doesn't ask anything, and opening a browser and the Help
 menu, so nothing outside it starts. Set `WMC_SHOTS` to a folder for a picture of each screen.
 
+For a system that can't run the stand-in, such as a virtual machine, this runs the real app against a real server, with
+key presses alone, and plays a video. The server needs a film in its first library:
+
+```bash
+WMC_SERVER=http://192.168.1.20:8096 WMC_USER=me WMC_PASSWORD=... npm run test:real -- --tv
+```
+
+On FreeBSD, run Electron yourself, as the `electron` npm package has no build for it:
+`/usr/local/share/electron42/electron test/app/real-server.js --tv`. Set `WMC_APP` to an installed `app.asar` to test that
+instead of this folder.
+
 ```bash
 cd apple/WittyKit
 swift test
@@ -68,8 +99,12 @@ swift test
 
 ```bash
 cd android
-gradle testDebugUnitTest
+gradle testDebugUnitTest lintSideload assembleSideload
+sh scripts/check-abis.sh app/build/outputs/apk/sideload/app-sideload.apk
 ```
+
+`lintSideload` is what keeps Android 6 honest: it fails on a call that version doesn't have. `check-abis.sh` says which
+processors the APK carries, and fails if a native library is missing for any of the four.
 
 The sample server answers used by those tests are checked against a real server with
 `WMS_TOKEN=<token> node shared/scripts/check-fixtures.mjs <server address>`. After a theme changes in the server, rerun
