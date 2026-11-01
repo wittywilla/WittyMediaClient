@@ -49,7 +49,8 @@ test('the uninstaller asks in plain words, about the program and your data apart
 
 test('the uninstaller only ever deletes the two folders that are the app\'s', () => {
   const deletions = uninstall.split('\n').filter((line) => /\brm\b/.test(line) && !/echo/.test(line))
-  assert.deepStrictEqual(deletions.map((l) => l.trim().split(' ').slice(0, 4).join(' ')), ['if rm -rf -- "$folder"'])
+  assert.strictEqual(deletions.length, 1)
+  assert.match(deletions[0], /rm -rf -- "\$folder"/)
   assert.match(uninstall, /for name in WittyMediaClient WittyMedia; do/)
 })
 
