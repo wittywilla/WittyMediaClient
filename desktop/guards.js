@@ -13,6 +13,7 @@ const OUTSIDE_WINDOW_MS = 30 * 1000
 const PAGE_SCHEME = 'wittymedia-app'
 const CONNECT_PAGE = `${PAGE_SCHEME}://connect/index.html`
 const BAR_PAGE = `${PAGE_SCHEME}://titlebar/index.html`
+const TV_MENU_PAGE = `${PAGE_SCHEME}://titlebar/tvmenu.html`
 const PAGE_TYPES = { html: 'text/html; charset=utf-8', css: 'text/css; charset=utf-8', js: 'text/javascript; charset=utf-8' }
 
 // Exactly the app's own connect page, whatever is asked of it.
@@ -131,6 +132,6 @@ function menuPoint(at, width, height) {
 }
 
 module.exports = {
-  PAGE_SCHEME, CONNECT_PAGE, BAR_PAGE, isConnectUrl, pageFile, navigation, outsideAddress, budget, downloadAllowed, readJson, whyFailed, isCertificateCode,
+  PAGE_SCHEME, CONNECT_PAGE, BAR_PAGE, TV_MENU_PAGE, isConnectUrl, pageFile, navigation, outsideAddress, budget, downloadAllowed, readJson, whyFailed, isCertificateCode,
   cleanText, cleanName, cleanMessage, validCode, validToken, menuPoint, MAX_ANSWER_BYTES, MAX_NAME,
 }

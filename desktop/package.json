@@ -2,7 +2,7 @@
   "name": "wittymediaclient-desktop",
   "productName": "WittyMedia",
   "version": "0.2.0",
-  "description": "WittyMediaClient for Windows and Linux",
+  "description": "WittyMediaClient for Windows, Linux and FreeBSD",
   "author": "WittyWilla",
   "license": "Apache-2.0",
   "main": "main.js",
@@ -10,10 +10,12 @@
   "scripts": {
     "sync": "node scripts/sync-shared.mjs",
     "start": "npm run sync && electron .",
-    "test": "npm run sync && node --test ../shared/connect/address.test.js test/state.test.js test/connect.test.js test/guards.test.js test/pages.test.js test/moonlight.test.js test/clientlog.test.js",
+    "test": "npm run sync && node --test ../shared/connect/address.test.js test/state.test.js test/connect.test.js test/guards.test.js test/pages.test.js test/moonlight.test.js test/clientlog.test.js test/tv.test.js test/freebsd.test.js",
     "test:app": "npm run sync && node test/app/all.js",
     "package:win": "npm run sync && electron-builder --win",
-    "package:linux": "npm run sync && electron-builder --linux"
+    "package:linux": "npm run sync && electron-builder --linux",
+    "test:real": "npm run sync && electron test/app/real-server.js",
+    "package:freebsd": "npm run sync && node packaging/freebsd/package.mjs"
   },
   "devDependencies": {
     "electron": "45.2.1",
@@ -35,6 +37,7 @@
       "discover.js",
       "moonlight.js",
       "clientlog.js",
+      "tv.js",
       "titlebar/**",
       "connect/**"
     ],
@@ -58,10 +61,25 @@
     "linux": {
       "target": [
         "AppImage",
-        "deb"
+        "deb",
+        "rpm",
+        "pacman"
       ],
+      "executableName": "wittymedia",
       "category": "AudioVideo",
-      "maintainer": "WittyWilla"
+      "maintainer": "WittyWilla",
+      "synopsis": "Watch and listen to your own WittyMediaServer",
+      "desktop": {
+        "entry": {
+          "Name": "WittyMedia",
+          "GenericName": "Media player",
+          "Comment": "Watch and listen to your own WittyMediaServer",
+          "Categories": "AudioVideo;Video;Audio;Player;TV;",
+          "Keywords": "media;video;music;television;server;",
+          "Terminal": "false",
+          "StartupWMClass": "wittymedia"
+        }
+      }
     },
     "nsis": {
       "oneClick": true,
@@ -70,5 +88,6 @@
   },
   "dependencies": {
     "multicast-dns": "7.2.5"
-  }
+  },
+  "desktopName": "wittymedia.desktop"
 }

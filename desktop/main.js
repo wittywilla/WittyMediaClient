@@ -1,4 +1,4 @@
-// WittyMediaClient for Windows and Linux: a frameless window with two views.
+// WittyMediaClient for Windows, Linux and FreeBSD: a frameless window with two views.
 // The title bar is our own local page. Below it, the content view shows the
 // connect screen and then the server's web UI, which has no access to Node or
 // to the app beyond reporting its theme colours and asking for Moonlight.
@@ -13,10 +13,12 @@ const { startDiscovery } = require('./discover.js')
 const moonlight = require('./moonlight.js')
 const { createClientLog } = require('./clientlog.js')
 const state = require('./state.js')
+const tv = require('./tv.js')
 
 const TITLE_BAR = 32
 const CONNECT_PAGE = guards.CONNECT_PAGE
 const BAR_PAGE = guards.BAR_PAGE
+const TV_MENU_PAGE = guards.TV_MENU_PAGE
 const STATUS_TIMEOUT_MS = 5000
 const API = '/api/v1' // the contract: docs/CLIENT-API.md
 const SESSION_COOKIE = 'wms_token'
@@ -26,17 +28,23 @@ const COLOUR = /^(#[0-9a-fA-F]{3,8}|rgba?\([\d\s.,%/]+\))$/
 const BACKGROUND = '#0f1115'
 const BAR_THEME = { bg: '#0f1115', fg: '#e8eaf0', border: 'transparent' }
 const RESTART_GAP_MS = 10 * 1000
+// On a TV: the whole screen from the start, no title bar, and the server's big screen mode.
+const TV = tv.wanted(process.argv, process.env)
+// FreeBSD's Electron is the system's own and starts this app from the outside, so it
+// never counts as packaged. Being inside its archive is what says this is an installed copy.
+const INSTALLED = app.isPackaged || __dirname.includes('.asar')
 
 const stateFile = () => path.join(app.getPath('userData'), 'state.json')
 let saved = {}
-let win, bar, content
+let win, bar, content, tvMenu, secure
 let server = '' // the origin the content view may show
 let lastServer = ''
 let stopDiscovery = null
 let shown = null // what the connect screen last showed about a server, to hold it to that
 
-const OS_NAMES = { win32: 'Windows', linux: 'Linux', darwin: 'macOS' }
-const DEVICE = `${OS_NAMES[process.platform] || process.platform} ${os.release()} ${process.arch}, Electron ${process.versions.electron}`
+const OS_NAMES = { win32: 'Windows', linux: 'Linux', darwin: 'macOS', freebsd: 'FreeBSD' }
+const OS_NAME = OS_NAMES[process.platform] || process.platform
+const DEVICE = `${OS_NAME} ${os.release()} ${process.arch}, Electron ${process.versions.electron}`
 
 // The sign-in stays in the session's cookie, which no page script can read. Only
 // the main process reads it here, to send this app's own reports to that server.
@@ -122,11 +130,38 @@ const isF6 = (input) => input.type === 'keyDown' && input.key === 'F6' && !input
 
 function layout() {
   const { width, height } = win.getContentBounds()
-  const full = win.isFullScreen() || htmlFullScreen
+  const full = TV || win.isFullScreen() || htmlFullScreen
   bar.setVisible(!full)
   bar.setBounds({ x: 0, y: 0, width, height: TITLE_BAR })
   const top = full ? 0 : TITLE_BAR
   content.setBounds({ x: 0, y: top, width, height: Math.max(0, height - top) })
+  if (tvMenu) tvMenu.setBounds({ x: 0, y: 0, width, height })
+}
+
+// Back at the top of the app. A remote can't reach a title bar, and this is what's on it.
+function openTvMenu() {
+  if (!tvMenu) {
+    tvMenu = new WebContentsView({ webPreferences: { ...secure, preload: path.join(__dirname, 'titlebar', 'preload.js') } })
+    tvMenu.setBackgroundColor('#00000000')
+    tvMenu.webContents.setWindowOpenHandler(() => ({ action: 'deny' }))
+    tvMenu.webContents.on('will-navigate', (e) => e.preventDefault())
+    watchContents(tvMenu.webContents, 'TV menu', () => closeTvMenu())
+  }
+  const details = { hasServer: Boolean(server) }
+  const show = () => {
+    win.contentView.addChildView(tvMenu)
+    layout()
+    tvMenu.webContents.focus()
+    tvMenu.webContents.send('tv-menu-open', details)
+  }
+  if (tvMenu.webContents.getURL()) show()
+  else tvMenu.webContents.loadURL(TV_MENU_PAGE).then(show).catch((err) => log.noteError('error', 'app', 'The TV menu could not be opened', err))
+}
+
+function closeTvMenu() {
+  if (!tvMenu) return
+  win.contentView.removeChildView(tvMenu)
+  content.webContents.focus()
 }
 
 let htmlFullScreen = false
@@ -139,9 +174,14 @@ function endDiscovery() {
 // A load that fails is reported by did-fail-load, which is where it gets dealt with.
 const quietly = (loading) => loading.catch(() => {})
 
+// What the app itself loads starts history afresh. Otherwise Back would walk from a
+// server's first page to the connect screen, around everything that guards it.
+let startedAfresh = false
+
 function showConnect(query) {
   endDiscovery()
   server = ''
+  startedAfresh = true
   bar.webContents.send('server', '')
   bar.webContents.send('theme', BAR_THEME)
   quietly(content.webContents.loadURL(query ? `${CONNECT_PAGE}?${new URLSearchParams(query)}` : CONNECT_PAGE))
@@ -152,8 +192,9 @@ function showServer(url) {
   server = new URL(url).origin
   lastServer = server
   shown = null
+  startedAfresh = true
   bar.webContents.send('server', url)
-  quietly(content.webContents.loadURL(url))
+  quietly(content.webContents.loadURL(TV ? tv.tenFootAddress(url) : url))
   log.kick()
 }
 
@@ -272,7 +313,7 @@ async function redeem(url, code) {
   let res, answer
   try {
     res = await postJson(found.url + API + '/pair/redeem', {
-      code, device: `${os.hostname()} (WittyMedia)`.slice(0, 60), platform: process.platform === 'win32' ? 'Windows' : 'Linux',
+      code, device: `${os.hostname()} (WittyMedia)`.slice(0, 60), platform: OS_NAME,
     })
     answer = await guards.readJson(res)
   } catch (err) {
@@ -354,7 +395,11 @@ function guardContent(wc) {
   })
   wc.on('enter-html-full-screen', () => { htmlFullScreen = true; layout() })
   wc.on('leave-html-full-screen', () => { htmlFullScreen = false; layout() })
-  wc.on('did-finish-load', () => wc.focus())
+  wc.on('did-finish-load', () => {
+    if (startedAfresh) wc.navigationHistory.clear()
+    startedAfresh = false
+    wc.focus()
+  })
 }
 
 // The app's own pages, from inside its package. No page needs anything from file://, so it
@@ -377,17 +422,17 @@ function servePages() {
 function createWindow() {
   const size = saved.window || {}
   win = new BaseWindow({
-    width: size.width || 1280, height: size.height || 800, minWidth: 480, minHeight: 360,
+    width: size.width || 1280, height: size.height || 800, minWidth: 480, minHeight: 360, fullscreen: TV,
     frame: false, backgroundColor: '#0f1115', title: 'WittyMedia', show: true,
   })
   win.setMenu(null)
 
-  const secure = {
+  secure = {
     contextIsolation: true, sandbox: true, nodeIntegration: false, nodeIntegrationInSubFrames: false, webSecurity: true, webviewTag: false,
-    spellcheck: false, safeDialogs: true, devTools: !app.isPackaged,
+    spellcheck: false, safeDialogs: true, devTools: !INSTALLED,
   }
   bar = new WebContentsView({ webPreferences: { ...secure, preload: path.join(__dirname, 'titlebar', 'preload.js') } })
-  content = new WebContentsView({ webPreferences: { ...secure, preload: path.join(__dirname, 'preload.js'), autoplayPolicy: 'no-user-gesture-required' } })
+  content = new WebContentsView({ webPreferences: { ...secure, preload: path.join(__dirname, 'preload.js'), autoplayPolicy: 'no-user-gesture-required', additionalArguments: TV ? ['--wittymedia-tv'] : [] } })
   // Before a page is ready, or while a server answers, a view is white unless told otherwise.
   bar.setBackgroundColor(BACKGROUND)
   content.setBackgroundColor(BACKGROUND)
@@ -450,7 +495,10 @@ ipcMain.on('theme', (e, t) => {
   if (!fromServerPage(e) || !t) return
   const ok = (c) => typeof c === 'string' && COLOUR.test(c)
   // A hairline in a form this check doesn't know mustn't stop the rest applying.
-  if (ok(t.bg) && ok(t.fg)) bar.webContents.send('theme', { bg: t.bg, fg: t.fg, border: ok(t.border) ? t.border : 'transparent' })
+  if (!ok(t.bg) || !ok(t.fg)) return
+  const theme = { bg: t.bg, fg: t.fg, border: ok(t.border) ? t.border : 'transparent' }
+  bar.webContents.send('theme', theme)
+  if (tvMenu) tvMenu.webContents.send('theme', theme)
 })
 
 // A game on someone's own PC, handed to the Moonlight app. The page gets a yes or a no.
@@ -467,8 +515,24 @@ ipcMain.on('window', (e, action, at) => {
   else if (action === 'focus-page') content.webContents.focus()
 })
 
+// Back on a TV: Escape that the page didn't use goes back, and with nowhere to go it's the menu.
+ipcMain.on('tv-back', (e, stepBack) => {
+  if (!TV || !(fromConnect(e) || fromServerPage(e))) return
+  const { navigationHistory } = content.webContents
+  if (!navigationHistory.canGoBack()) openTvMenu()
+  else if (stepBack === true) navigationHistory.goBack()
+})
+
+ipcMain.on('tv-menu', (e, action) => {
+  if (!TV || !tvMenu || e.sender !== tvMenu.webContents) return
+  if (action === 'close') closeTvMenu()
+  else if (action === 'change-server') { closeTvMenu(); leaveServer() }
+  else if (action === 'quit') win.close()
+})
+
 // Every page gets the sandbox, whatever made it. The default menu's shortcuts aren't for this app.
 app.enableSandbox()
+if (TV) for (const [name, value] of tv.switches(process.env)) app.commandLine.appendSwitch(name, value)
 Menu.setApplicationMenu(null)
 protocol.registerSchemesAsPrivileged([{ scheme: guards.PAGE_SCHEME, privileges: { standard: true, secure: true } }])
 

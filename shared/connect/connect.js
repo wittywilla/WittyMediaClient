@@ -331,6 +331,7 @@
     if (e.ctrlKey || e.altKey || e.metaKey) return
     if (isBack(e)) {
       if (screenBack) { e.preventDefault(); screenBack() }
+      else if (bridge.topBack) bridge.topBack() // nowhere further back: a TV needs a way out
       return
     }
     if (onScreenKey && onScreenKey(e)) { e.preventDefault(); return }
