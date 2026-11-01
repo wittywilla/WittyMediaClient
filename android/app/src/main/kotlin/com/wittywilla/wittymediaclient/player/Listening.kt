@@ -40,8 +40,6 @@ class Listening(private val app: WittyApp) {
         private set
     var isLoading by mutableStateOf(false)
         private set
-    var hasEnded by mutableStateOf(false)
-        private set
     var queue by mutableStateOf<List<QueueEntry>>(emptyList())
         private set
     var nowIndex by mutableIntStateOf(0)
@@ -88,7 +86,6 @@ class Listening(private val app: WittyApp) {
         now = player.currentMediaItem
         isPlaying = player.isPlaying
         isLoading = player.playbackState == Player.STATE_BUFFERING && player.playWhenReady
-        hasEnded = player.playbackState == Player.STATE_ENDED
         nowIndex = player.currentMediaItemIndex
         shuffle = player.shuffleModeEnabled
         repeat = player.repeatMode
@@ -122,7 +119,6 @@ class Listening(private val app: WittyApp) {
         queue = emptyList()
         isPlaying = false
         isLoading = false
-        hasEnded = false
     }
 
     // Off screen, nothing needs to hear about any of this. The service carries on.

@@ -6,6 +6,7 @@ import androidx.activity.ComponentActivity
 import androidx.activity.SystemBarStyle
 import androidx.activity.compose.BackHandler
 import androidx.activity.enableEdgeToEdge
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.WindowInsets
@@ -13,6 +14,7 @@ import androidx.compose.foundation.layout.consumeWindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.DisposableEffect
@@ -488,7 +490,8 @@ fun AppRoot(app: WittyApp) {
         if (hasQueue && route.hasMiniPlayer && !tabs) {
             Column(Modifier.fillMaxSize()) {
                 Box(Modifier.weight(1f).consumeWindowInsets(WindowInsets.navigationBars)) { showing() }
-                MiniPlayer(nav, Modifier.navigationBarsPadding())
+                // Its colour goes on under the system's bar, so the bar has a page behind it.
+                Box(Modifier.background(MaterialTheme.colorScheme.surface).navigationBarsPadding()) { MiniPlayer(nav) }
             }
         } else {
             showing()

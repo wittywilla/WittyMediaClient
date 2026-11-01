@@ -79,6 +79,13 @@ Connecting is your main requirement and it has only run on emulators, where find
 6. Change the server's address (restart it on another port, or let the router give it a new one), then
    reopen the app. Does it find the server again?
 
+The music player needs a real device too, as emulators make no sound:
+
+7. Play an album, turn the screen off, and wait for the next song. Is there sound all the way, with no gap you'd mind?
+8. Use the lock screen's buttons, and headphone or Bluetooth buttons if you have them. Does a phone call pause it?
+9. On a TV, press Home while it plays. Does the card on the home screen open the app? On the emulator its Open button did nothing, because of the system.
+10. Play an audiobook for a minute, close it, and reopen it on another device. Does it say Resume, and go to the same place?
+
 ## Step 3: Try Apple (needs a Mac)
 
 Apple only allows building and installing from a Mac. **Everything that can be done without one has been. Nothing

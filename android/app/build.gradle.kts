@@ -15,8 +15,8 @@ android {
         minSdk = 23
         // Target 37 adds a local-network permission: raise this with discovery tested on a device.
         targetSdk = 36
-        versionCode = 4
-        versionName = "0.2.2"
+        versionCode = 5
+        versionName = "0.3.0"
         // One APK for every Android device. 32-bit ARM stays, for old TV sticks and phones.
         // scripts/check-abis.sh fails if a native library is missing for any of these.
         ndk {

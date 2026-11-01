@@ -18,7 +18,8 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListScope
-import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.KeyboardArrowDown
@@ -130,6 +131,8 @@ fun MiniPlayer(nav: Nav, modifier: Modifier = Modifier) {
                         Text(about.title?.toString().orEmpty(), color = scheme.onSurface, style = MaterialTheme.typography.bodyLarge, maxLines = 1, overflow = TextOverflow.Ellipsis)
                         if (listening.problem.isNotEmpty()) {
                             Text(listening.problem, color = scheme.onSurfaceVariant, style = MaterialTheme.typography.bodySmall, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite })
+                        } else if (listening.isLoading) {
+                            Text("Loading…", color = scheme.onSurfaceVariant, style = MaterialTheme.typography.bodySmall, maxLines = 1, modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite })
                         } else if (!about.artist.isNullOrEmpty()) {
                             Text(about.artist.toString(), color = scheme.onSurfaceVariant, style = MaterialTheme.typography.bodySmall, maxLines = 1, overflow = TextOverflow.Ellipsis)
                         }
@@ -236,8 +239,8 @@ private fun LazyListScope.queueList(listening: Listening, editing: Boolean, onEd
         }
     }
     val list = listening.queue
-    items(list, key = { "${it.mediaId}-${it.index}" }) { entry ->
-        QueueRow(listening, entry, list.indexOf(entry), list.lastIndex, editing)
+    itemsIndexed(list, key = { _, it -> "${it.mediaId}-${it.index}" }) { position, entry ->
+        QueueRow(listening, entry, position, list.lastIndex, editing)
     }
 }
 
@@ -267,6 +270,7 @@ fun NowPlayingScreen(nav: Nav) {
             Text(about?.title?.toString().orEmpty(), color = MaterialTheme.colorScheme.onBackground, style = MaterialTheme.typography.headlineSmall, textAlign = align, maxLines = 3, overflow = TextOverflow.Ellipsis, modifier = Modifier.fillMaxWidth())
             val under = listOf(about?.artist?.toString().orEmpty(), about?.albumTitle?.toString().orEmpty()).filter { it.isNotEmpty() }.distinct().joinToString(" · ")
             if (under.isNotEmpty()) Text(under, color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodyLarge, textAlign = align, modifier = Modifier.fillMaxWidth())
+            if (listening.isLoading) Text("Loading…", color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodyMedium, textAlign = align, modifier = Modifier.fillMaxWidth().semantics { liveRegion = LiveRegionMode.Polite })
             ErrorText(listening.problem)
         }
     }
@@ -284,9 +288,15 @@ fun NowPlayingScreen(nav: Nav) {
                     }
                     Controls(listening)
                 }
+                // The list keeps what's playing in view, unless someone is rearranging it.
+                val queueScroll = rememberLazyListState()
+                LaunchedEffect(listening.nowIndex, listening.queue.size, editing) {
+                    if (!editing) queueScroll.scrollToItem(listening.queue.indexOfFirst { it.index == listening.nowIndex }.coerceAtLeast(0))
+                }
                 // Left from here goes back to the buttons. Past either end of the list stays in the list.
                 LazyColumn(
-                    Modifier
+                    state = queueScroll,
+                    modifier = Modifier
                         .weight(1f)
                         .fillMaxHeight()
                         .focusProperties {

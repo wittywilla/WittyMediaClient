@@ -183,7 +183,7 @@ server's own page, and the desktop's title bar reads its colours from that page'
 
 - Lists are lazy, and images are requested at the size shown and cached on disk with a bound.
 - No animation on focus beyond a border or small scale change.
-- No background work while playing, other than saving progress every 10 seconds.
+- No background work while playing, other than saving progress every 10 seconds. Music's service starts with the first queue and ends with the last, so someone only watching films pays nothing for it.
 - The player stops the server's conversion when the viewer leaves, so a closed stream costs nothing.
 - Android builds with R8 and ships a baseline profile when one can be generated on a device.
 
