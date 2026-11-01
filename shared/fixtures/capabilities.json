@@ -1,10 +1,11 @@
 {
   "server": "WittyMediaServer",
-  "version": "0.5.2-alpha",
+  "version": "0.6.0-alpha",
   "apiVersion": 1,
-  "apiRevision": 1,
+  "apiRevision": 6,
   "apiVersions": [1],
   "apiBase": "/api/v1",
   "setupRequired": false,
-  "features": ["pairing", "playback-profiles", "stream-tokens"]
+  "features": ["pairing", "playback-profiles", "stream-tokens", "min-client-versions"],
+  "minClientVersions": { "android": "0.1.0", "apple": "0.1.0", "desktop": "0.1.0" }
 }

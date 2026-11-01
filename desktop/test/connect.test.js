@@ -3,7 +3,7 @@ const assert = require('node:assert')
 const crypto = require('crypto')
 const dnsPacket = require('dns-packet')
 const { serversFromRecords, serverFromUdpReply, makeServer, ServerList, FORGET_AFTER_MS, MAX_SERVERS } = require('../discover.js')
-const { signatureValid, judge, judgeMissing, fingerprintOf, signedBytes } = require('../identity.js')
+const { signatureValid, judge, judgeMissing, signInFits, admit, fingerprintOf, signedBytes } = require('../identity.js')
 
 const ID = '0123456789abcdef0123456789abcdef'
 const INSTANCE = `Home (0123)._wittymedia._tcp.local`
@@ -32,6 +32,11 @@ test('tls=1 means https', () => {
 
 test('refuses announcements that point outside the local network', () => {
   assert.deepStrictEqual(serversFromRecords(answer({ host: '8.8.8.8' })), [])
+})
+
+test('refuses announcements that point this computer at itself', () => {
+  assert.deepStrictEqual(serversFromRecords(answer({ host: '127.0.0.1' })), [])
+  assert.deepStrictEqual(serversFromRecords(answer({ host: '127.1.2.3' })), [])
 })
 
 test('refuses a bad id or port, and other services', () => {
@@ -97,6 +102,18 @@ test('accepts a true signature and refuses tampering', () => {
   assert.strictEqual(signatureValid(null, 'nonce'), false)
 })
 
+test('an answer has to be made of what it should be', () => {
+  const { answer: a } = signedAnswer('nonce')
+  const raw = [...Buffer.from(a.publicKey, 'base64')]
+  // Buffer.from would happily read these as bytes, and the key would then not be a string anywhere else.
+  assert.strictEqual(signatureValid({ ...a, publicKey: raw }, 'nonce'), false)
+  assert.strictEqual(signatureValid({ ...a, signature: [...Buffer.from(a.signature, 'base64')] }, 'nonce'), false)
+  assert.strictEqual(signatureValid({ ...a, serverId: '' }, 'nonce'), false)
+  assert.strictEqual(signatureValid({ ...a, serverId: 7 }, 'nonce'), false)
+  assert.strictEqual(signatureValid({ ...a, serverId: 'x'.repeat(129) }, 'nonce'), false)
+  assert.strictEqual(signatureValid({ ...a, signature: 'AAAA' }, 'nonce'), false)
+})
+
 test('checks a real answer from a server', () => {
   const fixture = require('../../shared/fixtures/identity.json')
   assert.strictEqual(signatureValid(fixture.answer, fixture.nonce), true)
@@ -124,4 +141,58 @@ test('judges new, same and different keys', () => {
   assert.strictEqual(judge(other, 'n', url, [{ url, serverId: ID, publicKey: a.publicKey }]), 'different')
   // The same server ID at a new address must still hold the same key.
   assert.strictEqual(judge(other, 'n', 'http://10.0.0.3:9797', [{ url, serverId: ID, publicKey: a.publicKey }]), 'different')
+})
+
+test('holding any remembered key is enough to be that server, wherever it answers', () => {
+  const url = 'http://10.0.0.2:9797'
+  const { answer: mine } = signedAnswer('n', 'ee'.repeat(16))
+  const { answer: other } = signedAnswer('n')
+  // The first entry found at this address isn't this server's: its own entry comes later.
+  const saved = [{ url, serverId: other.serverId, publicKey: other.publicKey }, { url: 'http://10.0.0.9:9797', serverId: mine.serverId, publicKey: mine.publicKey }]
+  assert.strictEqual(judge(mine, 'n', url, saved), 'same')
+  assert.strictEqual(judge(mine, 'n', 'http://10.0.0.77:9797', saved), 'same')
+  // An entry with no key says nothing about who is here.
+  assert.strictEqual(judge(mine, 'n', url, [{ url, name: 'From before keys' }]), 'new')
+})
+
+test('a sign-in only goes to the server it was made with', () => {
+  const url = 'http://10.0.0.2:9797'
+  const key = 'k1'
+  const saved = [{ url, publicKey: key }, { url: 'http://10.0.0.9:9797', publicKey: 'k2' }, { url: 'http://10.0.0.5:9797' }]
+  assert.ok(signInFits(url, { state: 'same', publicKey: key }, saved))
+  assert.ok(!signInFits(url, { state: 'same', publicKey: 'k2' }, saved), 'another remembered server now at this address')
+  assert.ok(!signInFits(url, { state: 'different', publicKey: 'k3' }, saved))
+  assert.ok(!signInFits(url, { state: 'none' }, saved), 'a known server that stopped proving itself')
+  assert.ok(!signInFits('http://10.0.0.77:9797', { state: 'new', publicKey: 'k4' }, saved), 'an address never signed in to')
+  assert.ok(!signInFits(url, { state: 'same', publicKey: key }, undefined))
+  // From before the server had a key: its first proof is taken on trust, once.
+  assert.ok(signInFits('http://10.0.0.5:9797', { state: 'new', publicKey: 'k5' }, saved))
+  assert.ok(signInFits('http://10.0.0.5:9797', { state: 'none' }, saved))
+  assert.ok(!signInFits('http://10.0.0.5:9797', { state: 'same', publicKey: 'k2' }, saved))
+})
+
+test('a server is only let in if it is still what the person was shown', () => {
+  const url = 'http://10.0.0.2:9797'
+  const newServer = { state: 'new', publicKey: 'k1' }
+  const shownNew = { url, state: 'new', publicKey: 'k1' }
+  assert.strictEqual(admit(url, newServer, shownNew), 'ok')
+  assert.strictEqual(admit(url, { state: 'new', publicKey: 'k2' }, shownNew), 'changed', 'another key since')
+  assert.strictEqual(admit(url, { state: 'different', publicKey: 'k1' }, shownNew), 'changed')
+  assert.strictEqual(admit('http://10.0.0.3:9797', newServer, shownNew), 'changed', 'another address')
+  assert.strictEqual(admit(url, newServer, null), 'changed', 'never shown')
+  assert.strictEqual(admit(url, { state: 'none' }, { url, state: 'none', publicKey: '' }), 'ok', 'an older server')
+  assert.strictEqual(admit(url, { state: 'none' }, shownNew), 'changed', 'it stopped proving itself')
+  assert.strictEqual(admit(url, { state: 'same', publicKey: 'k1' }, { url, state: 'same', publicKey: 'k1' }), 'ok')
+  assert.strictEqual(admit(url, { state: 'bad' }, shownNew), 'refused')
+  assert.strictEqual(admit(url, { state: 'unreachable' }, shownNew), 'unreachable')
+})
+
+test('another key needs the person to have said so, about that key', () => {
+  const url = 'http://10.0.0.2:9797'
+  const proof = { state: 'different', publicKey: 'k2' }
+  const shown = { url, state: 'different', publicKey: 'k2' }
+  assert.strictEqual(admit(url, proof, shown), 'refused')
+  assert.strictEqual(admit(url, proof, shown, 'yes'), 'refused', 'only a real true')
+  assert.strictEqual(admit(url, proof, shown, true), 'ok')
+  assert.strictEqual(admit(url, { state: 'different', publicKey: 'k3' }, shown, true), 'changed', 'they trusted k2, not this one')
 })

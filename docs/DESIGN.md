@@ -4,6 +4,7 @@ WittyMediaClient is the family of apps that connect to a WittyMediaServer: TV bo
 tablets and desktops. This document records what we build, in which order, and why.
 
 Status of each platform, including what has actually been run, is in [PLATFORMS.md](PLATFORMS.md).
+The plan for TVs is in [PORTING.md](PORTING.md).
 What the owner has to do (accounts, signing, stores) is in [OWNER-STEPS.md](OWNER-STEPS.md).
 
 ## Goals, in priority order
@@ -25,6 +26,10 @@ There are three kinds of client, chosen by what each platform does well.
 | **Native** | tvOS, iOS, iPadOS, macOS | SwiftUI | AVPlayer | The system player gives HDR, Atmos passthrough, Siri remote scrubbing, AirPlay and VoiceOver. A web view on tvOS doesn't exist at all. |
 | **Native** | Android TV, Google TV, Fire TV, Android phones and tablets | Jetpack Compose | Media3 (ExoPlayer) | Hardware decoding and passthrough, and it doesn't depend on the age of the device's WebView, which is often very old on TV boxes. |
 | **Shell** | Windows, Linux, webOS, Tizen | The server's own web UI, behind a small connect screen | The browser engine, via the web UI | The web UI already has every feature, including TV navigation (`web/src/tv.ts`). A shell gets parity on day one and stays current with the server, with no second UI to maintain. |
+
+**Apple TV is native all the way through.** tvOS doesn't offer apps a web view, so everything there is
+SwiftUI and AVPlayer, sharing WittyKit with the others for API models, addresses, identity and discovery. The
+one web view on Apple devices is the game player on iPhone and iPad.
 
 Roku has its own language (BrightScript) and can't share code with anything else, so it is a
 separate later client. Consoles are blocked: see [Platform order](#platform-order).
@@ -106,9 +111,11 @@ anything: through `GET /api/v1/capabilities` on the native apps, and `GET /api/s
 
 Plain HTTP is allowed to private and local addresses, because that's how home servers run. On a
 public hostname it is refused with an explanation and a suggestion to use HTTPS, because a token
-would cross the internet in the clear. Apple's App Transport Security enforces this by itself. On
-Android, the network security config can't express "private addresses only", so cleartext stays
-enabled there and the check in the app's own connection code is what refuses public HTTP.
+would cross the internet in the clear. On Apple, App Transport Security stops plain HTTP to public
+names, but it doesn't look at numeric addresses at all, so there too the check in the app's own
+connection code is what refuses a public IP. On Android, the network security config can't express
+"private addresses only", so cleartext stays enabled and the same check is all there is. A name that
+looks local can still resolve to the internet: the Apple apps look it up first, and refuse.
 
 ### Tokens
 
@@ -117,7 +124,8 @@ enabled there and the check in the app's own connection code is what refuses pub
   has no supported way to add headers, and a stream token is far less powerful to leak.
 - **Storage:** Keychain on Apple, and an Android Keystore-wrapped value with backups disabled. Shells
   hold no token themselves: the web UI manages its own session as it does in a browser, and the
-  desktop app only remembers server addresses and its window size.
+  desktop app only remembers server addresses, their keys and its window size. Its session cookie is
+  encrypted by the system in packaged builds, and Change server ends the session.
 
 ## Platform order
 

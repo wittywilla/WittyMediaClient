@@ -3,6 +3,8 @@
 // shared/data/connection-cases.json. Loaded as a plain script and by Node's tests.
 (function (root) {
   const DEFAULT_PORT = 9797
+  const MAX_RECENT = 8
+  const MAX_NAME = 80
 
   function ipv4Private(host) {
     const m = /^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/.exec(host)
@@ -51,7 +53,19 @@
     return { url: u.origin }
   }
 
-  const api = { normalizeAddress, isPrivateHost, DEFAULT_PORT }
+  // What was remembered in this browser, which anything on the same origin could have
+  // written. Only proper addresses come out, however it reads.
+  function cleanRecent(list) {
+    if (!Array.isArray(list)) return []
+    const out = []
+    for (const s of list) {
+      const r = s && typeof s === 'object' ? normalizeAddress(s.url) : { error: 'invalid' }
+      if (r.url && out.length < MAX_RECENT) out.push({ url: r.url, name: typeof s.name === 'string' ? s.name.slice(0, MAX_NAME) : '' })
+    }
+    return out
+  }
+
+  const api = { normalizeAddress, isPrivateHost, cleanRecent, DEFAULT_PORT }
   if (typeof module !== 'undefined' && module.exports) module.exports = api
   else root.WittyAddress = api
 })(typeof self !== 'undefined' ? self : this)

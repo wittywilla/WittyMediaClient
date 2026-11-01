@@ -2,7 +2,7 @@
   "name": "wittymediaclient",
   "productName": "WittyMediaClient",
   "desktopName": "wittymediaclient.desktop",
-  "version": "0.1.1",
+  "version": "0.2.1",
   "description": "Watch and listen from your WittyMediaServer",
   "author": "WittyWilla",
   "homepage": "https://github.com/wittywilla/WittyMediaClient",
@@ -12,13 +12,14 @@
   "scripts": {
     "sync": "node scripts/sync-shared.mjs",
     "start": "npm run sync && electron .",
-    "test": "npm run sync && node --test ../shared/connect/address.test.js test/state.test.js test/connect.test.js test/moonlight.test.js test/clientlog.test.js",
+    "test": "npm run sync && node --test ../shared/connect/address.test.js test/state.test.js test/connect.test.js test/guards.test.js test/pages.test.js test/moonlight.test.js test/clientlog.test.js",
+    "test:app": "npm run sync && node test/app/all.js",
     "package:win": "npm run sync && electron-builder --win",
     "package:linux": "npm run sync && electron-builder --linux",
     "package:mac": "npm run sync && electron-builder --mac"
   },
   "devDependencies": {
-    "electron": "45.2.0",
+    "electron": "45.2.1",
     "electron-builder": "26.18.0"
   },
   "build": {
@@ -34,6 +35,7 @@
       "preload.js",
       "state.js",
       "identity.js",
+      "guards.js",
       "discover.js",
       "moonlight.js",
       "clientlog.js",
@@ -55,9 +57,13 @@
     "afterPack": "build/after-pack.js",
     "electronFuses": {
       "runAsNode": false,
+      "enableCookieEncryption": true,
       "enableNodeOptionsEnvironmentVariable": false,
       "enableNodeCliInspectArguments": false,
-      "onlyLoadAppFromAsar": true
+      "enableEmbeddedAsarIntegrityValidation": true,
+      "onlyLoadAppFromAsar": true,
+      "loadBrowserProcessSpecificV8Snapshot": false,
+      "grantFileProtocolExtraPrivileges": false
     },
     "win": {
       "target": [
@@ -223,7 +229,8 @@
         "libuuid",
         "libsecret"
       ]
-    }
+    },
+    "asar": true
   },
   "dependencies": {
     "multicast-dns": "7.2.5"

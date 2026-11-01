@@ -12,9 +12,10 @@ public struct ServerStatus: Decodable, Equatable {
     public let theme: String?
     public let user: User?
 
+    /// Comes from a server that may not have proved anything yet, so it is cleaned before showing.
     public var displayName: String {
-        if let brandName, !brandName.isEmpty { return brandName }
-        return name ?? "WittyMediaServer"
+        if let brandName, !brandName.isEmpty { return Discovery.cleanName(brandName) }
+        return Discovery.cleanName(name ?? "")
     }
 }
 
@@ -57,6 +58,11 @@ public struct Library: Decodable, Identifiable, Hashable {
     public var isShows: Bool { type == "shows" || type == "anime" }
     /// The games on someone's own PC: see Rigs.swift.
     public var isRigGames: Bool { type == "games" && console == "rig" }
+    /// Lists what these apps can open: video, and games on someone's own PC. Types are a list
+    /// that grows, so anything not known here counts as not yet.
+    public var opensHere: Bool { ["movies", "shows", "anime", "videos", "discs"].contains(type) || isRigGames }
+    /// Sound of some kind, which goes under Music.
+    public var isListening: Bool { ["music", "audiobooks", "podcasts", "radio"].contains(type) }
 }
 
 public struct CouchStatus: Decodable, Equatable {
@@ -102,6 +108,13 @@ public struct Item: Decodable, Identifiable, Equatable {
     public var resumeSeconds: Double? {
         guard let at = progress?.resumeSec, at > 0 else { return nil }
         return at
+    }
+
+    /// How far through, from 0 to 1, for a bar on the card. Nil if not started or already finished.
+    public var progressFraction: Double? {
+        guard progress?.watched != true, let at = progress?.positionSec, at > 0,
+              let total = progress?.durationSec ?? runtimeSec, total > 0 else { return nil }
+        return min(at / total, 1)
     }
 
     /// "S2 · E15–16", or "" for anything that isn't an episode.
@@ -159,6 +172,13 @@ public struct Home: Decodable, Equatable {
     public let hubs: [Hub]?
     public let featured: [Item]?
     public let libraries: [Library]?
+
+    /// The one big picture at the top: the first featured thing this app can play, or failing that
+    /// whatever someone is in the middle of.
+    public var hero: Item? {
+        if let first = (featured ?? []).first(where: \.isPlayable) { return first }
+        return (hubs ?? []).lazy.compactMap { $0.items?.first(where: \.isPlayable) }.first
+    }
 }
 
 public struct ItemPage: Decodable {
@@ -169,6 +189,18 @@ public struct ItemPage: Decodable {
 public struct ShowPage: Decodable {
     public let shows: [Show]?
     public let total: Int?
+}
+
+public struct SearchResults: Equatable {
+    public let items: [Item]
+    public let shows: [Show]
+
+    public init(items: [Item], shows: [Show]) {
+        self.items = items
+        self.shows = shows
+    }
+
+    public var isEmpty: Bool { items.isEmpty && shows.isEmpty }
 }
 
 public struct Track: Decodable, Identifiable, Equatable {
@@ -200,6 +232,15 @@ public struct Intro: Decodable, Equatable {
     public let endSec: Double
 }
 
+public struct Explanation: Decodable, Equatable {
+    public let summary: String?
+    public let source: String?
+    public let picture: String?
+    public let sound: String?
+    public let subtitles: String?
+    public let reasons: [String]?
+}
+
 /// What POST /items/{id}/playback answers: see docs/CLIENT-API.md. The film's
 /// position is always the player's time plus timeOffsetSec.
 public struct Playback: Decodable, Equatable {
@@ -218,10 +259,14 @@ public struct Playback: Decodable, Equatable {
     public let subtitleDelivery: String?
     public let intro: Intro?
     public let nextId: Int64?
+    /// Why it plays this way, in plain words to show as they are.
+    public let explain: Explanation?
+    /// A 3D picture stored in the frame: sbs or tab. Asking with `flatten3d` shows one eye.
+    public let stereo: String?
 
     private enum CodingKeys: String, CodingKey {
         case decision, url, streamId, durationSec, seek, startAtSec, timeOffsetSec, audio, subtitles
-        case audioIndex, subtitleIndex, subtitleDelivery, intro, nextId
+        case audioIndex, subtitleIndex, subtitleDelivery, intro, nextId, explain, stereo
         case protocolName = "protocol"
     }
 
@@ -233,12 +278,14 @@ public struct Playback: Decodable, Equatable {
 /// Left out, a field lets the server decide: which tracks, and where to resume.
 public struct PlaybackRequest: Encodable {
     public let profile: String
+    public var capabilities: DeviceCapabilities?
     public var audio: Int?
     public var subtitle: Int?
     public var startSec: Double?
 
-    public init(profile: String, audio: Int? = nil, subtitle: Int? = nil, startSec: Double? = nil) {
+    public init(profile: String, capabilities: DeviceCapabilities? = nil, audio: Int? = nil, subtitle: Int? = nil, startSec: Double? = nil) {
         self.profile = profile
+        self.capabilities = capabilities
         self.audio = audio
         self.subtitle = subtitle
         self.startSec = startSec
@@ -249,9 +296,34 @@ public struct Capabilities: Decodable, Equatable {
     public let server: String?
     public let version: String?
     public let apiVersion: Int?
+    /// Counts additions within the version. `features` names them.
+    public let apiRevision: Int?
     public let apiVersions: [Int]?
     public let setupRequired: Bool?
     public let features: [String]?
+    /// The lowest version of each kind of client (`android`, `apple`, `desktop`) this server works
+    /// with. An older server doesn't send it, and a platform not listed means fine.
+    public let minClientVersions: [String: String]?
+
+    private enum CodingKeys: String, CodingKey {
+        case server, version, apiVersion, apiRevision, apiVersions, setupRequired, features, minClientVersions
+    }
+
+    /// An optional field that can't be read counts as absent, so it can't stop anyone connecting.
+    public init(from decoder: Decoder) throws {
+        let values = try decoder.container(keyedBy: CodingKeys.self)
+        server = try values.decodeIfPresent(String.self, forKey: .server)
+        version = try values.decodeIfPresent(String.self, forKey: .version)
+        apiVersion = try? values.decodeIfPresent(Int.self, forKey: .apiVersion)
+        apiRevision = try? values.decodeIfPresent(Int.self, forKey: .apiRevision)
+        apiVersions = try? values.decodeIfPresent([Int].self, forKey: .apiVersions)
+        setupRequired = try? values.decodeIfPresent(Bool.self, forKey: .setupRequired)
+        features = try? values.decodeIfPresent([String].self, forKey: .features)
+        minClientVersions = try? values.decodeIfPresent([String: String].self, forKey: .minClientVersions)
+    }
+
+    /// Optional abilities go by name, never by comparing server versions.
+    public func has(_ feature: String) -> Bool { features?.contains(feature) == true }
 }
 
 public struct PairStart: Decodable, Equatable {
@@ -260,6 +332,16 @@ public struct PairStart: Decodable, Equatable {
     public let expiresInSec: Int?
     public let intervalSec: Int?
     public let approvePath: String?
+    public let approveUrl: String?
+
+    /// The full address for a phone. `approveUrl` carries the code, so it goes first. The page still
+    /// asks before doing anything. Whatever the server said, this only ever points back at it.
+    public func approveAddress(base: String) -> String? {
+        for path in [approveUrl, approvePath, "/pair"] {
+            if let path, let url = Origin.join(base: base, path: path) { return url.absoluteString }
+        }
+        return nil
+    }
 }
 
 public struct PairPoll: Decodable, Equatable {

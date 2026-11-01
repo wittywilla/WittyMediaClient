@@ -48,7 +48,8 @@ object Address {
     }
 
     // Is this address on the local network? A name with no dots or ending in
-    // .local can only be resolved locally; anything else may be public.
+    // .local can only be resolved locally; anything else may be public. A bare number is no name:
+    // systems read 134744072 and 0x08080808 as 8.8.8.8.
     fun isPrivateHost(host: String): Boolean {
         IPV4.matchEntire(host)?.let { m ->
             val a = m.groupValues[1].toInt()
@@ -61,6 +62,22 @@ object Address {
             return h == "::1" || h.startsWith("fc") || h.startsWith("fd") ||
                 h.startsWith("fe8") || h.startsWith("fe9") || h.startsWith("fea") || h.startsWith("feb")
         }
+        if (host.all { it.isDigit() } || host.startsWith("0x", ignoreCase = true)) return false
         return host == "localhost" || !host.contains('.') || host.endsWith(".local")
     }
+
+    // Does everything a name resolved to stay on the local network? A search domain or a local
+    // resolver can send `mediabox` to the internet, where plain http could be read on the way.
+    // Addresses as the system writes them: 192.168.1.5, fe80::1%wlan0, ::ffff:192.168.1.5.
+    fun staysLocal(resolved: List<String>): Boolean = resolved.all { address ->
+        val bare = address.substringBefore('%').lowercase()
+        when {
+            bare.startsWith("::ffff:") && bare.contains('.') -> isPrivateHost(bare.removePrefix("::ffff:"))
+            bare.contains(':') -> isPrivateHost("[$bare]")
+            else -> isPrivateHost(bare)
+        }
+    }
+
+    // Is this written as an address, so that there's nothing to look up?
+    fun isLiteral(host: String) = host.startsWith("[") || host.contains(':') || IPV4.matches(host)
 }

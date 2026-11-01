@@ -32,6 +32,31 @@ your behalf. Read them at <https://developer.android.com/studio/terms> if you wa
 GitHub Actions is free for public repositories. For a private one, the Mac builds use your free minutes
 quickly.
 
+## Android on this machine: your decision
+
+Real APKs and an emulator run need the Android SDK here. Installing it means accepting Google's Android SDK licence
+(<https://developer.android.com/studio/terms>). You said yes to this on 30 October for an earlier chat's smaller list, but that
+didn't include the emulator and system images, and the permission system refused it this time, so it's yours to run or to
+allow. The packages below are all under that one licence. The command-line tools are already downloaded, on WSL's disk, and
+no licence has been accepted. In a terminal:
+
+```bash
+wsl -d Ubuntu
+```
+
+```bash
+~/android-sdk/cmdline-tools/latest/bin/sdkmanager --channel=0 "platform-tools" "platforms;android-37.0" "build-tools;37.0.0" "emulator" "system-images;android-36;default;x86_64" "system-images;android-36;android-tv;x86_64"
+```
+
+It shows the licence and asks you to answer `y`. It takes about 6 GB, on `D:\build-tools\wsl`. To use the emulator with
+hardware speed, the `dev` user also needs the `kvm` group:
+
+```bash
+sudo usermod -aG kvm dev
+```
+
+Then tell any Claude chat that it's done, and it can build the APKs for phone and TV and run them on the emulators.
+
 ## Step 2: Try Android (free, no account)
 
 Once CI is green:
@@ -87,6 +112,31 @@ yourself yet, whatever you pay. Borrowing a Mac or renting one online are the us
 
 A free Apple ID should be enough to run your own builds, but they expire after about a week. The first
 launch asks permission to find devices on your network, and should be allowed.
+
+**The Top Shelf on Apple TV needs one more thing.** The app and its Top Shelf share a folder through an App
+Group, `group.com.wittywilla.wittymediaclient`, which belongs to your signing team:
+
+1. In Xcode, select **WittyMedia-tvOS**, then **Signing & Capabilities**, and check the App Groups box has that
+   group ticked. Press the refresh button beside it if it's red.
+2. Do the same for **WittyMedia-TopShelf**, and pick your team there too.
+
+It isn't known whether a free Apple ID can do this. If it can't, delete the two
+`com.apple.security.application-groups` entries from `apple/project.yml` and generate the project again. The
+app works the same, with an empty Top Shelf.
+
+**Please check on an Apple TV and report back:** nothing here has ever run, so all of this is open.
+
+1. Does the Siri Remote move through everything, with focus always visible? Try swiping and clicking the clickpad.
+2. Does Back ever quit from the middle of signing in? It should only leave from the top of a tab.
+3. Scan the QR code on the sign-in screen with a phone. Does it open the server's page with the code filled in?
+4. Play something. Does the TV switch to the film's frame rate and HDR, does Back leave the player, and does a
+   5.1 file have 5.1 sound? Do the Audio and Subtitles menus work?
+5. Leave the app with something playing, then come back. Is the place kept?
+6. Put the app in the top row of the Home screen. Does the Top Shelf show what you were watching, and does choosing it
+   open that thing, signing in first if needed?
+
+**Before submitting to Apple:** the app needs an icon and a Top Shelf image in an asset catalog, which don't exist
+yet, and the iPhone app's background audio will need explaining: it's there for picture in picture.
 
 ## Step 4: Publish, when you're ready
 

@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 // Copies the shared connect screen into the desktop app and turns the shared
-// wording into a script, because a page opened from a file can't fetch JSON.
+// wording into a script, because a page on the app's own scheme can't fetch JSON.
 import { cpSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'

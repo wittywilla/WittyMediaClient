@@ -22,12 +22,19 @@ const WANTED = {
   '--danger': 'danger', '--ok': 'ok',
 }
 const HEX = /^#[0-9a-fA-F]{6}$/
+const SHORT_HEX = /^#[0-9a-fA-F]{3}$/
+
+// #abc is #aabbcc, and is what a theme's author may well have written.
+const longHex = (value) => (SHORT_HEX.test(value) ? `#${[...value.slice(1)].map((c) => c + c).join('')}` : value)
 
 function colours(css, inherited) {
   const out = { ...inherited }
-  for (const [, name, value] of css.matchAll(/(--[\w-]+)\s*:\s*([^;]+);/g)) {
+  // A declaration in a comment isn't one, and a note can mention a variable and a value.
+  const live = css.replace(/\/\*[\s\S]*?\*\//g, '')
+  for (const [, name, written] of live.matchAll(/(--[\w-]+)\s*:\s*([^;]+);/g)) {
     const key = WANTED[name]
-    if (key && HEX.test(value.trim())) out[key] = value.trim().toLowerCase()
+    const value = longHex(written.trim())
+    if (key && HEX.test(value)) out[key] = value.toLowerCase()
   }
   return out
 }

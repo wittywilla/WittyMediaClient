@@ -70,11 +70,20 @@ function onPath(name, env, runnable) {
   return ''
 }
 
+// Windows can live on any drive, so it says where its program folders are. Only a path
+// on a drive counts, not a relative one or a network share. ProgramW6432 first: it's
+// the 64-bit folder even for a 32-bit process.
+function windowsRoots(env) {
+  const onDrive = (dir) => typeof dir === 'string' && /^[A-Za-z]:\\/.test(dir)
+  const main = [env.ProgramW6432, env.ProgramFiles].filter(onDrive)
+  const roots = main.length ? main : ['C:\\Program Files']
+  return [...new Set([...roots, ...[env['ProgramFiles(x86)']].filter(onDrive)])]
+}
+
 // Where this computer has Moonlight: { command, prefix }, or null. Never from a page.
 function findMoonlight({ platform = process.platform, env = process.env, home = os.homedir(), runnable = canRun, folder = isFolder } = {}) {
   if (platform === 'win32') {
-    const roots = ['C:\\Program Files', env['ProgramFiles(x86)']].filter(Boolean)
-    for (const root of roots) {
+    for (const root of windowsRoots(env)) {
       const file = path.win32.join(root, WINDOWS_FOLDER, 'Moonlight.exe')
       if (runnable(file)) return { command: file, prefix: [] }
     }

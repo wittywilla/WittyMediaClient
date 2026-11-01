@@ -52,6 +52,14 @@ class WittyApp : Application(), SingletonImageLoader.Factory {
         }
     }
 
+    // Leaving a server or an account takes its pictures along: the next person on this device
+    // shouldn't see what was on someone else's server.
+    fun forgetImages() {
+        val loader = SingletonImageLoader.get(this)
+        loader.memoryCache?.clear()
+        loader.diskCache?.clear()
+    }
+
     // Small bounded caches: a TV stick has little memory to spare.
     override fun newImageLoader(context: PlatformContext): ImageLoader =
         ImageLoader.Builder(context)

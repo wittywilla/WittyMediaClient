@@ -53,6 +53,18 @@ test('only exactly the two shapes get through', () => {
 
 const only = (...files) => (file) => files.includes(file)
 
+test('Windows: its program folders are wherever Windows says they are', () => {
+  const on = (dir) => `${dir}\\Moonlight Game Streaming\\Moonlight.exe`
+  assert.strictEqual(findMoonlight({ platform: 'win32', env: { ProgramFiles: 'E:\\Programs' }, runnable: only(on('E:\\Programs')) }).command, on('E:\\Programs'))
+  assert.strictEqual(findMoonlight({ platform: 'win32', env: { ProgramW6432: 'E:\\P64', ProgramFiles: 'E:\\P32' }, runnable: only(on('E:\\P64'), on('E:\\P32')) }).command, on('E:\\P64'))
+  // Nothing on C: gets a say when Windows lives elsewhere.
+  assert.strictEqual(findMoonlight({ platform: 'win32', env: { ProgramFiles: 'E:\\Programs' }, runnable: only(on('C:\\Program Files')) }), null)
+  // A relative path or a network share isn't a place to run a program from.
+  for (const dir of ['Programs', '.\\here', '\\\\attacker\\share', '']) {
+    assert.strictEqual(findMoonlight({ platform: 'win32', env: { ProgramFiles: dir }, runnable: only(on(dir)) }), null, dir)
+  }
+})
+
 test('Windows: the install folder, then the 32-bit one', () => {
   const main = 'C:\\Program Files\\Moonlight Game Streaming\\Moonlight.exe'
   const x86 = 'D:\\Old\\Moonlight Game Streaming\\Moonlight.exe'

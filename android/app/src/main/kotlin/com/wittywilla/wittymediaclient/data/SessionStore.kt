@@ -4,10 +4,13 @@ import android.content.Context
 import android.security.keystore.KeyGenParameterSpec
 import android.security.keystore.KeyProperties
 import android.util.Base64
+import com.wittywilla.wittymediaclient.diag.ClientLog
 import com.wittywilla.wittymediaclient.net.json
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.encodeToString
+import java.security.GeneralSecurityException
 import java.security.KeyStore
+import java.security.ProviderException
 import javax.crypto.Cipher
 import javax.crypto.KeyGenerator
 import javax.crypto.SecretKey
@@ -22,6 +25,11 @@ data class SavedServer(
     val publicKey: String = "",
     val fingerprint: String = "",
 )
+
+// The sign-in, and the key of the server it belongs to. They're sealed together, so changing the
+// list of servers can't make a token go to another machine.
+@Serializable
+data class SignIn(val token: String, val pin: String = "")
 
 private const val MAX_RECENT = 8
 
@@ -40,9 +48,15 @@ class SessionStore(context: Context) {
         get() = prefs.getString(KEY_SERVER, "") ?: ""
         set(v) = prefs.edit().putString(KEY_SERVER, v).apply()
 
-    var token: String
-        get() = decrypt(prefs.getString(KEY_TOKEN, "") ?: "")
-        set(v) = prefs.edit().putString(KEY_TOKEN, if (v.isEmpty()) "" else encrypt(v)).apply()
+    val signIn: SignIn?
+        get() = runCatching { json.decodeFromString<SignIn>(decrypt(prefs.getString(KEY_TOKEN, "") ?: "")) }
+            .getOrNull()?.takeIf { it.token.isNotEmpty() }
+
+    val token: String get() = signIn?.token.orEmpty()
+
+    fun forgetToken() {
+        prefs.edit().remove(KEY_TOKEN).apply()
+    }
 
     var recent: List<SavedServer>
         get() = runCatching { json.decodeFromString<List<SavedServer>>(prefs.getString(KEY_RECENT, "[]") ?: "[]") }.getOrDefault(emptyList())
@@ -54,13 +68,16 @@ class SessionStore(context: Context) {
 
     fun find(url: String): SavedServer? = recent.find { it.url == url }
 
-    // The address, the key it proved and the token are kept together, in one write.
-    fun signedIn(server: SavedServer, token: String) {
-        prefs.edit()
+    // The address, the key it proved and the token are kept together, in one write. False means
+    // this device couldn't seal it, so it lasts only until the app closes.
+    fun signedIn(server: SavedServer, token: String): Boolean {
+        val sealed = encrypt(json.encodeToString(SignIn(token, server.publicKey)))
+        val edit = prefs.edit()
             .putString(KEY_SERVER, server.url)
             .putString(KEY_RECENT, json.encodeToString(rememberServer(recent, server)))
-            .putString(KEY_TOKEN, encrypt(token))
-            .apply()
+        if (sealed == null) edit.remove(KEY_TOKEN) else edit.putString(KEY_TOKEN, sealed)
+        edit.apply()
+        return sealed != null
     }
 
     private fun key(): SecretKey {
@@ -76,10 +93,18 @@ class SessionStore(context: Context) {
         return generator.generateKey()
     }
 
-    private fun encrypt(plain: String): String {
+    // Some devices' Keystores fail outright. That has to end in signing in again, not a crash, and
+    // it never falls back to keeping the token in the clear.
+    private fun encrypt(plain: String): String? = try {
         val cipher = Cipher.getInstance(TRANSFORM).apply { init(Cipher.ENCRYPT_MODE, key()) }
         val sealed = cipher.iv + cipher.doFinal(plain.toByteArray())
-        return Base64.encodeToString(sealed, Base64.NO_WRAP)
+        Base64.encodeToString(sealed, Base64.NO_WRAP)
+    } catch (e: GeneralSecurityException) {
+        ClientLog.warn("app", "The sign-in couldn't be kept on this device: ${e.javaClass.simpleName}")
+        null
+    } catch (e: ProviderException) {
+        ClientLog.warn("app", "The sign-in couldn't be kept on this device: ${e.javaClass.simpleName}")
+        null
     }
 
     // A value that can't be read (the key was reset) means signing in again.
@@ -95,7 +120,7 @@ class SessionStore(context: Context) {
 
     private companion object {
         const val KEY_SERVER = "server"
-        const val KEY_TOKEN = "token"
+        const val KEY_TOKEN = "signin"
         const val KEY_RECENT = "recent"
         const val KEYSTORE = "AndroidKeyStore"
         const val ALIAS = "wittymediaclient-session"

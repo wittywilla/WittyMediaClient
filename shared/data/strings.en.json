@@ -33,6 +33,8 @@
   "pairExpired": "That code has expired.",
   "pairDenied": "That sign-in was refused.",
   "pairNew": "Get a new code",
+  "pairScan": "Or scan this with your phone:",
+  "notKept": "This device couldn't keep your sign-in safely, so you'll be asked to sign in again next time.",
   "usePassword": "Use a password instead",
   "useCode": "Sign in with a code",
   "showCodeInstead": "Show a code on this screen instead",
@@ -48,5 +50,6 @@
   "identityTitle": "This isn't the server you used before",
   "identityHint": "A different machine is answering at this address. It could be your server after a reinstall, or a look-alike. Only trust it if you know why it changed.",
   "identityTrust": "This is my server, trust it",
-  "identityBad": "This server couldn't prove who it is, so nothing was sent to it."
+  "identityBad": "This server couldn't prove who it is, so nothing was sent to it.",
+  "identityChanged": "This server's identity changed while you were on this screen, so nothing was sent to it. Check the new fingerprint before carrying on."
 }

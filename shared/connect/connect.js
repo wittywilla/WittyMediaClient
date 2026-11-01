@@ -5,43 +5,60 @@
 (function () {
   const S = self.WittyStrings
   const app = document.getElementById('app')
+  const announcer = document.getElementById('announce')
   const CODE_LENGTH = 6
   const NONE_AFTER_MS = 6000
 
   const ERRORS = {
     empty: S.errEmpty, scheme: S.errScheme, credentials: S.errCredentials, invalid: S.errInvalid,
     'public-http': S.errPublicHttp, unreachable: S.errUnreachable, 'not-server': S.errNotServer,
-    identity: S.identityBad,
+    identity: S.identityBad, certificate: S.errCertificate,
   }
 
   // Without a native bridge: a plain web page on a smart TV.
   const webBridge = {
     supportsDiscovery: false,
-    async probe(url) {
+    // Whatever an address came from, only one that passes the rules is ever asked or opened.
+    async probe(address) {
+      const { url, error } = self.WittyAddress.normalizeAddress(address)
+      if (error) return { error }
       try {
         const res = await fetch(url + '/api/status', { credentials: 'omit' })
         const data = await res.json()
-        if (data.name !== 'WittyMediaServer') return { error: 'not-server' }
+        if (!data || data.name !== 'WittyMediaServer') return { error: 'not-server' }
         return { ok: true, url, version: data.version, name: data.brandName || data.name, identity: { state: 'none' } }
       } catch (e) { return { error: 'unreachable' } }
     },
     async recent() {
-      try { return JSON.parse(localStorage.getItem('wmc.recent') || '[]') } catch (e) { return [] }
+      try { return self.WittyAddress.cleanRecent(JSON.parse(localStorage.getItem('wmc.recent') || '[]')) } catch (e) { return [] }
     },
-    open(server) {
-      try { localStorage.setItem('wmc.recent', JSON.stringify([{ url: server.url, name: server.name }])) } catch (e) { /* private mode */ }
-      location.href = server.url
+    async open(server) {
+      const { url, error } = self.WittyAddress.normalizeAddress(server.url)
+      if (error) return { error }
+      try { localStorage.setItem('wmc.recent', JSON.stringify([{ url, name: server.name }])) } catch (e) { /* private mode */ }
+      location.href = url
+      return { ok: true }
     },
   }
   const bridge = self.wittyClient || webBridge
 
   let screenBack = null
+  let onScreenKey = null
   let found = []
   let renderFound = null // set while the server list is on screen
   let userMoved = false
+  let listAvailable = bridge.supportsDiscovery // is there a list to go back to?
+  let listFocus = '' // what was chosen from the list, to come back to: an address, or ENTER_ADDRESS
+  let screen = 0 // which screen this is, so an answer that arrives late can tell it has been left
+  const ENTER_ADDRESS = 'enter-address'
 
+  // Roles and aria-* are attributes: as properties, older browsers ignore them.
   function el(tag, props, ...kids) {
-    const n = Object.assign(document.createElement(tag), props)
+    const n = document.createElement(tag)
+    for (const k of Object.keys(props || {})) {
+      if (k === 'role' || k.indexOf('aria-') === 0) n.setAttribute(k, props[k])
+      else n[k] = props[k]
+    }
     for (const k of kids) n.appendChild(typeof k === 'string' ? document.createTextNode(k) : k)
     return n
   }
@@ -55,20 +72,40 @@
 
   // Written for the older browsers built into smart TVs.
   function show(...kids) {
+    screen++
     renderFound = null
     userMoved = false
+    screenBack = null
+    onScreenKey = null
     app.textContent = ''
     for (const k of kids) app.appendChild(k)
-    const first = app.querySelector('input, button.primary, button')
+    // Focus lands on a control, so a screen reader wouldn't otherwise hear which screen this is.
+    const title = app.querySelector('h1')
+    if (title) {
+      announcer.textContent = title.textContent
+      document.title = `${title.textContent} - ${S.appName}`
+    }
+    const first = app.querySelector('input') || app.querySelector('button.primary') || app.querySelector('button')
     if (first) first.focus()
+    return screen
   }
 
-  const serverButton = (s) => button(s.name || s.url, () => choose(s.url), { sub: s.url, url: s.url })
+  // Asking a server can take seconds. This says so, and Back or Cancel leaves it.
+  function waitScreen() {
+    const turn = show(el('h1', { textContent: S.connecting }), el('div', { className: 'row' }, button(S.cancel, () => listScreen())))
+    screenBack = () => listScreen()
+    return turn
+  }
+
+  const serverButton = (s) => button(s.name || s.url, () => { listFocus = s.url; choose(s.url) }, { sub: s.url, url: s.url })
 
   async function listScreen(message) {
-    const recent = await bridge.recent()
-    screenBack = null
-    if (!bridge.supportsDiscovery && !recent.length) return addressScreen(message)
+    const turn = ++screen
+    let recent = []
+    try { recent = await bridge.recent() } catch (e) { /* nothing remembered, then */ }
+    if (turn !== screen) return undefined
+    listAvailable = bridge.supportsDiscovery || recent.length > 0
+    if (!listAvailable) return addressScreen(message)
 
     const foundList = el('div', { className: 'list' })
     const status = el('p', { role: 'status', textContent: S.findSearching })
@@ -82,7 +119,8 @@
     if (recent.length) {
       children.push(el('h2', { textContent: S.recentServers }), el('div', { className: 'list' }, ...recent.map(serverButton)))
     }
-    children.push(el('div', { className: 'row' }, button(S.enterAddress, () => addressScreen())))
+    const enterAddress = button(S.enterAddress, () => { listFocus = ENTER_ADDRESS; addressScreen() })
+    children.push(el('div', { className: 'row' }, enterAddress))
     if (bridge.openLogs) children.push(button(S.openLogs, () => bridge.openLogs(), { className: 'link' }))
     children.push(el('p', { className: 'legal', textContent: S.legalConnect }))
     show(...children)
@@ -107,81 +145,122 @@
     }
     const startedAt = Date.now()
     renderFound()
+    // Coming back: to the thing that was chosen, and discovery leaves it there.
+    const cameFrom = listFocus === ENTER_ADDRESS ? enterAddress : Array.from(app.querySelectorAll('button')).find((b) => b.dataset.url === listFocus)
+    if (cameFrom) {
+      cameFrom.focus()
+      userMoved = true
+    }
     if (bridge.supportsDiscovery) setTimeout(() => { if (renderFound) renderFound() }, NONE_AFTER_MS + 100)
+    return undefined
   }
 
   function addressScreen(message, value) {
     const input = el('input', {
       id: 'address', type: 'text', value: value || '', autocapitalize: 'off', spellcheck: false,
       autocomplete: 'off', inputMode: 'url', placeholder: '192.168.1.20',
+      'aria-describedby': 'address-hint address-error',
     })
-    const error = el('p', { className: 'error', role: 'alert', textContent: message || '' })
-    const go = button(S.connect, () => submit(input, error, go), { className: 'primary' })
+    const error = el('p', { id: 'address-error', className: 'error', role: 'alert', textContent: message || '' })
+    const say = (text) => {
+      error.textContent = text
+      input.setAttribute('aria-invalid', text ? 'true' : 'false')
+    }
+    say(message || '')
+    const go = button(S.connect, () => submit(input, say, go), { className: 'primary' })
     input.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); go.click() } })
+    const row = el('div', { className: 'row' }, go)
+    if (listAvailable) row.appendChild(button(S.back, () => listScreen()))
     show(
       el('h1', { textContent: S.addressTitle }),
-      el('p', { textContent: S.addressHint }),
+      el('p', { id: 'address-hint', textContent: S.addressHint }),
       el('label', { htmlFor: 'address', textContent: S.addressLabel }),
-      input, error,
-      el('div', { className: 'row' }, go),
+      input, error, row,
       el('p', { className: 'legal', textContent: S.legalConnect }),
     )
-    screenBack = () => listScreen()
+    if (listAvailable) screenBack = () => listScreen()
   }
 
-  async function submit(input, error, go) {
+  async function ask(url) {
+    try { return await bridge.probe(url) } catch (e) { return { error: 'unreachable' } }
+  }
+
+  async function submit(input, say, go) {
     const r = self.WittyAddress.normalizeAddress(input.value)
-    if (r.error) { error.textContent = ERRORS[r.error]; input.focus(); return }
+    if (r.error) { say(ERRORS[r.error]); input.focus(); return }
+    const turn = screen
     go.disabled = true
     go.textContent = S.connecting
-    const server = await bridge.probe(r.url)
+    const server = await ask(r.url)
+    if (turn !== screen) return
     go.disabled = false
     go.textContent = S.connect
-    if (server.error) { error.textContent = ERRORS[server.error]; input.focus(); return }
+    if (server.error) { say(ERRORS[server.error]); input.focus(); return }
     next(server)
   }
 
-  async function choose(url) {
-    const server = await bridge.probe(url)
+  async function choose(url, message) {
+    const turn = waitScreen()
+    const server = await ask(url)
+    if (turn !== screen) return undefined
     if (server.error) return addressScreen(ERRORS[server.error], url)
-    next(server)
+    return next(server, message)
   }
 
   // What this server needs before it can be opened.
-  function next(server) {
+  function next(server, message) {
     const state = server.identity ? server.identity.state : 'none'
-    if (state === 'different') return identityScreen(server)
+    if (state === 'different') return identityScreen(server, message)
     if (state === 'bad') return addressScreen(S.identityBad, server.url)
-    if (state === 'new' && bridge.redeem && !server.setupRequired) return codeScreen(server)
-    bridge.open({ url: server.url, name: server.name })
+    if (state === 'new' && bridge.redeem && !server.setupRequired) return codeScreen(server, message)
+    return enter({ url: server.url, name: server.name })
   }
 
-  function identityScreen(server) {
-    show(
+  // The app has the last word: the server may no longer be what the person just saw.
+  async function enter(request) {
+    const turn = waitScreen()
+    let r
+    try { r = await bridge.open(request) } catch (e) { r = { error: 'unreachable' } }
+    if (turn !== screen || !r || !r.error) return undefined
+    if (r.error === 'changed') return choose(request.url, S.identityChanged)
+    return addressScreen(ERRORS[r.error] || S.errInvalid, request.url)
+  }
+
+  function identityScreen(server, message) {
+    const children = [
       el('h1', { textContent: S.identityTitle }),
       el('p', { textContent: S.identityHint }),
+    ]
+    if (message) children.push(el('p', { className: 'error', role: 'alert', textContent: message }))
+    children.push(
       el('p', { className: 'fingerprint', textContent: `${server.url} · ${S.fingerprintLabel}: ${(server.identity && server.identity.fingerprint) || ''}` }),
       button(S.back, () => listScreen(), { className: 'primary' }),
-      el('div', { className: 'row' }, button(S.identityTrust, () => bridge.open({ url: server.url, name: server.name, trust: true }))),
+      el('div', { className: 'row' }, button(S.identityTrust, () => enter({ url: server.url, name: server.name, trust: true }))),
     )
+    show(...children)
     screenBack = () => listScreen()
   }
 
-  function codeScreen(server) {
+  function codeScreen(server, message) {
     let code = ''
     let busy = false
-    const display = el('div', { className: 'code', role: 'status', 'aria-label': S.codeLabel })
-    const error = el('p', { className: 'error', role: 'alert' })
+    // The row of dots is for the eye. A screen reader gets the same thing in words.
+    const display = el('div', { className: 'code', 'aria-hidden': 'true' })
+    const progress = el('p', { className: 'code-status', role: 'status' })
+    const error = el('p', { className: 'error', role: 'alert', textContent: message || '' })
     const paint = () => {
       display.textContent = '•'.repeat(code.length) + '–'.repeat(CODE_LENGTH - code.length)
-      display.setAttribute('aria-label', `${S.codeLabel}: ${code.length} ${S.codeEntered}`)
+      progress.textContent = `${code.length} ${S.codeEntered}`
     }
     const send = async () => {
       busy = true
-      error.textContent = S.connecting
-      const r = await bridge.redeem(server.url, code)
+      progress.textContent = S.connecting
+      const turn = screen
+      let r
+      try { r = await bridge.redeem(server.url, code) } catch (e) { r = { error: 'unreachable' } }
       busy = false
-      if (r.ok) return
+      if (r.ok || turn !== screen) return
+      if (r.error === 'changed') { choose(server.url, S.identityChanged); return }
       code = ''
       paint()
       error.textContent = r.message || ERRORS[r.error] || S.errInvalid
@@ -198,28 +277,26 @@
       code = code.slice(0, -1)
       paint()
     }
-    const pad = el('div', { className: 'pad' })
+    const pad = el('div', { className: 'pad', role: 'group', 'aria-label': S.codeLabel })
     for (const d of ['1', '2', '3', '4', '5', '6', '7', '8', '9']) pad.appendChild(button(d, () => type(d)))
     pad.appendChild(button(S.codeDelete, erase))
     pad.appendChild(button('0', () => type('0')))
     paint()
-    const usePassword = button(S.usePassword, () => bridge.open({ url: server.url, name: server.name }))
+    const usePassword = button(S.usePassword, () => enter({ url: server.url, name: server.name }))
     show(
       el('h1', { textContent: S.codeTitle }),
       el('p', { textContent: S.codeHint }),
-      display, error, pad,
-      el('div', { className: 'row' }, usePassword),
+      display, progress, error, pad,
+      el('div', { className: 'row' }, usePassword, button(S.back, () => listScreen())),
       el('p', { className: 'fingerprint', textContent: `${S.fingerprintLabel}: ${(server.identity && server.identity.fingerprint) || ''}` }),
     )
     screenBack = () => listScreen()
     onScreenKey = (e) => {
-      if (/^[0-9]$/.test(e.key)) { type(e.key); return true }
+      if (/^[0-9]$/.test(e.key)) { if (!e.repeat) type(e.key); return true }
       if (e.key === 'Backspace') { erase(); return true }
       return false
     }
   }
-
-  let onScreenKey = null
 
   // Arrow keys move to the nearest control in that direction. Inside a text box
   // left and right belong to the text, so only up and down leave it.
@@ -250,11 +327,13 @@
   const isBack = (e) => e.key === 'Escape' || e.key === 'GoBack' || e.key === 'BrowserBack' || e.keyCode === 461 || e.keyCode === 10009
 
   document.addEventListener('keydown', (e) => {
+    // Ctrl+1 or Alt+Left mean something else, to the system if not to this page.
+    if (e.ctrlKey || e.altKey || e.metaKey) return
     if (isBack(e)) {
-      if (screenBack) { e.preventDefault(); const f = screenBack; screenBack = null; onScreenKey = null; f() }
+      if (screenBack) { e.preventDefault(); screenBack() }
       return
     }
-    if (onScreenKey && document.querySelector('.pad') && onScreenKey(e)) { e.preventDefault(); return }
+    if (onScreenKey && onScreenKey(e)) { e.preventDefault(); return }
     const dir = DIRS[e.key]
     if (!dir) return
     if (document.activeElement && document.activeElement.tagName === 'INPUT' && (dir === 'left' || dir === 'right')) return
@@ -271,7 +350,8 @@
 
   // A message from the app, such as "the saved server has gone away".
   const params = new URLSearchParams(location.search)
-  const mismatch = params.get('mismatch')
+  // Only the app sends this. In a plain web page, a link can't send someone off to look at a server.
+  const mismatch = self.wittyClient ? params.get('mismatch') : ''
   if (mismatch) choose(mismatch)
-  else listScreen(params.get('lost') ? S.errLost : '')
+  else listScreen(params.get('certificate') ? S.errCertificate : params.get('lost') ? S.errLost : '')
 })()
