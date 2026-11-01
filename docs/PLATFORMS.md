@@ -182,7 +182,8 @@ episode, and leaving with Back. Signing out, which ends the session on the serve
 measured. Labels in the accessibility tree: TalkBack isn't on this image, so nothing has spoken them. Audio tracks, by the
 player's own log moving to the chosen track. English subtitles seen on the picture. The warning for another key. A wrong password.
 The network dropped in mid-film: a plain message with Try again, then back by itself at the same place. The Game PCs page in a web
-view, once it had started, as far as its list: no PC was added. Dark system-bar icons on a light theme, if the theme test below says so.
+view, once it had started, as far as its list: no PC was added. The server's light theme, on Home and Profile, with dark system icons and
+readable text. Back during the countdown, which leaves as Cancel does.
 
 **TV.** First focus on every screen, with the ring seen in screenshots. Left and right staying in a row, and up and down between rows.
 Focus returning after Back, and to the button that opened a list. The number pad with arrows and OK, right and wrong codes. The code
