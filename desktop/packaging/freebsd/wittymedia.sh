@@ -15,4 +15,20 @@ if [ -z "$electron" ] || [ ! -x "$electron" ]; then
 	exit 1
 fi
 
-exec "$electron" /usr/local/share/wittymedia/app.asar "$@"
+# This Electron plays sound through a sound server, and a video it can't open sound for never
+# starts its clock. FreeBSD doesn't run one by default, so without one this starts sndio's, for
+# this user. With no sound card at all there's nothing to open, and the picture plays silently.
+sound_server_running() {
+	pgrep -q -x sndiod || pgrep -q -x pulseaudio || pgrep -q -x pipewire
+}
+
+no_sound=
+if ! ls /dev/dsp* >/dev/null 2>&1; then
+	no_sound=--disable-audio-output
+elif ! sound_server_running; then
+	sndiod 2>/dev/null
+	sleep 0.2
+	sound_server_running || no_sound=--disable-audio-output
+fi
+
+exec "$electron" /usr/local/share/wittymedia/app.asar $no_sound "$@"

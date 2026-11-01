@@ -15,7 +15,7 @@ test('the launcher clears what the other platforms switch off inside their own E
 })
 
 test('the launcher starts the installed archive, and passes on what it was given', () => {
-  assert.match(launcher, /exec "\$electron" \/usr\/local\/share\/wittymedia\/app\.asar "\$@"/)
+  assert.match(launcher, /exec "\$electron" \/usr\/local\/share\/wittymedia\/app\.asar \$no_sound "\$@"/)
 })
 
 test('the window and the launcher entry are known by one name', () => {
