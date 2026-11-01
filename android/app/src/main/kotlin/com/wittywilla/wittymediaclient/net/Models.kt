@@ -84,6 +84,27 @@ data class Item(
     val album: String = "",
     val albumArtist: String = "",
     val artist: String = "",
+    val track: Int? = null,
+)
+
+// An album, a book or a podcast: the server groups them from their tracks, so these have no ID of
+// their own. `coverItem` is a track whose poster is the cover.
+@Serializable
+data class Album(
+    val artist: String = "",
+    val title: String = "",
+    val year: Int? = null,
+    val tracks: Int = 0,
+    val durationSec: Double = 0.0,
+    val coverItem: Long = 0,
+)
+
+@Serializable
+data class Artist(
+    val name: String = "",
+    val albums: Int = 0,
+    val tracks: Int = 0,
+    val coverItem: Long = 0,
 )
 
 @Serializable
@@ -160,6 +181,7 @@ data class Playback(
     val protocol: String = "",
     val url: String = "",
     val streamId: String = "",
+    val tokenExpiresInSec: Int = 0,
     val durationSec: Double = 0.0,
     val seek: String = "native",
     val startAtSec: Double = 0.0,
@@ -251,6 +273,9 @@ data class PairRedeemRequest(val code: String, val device: String, val platform:
 
 @Serializable
 data class ProgressReport(val positionSec: Double, val durationSec: Double)
+
+@Serializable
+data class ViewReport(val seconds: Double)
 
 @Serializable
 data class Credentials(val name: String, val password: String, val device: String)

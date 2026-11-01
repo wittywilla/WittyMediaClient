@@ -17,6 +17,7 @@ import com.wittywilla.wittymediaclient.data.SessionStore
 import com.wittywilla.wittymediaclient.diag.ClientLog
 import com.wittywilla.wittymediaclient.diag.ReportTarget
 import com.wittywilla.wittymediaclient.net.Api
+import com.wittywilla.wittymediaclient.player.Listening
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -27,6 +28,9 @@ class WittyApp : Application(), SingletonImageLoader.Factory {
 
     // For work that must outlive the screen that started it.
     val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
+
+    // What's playing in the listening service, for the screens that show it.
+    val listening by lazy { Listening(this) }
 
     // The current connection. Images use its client, so they carry the sign-in.
     @Volatile

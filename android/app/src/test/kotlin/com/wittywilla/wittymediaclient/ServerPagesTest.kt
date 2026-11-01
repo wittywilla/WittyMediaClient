@@ -3,7 +3,12 @@ package com.wittywilla.wittymediaclient
 import com.wittywilla.wittymediaclient.net.Item
 import com.wittywilla.wittymediaclient.net.Library
 import com.wittywilla.wittymediaclient.net.albumsOnce
+import com.wittywilla.wittymediaclient.net.albumsWord
+import com.wittywilla.wittymediaclient.net.artistsWord
 import com.wittywilla.wittymediaclient.net.hasOwnScreen
+import com.wittywilla.wittymediaclient.net.isListening
+import com.wittywilla.wittymediaclient.net.isTrack
+import com.wittywilla.wittymediaclient.net.keepsPlace
 import com.wittywilla.wittymediaclient.net.pageAddress
 import com.wittywilla.wittymediaclient.net.pageFillsScreen
 import com.wittywilla.wittymediaclient.net.pagePath
@@ -15,13 +20,39 @@ import org.junit.Test
 
 class ServerPagesTest {
     @Test
-    fun videoHasScreensHereAndTheRestIsTheServersPage() {
-        for (type in listOf("movies", "shows", "anime", "videos", "discs")) assertTrue(type, Library(type = type).hasOwnScreen)
-        for (type in listOf("music", "audiobooks", "podcasts", "radio", "books", "photos", "games")) assertFalse(type, Library(type = type).hasOwnScreen)
+    fun videoAndListeningHaveScreensHereAndTheRestIsTheServersPage() {
+        for (type in listOf("movies", "shows", "anime", "videos", "discs", "music", "audiobooks", "podcasts")) assertTrue(type, Library(type = type).hasOwnScreen)
+        for (type in listOf("radio", "books", "photos", "games")) assertFalse(type, Library(type = type).hasOwnScreen)
         assertTrue(Library(type = "games", console = "rig").hasOwnScreen)
         assertTrue(Item(kind = "video").hasOwnScreen)
-        for (kind in listOf("audio", "book", "photo", "game", "dvd-iso", "bluray-folder", "cd-image", "radio")) assertFalse(kind, Item(kind = kind).hasOwnScreen)
+        assertTrue(Item(kind = "audio").hasOwnScreen)
+        for (kind in listOf("book", "photo", "game", "dvd-iso", "bluray-folder", "cd-image", "radio")) assertFalse(kind, Item(kind = kind).hasOwnScreen)
         assertTrue(Item(kind = "game", console = "rig").hasOwnScreen)
+    }
+
+    @Test
+    fun onlyBooksAndPodcastsKeepAPlace() {
+        assertTrue(keepsPlace("audiobooks"))
+        assertTrue(keepsPlace("podcasts"))
+        assertFalse(keepsPlace("music"))
+        assertFalse(keepsPlace(""))
+    }
+
+    @Test
+    fun aListeningLibraryIsOneOfThree() {
+        for (type in listOf("music", "audiobooks", "podcasts")) assertTrue(type, Library(type = type).isListening)
+        for (type in listOf("movies", "radio", "books")) assertFalse(type, Library(type = type).isListening)
+        assertTrue(Item(kind = "audio").isTrack)
+        assertFalse(Item(kind = "cd-image").isTrack)
+    }
+
+    @Test
+    fun aLibrarysPartsAreCalledWhatTheyAre() {
+        assertEquals("Albums", albumsWord("music"))
+        assertEquals("Books", albumsWord("audiobooks"))
+        assertEquals("Podcasts", albumsWord("podcasts"))
+        assertEquals("Artists", artistsWord("music"))
+        assertEquals("Authors", artistsWord("audiobooks"))
     }
 
     @Test

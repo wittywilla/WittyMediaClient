@@ -105,6 +105,9 @@ class Api(val base: String, val token: String, private val quick: Boolean = fals
 
     private suspend inline fun <reified T> get(path: String): T = json.decodeFromString(call("GET", path))
 
+    // A plain list, which a Go nil sends as null.
+    private suspend inline fun <reified T> getList(path: String): List<T> = json.decodeFromString<List<T>?>(call("GET", path)).orEmpty()
+
     suspend fun capabilities(): Capabilities = get("/capabilities")
     suspend fun status(): ServerStatus = get("/status")
     suspend fun profiles(): Profiles = get("/profiles")
@@ -118,6 +121,16 @@ class Api(val base: String, val token: String, private val quick: Boolean = fals
     private fun query(text: String) = URLEncoder.encode(text, "UTF-8")
     suspend fun searchItems(text: String, limit: Int): ItemPage = get("/items?search=${query(text)}&noEpisodes=1&limit=$limit")
     suspend fun searchShows(text: String, limit: Int): ShowPage = get("/shows?search=${query(text)}&limit=$limit")
+
+    suspend fun libraries(): List<Library> = getList("/libraries")
+    suspend fun albums(library: Long, sort: String, artist: String? = null): List<Album> =
+        getList("/music/albums?library=$library&sort=$sort" + if (artist != null) "&artist=${query(artist)}" else "")
+    suspend fun artists(library: Long): List<Artist> = getList("/music/artists?library=$library")
+    // An empty album or artist means none or unknown: it is still asked for by name.
+    suspend fun tracks(library: Long, album: String, artist: String): List<Item> =
+        getList("/music/tracks?library=$library&album=${query(album)}&artist=${query(artist)}")
+    suspend fun songs(library: Long, offset: Int, limit: Int): List<Item> =
+        getList("/music/songs?library=$library&offset=$offset&limit=$limit&sort=title")
 
     suspend fun playback(id: Long, request: PlaybackRequest): Playback =
         json.decodeFromString(call("POST", "/items/$id/playback", json.encodeToString(request)))
@@ -151,6 +164,11 @@ class Api(val base: String, val token: String, private val quick: Boolean = fals
         call("POST", "/items/$id/progress", json.encodeToString(ProgressReport(positionSec, durationSec)))
     }
 
+    // Music has no place to save, but what was played counts towards the server's yearly summary.
+    suspend fun recordListen(id: Long, seconds: Double) {
+        call("POST", "/items/$id/view", json.encodeToString(ViewReport(seconds)))
+    }
+
     // What this device can do to play a game on someone's own PC. It starts nothing there.
     suspend fun rigPlay(gameId: Long, request: RigPlayRequest): RigPlay =
         json.decodeFromString(call("POST", "/rigs/games/$gameId/play", json.encodeToString(request)))
@@ -169,6 +187,7 @@ class Api(val base: String, val token: String, private val quick: Boolean = fals
     suspend fun sendClientLog(body: String): Int = raw("POST", "/logs/client", body).status
 
     fun posterUrl(it: Item) = "$base$API/items/${it.id}/poster?v=${it.updatedAt}"
+    fun coverUrl(item: Long) = "$base$API/items/$item/poster"
     fun backdropUrl(it: Item) = "$base$API/items/${it.id}/backdrop?v=${it.updatedAt}"
     fun showPosterUrl(s: Show) = "$base$API/shows/${s.id}/art/poster?v=${s.updatedAt}"
     fun showBackdropUrl(s: Show) = "$base$API/shows/${s.id}/art/backdrop?v=${s.updatedAt}"

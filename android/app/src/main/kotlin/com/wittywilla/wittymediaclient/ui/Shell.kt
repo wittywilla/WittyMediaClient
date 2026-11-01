@@ -142,23 +142,36 @@ fun Shell(nav: Nav, content: @Composable () -> Unit) {
             val sides = WindowInsets.safeDrawing.only(WindowInsetsSides.Horizontal).asPaddingValues()
             val direction = LocalLayoutDirection.current
             val clear = maxOf(sides.calculateLeftPadding(direction), sides.calculateRightPadding(direction))
-            CompositionLocalProvider(LocalBottomRoom provides PILL_ROOM, LocalMetrics provides metrics.copy(gutter = metrics.gutter + clear)) { content() }
+            val listening = nav.app.listening.now != null
+            CompositionLocalProvider(LocalBottomRoom provides if (listening) PILL_ROOM + MINI_HEIGHT else PILL_ROOM, LocalMetrics provides metrics.copy(gutter = metrics.gutter + clear)) { content() }
             // What scrolls under the clock and the battery fades out, so they can still be read.
             val page = MaterialTheme.colorScheme.background
             Box(Modifier.fillMaxWidth().windowInsetsTopHeight(WindowInsets.statusBars).background(Brush.verticalGradient(0f to page.copy(alpha = 0.92f), 1f to page.copy(alpha = 0f))))
-            Row(
-                Modifier
-                    .align(Alignment.BottomCenter)
-                    .navigationBarsPadding()
-                    .padding(bottom = Space.S3)
-                    .clip(Radius.FULL)
-                    .background(MaterialTheme.colorScheme.surface)
-                    .border(1.dp, MaterialTheme.colorScheme.outline, Radius.FULL)
-                    .padding(Space.S1)
-                    .semantics { role = Role.Tab },
-                horizontalArrangement = Arrangement.spacedBy(Space.S1),
+            Column(
+                Modifier.align(Alignment.BottomCenter).navigationBarsPadding().padding(bottom = Space.S3),
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.spacedBy(Space.S2),
             ) {
-                TABS.forEach { TabButton(nav, it, wide = nav.current == it.route) }
+                if (listening) {
+                    MiniPlayer(
+                        nav,
+                        Modifier
+                            .padding(horizontal = Space.S3)
+                            .clip(Radius.LG)
+                            .border(1.dp, MaterialTheme.colorScheme.outline, Radius.LG),
+                    )
+                }
+                Row(
+                    Modifier
+                        .clip(Radius.FULL)
+                        .background(MaterialTheme.colorScheme.surface)
+                        .border(1.dp, MaterialTheme.colorScheme.outline, Radius.FULL)
+                        .padding(Space.S1)
+                        .semantics { role = Role.Tab },
+                    horizontalArrangement = Arrangement.spacedBy(Space.S1),
+                ) {
+                    TABS.forEach { TabButton(nav, it, wide = nav.current == it.route) }
+                }
             }
             }
         }

@@ -6,6 +6,13 @@ import androidx.activity.ComponentActivity
 import androidx.activity.SystemBarStyle
 import androidx.activity.compose.BackHandler
 import androidx.activity.enableEdgeToEdge
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.consumeWindowInsets
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.navigationBars
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.DisposableEffect
@@ -17,6 +24,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveableStateHolder
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.core.graphics.ColorUtils
@@ -37,8 +45,15 @@ import com.wittywilla.wittymediaclient.net.ServerStatus
 import com.wittywilla.wittymediaclient.net.findServerById
 import com.wittywilla.wittymediaclient.net.hasOwnScreen
 import com.wittywilla.wittymediaclient.net.identify
+import com.wittywilla.wittymediaclient.net.isListening
+import com.wittywilla.wittymediaclient.net.isTrack
+import com.wittywilla.wittymediaclient.net.keepsPlace
 import com.wittywilla.wittymediaclient.net.pagePath
+import com.wittywilla.wittymediaclient.net.problemWords
 import com.wittywilla.wittymediaclient.player.PlayerScreen
+import com.wittywilla.wittymediaclient.player.Start
+import com.wittywilla.wittymediaclient.player.placeOn
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.launch
 import kotlinx.serialization.SerializationException
 import java.io.IOException
@@ -63,6 +78,16 @@ sealed interface Route {
     data class Player(val id: Long, val startOver: Boolean) : Route { override val key = "player-$id" }
     data class Web(val path: String) : Route { override val key = "web-$path" }
     data class Page(val path: String) : Route { override val key = "page-$path" }
+    data class Album(val library: Long, val album: String, val artist: String) : Route { override val key = "album-$library-$artist-$album" }
+    data class Artist(val library: Long, val name: String) : Route { override val key = "artist-$library-$name" }
+    data object NowPlaying : Route { override val key = "now-playing" }
+
+    // The app's own screens leave room for the mini player. A film, a server's page and signing in don't have it.
+    val hasMiniPlayer: Boolean
+        get() = when (this) {
+            Home, Search, Profile, Notices, Logs, is Library, is Show, is Item, is Album, is Artist -> true
+            else -> false
+        }
 }
 
 // How long a saved server's ID is looked for when its address stops answering.
@@ -90,6 +115,7 @@ class Nav(val app: WittyApp, private val s: Map<String, String>) {
         override fun removeEldestEntry(eldest: MutableMap.MutableEntry<String, Any>?) = size > REMEMBERED_SCREENS
     }
     private val focusMemory = HashMap<String, FocusMemory>()
+    private val libraryTypes = HashMap<Long, String>()
 
     @Suppress("UNCHECKED_CAST")
     fun <T : Any> remembered(key: String): T? = shown[key] as? T
@@ -103,6 +129,8 @@ class Nav(val app: WittyApp, private val s: Map<String, String>) {
     private fun forgetScreens() {
         shown.clear()
         focusMemory.clear()
+        libraryTypes.clear()
+        app.listening.forget()
         app.forgetImages()
     }
 
@@ -110,7 +138,51 @@ class Nav(val app: WittyApp, private val s: Map<String, String>) {
 
     // This app's own screens for what it has them for, and the server's page for all the rest.
     fun open(library: com.wittywilla.wittymediaclient.net.Library) = push(if (library.hasOwnScreen) Route.Library(library) else Route.Page(library.pagePath()))
-    fun open(item: com.wittywilla.wittymediaclient.net.Item) = push(if (item.hasOwnScreen) Route.Item(item.id) else Route.Page(item.pagePath()))
+    fun open(item: com.wittywilla.wittymediaclient.net.Item) = push(
+        when {
+            item.isTrack -> Route.Album(item.libraryId, item.album, item.albumArtist.ifEmpty { item.artist })
+            item.hasOwnScreen -> Route.Item(item.id)
+            else -> Route.Page(item.pagePath())
+        },
+    )
+
+    // Which kind of library, for what the lists of its tracks don't say. Asked for once.
+    suspend fun libraryType(id: Long): String {
+        libraryTypes[id]?.let { return it }
+        runCatching { app.api.libraries() }.getOrDefault(emptyList()).forEach { libraryTypes[it.id] = it.type }
+        return libraryTypes[id].orEmpty()
+    }
+
+    // A queue starts. A TV goes to the player, as there's little else to look at from across a room. A phone stays
+    // where it is, with the mini player showing.
+    fun startListening(tracks: List<com.wittywilla.wittymediaclient.net.Item>, start: Start, books: Boolean) {
+        app.listening.play(tracks, start, books)
+        if (app.isTv) openNowPlaying()
+    }
+
+    // Play on a track shown on its own, on Home: its album or book, from that track.
+    fun playTrack(track: com.wittywilla.wittymediaclient.net.Item) {
+        app.scope.launch {
+            try {
+                val books = keepsPlace(libraryType(track.libraryId))
+                val tracks = app.api.tracks(track.libraryId, track.album, track.albumArtist.ifEmpty { track.artist }).distinctBy { it.id }
+                val index = tracks.indexOfFirst { it.id == track.id }.coerceAtLeast(0)
+                if (tracks.isNotEmpty()) startListening(tracks, Start(index, placeOn(tracks[index], books)), books)
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                if (!handleExpired(e)) notice = problemWords(e, s["errLost"].orEmpty())
+            }
+        }
+    }
+
+    fun openNowPlaying() {
+        if (current != Route.NowPlaying) push(Route.NowPlaying)
+    }
+
+    fun closeNowPlaying() {
+        if (current == Route.NowPlaying) pop()
+    }
 
     fun replace(r: Route) { stack[stack.lastIndex] = r }
     fun reset(r: Route) { stack.clear(); stack.add(r) }
@@ -306,7 +378,12 @@ class Nav(val app: WittyApp, private val s: Map<String, String>) {
     // Ends the session on the server too, so no valid sign-in is left behind.
     private fun endSession() {
         val old = app.api
-        if (old.token.isNotEmpty()) app.scope.launch { runCatching { old.logout() } }
+        // The last place on a track goes first, while the sign-in is still good.
+        val placeSent = app.listening.forget()
+        if (old.token.isNotEmpty()) app.scope.launch {
+            placeSent.join()
+            runCatching { old.logout() }
+        }
     }
 
     fun signOut() {
@@ -362,30 +439,58 @@ fun AppRoot(app: WittyApp) {
 
     WittyTheme(theme, metrics, reduceMotion) {
         LaunchedEffect(Unit) { nav.startUp() }
-        LifecycleEventEffect(Lifecycle.Event.ON_START) { scope.launch { nav.recheck() } }
+        LifecycleEventEffect(Lifecycle.Event.ON_START) {
+            scope.launch { nav.recheck() }
+            app.listening.appeared()
+        }
+        LifecycleEventEffect(Lifecycle.Event.ON_STOP) { app.listening.disappeared() }
         BackHandler(enabled = nav.backStaysInApp) { nav.back() }
         val route = nav.current
-        saveable.SaveableStateProvider(route.key) {
-            CompositionLocalProvider(LocalFocusMemory provides nav.focusFor(route.key)) {
-                when (route) {
-                    Route.Starting -> Screen { Loading() }
-                    is Route.Connect -> ConnectScreen(nav, strings, route.message)
-                    is Route.Code -> CodeScreen(nav, strings, route.server)
-                    is Route.Mismatch -> MismatchScreen(nav, strings, route.server)
-                    is Route.SignIn -> SignInScreen(nav, strings, route.way)
-                    Route.Home -> Shell(nav) { HomeScreen(nav, strings) }
-                    Route.Search -> Shell(nav) { SearchScreen(nav, strings) }
-                    Route.Profile -> Shell(nav) { ProfileScreen(nav, strings) }
-                    Route.Notices -> NoticesScreen(nav)
-                    Route.Logs -> LogsScreen(nav)
-                    is Route.Library -> LibraryScreen(nav, strings, route.library)
-                    is Route.Show -> ShowScreen(nav, strings, route.id)
-                    is Route.Item -> ItemScreen(nav, strings, route.id)
-                    is Route.Player -> PlayerScreen(nav, route.id, route.startOver)
-                    is Route.Web -> ServerPageScreen(nav, route, route.path, keptToGames = true)
-                    is Route.Page -> ServerPageScreen(nav, route, route.path, keptToGames = false)
+        // Once the app's own screens are up, whichever way it started.
+        val hasQueue = app.listening.now != null
+        LaunchedEffect(app.listening.wantsScreen, route.hasMiniPlayer, hasQueue) {
+            if (app.listening.wantsScreen && route.hasMiniPlayer && hasQueue) {
+                app.listening.wantsScreen = false
+                nav.openNowPlaying()
+            }
+        }
+        val showing = @Composable {
+            saveable.SaveableStateProvider(route.key) {
+                CompositionLocalProvider(LocalFocusMemory provides nav.focusFor(route.key)) {
+                    when (route) {
+                        Route.Starting -> Screen { Loading() }
+                        is Route.Connect -> ConnectScreen(nav, strings, route.message)
+                        is Route.Code -> CodeScreen(nav, strings, route.server)
+                        is Route.Mismatch -> MismatchScreen(nav, strings, route.server)
+                        is Route.SignIn -> SignInScreen(nav, strings, route.way)
+                        Route.Home -> Shell(nav) { HomeScreen(nav, strings) }
+                        Route.Search -> Shell(nav) { SearchScreen(nav, strings) }
+                        Route.Profile -> Shell(nav) { ProfileScreen(nav, strings) }
+                        Route.Notices -> NoticesScreen(nav)
+                        Route.Logs -> LogsScreen(nav)
+                        is Route.Library -> if (route.library.isListening) ListeningLibraryScreen(nav, strings, route.library) else LibraryScreen(nav, strings, route.library)
+                        is Route.Show -> ShowScreen(nav, strings, route.id)
+                        is Route.Item -> ItemScreen(nav, strings, route.id)
+                        is Route.Album -> AlbumScreen(nav, strings, route)
+                        is Route.Artist -> ArtistScreen(nav, strings, route.library, route.name)
+                        Route.NowPlaying -> NowPlayingScreen(nav)
+                        is Route.Player -> PlayerScreen(nav, route.id, route.startOver)
+                        is Route.Web -> ServerPageScreen(nav, route, route.path, keptToGames = true)
+                        is Route.Page -> ServerPageScreen(nav, route, route.path, keptToGames = false)
+                    }
                 }
             }
+        }
+        // A phone's tabs float at the bottom, and the shell puts the mini player above them. Elsewhere it has its
+        // own strip along the bottom, which also takes care of the system's bar.
+        val tabs = !metrics.tv && (route == Route.Home || route == Route.Search || route == Route.Profile)
+        if (hasQueue && route.hasMiniPlayer && !tabs) {
+            Column(Modifier.fillMaxSize()) {
+                Box(Modifier.weight(1f).consumeWindowInsets(WindowInsets.navigationBars)) { showing() }
+                MiniPlayer(nav, Modifier.navigationBarsPadding())
+            }
+        } else {
+            showing()
         }
     }
 }

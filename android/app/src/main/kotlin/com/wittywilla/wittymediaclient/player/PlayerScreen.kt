@@ -113,7 +113,7 @@ import java.util.Locale
 private const val CONTROLS_HIDE_MS = 5_000L
 private const val SEEK_COMMIT_MS = 800L
 private const val NEXT_COUNTDOWN_SEC = 8
-private const val PROFILE = "androidtv"
+const val PLAYBACK_PROFILE = "androidtv"
 private const val LOST = "Lost contact with your server. Check that it is running, then try again."
 
 private fun trackName(t: Track): String {
@@ -185,7 +185,7 @@ fun PlayerScreen(nav: Nav, id: Long, startOver: Boolean) {
     val rootFocus = remember { FocusRequester() }
     val player = remember { newPlayer(context) }
     // The system's now-playing card, media keys and voice control. One session per player, and only
-    // while this screen is up: there's no playing in the background yet.
+    // while this screen is up: a film stops when the app is left. Sound has ListeningService.
     val session = remember { MediaSession.Builder(context, player).setId("witty-$id").build() }
 
     fun currentFilmSec() = player.currentPosition / 1000.0 + (stream?.timeOffsetSec ?: 0.0)
@@ -228,6 +228,9 @@ fun PlayerScreen(nav: Nav, id: Long, startOver: Boolean) {
             attempt = ask.attempt + 1,
         )
     }
+
+    // The system would stop the music for a film sooner or later. This is sooner.
+    LaunchedEffect(Unit) { nav.app.listening.pauseForVideo() }
 
     DisposableEffect(player) {
         val listener = object : Player.Listener {
@@ -286,7 +289,7 @@ fun PlayerScreen(nav: Nav, id: Long, startOver: Boolean) {
             val answer = api.playback(
                 id,
                 PlaybackRequest(
-                    PROFILE, ask.audio, ask.subtitle, ask.startSec,
+                    PLAYBACK_PROFILE, ask.audio, ask.subtitle, ask.startSec,
                     capabilities = DeviceProfile.capabilities(context),
                     maxBitrateKbps = DeviceProfile.maxBitrateKbps(context),
                     forceTranscode = if (ask.convert) true else null,
@@ -584,10 +587,18 @@ fun PlayerScreen(nav: Nav, id: Long, startOver: Boolean) {
     }
 }
 
-// The bar along the film. Left and right on a remote move it, and it only seeks once they stop:
+// The bar along the film or the track. Left and right on a remote move it, and it only seeks once they stop:
 // on a growing stream each seek can mean opening a new one. A finger does the same.
 @Composable
-private fun SeekBar(filmSec: Double, durationSec: Double, onTouched: () -> Unit, onSeekTo: (Double) -> Unit, modifier: Modifier = Modifier) {
+fun SeekBar(
+    filmSec: Double,
+    durationSec: Double,
+    onTouched: () -> Unit,
+    onSeekTo: (Double) -> Unit,
+    modifier: Modifier = Modifier,
+    trackColour: Color = Color(0x66FFFFFF), // over a film, whatever the theme
+    ringColour: Color = Color.White,
+) {
     val scheme = MaterialTheme.colorScheme
     val metrics = LocalMetrics.current
     var pending by remember { mutableStateOf<Double?>(null) }
@@ -643,9 +654,9 @@ private fun SeekBar(filmSec: Double, durationSec: Double, onTouched: () -> Unit,
         contentAlignment = Alignment.CenterStart,
     ) {
         val track = if (focused) 8.dp else 4.dp
-        Box(Modifier.fillMaxWidth().height(track).background(Color(0x66FFFFFF), Radius.FULL))
+        Box(Modifier.fillMaxWidth().height(track).background(trackColour, Radius.FULL))
         Box(Modifier.fillMaxWidth(fraction).height(track).background(scheme.primary, Radius.FULL))
-        if (focused) Box(Modifier.fillMaxWidth().fillMaxHeight().border(metrics.focusRing, Color.White, Radius.SM))
+        if (focused) Box(Modifier.fillMaxWidth().fillMaxHeight().border(metrics.focusRing, ringColour, Radius.SM))
     }
 }
 
