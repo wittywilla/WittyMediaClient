@@ -5,6 +5,7 @@
   "description": "WittyMediaClient for Windows, Linux and FreeBSD",
   "author": "WittyWilla",
   "license": "Apache-2.0",
+  "homepage": "https://github.com/wittywilla/WittyMediaClient",
   "main": "main.js",
   "private": true,
   "scripts": {
