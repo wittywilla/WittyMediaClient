@@ -41,9 +41,11 @@ function electronPort() {
   return ports.sort((a, b) => Number(b.slice(8)) - Number(a.slice(8)))[0]
 }
 
+// There's no compiled code in it, so it fits any FreeBSD with an Electron for this processor.
 function freebsdAbi() {
   if (stageOnly) return 'FreeBSD:*:*'
-  return spawnSync('pkg', ['config', 'ABI'], { encoding: 'utf8' }).stdout.trim()
+  const abi = spawnSync('pkg', ['config', 'ABI'], { encoding: 'utf8' }).stdout.trim()
+  return `FreeBSD:*:${abi.split(':').pop()}`
 }
 
 const fileArch = (abi) => (abi.endsWith(':aarch64') ? 'arm64' : abi.split(':').pop())

@@ -49,7 +49,7 @@ for REL in "${RELEASES[@]}"; do
   "${SSH[@]}" sh -s >>"$log" 2>&1 <<'SCRIPT'
 fail() { echo "FAIL: $*"; exit 1; }
 say() { echo; echo "##### $*"; }
-export ASSUME_ALWAYS_YES=yes IGNORE_OSVERSION=yes
+export ASSUME_ALWAYS_YES=yes
 APP=wittymediaclient
 SHARE=/usr/local/share/$APP
 pkg=$(ls /pkgs/$APP-*-freebsd-amd64.pkg)
@@ -81,8 +81,8 @@ open_app() {
 say "getting ready"
 freebsd-version; uname -m
 ping -c1 -t5 pkg.freebsd.org >/dev/null 2>&1 || dhclient vtnet0 >/dev/null 2>&1
-pkg bootstrap -y 2>&1 | tail -n 1
-pkg install -y sudo node22 xorg-vfbserver > /tmp/pkg.txt 2>&1 || { tail -n 15 /tmp/pkg.txt; fail "the test's own tools"; }
+IGNORE_OSVERSION=yes pkg bootstrap -y 2>&1 | tail -n 1
+IGNORE_OSVERSION=yes pkg install -y sudo node22 xorg-vfbserver > /tmp/pkg.txt 2>&1 || { tail -n 15 /tmp/pkg.txt; fail "the test's own tools"; }
 pw useradd tester -m -s /bin/sh -c tester || fail "no test account"
 echo 'tester ALL=(ALL) NOPASSWD: /usr/local/sbin/pkg' >> /usr/local/etc/sudoers
 Xvfb :9 -screen 0 1920x1080x24 >/dev/null 2>&1 &
