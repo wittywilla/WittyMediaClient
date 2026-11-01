@@ -20,18 +20,22 @@ public struct FoundServer: Identifiable, Equatable {
 
 public enum Discovery {
     public static let maxServers = 32
+    /// A noisy network can announce any number of names, and each one found costs a connection to
+    /// learn its address. These keep what it can make this app do small.
+    public static let maxSeen = 64
+    public static let maxResolvingAtOnce = 8
     private static let maxName = 80
 
     public static func cleanName(_ name: String) -> String {
-        let shown = String(name.unicodeScalars.filter { $0.value >= 0x20 && $0.value != 0x7f })
-        let clean = String(shown.trimmingCharacters(in: .whitespacesAndNewlines).prefix(maxName))
+        let clean = PlainWords.clean(name, limit: maxName)
         return clean.isEmpty ? "WittyMediaServer" : clean
     }
 
-    /// A server as the connect screen may show it, or nil if any part is unusable.
+    /// A server as the connect screen may show it, or nil if any part is unusable. An announcement
+    /// can't point at this device itself: that's a way to reach something only it can.
     public static func makeServer(id: String, name: String, host: String, port: Int, tls: Bool, instance: String = "") -> FoundServer? {
-        guard id.range(of: "^[0-9a-f]{32}$", options: .regularExpression) != nil, (1...65535).contains(port) else { return nil }
-        guard host.range(of: "^[0-9]{1,3}(\\.[0-9]{1,3}){3}$", options: .regularExpression) != nil, Address.isPrivateHost(host) else { return nil }
+        guard id.range(of: "^[0-9a-f]{32}\\z", options: .regularExpression) != nil, (1...65535).contains(port) else { return nil }
+        guard host.range(of: "^[0-9]{1,3}(\\.[0-9]{1,3}){3}\\z", options: .regularExpression) != nil, Address.isPrivateHost(host), !host.hasPrefix("127.") else { return nil }
         guard case .ok(let url) = Address.normalize("\(tls ? "https" : "http")://\(host):\(port)") else { return nil }
         return FoundServer(id: id, name: cleanName(name), url: url, instance: instance)
     }

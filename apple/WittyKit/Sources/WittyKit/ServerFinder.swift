@@ -16,9 +16,13 @@ public final class ServerFinder: @unchecked Sendable {
     private var list = ServerList()
     private var seen: [String: [String: String]] = [:] // instance to TXT record
     private var resolving: [String: NWConnection] = [:]
+    /// Told, on the main queue, when the system won't let this app look: usually the person
+    /// said no to local network access, and only Settings can change that.
+    private let onRefused: () -> Void
 
-    public init(onChange: @escaping ([FoundServer]) -> Void) {
+    public init(onChange: @escaping ([FoundServer]) -> Void, onRefused: @escaping () -> Void = {}) {
         self.onChange = onChange
+        self.onRefused = onRefused
     }
 
     public func start() {
@@ -26,6 +30,15 @@ public final class ServerFinder: @unchecked Sendable {
             guard browser == nil else { return }
             let found = NWBrowser(for: .bonjourWithTXTRecord(type: Self.serviceType, domain: "local."), using: NWParameters())
             found.browseResultsChangedHandler = { [weak self] results, _ in self?.update(results) }
+            let refused = onRefused
+            found.stateUpdateHandler = { state in
+                switch state {
+                case .waiting, .failed:
+                    DispatchQueue.main.async { refused() }
+                default:
+                    break
+                }
+            }
             found.start(queue: queue)
             browser = found
         }
@@ -55,6 +68,8 @@ public final class ServerFinder: @unchecked Sendable {
             guard case let .bonjour(record) = result.metadata else { continue }
             let txt = record.dictionary
             if seen[name] != txt {
+                // Anything past these limits waits for the next change to the results.
+                guard seen[name] != nil || seen.count < Discovery.maxSeen, resolving.count < Discovery.maxResolvingAtOnce else { continue }
                 seen[name] = txt
                 resolve(result.endpoint, instance: name, txt: txt)
             }
