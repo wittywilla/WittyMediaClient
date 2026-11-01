@@ -40,6 +40,8 @@ jobs:
         run: |
           npm ci --ignore-scripts --no-audit --no-fund
           npm test
+          # Making rpm and pacman packages needs these on Linux.
+          if [ "$RUNNER_OS" = Linux ]; then sudo apt-get install -y rpm libarchive-tools; fi
           npm run sync && npx electron-builder ${{ matrix.target }}
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
         with:
@@ -48,6 +50,34 @@ jobs:
             desktop/out/*.exe
             desktop/out/*.AppImage
             desktop/out/*.deb
+            desktop/out/*.rpm
+            desktop/out/*.pacman
+          if-no-files-found: error
+
+  desktop-freebsd:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+      - name: Package on FreeBSD
+        uses: vmactions/freebsd-vm@c46abacb49f09938ca4e1702d15d836285d694cc # v1.5.9
+        with:
+          release: '15.1'
+          usesh: true
+          prepare: pkg install -y node22 npm-node22
+          run: |
+            set -e
+            cd desktop
+            npm ci --ignore-scripts --no-audit --no-fund
+            npm test
+            npm run package:freebsd
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
+        with:
+          name: desktop-freebsd
+          path: desktop/out/freebsd/*.pkg
           if-no-files-found: error
 
   android:
@@ -69,6 +99,9 @@ jobs:
       - name: Test and build
         working-directory: android
         run: gradle --no-daemon testDebugUnitTest assembleSideload
+      - name: Native code for all four processors
+        working-directory: android
+        run: sh scripts/check-abis.sh app/build/outputs/apk/sideload/app-sideload.apk
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
         with:
           name: android
@@ -77,7 +110,7 @@ jobs:
 
   # Publishing runs no project code at all.
   publish:
-    needs: [desktop, android]
+    needs: [desktop, desktop-freebsd, android]
     runs-on: ubuntu-latest
     permissions:
       contents: write

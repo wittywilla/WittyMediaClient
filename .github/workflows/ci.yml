@@ -57,6 +57,32 @@ jobs:
           path: desktop/out/*-unpacked
           retention-days: 7
 
+  # Electron publishes nothing for FreeBSD, so this builds the package there, in a free
+  # virtual machine on GitHub's Linux runners. The package holds only the app: docs/PORTING.md.
+  desktop-freebsd:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Test and package on FreeBSD
+        uses: vmactions/freebsd-vm@c46abacb49f09938ca4e1702d15d836285d694cc # v1.5.9
+        with:
+          release: '15.1'
+          usesh: true
+          prepare: pkg install -y node22 npm-node22
+          run: |
+            set -e
+            cd desktop
+            npm ci --ignore-scripts --no-audit --no-fund
+            npm test
+            npm run package:freebsd
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: wittymedia-desktop-freebsd
+          path: desktop/out/freebsd/*.pkg
+          retention-days: 7
+
   android:
     runs-on: ubuntu-latest
     steps:
@@ -74,6 +100,9 @@ jobs:
       - name: Test and build
         working-directory: android
         run: gradle --no-daemon testDebugUnitTest assembleSideload
+      - name: Native code for all four processors
+        working-directory: android
+        run: sh scripts/check-abis.sh app/build/outputs/apk/sideload/app-sideload.apk
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: wittymedia-android-sideload
