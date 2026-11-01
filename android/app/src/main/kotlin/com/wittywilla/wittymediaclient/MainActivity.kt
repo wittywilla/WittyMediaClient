@@ -1,5 +1,6 @@
 package com.wittywilla.wittymediaclient
 
+import android.annotation.SuppressLint
 import android.os.Bundle
 import android.view.KeyEvent
 import androidx.activity.ComponentActivity
@@ -19,6 +20,8 @@ class MainActivity : ComponentActivity() {
     }
 
     // Before any screen, a web view included: it would keep this for a page that has no use for it.
+    // Lint reads this as the library's own override. It's the system's, on Activity, which any app may have.
+    @SuppressLint("RestrictedApi")
     override fun dispatchKeyEvent(event: KeyEvent): Boolean {
         if (event.keyCode == KeyEvent.KEYCODE_GUIDE) {
             if (event.action == KeyEvent.ACTION_DOWN) (application as WittyApp).onGuideKey?.invoke()
