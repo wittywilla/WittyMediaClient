@@ -6,7 +6,12 @@ import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 const here = dirname(fileURLToPath(import.meta.url))
-const themesDir = join(here, '..', '..', '..', '..', 'themes')
+// The themes belong to the server: a clone of it beside this one, or say where with WMS_THEMES.
+const themesDir = process.env.WMS_THEMES || join(here, '..', '..', '..', 'WittyMediaServer', 'themes')
+if (!existsSync(themesDir)) {
+  console.error(`no themes at ${themesDir}: clone WittyMediaServer beside this repository, or set WMS_THEMES`)
+  process.exit(1)
+}
 const outFile = join(here, '..', 'data', 'themes.json')
 
 // The CSS variables a native client needs, with the name it uses for them.

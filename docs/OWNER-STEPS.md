@@ -76,7 +76,7 @@ yourself yet, whatever you pay. Borrowing a Mac or renting one online are the us
 1. Install **Xcode** from the Mac App Store (free), and open it once.
 2. In Terminal, install the tool that creates the Xcode project: `brew install xcodegen`. This needs
    [Homebrew](https://brew.sh).
-3. In the `clients/wittymediaclient/apple` folder, run `xcodegen generate`, then open
+3. In the `apple` folder, run `xcodegen generate`, then open
    `WittyMedia.xcodeproj`.
 4. In Xcode's settings, under **Accounts**, add your Apple ID.
 5. Choose a target such as **WittyMedia-tvOS**. Under **Signing & Capabilities**, pick your team.

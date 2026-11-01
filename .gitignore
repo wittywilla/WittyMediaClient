@@ -9,3 +9,7 @@ apple/*.xcodeproj/
 apple/.build/
 apple/DerivedData/
 android/.kotlin/
+go.work
+go.work.sum
+.claude/
+.dev-modules

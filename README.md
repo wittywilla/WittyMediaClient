@@ -20,7 +20,7 @@ The native apps talk to the API described in `docs/CLIENT-API.md` at the top of 
 You need [Node.js](https://nodejs.org) 22.12 or newer, and a WittyMediaServer to connect to.
 
 ```bash
-cd clients/wittymediaclient/desktop
+cd desktop
 npm ci
 npm start
 ```
@@ -50,23 +50,24 @@ A report that fails is dropped. Repeats are grouped with a count, and nothing is
 ## Tests
 
 ```bash
-cd clients/wittymediaclient/desktop
+cd desktop
 npm test
 ```
 
 ```bash
-cd clients/wittymediaclient/apple/WittyKit
+cd apple/WittyKit
 swift test
 ```
 
 ```bash
-cd clients/wittymediaclient/android
+cd android
 gradle testDebugUnitTest
 ```
 
 The sample server answers used by those tests are checked against a real server with
-`node shared/scripts/check-fixtures.mjs <server address> <token>`. After changing any theme, rerun
-`node shared/scripts/build-themes.mjs`; CI fails if `shared/data/themes.json` is out of date.
+`node shared/scripts/check-fixtures.mjs <server address> <token>`. After a theme changes in the server, rerun
+`node shared/scripts/build-themes.mjs` with a clone of WittyMediaServer beside this one (or `WMS_THEMES` set to its
+`themes` folder); CI fails if `shared/data/themes.json` is out of date.
 
 ## Legal
 

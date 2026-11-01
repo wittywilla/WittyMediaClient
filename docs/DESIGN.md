@@ -50,7 +50,7 @@ toolchain:
 
 | File | What it holds | Used by |
 |---|---|---|
-| `shared/data/themes.json` | All server themes as plain colour values, generated from `themes/*/theme.css` by `shared/scripts/build-themes.mjs` | Native clients, connect screen |
+| `shared/data/themes.json` | All server themes as plain colour values, generated from `themes/*/theme.css` in the server's repository by `shared/scripts/build-themes.mjs` | Native clients, connect screen |
 | `shared/data/input-map.json` | What each remote and controller button means | All clients |
 | `shared/data/connection-cases.json` | Test vectors: what a typed address normalises to, and which addresses are refused | Tests on every client |
 | `shared/data/redaction-cases.json` | Test vectors: which secrets a client's log must hide, and what it must keep | Tests on every client |
@@ -159,7 +159,7 @@ Every client follows `shared/data/input-map.json`.
   the middle of a flow. Focus is always visible and is restored when returning to a screen.
 - **Game controllers:** Android and tvOS map controllers to focus events at system level, which Compose
   and SwiftUI receive natively. The player additionally reads shoulder buttons for seeking. In shells,
-  `web/src/tv.ts` already handles the Gamepad API.
+  the server's `web/src/tv.ts` already handles the Gamepad API.
 - **Touch:** phones and tablets use standard gestures and system controls.
 - **Screen readers:** every control has a label, posters announce title and year, and the system player
   is used wherever possible because it is already accessible. **Not yet tested with VoiceOver or
@@ -201,5 +201,4 @@ are used in shipped code. Electron's bundled Chromium and FFmpeg licences ship w
 
 ## Repository
 
-The code lives in `clients/wittymediaclient/` for now. The owner will create its own repository on
-GitHub, after which it mirrors with `scripts/mirror.sh` like the modules.
+This is its own repository, released on its own.
