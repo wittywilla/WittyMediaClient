@@ -80,6 +80,28 @@ async function arrowTo(what, isThere, keys = ['Down'], tries = 30) {
   throw new Error(`The arrows never reached ${what}. They went:\n      ${trail.join('\n      ')}`)
 }
 
+// Heads for something on the screen, the way someone holding a remote would.
+async function arrowTowards(what, selector, tries = 25) {
+  const trail = []
+  for (let i = 0; i < tries; i++) {
+    const way = await inPage(`(() => {
+      const target = document.querySelector(${JSON.stringify(selector)})
+      if (!target) return 'none'
+      if (document.activeElement === target || target.contains(document.activeElement)) return 'here'
+      const a = document.activeElement.getBoundingClientRect(), b = target.getBoundingClientRect()
+      if (a.bottom <= b.top) return 'Down'
+      if (a.top >= b.bottom) return 'Up'
+      return a.right <= b.left ? 'Right' : 'Left'
+    })()`)
+    if (way === 'here') return
+    await press(way === 'none' ? 'Down' : way)
+    trail.push(`${way}: ${await focused()}`)
+  }
+  throw new Error(`The arrows never reached ${what}. They went:
+      ${trail.join('
+      ')}`)
+}
+
 async function securityCode() {
   const headers = { 'Content-Type': 'application/json' }
   const login = await fetch(`${SERVER}/api/login`, { method: 'POST', headers, body: JSON.stringify({ name: USER, password: PASSWORD }) })
@@ -127,7 +149,7 @@ async function run() {
   })
 
   await step('the arrows and OK reach a film', async () => {
-    await arrowTo('a film', "(el) => { const a = el.closest && el.closest('a'); return !!a && /\\/(item|title|details)\\//.test(a.href) }", ['Down', 'Left'])
+    await arrowTowards('a film', "a[href*='/item/'], a[href*='/show/']")
     await shot('05-focus-on-card')
     await press('Enter')
     await until('its page', () => inPage("!!Array.from(document.querySelectorAll('button')).find((b) => /play|resume/i.test(b.innerText))"))
