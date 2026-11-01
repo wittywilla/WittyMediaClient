@@ -179,7 +179,7 @@ pkg info -e $APP && fail "the program stayed"
 pkg info -e electron42 || fail "Electron went, which it wasn't asked to"
 
 say "the snapshot after"
-rm -rf /home/tester/.cache /home/tester/.config /home/tester/.local /home/tester/.pki /home/tester/.sndio /srv/media
+rm -rf /home/tester/.cache /home/tester/.config /home/tester/.local /home/tester/.pki /home/tester/.sndio /srv
 snapshot > /tmp/after.txt
 if ! diff -u /tmp/before.txt /tmp/after.txt > /tmp/diff.txt; then
   cat /tmp/diff.txt
