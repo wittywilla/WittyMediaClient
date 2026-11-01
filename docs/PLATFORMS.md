@@ -250,11 +250,11 @@ Android 16 phone and 1080p TV emulators, against a real server with `saveMetadat
 | Swiping the app away | Clock moved, and the service stayed in the foreground | There's no swiping away on a TV |
 | The system's controls | On the lock screen and in the shade, with cover, Pause, Previous and Next. Books get Back 15 and Forward 30, and those two were pressed. Tapping the card opens the player | The launcher's card, with title and app. Its Stop pauses. **Its Open doesn't work:** see below |
 | Media keys | Pause and play | Play, pause and next, from the launcher |
-| Mini player over the app's own screens | Over tabs, lists and pages, in dark and light | The same, reached with Down |
-| Queue: add, jump, change, remove, clear, shuffle, repeat | Add, remove, clear and repeat pressed, and the Change buttons seen. Moving and jumping weren't pressed | Walked to with arrows, and the list stays put past either end. Nothing changed from there |
+| Mini player over the app's own screens | Over tabs, lists and pages, in dark and light. The colour under the system's bar was then corrected, and seen again in dark only | Over lists, reached with Down |
+| Queue: add, jump, change, remove, clear, shuffle, repeat | Add, remove, clear and repeat pressed, and the Change buttons seen. Shuffle pressed, with its order not looked at. Moving and jumping weren't pressed | Walked to with arrows, and the list stays put past either end. Nothing changed from there |
 | A book's place saved with `/items/{id}/progress`, every 10 seconds and on pausing, leaving and signing out | Read back from the server | Read back while asleep |
 | Resume, the chapter last left in the middle | Seen, after stopping the app | Seen |
-| Speed, −15 | Seen on screen. +15 and +30 by the system's card | Speed and −15 pressed |
+| Speed, −15, +30 | On screen, not pressed. Back 15 and Forward 30 pressed on the system's card | Speed and −15 pressed |
 | A song the server converts (WMA): plays, seeks, moves on | Seen | Plays and seeks by arrows |
 | The network dropping, then coming back | Carried on from the same time by itself | Not tried |
 | A film starting | Sound paused at once, and place saved | Not tried: the same code |
@@ -262,7 +262,7 @@ Android 16 phone and 1080p TV emulators, against a real server with `saveMetadat
 
 **Android 6, debug build:** a book played with the screen off and after leaving, right through to the end of a chapter, which the server then marked as finished. The notification had the cover and Back 15, Pause and Forward 30, and the service stayed in the foreground. Nothing else was repeated there.
 
-**Not seen:** any real device, and so no sound was heard: emulators have none. Android 7 to 15, headphones or Bluetooth buttons, a phone call taking the sound, TalkBack speaking, deep idle (not available on this image), a long queue, and audio CDs, whose tracks go through the same `/playback` as other sound.
+**Not seen:** any real device, and so no sound was heard: emulators have none. Android 7 to 15, headphones or Bluetooth buttons, a phone call taking the sound, TalkBack speaking, deep idle (not available on this image), the whole-screen player in the light theme, a long queue, and audio CDs, whose tracks go through the same `/playback` as other sound.
 
 **Limits:**
 
