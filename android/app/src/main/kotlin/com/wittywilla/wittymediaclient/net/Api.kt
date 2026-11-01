@@ -171,6 +171,7 @@ class Api(val base: String, val token: String, private val quick: Boolean = fals
     fun posterUrl(it: Item) = "$base$API/items/${it.id}/poster?v=${it.updatedAt}"
     fun backdropUrl(it: Item) = "$base$API/items/${it.id}/backdrop?v=${it.updatedAt}"
     fun showPosterUrl(s: Show) = "$base$API/shows/${s.id}/art/poster?v=${s.updatedAt}"
+    fun showBackdropUrl(s: Show) = "$base$API/shows/${s.id}/art/backdrop?v=${s.updatedAt}"
 
     // Addresses in answers start with /api/: the server's address goes in front, nothing else
     // changes. A server's answer can't point the player, with what it carries, somewhere else.

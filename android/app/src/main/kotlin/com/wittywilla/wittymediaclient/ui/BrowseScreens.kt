@@ -392,6 +392,9 @@ fun ShowScreen(nav: Nav, s: Map<String, String>, id: Long) {
             d == null -> Loading()
             else -> {
                 val selected = season ?: d.seasons.firstOrNull()?.number
+                // The picture behind, fading into the page, as on an item.
+                ServerImage(nav.app.api.showBackdropUrl(d.show), 960.dp, 16f / 9f, Modifier.fillMaxWidth().height(BACKDROP_HEIGHT).alpha(0.4f))
+                Box(Modifier.fillMaxWidth().height(BACKDROP_HEIGHT).background(Brush.verticalGradient(0.2f to Color.Transparent, 1f to MaterialTheme.colorScheme.background)))
                 LazyColumn(
                     Modifier.safeDrawingPadding(),
                     contentPadding = PaddingValues(horizontal = metrics.gutter, vertical = Space.S4),
@@ -423,9 +426,17 @@ fun ShowScreen(nav: Nav, s: Map<String, String>, id: Long) {
                             label = "${episodeLabel(ep)}, ${ep.title}", state = if (watched) "Watched" else null,
                             focusKey = "ep-${ep.id}", filled = MaterialTheme.colorScheme.surface,
                         ) {
-                            Column(Modifier.padding(Space.S3)) {
-                                Text("${episodeLabel(ep)}  ${ep.title}", color = MaterialTheme.colorScheme.onBackground)
-                                if (watched) Secondary("Watched")
+                            Row(Modifier.padding(Space.S2), horizontalArrangement = Arrangement.spacedBy(Space.S3), verticalAlignment = Alignment.CenterVertically) {
+                                ServerImage(nav.app.api.posterUrl(ep), EPISODE_PICTURE, 16f / 9f, Modifier.width(EPISODE_PICTURE).aspectRatio(16f / 9f).clip(Radius.SM))
+                                Column(Modifier.weight(1f)) {
+                                    Text("${episodeLabel(ep)}  ${ep.title}", color = MaterialTheme.colorScheme.onBackground, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                                    Secondary(listOfNotNull(runtimeText(ep.runtimeSec).ifEmpty { null }, if (watched) "Watched" else null).joinToString(" · "))
+                                    progressOf(ep)?.let { part ->
+                                        Box(Modifier.padding(top = Space.S1).fillMaxWidth().height(Space.S1).background(MaterialTheme.colorScheme.outline, Radius.XS)) {
+                                            Box(Modifier.fillMaxWidth(part.coerceIn(0f, 1f)).height(Space.S1).background(MaterialTheme.colorScheme.primary, Radius.XS))
+                                        }
+                                    }
+                                }
                             }
                         }
                     }
@@ -506,4 +517,5 @@ fun ItemScreen(nav: Nav, s: Map<String, String>, id: Long) {
 }
 
 private val BACKDROP_HEIGHT = 340.dp
+private val EPISODE_PICTURE = 120.dp
 private const val UPRIGHT_BELOW_DP = 600
