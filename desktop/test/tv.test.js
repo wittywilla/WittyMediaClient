@@ -30,7 +30,7 @@ test('the on-screen keyboard is only asked for on Wayland', () => {
   assert.strictEqual(hasKeyboard({ WAYLAND_DISPLAY: 'wayland-0' }), true)
 })
 
-test('a TV never opens the keyring's set-up wizard', () => {
+test('a TV never opens the keyring set-up wizard', () => {
   for (const env of [{}, { XDG_SESSION_TYPE: 'wayland' }]) {
     const asked = new Map(switches(env))
     assert.strictEqual(asked.get('password-store'), 'basic')
