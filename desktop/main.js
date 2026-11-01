@@ -50,7 +50,7 @@ async function postReport(to, body) {
 
 // Only what the main process sees: the server's page reports its own errors.
 const log = createClientLog({
-  dir: path.join(app.getPath('userData'), 'logs'), app: 'WittyMedia desktop', version: app.getVersion(), device: DEVICE,
+  dir: path.join(app.getPath('userData'), 'logs'), app: 'WittyMediaClient desktop', version: app.getVersion(), device: DEVICE,
   target: reportTarget, post: postReport,
 })
 
@@ -211,7 +211,7 @@ async function redeem(url, code) {
   let res, data
   try {
     res = await postJson(found.url + API + '/pair/redeem', {
-      code: String(code), device: `${os.hostname()} (WittyMedia)`.slice(0, 60), platform: process.platform === 'win32' ? 'Windows' : 'Linux',
+      code: String(code), device: `${os.hostname()} (WittyMediaClient)`.slice(0, 60), platform: process.platform === 'win32' ? 'Windows' : 'Linux',
     })
     data = await res.json()
   } catch (err) {
@@ -275,7 +275,7 @@ function createWindow() {
   const size = saved.window || {}
   win = new BaseWindow({
     width: size.width || 1280, height: size.height || 800, minWidth: 480, minHeight: 360,
-    frame: false, backgroundColor: '#0f1115', title: 'WittyMedia', show: true,
+    frame: false, backgroundColor: '#0f1115', title: 'WittyMediaClient', show: true,
   })
   win.setMenu(null)
 
