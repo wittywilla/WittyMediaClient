@@ -4,6 +4,7 @@
 // announced opens nothing, and the app checks the server's identity afterwards.
 const dgram = require('dgram')
 const { normalizeAddress, isPrivateHost } = require('./connect/address.js')
+const { cleanName } = require('./guards.js')
 
 const SERVICE = '_wittymedia._tcp.local'
 const UDP_QUESTION = 'WMS-DISCOVER/1'
@@ -11,18 +12,14 @@ const UDP_PORT = 9797
 const QUERY_EVERY_MS = 5000
 const FORGET_AFTER_MS = 20000
 const MAX_SERVERS = 32
-const MAX_NAME = 80
 const ID = /^[0-9a-f]{32}$/
-
-function cleanName(name) {
-  const clean = String(name == null ? '' : name).replace(/[\u0000-\u001f\u007f]/g, '').trim().slice(0, MAX_NAME)
-  return clean || 'WittyMediaServer'
-}
+// Another machine has no business pointing this one at itself.
+const LOOPBACK = /^127\./
 
 // A server as the connect screen may show it, or null if any part is unusable.
 function makeServer({ id, name, host, port, tls }) {
   if (!ID.test(String(id)) || !Number.isInteger(port) || port < 1 || port > 65535) return null
-  if (!/^\d{1,3}(\.\d{1,3}){3}$/.test(String(host)) || !isPrivateHost(host)) return null
+  if (!/^\d{1,3}(\.\d{1,3}){3}$/.test(String(host)) || !isPrivateHost(host) || LOOPBACK.test(host)) return null
   const scheme = tls ? 'https' : 'http'
   const r = normalizeAddress(`${scheme}://${host}:${port}`)
   return r.url ? { id, name: cleanName(name), url: r.url } : null
@@ -119,8 +116,9 @@ function startDiscovery(onChange) {
 
   const ask = () => {
     if (servers.expire()) changed()
-    mdns.query([{ name: SERVICE, type: 'PTR' }])
-    udp.send(UDP_QUESTION, UDP_PORT, '255.255.255.255', () => {})
+    // A socket that has gone away throws here, in a timer nothing else can catch.
+    try { mdns.query([{ name: SERVICE, type: 'PTR' }]) } catch { /* not this way, then */ }
+    try { udp.send(UDP_QUESTION, UDP_PORT, '255.255.255.255', () => {}) } catch { /* not this way, then */ }
   }
   ask()
   const timer = setInterval(ask, QUERY_EVERY_MS)

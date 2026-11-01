@@ -1,7 +1,7 @@
 {
   "name": "wittymediaclient-desktop",
   "productName": "WittyMedia",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "WittyMediaClient for Windows and Linux",
   "author": "WittyWilla",
   "license": "Apache-2.0",
@@ -10,7 +10,8 @@
   "scripts": {
     "sync": "node scripts/sync-shared.mjs",
     "start": "npm run sync && electron .",
-    "test": "npm run sync && node --test ../shared/connect/address.test.js test/state.test.js test/connect.test.js test/moonlight.test.js test/clientlog.test.js",
+    "test": "npm run sync && node --test ../shared/connect/address.test.js test/state.test.js test/connect.test.js test/guards.test.js test/pages.test.js test/moonlight.test.js test/clientlog.test.js",
+    "test:app": "npm run sync && node test/app/all.js",
     "package:win": "npm run sync && electron-builder --win",
     "package:linux": "npm run sync && electron-builder --linux"
   },
@@ -24,17 +25,29 @@
     "directories": {
       "output": "out"
     },
+    "asar": true,
     "files": [
       "main.js",
       "preload.js",
       "state.js",
       "identity.js",
+      "guards.js",
       "discover.js",
       "moonlight.js",
       "clientlog.js",
       "titlebar/**",
       "connect/**"
     ],
+    "electronFuses": {
+      "runAsNode": false,
+      "enableCookieEncryption": true,
+      "enableNodeOptionsEnvironmentVariable": false,
+      "enableNodeCliInspectArguments": false,
+      "enableEmbeddedAsarIntegrityValidation": true,
+      "onlyLoadAppFromAsar": true,
+      "loadBrowserProcessSpecificV8Snapshot": false,
+      "grantFileProtocolExtraPrivileges": false
+    },
     "publish": null,
     "win": {
       "target": [

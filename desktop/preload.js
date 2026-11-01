@@ -1,13 +1,14 @@
 // Runs before every page in the main view, in its own isolated world. The
-// connect screen, opened from a file, gets a small bridge. A server's page gets
+// connect screen, on the app's own scheme, gets a small bridge. A server's page gets
 // very little: it can report its colours, so the title bar matches, and ask for
 // Moonlight, which the main process checks strictly (see moonlight.js).
 const { contextBridge, ipcRenderer } = require('electron')
 
-if (location.protocol === 'file:') {
+if (location.protocol === 'wittymedia-app:') {
   contextBridge.exposeInMainWorld('wittyClient', {
     supportsDiscovery: true,
     startDiscovery: (onServers) => {
+      ipcRenderer.removeAllListeners('servers')
       ipcRenderer.on('servers', (_e, servers) => onServers(servers))
       ipcRenderer.send('discover-start')
     },
