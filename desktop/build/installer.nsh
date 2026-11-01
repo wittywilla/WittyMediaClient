@@ -118,6 +118,42 @@ FunctionEnd
   !insertmacro wittyRemoveStoredSetup
 !macroend
 
+# A section of its own would make the uninstaller show a page of components, so this is called from
+# the end of removing files, once nothing can stop the uninstall.
+!macro wittyRemoveDataIfAsked
+  ${ifNot} ${isUpdated}
+    # The app doesn't register these today. Removing them here means it never leaves one behind.
+    DeleteRegValue HKCU "Software\Microsoft\Windows\CurrentVersion\Run" "${PRODUCT_NAME}"
+    DeleteRegValue HKCU "Software\Microsoft\Windows\CurrentVersion\Run" "electron.app.${PRODUCT_NAME}"
+
+    StrCpy $R9 "0"
+    ClearErrors
+    ${GetParameters} $R0
+    ${GetOptions} $R0 "/RemoveData" $R1
+    ${ifNot} ${Errors}
+      StrCpy $R9 "1"
+    ${else}
+      MessageBox MB_YESNO|MB_ICONQUESTION|MB_DEFBUTTON2 \
+        "${PRODUCT_NAME} has been removed.$\r$\n$\r$\nDo you also want to delete its settings, saved sign-ins, logs and caches for this Windows account?$\r$\n$\r$\nChoose Yes to remove everything. You'd have to sign in to your servers again if you reinstall.$\r$\nChoose No to keep them.$\r$\n$\r$\nYour servers and what's on them are never touched." \
+        /SD IDNO IDNO +2
+      StrCpy $R9 "1"
+    ${endIf}
+
+    ${if} $R9 == "1"
+      # Electron keeps these for each Windows account, wherever the program was installed.
+      ${if} $installMode == "all"
+        SetShellVarContext current
+      ${endIf}
+      RMDir /r "$APPDATA\${PRODUCT_NAME}"
+      # The app's folder before it was renamed.
+      RMDir /r "$APPDATA\WittyMedia"
+      ${if} $installMode == "all"
+        SetShellVarContext all
+      ${endIf}
+    ${endIf}
+  ${endIf}
+!macroend
+
 # Takes the place of the standard removal, which deletes the whole folder and whatever is in it.
 !macro customRemoveFiles
   ClearErrors
@@ -137,45 +173,10 @@ FunctionEnd
   RMDir "$INSTDIR"
   ${ifNot} ${isUpdated}
     !insertmacro wittyRemoveStoredSetup
+    !insertmacro wittyRemoveDataIfAsked
     # Setup makes this folder if it isn't there. It goes only if nothing else is in it.
     ${if} $installMode != "all"
       RMDir "$LOCALAPPDATA\Programs"
     ${endIf}
   ${endIf}
-!macroend
-
-!macro customUnInstallSection
-  Section "un.WittyRemoveData"
-    ${ifNot} ${isUpdated}
-      # The app doesn't register these today. Removing them here means it never leaves one behind.
-      DeleteRegValue HKCU "Software\Microsoft\Windows\CurrentVersion\Run" "${PRODUCT_NAME}"
-      DeleteRegValue HKCU "Software\Microsoft\Windows\CurrentVersion\Run" "electron.app.${PRODUCT_NAME}"
-
-      StrCpy $R9 "0"
-      ClearErrors
-      ${GetParameters} $R0
-      ${GetOptions} $R0 "/RemoveData" $R1
-      ${ifNot} ${Errors}
-        StrCpy $R9 "1"
-      ${else}
-        MessageBox MB_YESNO|MB_ICONQUESTION|MB_DEFBUTTON2 \
-          "${PRODUCT_NAME} has been removed.$\r$\n$\r$\nDo you also want to delete its settings, saved sign-ins, logs and caches for this Windows account?$\r$\n$\r$\nChoose Yes to remove everything. You'd have to sign in to your servers again if you reinstall.$\r$\nChoose No to keep them.$\r$\n$\r$\nYour servers and what's on them are never touched." \
-          /SD IDNO IDNO +2
-        StrCpy $R9 "1"
-      ${endIf}
-
-      ${if} $R9 == "1"
-        # Electron keeps these for each Windows account, wherever the program was installed.
-        ${if} $installMode == "all"
-          SetShellVarContext current
-        ${endIf}
-        RMDir /r "$APPDATA\${PRODUCT_NAME}"
-        # The app's folder before it was renamed.
-        RMDir /r "$APPDATA\WittyMedia"
-        ${if} $installMode == "all"
-          SetShellVarContext all
-        ${endIf}
-      ${endIf}
-    ${endIf}
-  SectionEnd
 !macroend

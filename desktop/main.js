@@ -365,6 +365,9 @@ else {
   })
   app.whenReady().then(() => {
     saved = state.load(stateFile())
+    // Otherwise the engine fetches a spelling dictionary from a third party, even with spelling off in the page.
+    session.defaultSession.setSpellCheckerEnabled(false)
+    if (process.platform !== 'darwin') session.defaultSession.setSpellCheckerLanguages([])
     // Pages may go fullscreen and copy text, and the server's own may lock the mouse for a
     // game. Camera, location and the rest stay off. WebRTC to receive a stream and the
     // Gamepad API don't ask for anything.

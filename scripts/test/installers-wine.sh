@@ -185,45 +185,54 @@ uninstall "$MINE" /S
 if [ -n "${SHOTS:-}" ]; then
   mkdir -p /pkgs/results/wizard
   shoot() { import -window root "/pkgs/results/wizard/$1.png" 2>/dev/null; }
+  # The wizard and its question have the same title, so the number of windows says which is showing.
+  windows() { xdotool search --onlyvisible --name "$1" 2>/dev/null | wc -l; }
+  wait_windows() {
+    for _ in $(seq 1 120); do [ "$(windows "$1")" -ge "$2" ] && { sleep 2; return 0; }; sleep 1; done
+    shoot stuck; fail "never saw $2 of the window called $1"
+  }
+  finish() { timeout 60 wineserver -w || { echo "(closing what was still open)"; wineserver -k; }; sleep 2; }
+  by_hand() { # the answer to the question: y or n. Photographs it if given a name
+    wine "$MINE/Uninstall $APP.exe" >/dev/null 2>&1 &
+    wait_windows "$APP Uninstall" 1
+    [ -n "${2:-}" ] && shoot "$2-uninstall-start"
+    xdotool key Return
+    wait_windows "$APP Uninstall" 2
+    [ -n "${2:-}" ] && shoot "$2-uninstall-question"
+    xdotool key "$1"
+    sleep 5
+    [ -n "${2:-}" ] && shoot "$2-uninstall-end"
+    xdotool key Return
+    finish
+  }
 
   say "photographing the wizard"
   wine "$setup" >/dev/null 2>&1 &
-  sleep 12
+  wait_windows "$APP Setup" 1
   shoot 1-who-is-it-for
-  xdotool key Return; sleep 3; shoot 2-where
-  xdotool key Return; sleep 45; shoot 3-finished
-  xdotool key alt+f 2>/dev/null; sleep 1
-  xdotool key Return; sleep 3
-  pkill -f "$APP.exe" 2>/dev/null
-  wineserver -k; sleep 2
+  xdotool key Return; sleep 4; shoot 2-where
+  xdotool key Return
+  for _ in $(seq 1 180); do [ -f "$MINE/Uninstall $APP.exe" ] && break; sleep 1; done
+  sleep 10; shoot 3-finished
+  # Finished without starting the app: Wine isn't what it's meant to run on.
+  xdotool key space; sleep 1
+  xdotool key Return
+  finish
   [ -f "$MINE/$APP.exe" ] || fail "the wizard didn't install it"
 
   say "uninstalling by hand, answering No"
   leave_data
-  wine "$MINE/Uninstall $APP.exe" >/dev/null 2>&1 &
-  sleep 10
-  shoot 4-uninstall-start
-  xdotool key Return; sleep 12
-  shoot 5-uninstall-question
-  xdotool search --name "." getwindowname %@ 2>/dev/null | sort -u | head -10
-  xdotool key n; sleep 4
-  shoot 6-uninstall-after-no
-  xdotool key Return; sleep 3
-  wineserver -w
+  by_hand n 4
   [ -f "$ROAMING/$APP/state.json" ] || fail "answering No still took the settings"
   [ ! -e "$MINE/$APP.exe" ] || fail "the program stayed"
+  echo "answering No: the program went and the settings stayed"
 
   say "uninstalling by hand, answering Yes"
   run_setup "$setup" /S || fail "install exit $code"
-  wine "$MINE/Uninstall $APP.exe" >/dev/null 2>&1 &
-  sleep 10
-  xdotool key Return; sleep 12
-  xdotool key y; sleep 4
-  shoot 7-uninstall-after-yes
-  xdotool key Return; sleep 3
-  wineserver -w
+  by_hand y 5
   [ ! -e "$ROAMING/$APP" ] || fail "answering Yes left the settings"
-  echo "both answers do what they say"
+  [ ! -e "$MINE/$APP.exe" ] || fail "the program stayed"
+  echo "answering Yes: the program and the settings both went"
 fi
 echo ALLPASSED
 SCRIPT

@@ -40,7 +40,7 @@ for image in "${IMAGES[@]}"; do
   name="wittymediaclient-inst-$slug"
   docker rm -f "$name" >/dev/null 2>&1
   # Privileged so that the app's sandbox has what it needs: it's on in every run here.
-  docker run -d --name "$name" --privileged -v "$PKGS:/pkgs" -v "$HERE:/test:ro" -v "$NODE:/usr/local/bin/test-node:ro" "$image" sleep infinity >"$log" 2>&1
+  docker run -d --init --name "$name" --privileged -v "$PKGS:/pkgs" -v "$HERE:/test:ro" -v "$NODE:/usr/local/bin/test-node:ro" "$image" sleep infinity >"$log" 2>&1
 
   docker exec -i -e KIND="$kind" -e SNAPSHOT="$SNAPSHOT" -e SLUG="$slug" "$name" bash -s >>"$log" 2>&1 <<'SCRIPT'
 set -u
@@ -68,18 +68,30 @@ else
   test_tools="xorg-x11-server-Xvfb xorg-x11-xauth procps-ng shadow-utils util-linux findutils"
 fi
 
-open_app() { # the log's name, where the screenshot goes
-  rm -f /tmp/app.log
-  su tester -c "cd ~ && exec xvfb-run -a $APP --remote-debugging-port=9333 --remote-allow-origins='*'" >/tmp/app.log 2>&1 &
+check_outside() { # nothing from the app's data folder or its network log says it reached anything else
+  bdic=$(find /home/tester/.config -name '*.bdic' 2>/dev/null)
+  [ -z "$bdic" ] || { ls -la $bdic; grep -oE 'https?://[a-zA-Z0-9.-]+' /tmp/net.json | sort -u; fail "it fetched a spelling dictionary from outside"; }
+  [ -s /tmp/net.json ] || fail "no network log to read"
+  hosts=$(grep -oE 'https?://[a-zA-Z0-9.-]+' /tmp/net.json | sort -u | grep -vE '://(127\.|localhost|10\.|172\.|192\.168\.|a-made-up-server)' || true)
+  [ -z "$hosts" ] || { echo "$hosts"; fail "it reached outside addresses"; }
+  echo "reached nothing outside: $(grep -oE 'https?://[a-zA-Z0-9.-]+' /tmp/net.json | sort -u | wc -l) local addresses in its network log"
+}
+open_app() { # where the screenshot goes
+  rm -f /tmp/app.log /tmp/net.json
+  su tester -c "cd ~ && exec xvfb-run -a $APP --remote-debugging-port=9333 --remote-allow-origins='*' --log-net-log=/tmp/net.json" >/tmp/app.log 2>&1 &
   appshell=$!
   test-node /test/app-smoke.mjs 9333 "$1" || { tail -n 30 /tmp/app.log; fail "the app didn't open"; }
   grep -q 'no-sandbox\|setuid sandbox' /tmp/app.log && { cat /tmp/app.log; fail "the sandbox complained"; }
   # Each of its processes must have its sandbox on: the app wasn't told otherwise.
   ps -eo args | grep -- "--type=renderer" | grep -v grep | grep -q -- --no-sandbox && fail "renderers run without the sandbox"
-  pkill -f "$ROOT/$APP" 2>/dev/null
+  # Asked to quit properly, or the network log isn't finished. It's a failure if it won't.
+  test-node /test/app-close.mjs 9333 || fail "couldn't ask it to quit"
+  for _ in $(seq 1 30); do pgrep -f "$APP" >/dev/null || break; sleep 1; done
+  pgrep -f "$APP" >/dev/null && { ps -eo args | grep "$APP" | cut -c1-120; fail "it didn't quit when asked"; }
   wait "$appshell" 2>/dev/null
   pkill Xvfb 2>/dev/null
   sleep 1
+  check_outside
 }
 
 say "from a bare system: install with only what the package declares: $pkg"
@@ -177,6 +189,20 @@ if ! diff -u /tmp/before.txt /tmp/after.txt > /tmp/diff.txt; then
   fail "something was left behind or changed"
 fi
 echo "NOTHING LEFT: $(wc -l < /tmp/after.txt) paths before and after are the same"
+
+appimage=$(ls /pkgs/$APP-*-linux-amd64.AppImage 2>/dev/null)
+if [ -n "$appimage" ]; then
+  say "the AppImage opens too: $appimage"
+  cp "$appimage" /tmp/$APP.AppImage && chmod 755 /tmp/$APP.AppImage
+  # Without FUSE in the container, it unpacks itself to run.
+  su tester -c "cd ~ && APPIMAGE_EXTRACT_AND_RUN=1 exec xvfb-run -a /tmp/$APP.AppImage --remote-debugging-port=9333 --remote-allow-origins='*'" >/tmp/app.log 2>&1 &
+  appshell=$!
+  test-node /test/app-smoke.mjs 9333 "" || { tail -n 30 /tmp/app.log; fail "the AppImage didn't open"; }
+  test-node /test/app-close.mjs 9333
+  wait "$appshell" 2>/dev/null
+  pkill Xvfb 2>/dev/null
+  su tester -c 'rm -rf ~/.config/WittyMediaClient ~/.config/WittyMedia'
+fi
 echo ALLPASSED
 SCRIPT
   if tail -n 1 "$log" | grep -q ALLPASSED; then
