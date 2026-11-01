@@ -70,11 +70,14 @@ async function step(name, run) {
 
 // Moves with one arrow at a time until focus is where it's wanted, as a remote has to.
 async function arrowTo(what, isThere, keys = ['Down'], tries = 30) {
+  const trail = []
   for (let i = 0; i < tries; i++) {
     if (await inPage(`(() => { const el = document.activeElement; return (${isThere})(el) })()`)) return
-    await press(keys[i % keys.length])
+    const key = keys[i % keys.length]
+    await press(key)
+    trail.push(`${key}: ${await focused()}`)
   }
-  throw new Error(`The arrows never reached ${what}. Focus is on: ${await focused()}`)
+  throw new Error(`The arrows never reached ${what}. They went:\n      ${trail.join('\n      ')}`)
 }
 
 async function securityCode() {
