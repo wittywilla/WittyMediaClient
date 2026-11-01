@@ -57,6 +57,33 @@ final class ServerPagesTests: XCTestCase {
         XCTAssertFalse(refused.canTune)
     }
 
+    func testNowAndNextInTheGuide() throws {
+        let json = #"{"key":"lib-1","name":"Films","programmes":[{"start":100,"end":200,"title":"First"},{"start":200,"end":400,"title":"Second"},{"start":400,"end":500,"title":"Third"}]}"#
+        let channel = try JSONDecoder().decode(GuideChannel.self, from: Data(json.utf8))
+        XCTAssertEqual(channel.on(at: 150)?.title, "First")
+        XCTAssertEqual(channel.on(at: 200)?.title, "Second", "a programme starts on its first second")
+        XCTAssertEqual(channel.next(after: 150)?.title, "Second")
+        XCTAssertNil(channel.on(at: 900))
+        XCTAssertNil(channel.next(after: 450))
+        let first = try XCTUnwrap(channel.on(at: 150))
+        XCTAssertEqual(first.fraction(at: 150), 0.5)
+        XCTAssertEqual(first.fraction(at: 900), 1, "never past the end")
+        XCTAssertEqual(first.minutesLeft(at: 199), 1)
+    }
+
+    func testChannelButtonsGoRoundAndSkipWhatCannotPlay() throws {
+        func channel(_ key: String, encrypted: String? = nil) throws -> GuideChannel {
+            let extra = encrypted.map { #","encrypted":"\#($0)""# } ?? ""
+            return try JSONDecoder().decode(GuideChannel.self, from: Data(#"{"key":"\#(key)","name":"\#(key)"\#(extra)}"#.utf8))
+        }
+        let all = try [channel("a"), channel("b", encrypted: "Encrypted"), channel("c")]
+        XCTAssertEqual(ServerPages.channel(from: "a", by: 1, in: all)?.key, "c")
+        XCTAssertEqual(ServerPages.channel(from: "a", by: -1, in: all)?.key, "c")
+        XCTAssertEqual(ServerPages.channel(from: "c", by: 1, in: all)?.key, "a")
+        XCTAssertEqual(ServerPages.channel(from: "gone", by: 1, in: all)?.key, "a")
+        XCTAssertNil(ServerPages.channel(from: "a", by: 1, in: []))
+    }
+
     func testWhatAppleTVOpensItself() throws {
         func library(_ type: String) throws -> Library {
             try JSONDecoder().decode(Library.self, from: Data(#"{"id":1,"name":"x","type":"\#(type)"}"#.utf8))

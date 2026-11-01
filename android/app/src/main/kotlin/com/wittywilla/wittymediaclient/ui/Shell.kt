@@ -34,6 +34,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.DateRange
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.Search
@@ -73,6 +74,7 @@ import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
+import com.wittywilla.wittymediaclient.net.GUIDE_PATH
 import com.wittywilla.wittymediaclient.net.Item
 import com.wittywilla.wittymediaclient.net.SETTINGS_PATH
 import com.wittywilla.wittymediaclient.net.Show
@@ -132,6 +134,18 @@ fun Shell(nav: Nav, content: @Composable () -> Unit) {
                     horizontalArrangement = Arrangement.spacedBy(Space.S3),
                 ) {
                     TABS.forEach { TabButton(nav, it, wide = true) }
+                    if (nav.hasGuide) {
+                        FocusBox({ nav.push(Route.Page(GUIDE_PATH)) }, focusKey = "tab-guide", shape = Radius.FULL) {
+                            Row(
+                                Modifier.padding(horizontal = Space.S5, vertical = Space.S3),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(Space.S2),
+                            ) {
+                                Icon(Icons.Filled.DateRange, contentDescription = null, tint = MaterialTheme.colorScheme.onSurface)
+                                Text("TV guide", color = MaterialTheme.colorScheme.onSurface, style = MaterialTheme.typography.labelLarge)
+                            }
+                        }
+                    }
                 }
                 Box(Modifier.weight(1f)) { content() }
             }

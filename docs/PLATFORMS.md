@@ -196,9 +196,9 @@ again from the start, without following the redirect.
 
 ## Features
 
-Every client reaches everything the server does, except where this says it can't. Video has the native apps' own screens. Everything else opens
-**the server's own page inside the app**, signed in: in a web view on Android and on iPhone and iPad, with big screen mode at 1920 wide on a TV. Apple TV
-has no web view, as tvOS doesn't offer one to apps, so it has screens of its own for what it can do, and says plainly what it can't.
+Every client reaches everything the server does, except where this says it can't. Video has the native apps' own screens, and on Android so do music, audiobooks and
+podcasts. Everything else opens **the server's own page inside the app**, signed in: in a web view on Android and on iPhone and iPad, with big screen mode at 1920 wide on a TV.
+Apple TV has no web view, as tvOS doesn't offer one to apps, so it has screens of its own for what it can do, and says plainly what it can't.
 
 Checked on 2026-11-01 against a real server with every module, with made-up films, shows, music, audiobooks, podcasts, photos and a channel, and the real DVDs,
 books and comics in the test media. **Ran** on the desktop is the real app under Linux on a virtual display, driven by real key events. **Emulator** is Android 16:
@@ -213,14 +213,17 @@ books and comics in the test media. **Ran** on the desktop is the real app under
 | Next episode | Ran: offered | Emulator (0.2.1) | Emulator (0.2.1) | Written | Written |
 | Skip intro | Not seen here: no intros in this media | Emulator (0.2.1) | Emulator (0.2.1) | Written | Written |
 | Search | Ran | Emulator, films and shows; everything else in the server's page | The same | Written, films and shows | Written, films and shows |
-| Music: albums, artists, playlists, lyrics | Ran: opens and plays | Page: its clock moved | Page: played, by touch | Own screen, written: albums and tracks only | Page, written |
-| Audiobooks, podcasts | Ran: clock moved | Page: audiobook's clock moved | Page: both played | Own screen, written: as music | Page, written |
+| Music: albums, artists, songs, a queue | Ran: opens and plays | Own screens, Emulator: [below](#music-audiobooks-and-podcasts-on-android) | Own screens, Emulator: [below](#music-audiobooks-and-podcasts-on-android) | Own screen, written: albums and tracks only | Page, written |
+| Playlists, lyrics, a song's radio, following a podcast | Ran: opens | Page, behind More. Its sound stops when you leave it | The same | Not available | Page, written |
+| Audiobooks, podcasts | Ran: clock moved | Own screens, Emulator: place saved, Resume, speed | Own screens, Emulator: the same | Own screen, written: as music | Page, written |
 | Radio | Page opens. No station played: none set up | The same | The same | **Not available**: says so. Could be built | Page, written |
 | Books, comics, PDF | Ran: reader opens | Page: reader opens, Back leaves it | Page: reader opens | **Not available**: no web view to read in, and it says so | Page, written |
 | Photos | Ran: grid and viewer | Page: viewer with arrows, OK and Back | Page: viewer by touch, Back closes it | Own screen, written: left and right through a library | Page, written |
 | DVDs | Ran: the film plays | Page: the film plays, and the menu seen | Page: the film plays | **Not available**: discs need a player of their own, and it says so | Page, written |
 | Blu-ray, audio CDs | Not in this test server | Not in this test server | Not in this test server | **Not available**, as DVDs | Page, written |
-| TV guide, channels | Ran: a channel plays | Page: a channel plays, Back returns to the guide | Page: a channel plays | Own screen, written. Its requests were checked against the real server with `curl` | Page, written |
+| TV guide | Ran: the page, with arrows | Page, on the top bar, by arrows and by controller: the grid, what's on, Back | Page: opened, upright and on its side | Own screen, written: each channel with what's on now and next. It isn't the grid, and doesn't have the guide's looks | Page, written |
+| Watching a channel | Ran: a channel plays | Page: plays. Arrows, channel buttons and a controller change channel, OK shows what's on, Back returns to the guide | Page: a channel plays by touch | Own screen, written: up and down change channel, with what's on shown over the picture. Its requests were checked against the real server with `curl` | Page, written |
+| On TV now, on Home | Ran: the server's own row | A row of the app's own | A row of the app's own | A row of the app's own, written | A row of the app's own, written |
 | Tuners, recordings | Page opens. No tuner here | The same | The same | Tuner channels listed, written. Recordings **not available** | Page, written |
 | Home videos | Page opens | Page opens | Page opens | Written | Written |
 | Collections | Page opens, none made | Page opens | Page opens | **Not available**: their titles still appear in libraries | Page, written |
@@ -234,15 +237,47 @@ books and comics in the test media. **Ran** on the desktop is the real app under
 | A long name for the server | Ran: 40 letters wrap in the side menu | Seen | Seen | Written | Written |
 | Own log, with errors reported to the server | The log's logic ran in tests | Written and shown in the app | Written and shown in the app | The log's logic ran in tests on Linux | As Apple TV |
 
+### Music, audiobooks and podcasts on Android
+
+A player of the app's own, on Media3 with a `MediaSessionService`. It carries on whichever screens are up, and `net/ServerPages.kt` decides what opens in it. Seen on 2026-11-01 on the
+Android 16 phone and 1080p TV emulators, against a real server with `saveMetadata=0`, reading the system's own clock with `dumpsys media_session`:
+
+ANDROID-MUSIC-TABLE
+
 **Limits of the server's page inside the Android and iPhone apps:**
 
 - **Sound stops when you leave its page,** and with it the player on the lock screen. It's the web view playing, so leaving that screen ends it, and nothing
-  tells the system that sound is playing. Staying on the page with the screen off hasn't been tried. A player of the app's own, with a media session, is what would change this.
+  tells the system that sound is playing. Staying on the page with the screen off hasn't been tried. On Android this now only applies to what's behind More.
 - **A web view older than version 87 can't show these pages,** and says so. Android 6 comes with version 44 and needs an update of Android System WebView.
   Films and shows still play there. Versions just above that line haven't been tried: this was seen on 143.
 - **What a page builds itself to save can't be downloaded,** such as a backup or a zipped log. It says to use a browser. A file the server sends by address can be.
 - **Uploading by remote on a TV:** whether a TV has a file picker at all differs by device. It says so if it hasn't.
 - **Remote and controller:** only emulated key presses have reached the pages on a TV. A game controller in a web view hasn't been tried.
+
+## Controllers
+
+The app has to let a controller through, and what each button then does is the same on every client: D-pad or left stick to move, the confirm button to choose, the back button to go back.
+
+| | Xbox | DualSense | DualShock 4 | Nintendo Switch Pro |
+|---|---|---|---|---|
+| Android TV, this app's own screens | Emulator | Emulator | Emulator | Emulator |
+| Android TV, the server's page | Emulator | Emulator | Emulator | Emulator |
+| Android TV, this app's own player | Not repeated | Emulator: play and pause, skip, leave | Not repeated | Not repeated |
+| Android phone, tablet | Not run: the same code as TV | Not run | Not run | Not run |
+| Desktop | Ran once: a virtual pad on Plasma Bigscreen, as a key press each. See below | The page's own tests only | The page's own tests only | The page's own tests only |
+| Apple TV | Written: the system's focus engine moves for any controller it knows, and nothing in this app stands in the way | As Xbox | As Xbox | As Xbox |
+| iPhone, iPad | Not available on this app's own screens: iOS doesn't move focus for a controller. In the server's page, written | As Xbox | As Xbox | As Xbox |
+
+**How Android was run.** Android's own `uinput` tool made a device with the real maker and product numbers on the TV emulator, so its real layout files and input system decided what each press meant, on Android 16. Nothing real was held in a hand.
+
+- **Own screens and the page:** D-pad as a hat and left stick to move, confirm and back. In the page, the D-pad and buttons of all four.
+- **A Nintendo pad's labels are obeyed, on an assumption.** Android names buttons by where they sit, and Linux's driver reports A as the right-hand button, so this app and the page both read A as confirm. On an older device whose driver differs, A and B could be the wrong way round. A real pad on a cheap stick is what would tell.
+- **The DualShock 4 ran on the layout for the older driver,** as this tool can't set the version a newer one reports. The newer layout is the DualSense's.
+- **The first press in a newly opened page only wakes the controller,** as browsers don't show a page a controller until it's used. The second press moves. Button presses that wake it can go to the page as well.
+
+**Found by running it:** a DualSense gets no named layout from Android's web view, and the page looked for its D-pad in the wrong place, so it did nothing there. B at the top of a page did nothing either, as a web view keeps a controller's buttons for the page. Both are fixed.
+
+**Not seen:** any real controller, Bluetooth, a game played with one in a web view, the Gamepad API in iOS's web view, and a Guide button on a real remote. The emulator's system took that key before this app got it.
 
 ## Games on someone's own PC
 
@@ -355,7 +390,7 @@ anything, the Keychain, the web view, the Top Shelf, or generating the Xcode pro
 | Device capabilities | **Written** | What each device really reports, and whether the choices fit real files |
 | Picture in picture | **Written** | Whether pausing in the background interferes. Plain video pauses when the app goes to the background |
 | The server's pages, iPhone and iPad | **Written** | Whether the sign-in cookie reaches them, saving a file, and whether the page's own bars sit well under the system's |
-| Music, photos and channels on Apple TV | **Written** | Focus on the lists, a song with no picture in the system's player, and the next track following |
+| Music, photos and channels on Apple TV | **Written** | Focus on the lists, a song with no picture in the system's player, the next track following, and whether up and down reach a player that isn't the system's |
 
 **Known limits:**
 
@@ -373,8 +408,8 @@ anything, the Keychain, the web view, the Top Shelf, or generating the Xcode pro
 ## Not done yet in the native apps
 
 - A prompt for two-factor codes on password sign-in. Those accounts can use code sign-in instead.
-- On Android: playing in the background or picture in picture, a choice between a file's several pictures, and a baseline profile
-  for faster starts. Music and live channels play, in the server's page.
+- On Android: picture in picture and playing a film in the background, a choice between a file's several pictures, and a baseline profile
+  for faster starts. Live channels play, in the server's page. Music, audiobooks and podcasts have [their own player](#music-audiobooks-and-podcasts-on-android).
 - App icons and TV artwork. Android has a placeholder, Apple has none, and the desktop app has
   Electron's default icon.
 

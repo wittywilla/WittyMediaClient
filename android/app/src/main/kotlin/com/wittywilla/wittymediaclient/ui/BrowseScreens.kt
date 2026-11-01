@@ -57,12 +57,18 @@ import androidx.compose.ui.unit.dp
 import com.wittywilla.wittymediaclient.net.COLLECTIONS_PATH
 import com.wittywilla.wittymediaclient.net.GAME_PCS_PATH
 import com.wittywilla.wittymediaclient.net.GUIDE_PATH
+import com.wittywilla.wittymediaclient.net.GuideChannel
 import com.wittywilla.wittymediaclient.net.Home
 import com.wittywilla.wittymediaclient.net.Item
 import com.wittywilla.wittymediaclient.net.Library
 import com.wittywilla.wittymediaclient.net.Show
 import com.wittywilla.wittymediaclient.net.ShowDetail
 import com.wittywilla.wittymediaclient.net.albumsOnce
+import com.wittywilla.wittymediaclient.net.channelPath
+import com.wittywilla.wittymediaclient.net.fraction
+import com.wittywilla.wittymediaclient.net.minutesLeft
+import com.wittywilla.wittymediaclient.net.onNow
+import com.wittywilla.wittymediaclient.net.programmeAt
 import com.wittywilla.wittymediaclient.net.hasOwnScreen
 import com.wittywilla.wittymediaclient.net.isRigGame
 import com.wittywilla.wittymediaclient.net.isRigGames
@@ -218,6 +224,46 @@ private fun LibraryTabs(nav: Nav, libraries: List<Library>, extra: @Composable (
     }
 }
 
+// What's on the channels right now, as on the server's own Home. Choosing one watches it.
+@Composable
+private fun OnNowRow(nav: Nav, channels: List<GuideChannel>) {
+    val metrics = LocalMetrics.current
+    val scheme = MaterialTheme.colorScheme
+    val width = metrics.cardWidth * ON_NOW_WIDTH
+    val now = remember { System.currentTimeMillis() / 1000 }
+    Column(verticalArrangement = Arrangement.spacedBy(Space.S2)) {
+        SectionTitle("On TV now", Modifier.padding(horizontal = metrics.gutter))
+        LazyRow(
+            Modifier.remoteRow(),
+            contentPadding = PaddingValues(horizontal = metrics.gutter, vertical = Space.S1),
+            horizontalArrangement = Arrangement.spacedBy(Space.S3),
+        ) {
+            items(channels, key = { it.key }) { channel ->
+                val on = channel.programmeAt(now)
+                val words = on?.title ?: "Nothing listed"
+                FocusBox(
+                    { nav.push(Route.Page(channelPath(channel.key))) }, Modifier.width(width),
+                    label = "Channel ${channel.number}, ${channel.name}: $words", focusKey = "onnow-${channel.key}",
+                ) {
+                    Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(Space.S1)) {
+                        Box(Modifier.fillMaxWidth().aspectRatio(16f / 9f).clip(Radius.MD).background(scheme.surfaceVariant)) {
+                            on?.itemId?.let { ServerImage(nav.app.api.itemBackdropUrl(it), width, 16f / 9f, Modifier.fillMaxSize()) }
+                            Text(channel.number, color = Color.White, style = MaterialTheme.typography.labelLarge, modifier = Modifier.padding(Space.S2).background(Color(0x99000000), Radius.XS).padding(horizontal = Space.S1))
+                            if (on != null) {
+                                Box(Modifier.align(Alignment.BottomStart).fillMaxWidth().padding(Space.S1).background(Color(0x99000000), Radius.XS)) {
+                                    Box(Modifier.fillMaxWidth(on.fraction(now)).height(Space.S1).background(scheme.primary, Radius.XS))
+                                }
+                            }
+                        }
+                        Text(words, color = scheme.onBackground, maxLines = 2, overflow = TextOverflow.Ellipsis, style = MaterialTheme.typography.titleSmall, modifier = Modifier.padding(horizontal = Space.S1))
+                        Text(channel.name + if (on != null) " · ${on.minutesLeft(now)} min left" else "", color = scheme.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis, style = MaterialTheme.typography.bodySmall, modifier = Modifier.padding(horizontal = Space.S1))
+                    }
+                }
+            }
+        }
+    }
+}
+
 @Composable
 fun HomeScreen(nav: Nav, s: Map<String, String>) {
     val metrics = LocalMetrics.current
@@ -225,12 +271,13 @@ fun HomeScreen(nav: Nav, s: Map<String, String>) {
     var error by remember { mutableStateOf("") }
     var attempt by remember { mutableIntStateOf(0) }
     var gamePcs by remember { mutableStateOf(false) }
-    var hasGuide by remember { mutableStateOf(false) }
+    var onNow by remember { mutableStateOf(emptyList<GuideChannel>()) }
     val sideways = LocalConfiguration.current.orientation == Configuration.ORIENTATION_LANDSCAPE
     // Phones and tablets only: see rigChoice for why TVs don't play in the page.
     LaunchedEffect(Unit) {
         if (!nav.app.isTv && !nav.app.isFireTv) gamePcs = runCatching { nav.app.api.couchStatus().allowed }.getOrDefault(false)
-        hasGuide = runCatching { "live-tv" in nav.app.api.capabilities().features }.getOrDefault(false)
+        nav.hasGuide = runCatching { "live-tv" in nav.app.api.capabilities().features }.getOrDefault(false)
+        if (nav.hasGuide) onNow = runCatching { onNow(nav.app.api.guide(ON_NOW_HOURS, ON_NOW_CHANNELS).channels) }.getOrDefault(emptyList())
     }
     LaunchedEffect(attempt) {
         error = ""
@@ -272,12 +319,14 @@ fun HomeScreen(nav: Nav, s: Map<String, String>) {
             item(key = "libraries") {
                 LibraryTabs(nav, h.libraries.distinctBy { it.id }) {
                     Row(horizontalArrangement = Arrangement.spacedBy(Space.S2)) {
-                        if (hasGuide) ActionButton("TV guide", { nav.push(Route.Page(GUIDE_PATH)) }, pill = true, focusKey = "guide")
+                        // On a TV it's along the top. A phone has no room for it there.
+                        if (nav.hasGuide && !metrics.tv) ActionButton("TV guide", { nav.push(Route.Page(GUIDE_PATH)) }, pill = true, focusKey = "guide")
                         ActionButton("Collections", { nav.push(Route.Page(COLLECTIONS_PATH)) }, pill = true, focusKey = "collections")
                         if (gamePcs) ActionButton("Game PCs", { nav.push(Route.Web(GAME_PCS_PATH)) }, pill = true, focusKey = "gamepcs")
                     }
                 }
             }
+            if (onNow.isNotEmpty()) item(key = "onnow") { OnNowRow(nav, onNow) }
             items(hubs, key = { it.key }) { hub ->
                 Column(verticalArrangement = Arrangement.spacedBy(Space.S2)) {
                     SectionTitle(hub.title, Modifier.padding(horizontal = metrics.gutter))
@@ -520,5 +569,8 @@ fun ItemScreen(nav: Nav, s: Map<String, String>, id: Long) {
 }
 
 private val BACKDROP_HEIGHT = 340.dp
+private const val ON_NOW_HOURS = 1
+private const val ON_NOW_CHANNELS = 20
+private const val ON_NOW_WIDTH = 1.5f
 private val EPISODE_PICTURE = 120.dp
 private const val UPRIGHT_BELOW_DP = 600

@@ -312,7 +312,7 @@ public final class WittyClient: @unchecked Sendable {
     }
 
     public func couchStatus() async throws -> CouchStatus { try await get("/couch") }
-    public func guide() async throws -> Guide { try await get("/guide") }
+    public func guide() async throws -> Guide { try await get("/guide?hours=3") }
 
     /// Starts a channel's shared stream. A 503 means it's still starting: wait and ask again.
     public func tune(_ key: String, viewer: String) async throws -> Tuned {

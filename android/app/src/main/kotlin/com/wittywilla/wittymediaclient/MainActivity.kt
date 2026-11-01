@@ -1,10 +1,14 @@
 package com.wittywilla.wittymediaclient
 
 import android.content.Intent
+import android.annotation.SuppressLint
 import android.os.Bundle
+import android.view.KeyEvent
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import com.wittywilla.wittymediaclient.player.OPEN_NOW_PLAYING
+import com.wittywilla.wittymediaclient.net.NINTENDO_VENDOR
+import com.wittywilla.wittymediaclient.net.nintendoKey
 import com.wittywilla.wittymediaclient.ui.AppRoot
 import com.wittywilla.wittymediaclient.ui.showSystemBars
 
@@ -26,5 +30,23 @@ class MainActivity : ComponentActivity() {
     // Tapping the notification or a TV's card. It can only ask for the player's own screen.
     private fun noticeTap(intent: Intent?) {
         if (intent?.action == OPEN_NOW_PLAYING) (application as WittyApp).listening.wantsScreen = true
+    }
+
+    // Before any screen, a web view included: it would keep this for a page that has no use for it.
+    // Lint reads this as the library's own override. It's the system's, on Activity, which any app may have.
+    @SuppressLint("RestrictedApi")
+    override fun dispatchKeyEvent(event: KeyEvent): Boolean {
+        if (event.keyCode == KeyEvent.KEYCODE_GUIDE) {
+            if (event.action == KeyEvent.ACTION_DOWN) (application as WittyApp).onGuideKey?.invoke()
+            return true
+        }
+        if (!(application as WittyApp).showingPage && event.device?.vendorId == NINTENDO_VENDOR) {
+            nintendoKey(event.keyCode)?.let { meaning ->
+                val said = KeyEvent(event.downTime, event.eventTime, event.action, meaning, event.repeatCount, event.metaState, event.deviceId, event.scanCode, event.flags, event.source)
+                super.dispatchKeyEvent(said)
+                return true // or Android would go on to act on the button's own name as well
+            }
+        }
+        return super.dispatchKeyEvent(event)
     }
 }

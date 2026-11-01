@@ -170,14 +170,14 @@ private struct LibraryTabs: View {
             HStack(spacing: Tokens.Space.s2) {
                 tab("Home", nil)
                 #if os(tvOS)
-                ForEach(libraries) { tab($0.name, $0) }
                 link("TV guide", .guide)
+                ForEach(libraries) { tab($0.name, $0) }
                 #else
+                link("TV guide", .page(ServerPages.guide))
                 // Video opens under these tabs. The rest is the server's own page, on a screen of its own.
                 ForEach(libraries) { library in
                     if library.opensHere { tab(library.name, library) } else { link(library.name, .page(ServerPages.path(library))) }
                 }
-                link("TV guide", .page(ServerPages.guide))
                 link("Collections", .page(ServerPages.collections))
                 if gamePCs { link("Game PCs", .web(WebPlayer.gamePCsPath)) }
                 #endif
@@ -186,6 +186,53 @@ private struct LibraryTabs: View {
             .padding(.vertical, Tokens.focusRoom)
         }
         .remoteSection()
+    }
+}
+
+/// What's on the channels right now, as on the server's own Home. Choosing one watches it.
+private struct OnNowRow: View {
+    @Environment(\.palette) private var palette
+    let channels: [GuideChannel]
+
+    private func route(_ channel: GuideChannel) -> Route {
+        #if os(tvOS)
+        return .channel(key: channel.key)
+        #else
+        return .page("/tv/watch/\(WittyClient.pathPart(channel.key))")
+        #endif
+    }
+
+    var body: some View {
+        let now = Int64(Date().timeIntervalSince1970)
+        VStack(alignment: .leading, spacing: Tokens.Space.s2) {
+            Text("On TV now").font(.wmSection).accessibilityAddTraits(.isHeader)
+                .padding(.horizontal, Tokens.gutter)
+            ScrollView(.horizontal, showsIndicators: false) {
+                LazyHStack(alignment: .top, spacing: Tokens.Space.s4) {
+                    ForEach(channels) { channel in
+                        let on = channel.on(at: now)
+                        NavigationLink(value: route(channel)) {
+                            VStack(alignment: .leading, spacing: Tokens.Space.s1) {
+                                Text(channel.label).font(.wmCardSub).foregroundStyle(palette.textSecondary).lineLimit(1)
+                                Text(on?.title ?? "Nothing listed").font(.wmCard).lineLimit(2)
+                                if let on {
+                                    ProgressView(value: on.fraction(at: now)).progressViewStyle(.linear).accessibilityHidden(true)
+                                    Text("\(on.minutesLeft(at: now)) min left").font(.wmCardSub).foregroundStyle(palette.textSecondary)
+                                }
+                            }
+                            .frame(width: Tokens.cardWidth * 1.6, alignment: .leading)
+                            .padding(Tokens.Space.s3)
+                            .background(RoundedRectangle(cornerRadius: Tokens.Radius.md).fill(palette.card))
+                        }
+                        .tileStyle()
+                        .accessibilityLabel("\(channel.label): \(on?.title ?? "Nothing listed")")
+                    }
+                }
+                .padding(.horizontal, Tokens.gutter)
+                .padding(.vertical, Tokens.focusRoom)
+            }
+            .remoteSection()
+        }
     }
 }
 
@@ -264,6 +311,7 @@ struct HomeView: View {
     @State private var home: Home?
     @State private var error = ""
     @State private var gamePCs = false
+    @State private var onNow: [GuideChannel] = []
     @State private var selected: Library?
     @FocusState private var focused: String?
     /// What had focus when this screen was left. Coming back puts it there.
@@ -295,6 +343,9 @@ struct HomeView: View {
         #if os(iOS)
         gamePCs = (try? await client.couchStatus())?.allowed == true
         #endif
+        let channels = uniqued((try? await client.guide())?.channels ?? [])
+        model.channels = channels
+        onNow = channels.filter(\.canTune)
     }
 
     @ViewBuilder private func page(_ home: Home) -> some View {
@@ -310,6 +361,7 @@ struct HomeView: View {
                     LibraryContent(library: selected).id(selected.id)
                 } else {
                     if let hero = home.hero { HeroView(item: hero, scope: scope) }
+                    if !onNow.isEmpty { OnNowRow(channels: onNow) }
                     ForEach(uniqued(home.hubs ?? []).filter { !$0.isEmpty }) { HubRow(hub: $0, focus: $focused) }
                     if home.hero == nil, (home.hubs ?? []).allSatisfy(\.isEmpty) {
                         EmptyMessage(title: "Nothing here yet", detail: "Add a library on the server, or ask whoever runs it.")
