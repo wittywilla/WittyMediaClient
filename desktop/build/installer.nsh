@@ -101,6 +101,23 @@ FunctionEnd
 
 !endif
 
+# The standard setup leaves a copy of itself in the account's local folder, for an auto-updater this
+# app doesn't have. That's over 100 MB, in a place no uninstaller would know about.
+!macro wittyRemoveStoredSetup
+  ${if} $installMode == "all"
+    SetShellVarContext current
+  ${endIf}
+  Delete "$LOCALAPPDATA\${APP_INSTALLER_STORE_FILE}"
+  RMDir "$LOCALAPPDATA\${APP_PACKAGE_NAME}-updater"
+  ${if} $installMode == "all"
+    SetShellVarContext all
+  ${endIf}
+!macroend
+
+!macro customInstall
+  !insertmacro wittyRemoveStoredSetup
+!macroend
+
 # Takes the place of the standard removal, which deletes the whole folder and whatever is in it.
 !macro customRemoveFiles
   ClearErrors
@@ -118,6 +135,13 @@ FunctionEnd
   # Move out of the folder so it can go. It stays if someone else's files are still in it.
   SetOutPath $TEMP
   RMDir "$INSTDIR"
+  ${ifNot} ${isUpdated}
+    !insertmacro wittyRemoveStoredSetup
+    # Setup makes this folder if it isn't there. It goes only if nothing else is in it.
+    ${if} $installMode != "all"
+      RMDir "$LOCALAPPDATA\Programs"
+    ${endIf}
+  ${endIf}
 !macroend
 
 !macro customUnInstallSection

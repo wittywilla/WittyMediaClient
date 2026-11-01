@@ -1,9 +1,11 @@
 {
   "name": "wittymediaclient",
   "productName": "WittyMediaClient",
+  "desktopName": "wittymediaclient.desktop",
   "version": "0.1.0",
-  "description": "WittyMediaClient for Windows, macOS and Linux",
+  "description": "Watch and listen from your WittyMediaServer",
   "author": "WittyWilla",
+  "homepage": "https://github.com/wittywilla/WittyMediaClient",
   "license": "Apache-2.0",
   "main": "main.js",
   "private": true,
@@ -164,7 +166,8 @@
           "Name": "WittyMediaClient",
           "Comment": "Connect to your WittyMediaServer"
         }
-      }
+      },
+      "syncDesktopName": true
     },
     "appImage": {
       "artifactName": "wittymediaclient-${version}-linux-amd64.${ext}"
@@ -191,7 +194,8 @@
         "libxkbcommon0",
         "libuuid1",
         "libsecret-1-0"
-      ]
+      ],
+      "recommends": []
     },
     "rpm": {
       "artifactName": "wittymediaclient-${version}-linux-amd64.${ext}",
