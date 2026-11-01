@@ -90,11 +90,11 @@ app under the GPL, published on its own terms, is the only way to do better, and
 ## FreeBSD
 
 **Electron has no official FreeBSD builds, and electron-builder can't make a FreeBSD package without them.** FreeBSD's ports tree
-builds Electron itself instead (`devel/electron42` to `electron44`, as of November 2026), with packages for amd64. So:
+builds Electron itself instead. As of November 2026 the tree has `devel/electron41` to `electron44`, and `electron42` is the one seen with a package, for amd64 on FreeBSD 14 and 15. So:
 
 - **The package holds only the app:** `app.asar`, a launcher, the desktop entry and an icon, 91 KB in all. It depends on one Electron
   port. One codebase, and Electron's security updates come through `pkg upgrade`. A native shell around a system web view, the other
-  way to get here, would have meant a second window and security layer to keep right, and FreeBSD's web views play less.
+  way to get here, would have meant a second window and security layer to keep right.
 - **`npm run package:freebsd`** runs on FreeBSD, finds the newest Electron with a package, and builds with `pkg create`. CI does this free of
   charge in a virtual machine on GitHub's Linux runners, with `vmactions/freebsd-vm`.
 - **The launcher, `desktop/packaging/freebsd/wittymedia.sh`,** sorts out what the app can't:
@@ -143,8 +143,7 @@ a page. At the top of the app it opens the menu instead. The list of what counts
 **The interface is the server's own big screen mode.** The app adds `?tv=1` to the address, which is the same mode a TV browser gets. There's no second interface to keep up.
 
 **Packages:** `.deb`, `.rpm` and `.pacman` add the entry a launcher needs. An AppImage doesn't. **There's no Flatpak**, on purpose for now: Bigscreen's own distributions use
-their package managers, an unattended Flatpak of Electron needs its own sandbox helper, and one that hasn't been seen working isn't worth offering. Flathub
-is the place to add it when someone wants it.
+their package managers, and one that hasn't been seen working isn't worth offering. Flathub is the place to add it when someone wants it.
 
 **For Bigscreen's packagers:** on Fedora 44, `plasma-bigscreen` alone stops at an error screen, as the launcher needs `plasma-nm`, and displays need `kscreen`.
 

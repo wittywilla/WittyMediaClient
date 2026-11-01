@@ -30,7 +30,7 @@ ever run**, on a device or an emulator.
 | KDE Plasma Bigscreen | **Ran** | The real shell 6.8.2 on Fedora 44, in a virtual machine: listed in its launcher, opened from it, video and sound seen, keys through the real input stack. Never on a TV or with a real remote. See [below](#freebsd-plasma-bigscreen-and-linux). |
 | Android ARM, 64-bit | **Compiled** | In the same APK, from Android 6. Not run here: the emulators are x86. |
 | Android ARM, 32-bit | **Compiled** | In the same APK, from Android 6. Not run here: see [Android's processors](#androids-processors). |
-| Android x86, 64-bit | Same APK | The emulators run this one, so it's the build the Android rows above were seen on. |
+| Android x86, 64-bit | **Compiled** | In the same APK, from Android 6. This is the processor Android's emulators here use, and the `android-real` work records what was seen on them. |
 | Android x86, 32-bit | **Compiled** | In the same APK, from Android 6. Not run here. |
 | Android TV, Google TV | **Type-checked** | Never run. Same APK as phones. |
 | Fire TV | **Type-checked** | Never run. Needs Fire OS 6 or later: the first Fire TV Sticks are too old for Compose. |
@@ -92,7 +92,6 @@ its own keyboard or X, unless it says otherwise.
   first time someone signs in. So a TV uses Chromium's plain store, in a folder only that user can read.
 - **FreeBSD's ports retire each Electron within months.** The launcher falls back to the newest one present, and the build picks the
   newest one with a package. The code has to keep working across Electron versions. It's now run on 42 and 45.
-- Electron 42 has **no H.265** or other codecs beyond the web's: the server converts those, as it does for a browser.
 - Removing or reinstalling the `.rpm` over itself drops the `/usr/bin/wittymedia` link, which is how electron-builder's scripts work.
   The launcher entry doesn't use the link. `rpm -e` followed by a fresh install puts it back.
 - A real shell needs more than Fedora's `plasma-bigscreen` package installs. Without `plasma-nm` and `kscreen`, it stops at an error screen. That's
@@ -110,12 +109,12 @@ One APK carries all four. Checked by opening a real one built from this branch, 
 | 16 KB memory pages | Aligned, by `zipalign -c -P 16` |
 | Size | 2.9 MB |
 
-**Why Android 6 is the lowest claim.** 23 of the libraries, Compose, Activity, Core and Media3 among them, won't build below API 23, so it's a hard
-floor. Android's own lint reads every call against that version, and CI now runs it. It found two real problems and one missing annotation. The
-first was the one playback's network watcher, whose fix is on the `android-real` branch, and lint is only clean with that merged. `check-abis.sh`
-and `lintSideload` both run in CI.
+**Why Android 6 is the lowest claim.** Media3, Activity, Core and Lifecycle, 23 libraries in all, need API 23 and won't build below it, so it's a
+hard floor. Android's own lint reads every call against that version, and CI now runs it. It found the player's network watcher calling something from
+API 24, which was caught rather than crashing and is fixed on the `android-real` branch, so lint is only clean with that merged. It also found two places here
+that needed an annotation and no change in what they do.
 
-**ARM from before `armeabi-v7a` isn't possible.** Android's tools dropped ARMv5 and ARMv6 in 2018, and Android 6 itself needs a v7 processor or newer.
+**ARM older than `armeabi-v7a` isn't possible.** Android's tools dropped ARMv5 and ARMv6 in 2018, so the libraries this app depends on aren't built for them.
 
 **Not seen:** this app running on any ARM device or any 32-bit build. Android's emulators on this x86 machine don't run ARM at a usable speed, and
 it hasn't been run on a 32-bit x86 image or on Android 6. A cheap 32-bit ARM TV stick is the check that matters most.
