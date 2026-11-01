@@ -13,14 +13,14 @@ These change what gets built. Each has a recommendation.
    See [the design](DESIGN.md#windows-7).
 2. **The app's ID.** Android and Apple use `com.wittywilla.wittymediaclient`. Once published it can never
    change, so say now if you want something else.
-3. **The name people see.** The desktop app is "WittyMediaClient". The Android and Apple apps still say "WittyMedia":
-   say if they should follow.
+3. **The name people see.** The desktop and Android apps are "WittyMediaClient". The Apple apps still say "WittyMedia",
+   until someone next works on them.
 4. **Artwork.** Every app needs an icon, and TVs need a wide banner too.
 
 ## Step 1: Let CI build the apps
 
-CI builds the Android and Apple apps on GitHub's computers, and this is the first time that code will
-ever be compiled. **Expect failures the first time**: fixing them is normal.
+CI builds the Android and Apple apps on GitHub's computers. Android's build and tests have already passed on this machine. For the Apple
+apps this is the first time their code will ever be compiled. **Expect failures the first time**: fixing them is normal.
 
 The native apps need the `client-contract` branch merged too, or they can't connect. Nothing here pushes
 or merges, so that's your call. The simplest way is to ask your main Claude session to merge both
@@ -32,30 +32,15 @@ your behalf. Read them at <https://developer.android.com/studio/terms> if you wa
 GitHub Actions is free for public repositories. For a private one, the Mac builds use your free minutes
 quickly.
 
-## Android on this machine: your decision
+## Android on this machine
 
-Real APKs and an emulator run need the Android SDK here. Installing it means accepting Google's Android SDK licence
-(<https://developer.android.com/studio/terms>). You said yes to this on 30 October for an earlier chat's smaller list, but that
-didn't include the emulator and system images, and the permission system refused it this time, so it's yours to run or to
-allow. The packages below are all under that one licence. The command-line tools are already downloaded, on WSL's disk, and
-no licence has been accepted. In a terminal:
+**Nothing to do here.** You decided, and accepted Google's Android SDK licence (`android-sdk-license`), and the tools are installed in WSL at
+`~/android-sdk`. They take about 12 GB, plus 3.6 GB for an Android 6 image added to test the oldest version the app supports, under that same
+licence. Any Claude chat can build the APKs and run them on emulators, and the `dev` user is already in the `kvm` group.
 
-```bash
-wsl -d Ubuntu
-```
-
-```bash
-~/android-sdk/cmdline-tools/latest/bin/sdkmanager --channel=0 "platform-tools" "platforms;android-37.0" "build-tools;37.0.0" "emulator" "system-images;android-36;default;x86_64" "system-images;android-36;android-tv;x86_64"
-```
-
-It shows the licence and asks you to answer `y`. It takes about 6 GB, on `D:\build-tools\wsl`. To use the emulator with
-hardware speed, the `dev` user also needs the `kvm` group:
-
-```bash
-sudo usermod -aG kvm dev
-```
-
-Then tell any Claude chat that it's done, and it can build the APKs for phone and TV and run them on the emulators.
+Nothing else has been accepted, and `sdkmanager` here doesn't ask first: it installs and accepts by itself. Google TV, Play, preview and ARM images
+come under other licences and aren't installed, so a chat has to read a package's licence before installing it. Some older images are under a
+preview licence too, such as the Android 8, 9, 10 and 11 TV images and the Android 9 phone image.
 
 ## Step 2: Try Android (free, no account)
 
@@ -81,9 +66,9 @@ This build is signed with a throwaway key. It's for testing only, and can't be u
 without uninstalling first.
 
 **Please check on a real device and report back:** does it start, connect, sign in, and play? Are the
-remote and focus usable? Is it smooth? A cheap TV stick is the most useful test there is.
+remote and focus usable? Is it smooth, and is there sound? Those two couldn't be checked on an emulator. A cheap TV stick is the most useful test there is.
 
-Connecting is the owner's main requirement and nothing has yet tried it on a device, so these matter most:
+Connecting is your main requirement and it has only run on emulators, where finding a server goes through network translation, so these matter most:
 
 1. With a server running on the same network, does it appear by itself under "On your network"?
 2. On a TV, is it already highlighted, so one press of OK chooses it? Does it stay put once you've moved?

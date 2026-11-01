@@ -4,8 +4,8 @@ How WittyMediaClient reaches Apple TV and Android TV, what is done, and what is 
 port is a matter of building and testing, not a redesign. [PLATFORMS.md](PLATFORMS.md) says how far each claim
 has been checked; this page says what the plan is.
 
-**Where this stands:** neither TV app has ever run. Android's code is type-checked and its logic and network
-calls are tested, but no APK has been built since this work began. Apple's SwiftUI has never been compiled.
+**Where this stands:** Android TV has run on an emulator with arrow keys and OK, against a real server, and nothing has yet run on
+a real TV or remote: [PLATFORMS.md](PLATFORMS.md#android-as-of-021) has the details. Apple's SwiftUI has never been compiled.
 
 ## The decision
 
@@ -33,14 +33,14 @@ Kotlin Multiplatform and a shared UI toolkit were looked at and turned down: see
 | Area | Apple TV | Android TV |
 |---|---|---|
 | **Starts from the launcher** | System | `LEANBACK_LAUNCHER` and a banner in the manifest. One APK for phones and TVs, with nothing required of the device |
-| **Moving focus** | The focus engine: the Siri Remote's clickpad and swipe drive it, with no code of ours. Rows and pads are `focusSection()`s. Nothing uses `onTapGesture` or hover | Compose's D-pad focus. `FocusBox` is the one focusable surface. Nothing depends on touch or hover |
+| **Moving focus** | The focus engine: the Siri Remote's clickpad and swipe drive it, with no code of ours. Rows and pads are `focusSection()`s. Nothing uses `onTapGesture` or hover | Compose's D-pad focus. `FocusBox` is the one focusable surface, and `remoteRow` keeps left and right within a row. Nothing depends on touch or hover |
 | **Seeing focus** | `.card` buttons lift, as the system does it | A 3dp ring and 5% larger, with no animation. Not on a touch screen |
 | **First focus** | `prefersDefaultFocus` in a `focusScope` | `requestFocus` on the likeliest control |
-| **Focus after Back** | Explicit on Home. Elsewhere the system's, unverified | Remembered per screen by `focusKey`, and restored |
+| **Focus after Back** | Explicit on Home. Elsewhere the system's, unverified | Remembered per screen by `focusKey`, and restored. Seen working on an emulator |
 | **Disabled controls** | Never `.disabled`, which loses focus | Keep focus and do nothing, and a screen reader is told |
 | **Back and Menu** | `onExitCommand` steps back through sign-in. Whether Back leaves `AVPlayerViewController` inside a stack needs checking | Back goes up one level; only Home leaves the app. Search and Profile go to Home |
 | **Ten-foot sizes** | `Tokens.swift`: gutter 90, edge 60, targets 48, system text styles | `TvMetrics` in `Theme.kt`: gutter 58, edge 27, targets 48, text a quarter larger. All from the server's design tokens |
-| **Typing** | `TextField` opens the system keyboard | A text box can be left with up and down. Whether the keyboard gets in the way on a real TV needs checking |
+| **Typing** | `TextField` opens the system keyboard | Moving down to a text box opens the system's TV keyboard, which takes the arrows. Back shuts it, and then up and down leave the box. Seen on an emulator's keyboard, and a real TV's may differ |
 | **Signing in from a phone** | Code on the TV, approved on a phone, with a QR code | The same, and six digits typed with arrows and OK |
 | **Finding a server** | `NWBrowser` | `NsdManager` |
 | **Playback** | AVPlayer. No MKV, so the server remuxes it, nearly for free | Media3. MKV plays directly |
@@ -55,11 +55,11 @@ Kotlin Multiplatform and a shared UI toolkit were looked at and turned down: see
 
 ## Android TV, step by step
 
-1. **Build it.** This needs the Android SDK: see [OWNER-STEPS.md](OWNER-STEPS.md). `gradle assembleSideload` in `android/`.
-2. **Run it on an emulator.** Android's emulator runs under WSL, which has `/dev/kvm` here, with the
-   `system-images;android-36;android-tv;x86_64` and `system-images;android-36;default;x86_64` images.
-3. **Check with a D-pad**, in this order, since each one has never been seen: starting up; finding a server; the number
-   pad; Home; a row; Back returning focus; the seek bar; the track pickers; Back from the player.
+1. **Build it. Done.** `gradle assembleSideload` in `android/`, in WSL, with `~/android-sdk`.
+2. **Run it on an emulator. Done.** With `system-images;android-36;android-tv;x86_64`, under WSL's `/dev/kvm`. Start a new image with
+   `-wipe-data` the first time: without it the data partition comes out empty and the emulator hangs at boot.
+3. **Check with a D-pad. Done on the emulator:** starting up, finding a server, the number pad, Home, rows, Back returning focus, the
+   seek bar, the track lists and Back from the player. What that found is in the [changelog](../CHANGELOG.md).
 4. **Then a cheap TV stick**, which is the device this app is judged on.
 5. **Channels.** The Watch Next row and a channel of our own (`androidx.tvprovider`). Its pictures are the question: the
    launcher can't send a sign-in, so it needs either local copies behind a read-only `ContentProvider` or a stream token

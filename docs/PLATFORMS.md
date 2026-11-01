@@ -6,18 +6,15 @@ stay honest: **written** does not mean **works**.
 | Word | Meaning |
 |---|---|
 | **Ran** | Run for real on this development machine, against a real server, with automated checks. |
+| **Ran on an emulator** | Built into an APK and used on Android's emulator against a real server, and the screenshots looked at. No real device or remote has touched it. |
 | **Compiled** | It builds and its unit tests pass, but it has never been started on a device or emulator. Expect problems at run time. |
-| **Type-checked** | Its code compiles against Android's own classes, and its tests pass, but no APK has been made from it. Its manifest and resources have only been read. |
 | **Written** | The code exists but has never been compiled, let alone run on a device. Expect mistakes. |
 | **Not started** | Nothing exists yet. |
 | **Blocked** | Needs something only the owner can get. |
 
-**Android 0.2.0 has not been built into an APK.** This machine has no Android SDK, because installing one means
-accepting Google's licence terms, which is the owner's decision: see [OWNER-STEPS.md](OWNER-STEPS.md). Instead, all of its
-Kotlin was compiled against AOSP's `android-all` jar and the real libraries, Compose's compiler included, with 113 tests
-passing, one of them against a real server. That proves its types agree and its rules, data handling and network calls work. It
-says nothing about the manifest, resources or shrinking, and **none of its screens, its player or its focus handling has
-ever run**, on a device or an emulator.
+**Android has run on emulators and on nothing else.** [Android, as of 0.2.1](#android-as-of-021) lists what was seen and what
+wasn't. Using it for the first time found real bugs that nothing before it could, so anything on that list marked as not run
+should be expected to have some too.
 
 ## Platforms
 
@@ -26,9 +23,11 @@ ever run**, on a device or an emulator.
 | Windows 10 and later | **Ran** | From source and as a packaged app. The setup and uninstaller ran under Wine, not yet on a real Windows. |
 | macOS | **Written** | The desktop app builds for it in CI, and has never been launched. Its uninstaller only ran on Linux with a stand-in home folder. |
 | Linux | **Ran** | `.deb` and `.rpm` installed, opened on a virtual screen, upgraded and removed in containers. No real desktop yet. |
-| Android TV, Google TV | **Type-checked** | Never run. Same APK as phones. |
-| Fire TV | **Type-checked** | Never run. Needs Fire OS 6 or later: the first Fire TV Sticks are too old for Compose. |
-| Android phones, tablets | **Type-checked** | Never run. |
+| Android TV | **Ran on an emulator** | Android 16, 1080p, with arrow keys and OK only. Same APK as phones. No real TV or remote yet. |
+| Google TV | **Compiled** | Not run: its emulator images come under a licence that hasn't been accepted. It should behave as Android TV does, but nobody has seen it. |
+| Fire TV | **Compiled** | Not run: no image for it here. Needs Fire OS 6 or later: the first Fire TV Sticks are too old for Compose. |
+| Android phones | **Ran on an emulator** | Android 16 in full, and Android 6 (API 23, the oldest it supports) for connecting, playing and a network drop. No real phone yet. |
+| Android tablets | **Compiled** | Not run. They use the phone's screens with wider margins. |
 | Apple TV | **Written** | Never compiled. Needs a Mac to install. |
 | iPhone, iPad | **Written** | Never compiled. Needs a Mac to install. |
 | Mac | **Written** | Never compiled. |
@@ -42,20 +41,30 @@ ever run**, on a device or an emulator.
 
 | Step | Desktop | Android | Apple |
 |---|---|---|---|
-| Type an address, with the shared rules | Ran | Compiled | Written |
-| Refuse plain HTTP to a public address | Ran | Compiled | Written |
-| **Find servers on the network** | Ran, with packets built in tests only | Compiled. Its rules ran; the search itself never has | Written |
-| **Security code typed on the device** | Ran | Compiled. The network side ran against a real server; the number pad has never been on a screen | Written |
-| Check the server's identity before sending a sign-in | Ran | Compiled. The check ran against a real server and a real signed answer | Written |
-| The warning when a different key answers | Ran | Compiled. The decision ran; the screen never has | Written |
+| Type an address, with the shared rules | Ran | Ran on an emulator, Android 6 | Written |
+| Refuse plain HTTP to a public address | Ran | Ran on an emulator, Android 6 | Written |
+| **Find servers on the network** | Ran, with packets built in tests only | Ran on an emulator, Android 16, through its network translation and not on a real network: see below. Android 6 found none | Written |
+| **Security code typed on the device** | Ran | Ran on an emulator: touch and number keys on phones, arrows and OK on TV, right and wrong codes | Written |
+| Check the server's identity before sending a sign-in | Ran | Ran on an emulator, in both the debug and the shrunk build, Android 6 and 16 | Written |
+| The warning when a different key answers | Ran | Ran on an emulator: another server put on the same address, phone, with Back as the way out. "Trust it" wasn't pressed | Written |
 | Look for a saved server by its ID when its address stops answering | Not built: it lists what it finds | Compiled, never run | Written |
-| TV shows a code, approved on a phone | Not needed | Compiled | Written |
-| Password and profiles | Ran, through the web interface | Compiled | Written |
-| Remember the server | Ran | Compiled | Written |
+| TV shows a code, approved on a phone | Not needed | Ran on an emulator: the code was approved with the same requests a phone's browser makes, not with a phone. The QR code is on screen and nothing has scanned it | Written |
+| Password and profiles | Ran, through the web interface | Ran on an emulator, phone: the profile list, a wrong and a right password | Written |
+| Remember the server | Ran | Ran on an emulator: reopening goes straight to Home, and signing out ends the session on the server | Written |
 
-Finding servers and the security code are the owner's main requirement. **They have only been run on
-the desktop, and finding servers has not yet been tried on a real network anywhere.** The API for them
-is on the `client-contract` branch, so the native apps need that merged before they can connect.
+Finding servers and the security code are the owner's main requirement. **The security code has run on Android's emulator
+and the desktop. Finding servers has not yet been tried on a real network anywhere.**
+
+**How finding servers ran on the emulator.** The app found real servers by real mDNS, through Android's own `NsdManager`, and
+connected to the one chosen. But the emulator sits behind network translation, so its questions reach the server from another
+port, and the server rightly answers those with a 10-second lifetime and straight back. On a real network it answers from
+port 5353 to everyone, with lifetimes of 2 minutes and more. So this proves the app's half and the server's answer, not a
+server announcing itself to a whole network, and not a phone and a server on one Wi-Fi. Android 6 found nothing at all in the
+same place. Whether that is its older mDNS code, the emulator, or something a real device would also show isn't known, so the
+address box is the safe route there.
+
+**That run did find a bug.** Android reported the servers lost and found again every 22 seconds, and each report took their
+rows off the screen and a remote's focus with them. A server now only leaves the list after 45 seconds of being gone.
 
 **Checked for Android,** on this machine and without a device:
 
@@ -69,11 +78,11 @@ is on the `client-contract` branch, so the native apps need that merged before t
   code is refused.
 - The number pad's rules, including that every key can be reached with arrows alone, and what each
   identity result leads to.
-- That the Ed25519 code survives shrinking into the release build. Whether it then loads and runs on
-  old Android versions hasn't been seen.
+- That the Ed25519 code survives shrinking into the release build. The shrunk build signed in with it on the Android 16 TV
+  emulator. The debug build did so on Android 6. The shrunk build hasn't run on Android 6.
 
-**Not checked for Android:** every screen, focus on a real remote, `NsdManager` finding anything, which
-differs between devices and has known problems on some, and whether API 23 devices behave like newer ones.
+**Not checked for Android:** a real remote, a real device, a real network, and `NsdManager` on real hardware, which differs
+between devices and has known problems on some. Everything else is in [Android, as of 0.2.1](#android-as-of-021).
 
 **The Apple apps have never been compiled by Apple's tools,** as that needs a Mac. Expect compile errors. See
 [Apple, as of 0.2.0](#apple-as-of-020) for exactly what has and hasn't been checked.
@@ -97,18 +106,18 @@ again from the start, without following the redirect.
 
 | Feature | Desktop | Android | Apple |
 |---|---|---|---|
-| Home, libraries, shows, item pages | Ran | Compiled | Written |
-| Video with resume | Ran | Compiled | Written |
-| Audio and subtitle tracks | Web interface; not checked here | Compiled | Written |
-| Skip intro, next episode countdown | Web interface; not checked here | Compiled | Written |
+| Home, libraries, shows, item pages | Ran | Ran on an emulator | Written |
+| Video with resume | Ran | Ran on an emulator | Written |
+| Audio and subtitle tracks | Web interface; not checked here | Ran on an emulator. Subtitles were seen; audio only by the player's own log, as the emulators had no sound | Written |
+| Skip intro, next episode countdown | Web interface; not checked here | Ran on an emulator | Written |
 | Themes | Ran, including the title bar | Colours from the server's theme only, no picker | Colours from the server's theme only, no picker |
-| Search | Web interface; not checked here | Not started | Written, for films and shows |
+| Search | Web interface; not checked here | Ran on an emulator, for films and shows, with the TV's keyboard too | Written, for films and shows |
 | Music, audiobooks, podcasts | Web interface; not checked here | Not started | Listed, with a note that they play in a browser for now |
 | Books and comics | Web interface; not checked here | Not started | Not started |
 | Disc menus | Web interface; not checked here | Not started | Not started |
-| Games on someone's own PC | Web interface, with Moonlight as the fallback. Written; its rules ran in unit tests | Compiled | Written; its rules ran in unit tests on Linux |
+| Games on someone's own PC | Web interface, with Moonlight as the fallback. Written; its rules ran in unit tests | Its Game PCs page opened on an emulator, no further: see below | Written; its rules ran in unit tests on Linux |
 | Gaming, channels, tuners, photos | Arrive with the server | Not started | Not started |
-| Own log, with errors reported to the server | The log's logic ran in tests; never run inside the app | The log's logic ran in tests off Android; its use in the app was not compiled | The log's logic ran in tests on Linux; its use in the app was not compiled, and catching crashes only builds on Apple |
+| Own log, with errors reported to the server | The log's logic ran in tests; never run inside the app | Written and shown in the app on an emulator. A report reaching the server wasn't checked | The log's logic ran in tests on Linux; its use in the app was not compiled, and catching crashes only builds on Apple |
 
 Native apps say plainly that an item can't play yet, rather than failing, for anything but video and
 games on someone's own PC.
@@ -123,8 +132,8 @@ reached a real PC or a real Moonlight from these apps, and the player has never 
 | | What happens on Play | How far it was checked |
 |---|---|---|
 | Desktop | The server's page plays it. Starting Moonlight is the fallback, and the main process checks that request | **Written.** The checks, finding the program, starting a stand-in for it and who may lock the mouse ran in unit tests, and the real app answers a server's page with those checks (`npm run test:app`). Moonlight itself has never been started by it here. |
-| Android, phones and tablets | The player in a web view, with "Open in Moonlight instead" as the second choice. A "Game PCs" entry opens the same pages | **Compiled.** Its decisions ran in 16 unit tests: which comes first, only the same server staying in the web view, the shape of the sign-in cookie, and that a server can't name another app. The web view and the intent have never run. |
-| Android TV, Fire TV | Moonlight first, then "Play in this app instead" | **Compiled**, as above. Focus with a remote has never been seen. |
+| Android, phones and tablets | The player in a web view, with "Open in Moonlight instead" as the second choice. A "Game PCs" entry opens the same pages | **Ran on an emulator, as far as the Game PCs page.** It opens signed in, on Android 16. Its decisions ran in 16 unit tests: which comes first, only the same server staying in the web view, the shape of the sign-in cookie, and that a server can't name another app. The player in the web view and the intent have never run. |
+| Android TV, Fire TV | Moonlight first, then "Play in this app instead" | **Compiled**, as above. This path has never run, on a TV or anywhere. |
 | iPhone, iPad | The player in a web view, with "Start on <PC>" as the second choice. A "Game PCs" entry opens the same pages | **Written.** The checks in WittyKit built and passed their tests on Linux, with Swift 6.1 in a container. The screens need a Mac and have never been compiled. |
 | Apple TV | "Start on <PC>", then the app says to open Moonlight and Resume | **Written**, as above. |
 | Mac | Running the desktop Moonlight if it's in `/Applications`, the player in the Mac's own browser, or "Start on <PC>" | **Written**, as above. |
@@ -151,19 +160,53 @@ conflict, so that needs thinking through first. Moonlight's code never goes insi
 - Android can't tell that Moonlight doesn't know a PC yet. Moonlight says so itself, and the app has the setup
   steps a button away.
 
-## Android, as of 0.2.0
+## Android, as of 0.2.1
 
-**Ran against a real server** (built from this release, in WSL, with a generated test clip), from the app's own code off a device:
-the address and capability checks, the identity check, a code signing in, Home, a library, search, a playback request with a
-device's real abilities, opening the answer's media address with nothing but its stream token, a conversion on request, saving
-progress, stopping a stream, and a signed-out token being refused.
+Run in headless emulators under WSL, with hardware virtualisation and software graphics, against a real server built from
+`release/0.6.0-alpha`, with test films and an episode set made here. Driven with `adb`, read with screenshots and
+`uiautomator`, and the screenshots looked at. Unit tests and Android lint pass, and lint checks every call against API 23.
 
-**Ran in tests only:** the playback clock and retry rules, what each failure leads to, how a device's codecs become what the
-server hears, seek steps, the QR code's cells, every theme's contrast, redaction, Moonlight's rules.
+| Emulator | Build | What it had |
+|---|---|---|
+| Phone, Android 16 (API 36), 1080×2400 | Debug | Everything under "Phone" below |
+| TV, Android 16 (API 36), 1080p | Sideload, shrunk with R8 | Everything under "TV" below, with arrow keys, OK and Back only |
+| Phone, Android 6 (API 23), 1080×1920 | Debug | Everything under "Android 6" below |
 
-**Written and never seen working,** which is everything that needs a screen or Android itself: all screens and focus, the
-player, picking up after a network drop, HDR and passthrough detection, the Keystore, `NsdManager`, the web view, TalkBack,
-system bars, and the home screen's look. Expect some of this to need fixing the first time it runs.
+**Both, on Android 16.** Starting up, finding the server, a code signing in, Home with its hero and rows, libraries, a show and its
+seasons, an item page, search. A film and episodes playing with a real picture seen: H.264 and AAC in Matroska played as they are,
+and HEVC 10-bit with AC-3 converted by the server and played as HLS. Resuming at the saved place, also on another device, and
+Start over. Seeking, pausing, Skip intro by itself and within the controls, the next-episode countdown going on to the next
+episode, and leaving with Back. Signing out, which ends the session on the server.
+
+**Phone.** Rotating, with the screens laid out again and the picture kept. 44dp or more on every touch target on the eight screens
+measured. Labels in the accessibility tree: TalkBack isn't on this image, so nothing has spoken them. Audio tracks, by the
+player's own log moving to the chosen track. English subtitles seen on the picture. The warning for another key. A wrong password.
+The network dropped in mid-film: a plain message with Try again, then back by itself at the same place. The Game PCs page in a web
+view, once it had started, as far as its list: no PC was added. Dark system-bar icons on a light theme, if the theme test below says so.
+
+**TV.** First focus on every screen, with the ring seen in screenshots. Left and right staying in a row, and up and down between rows.
+Focus returning after Back, and to the button that opened a list. The number pad with arrows and OK, right and wrong codes. The code
+shown on the TV, approved. French subtitles seen on the picture, at a size that reads across a room in a screenshot; that's as near as
+this comes to ten feet. Search with the system's TV keyboard, then Back to shut it and down to the results. Licences scrolling.
+
+**Android 6.** Typing an address, with a public plain-http one refused and a dead one explained. A code signing in, so Keystore and
+Ed25519 both work there. Home, and a film playing on its older OMX decoders. Seeking, and a saved place from the TV. Mobile data
+dropped in mid-film and back, which came back by itself at the same place, through the older network callback this version needs.
+Reopening with the kept sign-in. Android 7 to 15 haven't been run, and nor has the shrunk build on Android 6. TV images older than
+16 weren't run either.
+
+**Not seen, and only a person can see most of it:**
+
+- **Any real device or remote.** A cheap TV stick is the test that matters most, for speed above all: nothing here says how smooth it is.
+  On these emulators, with other work holding the machine, a shrunk build started in 1 to 6 seconds and a debug build took up to 21.
+- **Sound.** The emulators had none. Tracks switched, and nothing has been listened to.
+- **A real network:** see [Connecting](#connecting).
+- **TalkBack speaking,** and any other screen reader.
+- **HDR, surround and passthrough, 4K, frame-rate switching.** The emulator reports none of them.
+- **Tablets, foldables, gesture navigation** (three buttons were on), very large text, Google TV and Fire TV.
+- **A game controller,** Moonlight, and playing a game on a PC: no part of it reached a real PC.
+- **The light themes on TV,** two-factor accounts, and a server that has moved to a new address.
+- **Hardware decoders.** The emulator's are software or its own.
 
 ## Apple, as of 0.2.0
 

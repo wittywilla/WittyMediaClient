@@ -3,7 +3,7 @@
 Apps that connect to a [WittyMediaServer](https://github.com/wittywilla/WittyMediaServer): TV boxes, phones, tablets and desktops.
 
 **Start with [docs/PLATFORMS.md](docs/PLATFORMS.md)**, which says exactly what works and what has
-never been run. Most of this is early, and the native apps have not been compiled yet.
+never been run. Most of this is early. The Android app has run on emulators, not on a real device, and the Apple apps have not been compiled yet.
 
 | Folder | What it is |
 |---|---|

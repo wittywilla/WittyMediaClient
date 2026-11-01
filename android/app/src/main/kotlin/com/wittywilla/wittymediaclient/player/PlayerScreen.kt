@@ -429,7 +429,8 @@ fun PlayerScreen(nav: Nav, id: Long, startOver: Boolean) {
     // gesture comes here too, without passing through key events.
     fun onBack() {
         when {
-            countdown != null -> countdown = null
+            // The same as Cancel. The film has ended, so stopping the count here would leave nothing on screen.
+            countdown != null -> { countdown = null; nav.pop() }
             showInfo -> showInfo = false
             picker != Picker.None -> picker = Picker.None
             controls && playing -> controls = false
