@@ -97,9 +97,7 @@ async function arrowTowards(what, selector, tries = 25) {
     await press(way === 'none' ? 'Down' : way)
     trail.push(`${way}: ${await focused()}`)
   }
-  throw new Error(`The arrows never reached ${what}. They went:
-      ${trail.join('
-      ')}`)
+  throw new Error(`The arrows never reached ${what}. They went: ${trail.join(', ')}`)
 }
 
 async function securityCode() {
