@@ -98,6 +98,9 @@ private fun TabButton(nav: Nav, tab: Tab, modifier: Modifier = Modifier, wide: B
     FocusBox(
         { if (!active) nav.reset(tab.route) }, modifier,
         label = tab.label, state = if (active) "Selected" else null, selected = active,
+        // A remote that has just chosen a tab stays on it, one press from what's below. Home has its
+        // own first focus on Play. Elsewhere nothing would have focus, and the next press would land on Home.
+        requestFocus = active && tab.route != Route.Home && LocalMetrics.current.tv,
         focusKey = "tab-${tab.label}", filled = if (active) scheme.primary else androidx.compose.ui.graphics.Color.Transparent, shape = Radius.FULL,
     ) {
         Row(
@@ -236,7 +239,7 @@ fun ProfileScreen(nav: Nav, s: Map<String, String>) {
             Secondary(server.url)
             if (server.fingerprint.isNotEmpty()) Secondary("${s["fingerprintLabel"]}: ${server.fingerprint}")
         }
-        ActionButton("Sign out", nav::signOut, Modifier.fillMaxWidth(), focusKey = "switch", requestFocus = metrics.tv)
+        ActionButton("Sign out", nav::signOut, Modifier.fillMaxWidth(), focusKey = "switch")
         ActionButton(s["changeServer"].orEmpty(), nav::changeServer, Modifier.fillMaxWidth(), focusKey = "server")
         SectionTitle("About this app")
         Secondary("WittyMedia $version")
