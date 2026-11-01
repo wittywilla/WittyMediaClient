@@ -15,6 +15,11 @@ android {
         targetSdk = 36
         versionCode = 2
         versionName = "0.2.0"
+        // One APK for every Android device. 32-bit ARM stays, for old TV sticks and phones.
+        // scripts/check-abis.sh fails if a native library is missing for any of these.
+        ndk {
+            abiFilters += listOf("armeabi-v7a", "arm64-v8a", "x86", "x86_64")
+        }
     }
 
     // The theme, wording and test data every client shares.
