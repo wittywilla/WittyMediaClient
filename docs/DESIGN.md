@@ -4,6 +4,7 @@ WittyMediaClient is the family of apps that connect to a WittyMediaServer: TV bo
 tablets and desktops. This document records what we build, in which order, and why.
 
 Status of each platform, including what has actually been run, is in [PLATFORMS.md](PLATFORMS.md).
+The plan for TVs is in [PORTING.md](PORTING.md).
 What the owner has to do (accounts, signing, stores) is in [OWNER-STEPS.md](OWNER-STEPS.md).
 
 ## Goals, in priority order

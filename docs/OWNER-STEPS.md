@@ -31,6 +31,31 @@ your behalf. Read them at <https://developer.android.com/studio/terms> if you wa
 GitHub Actions is free for public repositories. For a private one, the Mac builds use your free minutes
 quickly.
 
+## Android on this machine: your decision
+
+Real APKs and an emulator run need the Android SDK here. Installing it means accepting Google's Android SDK licence
+(<https://developer.android.com/studio/terms>). You said yes to this on 30 October for an earlier chat's smaller list, but that
+didn't include the emulator and system images, and the permission system refused it this time, so it's yours to run or to
+allow. The packages below are all under that one licence. The command-line tools are already downloaded, on WSL's disk, and
+no licence has been accepted. In a terminal:
+
+```bash
+wsl -d Ubuntu
+```
+
+```bash
+~/android-sdk/cmdline-tools/latest/bin/sdkmanager --channel=0 "platform-tools" "platforms;android-37.0" "build-tools;37.0.0" "emulator" "system-images;android-36;default;x86_64" "system-images;android-36;android-tv;x86_64"
+```
+
+It shows the licence and asks you to answer `y`. It takes about 6 GB, on `D:\build-tools\wsl`. To use the emulator with
+hardware speed, the `dev` user also needs the `kvm` group:
+
+```bash
+sudo usermod -aG kvm dev
+```
+
+Then tell any Claude chat that it's done, and it can build the APKs for phone and TV and run them on the emulators.
+
 ## Step 2: Try Android (free, no account)
 
 Once CI is green:

@@ -1,6 +1,6 @@
 # WittyMediaClient
 
-Apps that connect to a [WittyMediaServer](../../README.md): TV boxes, phones, tablets and desktops.
+Apps that connect to a [WittyMediaServer](https://github.com/wittywilla/WittyMediaServer): TV boxes, phones, tablets and desktops.
 
 **Start with [docs/PLATFORMS.md](docs/PLATFORMS.md)**, which says exactly what works and what has
 never been run. Most of this is early, and the native apps have not been compiled yet.
@@ -11,9 +11,9 @@ never been run. Most of this is early, and the native apps have not been compile
 | [`android/`](android) | Android TV, Google TV, Fire TV, phones and tablets (Kotlin, Compose, Media3) |
 | [`apple/`](apple) | Apple TV, iPhone, iPad and Mac (SwiftUI, AVPlayer) |
 | [`shared/`](shared) | What every app shares, as plain data: themes, wording, button meanings and test cases |
-| [`docs/`](docs) | [Design](docs/DESIGN.md), [status](docs/PLATFORMS.md), [what the owner needs to do](docs/OWNER-STEPS.md) |
+| [`docs/`](docs) | [Design](docs/DESIGN.md), [status](docs/PLATFORMS.md), [porting to TVs](docs/PORTING.md), [what the owner needs to do](docs/OWNER-STEPS.md) |
 
-The native apps talk to the API described in `docs/CLIENT-API.md` at the top of this repository.
+The native apps talk to the API described in [`docs/CLIENT-API.md`](https://github.com/wittywilla/WittyMediaServer/blob/master/docs/CLIENT-API.md) in the server's repository.
 
 ## Trying the desktop app
 
@@ -37,7 +37,7 @@ to that server and nowhere else: there is no telemetry and no other address. The
 | App | The file | How to reach it |
 |---|---|---|
 | Desktop | `logs/client.log` in the app's data folder, 2 MB and three files at most | **Help** in the title bar: "Open logs folder" and "Copy diagnostic info". The connect screen has the link too |
-| Android | `logs/client.log` in the app's private storage, 1 MB and three files at most | Not yet: no screen for it. Errors reach the server's log |
+| Android | `logs/client.log` in the app's private storage, 1 MB and three files at most | Profile, "This app's log". Errors reach the server's log |
 | Apple | `logs/client.log` in the app's caches, 1 MB and three files at most | Not yet: no screen for it. Errors reach the server's log |
 
 **What is kept and sent:** crashes, what stopped working in the app (with its reason and exit code), failed requests

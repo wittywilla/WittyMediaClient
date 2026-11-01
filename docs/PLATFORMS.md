@@ -7,14 +7,17 @@ stay honest: **written** does not mean **works**.
 |---|---|
 | **Ran** | Run for real on this development machine, against a real server, with automated checks. |
 | **Compiled** | It builds and its unit tests pass, but it has never been started on a device or emulator. Expect problems at run time. |
+| **Type-checked** | Its code compiles against Android's own classes, and its tests pass, but no APK has been made from it. Its manifest and resources have only been read. |
 | **Written** | The code exists but has never been compiled, let alone run on a device. Expect mistakes. |
 | **Not started** | Nothing exists yet. |
 | **Blocked** | Needs something only the owner can get. |
 
-The whole Android app compiles, in debug and in the shrunk release form, with 72 unit tests passing,
-including all the shared address cases, and one more against a real server when one is given. Only its
-rules, data handling and network calls have actually been executed: none of its screens, its player or
-its focus handling has ever run, and nothing has run on a device or emulator.
+**Android 0.2.0 has not been built into an APK.** This machine has no Android SDK, because installing one means
+accepting Google's licence terms, which is the owner's decision: see [OWNER-STEPS.md](OWNER-STEPS.md). Instead, all of its
+Kotlin was compiled against AOSP's `android-all` jar and the real libraries, Compose's compiler included, with 113 tests
+passing, one of them against a real server. That proves its types agree and its rules, data handling and network calls work. It
+says nothing about the manifest, resources or shrinking, and **none of its screens, its player or its focus handling has
+ever run**, on a device or an emulator.
 
 ## Platforms
 
@@ -22,9 +25,9 @@ its focus handling has ever run, and nothing has run on a device or emulator.
 |---|---|---|
 | Windows 10 and later | **Ran** | From source and as a packaged app. Installers are configured but not built yet. |
 | Linux | **Written** | Same code as Windows and CI packages it, but it has never been launched. |
-| Android TV, Google TV | **Compiled** | Never run. |
-| Fire TV | **Compiled** | Never run. Needs Fire OS 6 or later: the first Fire TV Sticks are too old for Compose. |
-| Android phones, tablets | **Compiled** | Never run. |
+| Android TV, Google TV | **Type-checked** | Never run. Same APK as phones. |
+| Fire TV | **Type-checked** | Never run. Needs Fire OS 6 or later: the first Fire TV Sticks are too old for Compose. |
+| Android phones, tablets | **Type-checked** | Never run. |
 | Apple TV | **Written** | Never compiled. Needs a Mac to install. |
 | iPhone, iPad | **Written** | Never compiled. Needs a Mac to install. |
 | Mac | **Written** | Never compiled. |
@@ -147,6 +150,20 @@ conflict, so that needs thinking through first. Moonlight's code never goes insi
 - Android can't tell that Moonlight doesn't know a PC yet. Moonlight says so itself, and the app has the setup
   steps a button away.
 
+## Android, as of 0.2.0
+
+**Ran against a real server** (built from this release, in WSL, with a generated test clip), from the app's own code off a device:
+the address and capability checks, the identity check, a code signing in, Home, a library, search, a playback request with a
+device's real abilities, opening the answer's media address with nothing but its stream token, a conversion on request, saving
+progress, stopping a stream, and a signed-out token being refused.
+
+**Ran in tests only:** the playback clock and retry rules, what each failure leads to, how a device's codecs become what the
+server hears, seek steps, the QR code's cells, every theme's contrast, redaction, Moonlight's rules.
+
+**Written and never seen working,** which is everything that needs a screen or Android itself: all screens and focus, the
+player, picking up after a network drop, HDR and passthrough detection, the Keystore, `NsdManager`, the web view, TalkBack,
+system bars, and the home screen's look. Expect some of this to need fixing the first time it runs.
+
 ## Apple, as of 0.2.0
 
 **Run, on Linux with Swift 6.1 in a container:** every test in `apple/WittyKit` with `swift test`, including real connections to a
@@ -184,7 +201,7 @@ anything, the Keychain, the web view, the Top Shelf, or generating the Xcode pro
 ## Not done yet in the native apps
 
 - A prompt for two-factor codes on password sign-in. Those accounts can use code sign-in instead.
-- On Android: a QR code on the TV sign-in screen, asking the device what it can play, Watch next, now-playing information,
+- On Android: playing in the background or picture in picture, TV channels, Live TV, a choice between a file's several pictures,
   and a baseline profile for faster starts.
 - App icons and TV artwork. Android has a placeholder, Apple has none, and the desktop app has
   Electron's default icon.

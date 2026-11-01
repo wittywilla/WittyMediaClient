@@ -7,6 +7,34 @@ What changed in WittyMediaClient, newest first. What changed before it had a rep
 
 - WittyMediaClient is now a project of its own, developed and released from this repository.
 
+### Android app 0.2.0
+
+Compiled against Android's own classes, and its logic and network calls tested. **It has not been made into an APK or run.**
+
+**Security**
+- Nothing leaves by device-to-device transfer now: `allowBackup=false` doesn't stop that on Android 12 and later.
+- A sign-in is sealed together with the key of the server it belongs to.
+- A password or code goes out only after the server has just proved it's the one the person was shown.
+- A bare number such as `134744072` no longer counts as a local name, and a local name that resolves to the internet is refused.
+- A server's answer can't point the player at another machine.
+- The web player's stored data goes with the sign-in, and its page crashing no longer takes the app down.
+- Pictures from a server are cleared on leaving it.
+
+**Playback**
+- Leaving the app pauses and saves. It used to carry on playing behind Home.
+- Other apps' sound, phone calls and unplugged headphones are respected, and the screen stays on.
+- The server hears what this device really plays. A file it can't decode is converted and tried again.
+- A dropped network, a busy server or an expired stream recover by themselves, and failures are in plain words with Try again.
+- A seek bar that works with a remote. Watch next, Next episode, Info on how it's playing, Show in 2D, and sound and radio items.
+- The system's now-playing card and media keys.
+
+**Screens**
+- Home has library tabs, a hero with Play, and Search and Profile: a floating bar on a phone, along the top on a TV.
+- Licences and this app's log, in Profile. A QR code on TV sign-in.
+- Focus goes back where it was after Back, and screens show what they had while asking again.
+- Sizes and type from the server's design tokens, with ten-foot sizes on a TV. Room is left for the system bars.
+- TalkBack hears roles, states and errors as they appear. Errors aren't marked by colour alone.
+
 ### Desktop app 0.2.0
 
 **Security**
