@@ -34,9 +34,10 @@ fi
 
 case "$1" in
   remove|0)
-    echo "WittyMediaClient has been removed from this computer."
-    echo "A package can't reach anyone's home folder, so each person's settings, saved sign-ins,"
-    echo "logs and caches are still there. To remove your own, run:"
+    echo "WittyMediaClient has been removed."
+    echo "A package can't reach home folders, so your settings,"
+    echo "saved sign-ins, logs and caches are still there."
+    echo "To remove your own, run:"
     echo "  rm -rf ~/.config/WittyMediaClient ~/.config/WittyMedia"
     ;;
 esac

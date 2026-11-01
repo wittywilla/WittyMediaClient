@@ -120,7 +120,9 @@
       "contents": [
         {
           "x": 140,
-          "y": 150
+          "y": 150,
+          "type": "file",
+          "name": "WittyMediaClient.app"
         },
         {
           "x": 400,
@@ -132,7 +134,8 @@
           "x": 270,
           "y": 300,
           "type": "file",
-          "path": "build/mac/Uninstall WittyMediaClient.command"
+          "path": "build/mac/Uninstall WittyMediaClient.command",
+          "name": "Uninstall WittyMediaClient.command"
         }
       ]
     },

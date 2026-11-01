@@ -108,8 +108,8 @@ security profile the package added. A plain `apt remove` and a purge do the same
 rm -rf ~/.config/WittyMediaClient ~/.config/WittyMedia
 ```
 
-The system's own libraries, which many programs share, may also have made `~/.cache/fontconfig`, `~/.cache/mesa_shader_cache*`
-and `~/.local/share/pki/nssdb` when the app ran. They aren't the app's, so nothing here removes them.
+The system's own libraries, which many programs share, may also have made `~/.cache/dconf`, `~/.cache/fontconfig`, `~/.cache/mesa_shader_cache*`
+`~/.config/pulse` and `~/.local/share/pki/nssdb` when the app ran. They aren't the app's, so nothing here removes them.
 
 **AppImage:** make it executable and run it. To remove it, delete the file, then run the same command.
 
