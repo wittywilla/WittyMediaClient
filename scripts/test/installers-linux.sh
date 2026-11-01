@@ -4,12 +4,12 @@
 # with its sandbox on. Then, with those libraries kept: install, upgrade, remove, purge, and a
 # snapshot of the file system from before and after to show nothing is left.
 #
-#   scripts/test/installers-linux.sh <folder with packages> [debian:trixie-slim ubuntu:26.04 fedora:43 ...]
+#   scripts/test/installers-linux.sh <folder with packages> [debian:trixie-slim ubuntu:26.04 fedora:43 archlinux:latest ...]
 #
-# The folder holds wittymediaclient-<version>-linux-amd64.{deb,rpm}, and upgrade/ the same at 9.9.9.
+# The folder holds wittymediaclient-<version>-linux-amd64.{deb,rpm,pacman}, and upgrade/ the same at 9.9.9.
 # Build them in desktop/ with:
 #   npx electron-builder --linux
-#   npx electron-builder --linux deb rpm -c.extraMetadata.version=9.9.9 -c.directories.output=out-upgrade
+#   npx electron-builder --linux deb rpm pacman -c.extraMetadata.version=9.9.9 -c.directories.output=out-upgrade
 #
 # Runs where Docker runs Linux containers. Needs Node 22 or newer on the host, lent to the containers
 # to drive the app. Writes each run's listings to <folder>/results/.
@@ -24,7 +24,7 @@ FAILED=0
 
 # What a machine does by itself, so isn't the package's doing.
 SNAPSHOT='find / -xdev \( -path /proc -o -path /sys -o -path /dev -o -path /run -o -path /tmp -o -path /pkgs -o -path /test -o -path /var/log -o -path /var/cache -o -path /var/tmp \
-  -o -path /var/lib/dpkg -o -path /var/lib/apt -o -path /var/lib/rpm -o -path /var/lib/dnf -o -path /usr/lib/sysimage/rpm -o -path /usr/lib/sysimage/libdnf5 \
+  -o -path /var/lib/dpkg -o -path /var/lib/apt -o -path /var/lib/rpm -o -path /var/lib/dnf -o -path /usr/lib/sysimage/rpm -o -path /usr/lib/sysimage/libdnf5 -o -path /var/lib/pacman \
   -o -path /etc/ld.so.cache -o -path /usr/share/applications/mimeinfo.cache -o -path /usr/share/mime \
   -o -path /usr/share/icons/hicolor/icon-theme.cache -o -path /root/.cache -o -path /etc/alternatives/.placeholder \) -prune -o -print 2>/dev/null | sort'
 
@@ -34,6 +34,7 @@ for image in "${IMAGES[@]}"; do
   echo "==> $image"
   case "$image" in
     fedora*|rocky*|alma*|opensuse*) kind=rpm ;;
+    arch*) kind=pacman ;;
     *) kind=deb ;;
   esac
 
@@ -59,6 +60,19 @@ if [ "$KIND" = deb ]; then
   is_installed() { dpkg-query -W -f='${Status}' $APP 2>/dev/null | grep -q 'install ok installed'; }
   version() { dpkg-query -W -f='${Version}' $APP; }
   test_tools="xvfb xauth procps"
+elif [ "$KIND" = pacman ]; then
+  pacman -Sy --noconfirm >/dev/null 2>&1
+  install_pkg() {
+    case "$1" in
+      *.pacman) pacman -U --noconfirm "$@" >/tmp/out 2>&1 ;;
+      *) pacman -S --noconfirm --needed "$@" >/tmp/out 2>&1 ;;
+    esac || { tail -n 30 /tmp/out; fail "installing $*"; }
+  }
+  remove_pkg() { pacman -R --noconfirm $APP >/tmp/out 2>&1 || { cat /tmp/out; fail removing; }; }
+  purge_pkg() { :; }
+  is_installed() { pacman -Q $APP >/dev/null 2>&1; }
+  version() { pacman -Q $APP | cut -d' ' -f2; }
+  test_tools="xorg-server-xvfb xorg-xauth procps-ng which diffutils"
 else
   install_pkg() { dnf install -y "$@" >/tmp/out 2>&1 || { tail -n 30 /tmp/out; fail "installing $*"; }; }
   remove_pkg() { dnf remove -y --setopt=clean_requirements_on_remove=False $APP >/tmp/out 2>&1 || { cat /tmp/out; fail removing; }; }
