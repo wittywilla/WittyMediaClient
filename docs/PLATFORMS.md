@@ -61,13 +61,13 @@ its own keyboard or X, unless it says otherwise.
 | Security code and sign-in | Real server | Real server | Real server |
 | Leaving the player, and the menu at the top | Yes | Yes | Yes |
 | Quit | Yes | Yes, back to the launcher | Not checked |
-| Change server from the menu, signing out | Yes | Not checked | Yes |
+| Change server from the menu, signing out | Yes | Yes: no sign-in cookie left | Yes |
 
 **Seen only on Plasma Bigscreen:**
 
 - It's listed in the launcher, with its icon and description, from an ordinary desktop entry.
 - Opened from the launcher with no flags, it recognises the session and opens as a TV app.
-- The on-screen keyboard appears for the address box, the page moves up to make room, and arrows and Enter typed into it.
+- The on-screen keyboard appears for the address box, and the page moves up to make room. Arrows and Enter type into it, and its own Enter key submits the address.
 - A virtual Xbox pad, made with `uinput`: as soon as the app opened it, the shell's input handler stopped turning it
   into key presses. Each press moved focus one step, and B opened the menu, so presses aren't handled twice.
 - A sign-in made from the launcher is still there after restarting the app. No keyring wizard appears.
@@ -111,8 +111,8 @@ One APK carries all four. Checked by opening a real one built from this branch, 
 
 **Why Android 6 is the lowest claim.** Media3, Activity, Core and Lifecycle, 23 libraries in all, need API 23 and won't build below it, so it's a
 hard floor. Android's own lint reads every call against that version, and CI now runs it. It found the player's network watcher calling something from
-API 24, which was caught rather than crashing and is fixed on the `android-real` branch, so lint is only clean with that merged. It also found two places here
-that needed an annotation and no change in what they do.
+API 24, which was caught rather than crashing, and two places that needed an annotation. All three are fixed on the `android-real` branch, so lint is only
+clean with that merged.
 
 **ARM older than `armeabi-v7a` isn't possible.** Android's tools dropped ARMv5 and ARMv6 in 2018, so the libraries this app depends on aren't built for them.
 
