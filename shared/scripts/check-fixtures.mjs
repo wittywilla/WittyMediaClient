@@ -3,16 +3,21 @@
 // server, so the native apps' tests can't drift from what servers really send.
 // It compares field names and types, never values, and prints no media titles.
 //
-//   node shared/scripts/check-fixtures.mjs http://127.0.0.1:9797 <token>
+//   WMS_TOKEN=<token> node shared/scripts/check-fixtures.mjs http://127.0.0.1:9797
+//
+// The token can also come second on the command line, but anyone on this
+// computer can read a command line while it runs.
 import { readFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
-const [server, token] = process.argv.slice(2)
+const [server, tokenArgument] = process.argv.slice(2)
+const token = process.env.WMS_TOKEN || tokenArgument
 if (!server || !token) {
-  console.error('usage: check-fixtures.mjs <server> <token>')
+  console.error('usage: WMS_TOKEN=<token> check-fixtures.mjs <server>')
   process.exit(2)
 }
+const REQUEST_TIMEOUT_MS = 30000
 const dir = join(dirname(fileURLToPath(import.meta.url)), '..', 'fixtures')
 const fixture = (name) => JSON.parse(readFileSync(join(dir, `${name}.json`), 'utf8'))
 const live = async (path, body) => {
@@ -20,6 +25,8 @@ const live = async (path, body) => {
     method: body ? 'POST' : 'GET',
     headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
     body: body ? JSON.stringify(body) : undefined,
+    signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
+    redirect: 'error',
   })
   if (!res.ok) throw new Error(`${path}: ${res.status}`)
   return res.json()
