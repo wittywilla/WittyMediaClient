@@ -330,8 +330,11 @@ fun AlbumScreen(nav: Nav, s: Map<String, String>, route: Route.Album) {
     val metrics = LocalMetrics.current
     val upright = !metrics.tv && LocalConfiguration.current.screenWidthDp < UPRIGHT_BELOW
     var libraryType by remember { mutableStateOf("") }
-    LaunchedEffect(route.library) { libraryType = nav.libraryType(route.library) }
-    val answer = rememberAnswer(nav, s, route.key) { nav.app.api.tracks(route.library, route.album, route.artist) }
+    // The kind of library first: Play means something different in a book, so nothing is shown until that is known.
+    val answer = rememberAnswer(nav, s, route.key) {
+        libraryType = nav.libraryType(route.library)
+        nav.app.api.tracks(route.library, route.album, route.artist)
+    }
     Screen {
         Answered(nav, answer) { found: List<Item> ->
             val tracks = remember(found) { found.distinctBy { it.id } }

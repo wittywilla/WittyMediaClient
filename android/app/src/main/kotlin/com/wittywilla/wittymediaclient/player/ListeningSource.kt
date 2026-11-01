@@ -173,7 +173,6 @@ private class TrackRetries : DefaultLoadErrorHandlingPolicy() {
 @OptIn(UnstableApi::class)
 class TrackSources(private val resolver: TrackResolver) : MediaSource.Factory {
     private val data = ResolvingDataSource.Factory(
-        // No redirects across hosts: an address the server gives can't lead a token elsewhere.
         DefaultHttpDataSource.Factory().setConnectTimeoutMs(CONNECT_MS).setReadTimeoutMs(READ_MS),
         resolver,
     )

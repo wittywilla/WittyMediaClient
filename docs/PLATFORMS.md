@@ -240,9 +240,38 @@ books and comics in the test media. **Ran** on the desktop is the real app under
 ### Music, audiobooks and podcasts on Android
 
 A player of the app's own, on Media3 with a `MediaSessionService`. It carries on whichever screens are up, and `net/ServerPages.kt` decides what opens in it. Seen on 2026-11-01 on the
-Android 16 phone and 1080p TV emulators, against a real server with `saveMetadata=0`, reading the system's own clock with `dumpsys media_session`:
+Android 16 phone and 1080p TV emulators, against a real server with `saveMetadata=0`, reading the system's own clock with `dumpsys media_session`. The TV ran the shrunk build, the phone the debug one:
 
-ANDROID-MUSIC-TABLE
+| What | Phone | TV, by arrows, OK and Back |
+|---|---|---|
+| Albums, artists or authors, songs, a podcast's episodes | Seen | Seen, with first focus and focus returning. Songs and a podcast by touch only |
+| Screen off | Clock moved, and the next track started by itself | Clock moved, and the place reached the server while asleep |
+| Leaving with Home | Clock moved | Clock moved |
+| Swiping the app away | Clock moved, and the service stayed in the foreground | There's no swiping away on a TV |
+| The system's controls | On the lock screen and in the shade, with cover, Pause, Previous and Next. Books get Back 15 and Forward 30, and those two were pressed. Tapping the card opens the player | The launcher's card, with title and app. Its Stop pauses. **Its Open doesn't work:** see below |
+| Media keys | Pause and play | Play, pause and next, from the launcher |
+| Mini player over the app's own screens | Over tabs, lists and pages, in dark and light | The same, reached with Down |
+| Queue: add, jump, change, remove, clear, shuffle, repeat | Add, remove, clear and repeat pressed, and the Change buttons seen. Moving and jumping weren't pressed | Walked to with arrows, and the list stays put past either end. Nothing changed from there |
+| A book's place saved with `/items/{id}/progress`, every 10 seconds and on pausing, leaving and signing out | Read back from the server | Read back while asleep |
+| Resume, the chapter last left in the middle | Seen, after stopping the app | Seen |
+| Speed, −15 | Seen on screen. +15 and +30 by the system's card | Speed and −15 pressed |
+| A song the server converts (WMA): plays, seeks, moves on | Seen | Plays and seeks by arrows |
+| The network dropping, then coming back | Carried on from the same time by itself | Not tried |
+| A film starting | Sound paused at once, and place saved | Not tried: the same code |
+| Signing out | Sound and notification gone, final place saved first | Not tried: the same code |
+
+**Android 6, debug build:** a book played with the screen off and after leaving, right through to the end of a chapter, which the server then marked as finished. The notification had the cover and Back 15, Pause and Forward 30, and the service stayed in the foreground. Nothing else was repeated there.
+
+**Not seen:** any real device, and so no sound was heard: emulators have none. Android 7 to 15, headphones or Bluetooth buttons, a phone call taking the sound, TalkBack speaking, deep idle (not available on this image), a long queue, and audio CDs, whose tracks go through the same `/playback` as other sound.
+
+**Limits:**
+
+- **On the TV emulator, the launcher's Open on the now-playing card does nothing.** The log says Android blocks the launch, as the launcher's service that sends it isn't on screen. Asking for it to be allowed from the app's side made no difference, so that was taken out again. Opening the app normally gets to the same place. Whether real TVs do the same isn't known.
+- **The queue is kept while the app's process lives.** If the system ends a paused player, the queue is gone. Books and podcasts keep their place on the server, and Continue listening has them.
+- **Sound in the server's page,** behind More, is a separate player. A page that plays a film, a channel or a game pauses the app's player, but nothing tells it about music in a page, so both could play at once until one is paused.
+- **Radio** stays in the server's page, with its limits.
+- **A song adds to the yearly summary, with `/view`, instead of saving a place,** as on the web, because the server starts songs over. Only books and podcasts have a place to read back.
+- **Pressing Add to queue with nothing playing starts it,** as there's nothing for it to wait for.
 
 **Limits of the server's page inside the Android and iPhone apps:**
 
