@@ -2,8 +2,10 @@ package com.wittywilla.wittymediaclient
 
 import android.app.Application
 import android.app.UiModeManager
+import android.content.pm.ApplicationInfo
 import android.content.res.Configuration
 import android.os.Build
+import android.webkit.WebView
 import coil3.ImageLoader
 import coil3.PlatformContext
 import coil3.SingletonImageLoader
@@ -43,6 +45,8 @@ class WittyApp : Application(), SingletonImageLoader.Factory {
 
     override fun onCreate() {
         super.onCreate()
+        // Developer builds only: lets a computer look inside the server's page, as nothing else can.
+        if (applicationInfo.flags and ApplicationInfo.FLAG_DEBUGGABLE != 0) WebView.setWebContentsDebuggingEnabled(true)
         val version = runCatching { packageManager.getPackageInfo(packageName, 0).versionName }.getOrNull().orEmpty()
         // Reports go only to the server this app is signed in to.
         ClientLog.start(filesDir.resolve("logs"), "WittyMediaClient $platformName", version, "$deviceName, Android ${Build.VERSION.RELEASE}", scope) {

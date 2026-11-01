@@ -70,6 +70,7 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
 import com.wittywilla.wittymediaclient.net.Item
+import com.wittywilla.wittymediaclient.net.SETTINGS_PATH
 import com.wittywilla.wittymediaclient.net.Show
 import com.wittywilla.wittymediaclient.net.problemWords
 import kotlinx.coroutines.CancellationException
@@ -239,6 +240,7 @@ fun ProfileScreen(nav: Nav, s: Map<String, String>) {
             Secondary(server.url)
             if (server.fingerprint.isNotEmpty()) Secondary("${s["fingerprintLabel"]}: ${server.fingerprint}")
         }
+        ActionButton("Server settings", { nav.push(Route.Page(SETTINGS_PATH)) }, Modifier.fillMaxWidth(), focusKey = "settings")
         ActionButton("Sign out", nav::signOut, Modifier.fillMaxWidth(), focusKey = "switch")
         ActionButton(s["changeServer"].orEmpty(), nav::changeServer, Modifier.fillMaxWidth(), focusKey = "server")
         SectionTitle("About this app")

@@ -35,7 +35,9 @@ import com.wittywilla.wittymediaclient.net.SendStep
 import com.wittywilla.wittymediaclient.net.ServerProof
 import com.wittywilla.wittymediaclient.net.ServerStatus
 import com.wittywilla.wittymediaclient.net.findServerById
+import com.wittywilla.wittymediaclient.net.hasOwnScreen
 import com.wittywilla.wittymediaclient.net.identify
+import com.wittywilla.wittymediaclient.net.pagePath
 import com.wittywilla.wittymediaclient.player.PlayerScreen
 import kotlinx.coroutines.launch
 import kotlinx.serialization.SerializationException
@@ -60,6 +62,7 @@ sealed interface Route {
     data class Item(val id: Long) : Route { override val key = "item-$id" }
     data class Player(val id: Long, val startOver: Boolean) : Route { override val key = "player-$id" }
     data class Web(val path: String) : Route { override val key = "web-$path" }
+    data class Page(val path: String) : Route { override val key = "page-$path" }
 }
 
 // How long a saved server's ID is looked for when its address stops answering.
@@ -104,6 +107,11 @@ class Nav(val app: WittyApp, private val s: Map<String, String>) {
     }
 
     fun push(r: Route) { stack.add(r) }
+
+    // This app's own screens for what it has them for, and the server's page for all the rest.
+    fun open(library: com.wittywilla.wittymediaclient.net.Library) = push(if (library.hasOwnScreen) Route.Library(library) else Route.Page(library.pagePath()))
+    fun open(item: com.wittywilla.wittymediaclient.net.Item) = push(if (item.hasOwnScreen) Route.Item(item.id) else Route.Page(item.pagePath()))
+
     fun replace(r: Route) { stack[stack.lastIndex] = r }
     fun reset(r: Route) { stack.clear(); stack.add(r) }
     fun pop() { if (stack.size > 1) stack.removeAt(stack.lastIndex) }
@@ -374,7 +382,8 @@ fun AppRoot(app: WittyApp) {
                     is Route.Show -> ShowScreen(nav, strings, route.id)
                     is Route.Item -> ItemScreen(nav, strings, route.id)
                     is Route.Player -> PlayerScreen(nav, route.id, route.startOver)
-                    is Route.Web -> WebPlayerScreen(nav, route)
+                    is Route.Web -> ServerPageScreen(nav, route, route.path, keptToGames = true)
+                    is Route.Page -> ServerPageScreen(nav, route, route.path, keptToGames = false)
                 }
             }
         }

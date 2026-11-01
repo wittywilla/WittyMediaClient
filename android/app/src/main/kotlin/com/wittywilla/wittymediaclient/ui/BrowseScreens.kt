@@ -54,21 +54,22 @@ import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import com.wittywilla.wittymediaclient.net.COLLECTIONS_PATH
 import com.wittywilla.wittymediaclient.net.GAME_PCS_PATH
+import com.wittywilla.wittymediaclient.net.GUIDE_PATH
 import com.wittywilla.wittymediaclient.net.Home
 import com.wittywilla.wittymediaclient.net.Item
 import com.wittywilla.wittymediaclient.net.Library
 import com.wittywilla.wittymediaclient.net.Show
 import com.wittywilla.wittymediaclient.net.ShowDetail
+import com.wittywilla.wittymediaclient.net.hasOwnScreen
 import com.wittywilla.wittymediaclient.net.isRigGame
 import com.wittywilla.wittymediaclient.net.isRigGames
+import com.wittywilla.wittymediaclient.net.pagePath
 import com.wittywilla.wittymediaclient.net.problemWords
 import kotlinx.coroutines.CancellationException
 import kotlin.math.absoluteValue
 
-// What plays in this app for now. Discs, books and games stay in the web interface until their
-// phases, and say so: see docs/DESIGN.md.
-private val PLAYABLE = setOf("video", "audio", "radio")
 private const val MUSIC_KIND = "audio"
 
 fun episodeLabel(it: Item): String {
@@ -90,7 +91,7 @@ private fun progressOf(it: Item): Float? {
 @Composable
 fun ItemCard(nav: Nav, it: Item, requestFocus: Boolean = false, scope: String = "") {
     PosterCard(
-        it.showTitle?.takeIf { s -> s.isNotEmpty() } ?: it.title, itemSubtitle(it), nav.app.api.posterUrl(it), { nav.push(Route.Item(it.id)) },
+        it.showTitle?.takeIf { s -> s.isNotEmpty() } ?: it.title, itemSubtitle(it), nav.app.api.posterUrl(it), { nav.open(it) },
         aspect = if (it.kind == MUSIC_KIND) 1f else 2f / 3f, focusKey = "$scope-i${it.id}", requestFocus = requestFocus, progress = progressOf(it),
     )
 }
@@ -111,7 +112,7 @@ private fun LoadFailed(nav: Nav, message: String, retry: () -> Unit) {
 }
 
 private fun Item.playRoute(): Route =
-    if (kind in PLAYABLE) Route.Player(id, false) else Route.Item(id)
+    if (hasOwnScreen && !isRigGame) Route.Player(id, false) else if (hasOwnScreen) Route.Item(id) else Route.Page(pagePath())
 
 // The first thing on Home. On a phone, posters to swipe through, with the one in front named below
 // and a Play pill, in the layout people know from the big music and video apps. On a TV, the
@@ -142,7 +143,7 @@ private fun PhoneHero(nav: Nav, featured: List<Item>) {
             ) { page ->
                 val item = featured[page]
                 FocusBox(
-                    { nav.push(Route.Item(item.id)) },
+                    { nav.open(item) },
                     // Read as it draws, so a swipe costs a redraw and not a whole recomposition.
                     Modifier.graphicsLayer {
                         val apart = (pager.currentPage - page + pager.currentPageOffsetFraction).absoluteValue.coerceIn(0f, 1f)
@@ -188,7 +189,7 @@ private fun TvHero(nav: Nav, item: Item) {
             if (item.overview.isNotEmpty()) Secondary(item.overview, maxLines = 2)
             Row(Modifier.remoteRow(), horizontalArrangement = Arrangement.spacedBy(Space.S3)) {
                 ActionButton("Play", { nav.push(item.playRoute()) }, primary = true, pill = true, icon = Icons.Filled.PlayArrow, focusKey = "hero-play", requestFocus = true)
-                ActionButton("More", { nav.push(Route.Item(item.id)) }, pill = true, focusKey = "hero-more")
+                ActionButton("More", { nav.open(item) }, pill = true, focusKey = "hero-more")
             }
         }
     }
@@ -204,7 +205,7 @@ private fun LibraryTabs(nav: Nav, libraries: List<Library>, extra: @Composable (
         horizontalArrangement = Arrangement.spacedBy(Space.S2),
     ) {
         items(libraries, key = { it.id }) { lib ->
-            ActionButton(lib.name, { nav.push(Route.Library(lib)) }, pill = true, focusKey = "lib-${lib.id}")
+            ActionButton(lib.name, { nav.open(lib) }, pill = true, focusKey = "lib-${lib.id}")
         }
         item(key = "extra") { extra() }
     }
@@ -217,10 +218,12 @@ fun HomeScreen(nav: Nav, s: Map<String, String>) {
     var error by remember { mutableStateOf("") }
     var attempt by remember { mutableIntStateOf(0) }
     var gamePcs by remember { mutableStateOf(false) }
+    var hasGuide by remember { mutableStateOf(false) }
     val sideways = LocalConfiguration.current.orientation == Configuration.ORIENTATION_LANDSCAPE
     // Phones and tablets only: see rigChoice for why TVs don't play in the page.
     LaunchedEffect(Unit) {
         if (!nav.app.isTv && !nav.app.isFireTv) gamePcs = runCatching { nav.app.api.couchStatus().allowed }.getOrDefault(false)
+        hasGuide = runCatching { "live-tv" in nav.app.api.capabilities().features }.getOrDefault(false)
     }
     LaunchedEffect(attempt) {
         error = ""
@@ -261,7 +264,11 @@ fun HomeScreen(nav: Nav, s: Map<String, String>) {
             }
             item(key = "libraries") {
                 LibraryTabs(nav, h.libraries.distinctBy { it.id }) {
-                    if (gamePcs) ActionButton("Game PCs", { nav.push(Route.Web(GAME_PCS_PATH)) }, pill = true, focusKey = "gamepcs")
+                    Row(horizontalArrangement = Arrangement.spacedBy(Space.S2)) {
+                        if (hasGuide) ActionButton("TV guide", { nav.push(Route.Page(GUIDE_PATH)) }, pill = true, focusKey = "guide")
+                        ActionButton("Collections", { nav.push(Route.Page(COLLECTIONS_PATH)) }, pill = true, focusKey = "collections")
+                        if (gamePcs) ActionButton("Game PCs", { nav.push(Route.Web(GAME_PCS_PATH)) }, pill = true, focusKey = "gamepcs")
+                    }
                 }
             }
             items(hubs, key = { it.key }) { hub ->
@@ -471,7 +478,7 @@ fun ItemScreen(nav: Nav, s: Map<String, String>, id: Long) {
                     if (it.isRigGame) {
                         if (it.tagline.isNotEmpty()) Secondary(it.tagline)
                         RigPlayPanel(nav, it)
-                    } else if (it.kind in PLAYABLE) {
+                    } else if (it.hasOwnScreen) {
                         // The server decides where Resume goes; 0 means start over.
                         val resume = (it.progress?.resumeSec ?: 0.0) > 0
                         Row(Modifier.remoteRow(), horizontalArrangement = Arrangement.spacedBy(Space.S3)) {
@@ -479,8 +486,7 @@ fun ItemScreen(nav: Nav, s: Map<String, String>, id: Long) {
                             if (resume) ActionButton("Start over", { nav.push(Route.Player(it.id, true)) }, pill = true, focusKey = "startover")
                         }
                     } else {
-                        Secondary("This kind of item can't play in this app yet. Open it in a web browser.")
-                        ActionButton("Back", nav::pop, requestFocus = true)
+                        ActionButton("Open", { nav.replace(Route.Page(it.pagePath())) }, primary = true, pill = true, icon = Icons.Filled.PlayArrow, requestFocus = true)
                     }
                     if (it.overview.isNotEmpty()) Text(it.overview, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
