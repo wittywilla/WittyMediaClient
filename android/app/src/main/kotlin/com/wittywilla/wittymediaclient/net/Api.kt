@@ -159,6 +159,7 @@ class Api(val base: String, val token: String, private val quick: Boolean = fals
         json.decodeFromString(call("POST", "/rigs/$rigId/wake", "{}"))
 
     suspend fun couchStatus(): CouchStatus = get("/couch")
+    suspend fun guide(hours: Int, limit: Int): Guide = get("/guide?hours=$hours&limit=$limit")
 
     suspend fun logout() {
         call("POST", "/logout", "{}")
@@ -170,6 +171,7 @@ class Api(val base: String, val token: String, private val quick: Boolean = fals
 
     fun posterUrl(it: Item) = "$base$API/items/${it.id}/poster?v=${it.updatedAt}"
     fun backdropUrl(it: Item) = "$base$API/items/${it.id}/backdrop?v=${it.updatedAt}"
+    fun itemBackdropUrl(id: Long) = "$base$API/items/$id/backdrop"
     fun showPosterUrl(s: Show) = "$base$API/shows/${s.id}/art/poster?v=${s.updatedAt}"
     fun showBackdropUrl(s: Show) = "$base$API/shows/${s.id}/art/backdrop?v=${s.updatedAt}"
 

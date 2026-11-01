@@ -94,14 +94,20 @@ private struct TabRoot: View {
                         #else
                         ElsewhereNote(path: path)
                         #endif
+                    #if os(tvOS)
                     case .album(let library, let name):
                         AlbumView(library: library, name: name)
                     case .photo(let library, let id):
                         PhotoView(library: library, id: id)
                     case .guide:
                         GuideView()
-                    case .channel(let key, let name):
-                        ChannelPlayer(key: key, name: name).id(key)
+                    case .channel(let key):
+                        ChannelPlayer(start: key)
+                    #else
+                    // Apple TV's own screens. These devices show the server's page for all of them.
+                    case .album, .photo, .guide, .channel:
+                        ElsewhereNote(path: ServerPages.guide)
+                    #endif
                     }
                 }
         }

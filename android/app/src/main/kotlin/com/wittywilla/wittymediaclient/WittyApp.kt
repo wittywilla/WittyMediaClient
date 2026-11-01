@@ -25,6 +25,9 @@ import okio.Path.Companion.toOkioPath
 class WittyApp : Application(), SingletonImageLoader.Factory {
     val store by lazy { SessionStore(this) }
 
+    // What a remote's Guide button does, while the app's screens are up.
+    var onGuideKey: (() -> Unit)? = null
+
     // For work that must outlive the screen that started it.
     val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
 

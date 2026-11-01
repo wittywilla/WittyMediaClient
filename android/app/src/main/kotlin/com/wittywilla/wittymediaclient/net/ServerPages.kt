@@ -25,6 +25,16 @@ fun Library.pagePath() = "/library/$id"
 fun Item.pagePath() = "/item/$id"
 
 const val GUIDE_PATH = "/tv"
+fun channelPath(key: String) = "/tv/watch/" + java.net.URLEncoder.encode(key, "UTF-8")
+
+// What the row on Home shows: favourites first, and nothing a device can't tune.
+fun onNow(channels: List<GuideChannel>) = channels.filter { it.encrypted.isEmpty() }.sortedByDescending { it.favourite }
+
+fun GuideChannel.programmeAt(now: Long) = programmes.firstOrNull { it.start <= now && now < it.end }
+
+fun GuideProgramme.fraction(now: Long) = if (end > start) ((now - start).toFloat() / (end - start)).coerceIn(0f, 1f) else 0f
+
+fun GuideProgramme.minutesLeft(now: Long) = ((end - now + 59) / 60).coerceAtLeast(1)
 const val COLLECTIONS_PATH = "/collections"
 const val SETTINGS_PATH = "/settings"
 

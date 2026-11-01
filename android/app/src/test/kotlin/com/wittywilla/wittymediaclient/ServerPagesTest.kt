@@ -1,8 +1,15 @@
 package com.wittywilla.wittymediaclient
 
+import com.wittywilla.wittymediaclient.net.GuideChannel
+import com.wittywilla.wittymediaclient.net.GuideProgramme
 import com.wittywilla.wittymediaclient.net.Item
 import com.wittywilla.wittymediaclient.net.Library
 import com.wittywilla.wittymediaclient.net.albumsOnce
+import com.wittywilla.wittymediaclient.net.channelPath
+import com.wittywilla.wittymediaclient.net.fraction
+import com.wittywilla.wittymediaclient.net.minutesLeft
+import com.wittywilla.wittymediaclient.net.onNow
+import com.wittywilla.wittymediaclient.net.programmeAt
 import com.wittywilla.wittymediaclient.net.hasOwnScreen
 import com.wittywilla.wittymediaclient.net.pageAddress
 import com.wittywilla.wittymediaclient.net.pageFillsScreen
@@ -41,6 +48,29 @@ class ServerPagesTest {
     fun aPlayerABookAndAGameHaveTheWholeScreen() {
         for (path in listOf("/play/1", "/read/1", "/tv/watch/lib-1", "/game/1", "/couch-rig/1", "/big", "/couch/1/play/2")) assertTrue(path, pageFillsScreen(path))
         for (path in listOf("/", "/library/1", "/item/1", "/tv", "/settings", "/couch", "/couch/1")) assertFalse(path, pageFillsScreen(path))
+    }
+
+    @Test
+    fun whatIsOnNowAndHowFarThrough() {
+        val channel = GuideChannel(key = "lib-1", programmes = listOf(GuideProgramme(100, 200, "First"), GuideProgramme(200, 400, "Second")))
+        assertEquals("First", channel.programmeAt(150)?.title)
+        assertEquals("Second", channel.programmeAt(200)?.title)
+        assertEquals(null, channel.programmeAt(900))
+        assertEquals(0.5f, channel.programmeAt(150)!!.fraction(150))
+        assertEquals(1f, channel.programmeAt(150)!!.fraction(900))
+        assertEquals(1L, channel.programmeAt(150)!!.minutesLeft(199))
+    }
+
+    @Test
+    fun theRowOnHomeHasFavouritesFirstAndNothingEncrypted() {
+        val row = onNow(listOf(GuideChannel(key = "a"), GuideChannel(key = "b", encrypted = "Encrypted"), GuideChannel(key = "c", favourite = true)))
+        assertEquals(listOf("c", "a"), row.map { it.key })
+    }
+
+    @Test
+    fun aChannelsKeyIsOnePieceOfTheAddress() {
+        assertEquals("/tv/watch/lib-1", channelPath("lib-1"))
+        assertEquals("/tv/watch/..%2Fsettings", channelPath("../settings"))
     }
 
     @Test

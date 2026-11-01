@@ -80,7 +80,7 @@ enum Route: Hashable {
     case photo(library: Int64, id: Int64)
     /// Live channels, on Apple TV.
     case guide
-    case channel(key: String, name: String)
+    case channel(key: String)
 }
 
 /// A list of tracks being played, in order, on Apple TV.
@@ -114,6 +114,8 @@ final class AppModel: ObservableObject {
     @Published var paths: [AppTab: [Route]] = [:]
     /// The tracks being played in order, on Apple TV. Only what's in this goes on by itself.
     var playingList: [Int64] = []
+    /// The channels as the guide last had them, for the remote to go through while one plays.
+    var channels: [GuideChannel] = []
     @Published var themeId: String?
     @Published var user: User?
     @Published var libraries: [Library] = []

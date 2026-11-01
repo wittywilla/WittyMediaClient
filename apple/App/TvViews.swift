@@ -1,10 +1,10 @@
+#if os(tvOS)
 import AVKit
 import SwiftUI
 import WittyKit
 
 // Apple TV's own screens for what iPhone and iPad leave to the server's page, as tvOS offers apps no
-// web view. They're compiled for every device, as the routes they answer to are, and only Apple TV
-// goes to them. Written without a Mac: see docs/PLATFORMS.md for how far that's been checked.
+// web view. Written without a Mac: see docs/PLATFORMS.md for how far that's been checked.
 
 /// An album or a book's chapters. Choosing one plays from there to the end of the list.
 struct AlbumView: View {
@@ -105,19 +105,17 @@ struct PhotoView: View {
         }
         .focusable()
         .focused($focused)
-        #if os(tvOS)
         .onMoveCommand { direction in
             if direction == .left { move(-1) }
             if direction == .right { move(1) }
         }
-        #endif
         .onAppear { focused = true }
         .task { await load() }
     }
 }
 
-/// Live channels, from the server's guide. Encrypted broadcasts are listed and say so: this server
-/// never decrypts one.
+/// Live channels, from the server's guide: what's on each now and what's next, in the server's order.
+/// Encrypted broadcasts are listed and say so: this server never decrypts one.
 struct GuideView: View {
     @EnvironmentObject private var model: AppModel
     @Environment(\.client) private var client
@@ -128,7 +126,9 @@ struct GuideView: View {
 
     private func load() async {
         do {
-            channels = uniqued(try await client.guide().channels ?? [])
+            let fresh = uniqued(try await client.guide().channels ?? [])
+            channels = fresh
+            model.channels = fresh
             error = ""
         } catch {
             let words = model.handle(error)
@@ -136,34 +136,59 @@ struct GuideView: View {
         }
     }
 
+    private func row(_ channel: GuideChannel, at now: Int64) -> some View {
+        let on = channel.on(at: now)
+        let next = channel.next(after: now)
+        return HStack(alignment: .firstTextBaseline, spacing: Tokens.Space.s6) {
+            Text(channel.label).font(.wmSection).lineLimit(2).frame(width: 340, alignment: .leading)
+            VStack(alignment: .leading, spacing: Tokens.Space.s1) {
+                Text(on?.title ?? "Nothing on").lineLimit(1)
+                if let on {
+                    ProgressView(value: on.fraction(at: now)).progressViewStyle(.linear).accessibilityHidden(true)
+                }
+                if let next {
+                    Text("Next: \(next.title)").font(.footnote).foregroundStyle(palette.textSecondary).lineLimit(1)
+                }
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            if let on {
+                Text("\(on.minutesLeft(at: now)) min left").font(.footnote).foregroundStyle(palette.textSecondary)
+            }
+        }
+        .frame(maxWidth: .infinity, minHeight: Tokens.minTarget, alignment: .leading)
+    }
+
     var body: some View {
         ZStack {
             if let channels {
-                ScrollView {
-                    VStack(alignment: .leading, spacing: Tokens.Space.s3) {
-                        Text("TV guide").font(.wmPage).accessibilityAddTraits(.isHeader)
-                        if channels.isEmpty {
-                            EmptyMessage(title: "No channels yet", detail: "Channels are made on the server, under Settings, Channels and tuners.")
-                        }
-                        ForEach(Array(channels.enumerated()), id: \.element.id) { index, channel in
-                            if channel.canTune {
-                                NavigationLink(value: Route.channel(key: channel.key, name: channel.name)) {
-                                    Text(channel.label).frame(maxWidth: .infinity, minHeight: Tokens.minTarget, alignment: .leading)
+                // The times move by themselves, and nothing else on the page has to be drawn again for it.
+                TimelineView(.periodic(from: .now, by: 30)) { time in
+                    let now = Int64(time.date.timeIntervalSince1970)
+                    ScrollView {
+                        VStack(alignment: .leading, spacing: Tokens.Space.s3) {
+                            Text("TV guide").font(.wmPage).accessibilityAddTraits(.isHeader)
+                            if channels.isEmpty {
+                                EmptyMessage(title: "No channels yet", detail: "Channels are made on the server, under Settings, Channels and tuners.")
+                            }
+                            ForEach(Array(channels.enumerated()), id: \.element.id) { index, channel in
+                                if channel.canTune {
+                                    NavigationLink(value: Route.channel(key: channel.key)) { row(channel, at: now) }
+                                        .firstFocus(in: scope, when: index == 0)
+                                        .accessibilityLabel("\(channel.label). \(channel.on(at: now)?.title ?? "Nothing on")")
+                                } else {
+                                    VStack(alignment: .leading) {
+                                        Text(channel.label).font(.wmSection)
+                                        Text(channel.encrypted ?? "").foregroundStyle(palette.textSecondary)
+                                    }
+                                    .accessibilityElement(children: .combine)
                                 }
-                                .firstFocus(in: scope, when: index == 0)
-                            } else {
-                                VStack(alignment: .leading) {
-                                    Text(channel.label)
-                                    Text(channel.encrypted ?? "").foregroundStyle(palette.textSecondary)
-                                }
-                                .accessibilityElement(children: .combine)
                             }
                         }
+                        .padding(.horizontal, Tokens.gutter)
+                        .padding(.vertical, Tokens.edge)
                     }
-                    .padding(.horizontal, Tokens.gutter)
-                    .padding(.vertical, Tokens.edge)
+                    .focusRoot(scope)
                 }
-                .focusRoot(scope)
             } else if !error.isEmpty {
                 ProblemView(words: error, retry: { error = ""; Task { await load() } })
             } else {
@@ -175,18 +200,48 @@ struct GuideView: View {
     }
 }
 
-/// One channel, in the system's player. It says when it's still starting, and leaves the channel on the way out.
+/// The picture alone: a live channel has nothing to scrub, so the arrows are free to change channel.
+private struct LivePicture: UIViewRepresentable {
+    let player: AVPlayer
+
+    final class Picture: UIView {
+        override class var layerClass: AnyClass { AVPlayerLayer.self }
+        var playerLayer: AVPlayerLayer { layer as! AVPlayerLayer }
+    }
+
+    func makeUIView(context: Context) -> Picture {
+        let view = Picture()
+        view.playerLayer.player = player
+        view.playerLayer.videoGravity = .resizeAspect
+        view.backgroundColor = .black
+        return view
+    }
+
+    func updateUIView(_ view: Picture, context: Context) {}
+}
+
+/// One channel, as a TV does it: up and down change channel and bring up what's on, Select brings it
+/// up on its own, and Back leaves. It says when it's still starting, and leaves the channel on the way out.
 struct ChannelPlayer: View {
     @EnvironmentObject private var model: AppModel
     @Environment(\.client) private var client
-    let key: String
-    let name: String
-    @State private var player: AVPlayer?
+    @Environment(\.scenePhase) private var scenePhase
+    @State private var key: String
+    @State private var player = AVPlayer()
+    @State private var starting = true
+    @State private var banner = true
     @State private var error = ""
-    // The same name for as long as this is on screen, however often the view is redrawn.
+    /// One name for as long as this is on screen, however often the view is redrawn.
     @State private var viewer = UUID().uuidString
+    @FocusState private var focused: Bool
+
+    init(start: String) { _key = State(initialValue: start) }
+
+    private var channel: GuideChannel? { model.channels.first { $0.key == key } }
 
     private func tune() async {
+        starting = true
+        error = ""
         for _ in 0..<20 {
             do {
                 let tuned = try await client.tune(key, viewer: viewer)
@@ -194,40 +249,98 @@ struct ChannelPlayer: View {
                     error = "The server sent an address that can't be used."
                     return
                 }
-                let starting = AVPlayer(url: url)
-                player = starting
-                starting.play()
+                if Task.isCancelled { return }
+                player.replaceCurrentItem(with: AVPlayerItem(url: url))
+                player.play()
+                starting = false
                 return
             } catch let problem as APIError where problem.status == 503 {
                 // Still starting: the server says to wait and ask again.
                 try? await Task.sleep(nanoseconds: 1_000_000_000)
                 if Task.isCancelled { return }
             } catch {
+                if Task.isCancelled { return }
                 let words = model.handle(error)
                 if !words.isEmpty { self.error = words }
                 return
             }
         }
-        error = "\(name) didn't start in time. Try it again in a moment."
+        error = "\(channel?.name ?? "This channel") didn't start in time. Try it again in a moment."
+    }
+
+    private func leave(_ old: String) {
+        let leaving = client, name = viewer
+        Task { try? await leaving.leaveChannel(old, viewer: name) }
+    }
+
+    private func step(_ by: Int) {
+        guard let next = ServerPages.channel(from: key, by: by, in: model.channels), next.key != key else { return }
+        leave(key)
+        key = next.key
+        banner = true
+    }
+
+    private func bannerView(at now: Int64) -> some View {
+        VStack(alignment: .leading, spacing: Tokens.Space.s1) {
+            Text(channel?.label ?? "").font(.wmSection)
+            if let on = channel?.on(at: now) {
+                Text(on.title).font(.wmDisplay).lineLimit(2)
+                if let sub = on.sub, !sub.isEmpty { Text(sub).lineLimit(1) }
+                ProgressView(value: on.fraction(at: now)).progressViewStyle(.linear)
+                Text("\(on.minutesLeft(at: now)) min left").font(.footnote)
+            }
+            if let next = channel?.next(after: now) {
+                Text("Next: \(next.title)").font(.footnote).lineLimit(1)
+            }
+        }
+        .foregroundStyle(.white)
+        .padding(Tokens.Space.s6)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(LinearGradient(colors: [.clear, .black.opacity(0.85)], startPoint: .top, endPoint: .bottom))
+        .accessibilityElement(children: .combine)
     }
 
     var body: some View {
-        ZStack {
-            Color.black.ignoresSafeArea()
-            if let player {
-                VideoPlayer(player: player).ignoresSafeArea()
-            } else if !error.isEmpty {
-                ProblemView(words: error, retry: { error = ""; Task { await tune() } })
-            } else {
+        ZStack(alignment: .bottom) {
+            LivePicture(player: player).ignoresSafeArea()
+            if !error.isEmpty {
+                ProblemView(words: error, retry: { Task { await tune() } })
+            } else if starting {
                 LoadingView()
             }
+            if banner, error.isEmpty {
+                TimelineView(.periodic(from: .now, by: 30)) { time in
+                    bannerView(at: Int64(time.date.timeIntervalSince1970))
+                }
+            }
         }
-        .task { await tune() }
+        .background(Color.black.ignoresSafeArea())
+        .focusable()
+        .focused($focused)
+        .onMoveCommand { direction in
+            if direction == .up { step(1) }
+            if direction == .down { step(-1) }
+        }
+        .onPlayPauseCommand {
+            if player.timeControlStatus == .paused { player.play() } else { player.pause() }
+        }
+        .onTapGesture { banner.toggle() }
+        .onAppear { focused = true }
+        .task(id: key) { await tune() }
+        // What's on says itself for a moment on every change, then gets out of the way.
+        .task(id: banner) {
+            guard banner else { return }
+            try? await Task.sleep(nanoseconds: 6_000_000_000)
+            if !Task.isCancelled { banner = false }
+        }
+        .onChange(of: scenePhase) { phase in
+            if phase == .active { player.play() } else { player.pause() }
+        }
         .onDisappear {
-            player?.pause()
-            let leaving = client
-            let channel = key, name = viewer
-            Task { try? await leaving.leaveChannel(channel, viewer: name) }
+            player.pause()
+            player.replaceCurrentItem(with: nil)
+            leave(key)
         }
     }
 }
+#endif

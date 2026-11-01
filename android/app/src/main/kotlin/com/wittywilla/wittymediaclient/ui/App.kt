@@ -34,6 +34,7 @@ import com.wittywilla.wittymediaclient.net.NextStep
 import com.wittywilla.wittymediaclient.net.SendStep
 import com.wittywilla.wittymediaclient.net.ServerProof
 import com.wittywilla.wittymediaclient.net.ServerStatus
+import com.wittywilla.wittymediaclient.net.GUIDE_PATH
 import com.wittywilla.wittymediaclient.net.findServerById
 import com.wittywilla.wittymediaclient.net.hasOwnScreen
 import com.wittywilla.wittymediaclient.net.identify
@@ -75,6 +76,15 @@ class Nav(val app: WittyApp, private val s: Map<String, String>) {
     val stack = mutableStateListOf<Route>(Route.Starting)
     val current: Route get() = stack.last()
     var themeId by mutableStateOf("default")
+
+    // Whether this server has a guide to offer.
+    var hasGuide by mutableStateOf(false)
+
+    // A remote's Guide button, from anywhere that's signed in.
+    fun openGuide() {
+        val onPage = current as? Route.Page
+        if (hasGuide && app.api.token.isNotEmpty() && onPage?.path != GUIDE_PATH) push(Route.Page(GUIDE_PATH))
+    }
 
     // The server the sign-in screens talk to. Its key waits here for a token to be
     // kept with, unless it was already pinned.
@@ -362,6 +372,10 @@ fun AppRoot(app: WittyApp) {
 
     WittyTheme(theme, metrics, reduceMotion) {
         LaunchedEffect(Unit) { nav.startUp() }
+        DisposableEffect(Unit) {
+            app.onGuideKey = nav::openGuide
+            onDispose { app.onGuideKey = null }
+        }
         LifecycleEventEffect(Lifecycle.Event.ON_START) { scope.launch { nav.recheck() } }
         BackHandler(enabled = nav.backStaysInApp) { nav.back() }
         val route = nav.current

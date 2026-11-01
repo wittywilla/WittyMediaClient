@@ -64,6 +64,28 @@ public extension Item {
     }
 }
 
+/// One programme in the guide. Times are seconds since 1970, as the server sends them.
+public struct GuideProgramme: Decodable, Equatable {
+    public let start: Int64
+    public let end: Int64
+    public let title: String
+    public let sub: String?
+    public let desc: String?
+    public let rating: String?
+    public let year: Int?
+
+    /// How far through it is at this moment, from 0 to 1.
+    public func fraction(at now: Int64) -> Double {
+        guard end > start else { return 0 }
+        return min(1, max(0, Double(now - start) / Double(end - start)))
+    }
+
+    /// Whole minutes left at this moment, rounded up. Never below one while it's on.
+    public func minutesLeft(at now: Int64) -> Int {
+        max(1, Int((end - now + 59) / 60))
+    }
+}
+
 /// One channel from GET /guide. Channels and tuners aren't items, so they don't go through /playback.
 public struct GuideChannel: Decodable, Identifiable, Equatable {
     public let key: String
@@ -72,10 +94,31 @@ public struct GuideChannel: Decodable, Identifiable, Equatable {
     public let radio: Bool?
     /// Why it can't be tuned. This server never decrypts a broadcast.
     public let encrypted: String?
+    public let programmes: [GuideProgramme]?
 
     public var id: String { key }
     public var canTune: Bool { (encrypted ?? "").isEmpty }
     public var label: String { [number, name].compactMap { $0 }.filter { !$0.isEmpty }.joined(separator: "  ") }
+
+    public func on(at now: Int64) -> GuideProgramme? {
+        programmes?.first { $0.start <= now && now < $0.end }
+    }
+
+    public func next(after now: Int64) -> GuideProgramme? {
+        programmes?.filter { $0.start > now }.min { $0.start < $1.start }
+    }
+}
+
+public extension ServerPages {
+    /// The channel so many steps along, going round at the ends, as a remote's channel buttons do.
+    /// Only those that can be tuned count.
+    static func channel(from key: String, by step: Int, in channels: [GuideChannel]) -> GuideChannel? {
+        let usable = channels.filter(\.canTune)
+        guard !usable.isEmpty else { return nil }
+        guard let at = usable.firstIndex(where: { $0.key == key }) else { return usable[0] }
+        let count = usable.count
+        return usable[((at + step) % count + count) % count]
+    }
 }
 
 public struct Guide: Decodable, Equatable {
