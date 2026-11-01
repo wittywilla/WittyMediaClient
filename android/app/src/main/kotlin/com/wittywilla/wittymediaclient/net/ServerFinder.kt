@@ -6,6 +6,7 @@ import android.net.nsd.NsdServiceInfo
 import android.os.Build
 import android.os.Handler
 import android.os.Looper
+import android.os.SystemClock
 import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.withTimeoutOrNull
 import java.net.Inet4Address
@@ -29,16 +30,27 @@ class ServerFinder(context: Context, private val onChange: (List<FoundServer>) -
         override fun onDiscoveryStopped(serviceType: String) = Unit
         override fun onStartDiscoveryFailed(serviceType: String, errorCode: Int) { main.post { browsing = false } }
         override fun onStopDiscoveryFailed(serviceType: String, errorCode: Int) = Unit
-        override fun onServiceFound(info: NsdServiceInfo) { main.post { queue(Waiting(info, 0)) } }
+        override fun onServiceFound(info: NsdServiceInfo) {
+            main.post {
+                list.heard(info.serviceName)
+                queue(Waiting(info, 0))
+            }
+        }
         override fun onServiceLost(info: NsdServiceInfo) {
             main.post {
                 waiting.removeAll { it.info.serviceName == info.serviceName }
-                if (list.removeInstance(info.serviceName) && browsing) onChange(list.list())
+                list.markLost(info.serviceName, SystemClock.elapsedRealtime())
+                main.removeCallbacks(checkLost)
+                main.postDelayed(checkLost, LOST_WAIT_MS)
             }
         }
     }
 
     private val giveUp = Runnable { resolving = null; resolveNext() }
+
+    private val checkLost = Runnable {
+        if (list.dropLost(SystemClock.elapsedRealtime(), LOST_WAIT_MS) && browsing) onChange(list.list())
+    }
 
     fun start() {
         main.post {
@@ -54,6 +66,7 @@ class ServerFinder(context: Context, private val onChange: (List<FoundServer>) -
             waiting.clear()
             resolving = null
             main.removeCallbacks(giveUp)
+            main.removeCallbacks(checkLost)
         }
     }
 
@@ -105,6 +118,8 @@ class ServerFinder(context: Context, private val onChange: (List<FoundServer>) -
     private companion object {
         const val SERVICE_TYPE = "_wittymedia._tcp"
         const val RESOLVE_WAIT_MS = 5000L
+        // Several of Android's rounds of asking, so one missed answer doesn't count.
+        const val LOST_WAIT_MS = 45_000L
         const val MAX_RETRIES = 2
         const val MAX_WAITING = 32
     }

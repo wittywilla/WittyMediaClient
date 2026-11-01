@@ -34,6 +34,28 @@ object Discovery {
 // oldest goes when too many turn up, so a noisy network can't grow it without limit.
 class ServerList {
     private val servers = LinkedHashMap<String, FoundServer>()
+    private val lostAt = HashMap<String, Long>()
+
+    // "Gone" is only believed after a while. Multicast is often dropped for a moment, and a row that
+    // blinks out takes the remote's focus with it.
+    fun markLost(instance: String, nowMs: Long) {
+        if (servers.values.any { it.instance == instance }) lostAt.putIfAbsent(instance, nowMs)
+    }
+
+    fun heard(instance: String) {
+        lostAt.remove(instance)
+    }
+
+    // Removes what has stayed lost for the whole wait. True when that changed the list.
+    fun dropLost(nowMs: Long, waitMs: Long): Boolean {
+        val due = lostAt.filterValues { nowMs - it >= waitMs }.keys
+        var changed = false
+        for (instance in due) {
+            lostAt.remove(instance)
+            if (removeInstance(instance)) changed = true
+        }
+        return changed
+    }
 
     fun add(server: FoundServer): Boolean {
         val before = servers[server.id]
