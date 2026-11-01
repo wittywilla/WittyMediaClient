@@ -68,7 +68,7 @@ async function step(name, run) {
 }
 
 // Moves with one arrow at a time until focus is where it's wanted, as a remote has to.
-async function arrowTo(what, isThere, keys = ['ArrowDown'], tries = 30) {
+async function arrowTo(what, isThere, keys = ['Down'], tries = 30) {
   for (let i = 0; i < tries; i++) {
     if (await inPage(`(() => { const el = document.activeElement; return (${isThere})(el) })()`)) return
     await press(keys[i % keys.length])
@@ -123,7 +123,7 @@ async function run() {
   })
 
   await step('the arrows and OK reach a film', async () => {
-    await arrowTo('a film', "(el) => { const a = el.closest && el.closest('a'); return !!a && /\\/(item|title|details)\\//.test(a.href) }", ['ArrowDown', 'ArrowRight'])
+    await arrowTo('a film', "(el) => { const a = el.closest && el.closest('a'); return !!a && /\\/(item|title|details)\\//.test(a.href) }", ['Down', 'Right'])
     await shot('05-focus-on-card')
     await press('Enter')
     await until('its page', () => inPage("!!Array.from(document.querySelectorAll('button')).find((b) => /play|resume/i.test(b.innerText))"))
@@ -131,7 +131,7 @@ async function run() {
   })
 
   await step('the arrows and OK start it playing', async () => {
-    await arrowTo('Play', "(el) => el.tagName === 'BUTTON' && /play|resume/i.test(el.innerText)", ['ArrowDown', 'ArrowRight', 'ArrowDown', 'ArrowLeft'])
+    await arrowTo('Play', "(el) => el.tagName === 'BUTTON' && /play|resume/i.test(el.innerText)", ['Down', 'Right', 'Down', 'Left'])
     await press('Enter')
     await until('a video', () => inPage("!!document.querySelector('video') && document.querySelector('video').readyState >= 2"), 45000)
   })
@@ -172,9 +172,9 @@ async function run() {
       await shot('09-menu', tvMenu())
     })
     await step('the menu works with arrows, and Back closes it', async () => {
-      await press('ArrowDown', tvMenu())
+      await press('Down', tvMenu())
       assert.strictEqual(await tvMenu().executeJavaScript('document.activeElement.id'), 'change')
-      await press('ArrowDown', tvMenu())
+      await press('Down', tvMenu())
       assert.strictEqual(await tvMenu().executeJavaScript('document.activeElement.id'), 'quit')
       await press('Escape', tvMenu())
       await wait(300)
