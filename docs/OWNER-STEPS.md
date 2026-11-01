@@ -13,7 +13,8 @@ These change what gets built. Each has a recommendation.
    See [the design](DESIGN.md#windows-7).
 2. **The app's ID.** Android and Apple use `com.wittywilla.wittymediaclient`. Once published it can never
    change, so say now if you want something else.
-3. **The name people see.** Currently "WittyMedia".
+3. **The name people see.** The desktop app is "WittyMediaClient". The Android and Apple apps still say "WittyMedia":
+   say if they should follow.
 4. **Artwork.** Every app needs an icon, and TVs need a wide banner too.
 
 ## Step 1: Let CI build the apps
@@ -112,3 +113,31 @@ local network and needs local network access. The reason is that home media serv
 
 **Consoles.** PlayStation, Xbox and Nintendo all need you to apply to and be accepted by a developer
 programme, usually as a company. Nothing can be built until then.
+
+## Check the desktop installers
+
+These ran for real under Wine and in Linux containers, and only a person with the machine can do the rest.
+[INSTALLING.md](INSTALLING.md) says what each step should do.
+
+**On a real Windows (a Windows Sandbox or a spare account is enough):**
+
+1. Build it with `npm run package:win` in `desktop/`, or take the setup from a release.
+2. Run `wittymediaclient-<version>-windows-amd64-setup.exe`. Choose **Only for me**, then the default folder. Check the desktop
+   shortcut and the Start menu entry, and that the app opens and connects.
+3. In **Settings > Apps > Installed apps**, find WittyMediaClient and uninstall it. Answer **No** to the question, and check
+   `%APPDATA%\WittyMediaClient` is still there.
+4. Install again, **Anyone who uses this computer** this time. Windows asks for an administrator. Uninstall, answer **Yes**, and
+   check that `%APPDATA%\WittyMediaClient` and `C:\Program Files\WittyMediaClient` are gone.
+
+**On a Mac:**
+
+1. Take the `.dmg` for your chip from a release, or run `npm run package:mac` in `desktop/`.
+2. Open it. Check that the window shows the app, Applications and the uninstaller without anything overlapping, and drag the app across.
+3. Open the app, using **Open Anyway** in **System Settings > Privacy & Security**, and connect to a server.
+4. Quit it, and run **Uninstall WittyMediaClient.command** from the `.dmg`. Check the list it shows, type `yes`, and check that the
+   list is gone. If something of the app's stays in `~/Library`, tell your main Claude session its name so it can be added.
+
+**Signing.** Until these are signed, Windows and macOS warn on every download. For Windows, a code-signing certificate; for
+macOS, the Apple Developer Program and its notarising. Then set electron-builder's `CSC_LINK` and `CSC_KEY_PASSWORD` secrets in the
+release workflow, and remove its `CSC_IDENTITY_AUTO_DISCOVERY: 'false'`. Ask your main Claude session to make that change when you
+have them.

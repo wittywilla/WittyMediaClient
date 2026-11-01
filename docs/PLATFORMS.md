@@ -20,8 +20,9 @@ its focus handling has ever run, and nothing has run on a device or emulator.
 
 | Platform | Status | Notes |
 |---|---|---|
-| Windows 10 and later | **Ran** | From source and as a packaged app. Installers are configured but not built yet. |
-| Linux | **Written** | Same code as Windows and CI packages it, but it has never been launched. |
+| Windows 10 and later | **Ran** | From source and as a packaged app. The setup and uninstaller ran under Wine, not yet on a real Windows. |
+| macOS | **Written** | The desktop app builds for it in CI, and has never been launched. Its uninstaller only ran on Linux with a stand-in home folder. |
+| Linux | **Ran** | `.deb` and `.rpm` installed, opened on a virtual screen, upgraded and removed in containers. No real desktop yet. |
 | Android TV, Google TV | **Compiled** | Never run. |
 | Fire TV | **Compiled** | Never run. Needs Fire OS 6 or later: the first Fire TV Sticks are too old for Compose. |
 | Android phones, tablets | **Compiled** | Never run. |
@@ -179,8 +180,9 @@ branch, 24 checks passed using real key presses:
 
 - **Sound.** Nothing here listens to it.
 - **Game controllers** and real TV remotes. Key presses were simulated.
-- **Linux** at all.
-- Installers, updating from an old version, and very low-end hardware.
+- **Linux** on a real desktop.
+- **macOS** at all.
+- Installers on a real Windows, and very low-end hardware.
 - Screen readers.
 - Audio and subtitle tracks, and everything else marked "not checked here" above. They are the web
   interface's own features, displayed unchanged.

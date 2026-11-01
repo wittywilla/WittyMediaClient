@@ -7,15 +7,21 @@ never been run. Most of this is early, and the native apps have not been compile
 
 | Folder | What it is |
 |---|---|
-| [`desktop/`](desktop) | Windows and Linux: a frameless window around the server's web interface |
+| [`desktop/`](desktop) | Windows, macOS and Linux: a frameless window around the server's web interface |
 | [`android/`](android) | Android TV, Google TV, Fire TV, phones and tablets (Kotlin, Compose, Media3) |
 | [`apple/`](apple) | Apple TV, iPhone, iPad and Mac (SwiftUI, AVPlayer) |
 | [`shared/`](shared) | What every app shares, as plain data: themes, wording, button meanings and test cases |
-| [`docs/`](docs) | [Design](docs/DESIGN.md), [status](docs/PLATFORMS.md), [what the owner needs to do](docs/OWNER-STEPS.md) |
+| [`docs/`](docs) | [Installing and removing](docs/INSTALLING.md), [design](docs/DESIGN.md), [status](docs/PLATFORMS.md), [what the owner needs to do](docs/OWNER-STEPS.md) |
 
 The native apps talk to the API described in `docs/CLIENT-API.md` at the top of this repository.
 
-## Trying the desktop app
+## Installing the desktop app
+
+[The releases page](https://github.com/wittywilla/WittyMediaClient/releases) has a setup for Windows, a disk image for
+macOS, and a `.deb`, `.rpm` and AppImage for Linux. Each one upgrades in place and removes cleanly, down to your settings if
+you ask: [docs/INSTALLING.md](docs/INSTALLING.md) has the steps and every folder involved.
+
+## Trying the desktop app from source
 
 You need [Node.js](https://nodejs.org) 22.12 or newer, and a WittyMediaServer to connect to.
 
