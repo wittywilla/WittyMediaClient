@@ -67,20 +67,19 @@
         "pacman"
       ],
       "executableName": "wittymedia",
-      "category": "AudioVideo",
+      "category": "AudioVideo;Video;Audio;Player;TV;",
       "maintainer": "WittyWilla",
       "synopsis": "Watch and listen to your own WittyMediaServer",
       "desktop": {
         "entry": {
           "Name": "WittyMedia",
           "GenericName": "Media player",
-          "Comment": "Watch and listen to your own WittyMediaServer",
-          "Categories": "AudioVideo;Video;Audio;Player;TV;",
           "Keywords": "media;video;music;television;server;",
           "Terminal": "false",
           "StartupWMClass": "wittymedia"
         }
-      }
+      },
+      "description": "Watch and listen to your own WittyMediaServer"
     },
     "nsis": {
       "oneClick": true,

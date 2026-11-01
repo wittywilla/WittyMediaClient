@@ -38,8 +38,9 @@ test('the big screen address keeps the server and what was asked for', () => {
 test('the launcher entry suits a TV launcher and a desktop menu alike', () => {
   const { build } = JSON.parse(fs.readFileSync(path.join(__dirname, '..', 'package.json'), 'utf8'))
   const { entry } = build.linux.desktop
+  const { category } = build.linux
   assert.strictEqual(entry.Terminal, 'false', 'Bigscreen leaves out anything run in a terminal')
   assert.strictEqual(entry.NoDisplay, undefined, 'and anything hidden')
-  assert.ok(!/(^|;)Game(;|$)/.test(entry.Categories), 'a Game goes in the row for games')
-  assert.ok(entry.Categories.includes('AudioVideo'))
+  assert.ok(!/(^|;)Game(;|$)/.test(category), 'a Game goes in the row for games')
+  assert.ok(category.includes('AudioVideo'))
 })

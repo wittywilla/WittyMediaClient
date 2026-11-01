@@ -44,8 +44,9 @@ function freebsdAbi() {
 }
 
 function writeDesktopEntry(to) {
-  const { entry } = pkg.build.linux.desktop
-  const lines = ['[Desktop Entry]', 'Type=Application', 'Exec=wittymedia %U', 'Icon=wittymedia', ...Object.entries(entry).map(([k, v]) => `${k}=${v}`)]
+  const { category, description, desktop } = pkg.build.linux
+  const fields = { ...desktop.entry, Comment: description, Categories: category }
+  const lines = ['[Desktop Entry]', 'Type=Application', 'Exec=wittymedia %U', 'Icon=wittymedia', ...Object.entries(fields).map(([k, v]) => `${k}=${v}`)]
   writeFileSync(to, `${lines.join('\n')}\n`)
 }
 
