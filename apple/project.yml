@@ -4,6 +4,7 @@ name: WittyMedia
 options:
   bundleIdPrefix: com.wittywilla
   deploymentTarget:
+    # tvOS 16 is what every Apple TV HD and 4K can run, and what NavigationStack needs.
     iOS: "16.0"
     tvOS: "16.0"
     macOS: "13.0"
@@ -13,8 +14,8 @@ packages:
     path: WittyKit
 settings:
   base:
-    SWIFT_VERSION: "5.9"
-    MARKETING_VERSION: "0.1.0"
+    SWIFT_VERSION: "5.0"
+    MARKETING_VERSION: "0.2.0"
     CURRENT_PROJECT_VERSION: "1"
     PRODUCT_BUNDLE_IDENTIFIER: com.wittywilla.wittymediaclient
     GENERATE_INFOPLIST_FILE: "YES"
@@ -44,20 +45,69 @@ targetTemplates:
         # Without this the system refuses the search for servers.
         NSBonjourServices:
           - _wittymedia._tcp
-        # Plain HTTP only to local addresses. Everything else needs HTTPS.
+        # Plain HTTP only to local addresses. Everything else needs HTTPS. The app's own check in
+        # WittyKit's Address is what refuses a public IP address: this setting doesn't cover those.
         NSAppTransportSecurity:
           NSAllowsLocalNetworking: true
 
 targets:
+  # tvOS has no WebView, so this target is native SwiftUI and AVPlayer only. It's the one with a Top Shelf.
   WittyMedia-tvOS:
     templates: [App]
     platform: tvOS
+    dependencies:
+      - target: WittyMedia-TopShelf
+    info:
+      path: Generated/Info-WittyMedia-tvOS.plist
+      properties:
+        # What the Top Shelf opens: see WittyKit's DeepLink.swift. Only this target registers it.
+        CFBundleURLTypes:
+          - CFBundleURLName: com.wittywilla.wittymediaclient.link
+            CFBundleURLSchemes:
+              - wittymedia
+    entitlements:
+      path: Generated/WittyMedia-tvOS.entitlements
+      properties:
+        # Needs the owner's signing team: see docs/OWNER-STEPS.md. Without it the shelf is just empty.
+        com.apple.security.application-groups:
+          - group.com.wittywilla.wittymediaclient
     settings:
       base:
+        TARGETED_DEVICE_FAMILY: "3"
+  WittyMedia-TopShelf:
+    type: tv-app-extension
+    platform: tvOS
+    sources:
+      - path: TopShelf
+    dependencies:
+      - package: WittyKit
+    info:
+      path: Generated/Info-WittyMedia-TopShelf.plist
+      properties:
+        CFBundleDisplayName: WittyMedia Top Shelf
+        CFBundleShortVersionString: $(MARKETING_VERSION)
+        CFBundleVersion: $(CURRENT_PROJECT_VERSION)
+        NSExtension:
+          NSExtensionPointIdentifier: com.apple.tv-top-shelf
+          NSExtensionPrincipalClass: $(PRODUCT_MODULE_NAME).ContentProvider
+    entitlements:
+      path: Generated/WittyMedia-TopShelf.entitlements
+      properties:
+        com.apple.security.application-groups:
+          - group.com.wittywilla.wittymediaclient
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.wittywilla.wittymediaclient.topshelf
         TARGETED_DEVICE_FAMILY: "3"
   WittyMedia-iOS:
     templates: [App]
     platform: iOS
+    info:
+      path: Generated/Info-WittyMedia-iOS.plist
+      properties:
+        # So the sound carries on with the screen locked, and in picture in picture.
+        UIBackgroundModes:
+          - audio
     settings:
       base:
         TARGETED_DEVICE_FAMILY: "1,2"
