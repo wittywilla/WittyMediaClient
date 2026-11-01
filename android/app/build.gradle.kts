@@ -7,6 +7,8 @@ plugins {
 android {
     namespace = "com.wittywilla.wittymediaclient"
     compileSdk = 37
+    // Named here so a machine with only these tools doesn't go looking for the plugin's own default.
+    buildToolsVersion = "37.0.0"
 
     defaultConfig {
         applicationId = "com.wittywilla.wittymediaclient"
