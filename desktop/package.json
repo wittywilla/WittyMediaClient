@@ -115,7 +115,9 @@
           "from": "build/mac/Uninstall WittyMediaClient.command",
           "to": "Uninstall WittyMediaClient.command"
         }
-      ]
+      ],
+      "identity": "-",
+      "hardenedRuntime": false
     },
     "dmg": {
       "title": "WittyMediaClient ${version}",

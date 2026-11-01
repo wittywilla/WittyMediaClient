@@ -189,5 +189,6 @@ These ran for real under Wine and in Linux containers, and only a person with th
 
 **Signing.** Until these are signed, Windows and macOS warn on every download. For Windows, a code-signing certificate; for
 macOS, the Apple Developer Program and its notarising. Then set electron-builder's `CSC_LINK` and `CSC_KEY_PASSWORD` secrets in the
-release workflow, and remove its `CSC_IDENTITY_AUTO_DISCOVERY: 'false'`. Ask your main Claude session to make that change when you
+release workflow, remove its `CSC_IDENTITY_AUTO_DISCOVERY: 'false'`, and remove `identity` and `hardenedRuntime` from `mac` in
+`desktop/package.json`, which make the stand-in signature an unsigned Mac build needs. Ask your main Claude session to make that change when you
 have them.
