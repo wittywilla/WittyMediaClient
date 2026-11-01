@@ -47,7 +47,8 @@ const focused = () => inPage("(document.activeElement.innerText || document.acti
 
 async function press(keyCode, to = page()) {
   to.sendInputEvent({ type: 'keyDown', keyCode })
-  if (keyCode.length === 1) to.sendInputEvent({ type: 'char', keyCode })
+  // A button acts on the character a key makes, and Enter makes one too.
+  if (keyCode.length === 1 || keyCode === 'Enter') to.sendInputEvent({ type: 'char', keyCode: keyCode === 'Enter' ? '\r' : keyCode })
   to.sendInputEvent({ type: 'keyUp', keyCode })
   await wait(250)
 }
