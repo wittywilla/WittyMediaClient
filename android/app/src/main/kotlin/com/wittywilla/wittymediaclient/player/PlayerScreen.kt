@@ -202,6 +202,8 @@ fun PlayerScreen(nav: Nav, id: Long, startOver: Boolean) {
         )
         if (wait == null) {
             problem = failureWords(e.errorCode, code)
+            // Out of tries on a network that's down: the network coming back is one more.
+            waitingForNetwork = recovery == Recovery.WaitThenNewStream
             return
         }
         ask = ask.copy(
