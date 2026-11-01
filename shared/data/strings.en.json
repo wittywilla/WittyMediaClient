@@ -42,7 +42,7 @@
   "cancel": "Cancel",
   "foundServers": "On your network",
   "codeTitle": "Enter the security code",
-  "codeHint": "On a phone or computer signed in to this server, open your name, choose Sign in a TV, then press Get a number.",
+  "codeHint": "On a phone or computer signed in to this server, open your name, choose Sign in a TV, then press Get a code.",
   "codeLabel": "Security code",
   "codeEntered": "digits entered",
   "codeDelete": "Delete",

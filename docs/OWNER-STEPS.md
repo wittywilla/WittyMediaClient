@@ -72,7 +72,7 @@ Connecting is your main requirement and it has only run on emulators, where find
 
 1. With a server running on the same network, does it appear by itself under "On your network"?
 2. On a TV, is it already highlighted, so one press of OK chooses it? Does it stay put once you've moved?
-3. On the server's web page, open your name, choose **Sign in a TV**, press **Get a number**. Can you
+3. On the server's web page, open your name, choose **Sign in a TV**, press **Get a code**. Can you
    type the six digits with only the arrows and OK, and does it sign you straight in?
 4. Type a wrong code. Does it say so in plain words and let you try again?
 5. Close and reopen the app. Does it go straight to the home screen?
