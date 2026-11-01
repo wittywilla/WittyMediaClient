@@ -27,7 +27,7 @@
         android:appCategory="video"
         android:banner="@drawable/banner"
         android:icon="@mipmap/ic_launcher"
-        android:label="WittyMedia"
+        android:label="WittyMediaClient"
         android:networkSecurityConfig="@xml/network_security"
         android:supportsRtl="true"
         android:theme="@style/AppTheme">

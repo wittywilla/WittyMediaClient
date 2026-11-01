@@ -242,7 +242,7 @@ fun ProfileScreen(nav: Nav, s: Map<String, String>) {
         ActionButton("Sign out", nav::signOut, Modifier.fillMaxWidth(), focusKey = "switch")
         ActionButton(s["changeServer"].orEmpty(), nav::changeServer, Modifier.fillMaxWidth(), focusKey = "server")
         SectionTitle("About this app")
-        Secondary("WittyMedia $version")
+        Secondary("WittyMediaClient $version")
         ActionButton("Licences", { nav.push(Route.Notices) }, Modifier.fillMaxWidth(), focusKey = "notices")
         ActionButton("This app's log", { nav.push(Route.Logs) }, Modifier.fillMaxWidth(), focusKey = "logs")
         Secondary(s["legalConnect"].orEmpty())
