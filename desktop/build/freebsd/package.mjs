@@ -112,10 +112,11 @@ const manifest = {
   licenselogic: 'single',
   licenses: ['APACHE20'],
   categories: ['multimedia'],
-  deps: { [port]: { origin: `devel/${port}`, version: '*' } },
+  // Electron doesn't bring a font, and without one a page lays out no text at all.
+  deps: { [port]: { origin: `devel/${port}`, version: '*' }, dejavu: { origin: 'x11-fonts/dejavu', version: '*' } },
   messages: [
     { message: `WittyMediaClient is installed. Start it from your desktop's menu, or with: ${NAME}\nTo remove it, and choose what happens to your settings: ${NAME} --uninstall\n`, type: 'install' },
-    { message: `WittyMediaClient has been removed.\nA package can't reach home folders, so your settings, saved sign-ins, logs and caches are still there.\nTo remove your own, run:\n  rm -rf ${USER_DATA}\nElectron stays, as other programs may use it. To remove it if nothing else needs it: pkg autoremove\n`, type: 'remove' },
+    { message: `WittyMediaClient has been removed.\nA package can't reach home folders, so your settings, saved sign-ins, logs and caches are still there.\nTo remove your own, run:\n  rm -rf ${USER_DATA}\nElectron and its font stay, as other programs may use them. To remove them if nothing else needs them: pkg autoremove\n`, type: 'remove' },
   ],
 }
 writeFileSync(join(work, 'manifest.json'), JSON.stringify(manifest, null, 2))

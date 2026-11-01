@@ -140,7 +140,7 @@ over the app otherwise, and a remote can't get through it.
 sudo pkg install ./wittymediaclient-<version>-freebsd-amd64.pkg
 ```
 
-It brings in FreeBSD's own Electron, and adds the `wittymediaclient` command and a menu entry. Installing a newer package upgrades in place.
+It brings in FreeBSD's own Electron and a font, and adds the `wittymediaclient` command and a menu entry. Installing a newer package upgrades in place.
 Sound uses a sound server: if none is running, the app starts `sndiod` for as long as it's open, and stops it afterwards. With no sound card, the picture plays silently.
 
 **Remove it:**
@@ -156,7 +156,7 @@ says what's left. Removing the program needs `sudo` or `doas`, and if there's ne
 
 Either way, these stay:
 
-- **Electron,** which other programs may use. To remove it if nothing else needs it: `sudo pkg autoremove`
+- **Electron and its font,** which other programs may use. To remove them if nothing else needs them: `sudo pkg autoremove`
 - **Other accounts' settings,** which are theirs: `rm -rf ~/.config/WittyMediaClient ~/.config/WittyMedia`
 - **What the system's shared libraries keep for every program:** `~/.sndio`, `~/.cache/fontconfig` and similar. They aren't the app's, so nothing here removes them.
 

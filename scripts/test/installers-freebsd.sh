@@ -27,7 +27,7 @@ for REL in "${RELEASES[@]}"; do
   RAW="$CACHE/FreeBSD-$REL-RELEASE-amd64-BASIC-CI.raw"
   if [ ! -f "$RAW" ]; then
     BASE="https://download.freebsd.org/releases/CI-IMAGES/$REL-RELEASE/amd64/Latest/FreeBSD-$REL-RELEASE-amd64-BASIC-CI"
-    curl -fsSL -o "$RAW.xz" "$BASE.raw.xz" </dev/null || curl -fsSL -o "$RAW.xz" "$BASE-ufs.raw.xz" </dev/null || { echo "   can't download the image"; FAILED=1; continue; }
+    curl -fsL -o "$RAW.xz" "$BASE.raw.xz" </dev/null || curl -fsSL -o "$RAW.xz" "$BASE-ufs.raw.xz" </dev/null || { echo "   can't download the image"; FAILED=1; continue; }
     xz -d "$RAW.xz"
   fi
   DISK="$(mktemp -d)/disk.qcow2"

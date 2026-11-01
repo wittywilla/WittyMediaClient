@@ -102,8 +102,8 @@ main() {
 	fi
 	if [ "$take_program" = 1 ]; then
 		left=1
-		echo "  Electron, which pkg installed for this app and other programs may use."
-		echo "    To remove it if nothing else needs it: pkg autoremove"
+		echo "  Electron and a font, which pkg installed for this app and other programs may use."
+		echo "    To remove them if nothing else needs them: pkg autoremove"
 	fi
 	if [ -e "${HOME:-/nonexistent}/.sndio" ]; then
 		left=1

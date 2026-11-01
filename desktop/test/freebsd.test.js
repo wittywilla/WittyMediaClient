@@ -22,6 +22,11 @@ test('the launcher starts the installed archive, and passes on what it was given
   assert.match(launcher, /"\$electron" \/usr\/local\/share\/wittymediaclient\/app\.asar "\$@" &/)
 })
 
+test('the package brings a font, as Electron has none and a page without one shows no text', () => {
+  const packager = fs.readFileSync(path.join(folder, 'package.mjs'), 'utf8')
+  assert.match(packager, /deps: \{[^\n]*origin: 'x11-fonts\/dejavu'/)
+})
+
 test('a sound server the launcher started goes when the app does', () => {
   assert.match(launcher, /sndiod -d/)
   assert.match(launcher, /kill "\$sound_server"/)
