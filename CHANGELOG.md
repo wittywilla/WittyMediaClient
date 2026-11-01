@@ -14,6 +14,7 @@ What changed in WittyMediaClient, newest first. What changed before it had a rep
 - **Apple: the same, not yet compiled.** On iPhone and iPad everything else opens in the server's page. Apple TV has no web view, so it gets screens for music, photos and
   live channels, and says plainly what it can't show. The apps are now called WittyMediaClient. `apple/scripts/check-on-mac.sh` is the first check on a Mac.
 - **WittyTV on Android:** TV guide is on the TV's top bar, and Home has a row of what's on now, on phones too. Channel buttons, arrows and a controller change channel. A remote's Guide button opens the guide, though no emulator has passed that button on yet.
+- **WittyTV on Apple TV, not yet compiled:** the guide and the channel banner take the colours of the WittyTV theme chosen on the account, from any device, and show the owner's channel logos.
 - **WittyTV on Apple, not yet compiled:** Apple TV has a guide with what's on now and next, and a player where up and down change channel, with what's on shown over the picture. Home has the row too. iPhone and iPad have the server's guide.
 - **Controllers on Android:** the first press on a page opened with a controller now counts. It used to do nothing, so opening the TV guide took A twice to watch.
 - **Controllers on Android:** Xbox, DualSense, DualShock 4 and Switch Pro layouts all move and choose, on the app's own screens and in the server's page. A Nintendo pad's A is confirm, as printed. B now leaves a server page when there's nothing left to go back through.

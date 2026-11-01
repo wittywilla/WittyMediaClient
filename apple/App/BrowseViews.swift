@@ -343,8 +343,12 @@ struct HomeView: View {
         #if os(iOS)
         gamePCs = (try? await client.couchStatus())?.allowed == true
         #endif
-        let channels = uniqued((try? await client.guide())?.channels ?? [])
+        let guide = try? await client.guide()
+        let channels = uniqued(guide?.channels ?? [])
         model.channels = channels
+        #if os(tvOS)
+        if let guide { await model.learnTvLook(from: guide, client: client) }
+        #endif
         onNow = channels.filter(\.canTune)
     }
 

@@ -314,6 +314,12 @@ public final class WittyClient: @unchecked Sendable {
     public func couchStatus() async throws -> CouchStatus { try await get("/couch") }
     public func guide() async throws -> Guide { try await get("/guide?hours=3") }
 
+    /// How this account's guide looks, as chosen on any device.
+    public func tvSaved() async throws -> TvSaved? {
+        let choices: AccountChoices = try await get("/me/ui")
+        return choices.tvLook
+    }
+
     /// Starts a channel's shared stream. A 503 means it's still starting: wait and ask again.
     public func tune(_ key: String, viewer: String) async throws -> Tuned {
         try await get("/tv/\(WittyClient.pathPart(key))/tune?streamToken=1&viewer=\(WittyClient.pathPart(viewer))")

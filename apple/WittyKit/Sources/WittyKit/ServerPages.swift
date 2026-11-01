@@ -94,6 +94,8 @@ public struct GuideChannel: Decodable, Identifiable, Equatable {
     public let radio: Bool?
     /// Why it can't be tuned. This server never decrypts a broadcast.
     public let encrypted: String?
+    /// The owner's picture for it, as an address on the server. Not every channel has one.
+    public let logo: String?
     public let programmes: [GuideProgramme]?
 
     public var id: String { key }
@@ -123,6 +125,10 @@ public extension ServerPages {
 
 public struct Guide: Decodable, Equatable {
     public let channels: [GuideChannel]?
+    /// The look the server's owner starts people on. `layout` and `skin` are from before there were themes.
+    public let theme: String?
+    public let layout: String?
+    public let skin: String?
 }
 
 /// What GET /tv/{key}/tune answers. AVPlayer always needs `streamUrl`, as it can't set headers.

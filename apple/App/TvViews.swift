@@ -114,19 +114,67 @@ struct PhotoView: View {
     }
 }
 
-/// Live channels, from the server's guide: what's on each now and what's next, in the server's order.
+/// A row of the guide in the account's WittyTV theme. Focus takes the theme's highlight.
+private struct GuideRowStyle: ButtonStyle {
+    let look: TvColours
+    let on: Bool
+
+    private struct Row: View {
+        @Environment(\.isFocused) private var focused
+        @Environment(\.accessibilityReduceMotion) private var reduceMotion
+        let label: Configuration.Label
+        let look: TvColours
+        let on: Bool
+
+        var body: some View {
+            label
+                .foregroundStyle(Color(hex: focused ? look.hiText : on ? look.liveText : look.cellText))
+                .padding(.horizontal, Tokens.Space.s6)
+                .padding(.vertical, Tokens.Space.s3)
+                .background(RoundedRectangle(cornerRadius: Tokens.Radius.sm).fill(Color(hex: focused ? look.hi : on ? look.live : look.cell)))
+                .scaleEffect(focused && !reduceMotion ? 1.02 : 1)
+                .animation(reduceMotion ? nil : .easeOut(duration: Tokens.Motion.focus), value: focused)
+        }
+    }
+
+    func makeBody(configuration: Configuration) -> some View {
+        Row(label: configuration.label, look: look, on: on)
+    }
+}
+
+/// How far through a programme, in whatever colour the words beside it are.
+private struct ProgrammeBar: View {
+    let fraction: Double
+
+    var body: some View {
+        GeometryReader { room in
+            ZStack(alignment: .leading) {
+                Capsule().fill(.secondary).opacity(0.4)
+                Capsule().fill(.primary).frame(width: room.size.width * fraction)
+            }
+        }
+        .frame(height: 6)
+        .accessibilityHidden(true)
+    }
+}
+
+/// Live channels, from the server's guide: what's on each now and what's next, in the server's order,
+/// in the theme this account chose for WittyTV. It isn't the grid: its colours are the theme's, not its layout.
 /// Encrypted broadcasts are listed and say so: this server never decrypts one.
 struct GuideView: View {
     @EnvironmentObject private var model: AppModel
     @Environment(\.client) private var client
-    @Environment(\.palette) private var palette
     @State private var channels: [GuideChannel]?
+    @State private var look: TvColours?
     @State private var error = ""
     @Namespace private var scope
 
     private func load() async {
         do {
-            let fresh = uniqued(try await client.guide().channels ?? [])
+            let guide = try await client.guide()
+            await model.learnTvLook(from: guide, client: client)
+            look = model.tvColours
+            let fresh = uniqued(guide.channels ?? [])
             channels = fresh
             model.channels = fresh
             error = ""
@@ -136,49 +184,62 @@ struct GuideView: View {
         }
     }
 
+    /// The owner's logo for a channel if it has one and this account wants them, else its name.
+    @ViewBuilder private func channelMark(_ channel: GuideChannel) -> some View {
+        if model.tvLogos, let logo = channel.logo, logo.hasPrefix("/"), let url = client.mediaURL(logo) {
+            HStack(spacing: Tokens.Space.s3) {
+                Text(channel.number ?? "").font(.wmSection)
+                ArtImage(url: url, width: 160, fit: true).frame(width: 160, height: 64)
+            }
+        } else {
+            Text(channel.label).font(.wmSection).lineLimit(2)
+        }
+    }
+
     private func row(_ channel: GuideChannel, at now: Int64) -> some View {
         let on = channel.on(at: now)
         let next = channel.next(after: now)
-        return HStack(alignment: .firstTextBaseline, spacing: Tokens.Space.s6) {
-            Text(channel.label).font(.wmSection).lineLimit(2).frame(width: 340, alignment: .leading)
+        return HStack(alignment: .center, spacing: Tokens.Space.s6) {
+            channelMark(channel).frame(width: 340, alignment: .leading)
             VStack(alignment: .leading, spacing: Tokens.Space.s1) {
                 Text(on?.title ?? "Nothing on").lineLimit(1)
-                if let on {
-                    ProgressView(value: on.fraction(at: now)).progressViewStyle(.linear).accessibilityHidden(true)
-                }
+                if let on { ProgrammeBar(fraction: on.fraction(at: now)) }
                 if let next {
-                    Text("Next: \(next.title)").font(.footnote).foregroundStyle(palette.textSecondary).lineLimit(1)
+                    Text("Next: \(next.title)").font(.footnote).foregroundStyle(.secondary).lineLimit(1)
                 }
             }
             .frame(maxWidth: .infinity, alignment: .leading)
             if let on {
-                Text("\(on.minutesLeft(at: now)) min left").font(.footnote).foregroundStyle(palette.textSecondary)
+                Text("\(on.minutesLeft(at: now)) min left").font(.footnote).foregroundStyle(.secondary)
             }
         }
         .frame(maxWidth: .infinity, minHeight: Tokens.minTarget, alignment: .leading)
     }
 
     var body: some View {
+        let look = self.look ?? model.tvColours ?? TvLook.colours(saved: nil, ownerTheme: nil, ownerLayout: nil, ownerSkin: nil, app: model.tvAppColours)
         ZStack {
+            Color(hex: look.bg).ignoresSafeArea()
             if let channels {
                 // The times move by themselves, and nothing else on the page has to be drawn again for it.
                 TimelineView(.periodic(from: .now, by: 30)) { time in
                     let now = Int64(time.date.timeIntervalSince1970)
                     ScrollView {
                         VStack(alignment: .leading, spacing: Tokens.Space.s3) {
-                            Text("TV guide").font(.wmPage).accessibilityAddTraits(.isHeader)
+                            Text("TV guide").font(.wmPage).foregroundStyle(Color(hex: look.accent)).accessibilityAddTraits(.isHeader)
                             if channels.isEmpty {
                                 EmptyMessage(title: "No channels yet", detail: "Channels are made on the server, under Settings, Channels and tuners.")
                             }
                             ForEach(Array(channels.enumerated()), id: \.element.id) { index, channel in
                                 if channel.canTune {
                                     NavigationLink(value: Route.channel(key: channel.key)) { row(channel, at: now) }
+                                        .buttonStyle(GuideRowStyle(look: look, on: channel.on(at: now) != nil))
                                         .firstFocus(in: scope, when: index == 0)
                                         .accessibilityLabel("\(channel.label). \(channel.on(at: now)?.title ?? "Nothing on")")
                                 } else {
                                     VStack(alignment: .leading) {
-                                        Text(channel.label).font(.wmSection)
-                                        Text(channel.encrypted ?? "").foregroundStyle(palette.textSecondary)
+                                        Text(channel.label).font(.wmSection).foregroundStyle(Color(hex: look.text))
+                                        Text(channel.encrypted ?? "").foregroundStyle(Color(hex: look.soft))
                                     }
                                     .accessibilityElement(children: .combine)
                                 }
@@ -195,7 +256,6 @@ struct GuideView: View {
                 LoadingView()
             }
         }
-        .pageBackground(palette)
         .task { await load() }
     }
 }
@@ -281,22 +341,24 @@ struct ChannelPlayer: View {
     }
 
     private func bannerView(at now: Int64) -> some View {
-        VStack(alignment: .leading, spacing: Tokens.Space.s1) {
-            Text(channel?.label ?? "").font(.wmSection)
+        let look = model.tvColours ?? TvLook.colours(saved: nil, ownerTheme: nil, ownerLayout: nil, ownerSkin: nil, app: model.tvAppColours)
+        return VStack(alignment: .leading, spacing: Tokens.Space.s1) {
+            Text(channel?.label ?? "").font(.wmSection).foregroundStyle(Color(hex: look.accent))
             if let on = channel?.on(at: now) {
                 Text(on.title).font(.wmDisplay).lineLimit(2)
                 if let sub = on.sub, !sub.isEmpty { Text(sub).lineLimit(1) }
-                ProgressView(value: on.fraction(at: now)).progressViewStyle(.linear)
+                ProgrammeBar(fraction: on.fraction(at: now))
                 Text("\(on.minutesLeft(at: now)) min left").font(.footnote)
             }
             if let next = channel?.next(after: now) {
                 Text("Next: \(next.title)").font(.footnote).lineLimit(1)
             }
         }
-        .foregroundStyle(.white)
+        .foregroundStyle(Color(hex: look.text))
         .padding(Tokens.Space.s6)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(LinearGradient(colors: [.clear, .black.opacity(0.85)], startPoint: .top, endPoint: .bottom))
+        .background(RoundedRectangle(cornerRadius: Tokens.Radius.md).fill(Color(hex: look.panel).opacity(0.94)))
+        .padding(Tokens.gutter)
         .accessibilityElement(children: .combine)
     }
 

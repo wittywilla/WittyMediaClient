@@ -177,7 +177,7 @@ rows off the screen and a remote's focus with them. A server now only leaves the
 between devices and has known problems on some. Everything else is in [Android, as of 0.2.1](#android-as-of-021).
 
 **The Apple apps have never been compiled by Apple's tools,** as that needs a Mac. Expect compile errors. See
-[Apple, as of 0.2.0](#apple-as-of-020) for exactly what has and hasn't been checked.
+[Apple, as of 0.3.1](#apple-as-of-031) for exactly what has and hasn't been checked.
 
 **Known limits of the identity check,** on every client: the very first connection trusts whatever key it
 is shown, so someone already impersonating the server at that moment gets pinned, and would see a code
@@ -220,7 +220,7 @@ books and comics in the test media. **Ran** on the desktop is the real app under
 | Photos | Ran: grid and viewer | Page: viewer with arrows, OK and Back | Page: viewer by touch, Back closes it | Own screen, written: left and right through a library | Page, written |
 | DVDs | Ran: the film plays | Page: the film plays, and the menu seen | Page: the film plays | **Not available**: discs need a player of their own, and it says so | Page, written |
 | Blu-ray, audio CDs | Not in this test server | Not in this test server | Not in this test server | **Not available**, as DVDs | Page, written |
-| TV guide | Ran: the page, with arrows | Page, on the top bar, by arrows and by controller: the grid, what's on, Back | Page: opened, upright and on its side | Own screen, written: each channel with what's on now and next. It isn't the grid, and doesn't have the guide's looks | Page, written |
+| TV guide | Ran: the page, with arrows | Page, on the top bar, by arrows and by controller: the grid, what's on, Back | Page: opened, upright and on its side | Own screen, written: each channel with what's on now and next, in the colours of the account's WittyTV theme. It isn't the grid: a theme's layout, type and preview don't come across | Page, written |
 | Watching a channel | Ran: a channel plays | Page: plays. Arrows, channel buttons and a controller change channel, OK shows what's on, Back returns to the guide | Page: a channel plays by touch | Own screen, written: up and down change channel, with what's on shown over the picture. Its requests were checked against the real server with `curl` | Page, written |
 | On TV now, on Home | Ran: the server's own row | A row of the app's own | A row of the app's own | A row of the app's own, written | A row of the app's own, written |
 | Tuners, recordings | Page opens. No tuner here | The same | The same | Tuner channels listed, written. Recordings **not available** | Page, written |
@@ -233,6 +233,7 @@ books and comics in the test media. **Ran** on the desktop is the real app under
 | Downloading to the device | Written | Written | Emulator: a book saved to Downloads | No | Written: saved where Files can see it |
 | Going full screen | Ran | The page already fills the screen | Emulator: in and out, and Back leaves it first | The system's player | Written |
 | The server's themes | Ran, with light, paper and high contrast looked at | Colours of the server's theme, seen in light and dark | The same | Colours of the server's theme | Colours of the server's theme |
+| WittyTV's themes | The server's page follows them | Page: all nine opened at 1920 with a virtual controller: first focus, into the grid, no sideways page, and pictures looked at | Page follows them, not looked at in each | Colours only, written. The account's choice and its changed colours, which WittyKit's tests hold to the server's own code. The app theme's suggestion isn't read | Page follows them, written |
 | A long name for the server | Ran: 40 letters wrap in the side menu | Seen | Seen | Written | Written |
 | Own log, with errors reported to the server | The log's logic ran in tests | Written and shown in the app | Written and shown in the app | The log's logic ran in tests on Linux | As Apple TV |
 
@@ -358,7 +359,7 @@ Reopening with the kept sign-in. Android 7 to 15 haven't been run, and nor has t
 - Two-factor accounts, and a server that has moved to a new address.
 - **Hardware decoders.** The emulator's are software or its own.
 
-## Apple, as of 0.3.0
+## Apple, as of 0.3.1
 
 **Run, on Linux with Swift 6.1 in a container:** every test in `apple/WittyKit` with `swift test`, including real connections to a
 stand-in server: redirects not followed, oversized answers dropped, version and revision checks, and cancelling. Signatures can't be
@@ -395,6 +396,7 @@ anything, the Keychain, the web view, the Top Shelf, or generating the Xcode pro
 - Search in the app's own screen finds films and shows, not episodes or music. On iPhone and iPad, the server's page finds the rest.
 - Apple TV shows one album's tracks from the first 500 items of a library, as the server has no list by album name.
 - A two-factor prompt on password sign-in isn't built. Those accounts can sign in by code.
+- Apple TV's guide has WittyTV's colours and the owner's own channel logos, not its themes' layouts, type or preview, nor logos from the logo service. An app theme that suggests a WittyTV theme is only followed in the page.
 - There are no tests of the screens themselves. Anything that can be tested without one is in WittyKit.
 
 ## Not done yet in the native apps

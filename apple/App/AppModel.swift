@@ -116,6 +116,9 @@ final class AppModel: ObservableObject {
     var playingList: [Int64] = []
     /// The channels as the guide last had them, for the remote to go through while one plays.
     var channels: [GuideChannel] = []
+    /// The account's WittyTV colours and whether it wants logos, once the guide has asked.
+    var tvColours: TvColours?
+    var tvLogos = true
     @Published var themeId: String?
     @Published var user: User?
     @Published var libraries: [Library] = []
@@ -187,6 +190,19 @@ final class AppModel: ObservableObject {
     }
 
     var palette: Palette { Palette(SharedData.theme(themeId)?.colours) }
+    /// What the owner set, in the guide, and what this account chose, for Apple TV's guide and channels.
+    func learnTvLook(from guide: Guide, client: WittyClient) async {
+        let saved = try? await client.tvSaved()
+        tvColours = TvLook.colours(saved: saved, ownerTheme: guide.theme, ownerLayout: guide.layout, ownerSkin: guide.skin, app: tvAppColours)
+        tvLogos = saved?.logos ?? true
+    }
+
+    /// The app's theme, for the WittyTV themes that follow it.
+    var tvAppColours: TvAppColours {
+        guard let c = SharedData.theme(themeId)?.colours else { return .fallback }
+        return TvAppColours(bg: c.background, bg2: c.panel, bg3: c.card, bg4: c.border, fg: c.text, fg2: c.textSecondary,
+                            accent: c.accent, accentText: c.accentText ?? c.accent, accentFg: c.onAccent, border: c.border)
+    }
     var scheme: ColorScheme { SharedData.theme(themeId)?.scheme == "light" ? .light : .dark }
 
     /// Only for a server whose identity has just been checked.
