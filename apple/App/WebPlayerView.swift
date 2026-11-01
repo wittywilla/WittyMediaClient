@@ -125,7 +125,6 @@ struct WebPlayerView: View {
             } else if let url = client.mediaURL(path) {
                 WebPlayerPage(base: client.base, token: client.token, url: url, onLeave: leave, onFail: { failed = true })
                     .ignoresSafeArea(.container, edges: .bottom)
-                    .accessibilityLabel("Game player")
             } else {
                 ProblemView(words: "The server sent an address that can't be used.", back: leave)
             }

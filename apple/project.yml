@@ -105,7 +105,7 @@ targets:
     info:
       path: Generated/Info-WittyMedia-iOS.plist
       properties:
-        # So the sound carries on with the screen locked, and in picture in picture.
+        # Picture in picture needs this. Plain video still pauses when the app goes to the background.
         UIBackgroundModes:
           - audio
     settings:

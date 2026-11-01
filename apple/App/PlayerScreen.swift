@@ -660,8 +660,8 @@ struct PlayerScreen: View {
         ZStack(alignment: .topTrailing) {
             Color.black.ignoresSafeArea()
             if playback.error.isEmpty {
+                // No label of its own: the system's player already speaks for itself and its controls.
                 PlayerHost(playback: playback).ignoresSafeArea()
-                    .accessibilityLabel(playback.item?.title ?? "Video")
             } else {
                 // The player is always dark, whatever the theme. There's a way out here on any
                 // device: on a TV there would otherwise be nothing to focus at all.
