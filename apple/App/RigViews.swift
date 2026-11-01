@@ -44,6 +44,7 @@ private func runMoonlight(_ args: [String]) -> Bool {
 /// Nothing here is ever disabled, because on Apple TV a disabled button loses the focus.
 struct RigPlayPanel: View {
     @EnvironmentObject private var model: AppModel
+    @Environment(\.palette) private var palette
     let item: Item
     @State private var play: RigPlay?
     @State private var steps: [String] = []
@@ -67,13 +68,15 @@ struct RigPlayPanel: View {
     }
 
     @ViewBuilder private func lines(_ list: [String]) -> some View {
-        ForEach(Array(list.enumerated()), id: \.offset) { _, line in Text(line) }
+        ForEach(Array(list.enumerated()), id: \.offset) { _, line in
+            Text(line).fixedSize(horizontal: false, vertical: true)
+        }
     }
 
     @ViewBuilder private func playing(_ play: RigPlay) -> some View {
         #if os(iOS)
         if play.playsInPage {
-            if let note = play.inPageNote, !note.isEmpty { Text(note).foregroundStyle(.secondary) }
+            if let note = play.inPageNote, !note.isEmpty { Text(note).foregroundStyle(palette.textSecondary) }
             NavigationLink("Play here", value: Route.web(WebPlayer.rigPath(item.id)))
         }
         #endif
@@ -97,17 +100,17 @@ struct RigPlayPanel: View {
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            if !error.isEmpty { Text(error).foregroundStyle(.red) }
+        VStack(alignment: .leading, spacing: Tokens.Space.s3) {
+            if !error.isEmpty { ProblemLine(error) }
             if !said.isEmpty { Text(said) }
             if let play {
-                if let message = play.message, !message.isEmpty { Text(message).foregroundStyle(.secondary) }
+                if let message = play.message, !message.isEmpty { Text(message).foregroundStyle(palette.textSecondary) }
                 if play.isReady {
                     playing(play)
                     if !steps.isEmpty {
                         lines(steps)
                     } else {
-                        lines(play.steps).foregroundStyle(.secondary)
+                        lines(play.steps).foregroundStyle(palette.textSecondary)
                     }
                 } else if play.rig.canWake == true {
                     Button("Wake \(play.rig.name)") {
@@ -120,18 +123,18 @@ struct RigPlayPanel: View {
                 Button("Check again") { work { steps = []; try await ask() } }
                 if let install = play.install {
                     let license = install.license.map { " (\($0))" } ?? ""
-                    Text("This needs \(install.name), a separate, free app\(license).").foregroundStyle(.secondary)
-                    if let note = install.note, !note.isEmpty { Text(note).foregroundStyle(.secondary) }
+                    Text("This needs \(install.name), a separate, free app\(license).").foregroundStyle(palette.textSecondary)
+                    if let note = install.note, !note.isEmpty { Text(note).foregroundStyle(palette.textSecondary) }
                     #if !os(tvOS)
                     if let url = install.webURL { Link("Get \(install.name)", destination: url) }
                     #endif
                 }
                 if let setup = play.setup, !setup.isEmpty {
-                    Text("Setting up Moonlight").font(.headline)
-                    lines(setup).foregroundStyle(.secondary)
+                    Text("Setting up Moonlight").font(.wmSection).accessibilityAddTraits(.isHeader)
+                    lines(setup).foregroundStyle(palette.textSecondary)
                 }
             } else if error.isEmpty {
-                ProgressView()
+                LoadingView()
             } else {
                 Button("Try again") { work { try await ask() } }
             }

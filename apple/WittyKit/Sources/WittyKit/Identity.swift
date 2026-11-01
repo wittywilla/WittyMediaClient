@@ -93,6 +93,15 @@ public enum NextStep: Equatable {
     case warn, refuse, lost, askCode, signIn, open
 }
 
+/// Asked again just before a code or a password leaves this device.
+public enum BeforeSending: Equatable {
+    case send
+    /// Another key is answering now: show it, and let the person decide.
+    case changed
+    case unreachable
+    case refuse
+}
+
 public enum Identity {
     public static func newNonce() -> String {
         // The system's generator, which Swift documents as cryptographically secure.
@@ -156,6 +165,19 @@ public enum Identity {
     public static func fits(pin: String, proof: ServerProof) -> Bool {
         if pin.isEmpty { return proof.state == .new || proof.state == .older }
         return proof.state == .same && proof.publicKey == pin
+    }
+
+    /// The person was looking at `shownKey`. Only that key may be sent anything. With no key to hold
+    /// it to (a server older than this check), only a server that still has none will do.
+    public static func beforeSending(shownKey: String, proof: ServerProof) -> BeforeSending {
+        switch proof.state {
+        case .unreachable: return .unreachable
+        case .bad: return .refuse
+        case .different: return .changed
+        case .older: return shownKey.isEmpty ? .send : .refuse
+        case .new: return shownKey.isEmpty ? .send : .changed
+        case .same: return proof.publicKey == shownKey ? .send : .changed
+        }
     }
 
     /// After someone chooses a server.

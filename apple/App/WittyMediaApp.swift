@@ -6,16 +6,17 @@ struct WittyMediaApp: App {
     @StateObject private var model = AppModel()
 
     init() {
-        let version = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? ""
-        ClientLog.shared.start(app: "WittyMedia Apple", version: version)
+        ClientLog.shared.start(app: "WittyMedia Apple", version: WittyClient.appVersion)
     }
 
     var body: some Scene {
         WindowGroup {
             RootView()
                 .environmentObject(model)
+                .environment(\.palette, model.palette)
+                .environment(\.client, model.client)
                 .preferredColorScheme(model.scheme)
-                .tint(model.colours.map { Color(hex: $0.accent) })
+                .tint(model.palette.accent)
                 .task { await model.start() }
         }
     }
@@ -24,13 +25,14 @@ struct WittyMediaApp: App {
 struct RootView: View {
     @EnvironmentObject private var model: AppModel
     @Environment(\.scenePhase) private var scenePhase
+    @Environment(\.palette) private var palette
 
     var body: some View {
         ZStack {
-            (model.colours.map { Color(hex: $0.background) } ?? Color.black).ignoresSafeArea()
+            palette.background.ignoresSafeArea()
             switch model.stage {
             case .starting:
-                ProgressView()
+                LoadingView()
             case .connect(let message):
                 ConnectView(initialMessage: message)
             case .code(let server, let fromSignIn):
@@ -40,65 +42,15 @@ struct RootView: View {
             case .signIn(let way):
                 SignInView(way: way).id(way)
             case .browsing:
-                NavigationStack(path: $model.path) {
-                    HomeView()
-                        .navigationDestination(for: Route.self) { route in
-                            switch route {
-                            case .library(let library): LibraryView(library: library)
-                            case .show(let id): ShowView(id: id)
-                            case .item(let id): ItemView(id: id)
-                            case .player(let id, let startOver): PlayerScreen(id: id, startOver: startOver)
-                            case .web(let path):
-                                #if os(iOS)
-                                WebPlayerView(path: path)
-                                #else
-                                EmptyView()
-                                #endif
-                            }
-                        }
-                }
+                BrowseShell()
             }
         }
         .onChange(of: scenePhase) { phase in
             if phase == .active { Task { await model.recheck() } }
         }
-    }
-}
-
-extension View {
-    /// The Back button on the Apple TV remote. Without an action it leaves the app as usual.
-    @ViewBuilder func onRemoteBack(_ action: (() -> Void)?) -> some View {
         #if os(tvOS)
-        self.onExitCommand(perform: action)
-        #else
-        self
-        #endif
-    }
-
-    /// Keeps focus able to move into and out of a group, wherever its buttons line up.
-    @ViewBuilder func remoteSection() -> some View {
-        #if os(tvOS)
-        self.focusSection()
-        #else
-        self
-        #endif
-    }
-
-    /// Cards on Apple TV lift when focused, which is how focus is shown there.
-    @ViewBuilder func tileStyle() -> some View {
-        #if os(tvOS)
-        self.buttonStyle(.card)
-        #else
-        self.buttonStyle(.plain)
-        #endif
-    }
-
-    /// A text box that doesn't try to correct a server address or a name.
-    @ViewBuilder func plainEntry() -> some View {
-        #if os(macOS)
-        self.autocorrectionDisabled()
-        #else
-        self.textInputAutocapitalization(.never).autocorrectionDisabled()
+        // Only Apple TV has anything that opens this, the Top Shelf, so only it registers the scheme.
+        .onOpenURL { model.open(link: $0) }
         #endif
     }
 }

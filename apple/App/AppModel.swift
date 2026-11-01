@@ -1,36 +1,6 @@
 import Foundation
-import Security
 import SwiftUI
 import WittyKit
-
-/// The sign-in lives in the Keychain, the server's address in plain settings.
-enum Keychain {
-    private static let account = "session-token"
-    private static let service = "com.wittywilla.wittymediaclient"
-
-    private static var query: [String: Any] {
-        [kSecClass as String: kSecClassGenericPassword, kSecAttrService as String: service, kSecAttrAccount as String: account]
-    }
-
-    static var token: String {
-        get {
-            var q = query
-            q[kSecReturnData as String] = true
-            q[kSecMatchLimit as String] = kSecMatchLimitOne
-            var out: AnyObject?
-            guard SecItemCopyMatching(q as CFDictionary, &out) == errSecSuccess, let data = out as? Data else { return "" }
-            return String(data: data, encoding: .utf8) ?? ""
-        }
-        set {
-            SecItemDelete(query as CFDictionary)
-            guard !newValue.isEmpty else { return }
-            var q = query
-            q[kSecValueData as String] = Data(newValue.utf8)
-            q[kSecAttrAccessible as String] = kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly
-            SecItemAdd(q as CFDictionary, nil)
-        }
-    }
-}
 
 /// Themes and wording are shared data: see shared/data/, bundled into the app.
 enum SharedData {
@@ -43,6 +13,7 @@ enum SharedData {
 
     struct ThemeColours: Decodable {
         let background, panel, card, border, text, textSecondary, accent, onAccent, danger: String
+        let textHint, accentText, ok: String?
     }
     struct Theme: Decodable {
         let id: String
@@ -62,12 +33,35 @@ enum SharedData {
     }
 }
 
-func say(_ key: String) -> String { SharedData.strings[key] ?? "" }
+/// A word missing from the shared file shows as its key, which is ugly but never an empty button.
+func say(_ key: String) -> String { SharedData.strings[key] ?? key }
 
-extension Color {
-    init(hex: String) {
-        let value = UInt32(hex.dropFirst(), radix: 16) ?? 0
-        self.init(.sRGB, red: Double((value >> 16) & 0xff) / 255, green: Double((value >> 8) & 0xff) / 255, blue: Double(value & 0xff) / 255)
+/// What to show for something `WittyClient.probe` or `judge` refused.
+func reasonText(_ reason: String) -> String {
+    switch reason {
+    case "empty": return say("errEmpty")
+    case "scheme": return say("errScheme")
+    case "credentials": return say("errCredentials")
+    case "public-http": return say("errPublicHttp")
+    case "unreachable": return say("errUnreachable")
+    case "not-server": return say("errNotServer")
+    case "not-set-up": return say("errNotSetUp")
+    case "server-old": return say("errServerOld")
+    case "app-old": return say("errAppOld")
+    case "certificate": return say("errCertificate")
+    default: return say("errInvalid")
+    }
+}
+
+/// Plain words for a problem. The system's descriptions are for the log. Empty means show nothing.
+func plainWords(_ problem: Problem) -> String {
+    switch problem {
+    case .cancelled, .expiredSignIn: return ""
+    case .offline: return "This device isn't connected to a network."
+    case .lost: return say("errLost")
+    case .certificate: return say("errCertificate")
+    case .server(let words): return words
+    case .unreadable: return "The server sent an answer this app can't read. Updating the server or this app may help."
     }
 }
 
@@ -95,9 +89,18 @@ final class AppModel: ObservableObject {
         case browsing
     }
 
-    @Published var stage: Stage = .starting
-    @Published var path: [Route] = []
+    @Published var stage: Stage = .starting {
+        didSet { if stage == .browsing { openWaitingLink() } }
+    }
+    @Published var tab: AppTab = .home
+    /// Where each tab has got to, so coming back to one finds it as it was left.
+    @Published var paths: [AppTab: [Route]] = [:]
     @Published var themeId: String?
+    @Published var user: User?
+    @Published var libraries: [Library] = []
+    /// Something worth saying that isn't a failure of the screen in front of the person.
+    @Published var notice = ""
+
     private(set) var client = WittyClient(base: "") {
         didSet { ClientLog.shared.use(client) }
     }
@@ -107,6 +110,25 @@ final class AppModel: ObservableObject {
     private(set) var current: SavedServer?
 
     private let defaults = UserDefaults.standard
+    private var started = false
+    private var waitingLink: DeepLink?
+
+    var path: [Route] {
+        get { paths[tab] ?? [] }
+        set { paths[tab] = newValue }
+    }
+
+    func pathBinding(_ tab: AppTab) -> Binding<[Route]> {
+        Binding(get: { self.paths[tab] ?? [] }, set: { self.paths[tab] = $0 })
+    }
+
+    /// The player and the game page have the whole screen.
+    var hidesBars: Bool {
+        switch path.last {
+        case .player?, .web?: return true
+        default: return false
+        }
+    }
 
     var platformName: String {
         #if os(tvOS)
@@ -118,9 +140,11 @@ final class AppModel: ObservableObject {
         #endif
     }
 
+    /// The name shown in the server's list of signed-in devices.
     var deviceName: String {
         #if os(tvOS)
-        return "Apple TV"
+        let given = PlainWords.clean(UIDevice.current.name, limit: 64)
+        return given.isEmpty ? "Apple TV" : given
         #elseif os(macOS)
         return "Mac"
         #else
@@ -141,7 +165,7 @@ final class AppModel: ObservableObject {
         set { defaults.set(newValue, forKey: "server") }
     }
 
-    var colours: SharedData.ThemeColours? { SharedData.theme(themeId)?.colours }
+    var palette: Palette { Palette(SharedData.theme(themeId)?.colours) }
     var scheme: ColorScheme { SharedData.theme(themeId)?.scheme == "light" ? .light : .dark }
 
     /// Only for a server whose identity has just been checked.
@@ -153,9 +177,19 @@ final class AppModel: ObservableObject {
 
     /// On to signing in, for a server that has been checked.
     func signIn(to opening: SavedServer, way: SignInWay = .usual) {
-        Keychain.token = ""
+        forgetSignIn()
         openServer(opening)
         stage = .signIn(way)
+    }
+
+    private func forgetSignIn() {
+        Keychain.clear()
+        TopShelfWriter.clear()
+        ArtCache.shared.removeAllObjects()
+        user = nil
+        libraries = []
+        paths = [:]
+        tab = .home
     }
 
     /// Opens a server with a token that was kept with its key. Answers words to show if it can't.
@@ -163,10 +197,22 @@ final class AppModel: ObservableObject {
         recent = SavedServer.remember(opening, in: recent)
         openServer(opening, token: Keychain.token)
         do {
+            // A server can stop working with this app between one run and the next.
+            if let caps = try? await client.capabilities(), let reason = WittyClient.judge(caps, appVersion: WittyClient.appVersion) {
+                return reasonText(reason)
+            }
             let status = try await client.status()
             themeId = status.theme
-            path = []
-            stage = status.user != nil ? .browsing : .signIn(.usual)
+            paths = [:]
+            user = status.user
+            if status.user != nil {
+                stage = .browsing
+            } else {
+                // The server doesn't know this sign-in any more, so it's no use keeping.
+                Keychain.clear()
+                client = WittyClient(base: opening.url)
+                stage = .signIn(.usual)
+            }
             return nil
         } catch let error as APIError {
             return error.message
@@ -177,6 +223,8 @@ final class AppModel: ObservableObject {
         }
     }
 
+    /// The key kept with the token decides. A sign-in saved with none is from a server too old
+    /// to have a key, and all that's left to go on is what it said then.
     private func tokenFits(pin: String, proof: ServerProof) -> Bool {
         !Keychain.token.isEmpty && Identity.fits(pin: pin, proof: proof)
     }
@@ -184,6 +232,8 @@ final class AppModel: ObservableObject {
     /// What the last run was using, if it still is who it was. Its token goes
     /// nowhere until then.
     func start() async {
+        guard !started else { return }
+        started = true
         let url = server
         guard !url.isEmpty else { stage = .connect(message: ""); return }
         var saved = recent.first { $0.url == url } ?? SavedServer(url: url, name: "WittyMediaServer")
@@ -194,7 +244,7 @@ final class AppModel: ObservableObject {
             proof = await WittyClient.identify(found.url, saved: [saved])
         }
         let checked = proof.saved(url: saved.url, name: saved.name)
-        switch Identity.stepAtStart(proof.state, tokenFits: tokenFits(pin: saved.publicKey, proof: proof)) {
+        switch Identity.stepAtStart(proof.state, tokenFits: tokenFits(pin: Keychain.pin, proof: proof)) {
         case .warn:
             stage = .mismatch(checked)
         case .refuse:
@@ -222,7 +272,7 @@ final class AppModel: ObservableObject {
         guard proof.state == .different || proof.state == .bad else { return }
         current = nil
         client = WittyClient(base: "")
-        path = []
+        paths = [:]
         stage = proof.state == .bad ? .connect(message: say("identityBad")) : .mismatch(proof.saved(url: using.url, name: using.name))
     }
 
@@ -230,7 +280,7 @@ final class AppModel: ObservableObject {
     /// decides what comes next. Answers words to show if that's nowhere.
     func arrive(url: String, status: ServerStatus) async -> String? {
         let proof = await WittyClient.identify(url, saved: recent)
-        let pin = recent.first { $0.url == server }?.publicKey ?? ""
+        let pin = Keychain.pin
         let checked = proof.saved(url: url, name: status.displayName)
         let step = Identity.nextStep(proof.state, tokenFits: !pin.isEmpty && tokenFits(pin: pin, proof: proof))
         if step != .refuse && step != .lost { themeId = status.theme }
@@ -259,7 +309,7 @@ final class AppModel: ObservableObject {
         case .unreachable:
             return say("errUnreachable")
         case .new where proof.publicKey == shown.publicKey:
-            Keychain.token = ""
+            forgetSignIn()
             recent = SavedServer.remember(shown, in: recent)
             stage = .code(shown, fromSignIn: false)
             return nil
@@ -279,16 +329,31 @@ final class AppModel: ObservableObject {
         if let current { stage = .code(current, fromSignIn: true) }
     }
 
-    /// A code typed on this device. The server has to prove itself again first, as it
-    /// could have changed since the screen opened. Answers words to show on failure.
+    /// The server has to prove itself again before a code or a password leaves, and with the very
+    /// key the person was shown: it could have changed since the screen opened. If another key is
+    /// answering, nothing is sent and the warning shows the new one. Nil means go ahead.
+    private func refuseToSend(to shown: SavedServer) async -> String? {
+        let proof = await WittyClient.identify(shown.url, saved: shown.publicKey.isEmpty ? [] : [shown])
+        switch Identity.beforeSending(shownKey: shown.publicKey, proof: proof) {
+        case .send:
+            return nil
+        case .unreachable:
+            return say("errUnreachable")
+        case .refuse:
+            return say("identityBad")
+        case .changed:
+            stage = .mismatch(proof.saved(url: shown.url, name: shown.name))
+            return say("identityBad")
+        }
+    }
+
+    /// A code typed on this device. Answers words to show on failure.
     func redeem(_ to: SavedServer, code: String) async -> String? {
-        let proof = await WittyClient.identify(to.url, saved: [to])
-        if proof.state == .unreachable { return say("errUnreachable") }
-        guard Identity.fits(pin: to.publicKey, proof: proof) else { return say("identityBad") }
+        if let refused = await refuseToSend(to: to) { return refused }
         do {
             let result = try await WittyClient(base: to.url, quick: true).pairRedeem(code: code, device: deviceName, platform: platformName)
             openServer(to)
-            signedIn(token: result.token)
+            signedIn(token: result.token, user: result.user)
             return nil
         } catch let error as APIError {
             return error.message
@@ -299,15 +364,34 @@ final class AppModel: ObservableObject {
         }
     }
 
+    /// A name and password, or a profile with neither. The server's own words say what was wrong.
+    func passwordSignIn(name: String, password: String) async -> String? {
+        if let current, let refused = await refuseToSend(to: current) { return refused }
+        do {
+            let result = try await client.login(name: name, password: password, device: deviceName)
+            signedIn(token: result.token, user: result.user)
+            return nil
+        } catch let error as APIError {
+            return error.message
+        } catch {
+            return plainWords(Problem.of(error))
+        }
+    }
+
     /// The address, the key it proved and the token are kept together.
-    func signedIn(token: String) {
+    func signedIn(token: String, user: User? = nil) {
         let kept = current ?? SavedServer(url: client.base, name: "WittyMediaServer")
-        Keychain.token = token
+        notice = Keychain.save(token: token, pin: kept.publicKey) ? "" : "This device couldn't keep your sign-in, so you'll be asked again next time."
         server = kept.url
         recent = SavedServer.remember(kept, in: recent)
         client = WittyClient(base: kept.url, token: token)
-        path = []
+        self.user = user
+        paths = [:]
+        tab = .home
         stage = .browsing
+        if user == nil {
+            Task { self.user = try? await client.status().user }
+        }
     }
 
     private func endSession() {
@@ -318,32 +402,56 @@ final class AppModel: ObservableObject {
 
     func signOut() {
         endSession()
-        Keychain.token = ""
+        forgetSignIn()
         client = WittyClient(base: client.base)
-        path = []
         stage = .signIn(.usual)
     }
 
     func changeServer() {
         endSession()
-        Keychain.token = ""
+        forgetSignIn()
         current = nil
         server = ""
         client = WittyClient(base: "")
-        path = []
         themeId = nil
         stage = .connect(message: "")
     }
 
-    /// A sign-in the server no longer accepts means signing in again.
+    /// Words for a failure, with a sign-in the server no longer accepts meaning signing in again.
+    /// Empty means there's nothing to show: the screen went away, or the stage has changed.
     func handle(_ error: Error) -> String {
-        if let api = error as? APIError, api.isExpiredSignIn {
-            Keychain.token = ""
+        let problem = Problem.of(error)
+        if problem == .expiredSignIn {
+            forgetSignIn()
             client = WittyClient(base: client.base)
-            path = []
             stage = .signIn(.usual)
-            return ""
         }
-        return error.localizedDescription
+        return plainWords(problem)
+    }
+
+    func homeLoaded(_ home: Home) {
+        let fresh = uniqued(home.libraries ?? [])
+        if fresh != libraries { libraries = fresh }
+        TopShelfWriter.update(home: home, client: client)
+    }
+
+    // MARK: Links from outside
+
+    /// All a link can do is choose a screen, and only for someone signed in. If nobody is yet, it
+    /// waits until they are. It can't sign anyone in or change server: it holds only a number.
+    func open(link url: URL) {
+        guard let link = DeepLink.parse(url) else { return }
+        waitingLink = link
+        if stage == .browsing { openWaitingLink() }
+    }
+
+    private func openWaitingLink() {
+        guard let link = waitingLink else { return }
+        waitingLink = nil
+        tab = .home
+        switch link {
+        case .item(let id): paths[.home] = [.item(id)]
+        case .show(let id): paths[.home] = [.show(id)]
+        }
     }
 }

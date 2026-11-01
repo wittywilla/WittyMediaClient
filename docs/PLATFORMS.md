@@ -71,11 +71,8 @@ is on the `client-contract` branch, so the native apps need that merged before t
 **Not checked for Android:** every screen, focus on a real remote, `NsdManager` finding anything, which
 differs between devices and has known problems on some, and whether API 23 devices behave like newer ones.
 
-**Apple has never been compiled,** since nothing here has Swift or a Mac. This code was reviewed by reading,
-with a script confirming that its brackets balance and its wording keys exist, which proves little. Expect
-compile errors. `NWBrowser` and the focus code are the most likely places, and how tvOS moves focus around
-the pad can only be seen on one. WittyKit alone has built on Linux with Swift 6.1, but can't verify signatures
-there: every answer is refused, and the signature tests only run on Apple platforms.
+**The Apple apps have never been compiled by Apple's tools,** as that needs a Mac. Expect compile errors. See
+[Apple, as of 0.2.0](#apple-as-of-020) for exactly what has and hasn't been checked.
 
 **Known limits of the identity check,** on every client: the very first connection trusts whatever key it
 is shown, so someone already impersonating the server at that moment gets pinned, and would see a code
@@ -88,9 +85,9 @@ was shown, by asking again just before sending; the native apps don't yet compar
 
 **Left out of the native apps:** the UDP question, because mDNS is the way the API guide gives and Apple
 can't use it without a special permission. If a device or network turns out to block mDNS, adding it on
-Android is the next step. An `http://` address that redirects to `https://` is reported as not being a
-server, and needs the `https://` address typed. Apple doesn't limit the size of an answer from an untrusted
-address, only how long it takes.
+Android is the next step. On Android, an `http://` address that redirects to `https://` is reported as not being a
+server, and needs the `https://` address typed. The Apple apps try the `https://` address when it's the same host, and prove it
+again from the start, without following the redirect.
 
 ## Features
 
@@ -101,8 +98,8 @@ address, only how long it takes.
 | Audio and subtitle tracks | Web interface; not checked here | Compiled | Written |
 | Skip intro, next episode countdown | Web interface; not checked here | Compiled | Written |
 | Themes | Ran, including the title bar | Colours from the server's theme only, no picker | Colours from the server's theme only, no picker |
-| Search | Web interface; not checked here | Not started | Not started |
-| Music, audiobooks, podcasts | Web interface; not checked here | Not started | Not started |
+| Search | Web interface; not checked here | Not started | Written, for films and shows |
+| Music, audiobooks, podcasts | Web interface; not checked here | Not started | Listed, with a note that they play in a browser for now |
 | Books and comics | Web interface; not checked here | Not started | Not started |
 | Disc menus | Web interface; not checked here | Not started | Not started |
 | Games on someone's own PC | Web interface, with Moonlight as the fallback. Written; its rules ran in unit tests | Compiled | Written; its rules ran in unit tests on Linux |
@@ -150,14 +147,45 @@ conflict, so that needs thinking through first. Moonlight's code never goes insi
 - Android can't tell that Moonlight doesn't know a PC yet. Moonlight says so itself, and the app has the setup
   steps a button away.
 
+## Apple, as of 0.2.0
+
+**Run, on Linux with Swift 6.1 in a container:** every test in `apple/WittyKit` with `swift test`, including real connections to a
+stand-in server: redirects not followed, oversized answers dropped, version and revision checks, and cancelling. Signatures can't be
+verified on Linux, as it has no CryptoKit. Every answer is refused there, and those tests only run on Apple platforms.
+
+**Only checked for syntax:** every file in `apple/App` and `apple/TopShelf`, with `swiftc -parse`. The app's own files were also
+type-checked against small stand-ins written for SwiftUI, AVFoundation and the rest, for each of the three platforms. That catches
+wrong names and types between the app's own files, and says nothing about whether Apple's real frameworks accept the code.
+
+**Never done:** compiling with Xcode, running on any device or simulator, focus with a real remote, VoiceOver, AVPlayer playing
+anything, the Keychain, the web view, the Top Shelf, or generating the Xcode project from `project.yml`, which has only been read.
+
+| Part | State | Most likely to need work |
+|---|---|---|
+| Whole app | **Written** | Availability of SwiftUI calls at the deployment targets, and strict concurrency in newer Xcode |
+| iPhone pill bar | **Written** | Whether the bar's inset reaches the scrolling content on iOS 16 |
+| Apple TV focus | **Written** | First focus, restoring focus, and how far lifted cards clip at the edges |
+| Top Shelf | **Written** | Whether poster files in the App Group load, and the App Group's signing |
+| Device capabilities | **Written** | What each device really reports, and whether the choices fit real files |
+| Picture in picture | **Written** | Whether pausing in the background interferes. Plain video pauses when the app goes to the background |
+
+**Known limits:**
+
+- The server's growing streams start the player's clock at the place they start from, so the system's seek bar shows time from there,
+  not the film's own time. It can only seek within what exists so far. Going further needs a track change or a new start.
+- Now-playing information comes from the system's player. It isn't written by hand, so a screen other than the player would need its
+  own when music arrives.
+- Posters are kept in memory, not on disk, so they're fetched again each time the app starts.
+- The hero is one picture from the server's featured list, and doesn't turn or page.
+- Music and every other type the app can't open only say so. Search finds films and shows, not episodes or music.
+- A two-factor prompt on password sign-in isn't built. Those accounts can sign in by code.
+- There are no tests of the screens themselves. Anything that can be tested without one is in WittyKit.
+
 ## Not done yet in the native apps
 
-- A QR code on the TV sign-in screen, which the API guide recommends.
 - A prompt for two-factor codes on password sign-in. Those accounts can use code sign-in instead.
-- Asking the device what it can play. Both apps send a safe profile, so the server converts more
-  than it needs to. Phones and tablets borrow the TV profiles.
-- Watch next, 30 seconds before the end.
-- Now-playing information for the system, and a baseline profile for faster starts on Android.
+- On Android: a QR code on the TV sign-in screen, asking the device what it can play, Watch next, now-playing information,
+  and a baseline profile for faster starts.
 - App icons and TV artwork. Android has a placeholder, Apple has none, and the desktop app has
   Electron's default icon.
 

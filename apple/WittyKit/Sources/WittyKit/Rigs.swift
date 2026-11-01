@@ -45,10 +45,13 @@ public struct RigPlay: Decodable, Equatable {
     public let install: RigInstall?
     public let setup: [String]?
 
-    /// Only web links leave for a browser: anything else could open other apps.
+    /// Only web links leave for a browser: anything else could open other apps. Plain http only to
+    /// the local network, as everywhere else in these apps, and never with a name and password in it.
     static func webLink(_ text: String) -> URL? {
-        guard let url = URL(string: text), let scheme = url.scheme?.lowercased(), scheme == "https" || scheme == "http" else { return nil }
-        return url
+        guard let url = URL(string: text), let scheme = url.scheme?.lowercased(), let host = url.host?.lowercased(), !host.isEmpty,
+              url.user == nil, url.password == nil else { return nil }
+        if scheme == "https" { return url }
+        return scheme == "http" && Address.isPrivateHost(host.contains(":") && !host.hasPrefix("[") ? "[\(host)]" : host) ? url : nil
     }
 
     public var isReady: Bool { ready == true }
@@ -91,19 +94,9 @@ public enum WebPlayer {
         path == gamePCsPath || path.hasPrefix(gamePCsPath + "/") || path.hasPrefix("/couch-rig/")
     }
 
-    private static func effectivePort(_ url: URL) -> Int? {
-        if let port = url.port { return port }
-        switch url.scheme?.lowercased() {
-        case "https": return 443
-        case "http": return 80
-        default: return nil
-        }
-    }
-
     public static func sameServer(_ url: URL, base: String) -> Bool {
-        guard let server = URL(string: base), let scheme = url.scheme?.lowercased(), scheme == "https" || scheme == "http",
-              let host = url.host else { return false }
-        return scheme == server.scheme?.lowercased() && host.lowercased() == server.host?.lowercased() && effectivePort(url) == effectivePort(server)
+        guard let server = URL(string: base), let scheme = url.scheme?.lowercased(), scheme == "https" || scheme == "http" else { return false }
+        return Origin.same(url, server)
     }
 
     /// Only web links leave for a browser: anything else could open other apps.

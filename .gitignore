@@ -7,6 +7,8 @@ android/app/build/
 android/local.properties
 apple/*.xcodeproj/
 apple/.build/
+apple/WittyKit/.build/
+apple/Generated/
 apple/DerivedData/
 android/.kotlin/
 go.work
