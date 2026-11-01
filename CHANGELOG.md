@@ -21,7 +21,7 @@ What changed in WittyMediaClient, newest first. What changed before it had a rep
 ### Desktop app 0.2.2
 
 **New systems**
-- **FreeBSD:** a package of its own, on the system's Electron from the ports tree. `wittymediaclient --uninstall` asks about the program and your settings separately, removes only what's the app's, and says what's left.
+- **FreeBSD:** a package of its own, on the system's Electron from the ports tree, with a font, as a bare system has none. `wittymediaclient --uninstall` asks about the program and your settings separately, removes only what's the app's, and says what's left.
 - **KDE Plasma Bigscreen:** the Linux app appears in its launcher and opens as a TV app by itself. It has been run in the real shell, in a virtual machine.
 - `--tv` and `--no-tv` ask for that anywhere else, or turn it off.
 - Linux gets a `.pacman` package too, for Arch and its relatives.

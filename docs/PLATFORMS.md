@@ -24,7 +24,8 @@ should be expected to have some too.
 | macOS | **Written** | The desktop app builds for it in CI, and has never been launched. Its uninstaller only ran on Linux with a stand-in home folder. |
 | Linux | **Ran** | `.deb` and `.rpm` installed, opened on a virtual screen, upgraded and removed in containers. `.pacman` the same. The `.rpm` also ran on Fedora 44 in a virtual machine, and from source on Ubuntu 26.04. See [below](#freebsd-plasma-bigscreen-and-linux). |
 | FreeBSD 15.1, amd64 | **Ran** | In a virtual machine, as an installed package: picture and sound seen. Needs the system's Electron from the ports tree. See [below](#freebsd-plasma-bigscreen-and-linux). |
-| FreeBSD 14, aarch64, i386 | **Not run** | The same package should work where FreeBSD has an Electron package. At the time of writing that means amd64 on 14 and 15, and only by building Electron from ports on the others. |
+| FreeBSD 14.4, amd64 | **Ran** | The same package, in a virtual machine: installed on a bare system, opened as far as the connect screen, upgraded and removed. No video played on it. |
+| FreeBSD aarch64, i386 | **Not run** | The package is built for amd64. Those would need Electron built from ports, as FreeBSD has no package of it for them at the time of writing. |
 | KDE Plasma Bigscreen | **Ran** | The real shell 6.8.2 on Fedora 44, in a virtual machine: listed in its launcher, opened from it, video and sound seen, keys through the real input stack. Never on a TV or with a real remote. See [below](#freebsd-plasma-bigscreen-and-linux). |
 | Android ARM, 64-bit | **Compiled** | In the same APK, from Android 6. Not run: the emulators here are x86-64. |
 | Android ARM, 32-bit | **Compiled** | In the same APK, from Android 6. Not run: see [Android's processors](#androids-processors). |
@@ -54,14 +55,26 @@ its own keyboard or X, unless it says otherwise.
 |---|---|---|---|
 | How it was installed | `pkg install` of the package, with Electron 42.11.10 from FreeBSD's repository | `dnf install` of the `.rpm`, with its own Electron 45.2.1 | From source, under a virtual display |
 | Display | X11, on the VESA driver | Wayland, native, in the real KWin | Xvfb |
-| `npm run test:real`, with `--tv` and on the desktop | 11 of 11, and 8 of 8 | Not used: the same journey was done with real keys and pictures | 11 of 11 |
-| The clock moves and frames decode | Yes | Yes: the frame counter on the clip reached 10.8 seconds | Yes |
-| Sound | Yes: the VM's sound card recorded the clip's tone, at 334 Hz by a rough count | Yes: 330 Hz recorded | Not checked |
-| Finding servers with real packets | Found this machine's four servers, through the VM's network | Found four | Found one |
-| Security code and sign-in | Real server | Real server | Real server |
+| `npm run test:real`, with `--tv` and on the desktop | 11 of 11 on the code here, and 8 of 8 on a build before its last merges | Not used: the same journey was done with real keys and pictures | 11 of 11, and 8 of 8, on a build before its last merges |
+| The clock moves and frames decode | Yes, and the VM's own screen showed the clip across the whole display | Yes: the frame counter on the clip reached 10.8 seconds | Yes |
+| Sound | Yes: the VM's sound card recorded the clip's tone at 330 Hz | Yes: 330 Hz recorded | Not checked |
+| Finding servers with real packets | Found this machine's four servers, through the VM's network, on a build before its last merges | Found four | Found one |
+| Security code and sign-in | Real server, with real key presses on the VM's screen | Real server | Real server |
 | Leaving the player, and the menu at the top | Yes | Yes | Yes |
-| Quit | Yes | Yes, back to the launcher | Not checked |
+| Quit | Yes: no app and no sound server left running | Yes, back to the launcher | Not checked |
 | Change server from the menu, signing out | Yes | Yes: no sign-in cookie left | Yes |
+| Removing it | Yes: see below | `dnf remove`: the program and its launcher entry went, and the settings stayed until the command it gives was run | See below |
+
+**Installing and removing, run for real in throwaway systems:**
+
+- **FreeBSD 14.4 and 15.1,** in virtual machines, with `scripts/test/installers-freebsd.sh`. From a bare system with only what the package declares: it installs, and
+  nothing in it is writable by everyone. The menu entry is right, and it opens as an ordinary user with its sandbox on. `pkg delete` says what's left. Then an upgrade, and
+  `--uninstall`: `--dry-run` and no to both change nothing, the program alone keeps the data and says how to remove it, and both removes the app's folders. Someone else's
+  files and a film beside them stayed, and a list of every path on the system was the same before and after. The package is 93 KB, with the same file on both versions.
+- **Linux,** in containers, with `scripts/test/installers-linux.sh`: `.deb` on Debian 13, `.rpm` on Fedora 44 and `.pacman` on Arch. Installed, sandbox on, opened, upgraded and
+  removed, with the removal message and the same list of paths before and after. An AppImage opened too.
+
+Running this on a bare FreeBSD found that the app showed no text at all, as Electron brings no font and the VM used until then had one. The package now brings one.
 
 **Seen only on Plasma Bigscreen:**
 
@@ -78,7 +91,7 @@ its own keyboard or X, unless it says otherwise.
 - Readability from across a real room. Body text is 18.75px at 1080p, from the server's big screen mode, which is how a TV browser looks too.
 - Hardware video decoding. All of this was software, on a machine with plenty of power to spare.
 - A real FreeBSD desktop. X11 was bare, with one small window manager. Wayland on FreeBSD hasn't been tried.
-- Installing the `.deb`, `.pacman` and AppImage, though all three build.
+- Video on FreeBSD 14.4, which only got as far as the connect screen. Video on an installed `.deb` or `.pacman`.
 - Flatpak. No package exists: see [PORTING.md](PORTING.md#plasma-bigscreen).
 - CI's FreeBSD job. Its commands ran by hand in the VM, but the job itself needs a push to run.
 

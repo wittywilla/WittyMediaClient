@@ -14,7 +14,8 @@ Desktop (Windows, macOS, Linux, FreeBSD)
     bundles Chromium and FFmpeg. Their licences ship with every build, in
     LICENSE.electron.txt and LICENSES.chromium.html. On FreeBSD it isn't part
     of this package: it's the system's own, installed from FreeBSD's ports
-    tree, with its own licence files in /usr/local/share/licenses.
+    tree, with its own licence files in /usr/local/share/licenses. The DejaVu
+    fonts come the same way, as Electron brings none there.
   electron-builder        MIT           build tool only, not shipped
 
 Android

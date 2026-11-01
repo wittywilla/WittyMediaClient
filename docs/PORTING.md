@@ -93,7 +93,7 @@ app under the GPL, published on its own terms, is the only way to do better, and
 builds Electron itself instead. As of November 2026 the tree has `devel/electron41` to `electron44`, and `electron42` is the one seen with a package, for amd64 on FreeBSD 14 and 15. So:
 
 - **The package holds only the app:** `app.asar`, a launcher, an uninstaller, the desktop entry and an icon, under 100 KB in all. It depends on one Electron
-  port. One codebase, and Electron's security updates come through `pkg upgrade`. A native shell around a system web view, the other
+  port, and on the DejaVu fonts as Electron brings none. One codebase, and Electron's security updates come through `pkg upgrade`. A native shell around a system web view, the other
   way to get here, would have meant a second window and security layer to keep right.
 - **`npm run package:freebsd`** runs on FreeBSD, finds the newest Electron with a package, and builds with `pkg create`. CI does this free of
   charge in a virtual machine on GitHub's Linux runners, with `vmactions/freebsd-vm`.
