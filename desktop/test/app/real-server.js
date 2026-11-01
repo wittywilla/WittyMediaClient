@@ -170,6 +170,7 @@ async function run() {
     assert.ok(later.frames > first.frames, 'frames were decoded')
     assert.ok(later.width > 0 && later.height > 0, 'it has a picture')
     await shot('07-playing')
+    await wait(Number(process.env.WMC_HOLD_MS) || 0) // time for a picture from outside the app
     if (SHOTS) {
       // The middle of a real frame, drawn by the page: all one colour would mean no picture.
       const spread = await inPage("(() => { const v = document.querySelector('video'); const c = document.createElement('canvas'); c.width = 64; c.height = 36; const g = c.getContext('2d'); g.drawImage(v, 0, 0, 64, 36); const d = g.getImageData(0, 0, 64, 36).data; const seen = new Set(); for (let i = 0; i < d.length; i += 4) seen.add(d[i] >> 4 | (d[i + 1] >> 4) << 4 | (d[i + 2] >> 4) << 8); return seen.size })()")
