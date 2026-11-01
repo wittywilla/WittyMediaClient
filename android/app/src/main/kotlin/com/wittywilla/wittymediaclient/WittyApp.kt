@@ -32,6 +32,10 @@ class WittyApp : Application(), SingletonImageLoader.Factory {
     @Volatile
     var showingPage = false
 
+    // The controller last used, if the last thing pressed was on one.
+    @Volatile
+    var lastPad = -1
+
     // For work that must outlive the screen that started it.
     val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
 
