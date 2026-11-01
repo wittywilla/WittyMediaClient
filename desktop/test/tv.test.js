@@ -23,10 +23,15 @@ test('the flags beat the session', () => {
 })
 
 test('the on-screen keyboard is only asked for on Wayland', () => {
-  assert.deepStrictEqual(switches({ XDG_SESSION_TYPE: 'x11' }), [])
-  assert.deepStrictEqual(switches({}), [])
-  assert.ok(switches({ XDG_SESSION_TYPE: 'wayland' }).some(([name]) => name === 'enable-wayland-ime'))
-  assert.ok(switches({ WAYLAND_DISPLAY: 'wayland-0' }).length > 0)
+  const hasKeyboard = (env) => switches(env).some(([name]) => name === 'enable-wayland-ime')
+  assert.strictEqual(hasKeyboard({ XDG_SESSION_TYPE: 'x11' }), false)
+  assert.strictEqual(hasKeyboard({}), false)
+  assert.strictEqual(hasKeyboard({ XDG_SESSION_TYPE: 'wayland' }), true)
+  assert.strictEqual(hasKeyboard({ WAYLAND_DISPLAY: 'wayland-0' }), true)
+})
+
+test('a TV never opens the keyring's set-up wizard', () => {
+  for (const env of [{}, { XDG_SESSION_TYPE: 'wayland' }]) assert.ok(switches(env).some(([name, value]) => name === 'password-store' && value === 'basic'))
 })
 
 test('the big screen address keeps the server and what was asked for', () => {

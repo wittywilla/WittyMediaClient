@@ -532,7 +532,7 @@ ipcMain.on('tv-menu', (e, action) => {
 
 // Every page gets the sandbox, whatever made it. The default menu's shortcuts aren't for this app.
 app.enableSandbox()
-if (TV) for (const [name, value] of tv.switches(process.env)) app.commandLine.appendSwitch(name, value)
+if (TV && process.platform !== 'win32' && process.platform !== 'darwin') for (const [name, value] of tv.switches(process.env)) app.commandLine.appendSwitch(name, value)
 Menu.setApplicationMenu(null)
 protocol.registerSchemesAsPrivileged([{ scheme: guards.PAGE_SCHEME, privileges: { standard: true, secure: true } }])
 

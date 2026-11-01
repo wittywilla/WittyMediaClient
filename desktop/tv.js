@@ -12,11 +12,16 @@ function wanted(argv = [], env = {}) {
   return String(env.PLASMA_PLATFORM || '').split(':').includes(BIGSCREEN_PLATFORM) || env.PLASMA_DEFAULT_SHELL === BIGSCREEN_SHELL
 }
 
+// What a TV needs from Chromium. The sign-in cookie is kept in the system's keyring, whose first
+// use opens a set-up wizard over the app, and a TV has nobody with a keyboard to get through
+// it. So a TV keeps the cookie in the app's own folder, readable only by this user.
+//
 // Chromium only talks to an on-screen keyboard on Wayland when asked to, and a remote has
 // nothing else to type an address with. Version 3 is the one Plasma's keyboard speaks.
 function switches(env = {}) {
-  if (env.XDG_SESSION_TYPE !== 'wayland' && !env.WAYLAND_DISPLAY) return []
-  return [['enable-wayland-ime'], ['wayland-text-input-version', '3']]
+  const needed = [['password-store', 'basic']]
+  if (env.XDG_SESSION_TYPE !== 'wayland' && !env.WAYLAND_DISPLAY) return needed
+  return [...needed, ['enable-wayland-ime'], ['wayland-text-input-version', '3']]
 }
 
 // The address that turns on the server's own big screen mode: larger type and the stronger
