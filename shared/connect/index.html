@@ -3,12 +3,13 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self'; connect-src http: https:; img-src 'self' data:">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self'; connect-src http: https:; base-uri 'none'; form-action 'none'">
   <title>WittyMedia</title>
   <link rel="stylesheet" href="connect.css">
 </head>
 <body>
-  <main id="app" aria-live="polite"></main>
+  <main id="app"></main>
+  <div id="announce" class="sr-only" role="status" aria-live="polite"></div>
   <script src="strings.js"></script>
   <script src="address.js"></script>
   <script src="connect.js"></script>
