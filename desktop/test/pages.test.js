@@ -21,7 +21,7 @@ function policy(html) {
   }))
 }
 
-for (const [name, html] of [['connect', read(shared, 'connect', 'index.html')], ['title bar', read(here, 'titlebar', 'index.html')]]) {
+for (const [name, html] of [['connect', read(shared, 'connect', 'index.html')], ['title bar', read(here, 'titlebar', 'index.html')], ['TV menu', read(here, 'titlebar', 'tvmenu.html')]]) {
   test(`the ${name} page can only load its own files`, () => {
     const p = policy(html)
     assert.strictEqual(p['default-src'], "'none'")

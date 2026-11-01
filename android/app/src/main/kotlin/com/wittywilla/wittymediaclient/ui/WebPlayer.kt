@@ -76,7 +76,8 @@ private class PlayerClient(
         if (request.isForMainFrame) onFail()
     }
 
-    // Without this, the page's process dying takes the whole app with it.
+    // Without this, the page's process dying takes the whole app with it. Android calls it from API 26.
+    @androidx.annotation.RequiresApi(26)
     override fun onRenderProcessGone(view: WebView, detail: RenderProcessGoneDetail): Boolean {
         ClientLog.warn("player", "The game player's page stopped: ${if (detail.didCrash()) "it crashed" else "the system ended it"}")
         onFail()

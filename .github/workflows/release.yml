@@ -98,7 +98,7 @@ jobs:
           gradle-version: 9.8.2
       - name: Test and build
         working-directory: android
-        run: gradle --no-daemon testDebugUnitTest assembleSideload
+        run: gradle --no-daemon testDebugUnitTest lintSideload assembleSideload
       - name: Native code for all four processors
         working-directory: android
         run: sh scripts/check-abis.sh app/build/outputs/apk/sideload/app-sideload.apk

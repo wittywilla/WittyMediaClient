@@ -6,7 +6,7 @@
 // The server needs a film in its first library. The password is only used to ask the server
 // for a security code, as someone would on its /pair page. WMC_SHOTS is a folder for pictures,
 // and WMC_APP is an installed app.asar to test instead of this folder.
-const { app, webContents } = require('electron')
+const { app, session, webContents } = require('electron')
 const assert = require('node:assert')
 const fs = require('node:fs')
 const os = require('node:os')
@@ -204,6 +204,16 @@ async function run() {
       await press('Escape', tvMenu())
       await wait(300)
       assert.strictEqual(await page().executeJavaScript('document.hasFocus()'), true, 'focus is back on the page')
+    })
+    await step('Change server from the menu signs out, and goes to the connect screen', async () => {
+      await press('Escape')
+      await until('its first button', () => tvMenu().executeJavaScript("document.activeElement.id === 'stay'"))
+      await press('Down', tvMenu())
+      await press('Enter', tvMenu())
+      await until('the connect screen', () => page().getURL().includes('connect'))
+      const left = await session.defaultSession.cookies.get({ url: SERVER, name: 'wms_token' })
+      assert.strictEqual(left.length, 0, 'the sign-in is gone')
+      await shot('10-changed-server')
     })
   }
   const log = fs.readFileSync(path.join(dataDir, 'logs', 'client.log'), 'utf8')

@@ -1,7 +1,7 @@
 {
   "name": "wittymediaclient-desktop",
   "productName": "WittyMedia",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "description": "WittyMediaClient for Windows, Linux and FreeBSD",
   "author": "WittyWilla",
   "license": "Apache-2.0",
