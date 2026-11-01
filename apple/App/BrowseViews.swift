@@ -46,7 +46,7 @@ struct Tile: View {
                         }
                     }
                     .clipShape(RoundedRectangle(cornerRadius: Tokens.Radius.md))
-                Text(title).font(.wmCard).lineLimit(typeSize.isAccessibilitySize ? 3 : 1)
+                Text(title).font(.wmCard).lineLimit(typeSize.isAccessibilitySize ? 3 : 2)
                 if !subtitle.isEmpty {
                     Text(subtitle).font(.wmCardSub).foregroundStyle(.secondary).lineLimit(typeSize.isAccessibilitySize ? 2 : 1)
                 }
@@ -65,9 +65,20 @@ private struct ItemTile: View {
     let item: Item
     let focus: FocusState<String?>.Binding
 
+    /// This app's own screen where it has one, and otherwise the server's page, or on Apple TV what it can do.
+    private var route: Route {
+        if item.isPlayable || item.isRigGame { return .item(item.id) }
+        #if os(tvOS)
+        if item.isAudio, let library = item.libraryId, let album = item.album, !album.isEmpty { return .album(library: library, name: album) }
+        if item.isPhoto, let library = item.libraryId { return .photo(library: library, id: item.id) }
+        return .item(item.id)
+        #else
+        return .page(ServerPages.path(item))
+        #endif
+    }
+
     var body: some View {
-        let subtitle = item.episodeLabel.isEmpty ? (item.year.map(String.init) ?? "") : item.episodeLabel
-        Tile(title: displayTitle(item), subtitle: subtitle, url: client.posterURL(item), route: .item(item.id),
+        Tile(title: item.cardTitle, subtitle: item.cardSubtitle, url: client.posterURL(item), route: route,
              progress: item.progressFraction, focus: focus, focusKey: "item\(item.id)")
     }
 }
@@ -98,7 +109,7 @@ struct CardGrid: View {
     var body: some View {
         LazyVGrid(columns: [GridItem(.adaptive(minimum: Tokens.cardWidth), spacing: Tokens.Space.s4, alignment: .top)], spacing: Tokens.Space.s6) {
             ForEach(shows) { ShowTile(show: $0, focus: focus) }
-            ForEach(items) { item in
+            ForEach(ServerPages.albumsOnce(items)) { item in
                 ItemTile(item: item, focus: focus).task {
                     if item.id == items.last?.id { await onLast?() }
                 }
@@ -120,7 +131,7 @@ private struct HubRow: View {
                 .padding(.horizontal, Tokens.gutter)
             ScrollView(.horizontal, showsIndicators: false) {
                 LazyHStack(alignment: .top, spacing: Tokens.Space.s4) {
-                    ForEach(uniqued(hub.items ?? [])) { ItemTile(item: $0, focus: focus) }
+                    ForEach(ServerPages.albumsOnce(uniqued(hub.items ?? []))) { ItemTile(item: $0, focus: focus) }
                     ForEach(uniqued(hub.shows ?? [])) { ShowTile(show: $0, focus: focus) }
                 }
                 .padding(.horizontal, Tokens.gutter)
@@ -147,18 +158,28 @@ private struct LibraryTabs: View {
         .accessibilityAddTraits(selected == library ? [.isSelected] : [])
     }
 
+    private func link(_ title: String, _ route: Route) -> some View {
+        NavigationLink(value: route) {
+            ChipLabel(title: title, selected: false)
+        }
+        .buttonStyle(.plain)
+    }
+
     var body: some View {
         ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: Tokens.Space.s2) {
                 tab("Home", nil)
+                #if os(tvOS)
                 ForEach(libraries) { tab($0.name, $0) }
-                #if os(iOS)
-                if gamePCs {
-                    NavigationLink(value: Route.web(WebPlayer.gamePCsPath)) {
-                        ChipLabel(title: "Game PCs", selected: false)
-                    }
-                    .buttonStyle(.plain)
+                link("TV guide", .guide)
+                #else
+                // Video opens under these tabs. The rest is the server's own page, on a screen of its own.
+                ForEach(libraries) { library in
+                    if library.opensHere { tab(library.name, library) } else { link(library.name, .page(ServerPages.path(library))) }
                 }
+                link("TV guide", .page(ServerPages.guide))
+                link("Collections", .page(ServerPages.collections))
+                if gamePCs { link("Game PCs", .web(WebPlayer.gamePCsPath)) }
                 #endif
             }
             .padding(.horizontal, Tokens.gutter)
@@ -337,6 +358,14 @@ struct LibraryContent: View {
     @FocusState private var focused: String?
     private let pageSize = 60
 
+    private var opens: Bool {
+        #if os(tvOS)
+        return library.opensOnAppleTV
+        #else
+        return library.opensHere
+        #endif
+    }
+
     private func loadMore() async {
         guard !loading else { return }
         loading = true
@@ -363,7 +392,7 @@ struct LibraryContent: View {
 
     var body: some View {
         ZStack {
-            if !library.opensHere {
+            if !opens {
                 BrowserOnlyNote(library: library).padding(.horizontal, Tokens.gutter)
             } else if !error.isEmpty, total == nil {
                 ProblemView(words: error, retry: { error = ""; Task { await loadMore() } })
@@ -384,7 +413,7 @@ struct LibraryContent: View {
                 .padding(.horizontal, Tokens.gutter)
             }
         }
-        .task { if library.opensHere, total == nil { await loadMore() } }
+        .task { if opens, total == nil { await loadMore() } }
     }
 }
 
@@ -554,7 +583,14 @@ struct ItemView: View {
             }
             .remoteSection()
         } else {
-            Text("This plays in a web browser for now.").foregroundStyle(palette.textSecondary)
+            #if os(iOS)
+            NavigationLink(value: Route.page(ServerPages.path(item))) {
+                Label("Open", systemImage: "play.fill")
+            }
+            .mainAction()
+            #else
+            ElsewhereNote(path: ServerPages.path(item))
+            #endif
         }
     }
 

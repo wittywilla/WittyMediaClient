@@ -615,7 +615,8 @@ struct PlayerScreen: View {
     private func moveOn(_ next: Int64?) {
         guard case .player? = model.path.last else { return }
         model.path.removeLast()
-        if let next { model.path.append(.player(next, startOver: false)) }
+        // A list of tracks goes on by itself; the server only knows what follows an episode.
+        if let then = next ?? ServerPages.next(after: id, in: model.playingList) { model.path.append(.player(then, startOver: false)) }
     }
 
     #if !os(tvOS)

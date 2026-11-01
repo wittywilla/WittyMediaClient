@@ -72,6 +72,23 @@ enum Route: Hashable {
     case player(Int64, startOver: Bool)
     /// The server's own page for playing a game: iPhone and iPad only, see WebPlayerView.
     case web(String)
+    /// Any other page of the server's. A Mac opens these in its browser, and Apple TV has none.
+    case page(String)
+    /// An album or a book's chapters, on Apple TV.
+    case album(library: Int64, name: String)
+    /// A photo and the ones around it, on Apple TV.
+    case photo(library: Int64, id: Int64)
+    /// Live channels, on Apple TV.
+    case guide
+    case channel(key: String, name: String)
+}
+
+/// A list of tracks being played, in order, on Apple TV.
+extension AppModel {
+    func play(_ tracks: [Item], from track: Item) {
+        playingList = tracks.map(\.id)
+        path.append(.player(track.id, startOver: true))
+    }
 }
 
 enum SignInWay: Hashable {
@@ -95,6 +112,8 @@ final class AppModel: ObservableObject {
     @Published var tab: AppTab = .home
     /// Where each tab has got to, so coming back to one finds it as it was left.
     @Published var paths: [AppTab: [Route]] = [:]
+    /// The tracks being played in order, on Apple TV. Only what's in this goes on by itself.
+    var playingList: [Int64] = []
     @Published var themeId: String?
     @Published var user: User?
     @Published var libraries: [Library] = []

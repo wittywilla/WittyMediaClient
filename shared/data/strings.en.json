@@ -1,5 +1,5 @@
 {
-  "appName": "WittyMedia",
+  "appName": "WittyMediaClient",
   "legalConnect": "This app connects to a server its owner runs. What's on that server is theirs, not the WittyMediaServer project's: the project, its contributors and affiliates don't provide, host, endorse or check it.",
   "findTitle": "Choose your server",
   "findSearching": "Looking for servers on your network…",

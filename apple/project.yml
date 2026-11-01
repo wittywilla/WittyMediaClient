@@ -19,7 +19,7 @@ settings:
     CURRENT_PROJECT_VERSION: "1"
     PRODUCT_BUNDLE_IDENTIFIER: com.wittywilla.wittymediaclient
     GENERATE_INFOPLIST_FILE: "YES"
-    INFOPLIST_KEY_CFBundleDisplayName: WittyMedia
+    INFOPLIST_KEY_CFBundleDisplayName: WittyMediaClient
     # Filled in by the owner in Xcode: see docs/OWNER-STEPS.md.
     DEVELOPMENT_TEAM: ""
 
@@ -38,10 +38,10 @@ targetTemplates:
     info:
       path: Generated/Info-${target_name}.plist
       properties:
-        CFBundleDisplayName: WittyMedia
+        CFBundleDisplayName: WittyMediaClient
         CFBundleShortVersionString: $(MARKETING_VERSION)
         CFBundleVersion: $(CURRENT_PROJECT_VERSION)
-        NSLocalNetworkUsageDescription: WittyMedia looks for your WittyMediaServer on your home network.
+        NSLocalNetworkUsageDescription: WittyMediaClient looks for your WittyMediaServer on your home network.
         # Without this the system refuses the search for servers.
         NSBonjourServices:
           - _wittymedia._tcp
@@ -84,7 +84,7 @@ targets:
     info:
       path: Generated/Info-WittyMedia-TopShelf.plist
       properties:
-        CFBundleDisplayName: WittyMedia Top Shelf
+        CFBundleDisplayName: WittyMediaClient Top Shelf
         CFBundleShortVersionString: $(MARKETING_VERSION)
         CFBundleVersion: $(CURRENT_PROJECT_VERSION)
         NSExtension:
@@ -108,6 +108,9 @@ targets:
         # Picture in picture needs this. Plain video still pauses when the app goes to the background.
         UIBackgroundModes:
           - audio
+        # What the server's pages save goes where the Files app can see it.
+        UIFileSharingEnabled: true
+        LSSupportsOpeningDocumentsInPlace: true
     settings:
       base:
         TARGETED_DEVICE_FAMILY: "1,2"

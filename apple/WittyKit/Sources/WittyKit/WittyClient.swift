@@ -312,6 +312,21 @@ public final class WittyClient: @unchecked Sendable {
     }
 
     public func couchStatus() async throws -> CouchStatus { try await get("/couch") }
+    public func guide() async throws -> Guide { try await get("/guide") }
+
+    /// Starts a channel's shared stream. A 503 means it's still starting: wait and ask again.
+    public func tune(_ key: String, viewer: String) async throws -> Tuned {
+        try await get("/tv/\(WittyClient.pathPart(key))/tune?streamToken=1&viewer=\(WittyClient.pathPart(viewer))")
+    }
+
+    public func leaveChannel(_ key: String, viewer: String) async throws {
+        _ = try await call("POST", "/tv/\(WittyClient.pathPart(key))/leave?viewer=\(WittyClient.pathPart(viewer))", body: Data("{}".utf8))
+    }
+
+    /// A channel's key goes in the address as it is, and only ever as one piece of it.
+    static func pathPart(_ text: String) -> String {
+        text.addingPercentEncoding(withAllowedCharacters: .alphanumerics.union(CharacterSet(charactersIn: "-_"))) ?? ""
+    }
 
     /// What this device can do to play a game on someone's own PC. It starts nothing there.
     public func rigPlay(_ gameId: Int64, client: String, os: String) async throws -> RigPlay {
@@ -354,6 +369,8 @@ public final class WittyClient: @unchecked Sendable {
     /// Addresses in answers start with /api/: the server's address goes in front, nothing else changes.
     /// One that would end up anywhere but this server comes back nil.
     public func mediaURL(_ path: String) -> URL? { Origin.join(base: base, path: path) }
+    /// A photo as it was taken, as big as the file is.
+    public func originalURL(_ item: Int64) -> URL? { URL(string: "\(base)\(apiPath)/items/\(item)/original") }
 
     public enum Probe: Equatable {
         case found(ServerStatus)

@@ -150,6 +150,8 @@ struct ArtImage: View {
     let url: URL?
     /// The width it's shown at, in points.
     let width: CGFloat
+    /// All of it, with bars if it has to: a photo, rather than a poster that fills its card.
+    var fit = false
     @State private var image: CGImage?
 
     var body: some View {
@@ -157,7 +159,11 @@ struct ArtImage: View {
             .fill(palette.card)
             .overlay {
                 if let image {
-                    Image(decorative: image, scale: 1).resizable().scaledToFill()
+                    if fit {
+                        Image(decorative: image, scale: 1).resizable().scaledToFit()
+                    } else {
+                        Image(decorative: image, scale: 1).resizable().scaledToFill()
+                    }
                 } else {
                     Image(systemName: "film").font(.title).foregroundStyle(palette.textHint)
                 }
