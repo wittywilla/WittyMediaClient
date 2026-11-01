@@ -3,7 +3,7 @@
 //
 // Electron publishes nothing for FreeBSD, and electron-builder has no way to make a package
 // there, but FreeBSD's ports tree builds Electron itself. So this package holds only the app, and
-// depends on the system's Electron: the same code as every other desktop, about 1 MB, and
+// depends on the system's Electron: the same code as every other desktop, under a megabyte, and
 // security updates to Electron come with `pkg upgrade`.
 //
 // `--stage-only` stops before `pkg create`, for a look at what would go in. It works anywhere.

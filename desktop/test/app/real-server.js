@@ -124,7 +124,7 @@ async function run() {
   })
 
   await step('the arrows and OK reach a film', async () => {
-    await arrowTo('a film', "(el) => { const a = el.closest && el.closest('a'); return !!a && /\\/(item|title|details)\\//.test(a.href) }", ['Down', 'Right'])
+    await arrowTo('a film', "(el) => { const a = el.closest && el.closest('a'); return !!a && /\\/(item|title|details)\\//.test(a.href) }", ['Down', 'Left'])
     await shot('05-focus-on-card')
     await press('Enter')
     await until('its page', () => inPage("!!Array.from(document.querySelectorAll('button')).find((b) => /play|resume/i.test(b.innerText))"))
