@@ -25,6 +25,9 @@ npm ci
 npm start
 ```
 
+Tab moves around the page. **F6** moves between the page and the title bar, where the arrow keys move along the bar and
+Escape goes back to the page. **Change server** signs out of the server you're leaving.
+
 ## Logs
 
 Each app keeps a small log of its own, and reports errors to the server it is connected to. Those reports go
@@ -51,8 +54,12 @@ A report that fails is dropped. Repeats are grouped with a count, and nothing is
 
 ```bash
 cd desktop
-npm test
+npm test          # the app's rules, with no window
+npm run test:app  # the real app against a stand-in server on 127.0.0.1, with a window for a few seconds
 ```
+
+`test:app` replaces the network search, so the Windows firewall doesn't ask anything, and opening a browser and the Help
+menu, so nothing outside it starts. Set `WMC_SHOTS` to a folder for a picture of each screen.
 
 ```bash
 cd apple/WittyKit
@@ -65,7 +72,7 @@ gradle testDebugUnitTest
 ```
 
 The sample server answers used by those tests are checked against a real server with
-`node shared/scripts/check-fixtures.mjs <server address> <token>`. After a theme changes in the server, rerun
+`WMS_TOKEN=<token> node shared/scripts/check-fixtures.mjs <server address>`. After a theme changes in the server, rerun
 `node shared/scripts/build-themes.mjs` with a clone of WittyMediaServer beside this one (or `WMS_THEMES` set to its
 `themes` folder); CI fails if `shared/data/themes.json` is out of date.
 

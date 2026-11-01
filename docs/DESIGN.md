@@ -117,7 +117,8 @@ enabled there and the check in the app's own connection code is what refuses pub
   has no supported way to add headers, and a stream token is far less powerful to leak.
 - **Storage:** Keychain on Apple, and an Android Keystore-wrapped value with backups disabled. Shells
   hold no token themselves: the web UI manages its own session as it does in a browser, and the
-  desktop app only remembers server addresses and its window size.
+  desktop app only remembers server addresses, their keys and its window size. Its session cookie is
+  encrypted by the system in packaged builds, and Change server ends the session.
 
 ## Platform order
 

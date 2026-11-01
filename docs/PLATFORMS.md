@@ -82,9 +82,9 @@ is shown, so someone already impersonating the server at that moment gets pinned
 typed for them. Comparing the fingerprint with the one on the server's `/pair` page catches that, and HTTPS
 prevents it.
 
-**Differences from the desktop app.** The native apps work out the fingerprint from the key instead of
-trusting the server's word, refuse a 404 from `/identity` when a key is already remembered, and re-check when
-brought back to the front as well as at a cold start, since TV apps are rarely closed.
+**Differences from the desktop app.** The native apps re-check when brought back to the front as well as at a cold
+start, since TV apps are rarely closed. The desktop app also holds a code or a "trust it" to the very key the person
+was shown, by asking again just before sending; the native apps don't yet compare those two answers.
 
 **Left out of the native apps:** the UDP question, because mDNS is the way the API guide gives and Apple
 can't use it without a special permission. If a device or network turns out to block mDNS, adding it on
@@ -121,7 +121,7 @@ reached a real PC or a real Moonlight from these apps, and the player has never 
 
 | | What happens on Play | How far it was checked |
 |---|---|---|
-| Desktop | The server's page plays it. Starting Moonlight is the fallback, and the main process checks that request | **Written.** The checks, finding the program, starting a stand-in for it and who may lock the mouse ran in 15 unit tests. `main.js` and `preload.js` only had their syntax checked, as the tests start no windows. |
+| Desktop | The server's page plays it. Starting Moonlight is the fallback, and the main process checks that request | **Written.** The checks, finding the program, starting a stand-in for it and who may lock the mouse ran in unit tests, and the real app answers a server's page with those checks (`npm run test:app`). Moonlight itself has never been started by it here. |
 | Android, phones and tablets | The player in a web view, with "Open in Moonlight instead" as the second choice. A "Game PCs" entry opens the same pages | **Compiled.** Its decisions ran in 16 unit tests: which comes first, only the same server staying in the web view, the shape of the sign-in cookie, and that a server can't name another app. The web view and the intent have never run. |
 | Android TV, Fire TV | Moonlight first, then "Play in this app instead" | **Compiled**, as above. Focus with a remote has never been seen. |
 | iPhone, iPad | The player in a web view, with "Start on <PC>" as the second choice. A "Game PCs" entry opens the same pages | **Written.** The checks in WittyKit built and passed their tests on Linux, with Swift 6.1 in a container. The screens need a Mac and have never been compiled. |
@@ -175,13 +175,28 @@ branch, 24 checks passed using real key presses:
 - The title bar follows the theme.
 - Up, down, OK and Back on the connect screen.
 
+`npm run test:app` runs the app itself against a stand-in server on 127.0.0.1, with the network search replaced. It
+passes on Windows from source, and its main journey passes inside a package with every fuse on (encrypted cookies,
+checked package, no `file://` privileges):
+
+- The code screen, a refused code, a key changing mid-screen, signing in, and the cookie being out of a page's reach.
+- What a hostile page can't do: open programs or files, reach the connect screen, open things outside without limit, be
+  redirected away, or save anything from elsewhere.
+- F6 and the keys along the title bar. Change server ending the session here and on the server. The warning for another
+  key, and trusting that key rather than a later one.
+- Starting with a remembered server, another key at it, a server that has gone, a damaged state file and a bad
+  certificate, which also proves that listening to `certificate-error` doesn't accept one.
+
 ## Not checked on the desktop client
 
 - **Sound.** Nothing here listens to it.
 - **Game controllers** and real TV remotes. Key presses were simulated.
-- **Linux** at all.
+- **Linux** running. A Linux package builds, with its fuses set, but has never been started here.
+- **The network search with real sockets** on this version: it would ask the Windows firewall.
+- The package check failing as it should when the package is changed.
+- A server asking for a client certificate, which needs one in the system's store.
 - Installers, updating from an old version, and very low-end hardware.
-- Screen readers.
+- Screen readers. Roles, labels and live regions are checked as they appear in the page, but no screen reader has read them.
 - Audio and subtitle tracks, and everything else marked "not checked here" above. They are the web
   interface's own features, displayed unchanged.
 - A real look on screen. A capture of the whole window looks right, with a pale strip around its edge
@@ -193,6 +208,10 @@ added, and the cause is unknown. It could be the test or the screen.
 
 ## Other known limits
 
+- Cookies don't go by port, so two servers at one address (the same computer on two ports) share the desktop app's
+  sign-in cookie: signing in to one signs the other out, and the other is sent that sign-in if it's opened. Each
+  server having a session of its own would solve it.
+- The title bar can be reached by keyboard (F6), but not by a remote or a controller alone.
 - `shared/data/themes.json` is generated. Merging the interface overhaul changes theme colours, so it
   must be regenerated at that point, or CI fails on purpose.
 - Plain HTTP stays enabled on Android because its rules can't name "private addresses only". The app's
