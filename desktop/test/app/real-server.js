@@ -81,11 +81,11 @@ async function arrowTo(what, isThere, keys = ['Down'], tries = 30) {
 }
 
 // Heads for something on the screen, the way someone holding a remote would.
-async function arrowTowards(what, selector, tries = 25) {
+async function arrowTowards(what, finder, tries = 25) {
   const trail = []
   for (let i = 0; i < tries; i++) {
     const way = await inPage(`(() => {
-      const target = document.querySelector(${JSON.stringify(selector)})
+      const target = ${finder}
       if (!target) return 'none'
       if (document.activeElement === target || target.contains(document.activeElement)) return 'here'
       const a = document.activeElement.getBoundingClientRect(), b = target.getBoundingClientRect()
@@ -147,7 +147,7 @@ async function run() {
   })
 
   await step('the arrows and OK reach a film', async () => {
-    await arrowTowards('a film', "a[href*='/item/'], a[href*='/show/']")
+    await arrowTowards('a film', "document.querySelector('a[href*=\"/item/\"], a[href*=\"/show/\"]')")
     await shot('05-focus-on-card')
     await press('Enter')
     await until('its page', () => inPage("!!Array.from(document.querySelectorAll('button')).find((b) => /play|resume/i.test(b.innerText))"))
@@ -155,7 +155,7 @@ async function run() {
   })
 
   await step('the arrows and OK start it playing', async () => {
-    await arrowTo('Play', "(el) => el.tagName === 'BUTTON' && /play|resume/i.test(el.innerText)", ['Down', 'Right', 'Down', 'Left'])
+    await arrowTowards('Play', "Array.from(document.querySelectorAll('button')).find((b) => /^(play|resume)/i.test(b.innerText.trim()))")
     await press('Enter')
     await until('a video', () => inPage("!!document.querySelector('video') && document.querySelector('video').readyState >= 2"), 45000)
   })
