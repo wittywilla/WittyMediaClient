@@ -15,3 +15,4 @@ go.work
 go.work.sum
 .claude/
 .dev-modules
+desktop/out-upgrade/

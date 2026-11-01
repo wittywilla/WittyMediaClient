@@ -23,8 +23,9 @@ ever run**, on a device or an emulator.
 
 | Platform | Status | Notes |
 |---|---|---|
-| Windows 10 and later | **Ran** | From source and as a packaged app. Installers are configured but not built yet. |
-| Linux | **Written** | Same code as Windows and CI packages it, but it has never been launched. |
+| Windows 10 and later | **Ran** | From source and as a packaged app. The setup and uninstaller ran under Wine, not yet on a real Windows. |
+| macOS | **Written** | The desktop app builds for it in CI, and has never been launched. Its uninstaller only ran on Linux with a stand-in home folder. |
+| Linux | **Ran** | `.deb` and `.rpm` installed, opened on a virtual screen, upgraded and removed in containers. No real desktop yet. |
 | Android TV, Google TV | **Type-checked** | Never run. Same APK as phones. |
 | Fire TV | **Type-checked** | Never run. Needs Fire OS 6 or later: the first Fire TV Sticks are too old for Compose. |
 | Android phones, tablets | **Type-checked** | Never run. |
@@ -236,11 +237,12 @@ checked package, no `file://` privileges):
 
 - **Sound.** Nothing here listens to it.
 - **Game controllers** and real TV remotes. Key presses were simulated.
-- **Linux** running. A Linux package builds, with its fuses set, but has never been started here.
+- **Linux** on a real desktop. The packages opened on a virtual screen in containers.
+- **macOS** at all.
 - **The network search with real sockets** on this version: it would ask the Windows firewall.
 - The package check failing as it should when the package is changed.
 - A server asking for a client certificate, which needs one in the system's store.
-- Installers, updating from an old version, and very low-end hardware.
+- Installers on a real Windows, and very low-end hardware.
 - Screen readers. Roles, labels and live regions are checked as they appear in the page, but no screen reader has read them.
 - Audio and subtitle tracks, and everything else marked "not checked here" above. They are the web
   interface's own features, displayed unchanged.
