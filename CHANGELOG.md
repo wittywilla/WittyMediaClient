@@ -21,12 +21,12 @@ What changed in WittyMediaClient, newest first. What changed before it had a rep
   for the connect screen. A server's page can't open it either.
 - Packaged apps no longer run as plain Node, take Node's options or debugging flags, or load code from outside their
   package. On Windows the package's contents are checked against the program, and the sign-in cookie is encrypted with
-  the system's own key on both systems.
+  the system's own key (on Linux, where a keyring is running).
 - A hostile server's page can't bury the screen in browser windows or save dialogs. Redirects never open a browser, a
   download has to come from the open server, and only that server's page gets the Moonlight and title bar messages.
 - A server asking for a client certificate gets none. Before, Electron gave it the first one it found.
 - Answers from a server that hasn't proved itself are limited in size and checked part by part, and names and messages
-  from it are cleaned before they are kept or shown. A second look at `/api/status` no longer happens for each request.
+  from it are cleaned before they are kept or shown.
 - `state.json` is now written whole or not at all, and on Linux only this user can read it.
 - Announcements on the network can't point the app at this computer itself.
 - Nothing can fetch spell-checking dictionaries from a third party.

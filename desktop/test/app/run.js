@@ -547,6 +547,17 @@ async function run() {
     assert.ok(!/"kind":"crash"/.test(log), 'nothing crashed or went unhandled')
   })
 
+  await step('a page that crashes goes back to the connect screen and says so', async () => {
+    views().page.forcefullyCrashRenderer()
+    await onConnect()
+    await until('the message', async () => (await pageText()).includes(S.errLost))
+  })
+
+  await step('a title bar that crashes comes back, or the window couldn\'t be closed', async () => {
+    views().bar.forcefullyCrashRenderer()
+    await until('the bar', () => inBar("document.getElementById('close') !== null"))
+  })
+
   listener.close()
 }
 
