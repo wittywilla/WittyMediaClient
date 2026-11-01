@@ -14,11 +14,11 @@ fun placeOn(track: Item, keepsPlace: Boolean): Double {
     return if (keepsPlace && !progress.watched) progress.positionSec.coerceAtLeast(0.0) else 0.0
 }
 
-// Which track Play means: the one in the middle, else the first not finished, else the first again.
+// Which track Play means: the one last left in the middle, else the first not finished, else the first again.
 fun whereToStart(tracks: List<Item>, keepsPlace: Boolean): Start {
     if (!keepsPlace) return Start(0)
-    val middle = tracks.indexOfFirst { placeOn(it, true) > 0 }
-    if (middle >= 0) return Start(middle, placeOn(tracks[middle], true))
+    val middle = tracks.indices.filter { placeOn(tracks[it], true) > 0 }.maxByOrNull { tracks[it].progress?.updatedAt ?: 0 }
+    if (middle != null) return Start(middle, placeOn(tracks[middle], true))
     val unfinished = tracks.indexOfFirst { it.progress?.watched != true }
     return Start(unfinished.coerceAtLeast(0))
 }

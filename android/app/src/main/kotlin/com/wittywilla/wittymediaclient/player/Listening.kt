@@ -62,7 +62,7 @@ class Listening(private val app: WittyApp) {
     var jumps by mutableIntStateOf(0)
         private set
 
-    // Asked for by a tap on the notification, for when the screens are ready.
+    // Asked for by a tap on the notification, or a TV starting a queue, for when the screens are ready.
     var wantsScreen by mutableStateOf(false)
 
     var serviceRunning = false
@@ -79,6 +79,8 @@ class Listening(private val app: WittyApp) {
         override fun onEvents(player: Player, events: Player.Events) {
             read(player)
             if (events.contains(Player.EVENT_POSITION_DISCONTINUITY)) jumps++
+            // An empty queue: let go, so that the service can end. The next one starts it again.
+            if (player.mediaItemCount == 0 && events.contains(Player.EVENT_TIMELINE_CHANGED)) disappeared()
         }
     }
 
@@ -109,9 +111,18 @@ class Listening(private val app: WittyApp) {
         }
     }
 
-    // Back on screen with something playing: catch up with what happened meanwhile.
+    // Back on screen with something playing: catch up with what happened meanwhile. If the queue
+    // finished and the service went with it, there's nothing to show.
     fun appeared() {
-        if (serviceRunning) connect {}
+        if (serviceRunning) connect {} else clear()
+    }
+
+    private fun clear() {
+        now = null
+        queue = emptyList()
+        isPlaying = false
+        isLoading = false
+        hasEnded = false
     }
 
     // Off screen, nothing needs to hear about any of this. The service carries on.
@@ -126,7 +137,18 @@ class Listening(private val app: WittyApp) {
         controller?.let { then(it); return }
         waiting += then
         if (connecting != null) return
-        val future = MediaController.Builder(app, ListeningService.token(app)).buildAsync()
+        val future = MediaController.Builder(app, ListeningService.token(app))
+            .setListener(object : MediaController.Listener {
+                // The service has gone, which the system can do to a paused one.
+                override fun onDisconnected(controller: MediaController) {
+                    if (this@Listening.controller === controller) {
+                        this@Listening.controller = null
+                        connecting = null
+                        clear()
+                    }
+                }
+            })
+            .buildAsync()
         connecting = future
         future.addListener({
             if (connecting !== future) return@addListener
@@ -288,9 +310,7 @@ class Listening(private val app: WittyApp) {
                 c.clearMediaItems()
             }
         }
-        now = null
-        queue = emptyList()
-        isPlaying = false
+        clear()
         problem = ""
         return app.scope.launch { sent?.join() }
     }

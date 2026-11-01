@@ -157,7 +157,8 @@ class Nav(val app: WittyApp, private val s: Map<String, String>) {
     // where it is, with the mini player showing.
     fun startListening(tracks: List<com.wittywilla.wittymediaclient.net.Item>, start: Start, books: Boolean) {
         app.listening.play(tracks, start, books)
-        if (app.isTv) openNowPlaying()
+        // AppRoot opens it as soon as the queue is there.
+        if (app.isTv) app.listening.wantsScreen = true
     }
 
     // Play on a track shown on its own, on Home: its album or book, from that track.

@@ -1,25 +1,21 @@
 package com.wittywilla.wittymediaclient.ui
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.focusGroup
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.ExperimentalLayoutApi
-import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawingPadding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.widthIn
-import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListScope
 import androidx.compose.foundation.lazy.items
@@ -41,12 +37,14 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.focus.FocusDirection
+import androidx.compose.ui.focus.focusProperties
+import androidx.compose.ui.focus.focusRestorer
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.graphics.vector.addPathNodes
 import androidx.compose.ui.platform.LocalConfiguration
-import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.liveRegion
@@ -115,7 +113,8 @@ fun MiniPlayer(nav: Nav, modifier: Modifier = Modifier) {
             Box(Modifier.fillMaxWidth(part).fillMaxHeight().background(scheme.primary))
         }
         Row(
-            Modifier.fillMaxWidth().padding(horizontal = if (metrics.tv) metrics.gutter else Space.S2, vertical = Space.S1).remoteRow(),
+            // A TV may crop the edge of its picture.
+            Modifier.fillMaxWidth().padding(horizontal = if (metrics.tv) metrics.gutter else Space.S2, vertical = if (metrics.tv) Space.S3 else Space.S1).remoteRow(),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(Space.S1),
         ) {
@@ -163,7 +162,8 @@ private fun Controls(listening: Listening) {
                 Secondary(clock(duration), Modifier.semantics { contentDescription = "${spokenClock(duration)} long" })
             }
         }
-        Row(Modifier.fillMaxWidth().remoteRow(), horizontalArrangement = Arrangement.spacedBy(Space.S2, Alignment.CenterHorizontally), verticalAlignment = Alignment.CenterVertically) {
+        // Right from the last button leads across to the queue, on a screen with room for it beside these.
+        Row(Modifier.fillMaxWidth().focusRestorer().focusGroup(), horizontalArrangement = Arrangement.spacedBy(Space.S2, Alignment.CenterHorizontally), verticalAlignment = Alignment.CenterVertically) {
             if (books) {
                 RoundButton(Glyphs.Previous, "Previous part", listening::previous, focusKey = "np-prev")
                 ActionButton("−15", { listening.seekBy(-BOOK_BACK_SEC) }, pill = true, focusKey = "np-back")
@@ -188,7 +188,7 @@ private fun Controls(listening: Listening) {
             }
         }
         if (books) {
-            Row(Modifier.fillMaxWidth().remoteRow(), horizontalArrangement = Arrangement.Center) {
+            Row(Modifier.fillMaxWidth().focusGroup(), horizontalArrangement = Arrangement.Center) {
                 ActionButton("Speed ${speedWords(listening.speed)}", listening::cycleSpeed, pill = true, focusKey = "np-speed")
             }
         }
@@ -242,7 +242,6 @@ private fun LazyListScope.queueList(listening: Listening, editing: Boolean, onEd
 }
 
 // The whole screen. Upright, everything scrolls in one column. On a TV or sideways, the queue has its own side.
-@OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun NowPlayingScreen(nav: Nav) {
     val listening = nav.app.listening
@@ -266,7 +265,7 @@ fun NowPlayingScreen(nav: Nav) {
         val align = if (center) TextAlign.Center else TextAlign.Start
         Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(Space.S1)) {
             Text(about?.title?.toString().orEmpty(), color = MaterialTheme.colorScheme.onBackground, style = MaterialTheme.typography.headlineSmall, textAlign = align, maxLines = 3, overflow = TextOverflow.Ellipsis, modifier = Modifier.fillMaxWidth())
-            val under = listOf(about?.artist?.toString().orEmpty(), about?.albumTitle?.toString().orEmpty()).filter { it.isNotEmpty() }.joinToString(" · ")
+            val under = listOf(about?.artist?.toString().orEmpty(), about?.albumTitle?.toString().orEmpty()).filter { it.isNotEmpty() }.distinct().joinToString(" · ")
             if (under.isNotEmpty()) Text(under, color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodyLarge, textAlign = align, modifier = Modifier.fillMaxWidth())
             ErrorText(listening.problem)
         }
@@ -279,13 +278,23 @@ fun NowPlayingScreen(nav: Nav) {
                 horizontalArrangement = Arrangement.spacedBy(Space.S8),
             ) {
                 Column(Modifier.weight(1f).fillMaxHeight(), verticalArrangement = Arrangement.spacedBy(Space.S3, Alignment.CenterVertically)) {
-                    Row(Modifier.fillMaxWidth().weight(1f, fill = false), horizontalArrangement = Arrangement.spacedBy(Space.S6), verticalAlignment = Alignment.CenterVertically) {
-                        Art(Modifier.widthIn(max = if (metrics.tv) COVER else SIDE_COVER).fillMaxHeight(if (metrics.tv) 1f else 1f))
+                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(Space.S6), verticalAlignment = Alignment.CenterVertically) {
+                        Art(Modifier.size(if (metrics.tv) TV_COVER else SIDE_COVER))
                         Box(Modifier.weight(1f)) { Words(center = false) }
                     }
                     Controls(listening)
                 }
-                LazyColumn(Modifier.weight(1f).fillMaxHeight(), verticalArrangement = Arrangement.spacedBy(Space.S1)) {
+                // Left from here goes back to the buttons. Past either end of the list stays in the list.
+                LazyColumn(
+                    Modifier
+                        .weight(1f)
+                        .fillMaxHeight()
+                        .focusProperties {
+                            onExit = { if (requestedFocusDirection == FocusDirection.Up || requestedFocusDirection == FocusDirection.Down) cancelFocusChange() }
+                        }
+                        .focusGroup(),
+                    verticalArrangement = Arrangement.spacedBy(Space.S1),
+                ) {
                     queueList(listening, editing, { editing = !editing }, onClear)
                 }
             }
@@ -309,4 +318,5 @@ fun NowPlayingScreen(nav: Nav) {
 }
 
 private val COVER = 360.dp
-private val SIDE_COVER = 220.dp
+private val TV_COVER = 240.dp
+private val SIDE_COVER = 120.dp

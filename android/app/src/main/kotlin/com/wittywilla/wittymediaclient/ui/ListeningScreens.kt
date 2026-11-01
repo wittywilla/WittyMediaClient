@@ -173,7 +173,7 @@ private fun AlbumGrid(nav: Nav, s: Map<String, String>, library: Long, sort: Str
         ) {
             items(distinct, key = { "${it.artist}|${it.title}" }) { album ->
                 PosterCard(
-                    album.title.ifEmpty { "No album" }, album.artist, nav.app.api.coverUrl(album.coverItem),
+                    album.title.ifEmpty { "No album" }, album.artist.takeIf { it != album.title }.orEmpty(), nav.app.api.coverUrl(album.coverItem),
                     { nav.push(Route.Album(library, album.title, album.artist)) },
                     aspect = 1f, focusKey = "a-${album.artist}-${album.title}", requestFocus = album === distinct.first(),
                 )
@@ -309,6 +309,15 @@ private fun TrackRow(
     }
 }
 
+private fun tracksWords(libraryType: String, count: Int): String {
+    val word = when (libraryType) {
+        "audiobooks" -> "part"
+        "podcasts" -> "episode"
+        else -> "song"
+    }
+    return if (count == 1) "1 $word" else "$count ${word}s"
+}
+
 private fun lengthWords(sec: Double): String {
     val minutes = ((sec + 30) / 60).toInt()
     return if (minutes >= 60) "${minutes / 60} h ${minutes % 60} min" else "$minutes min"
@@ -344,9 +353,9 @@ fun AlbumScreen(nav: Nav, s: Map<String, String>, route: Route.Album) {
                         ServerImage(cover, ALBUM_ART, 1f, Modifier.width(ALBUM_ART).aspectRatio(1f).clip(Radius.LG), placeholder = route.album)
                         Column((if (upright) Modifier.fillMaxWidth() else Modifier.widthIn(min = 280.dp, max = 640.dp).weight(1f, fill = false)), verticalArrangement = Arrangement.spacedBy(Space.S3)) {
                             Heading(route.album.ifEmpty { "No album" })
-                            if (route.artist.isNotEmpty()) Secondary(route.artist)
+                            if (route.artist.isNotEmpty() && route.artist != route.album) Secondary(route.artist)
                             val year = tracks.firstNotNullOfOrNull { it.year }?.takeIf { !books }
-                            Secondary(listOfNotNull(year?.toString(), if (books) "${tracks.size} parts" else "${tracks.size} songs", lengthWords(tracks.sumOf { it.runtimeSec })).joinToString(" · "))
+                            Secondary(listOfNotNull(year?.toString(), tracksWords(libraryType, tracks.size), lengthWords(tracks.sumOf { it.runtimeSec })).joinToString(" · "))
                             ErrorText(answer.problem)
                             // The buttons wrap on a narrow phone, so they aren't a row a remote is held in.
                             FlowRow(horizontalArrangement = Arrangement.spacedBy(Space.S2), verticalArrangement = Arrangement.spacedBy(Space.S2)) {

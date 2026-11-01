@@ -53,6 +53,7 @@ data class Progress(
     val durationSec: Double = 0.0,
     val watched: Boolean = false,
     val resumeSec: Double = 0.0, // where Resume goes; 0 means start over
+    val updatedAt: Long = 0,
 )
 
 @Serializable

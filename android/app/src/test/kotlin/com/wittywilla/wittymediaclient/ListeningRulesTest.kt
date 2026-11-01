@@ -39,6 +39,14 @@ class ListeningRulesTest {
     }
 
     @Test
+    fun aBookLeftInTwoChaptersGoesOnFromTheLastOneHeard() {
+        fun at(id: Long, sec: Double, whenSaved: Long) =
+            Item(id = id, kind = "audio", progress = Progress(positionSec = sec, durationSec = 100.0, updatedAt = whenSaved))
+        val book = listOf(at(1, 30.0, 500), at(2, 20.0, 900), at(3, 10.0, 100))
+        assertEquals(Start(1, 20.0), whereToStart(book, keepsPlace = true))
+    }
+
+    @Test
     fun aBookGoesOnFromTheFirstNotFinished() {
         val book = listOf(track(1, done = true), track(2, done = true), track(3))
         assertEquals(Start(2), whereToStart(book, keepsPlace = true))
