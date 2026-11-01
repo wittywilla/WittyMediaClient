@@ -183,7 +183,8 @@ struct ChannelPlayer: View {
     let name: String
     @State private var player: AVPlayer?
     @State private var error = ""
-    private let viewer = UUID().uuidString
+    // The same name for as long as this is on screen, however often the view is redrawn.
+    @State private var viewer = UUID().uuidString
 
     private func tune() async {
         for _ in 0..<20 {
