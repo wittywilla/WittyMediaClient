@@ -16,3 +16,5 @@ go.work.sum
 .claude/
 .dev-modules
 desktop/out-upgrade/
+apple/build-logs/
+*.bundle

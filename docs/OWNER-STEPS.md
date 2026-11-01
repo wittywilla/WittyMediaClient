@@ -13,8 +13,8 @@ These change what gets built. Each has a recommendation.
    See [the design](DESIGN.md#windows-7).
 2. **The app's ID.** Android and Apple use `com.wittywilla.wittymediaclient`. Once published it can never
    change, so say now if you want something else.
-3. **The name people see.** The desktop and Android apps are "WittyMediaClient". The Apple apps still say "WittyMedia",
-   until someone next works on them.
+3. **The name people see.** Every app is "WittyMediaClient". The Xcode project and its targets are still called WittyMedia, which
+   nobody sees.
 4. **Artwork.** Every app needs an icon, and TVs need a wide banner too.
 
 ## Step 1: Let CI build the apps
@@ -81,8 +81,41 @@ Connecting is your main requirement and it has only run on emulators, where find
 
 ## Step 3: Try Apple (needs a Mac)
 
-Apple only allows building and installing from a Mac. If you don't have one, you can't run these apps
-yourself yet, whatever you pay. Borrowing a Mac or renting one online are the usual ways round that.
+Apple only allows building and installing from a Mac. **Everything that can be done without one has been. Nothing
+further can be checked until these steps run.**
+
+**First, the quick check, which needs no Apple account.** It takes about 20 minutes, most of it Xcode building, and
+touches nothing but the folder it runs in.
+
+1. Install **Xcode** from the Mac App Store (free), open it once, and let it finish installing its parts.
+2. In Terminal, install the tool that makes the Xcode project, if you don't have it. This needs [Homebrew](https://brew.sh).
+
+```bash
+brew install xcodegen
+```
+
+3. Get the code onto the Mac. If the branch has been pushed, clone it as usual. If not, make a single file of it on the PC, in the repository's
+   folder, copy that file over by USB or a shared folder, and open it on the Mac:
+
+```bash
+git bundle create WittyMediaClient.bundle clients-ui-audit
+```
+
+```bash
+git clone -b clients-ui-audit WittyMediaClient.bundle WittyMediaClient
+```
+
+4. Run the check:
+
+```bash
+bash WittyMediaClient/apple/scripts/check-on-mac.sh
+```
+
+5. Send back the folder it names at the end, `apple/build-logs`. It holds a report, every build's log, and a picture of each app's first
+   screen. **Expect compile errors:** this code has never met Apple's compiler. Fixing them from those logs is the next job, and it
+   can be done from Windows, one run of this script at a time.
+
+**Then, once that builds, on your own devices:**
 
 1. Install **Xcode** from the Mac App Store (free), and open it once.
 2. In Terminal, install the tool that creates the Xcode project: `brew install xcodegen`. This needs
@@ -109,6 +142,9 @@ It isn't known whether a free Apple ID can do this. If it can't, delete the two
 `com.apple.security.application-groups` entries from `apple/project.yml` and generate the project again. The
 app works the same, with an empty Top Shelf.
 
+**On iPhone and iPad, please check:** that Music, a book, photos, a DVD's menu and the TV guide each open inside the app, signed in, and that the
+system's Back and the swipe from the edge both get out of them. Download a photo's original, and see that it's in Files, under this app.
+
 **Please check on an Apple TV and report back:** nothing here has ever run, so all of this is open.
 
 1. Does the Siri Remote move through everything, with focus always visible? Try swiping and clicking the clickpad.
@@ -119,6 +155,9 @@ app works the same, with an empty Top Shelf.
 5. Leave the app with something playing, then come back. Is the place kept?
 6. Put the app in the top row of the Home screen. Does the Top Shelf show what you were watching, and does choosing it
    open that thing, signing in first if needed?
+7. Open Music, choose an album and a track. Does sound play, and does the next track follow by itself?
+8. Open Photos and a photo. Do left and right on the remote go through them, and does Back leave?
+9. Choose TV guide and a channel, with a channel made on the server. Does the picture start, and does Back leave it?
 
 **Before submitting to Apple:** the app needs an icon and a Top Shelf image in an asset catalog, which don't exist
 yet, and the iPhone app's background audio will need explaining: it's there for picture in picture.
