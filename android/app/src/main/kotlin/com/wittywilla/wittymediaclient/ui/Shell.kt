@@ -7,14 +7,18 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.WindowInsetsSides
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.foundation.layout.only
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.layout.safeDrawingPadding
 import androidx.compose.foundation.layout.statusBarsPadding
-import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.rememberScrollState
@@ -106,7 +110,10 @@ fun Shell(nav: Nav, content: @Composable () -> Unit) {
             }
         } else {
             Box(Modifier.fillMaxSize()) {
-            CompositionLocalProvider(LocalBottomRoom provides PILL_ROOM) { content() }
+            // A phone on its side has its navigation bar and any camera cut-out at the sides.
+            Box(Modifier.windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Horizontal))) {
+                CompositionLocalProvider(LocalBottomRoom provides PILL_ROOM) { content() }
+            }
             Row(
                 Modifier
                     .align(Alignment.BottomCenter)
@@ -171,7 +178,7 @@ fun SearchScreen(nav: Nav, s: Map<String, String>) {
         if (list != null && list.isEmpty()) Secondary("Nothing found for that.", Modifier.semantics { contentDescription = "Nothing found" })
         if (!list.isNullOrEmpty()) {
             LazyVerticalGrid(
-                GridCells.Adaptive(metrics.cardWidth + Space.S2),
+                posterColumns(),
                 contentPadding = PaddingValues(bottom = LocalBottomRoom.current + Space.S4),
                 horizontalArrangement = Arrangement.spacedBy(Space.S2),
                 verticalArrangement = Arrangement.spacedBy(Space.S3),
@@ -210,7 +217,7 @@ fun ProfileScreen(nav: Nav, s: Map<String, String>) {
             Secondary(server.url)
             if (server.fingerprint.isNotEmpty()) Secondary("${s["fingerprintLabel"]}: ${server.fingerprint}")
         }
-        ActionButton("Switch profile", nav::signOut, Modifier.fillMaxWidth(), focusKey = "switch", requestFocus = metrics.tv)
+        ActionButton("Sign out", nav::signOut, Modifier.fillMaxWidth(), focusKey = "switch", requestFocus = metrics.tv)
         ActionButton(s["changeServer"].orEmpty(), nav::changeServer, Modifier.fillMaxWidth(), focusKey = "server")
         SectionTitle("About this app")
         Secondary("WittyMedia $version")

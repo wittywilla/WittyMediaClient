@@ -1,6 +1,8 @@
 package com.wittywilla.wittymediaclient.player
 
+import androidx.annotation.OptIn
 import androidx.media3.common.PlaybackException
+import androidx.media3.common.util.UnstableApi
 import com.wittywilla.wittymediaclient.net.Track
 
 // The player's decisions, apart from its screen, so they can be tested without one. The same rules
@@ -82,6 +84,7 @@ enum class Recovery {
     GiveUp,
 }
 
+@OptIn(UnstableApi::class)
 fun recoveryFor(errorCode: Int, httpStatus: Int?): Recovery = when {
     httpStatus == 401 || httpStatus == 404 -> Recovery.NewStream
     httpStatus == 503 || httpStatus == 429 -> Recovery.WaitThenNewStream

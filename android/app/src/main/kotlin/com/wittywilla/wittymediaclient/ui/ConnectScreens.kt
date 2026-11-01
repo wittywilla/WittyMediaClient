@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.safeDrawingPadding
 import androidx.compose.foundation.layout.padding
@@ -312,6 +313,8 @@ fun CodeScreen(nav: Nav, s: Map<String, String>, server: SavedServer) {
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
             Heading(s["codeTitle"].orEmpty())
+            // Several servers can look alike in the list: this says which one the code goes to.
+            Secondary("${server.name} · ${server.url}")
             Secondary(s["codeHint"].orEmpty())
             Text(
                 entry.shown,
@@ -321,7 +324,10 @@ fun CodeScreen(nav: Nav, s: Map<String, String>, server: SavedServer) {
                     contentDescription = "${s["codeLabel"]}: ${entry.digits.length} ${s["codeEntered"]}"
                 },
             )
-            if (entry.busy) Secondary(s["connecting"].orEmpty()) else ErrorText(problem)
+            // Room is kept for the message, or the keys would move under a finger as it comes and goes.
+            Box(Modifier.heightIn(min = MaterialTheme.typography.bodyLarge.lineHeight.value.dp * 2)) {
+                if (entry.busy) Secondary(s["connecting"].orEmpty()) else ErrorText(problem)
+            }
             NumberPad(s["codeDelete"].orEmpty(), ::press) { entry = entry.erased() }
             ActionButton(s["usePassword"].orEmpty(), { nav.signInTo(server, SignInWay.Password) }, Modifier.fillMaxWidth())
             ActionButton(s["showCodeInstead"].orEmpty(), { nav.signInTo(server, SignInWay.ShownCode) }, Modifier.fillMaxWidth())

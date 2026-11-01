@@ -44,5 +44,6 @@ class ServerList {
 
     fun removeInstance(instance: String): Boolean = servers.values.removeAll { it.instance == instance }
 
-    fun list(): List<FoundServer> = servers.values.sortedBy { it.name.lowercase() }
+    // By name, then address: servers with the same name keep their order however they were heard.
+    fun list(): List<FoundServer> = servers.values.sortedWith(compareBy({ it.name.lowercase() }, { it.url }))
 }

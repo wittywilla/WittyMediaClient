@@ -2,8 +2,12 @@ package com.wittywilla.wittymediaclient.player
 
 import android.app.Activity
 import android.content.Context
+import android.content.pm.ApplicationInfo
 import android.net.ConnectivityManager
 import android.net.Network
+import android.net.NetworkCapabilities
+import android.net.NetworkRequest
+import android.os.Build
 import android.view.KeyEvent
 import androidx.activity.compose.BackHandler
 import androidx.annotation.OptIn
@@ -81,6 +85,7 @@ import androidx.media3.common.util.UnstableApi
 import androidx.media3.datasource.HttpDataSource
 import androidx.media3.exoplayer.DefaultRenderersFactory
 import androidx.media3.exoplayer.ExoPlayer
+import androidx.media3.exoplayer.util.EventLogger
 import androidx.media3.session.MediaSession
 import androidx.media3.ui.PlayerView
 import com.wittywilla.wittymediaclient.diag.ClientLog
@@ -110,7 +115,9 @@ private const val LOST = "Lost contact with your server. Check that it is runnin
 
 private fun trackName(t: Track): String {
     val language = t.languageName.ifEmpty { if (t.language.isEmpty()) "Unknown" else Locale.forLanguageTag(t.language).displayLanguage.ifEmpty { t.language } }
-    return listOf(language, t.title, t.codec.uppercase(Locale.ROOT), if (t.channels > 0) "${t.channels}ch" else "")
+    // A text subtitle's format means nothing to anyone. A picture-based one's does: it may have to be burned in.
+    val codec = if (t.text) "" else t.codec.uppercase(Locale.ROOT)
+    return listOf(language, t.title, codec, if (t.channels > 0) "${t.channels}ch" else "")
         .filter { it.isNotEmpty() }.joinToString(" · ")
 }
 
@@ -137,6 +144,10 @@ private fun newPlayer(context: Context): ExoPlayer =
         .setAudioAttributes(AudioAttributes.Builder().setUsage(C.USAGE_MEDIA).setContentType(C.AUDIO_CONTENT_TYPE_MOVIE).build(), true)
         .setHandleAudioBecomingNoisy(true)
         .build()
+        .also {
+            // What was chosen and why, in the system log, for a debug build only.
+            if (context.applicationInfo.flags and ApplicationInfo.FLAG_DEBUGGABLE != 0) it.addAnalyticsListener(EventLogger())
+        }
 
 private fun hidesBars(view: android.view.View): () -> Unit {
     val window = (view.context as? Activity)?.window ?: return {}
@@ -255,7 +266,11 @@ fun PlayerScreen(nav: Nav, id: Long, startOver: Boolean) {
                 }
             }
         }
-        val listening = runCatching { network?.registerDefaultNetworkCallback(callback) }.isSuccess
+        val listening = runCatching {
+            // Android 6 has no default-network call: any network that reaches the internet will do there.
+            if (Build.VERSION.SDK_INT >= 24) network?.registerDefaultNetworkCallback(callback)
+            else network?.registerNetworkCallback(NetworkRequest.Builder().addCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET).build(), callback)
+        }.isSuccess
         onDispose { if (listening) runCatching { network?.unregisterNetworkCallback(callback) } }
     }
 
@@ -363,7 +378,7 @@ fun PlayerScreen(nav: Nav, id: Long, startOver: Boolean) {
         val left = countdown ?: return@LaunchedEffect
         val next = stream?.nextId ?: return@LaunchedEffect
         if (left <= 0) {
-            nav.replace(Route.Player(next, false))
+            nav.playInstead(next)
         } else {
             delay(1000)
             countdown = left - 1
@@ -397,7 +412,7 @@ fun PlayerScreen(nav: Nav, id: Long, startOver: Boolean) {
         filmSec = target
     }
     fun playPause() { if (player.isPlaying) player.pause() else player.play() }
-    fun playNext() { stream?.nextId?.let { nav.replace(Route.Player(it, false)) } }
+    fun playNext() { stream?.nextId?.let(nav::playInstead) }
 
     // Back goes up one level at a time: `input-map.json`'s rule. On a phone the system's own back
     // gesture comes here too, without passing through key events.

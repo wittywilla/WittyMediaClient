@@ -10,6 +10,7 @@ import android.view.ViewGroup
 import android.webkit.CookieManager
 import android.webkit.RenderProcessGoneDetail
 import android.webkit.WebStorage
+import androidx.annotation.RequiresApi
 import android.webkit.WebChromeClient
 import android.webkit.WebResourceError
 import android.webkit.WebResourceRequest
@@ -76,7 +77,8 @@ private class PlayerClient(
         if (request.isForMainFrame) onFail()
     }
 
-    // Without this, the page's process dying takes the whole app with it.
+    // Without this, the page's process dying takes the whole app with it. Android 8 is the first to ask.
+    @RequiresApi(26)
     override fun onRenderProcessGone(view: WebView, detail: RenderProcessGoneDetail): Boolean {
         ClientLog.warn("player", "The game player's page stopped: ${if (detail.didCrash()) "it crashed" else "the system ended it"}")
         onFail()

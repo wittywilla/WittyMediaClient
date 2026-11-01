@@ -1,9 +1,14 @@
 package com.wittywilla.wittymediaclient.ui
 
+import android.graphics.Color
 import android.provider.Settings
+import androidx.activity.ComponentActivity
+import androidx.activity.SystemBarStyle
 import androidx.activity.compose.BackHandler
+import androidx.activity.enableEdgeToEdge
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateListOf
@@ -14,6 +19,8 @@ import androidx.compose.runtime.saveable.rememberSaveableStateHolder
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
+import androidx.core.graphics.ColorUtils
+import androidx.core.graphics.toColorInt
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LifecycleEventEffect
 import com.wittywilla.wittymediaclient.WittyApp
@@ -100,6 +107,13 @@ class Nav(val app: WittyApp, private val s: Map<String, String>) {
     fun replace(r: Route) { stack[stack.lastIndex] = r }
     fun reset(r: Route) { stack.clear(); stack.add(r) }
     fun pop() { if (stack.size > 1) stack.removeAt(stack.lastIndex) }
+
+    // The next episode takes this one's place, so Back leads to its page and not the one just finished.
+    fun playInstead(id: Long) {
+        val below = stack.lastIndex - 1
+        if (below >= 0 && stack[below] is Route.Item) stack[below] = Route.Item(id)
+        replace(Route.Player(id, false))
+    }
 
     // Back from the middle of the app goes up a level, and from a tab goes to Home.
     val backStaysInApp: Boolean get() = stack.size > 1 || current == Route.Search || current == Route.Profile
@@ -309,6 +323,16 @@ class Nav(val app: WittyApp, private val s: Map<String, String>) {
     }
 }
 
+// Transparent over the page. A three-button bar keeps a veil of the page's own colour, so its
+// buttons can still be seen with a poster passing underneath.
+fun showSystemBars(activity: ComponentActivity, light: Boolean, background: Int) {
+    val veil = ColorUtils.setAlphaComponent(background, NAV_VEIL_ALPHA)
+    activity.enableEdgeToEdge(
+        statusBarStyle = if (light) SystemBarStyle.light(Color.TRANSPARENT, Color.TRANSPARENT) else SystemBarStyle.dark(Color.TRANSPARENT),
+        navigationBarStyle = if (light) SystemBarStyle.light(veil, veil) else SystemBarStyle.dark(veil),
+    )
+}
+
 @Composable
 fun AppRoot(app: WittyApp) {
     val context = LocalContext.current
@@ -321,7 +345,14 @@ fun AppRoot(app: WittyApp) {
     val metrics = if (app.isTv) TvMetrics else if (width >= TABLET_WIDTH_DP) TabletMetrics else PhoneMetrics
     val reduceMotion = remember { runCatching { Settings.Global.getFloat(context.contentResolver, Settings.Global.ANIMATOR_DURATION_SCALE, 1f) == 0f }.getOrDefault(false) }
 
-    WittyTheme(pickTheme(themes, nav.themeId), metrics, reduceMotion) {
+    val theme = pickTheme(themes, nav.themeId)
+    // The system bars follow this app's theme, not the device's: dark icons on a dark page can't be read.
+    DisposableEffect(theme.scheme, theme.colours.background) {
+        (context as? ComponentActivity)?.let { showSystemBars(it, theme.scheme == "light", theme.colours.background.toColorInt()) }
+        onDispose { }
+    }
+
+    WittyTheme(theme, metrics, reduceMotion) {
         LaunchedEffect(Unit) { nav.startUp() }
         LifecycleEventEffect(Lifecycle.Event.ON_START) { scope.launch { nav.recheck() } }
         BackHandler(enabled = nav.backStaysInApp) { nav.back() }
@@ -351,3 +382,4 @@ fun AppRoot(app: WittyApp) {
 }
 
 private const val TABLET_WIDTH_DP = 600
+private const val NAV_VEIL_ALPHA = 0xB3

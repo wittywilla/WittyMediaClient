@@ -1,9 +1,13 @@
 package com.wittywilla.wittymediaclient.ui
 
+import android.content.res.Configuration
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.aspectRatio
@@ -13,6 +17,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawingPadding
 import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
@@ -45,6 +50,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -115,7 +121,9 @@ private fun PhoneHero(nav: Nav, featured: List<Item>) {
     val pager = rememberPagerState { featured.size }
     val reduce = LocalReduceMotion.current
     val front = featured[pager.currentPage.coerceIn(0, featured.lastIndex)]
-    Box(Modifier.fillMaxWidth()) {
+    BoxWithConstraints(Modifier.fillMaxWidth()) {
+        // Whatever the width, the poster in front sits in the middle.
+        val side = ((maxWidth - HERO_POSTER) / 2).coerceAtLeast(0.dp)
         // The front poster's own colours would need a blur, which old phones can't do cheaply. A
         // dimmed backdrop fading into the page gives much the same depth.
         ServerImage(nav.app.api.backdropUrl(front), 400.dp, 1f, Modifier.fillMaxWidth().aspectRatio(1f).alpha(0.35f))
@@ -127,23 +135,24 @@ private fun PhoneHero(nav: Nav, featured: List<Item>) {
         Column(Modifier.fillMaxWidth().statusBarsPadding().padding(top = Space.S12), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(Space.S3)) {
             HorizontalPager(
                 state = pager,
-                pageSize = PageSize.Fixed(220.dp),
-                contentPadding = PaddingValues(horizontal = 70.dp),
+                pageSize = PageSize.Fixed(HERO_POSTER),
+                contentPadding = PaddingValues(horizontal = side),
                 pageSpacing = Space.S3,
                 modifier = Modifier.fillMaxWidth(),
             ) { page ->
                 val item = featured[page]
-                val apart = (pager.currentPage - page + pager.currentPageOffsetFraction).absoluteValue.coerceIn(0f, 1f)
                 FocusBox(
                     { nav.push(Route.Item(item.id)) },
+                    // Read as it draws, so a swipe costs a redraw and not a whole recomposition.
                     Modifier.graphicsLayer {
+                        val apart = (pager.currentPage - page + pager.currentPageOffsetFraction).absoluteValue.coerceIn(0f, 1f)
                         if (!reduce) { val shrink = 1f - apart * 0.12f; scaleX = shrink; scaleY = shrink }
                         alpha = 1f - apart * 0.4f
                     },
                     label = item.showTitle?.ifEmpty { null } ?: item.title,
                     focusKey = "hero-${item.id}",
                 ) {
-                    ServerImage(nav.app.api.posterUrl(item), 220.dp, 2f / 3f, Modifier.fillMaxWidth().aspectRatio(2f / 3f).clip(Radius.LG), placeholder = item.title)
+                    ServerImage(nav.app.api.posterUrl(item), HERO_POSTER, 2f / 3f, Modifier.fillMaxWidth().aspectRatio(2f / 3f).clip(Radius.LG), placeholder = item.title)
                 }
             }
             Text(
@@ -156,10 +165,12 @@ private fun PhoneHero(nav: Nav, featured: List<Item>) {
     }
 }
 
+// Also for a phone on its side, where a tall poster wouldn't leave room for its own title.
 @Composable
 private fun TvHero(nav: Nav, item: Item) {
     val metrics = LocalMetrics.current
-    Box(Modifier.fillMaxWidth().height(340.dp)) {
+    val height = if (metrics.tv) 340.dp else 260.dp
+    Box(Modifier.fillMaxWidth().height(height)) {
         ServerImage(nav.app.api.backdropUrl(item), 960.dp, 16f / 9f, Modifier.matchParentSize().alpha(0.5f))
         Box(
             Modifier.matchParentSize().background(
@@ -205,6 +216,7 @@ fun HomeScreen(nav: Nav, s: Map<String, String>) {
     var error by remember { mutableStateOf("") }
     var attempt by remember { mutableIntStateOf(0) }
     var gamePcs by remember { mutableStateOf(false) }
+    val sideways = LocalConfiguration.current.orientation == Configuration.ORIENTATION_LANDSCAPE
     // Phones and tablets only: see rigChoice for why TVs don't play in the page.
     LaunchedEffect(Unit) {
         if (!nav.app.isTv && !nav.app.isFireTv) gamePcs = runCatching { nav.app.api.couchStatus().allowed }.getOrDefault(false)
@@ -233,7 +245,7 @@ fun HomeScreen(nav: Nav, s: Map<String, String>) {
             // Featured first, and otherwise whatever someone was in the middle of.
             val heroes = h.featured.ifEmpty { hubs.firstOrNull()?.items.orEmpty() }.distinctBy { it.id }.take(HERO_ITEMS)
             if (heroes.isNotEmpty()) {
-                item(key = "hero") { if (metrics.tv) TvHero(nav, heroes.first()) else PhoneHero(nav, heroes) }
+                item(key = "hero") { if (metrics.tv || sideways) TvHero(nav, heroes.first()) else PhoneHero(nav, heroes) }
             } else {
                 item(key = "top") { Box(Modifier.statusBarsPadding()) }
             }
@@ -268,7 +280,12 @@ fun HomeScreen(nav: Nav, s: Map<String, String>) {
 }
 
 private const val HERO_ITEMS = 8
+private val HERO_POSTER = 220.dp
 private const val PAGE = 60
+
+// Posters to fill the width. A card can be a little narrower than in a row: three fit across a phone.
+@Composable
+fun posterColumns() = GridCells.Adaptive(LocalMetrics.current.cardWidth - Space.S3)
 
 @Composable
 fun LibraryScreen(nav: Nav, s: Map<String, String>, library: Library) {
@@ -313,7 +330,7 @@ fun LibraryScreen(nav: Nav, s: Map<String, String>, library: Library) {
                 if (error.isNotEmpty()) ActionButton("Try again", { error = ""; wanted++ }, focusKey = "retry")
                 val loaded = if (isShows) shows.size else items.size
                 LazyVerticalGrid(
-                    GridCells.Adaptive(metrics.cardWidth + Space.S2),
+                    posterColumns(),
                     contentPadding = PaddingValues(bottom = Space.S6),
                     horizontalArrangement = Arrangement.spacedBy(Space.S2),
                     verticalArrangement = Arrangement.spacedBy(Space.S4),
@@ -373,7 +390,8 @@ fun ShowScreen(nav: Nav, s: Map<String, String>, id: Long) {
                             if (d.show.overview.isNotEmpty()) Secondary(d.show.overview, maxLines = 4)
                             ErrorText(error)
                             d.nextUpId?.let { next ->
-                                ActionButton("Next up", { nav.push(Route.Item(next)) }, primary = true, pill = true, icon = Icons.Filled.PlayArrow, focusKey = "nextup", requestFocus = true)
+                                val episode = d.episodes.firstOrNull { it.id == next }?.let(::episodeLabel).orEmpty()
+                                ActionButton(if (episode.isEmpty()) "Next up" else "Next up: $episode", { nav.push(Route.Item(next)) }, primary = true, pill = true, icon = Icons.Filled.PlayArrow, focusKey = "nextup", requestFocus = true)
                             }
                         }
                     }
@@ -411,6 +429,7 @@ private fun runtimeText(sec: Double): String {
     return if (h > 0) "$h h $m min" else "$m min"
 }
 
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun ItemScreen(nav: Nav, s: Map<String, String>, id: Long) {
     val metrics = LocalMetrics.current
@@ -434,12 +453,14 @@ fun ItemScreen(nav: Nav, s: Map<String, String>, id: Long) {
         when {
             it == null && error.isNotEmpty() -> LoadFailed(nav, error) { attempt++ }
             it == null -> Loading()
-            else -> Row(
+            else -> FlowRow(
                 Modifier.fillMaxSize().verticalScroll(rememberScrollState()).safeDrawingPadding().padding(horizontal = metrics.gutter, vertical = Space.S6),
                 horizontalArrangement = Arrangement.spacedBy(Space.S6),
+                verticalArrangement = Arrangement.spacedBy(Space.S4),
             ) {
-                if (metrics.tv) ServerImage(nav.app.api.posterUrl(it), metrics.cardWidth, 2f / 3f, Modifier.widthIn(max = metrics.cardWidth * 1.4f).aspectRatio(2f / 3f).clip(Radius.LG), placeholder = it.title)
-                Column(verticalArrangement = Arrangement.spacedBy(Space.S3)) {
+                // Beside the words where there's room, above them on a phone held upright.
+                ServerImage(nav.app.api.posterUrl(it), metrics.cardWidth * 1.4f, 2f / 3f, Modifier.width(metrics.cardWidth * 1.4f).aspectRatio(2f / 3f).clip(Radius.LG), placeholder = it.title)
+                Column(Modifier.widthIn(min = 280.dp, max = 640.dp).weight(1f, fill = false), verticalArrangement = Arrangement.spacedBy(Space.S3)) {
                     if (!it.showTitle.isNullOrEmpty()) Secondary("${it.showTitle} · ${episodeLabel(it)}")
                     Heading(it.title)
                     Secondary(listOfNotNull(it.year?.toString(), runtimeText(it.runtimeSec).ifEmpty { null }, it.contentRating.ifEmpty { null }).joinToString(" · "))
