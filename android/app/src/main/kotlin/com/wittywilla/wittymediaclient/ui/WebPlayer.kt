@@ -6,10 +6,14 @@ import android.content.ActivityNotFoundException
 import android.content.Context
 import android.content.Intent
 import android.graphics.Color
+import android.view.ViewGroup
 import android.webkit.CookieManager
+import android.webkit.RenderProcessGoneDetail
+import android.webkit.WebStorage
 import android.webkit.WebChromeClient
 import android.webkit.WebResourceError
 import android.webkit.WebResourceRequest
+import android.webkit.WebSettings
 import android.webkit.WebView
 import android.webkit.WebViewClient
 import androidx.activity.compose.BackHandler
@@ -32,6 +36,7 @@ import androidx.core.net.toUri
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
+import com.wittywilla.wittymediaclient.diag.ClientLog
 import com.wittywilla.wittymediaclient.net.isWebLink
 import com.wittywilla.wittymediaclient.net.sameServer
 import com.wittywilla.wittymediaclient.net.sessionCookie
@@ -70,6 +75,13 @@ private class PlayerClient(
     override fun onReceivedError(view: WebView, request: WebResourceRequest, error: WebResourceError) {
         if (request.isForMainFrame) onFail()
     }
+
+    // Without this, the page's process dying takes the whole app with it.
+    override fun onRenderProcessGone(view: WebView, detail: RenderProcessGoneDetail): Boolean {
+        ClientLog.warn("player", "The game player's page stopped: ${if (detail.didCrash()) "it crashed" else "the system ended it"}")
+        onFail()
+        return true
+    }
 }
 
 // JavaScript is what the player is. It only ever runs the signed-in server's own page.
@@ -83,6 +95,10 @@ private fun playerWebView(context: Context): WebView = WebView(context).apply {
         mediaPlaybackRequiresUserGesture = false
         allowFileAccess = false
         allowContentAccess = false
+        mixedContentMode = WebSettings.MIXED_CONTENT_NEVER_ALLOW
+        @Suppress("DEPRECATION") // still honoured before Android 8, which this app runs on
+        saveFormData = false
+        cacheMode = WebSettings.LOAD_NO_CACHE
         setGeolocationEnabled(false)
         setSupportMultipleWindows(false)
     }
@@ -132,8 +148,12 @@ fun WebPlayerScreen(nav: Nav, route: Route.Web) {
             gone = true
             bars?.show(WindowInsetsCompat.Type.systemBars())
             web.stopLoading()
+            (web.parent as? ViewGroup)?.removeView(web)
             web.destroy() // this closes the stream's connection too, which ends it on the server
             cookies.removeAllCookies(null)
+            cookies.flush()
+            // What the page kept for itself goes with the sign-in.
+            WebStorage.getInstance().deleteAllData()
         }
     }
 

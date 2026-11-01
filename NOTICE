@@ -18,7 +18,9 @@ Desktop (Windows, Linux)
 Android
   AndroidX: Activity, Core, Lifecycle       Apache-2.0
   Jetpack Compose                           Apache-2.0
-  AndroidX Media3 (ExoPlayer, HLS, UI)      Apache-2.0
+  AndroidX Media3 (ExoPlayer, HLS, Session, UI)  Apache-2.0
+  ZXing core                                Apache-2.0
+    Draws the QR code on the TV sign-in screen.
   Coil                                      Apache-2.0
   OkHttp, Okio                              Apache-2.0
   Kotlin, kotlinx.coroutines,

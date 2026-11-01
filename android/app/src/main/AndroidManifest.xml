@@ -2,11 +2,14 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
     <uses-permission android:name="android.permission.INTERNET" />
+    <!-- To try playback again as soon as a dropped network comes back. -->
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
 
     <!-- One app for phones, tablets and TVs: nothing here is required of the device. -->
     <uses-feature android:name="android.software.leanback" android:required="false" />
     <uses-feature android:name="android.hardware.touchscreen" android:required="false" />
     <uses-feature android:name="android.hardware.gamepad" android:required="false" />
+    <uses-feature android:name="android.hardware.microphone" android:required="false" />
 
     <!-- Moonlight, a separate app, plays games on someone's own PC. Android 11 and later hide
          other apps unless they're named here. -->
@@ -14,10 +17,14 @@
         <package android:name="com.limelight" />
     </queries>
 
+    <!-- allowBackup=false stops cloud backup. dataExtractionRules also stops the device-to-device
+         transfer on Android 12 and later, which ignores allowBackup. -->
     <application
         android:name=".WittyApp"
         android:allowBackup="false"
         android:fullBackupContent="false"
+        android:dataExtractionRules="@xml/data_extraction_rules"
+        android:appCategory="video"
         android:banner="@drawable/banner"
         android:icon="@mipmap/ic_launcher"
         android:label="WittyMedia"
@@ -25,11 +32,14 @@
         android:supportsRtl="true"
         android:theme="@style/AppTheme">
 
+        <!-- No links lead in, so no other app or web page can open a screen here by address. An
+             empty task affinity keeps another app from placing itself in this app's task. -->
         <activity
             android:name=".MainActivity"
-            android:configChanges="orientation|screenSize|screenLayout|smallestScreenSize|keyboard|keyboardHidden|navigation|uiMode"
+            android:configChanges="orientation|screenSize|screenLayout|smallestScreenSize|keyboard|keyboardHidden|navigation|uiMode|density|fontScale|layoutDirection"
             android:exported="true"
             android:launchMode="singleTask"
+            android:taskAffinity=""
             android:supportsPictureInPicture="false"
             android:windowSoftInputMode="adjustResize">
             <intent-filter>

@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.imePadding
+import androidx.compose.foundation.layout.safeDrawingPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
@@ -44,12 +45,10 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import com.wittywilla.wittymediaclient.data.SavedServer
 import com.wittywilla.wittymediaclient.net.Address
 import com.wittywilla.wittymediaclient.net.ApiError
@@ -59,6 +58,9 @@ import com.wittywilla.wittymediaclient.net.Profile
 import com.wittywilla.wittymediaclient.net.Profiles
 import com.wittywilla.wittymediaclient.net.ServerFinder
 import com.wittywilla.wittymediaclient.net.probeServer
+import com.wittywilla.wittymediaclient.net.problemWords
+import kotlinx.coroutines.CancellationException
+import java.io.IOException
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
@@ -87,7 +89,6 @@ private fun Field(
     keyboard: KeyboardType = KeyboardType.Text,
     onDone: () -> Unit,
 ) {
-    val focus = LocalFocusManager.current
     OutlinedTextField(
         value = value,
         onValueChange = onChange,
@@ -96,23 +97,30 @@ private fun Field(
         visualTransformation = if (password) PasswordVisualTransformation() else androidx.compose.ui.text.input.VisualTransformation.None,
         keyboardOptions = KeyboardOptions(keyboardType = if (password) KeyboardType.Password else keyboard, imeAction = ImeAction.Go, autoCorrectEnabled = false),
         keyboardActions = KeyboardActions(onGo = { onDone() }),
-        modifier = modifier.fillMaxWidth().onPreviewKeyEvent {
-            if (it.type == KeyEventType.KeyDown && it.key.nativeKeyCode == KeyEvent.KEYCODE_DPAD_DOWN) {
-                focus.moveFocus(FocusDirection.Down)
-            } else if (it.type == KeyEventType.KeyDown && it.key.nativeKeyCode == KeyEvent.KEYCODE_DPAD_UP) {
-                focus.moveFocus(FocusDirection.Up)
-            } else {
-                false
-            }
-        },
+        modifier = modifier.fillMaxWidth().tvLeavable(),
     )
+}
+
+// A text box otherwise keeps up and down for itself, and a remote can't get out of it.
+@Composable
+fun Modifier.tvLeavable(): Modifier {
+    val focus = LocalFocusManager.current
+    return onPreviewKeyEvent {
+        if (it.type == KeyEventType.KeyDown && it.key.nativeKeyCode == KeyEvent.KEYCODE_DPAD_DOWN) {
+            focus.moveFocus(FocusDirection.Down)
+        } else if (it.type == KeyEventType.KeyDown && it.key.nativeKeyCode == KeyEvent.KEYCODE_DPAD_UP) {
+            focus.moveFocus(FocusDirection.Up)
+        } else {
+            false
+        }
+    }
 }
 
 @Composable
 private fun Centred(content: @Composable () -> Unit) {
     Screen {
         Column(
-            Modifier.fillMaxWidth().imePadding().verticalScroll(rememberScrollState()).padding(32.dp),
+            Modifier.fillMaxWidth().safeDrawingPadding().imePadding().verticalScroll(rememberScrollState()).padding(Space.S8),
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
             Column(Modifier.widthIn(max = 560.dp).fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(12.dp)) { content() }
@@ -139,6 +147,7 @@ fun ConnectScreen(nav: Nav, s: Map<String, String>, message: String) {
     val scope = rememberCoroutineScope()
     val context = LocalContext.current
     val recent = remember { nav.app.store.recent }
+    val appVersion = remember { runCatching { context.packageManager.getPackageInfo(context.packageName, 0).versionName }.getOrNull().orEmpty() }
     var address by rememberSaveable { mutableStateOf("") }
     var error by rememberSaveable(message) { mutableStateOf(message) }
     var busy by remember { mutableStateOf(false) }
@@ -165,8 +174,8 @@ fun ConnectScreen(nav: Nav, s: Map<String, String>, message: String) {
         busy = true
         error = ""
         scope.launch {
-            val problem = when (val r = probeServer(url)) {
-                is Probe.Found -> nav.arrive(url, r.status)
+            val problem = when (val r = probeServer(url, appVersion)) {
+                is Probe.Found -> nav.arrive(r.url, r.status)
                 is Probe.Failed -> reasonText(s, r.reason)
             }
             if (problem != null) {
@@ -240,7 +249,7 @@ private fun PadKey(key: Int, keys: List<FocusRequester>, label: String, small: B
         filled = MaterialTheme.colorScheme.surfaceVariant,
     ) {
         Box(Modifier.fillMaxWidth().padding(vertical = 13.dp), contentAlignment = Alignment.Center) {
-            Text(label, color = MaterialTheme.colorScheme.onSurface, fontSize = if (small) 16.sp else 22.sp, fontWeight = FontWeight.SemiBold)
+            Text(label, color = MaterialTheme.colorScheme.onSurface, style = if (small) MaterialTheme.typography.labelLarge else MaterialTheme.typography.headlineSmall)
         }
     }
 }
@@ -307,8 +316,7 @@ fun CodeScreen(nav: Nav, s: Map<String, String>, server: SavedServer) {
             Text(
                 entry.shown,
                 color = MaterialTheme.colorScheme.onBackground,
-                fontSize = 36.sp,
-                fontWeight = FontWeight.Bold,
+                style = MaterialTheme.typography.displaySmall,
                 modifier = Modifier.semantics {
                     contentDescription = "${s["codeLabel"]}: ${entry.digits.length} ${s["codeEntered"]}"
                 },
@@ -366,30 +374,49 @@ private fun PairPanel(nav: Nav, s: Map<String, String>, onUsePassword: () -> Uni
     var round by remember { mutableStateOf(0) }
     var code by remember { mutableStateOf("") }
     var approveAt by remember { mutableStateOf("") }
+    var scan by remember { mutableStateOf("") }
     var problem by remember { mutableStateOf("") }
+    var waiting by remember { mutableStateOf(false) }
 
     LaunchedEffect(round) {
         code = ""
         problem = ""
+        waiting = false
         try {
             val start = nav.app.api.pairStart(nav.app.deviceName, nav.app.platformName)
             code = start.code
-            approveAt = nav.app.api.base + start.approvePath
+            approveAt = nav.app.api.mediaUrl(start.approvePath)
+            scan = start.approveUrl.ifEmpty { start.approvePath }.let { nav.app.api.mediaUrl(it) }
             var wait = start.intervalSec.coerceAtLeast(1)
             while (true) {
                 delay(wait * 1000L)
-                val poll = nav.app.api.pairPoll(start.deviceSecret)
+                // A network that blinks is no reason to give up on a code that's still good.
+                val poll = try {
+                    nav.app.api.pairPoll(start.deviceSecret).also { waiting = false }
+                } catch (_: IOException) {
+                    waiting = true
+                    continue
+                }
                 when (poll.status) {
-                    "approved" -> { nav.signedIn(poll.token); return@LaunchedEffect }
+                    "approved" -> {
+                        if (poll.token.isEmpty()) {
+                            problem = s["errInvalid"].orEmpty()
+                            code = ""
+                        } else {
+                            nav.signedIn(poll.token)
+                        }
+                        return@LaunchedEffect
+                    }
                     "denied" -> { problem = s["pairDenied"].orEmpty(); code = ""; return@LaunchedEffect }
                     "expired" -> { problem = s["pairExpired"].orEmpty(); code = ""; return@LaunchedEffect }
                     "slow-down" -> wait = (poll.intervalSec.coerceAtLeast(wait)) + 1
                 }
             }
-        } catch (e: ApiError) {
-            problem = e.message.orEmpty()
-        } catch (_: java.io.IOException) {
-            problem = s["errLost"].orEmpty()
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            code = ""
+            problem = problemWords(e, s["errLost"].orEmpty())
         }
     }
 
@@ -397,8 +424,12 @@ private fun PairPanel(nav: Nav, s: Map<String, String>, onUsePassword: () -> Uni
     if (code.isNotEmpty()) {
         Secondary(s["pairHint"].orEmpty())
         Text(approveAt, color = MaterialTheme.colorScheme.onBackground)
-        Text(code, color = MaterialTheme.colorScheme.onBackground, fontSize = 44.sp, fontWeight = FontWeight.Bold, modifier = Modifier.semantics { contentDescription = code.toList().joinToString(" ") })
-        Secondary(s["pairWaiting"].orEmpty())
+        Text(code, color = MaterialTheme.colorScheme.onBackground, style = MaterialTheme.typography.displayMedium, modifier = Modifier.semantics { contentDescription = code.toList().joinToString(" ") })
+        Secondary(if (waiting) s["errLost"].orEmpty() else s["pairWaiting"].orEmpty())
+        if (scan.isNotEmpty()) {
+            Secondary(s["pairScan"].orEmpty())
+            QrCode(scan, Modifier.semantics { contentDescription = s["pairScan"].orEmpty() })
+        }
     }
     ErrorText(problem)
     if (code.isEmpty() && problem.isNotEmpty()) ActionButton(s["pairNew"].orEmpty(), { round++ }, Modifier.fillMaxWidth(), primary = true, requestFocus = true)
@@ -432,13 +463,20 @@ fun SignInScreen(nav: Nav, s: Map<String, String>, way: SignInWay) {
         error = ""
         scope.launch {
             try {
-                nav.signedIn(nav.app.api.login(who, secret, nav.app.deviceName).token)
-            } catch (e: ApiError) {
-                error = e.message.orEmpty()
-            } catch (_: Exception) {
-                error = s["errLost"].orEmpty()
+                val refused = nav.server?.let { nav.clearToSend(it) }
+                if (refused != null) {
+                    error = refused
+                } else {
+                    val result = nav.app.api.login(who, secret, nav.app.deviceName)
+                    if (result.token.isEmpty()) error = s["errInvalid"].orEmpty() else nav.signedIn(result.token)
+                }
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                error = problemWords(e, s["errLost"].orEmpty())
+            } finally {
+                busy = false
             }
-            busy = false
         }
     }
 

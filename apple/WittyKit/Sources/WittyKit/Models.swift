@@ -232,6 +232,15 @@ public struct Intro: Decodable, Equatable {
     public let endSec: Double
 }
 
+public struct Explanation: Decodable, Equatable {
+    public let summary: String?
+    public let source: String?
+    public let picture: String?
+    public let sound: String?
+    public let subtitles: String?
+    public let reasons: [String]?
+}
+
 /// What POST /items/{id}/playback answers: see docs/CLIENT-API.md. The film's
 /// position is always the player's time plus timeOffsetSec.
 public struct Playback: Decodable, Equatable {
@@ -250,10 +259,14 @@ public struct Playback: Decodable, Equatable {
     public let subtitleDelivery: String?
     public let intro: Intro?
     public let nextId: Int64?
+    /// Why it plays this way, in plain words to show as they are.
+    public let explain: Explanation?
+    /// A 3D picture stored in the frame: sbs or tab. Asking with `flatten3d` shows one eye.
+    public let stereo: String?
 
     private enum CodingKeys: String, CodingKey {
         case decision, url, streamId, durationSec, seek, startAtSec, timeOffsetSec, audio, subtitles
-        case audioIndex, subtitleIndex, subtitleDelivery, intro, nextId
+        case audioIndex, subtitleIndex, subtitleDelivery, intro, nextId, explain, stereo
         case protocolName = "protocol"
     }
 

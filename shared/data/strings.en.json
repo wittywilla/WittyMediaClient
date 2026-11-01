@@ -33,6 +33,8 @@
   "pairExpired": "That code has expired.",
   "pairDenied": "That sign-in was refused.",
   "pairNew": "Get a new code",
+  "pairScan": "Or scan this with your phone:",
+  "notKept": "This device couldn't keep your sign-in safely, so you'll be asked to sign in again next time.",
   "usePassword": "Use a password instead",
   "useCode": "Sign in with a code",
   "showCodeInstead": "Show a code on this screen instead",

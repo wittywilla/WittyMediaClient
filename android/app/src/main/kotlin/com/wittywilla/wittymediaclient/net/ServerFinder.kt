@@ -52,12 +52,14 @@ class ServerFinder(context: Context, private val onChange: (List<FoundServer>) -
             if (browsing) runCatching { nsd.stopServiceDiscovery(browse) }
             browsing = false
             waiting.clear()
+            resolving = null
             main.removeCallbacks(giveUp)
         }
     }
 
     private fun queue(next: Waiting) {
-        if (!browsing) return
+        // A noisy network can't make this keep asking for ever.
+        if (!browsing || waiting.size >= MAX_WAITING) return
         waiting.addLast(next)
         resolveNext()
     }
@@ -104,6 +106,7 @@ class ServerFinder(context: Context, private val onChange: (List<FoundServer>) -
         const val SERVICE_TYPE = "_wittymedia._tcp"
         const val RESOLVE_WAIT_MS = 5000L
         const val MAX_RETRIES = 2
+        const val MAX_WAITING = 32
     }
 }
 

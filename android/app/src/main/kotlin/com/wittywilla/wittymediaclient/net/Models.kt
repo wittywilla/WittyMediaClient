@@ -78,6 +78,9 @@ data class Item(
     val introEnd: Double? = null,
     val console: String = "",
     val tagline: String = "",
+    // Worked out by the server from its list of formats, so no client keeps a list of its own.
+    val audioDirect: Boolean = false,
+    val reader: String = "",
 )
 
 @Serializable
@@ -164,6 +167,35 @@ data class Playback(
     val subtitleDelivery: String = "none",
     val intro: Intro? = null,
     val nextId: Long? = null,
+    // Why it plays this way, in plain words to show as they are.
+    val explain: Explanation? = null,
+    // A 3D picture stored in the frame: sbs or tab. Asking with `flatten3d` shows one eye.
+    val stereo: String = "",
+)
+
+@Serializable
+data class Explanation(
+    val summary: String = "",
+    val source: String = "",
+    val picture: String = "",
+    val sound: String = "",
+    val subtitles: String = "",
+    val reasons: List<String> = emptyList(),
+) {
+    val lines: List<String> get() = listOf(source, picture, sound, subtitles).filter { it.isNotEmpty() } + reasons
+}
+
+// What this device really plays, found by asking it. Replaces the profile's lists.
+@Serializable
+data class DeviceCapabilities(
+    val videoCodecs: List<String>? = null,
+    val audioCodecs: List<String>? = null,
+    val hdr: List<String>? = null,
+    val tenBit: Boolean? = null,
+    val maxHeight: Int? = null,
+    val maxAudioChannels: Int? = null,
+    val hlsAudio: List<String>? = null,
+    val hlsVideo: List<String>? = null,
 )
 
 // Left out, a field lets the server decide: which tracks, and where to resume.
@@ -173,6 +205,10 @@ data class PlaybackRequest(
     val audio: Int? = null,
     val subtitle: Int? = null,
     val startSec: Double? = null,
+    val capabilities: DeviceCapabilities? = null,
+    val maxBitrateKbps: Int? = null,
+    val forceTranscode: Boolean? = null,
+    val flatten3d: Boolean? = null,
 )
 
 @Serializable
@@ -180,9 +216,11 @@ data class Capabilities(
     val server: String = "",
     val version: String = "",
     val apiVersion: Int = 0,
+    val apiRevision: Int = 0,
     val apiVersions: List<Int> = emptyList(),
     val setupRequired: Boolean = false,
     val features: List<String> = emptyList(),
+    val minClientVersions: Map<String, String> = emptyMap(),
 )
 
 @Serializable
@@ -192,6 +230,7 @@ data class PairStart(
     val expiresInSec: Int = 600,
     val intervalSec: Int = 3,
     val approvePath: String = "/pair",
+    val approveUrl: String = "",
 )
 
 @Serializable

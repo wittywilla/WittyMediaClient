@@ -41,6 +41,8 @@ data class ServerProof(
 
 enum class NextStep { Warn, Refuse, Lost, AskCode, SignIn, Open }
 
+enum class SendStep { Send, Changed, Refuse, Unreachable }
+
 object Identity {
     private const val NONCE_BYTES = 32
     private const val KEY_BYTES = 32
@@ -96,6 +98,16 @@ object Identity {
     fun fits(pin: String, proof: ServerProof): Boolean =
         if (pin.isEmpty()) proof.state == IdentityState.New || proof.state == IdentityState.None
         else proof.state == IdentityState.Same && proof.publicKey == pin
+
+    // Just before a code or a password goes out: is this still the key the person was shown?
+    fun beforeSending(shownKey: String, proof: ServerProof) = when (proof.state) {
+        IdentityState.Unreachable -> SendStep.Unreachable
+        IdentityState.Bad -> SendStep.Refuse
+        IdentityState.Different -> SendStep.Changed
+        IdentityState.None -> if (shownKey.isEmpty()) SendStep.Send else SendStep.Refuse
+        IdentityState.New -> if (shownKey.isEmpty()) SendStep.Send else SendStep.Changed
+        IdentityState.Same -> if (proof.publicKey == shownKey) SendStep.Send else SendStep.Changed
+    }
 
     // After someone chooses a server.
     fun nextStep(state: IdentityState, tokenFits: Boolean) = when (state) {

@@ -1,7 +1,9 @@
 package com.wittywilla.wittymediaclient.ui
 
+import android.provider.Settings
 import androidx.activity.compose.BackHandler
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateListOf
@@ -10,6 +12,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveableStateHolder
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LifecycleEventEffect
@@ -21,6 +24,7 @@ import com.wittywilla.wittymediaclient.net.ApiError
 import com.wittywilla.wittymediaclient.net.Identity
 import com.wittywilla.wittymediaclient.net.IdentityState
 import com.wittywilla.wittymediaclient.net.NextStep
+import com.wittywilla.wittymediaclient.net.SendStep
 import com.wittywilla.wittymediaclient.net.ServerProof
 import com.wittywilla.wittymediaclient.net.ServerStatus
 import com.wittywilla.wittymediaclient.net.findServerById
@@ -40,6 +44,10 @@ sealed interface Route {
     data class Mismatch(val server: SavedServer) : Route { override val key = "mismatch" }
     data class SignIn(val way: SignInWay = SignInWay.Usual) : Route { override val key = "signin-$way" }
     data object Home : Route { override val key = "home" }
+    data object Search : Route { override val key = "search" }
+    data object Profile : Route { override val key = "profile" }
+    data object Notices : Route { override val key = "notices" }
+    data object Logs : Route { override val key = "logs" }
     data class Library(val library: com.wittywilla.wittymediaclient.net.Library) : Route { override val key = "library-${library.id}" }
     data class Show(val id: Long) : Route { override val key = "show-$id" }
     data class Item(val id: Long) : Route { override val key = "item-$id" }
@@ -49,6 +57,7 @@ sealed interface Route {
 
 // How long a saved server's ID is looked for when its address stops answering.
 private const val FIND_AGAIN_MS = 6000L
+private const val REMEMBERED_SCREENS = 24
 
 // The app's state and its screen stack. Back pops one screen, and only leaves
 // the app from the top level.
@@ -62,10 +71,42 @@ class Nav(val app: WittyApp, private val s: Map<String, String>) {
     var server: SavedServer? = null
         private set
 
+    // A notice for after signing in, such as the sign-in not being kept on this device.
+    var notice by mutableStateOf("")
+
+    // What each screen last showed, in memory only. Coming back draws it straight away and asks
+    // the server again underneath, so a dropped network shows what was there, not a blank screen.
+    private val shown = object : LinkedHashMap<String, Any>(REMEMBERED_SCREENS, 0.75f, true) {
+        override fun removeEldestEntry(eldest: MutableMap.MutableEntry<String, Any>?) = size > REMEMBERED_SCREENS
+    }
+    private val focusMemory = HashMap<String, FocusMemory>()
+
+    @Suppress("UNCHECKED_CAST")
+    fun <T : Any> remembered(key: String): T? = shown[key] as? T
+
+    fun remember(key: String, value: Any) {
+        shown[key] = value
+    }
+
+    fun focusFor(key: String) = focusMemory.getOrPut(key) { FocusMemory() }
+
+    private fun forgetScreens() {
+        shown.clear()
+        focusMemory.clear()
+        app.forgetImages()
+    }
+
     fun push(r: Route) { stack.add(r) }
     fun replace(r: Route) { stack[stack.lastIndex] = r }
     fun reset(r: Route) { stack.clear(); stack.add(r) }
     fun pop() { if (stack.size > 1) stack.removeAt(stack.lastIndex) }
+
+    // Back from the middle of the app goes up a level, and from a tab goes to Home.
+    val backStaysInApp: Boolean get() = stack.size > 1 || current == Route.Search || current == Route.Profile
+
+    fun back() {
+        if (stack.size > 1) pop() else if (backStaysInApp) reset(Route.Home)
+    }
 
     // The warning, with the safe way out of it underneath.
     private fun warn(about: SavedServer) { reset(Route.Connect()); push(Route.Mismatch(about)) }
@@ -80,7 +121,8 @@ class Nav(val app: WittyApp, private val s: Map<String, String>) {
 
     // On to signing in, for a server that has been checked.
     fun signInTo(opening: SavedServer, way: SignInWay = SignInWay.Usual) {
-        app.store.token = ""
+        app.store.forgetToken()
+        forgetScreens()
         openServer(opening)
         reset(Route.SignIn(way))
     }
@@ -101,8 +143,11 @@ class Nav(val app: WittyApp, private val s: Map<String, String>) {
         s["errNotServer"].orEmpty()
     }
 
-    private fun tokenFits(pin: String, proof: ServerProof) =
-        app.store.token.isNotEmpty() && Identity.fits(pin, proof)
+    // The sign-in carries the key it was made for, so this asks about that key, not the list's.
+    private fun tokenFits(proof: ServerProof): Boolean {
+        val kept = app.store.signIn ?: return false
+        return Identity.fits(kept.pin, proof)
+    }
 
     // What the last run was using, if it still is who it was. Its token goes
     // nowhere until then.
@@ -119,7 +164,7 @@ class Nav(val app: WittyApp, private val s: Map<String, String>) {
             }
         }
         val checked = proof.savedAs(saved.url, saved.name)
-        when (Identity.stepAtStart(proof.state, tokenFits(saved.publicKey, proof))) {
+        when (Identity.stepAtStart(proof.state, tokenFits(proof))) {
             NextStep.Warn -> warn(checked)
             NextStep.Refuse -> reset(Route.Connect(s["identityBad"].orEmpty()))
             NextStep.Lost -> reset(Route.Connect(s["errLost"].orEmpty()))
@@ -145,6 +190,7 @@ class Nav(val app: WittyApp, private val s: Map<String, String>) {
         if (proof.state != IdentityState.Different && proof.state != IdentityState.Bad) return
         server = null
         app.api = Api("", "")
+        forgetScreens()
         if (proof.state == IdentityState.Bad) reset(Route.Connect(s["identityBad"].orEmpty()))
         else warn(proof.savedAs(using.url, using.name))
     }
@@ -153,9 +199,9 @@ class Nav(val app: WittyApp, private val s: Map<String, String>) {
     // decides what comes next. Answers words to show if that's nowhere.
     suspend fun arrive(url: String, status: ServerStatus): String? {
         val proof = identify(url, app.store.recent)
-        val pin = app.store.find(app.store.server)?.publicKey.orEmpty()
         val checked = proof.savedAs(url, status.brandName.ifEmpty { status.name })
-        val step = Identity.nextStep(proof.state, pin.isNotEmpty() && tokenFits(pin, proof))
+        val sameServerAsToken = app.store.server == url || app.store.find(app.store.server)?.publicKey == proof.publicKey
+        val step = Identity.nextStep(proof.state, sameServerAsToken && tokenFits(proof))
         if (step != NextStep.Refuse && step != NextStep.Lost) themeId = status.theme
         return when (step) {
             NextStep.Warn -> { push(Route.Mismatch(checked)); null }
@@ -176,8 +222,9 @@ class Nav(val app: WittyApp, private val s: Map<String, String>) {
             proof.state != IdentityState.New -> s["identityBad"].orEmpty()
             proof.publicKey != shown.publicKey -> { replace(Route.Mismatch(proof.savedAs(shown.url, shown.name))); null }
             else -> {
-                app.store.token = ""
+                app.store.forgetToken()
                 app.store.remember(shown)
+                forgetScreens()
                 reset(Route.Connect())
                 push(Route.Code(shown))
                 null
@@ -185,12 +232,24 @@ class Nav(val app: WittyApp, private val s: Map<String, String>) {
         }
     }
 
-    // A code typed on this device. The server has to prove itself again first, as it
-    // could have changed since the screen opened. Answers words to show on failure.
-    suspend fun redeem(to: SavedServer, code: String): String? {
+    // Right before a code or a password leaves this device: has the server just proved it's the
+    // one the person was shown? Answers words to show, or null to go ahead.
+    suspend fun clearToSend(to: SavedServer): String? {
         val proof = identify(to.url, listOf(to))
-        if (proof.state == IdentityState.Unreachable) return s["errUnreachable"]
-        if (!Identity.fits(to.publicKey, proof)) return s["identityBad"]
+        return when (Identity.beforeSending(to.publicKey, proof)) {
+            SendStep.Send -> null
+            SendStep.Unreachable -> s["errUnreachable"]
+            SendStep.Refuse -> s["identityBad"]
+            SendStep.Changed -> {
+                warn(proof.savedAs(to.url, to.name))
+                s["identityChanged"].orEmpty()
+            }
+        }
+    }
+
+    // A code typed on this device. Answers words to show on failure.
+    suspend fun redeem(to: SavedServer, code: String): String? {
+        clearToSend(to)?.let { return it }
         return try {
             val result = Api(to.url, "", quick = true).pairRedeem(code, app.deviceName, app.platformName)
             if (result.token.isEmpty()) return s["errInvalid"]
@@ -208,15 +267,17 @@ class Nav(val app: WittyApp, private val s: Map<String, String>) {
 
     fun signedIn(token: String) {
         val kept = server ?: SavedServer(app.api.base, "WittyMediaServer")
-        app.store.signedIn(kept, token)
+        if (!app.store.signedIn(kept, token)) notice = s["notKept"].orEmpty()
         app.api = Api(kept.url, token)
         ClientLog.kick()
+        forgetScreens()
         reset(Route.Home)
     }
 
     private fun forgetSignIn() {
-        app.store.token = ""
+        app.store.forgetToken()
         app.api = Api(app.api.base, "")
+        forgetScreens()
         reset(Route.SignIn())
     }
 
@@ -235,8 +296,9 @@ class Nav(val app: WittyApp, private val s: Map<String, String>) {
         endSession()
         server = null
         app.store.server = ""
-        app.store.token = ""
+        app.store.forgetToken()
         app.api = Api("", "")
+        forgetScreens()
         reset(Route.Connect())
     }
 
@@ -255,26 +317,37 @@ fun AppRoot(app: WittyApp) {
     val nav = remember { Nav(app, strings) }
     val saveable = rememberSaveableStateHolder()
     val scope = rememberCoroutineScope()
+    val width = LocalConfiguration.current.screenWidthDp
+    val metrics = if (app.isTv) TvMetrics else if (width >= TABLET_WIDTH_DP) TabletMetrics else PhoneMetrics
+    val reduceMotion = remember { runCatching { Settings.Global.getFloat(context.contentResolver, Settings.Global.ANIMATOR_DURATION_SCALE, 1f) == 0f }.getOrDefault(false) }
 
-    WittyTheme(pickTheme(themes, nav.themeId)) {
+    WittyTheme(pickTheme(themes, nav.themeId), metrics, reduceMotion) {
         LaunchedEffect(Unit) { nav.startUp() }
         LifecycleEventEffect(Lifecycle.Event.ON_START) { scope.launch { nav.recheck() } }
-        BackHandler(enabled = nav.stack.size > 1) { nav.pop() }
+        BackHandler(enabled = nav.backStaysInApp) { nav.back() }
         val route = nav.current
         saveable.SaveableStateProvider(route.key) {
-            when (route) {
-                Route.Starting -> Screen { Loading() }
-                is Route.Connect -> ConnectScreen(nav, strings, route.message)
-                is Route.Code -> CodeScreen(nav, strings, route.server)
-                is Route.Mismatch -> MismatchScreen(nav, strings, route.server)
-                is Route.SignIn -> SignInScreen(nav, strings, route.way)
-                Route.Home -> HomeScreen(nav, strings)
-                is Route.Library -> LibraryScreen(nav, route.library)
-                is Route.Show -> ShowScreen(nav, route.id)
-                is Route.Item -> ItemScreen(nav, route.id)
-                is Route.Player -> PlayerScreen(nav, route.id, route.startOver)
-                is Route.Web -> WebPlayerScreen(nav, route)
+            CompositionLocalProvider(LocalFocusMemory provides nav.focusFor(route.key)) {
+                when (route) {
+                    Route.Starting -> Screen { Loading() }
+                    is Route.Connect -> ConnectScreen(nav, strings, route.message)
+                    is Route.Code -> CodeScreen(nav, strings, route.server)
+                    is Route.Mismatch -> MismatchScreen(nav, strings, route.server)
+                    is Route.SignIn -> SignInScreen(nav, strings, route.way)
+                    Route.Home -> Shell(nav) { HomeScreen(nav, strings) }
+                    Route.Search -> Shell(nav) { SearchScreen(nav, strings) }
+                    Route.Profile -> Shell(nav) { ProfileScreen(nav, strings) }
+                    Route.Notices -> NoticesScreen(nav)
+                    Route.Logs -> LogsScreen(nav)
+                    is Route.Library -> LibraryScreen(nav, strings, route.library)
+                    is Route.Show -> ShowScreen(nav, strings, route.id)
+                    is Route.Item -> ItemScreen(nav, strings, route.id)
+                    is Route.Player -> PlayerScreen(nav, route.id, route.startOver)
+                    is Route.Web -> WebPlayerScreen(nav, route)
+                }
             }
         }
     }
 }
+
+private const val TABLET_WIDTH_DP = 600
