@@ -4,6 +4,7 @@ import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.focusGroup
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsFocusedAsState
 import androidx.compose.foundation.layout.Arrangement
@@ -14,6 +15,7 @@ import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
@@ -29,8 +31,11 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.focus.FocusDirection
 import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusProperties
 import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.focus.focusRestorer
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Shape
@@ -77,6 +82,7 @@ fun FocusBox(
     selected: Boolean = false,
     focusKey: String? = null,
     requestFocus: Boolean = false,
+    takeFocus: Boolean = false,
     enabled: Boolean = true,
     filled: Color = Color.Transparent,
     shape: Shape = Radius.MD,
@@ -90,7 +96,9 @@ fun FocusBox(
     val keyboardMode = LocalInputModeManager.current.inputMode == InputMode.Keyboard
     val reduce = LocalReduceMotion.current
     val comingBack = focusKey != null && memory.last == focusKey
-    if (comingBack || (requestFocus && memory.last == null)) LaunchedEffect(focusKey, requestFocus) { runCatching { requester.requestFocus() } }
+    // requestFocus is for the screen's first look. takeFocus is for something that has just appeared
+    // on top of a screen, such as a list of tracks, whatever had focus before.
+    if (comingBack || takeFocus || (requestFocus && memory.last == null)) LaunchedEffect(focusKey, requestFocus, takeFocus) { runCatching { requester.requestFocus() } }
     val showing = focused && keyboardMode
     val ring = if (showing) MaterialTheme.colorScheme.onBackground else Color.Transparent
     val grow = if (showing && !reduce) metrics.focusScale else 1f
@@ -120,6 +128,7 @@ fun ActionButton(
     modifier: Modifier = Modifier,
     primary: Boolean = false,
     requestFocus: Boolean = false,
+    takeFocus: Boolean = false,
     enabled: Boolean = true,
     selected: Boolean = false,
     focusKey: String? = null,
@@ -133,7 +142,7 @@ fun ActionButton(
     val ink = if (primary) scheme.onPrimary else scheme.onSurface
     FocusBox(
         onClick, modifier, label = null, state = state ?: if (selected) "Selected" else null, selected = selected, focusKey = focusKey,
-        requestFocus = requestFocus, enabled = enabled, filled = fill, shape = if (pill) Radius.FULL else Radius.MD,
+        requestFocus = requestFocus, takeFocus = takeFocus, enabled = enabled, filled = fill, shape = if (pill) Radius.FULL else Radius.MD,
     ) {
         Row(
             Modifier
@@ -148,6 +157,18 @@ fun ActionButton(
         }
     }
 }
+
+// A row on a remote. Left and right stay in it, and coming back lands where it was left. Without
+// this, pressing on past the end jumps to whatever happens to be up and to the side.
+@Composable
+fun Modifier.remoteRow(): Modifier =
+    focusRestorer()
+        .focusProperties {
+            onExit = {
+                if (requestedFocusDirection == FocusDirection.Left || requestedFocusDirection == FocusDirection.Right) cancelFocusChange()
+            }
+        }
+        .focusGroup()
 
 // The one heading of a page, or above a row.
 @Composable
@@ -229,12 +250,13 @@ fun PosterCard(
                 ServerImage(imageUrl, width, aspect, Modifier.fillMaxSize(), placeholder = title)
                 if (progress != null) {
                     Box(Modifier.align(Alignment.BottomStart).fillMaxWidth().padding(Space.S1).background(Color(0x99000000), Radius.XS)) {
-                        Box(Modifier.fillMaxWidth(progress.coerceIn(0f, 1f)).padding(vertical = 2.dp).background(scheme.primary, Radius.XS))
+                        Box(Modifier.fillMaxWidth(progress.coerceIn(0f, 1f)).height(Space.S1).background(scheme.primary, Radius.XS))
                     }
                 }
             }
-            Text(title, color = scheme.onBackground, maxLines = 1, overflow = TextOverflow.Ellipsis, style = MaterialTheme.typography.titleSmall)
-            if (subtitle.isNotEmpty()) Text(subtitle, color = scheme.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis, style = MaterialTheme.typography.bodySmall)
+            // Inset, so the focus ring doesn't run through the words.
+            Text(title, color = scheme.onBackground, maxLines = 1, overflow = TextOverflow.Ellipsis, style = MaterialTheme.typography.titleSmall, modifier = Modifier.padding(horizontal = Space.S1))
+            if (subtitle.isNotEmpty()) Text(subtitle, color = scheme.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis, style = MaterialTheme.typography.bodySmall, modifier = Modifier.padding(horizontal = Space.S1))
         }
     }
 }

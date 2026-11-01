@@ -186,7 +186,7 @@ private fun TvHero(nav: Nav, item: Item) {
             Text(item.showTitle?.ifEmpty { null } ?: item.title, color = MaterialTheme.colorScheme.onBackground, style = MaterialTheme.typography.displaySmall, maxLines = 2, overflow = TextOverflow.Ellipsis)
             Secondary(listOfNotNull(item.year?.toString(), item.genres.firstOrNull(), item.contentRating.ifEmpty { null }).joinToString(" · "))
             if (item.overview.isNotEmpty()) Secondary(item.overview, maxLines = 2)
-            Row(horizontalArrangement = Arrangement.spacedBy(Space.S3)) {
+            Row(Modifier.remoteRow(), horizontalArrangement = Arrangement.spacedBy(Space.S3)) {
                 ActionButton("Play", { nav.push(item.playRoute()) }, primary = true, pill = true, icon = Icons.Filled.PlayArrow, focusKey = "hero-play", requestFocus = true)
                 ActionButton("More", { nav.push(Route.Item(item.id)) }, pill = true, focusKey = "hero-more")
             }
@@ -199,6 +199,7 @@ private fun TvHero(nav: Nav, item: Item) {
 private fun LibraryTabs(nav: Nav, libraries: List<Library>, extra: @Composable () -> Unit) {
     val metrics = LocalMetrics.current
     LazyRow(
+        Modifier.remoteRow(),
         contentPadding = PaddingValues(horizontal = metrics.gutter),
         horizontalArrangement = Arrangement.spacedBy(Space.S2),
     ) {
@@ -267,6 +268,7 @@ fun HomeScreen(nav: Nav, s: Map<String, String>) {
                 Column(verticalArrangement = Arrangement.spacedBy(Space.S2)) {
                     SectionTitle(hub.title, Modifier.padding(horizontal = metrics.gutter))
                     LazyRow(
+                        Modifier.remoteRow(),
                         contentPadding = PaddingValues(horizontal = metrics.gutter, vertical = Space.S1),
                         horizontalArrangement = Arrangement.spacedBy(Space.S3),
                     ) {
@@ -396,7 +398,7 @@ fun ShowScreen(nav: Nav, s: Map<String, String>, id: Long) {
                         }
                     }
                     item {
-                        LazyRow(horizontalArrangement = Arrangement.spacedBy(Space.S2)) {
+                        LazyRow(Modifier.remoteRow(), horizontalArrangement = Arrangement.spacedBy(Space.S2)) {
                             items(d.seasons.distinctBy { it.number }, key = { it.number }) { one ->
                                 val title = one.title.ifEmpty { if (one.number == 0) "Specials" else "Season ${one.number}" }
                                 ActionButton(title, { season = one.number }, selected = one.number == selected, pill = true, focusKey = "season-${one.number}", requestFocus = d.nextUpId == null && one.number == selected)
@@ -472,8 +474,8 @@ fun ItemScreen(nav: Nav, s: Map<String, String>, id: Long) {
                     } else if (it.kind in PLAYABLE) {
                         // The server decides where Resume goes; 0 means start over.
                         val resume = (it.progress?.resumeSec ?: 0.0) > 0
-                        Row(horizontalArrangement = Arrangement.spacedBy(Space.S3)) {
-                            ActionButton(if (resume) "Resume" else "Play", { nav.push(Route.Player(it.id, false)) }, primary = true, pill = true, icon = Icons.Filled.PlayArrow, focusKey = "play", requestFocus = true)
+                        Row(Modifier.remoteRow(), horizontalArrangement = Arrangement.spacedBy(Space.S3)) {
+                            ActionButton(if (resume) "Resume" else "Play",{ nav.push(Route.Player(it.id, false)) }, primary = true, pill = true, icon = Icons.Filled.PlayArrow, focusKey = "play", requestFocus = true)
                             if (resume) ActionButton("Start over", { nav.push(Route.Player(it.id, true)) }, pill = true, focusKey = "startover")
                         }
                     } else {

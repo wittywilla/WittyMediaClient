@@ -61,8 +61,10 @@ import androidx.compose.ui.input.key.type
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalView
+import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.ProgressBarRangeInfo
 import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.progressBarRangeInfo
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.setProgress
@@ -96,6 +98,7 @@ import com.wittywilla.wittymediaclient.net.Track
 import com.wittywilla.wittymediaclient.net.problemWords
 import com.wittywilla.wittymediaclient.ui.ActionButton
 import com.wittywilla.wittymediaclient.ui.ErrorText
+import com.wittywilla.wittymediaclient.ui.LocalFocusMemory
 import com.wittywilla.wittymediaclient.ui.LocalMetrics
 import com.wittywilla.wittymediaclient.ui.Nav
 import com.wittywilla.wittymediaclient.ui.Radius
@@ -395,6 +398,12 @@ fun PlayerScreen(nav: Nav, id: Long, startOver: Boolean) {
         if (!controls && picker == Picker.None && problem.isEmpty() && countdown == null) runCatching { rootFocus.requestFocus() }
     }
 
+    // Coming back to the controls from a list lands on the button that opened it. Coming back after
+    // they hid starts from Play again, where OK does what people expect.
+    val focusMemory = LocalFocusMemory.current
+    LaunchedEffect(controls) { if (!controls) focusMemory.last = null }
+    DisposableEffect(Unit) { onDispose { focusMemory.last = null } }
+
     // How far can be reached depends on the stream: a growing one has to be
     // reopened to go past what exists so far (see `seek` in docs/CLIENT-API.md).
     fun seekFilm(targetSec: Double) {
@@ -411,6 +420,8 @@ fun PlayerScreen(nav: Nav, id: Long, startOver: Boolean) {
         }
         filmSec = target
     }
+    // Where the intro ends, while it's on.
+    fun introEnd(): Double? = stream?.intro?.takeIf { filmSec >= it.startSec && filmSec < it.endSec - 1 }?.endSec
     fun playPause() { if (player.isPlaying) player.pause() else player.play() }
     fun playNext() { stream?.nextId?.let(nav::playInstead) }
 
@@ -443,7 +454,12 @@ fun PlayerScreen(nav: Nav, id: Long, startOver: Boolean) {
             KeyEvent.KEYCODE_DPAD_LEFT -> if (controls || picker != Picker.None) return false else seekFilm(currentFilmSec() - seekStepSec(0))
             KeyEvent.KEYCODE_DPAD_RIGHT -> if (controls || picker != Picker.None) return false else seekFilm(currentFilmSec() + seekStepSec(0))
             KeyEvent.KEYCODE_DPAD_UP, KeyEvent.KEYCODE_DPAD_DOWN -> if (controls || picker != Picker.None) return false else controls = true
-            KeyEvent.KEYCODE_DPAD_CENTER, KeyEvent.KEYCODE_ENTER, KeyEvent.KEYCODE_BUTTON_A -> if (controls || picker != Picker.None) return false else controls = true
+            KeyEvent.KEYCODE_DPAD_CENTER, KeyEvent.KEYCODE_ENTER, KeyEvent.KEYCODE_BUTTON_A -> when {
+                controls || picker != Picker.None -> return false
+                // Up on screen by itself during the intro, so OK is for it.
+                introEnd() != null -> introEnd()?.let(::seekFilm)
+                else -> controls = true
+            }
             else -> return false
         }
         return true
@@ -485,13 +501,13 @@ fun PlayerScreen(nav: Nav, id: Long, startOver: Boolean) {
         if (problem.isNotEmpty()) {
             Column(Modifier.align(Alignment.Center).safeDrawingPadding().padding(Space.S8), verticalArrangement = Arrangement.spacedBy(Space.S3)) {
                 ErrorText(problem)
-                ActionButton("Try again", { budget.reset(); tryAgain(ask) }, primary = true, requestFocus = true)
+                ActionButton("Try again", { budget.reset(); tryAgain(ask) }, primary = true, takeFocus = true)
                 ActionButton("Back", nav::pop)
             }
         } else if (left != null) {
             Column(Modifier.align(Alignment.Center).padding(Space.S8), verticalArrangement = Arrangement.spacedBy(Space.S3), horizontalAlignment = Alignment.CenterHorizontally) {
                 Text("Next episode in $left", color = Color.White, style = MaterialTheme.typography.titleLarge, modifier = Modifier.semantics { contentDescription = "Next episode in $left seconds" })
-                ActionButton("Play now", ::playNext, primary = true, requestFocus = true)
+                ActionButton("Play now", ::playNext, primary = true, takeFocus = true)
                 ActionButton("Cancel", { countdown = null; nav.pop() })
             }
         } else if (showInfo && current != null) {
@@ -501,7 +517,7 @@ fun PlayerScreen(nav: Nav, id: Long, startOver: Boolean) {
             ) {
                 Text(current.explain?.summary.orEmpty().ifEmpty { "How this is playing" }, color = Color.White, style = MaterialTheme.typography.titleMedium)
                 current.explain?.lines.orEmpty().forEach { Text(it, color = Color(0xFFD0D0D8), style = MaterialTheme.typography.bodyMedium) }
-                ActionButton("Close", { showInfo = false }, requestFocus = true)
+                ActionButton("Close", { showInfo = false }, takeFocus = true)
             }
         } else if (picker != Picker.None && current != null) {
             TrackList(
@@ -520,7 +536,6 @@ fun PlayerScreen(nav: Nav, id: Long, startOver: Boolean) {
                 modifier = Modifier.align(Alignment.Center).safeDrawingPadding(),
             )
         } else if (controls) {
-            val intro = current?.intro
             Controls(
                 title = item?.showTitle?.ifEmpty { null } ?: item?.title.orEmpty(),
                 subtitle = if (item?.showTitle.isNullOrEmpty()) "" else item?.title.orEmpty(),
@@ -528,7 +543,7 @@ fun PlayerScreen(nav: Nav, id: Long, startOver: Boolean) {
                 canSeek = current != null && current.seek != "none" && duration > 0,
                 filmSec = filmSec,
                 durationSec = duration,
-                introEndSec = intro?.takeIf { filmSec >= it.startSec && filmSec < it.endSec - 1 }?.endSec,
+                introEndSec = introEnd(),
                 nextDue = nextDue,
                 hasNext = current?.nextId != null,
                 hasAudioChoice = (current?.audio?.size ?: 0) > 1,
@@ -551,6 +566,19 @@ fun PlayerScreen(nav: Nav, id: Long, startOver: Boolean) {
                 onBack = nav::pop,
                 modifier = Modifier.align(Alignment.BottomCenter),
             )
+        } else {
+            // The controls hide after a few seconds, and an intro shouldn't need them called back.
+            // A remote's OK is sent here from onKey, and focus stays where the arrows keep seeking.
+            introEnd()?.let { end ->
+                ActionButton(
+                    "Skip intro", { seekFilm(end) }, primary = true, pill = true,
+                    modifier = Modifier
+                        .align(Alignment.BottomEnd)
+                        .safeDrawingPadding()
+                        .padding(LocalMetrics.current.gutter)
+                        .semantics { liveRegion = LiveRegionMode.Polite },
+                )
+            }
         }
     }
 }
@@ -662,22 +690,22 @@ private fun Controls(
     ) {
         Text(title, color = Color.White, style = MaterialTheme.typography.titleLarge)
         if (subtitle.isNotEmpty()) Text(subtitle, color = Color(0xFFD0D0D8), style = MaterialTheme.typography.bodyMedium)
-        if (introEndSec != null) ActionButton("Skip intro", { onSeekTo(introEndSec) }, primary = true, requestFocus = true)
-        if (nextDue) ActionButton("Next episode", onNext, primary = true, requestFocus = introEndSec == null)
+        if (introEndSec != null) ActionButton("Skip intro", { onSeekTo(introEndSec) }, primary = true, requestFocus = true, focusKey = "c-skip")
+        if (nextDue) ActionButton("Next episode", onNext, primary = true, requestFocus = introEndSec == null, focusKey = "c-next-due")
         if (canSeek) SeekBar(filmSec, durationSec, onTouched, onSeekTo)
         FlowRow(horizontalArrangement = Arrangement.spacedBy(Space.S2), verticalArrangement = Arrangement.spacedBy(Space.S2), itemVerticalAlignment = Alignment.CenterVertically) {
-            ActionButton(if (playing) "Pause" else "Play", onPlayPause, primary = !nextDue && introEndSec == null, requestFocus = !nextDue && introEndSec == null)
+            ActionButton(if (playing) "Pause" else "Play", onPlayPause, primary = !nextDue && introEndSec == null, requestFocus = !nextDue && introEndSec == null, focusKey = "c-play")
             if (canSeek) {
-                ActionButton("Back 10 s", onSeekBack)
-                ActionButton("Forward 10 s", onSeekForward)
+                ActionButton("Back 10 s", onSeekBack, focusKey = "c-back")
+                ActionButton("Forward 10 s", onSeekForward, focusKey = "c-forward")
             }
-            if (hasAudioChoice) ActionButton("Audio", onAudio)
-            if (hasSubtitles) ActionButton("Subtitles", onSubtitles)
-            if (stereo) ActionButton(if (flattened) "Show as stored" else "Show in 2D", onFlatten)
-            if (hasInfo) ActionButton("Info", onInfo)
-            if (hasNext && !nextDue) ActionButton("Next episode", onNext)
+            if (hasAudioChoice) ActionButton("Audio", onAudio, focusKey = "c-audio")
+            if (hasSubtitles) ActionButton("Subtitles", onSubtitles, focusKey = "c-subtitles")
+            if (stereo) ActionButton(if (flattened) "Show as stored" else "Show in 2D", onFlatten, focusKey = "c-flatten")
+            if (hasInfo) ActionButton("Info", onInfo, focusKey = "c-info")
+            if (hasNext && !nextDue) ActionButton("Next episode", onNext, focusKey = "c-next")
             // On a remote or a phone Back does this too; this is for those who look for it.
-            ActionButton("Leave", onBack)
+            ActionButton("Leave", onBack, focusKey = "c-leave")
             if (durationSec > 0) {
                 Text(
                     "${clock(filmSec)} / ${clock(durationSec)}", color = Color.White, style = MaterialTheme.typography.bodyMedium,
@@ -704,9 +732,9 @@ private fun TrackList(
             .padding(Space.S4),
         verticalArrangement = Arrangement.spacedBy(Space.S2),
     ) {
-        if (allowOff) ActionButton("Off", { onPick(-1) }, Modifier.fillMaxWidth(), selected = selected == -1, requestFocus = selected == -1)
+        if (allowOff) ActionButton("Off", { onPick(-1) }, Modifier.fillMaxWidth(), selected = selected == -1, takeFocus = selected == -1)
         tracks.distinctBy { it.index }.forEach { t ->
-            ActionButton(trackName(t), { onPick(t.index) }, Modifier.fillMaxWidth(), selected = t.index == selected, requestFocus = t.index == selected)
+            ActionButton(trackName(t), { onPick(t.index) }, Modifier.fillMaxWidth(), selected = t.index == selected, takeFocus = t.index == selected)
         }
     }
 }
