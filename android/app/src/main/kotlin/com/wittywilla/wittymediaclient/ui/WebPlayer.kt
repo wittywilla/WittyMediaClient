@@ -10,6 +10,8 @@ import android.graphics.Color
 import android.net.Uri
 import android.os.Build
 import android.os.Environment
+import android.os.SystemClock
+import android.view.InputDevice
 import android.view.KeyEvent
 import android.view.View
 import android.view.ViewGroup
@@ -52,9 +54,11 @@ import androidx.core.net.toUri
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
+import com.wittywilla.wittymediaclient.WittyApp
 import com.wittywilla.wittymediaclient.diag.ClientLog
 import com.wittywilla.wittymediaclient.net.APP_BACK_PATH
 import com.wittywilla.wittymediaclient.net.ASK_OWN_BACK
+import com.wittywilla.wittymediaclient.net.ASK_SEES_PAD
 import com.wittywilla.wittymediaclient.net.OFFER_APP_BACK
 import com.wittywilla.wittymediaclient.net.Api
 import com.wittywilla.wittymediaclient.net.TV_VIEWPORT
@@ -81,6 +85,7 @@ private class PageClient(
     private val onPath: (String) -> Unit,
     private val onFail: () -> Unit,
     private val onShowing: () -> Unit,
+    private val onLoaded: () -> Unit,
     private val onAppBack: () -> Unit,
     private val isTv: Boolean,
 ) : WebViewClient() {
@@ -90,6 +95,8 @@ private class PageClient(
         view.evaluateJavascript(OFFER_APP_BACK, null)
         onShowing()
     }
+
+    override fun onPageFinished(view: WebView, url: String) = onLoaded()
 
     override fun shouldOverrideUrlLoading(view: WebView, request: WebResourceRequest): Boolean {
         val url = request.url.toString()
@@ -158,6 +165,31 @@ private fun pageWebView(context: Context, background: Int, isTv: Boolean): WebVi
         saveFormData = false
         setGeolocationEnabled(false)
         setSupportMultipleWindows(false)
+    }
+}
+
+// The controller a page should know about from the start: the one that opened it. A TV's page already
+// draws itself for across the room, so any controller plugged in to one counts. On a phone, a controller
+// that's only plugged in stays out of it: the page would change its size for someone holding the phone.
+private fun padForPage(app: WittyApp): Int? {
+    if (app.lastPad >= 0 && InputDevice.getDevice(app.lastPad) != null) return app.lastPad
+    if (!app.isTv) return null
+    return InputDevice.getDeviceIds().firstOrNull { id -> InputDevice.getDevice(id)?.let { it.supportsSource(InputDevice.SOURCE_GAMEPAD) && !it.isVirtual } == true }
+}
+
+// A web view hides a controller from a new page until a button is pressed with that page up, and the first
+// press after opening it doesn't count even for that. So someone who opened this page with A would press A on
+// its first button and see nothing happen. This presses the left stick for them, which the page has no use for,
+// until the page can see the controller. The next press is theirs.
+private fun showPadToPage(web: WebView, pad: Int, tries: Int = 4) {
+    if (tries == 0 || !web.isAttachedToWindow) return
+    web.evaluateJavascript(ASK_SEES_PAD) { answer ->
+        if (answer == "true" || !web.isAttachedToWindow) return@evaluateJavascript
+        val at = SystemClock.uptimeMillis()
+        fun stick(action: Int) = web.dispatchKeyEvent(KeyEvent(at, SystemClock.uptimeMillis(), action, KeyEvent.KEYCODE_BUTTON_THUMBL, 0, 0, pad, 0, 0, InputDevice.SOURCE_GAMEPAD))
+        stick(KeyEvent.ACTION_DOWN)
+        web.postDelayed({ if (web.isAttachedToWindow) stick(KeyEvent.ACTION_UP) }, 150)
+        web.postDelayed({ showPadToPage(web, pad, tries - 1) }, 1000)
     }
 }
 
@@ -232,6 +264,7 @@ fun ServerPageScreen(nav: Nav, route: Route, path: String, keptToGames: Boolean)
             },
             onFail = { failed = CANT_OPEN },
             onShowing = { showing = true },
+            onLoaded = { padForPage(nav.app)?.let { showPadToPage(web, it) } },
             onAppBack = { if (nav.current == route) nav.pop() },
             isTv = nav.app.isTv && !keptToGames,
         )

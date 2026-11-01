@@ -86,6 +86,9 @@ fun nintendoKey(keyCode: Int): Int? = when (keyCode) {
 const val APP_BACK_PATH = "/.wittymedia-app-back"
 const val OFFER_APP_BACK = "document.documentElement.dataset.appBack='$APP_BACK_PATH'"
 
+// Whether the page has been shown a controller yet.
+const val ASK_SEES_PAD = "(function(){try{return Array.from(navigator.getGamepads()).some(Boolean)}catch(e){return false}})()"
+
 // The server's big screen mode is drawn for a screen 1920 wide, whatever a TV's density makes of it.
 const val TV_VIEWPORT = "(function(){var m=document.querySelector('meta[name=viewport]');if(m)m.content='width=1920'})()"
 

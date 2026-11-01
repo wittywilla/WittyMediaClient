@@ -281,7 +281,7 @@ Android 16 phone and 1080p TV emulators, against a real server with `saveMetadat
   Films and shows still play there. Versions just above that line haven't been tried: this was seen on 143.
 - **What a page builds itself to save can't be downloaded,** such as a backup or a zipped log. It says to use a browser. A file the server sends by address can be.
 - **Uploading by remote on a TV:** whether a TV has a file picker at all differs by device. It says so if it hasn't.
-- **Remote and controller:** only emulated key presses have reached the pages on a TV. A game controller in a web view hasn't been tried.
+- **Remote and controller:** only emulated key presses and virtual controllers have reached the pages on a TV. See [Controllers](#controllers).
 
 ## Controllers
 
@@ -302,7 +302,7 @@ The app has to let a controller through, and what each button then does is the s
 - **Own screens and the page:** D-pad as a hat and left stick to move, confirm and back. In the page, the D-pad and buttons of all four.
 - **A Nintendo pad's labels are obeyed, on an assumption.** Android names buttons by where they sit, and Linux's driver reports A as the right-hand button, so this app and the page both read A as confirm. On an older device whose driver differs, A and B could be the wrong way round. A real pad on a cheap stick is what would tell.
 - **The DualShock 4 ran on the layout for the older driver,** as this tool can't set the version a newer one reports. The newer layout is the DualSense's.
-- **The first press in a newly opened page only wakes the controller,** as browsers don't show a page a controller until it's used. The second press moves. Button presses that wake it can go to the page as well.
+- **The first press in a newly opened page counts.** A web view hides a controller from a page until a button is pressed, and the first press after opening a page didn't even do that, so A on the guide's first button did nothing the first time. The app now presses the left stick for the page when it loads, until the page can see the controller. On a TV it does this for any controller plugged in, and on a phone only if a controller was what opened the page. Seen on the TV emulator.
 
 **Found by running it:** a DualSense gets no named layout from Android's web view, and the page looked for its D-pad in the wrong place, so it did nothing there. B at the top of a page did nothing either, as a web view keeps a controller's buttons for the page. Both are fixed.
 

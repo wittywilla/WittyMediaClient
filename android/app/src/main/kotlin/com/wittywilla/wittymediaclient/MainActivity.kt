@@ -3,6 +3,7 @@ package com.wittywilla.wittymediaclient
 import android.content.Intent
 import android.annotation.SuppressLint
 import android.os.Bundle
+import android.view.InputDevice
 import android.view.KeyEvent
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -36,6 +37,9 @@ class MainActivity : ComponentActivity() {
     // Lint reads this as the library's own override. It's the system's, on Activity, which any app may have.
     @SuppressLint("RestrictedApi")
     override fun dispatchKeyEvent(event: KeyEvent): Boolean {
+        if (event.action == KeyEvent.ACTION_DOWN) {
+            (application as WittyApp).lastPad = if (event.device?.supportsSource(InputDevice.SOURCE_GAMEPAD) == true) event.deviceId else -1
+        }
         if (event.keyCode == KeyEvent.KEYCODE_GUIDE) {
             if (event.action == KeyEvent.ACTION_DOWN) (application as WittyApp).onGuideKey?.invoke()
             return true
