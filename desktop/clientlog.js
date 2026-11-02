@@ -189,6 +189,8 @@ function createClientLog(options) {
       for (const resolve of waiters) resolve()
     }
     const write = () => {
+      // Quitting may have written everything while this waited to learn the file's size.
+      if (!unwritten.length) return done()
       if (firstFits()) return writeSome(done)
       rotate(() => learnSize(() => {
         if (firstFits()) return writeSome(done)
