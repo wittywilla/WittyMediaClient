@@ -5,6 +5,11 @@ What changed in WittyMediaClient, newest first. What changed before it had a rep
 
 ## Unreleased
 
+- **Android 0.3.0: music, audiobooks and podcasts have a player of their own.** Sound carries on with the screen off, after leaving the app and after swiping it away, with the
+  player on the lock screen, in the system's controls and on a TV's home screen, and headphone and media keys work. Albums, artists or authors, songs and podcast episodes have the app's own screens,
+  with a queue you can add to, rearrange and shuffle, and a mini player over the rest of the app. Books and podcasts save their place and resume it, go back 15 and forward 30 seconds, and keep a
+  chosen speed. A song the server has to convert seeks like any other. It tries again by itself when the network comes back, and everything works with arrows and OK on a TV. Playlists, lyrics
+  and following a podcast are behind More, in the server's own page.
 - **Android: nothing the server does is a dead end now.** Music, audiobooks, podcasts, radio, books, comics, photos, disc menus, games, the TV guide, collections
   and settings open in the server's own page inside the app, signed in, instead of "open it in a web browser". On a TV it's the big screen version, and Back
   closes what's open on the page first. A page can go full screen, choose a file to upload, and save a file to Downloads. A device whose web view is too old says so.

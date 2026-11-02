@@ -48,7 +48,7 @@ Kotlin Multiplatform and a shared UI toolkit were looked at and turned down: see
 | **HDR** | `appliesPreferredDisplayCriteriaAutomatically` | `SurfaceView` and the display's reported types. `dv5` only with a Dolby Vision decoder |
 | **Frame rate** | The same setting | Media3's default, which only switches when it's seamless. Turning on full switching is an experiment for a real TV |
 | **Audio passthrough** | Left to AVPlayer | Media3 passes through what `AudioCapabilities` reports over HDMI |
-| **Remote commands, now playing** | `externalMetadata` and the system player | `MediaSession`, while the player is open |
+| **Remote commands, now playing** | `externalMetadata` and the system player | `MediaSession`: while a film is open, and for as long as there's a queue for sound, in a `MediaSessionService` |
 | **Top shelf or channels** | Top Shelf extension, reading a file the app writes. No network or token in it | **Not built.** See below |
 | **Live TV** | **Not built** | **Not built** |
 | **Screen readers** | VoiceOver labels and groups | TalkBack labels, roles, states and live regions |

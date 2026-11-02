@@ -4,6 +4,10 @@
     <uses-permission android:name="android.permission.INTERNET" />
     <!-- To try playback again as soon as a dropped network comes back. -->
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+    <!-- Music, audiobooks and podcasts carry on with the screen off and the app left. -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK" />
+    <uses-permission android:name="android.permission.WAKE_LOCK" />
 
     <!-- One app for phones, tablets and TVs: nothing here is required of the device. -->
     <uses-feature android:name="android.software.leanback" android:required="false" />
@@ -48,5 +52,16 @@
                 <category android:name="android.intent.category.LEANBACK_LAUNCHER" />
             </intent-filter>
         </activity>
+
+        <!-- Exported so that the system's media controls, headphones and a TV's card can reach it. Other apps
+             can only press its buttons: ListeningService.Callback.onConnect. -->
+        <service
+            android:name=".player.ListeningService"
+            android:exported="true"
+            android:foregroundServiceType="mediaPlayback">
+            <intent-filter>
+                <action android:name="androidx.media3.session.MediaSessionService" />
+            </intent-filter>
+        </service>
     </application>
 </manifest>

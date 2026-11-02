@@ -72,12 +72,11 @@ import com.wittywilla.wittymediaclient.net.programmeAt
 import com.wittywilla.wittymediaclient.net.hasOwnScreen
 import com.wittywilla.wittymediaclient.net.isRigGame
 import com.wittywilla.wittymediaclient.net.isRigGames
+import com.wittywilla.wittymediaclient.net.isTrack
 import com.wittywilla.wittymediaclient.net.pagePath
 import com.wittywilla.wittymediaclient.net.problemWords
 import kotlinx.coroutines.CancellationException
 import kotlin.math.absoluteValue
-
-private const val MUSIC_KIND = "audio"
 
 fun episodeLabel(it: Item): String {
     val season = it.season ?: return ""
@@ -88,7 +87,7 @@ fun episodeLabel(it: Item): String {
 }
 
 private fun itemSubtitle(it: Item) = when {
-    it.kind == MUSIC_KIND -> it.albumArtist.ifEmpty { it.artist }
+    it.isTrack -> it.albumArtist.ifEmpty { it.artist }
     else -> episodeLabel(it).ifEmpty { it.year?.toString().orEmpty() }
 }
 
@@ -102,7 +101,7 @@ private fun progressOf(it: Item): Float? {
 fun ItemCard(nav: Nav, it: Item, requestFocus: Boolean = false, scope: String = "") {
     PosterCard(
         it.showTitle?.takeIf { s -> s.isNotEmpty() } ?: it.title, itemSubtitle(it), nav.app.api.posterUrl(it), { nav.open(it) },
-        aspect = if (it.kind == MUSIC_KIND) 1f else 2f / 3f, focusKey = "$scope-i${it.id}", requestFocus = requestFocus, progress = progressOf(it),
+        aspect = if (it.isTrack) 1f else 2f / 3f, focusKey = "$scope-i${it.id}", requestFocus = requestFocus, progress = progressOf(it),
     )
 }
 
@@ -113,7 +112,7 @@ fun ShowCard(nav: Nav, s: Show, requestFocus: Boolean = false, scope: String = "
 }
 
 @Composable
-private fun LoadFailed(nav: Nav, message: String, retry: () -> Unit) {
+fun LoadFailed(nav: Nav, message: String, retry: () -> Unit) {
     Column(Modifier.fillMaxSize().safeDrawingPadding().padding(Space.S8), verticalArrangement = Arrangement.spacedBy(Space.S3)) {
         ErrorText(message)
         ActionButton("Try again", retry, requestFocus = true)
@@ -121,8 +120,12 @@ private fun LoadFailed(nav: Nav, message: String, retry: () -> Unit) {
     }
 }
 
-private fun Item.playRoute(): Route =
-    if (hasOwnScreen && !isRigGame) Route.Player(id, false) else if (hasOwnScreen) Route.Item(id) else Route.Page(pagePath())
+private fun Nav.play(item: Item) = when {
+    item.isTrack -> playTrack(item)
+    item.isRigGame -> push(Route.Item(item.id))
+    item.hasOwnScreen -> push(Route.Player(item.id, false))
+    else -> push(Route.Page(item.pagePath()))
+}
 
 // The first thing on Home. On a phone, posters to swipe through, with the one in front named below
 // and a Play pill, in the layout people know from the big music and video apps. On a TV, the
@@ -171,7 +174,7 @@ private fun PhoneHero(nav: Nav, featured: List<Item>) {
                 maxLines = 2, overflow = TextOverflow.Ellipsis, textAlign = TextAlign.Center, modifier = Modifier.padding(horizontal = Space.S6),
             )
             Secondary(listOfNotNull(front.year?.toString(), front.genres.firstOrNull()).joinToString(" · "))
-            ActionButton("Play", { nav.push(front.playRoute()) }, primary = true, pill = true, icon = Icons.Filled.PlayArrow, focusKey = "hero-play")
+            ActionButton("Play", { nav.play(front) }, primary = true, pill = true, icon = Icons.Filled.PlayArrow, focusKey = "hero-play")
         }
     }
 }
@@ -198,7 +201,7 @@ private fun TvHero(nav: Nav, item: Item) {
             Secondary(listOfNotNull(item.year?.toString(), item.genres.firstOrNull(), item.contentRating.ifEmpty { null }).joinToString(" · "))
             if (item.overview.isNotEmpty()) Secondary(item.overview, maxLines = 2)
             Row(Modifier.remoteRow(), horizontalArrangement = Arrangement.spacedBy(Space.S3)) {
-                ActionButton("Play", { nav.push(item.playRoute()) }, primary = true, pill = true, icon = Icons.Filled.PlayArrow, focusKey = "hero-play", requestFocus = true)
+                ActionButton("Play", { nav.play(item) }, primary = true, pill = true, icon = Icons.Filled.PlayArrow, focusKey = "hero-play", requestFocus = true)
                 ActionButton("More", { nav.open(item) }, pill = true, focusKey = "hero-more")
             }
         }
@@ -298,7 +301,7 @@ fun HomeScreen(nav: Nav, s: Map<String, String>) {
         ) {
             val hubs = h.hubs.filter { it.items.isNotEmpty() || it.shows.isNotEmpty() }.distinctBy { it.key }
             // Featured first, and otherwise whatever someone was in the middle of.
-            val heroes = h.featured.ifEmpty { hubs.firstOrNull()?.items.orEmpty() }.distinctBy { it.id }.take(HERO_ITEMS)
+            val heroes = albumsOnce(h.featured.ifEmpty { hubs.firstOrNull()?.items.orEmpty() }.distinctBy { it.id }).take(HERO_ITEMS)
             if (heroes.isNotEmpty()) {
                 item(key = "hero") { if (metrics.tv || sideways) TvHero(nav, heroes.first()) else PhoneHero(nav, heroes) }
             } else {

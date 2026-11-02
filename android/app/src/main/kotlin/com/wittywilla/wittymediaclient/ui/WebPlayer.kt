@@ -40,6 +40,7 @@ import androidx.compose.foundation.layout.safeDrawingPadding
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -241,6 +242,9 @@ fun ServerPageScreen(nav: Nav, route: Route, path: String, keptToGames: Boolean)
     // Some devices have a missing or broken web view, and creating one is where that shows.
     val tooOld = remember { runCatching { webViewTooOld(WebSettings.getDefaultUserAgent(context)) }.getOrDefault(false) }
     val web = remember { if (tooOld) null else runCatching { pageWebView(context, if (keptToGames) Color.BLACK else background, nav.app.isTv && !keptToGames) }.getOrNull() }
+
+    // A film, a channel or a game in the page. Music in a page can't be told apart from a quiet one, so that isn't here.
+    LaunchedEffect(fills) { if (fills) nav.app.listening.pauseForVideo() }
 
     DisposableEffect(web) {
         nav.app.showingPage = true

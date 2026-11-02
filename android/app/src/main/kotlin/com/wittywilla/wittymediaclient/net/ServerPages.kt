@@ -3,21 +3,43 @@ package com.wittywilla.wittymediaclient.net
 import android.view.KeyEvent
 
 // Which things have this app's own screens, and which open the server's own page inside the app.
-// Video is built here. Everything else the server does, from music to books, photos, disc menus,
-// the TV guide and its settings, is the server's page, so nothing it offers is out of reach and
-// nothing has to be built twice. These are the decisions, kept apart from Android so they can be tested.
+// Video and listening are built here. Everything else the server does, from radio to books, photos,
+// disc menus, the TV guide and its settings, is the server's page, so nothing it offers is out of reach
+// and nothing has to be built twice. These are the decisions, kept apart from Android so they can be tested.
 
 private val OWN_SCREEN_LIBRARIES = setOf("movies", "shows", "anime", "videos", "discs")
+private val LISTENING_LIBRARIES = setOf("music", "audiobooks", "podcasts")
+private const val KIND_AUDIO = "audio"
 
-val Library.hasOwnScreen: Boolean get() = type in OWN_SCREEN_LIBRARIES || isRigGames
+val Library.isListening: Boolean get() = type in LISTENING_LIBRARIES
 
-val Item.hasOwnScreen: Boolean get() = kind == "video" || isRigGame
+val Library.hasOwnScreen: Boolean get() = type in OWN_SCREEN_LIBRARIES || isListening || isRigGames
+
+val Item.isTrack: Boolean get() = kind == KIND_AUDIO
+
+val Item.hasOwnScreen: Boolean get() = kind == "video" || isTrack || isRigGame
+
+// Books and podcasts carry on from where they stopped. Songs start over, as the server decides for /playback.
+fun keepsPlace(libraryType: String) = libraryType == "audiobooks" || libraryType == "podcasts"
+
+// The words for a library's own parts.
+fun albumsWord(libraryType: String) = when (libraryType) {
+    "audiobooks" -> "Books"
+    "podcasts" -> "Podcasts"
+    else -> "Albums"
+}
+
+fun artistsWord(libraryType: String) = if (libraryType == "audiobooks") "Authors" else "Artists"
+
+// The server's own page for a listening library has what isn't built here: playlists, lyrics, a song's radio,
+// and following a podcast.
+fun Library.fullPagePath() = pagePath()
 
 // A row of songs or chapters shows each album or book once, under its own name.
 fun albumsOnce(items: List<Item>): List<Item> {
     val seen = HashSet<String>()
     return items.mapNotNull { item ->
-        if (item.kind != "audio" || item.album.isEmpty()) return@mapNotNull item
+        if (!item.isTrack || item.album.isEmpty()) return@mapNotNull item
         val key = item.albumArtist.ifEmpty { item.artist } + "|" + item.album
         if (seen.add(key)) item.copy(title = item.album) else null
     }
