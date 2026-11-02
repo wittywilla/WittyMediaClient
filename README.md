@@ -2,6 +2,22 @@
 
 Apps that connect to a WittyMediaServer, for TV boxes, phones, tablets and desktops. You need one if you'd rather not use a browser on that device. Most of this is early, and [Platforms](#platforms) says how far each one has been run.
 
+<!-- pictures -->
+
+![The desktop app showing a server's home page](docs/images/client-home.webp)
+
+<sub>WittyMediaClient on a desktop, connected to a test server. From a test server. The server's [credits list](https://github.com/wittywilla/WittyMediaServer/blob/master/docs/images/CREDITS.md) names everything shown.</sub>
+
+![The big-screen view for a TV](docs/images/big-screen.webp)
+
+<sub>The big-screen view the app shows on a TV, here in a browser. From a test server. The server's [credits list](https://github.com/wittywilla/WittyMediaServer/blob/master/docs/images/CREDITS.md) names everything shown.</sub>
+
+![The home page at phone width](docs/images/phone-home.webp)
+
+<sub>The server's pages at phone width, here in a browser. From a test server. The server's [credits list](https://github.com/wittywilla/WittyMediaServer/blob/master/docs/images/CREDITS.md) names everything shown.</sub>
+
+<!-- /pictures -->
+
 ## What it does
 
 - **Finds your server** on the network, or takes its address, and signs in with a code or a password. It checks the server's identity first.
