@@ -129,11 +129,12 @@ test('a file that is full when the app starts is rotated first', async (t) => {
   assert.strictEqual(fileLines(log).length, 1)
 })
 
-test('what is queued is written by the last call before quitting', (t) => {
+test('what is queued is written by the last call before quitting', async (t) => {
   const { log } = withServer(t)
   log.error('crash', 'the last thing that happened')
   log.drainSync()
   assert.ok(fs.readFileSync(log.file, 'utf8').includes('the last thing that happened'))
+  await log.idle()
 })
 
 test('errors carry the version and system in the file', async (t) => {

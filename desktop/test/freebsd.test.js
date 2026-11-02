@@ -64,7 +64,9 @@ test('every package that adds a launcher entry says what it left when it goes', 
   assert.ok(build.linux.target.some((t) => t.target === 'pacman'))
 })
 
-test('the removal message reaches every package manager that removes it', { skip: process.platform === 'win32' && 'no bash here' }, () => {
+const hasBash = spawnSync('bash', ['-c', 'true']).status === 0
+
+test('the removal message reaches every package manager that removes it', { skip: !hasBash && 'no bash here' }, () => {
   const script = fs.readFileSync(path.join(here, 'build', 'linux', 'after-remove.sh'), 'utf8')
     .replace(/\$\{executable\}/g, 'not-here-at-all').replace(/\$\{sanitizedProductName\}/g, 'NotHereAtAll')
   const says = (arg) => spawnSync('bash', ['-c', script, 'after-remove', arg], { encoding: 'utf8' }).stdout.includes('has been removed')
