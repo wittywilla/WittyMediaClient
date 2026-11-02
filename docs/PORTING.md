@@ -157,8 +157,9 @@ autologin, and `-device virtio-vga,xres=1920,yres=1080` in QEMU. Its kernel leav
 The one APK carries `armeabi-v7a`, `arm64-v8a`, `x86` and `x86_64`, named in `android/app/build.gradle.kts`. It costs very little: only one native library is in it. A
 dependency that brings in a library missing for one of them fails `android/scripts/check-abis.sh` in CI. [PLATFORMS.md](PLATFORMS.md#androids-processors) has what was checked.
 
-## Not started, on either TV app
+## What a TV app doesn't have of its own
 
-Live TV and the guide, discs and their menus, games other than on someone's own PC, books and photos. The server's API has
-what they need: [its guide](https://github.com/wittywilla/WittyMediaServer/blob/master/docs/CLIENT-API.md) has a list called
-"What a TV app must build itself". Each plainly says it can't play yet, rather than failing.
+Android TV shows the server's own page for everything but video, and that's where disc menus, books, music with its queue, games and the guide come from.
+Apple TV has no web view, so it has screens of its own for music, photos and channels, and says plainly what it can't show. What's left to build there, from the
+server's `docs/CLIENT-API.md`, "What a TV app must build itself": disc menus, a reader, radio, games, and music beyond albums and tracks. [Features](PLATFORMS.md#features)
+has where each stands.

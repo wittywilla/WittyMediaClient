@@ -81,6 +81,9 @@ data class Item(
     // Worked out by the server from its list of formats, so no client keeps a list of its own.
     val audioDirect: Boolean = false,
     val reader: String = "",
+    val album: String = "",
+    val albumArtist: String = "",
+    val artist: String = "",
 )
 
 @Serializable
@@ -126,6 +129,27 @@ data class Home(
     val featured: List<Item> = emptyList(),
     val libraries: List<Library> = emptyList(),
 )
+
+@Serializable
+data class GuideProgramme(
+    val start: Long = 0,
+    val end: Long = 0,
+    val title: String = "",
+    val itemId: Long? = null,
+)
+
+@Serializable
+data class GuideChannel(
+    val key: String = "",
+    val number: String = "",
+    val name: String = "",
+    val encrypted: String = "", // why it can't be tuned: this server never decrypts a broadcast
+    val favourite: Boolean = false,
+    val programmes: List<GuideProgramme> = emptyList(),
+)
+
+@Serializable
+data class Guide(val channels: List<GuideChannel> = emptyList())
 
 @Serializable
 data class ItemPage(val items: List<Item> = emptyList(), val total: Int = 0)

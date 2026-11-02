@@ -12,8 +12,8 @@ stay honest: **written** does not mean **works**.
 | **Not started** | Nothing exists yet. |
 | **Blocked** | Needs something only the owner can get. |
 
-**Android has run on emulators and on nothing else.** [Android, as of 0.2.1](#android-as-of-021) lists what was seen and what
-wasn't. Using it for the first time found real bugs that nothing before it could, so anything on that list marked as not run
+**Android has run on emulators and on nothing else.** [Features](#features) has what each client does, and how far each was seen.
+[Android, as of 0.2.1](#android-as-of-021) lists more of what was seen and what wasn't. Using it for the first time found real bugs that nothing before it could, so anything on that list marked as not run
 should be expected to have some too.
 
 ## Platforms
@@ -35,9 +35,9 @@ should be expected to have some too.
 | Google TV | **Compiled** | Not run: its emulator images come under a licence that hasn't been accepted. It should behave as Android TV does, but nobody has seen it. |
 | Fire TV | **Compiled** | Not run: no image for it here. Needs Fire OS 6 or later: the first Fire TV Sticks are too old for Compose. |
 | Android phones | **Ran on an emulator** | Android 16 in full, and Android 6 (API 23, the oldest it supports) for connecting, playing and a network drop. No real phone yet. |
-| Android tablets | **Compiled** | Not run. They use the phone's screens with wider margins. |
-| Apple TV | **Written** | Never compiled. Needs a Mac to install. |
-| iPhone, iPad | **Written** | Never compiled. Needs a Mac to install. |
+| Android tablets | **Ran on an emulator** | Android 16, 2560×1600, sideways: signing in, Home, a library, an item, and the server's pages. They use the phone's screens with wider margins. |
+| Apple TV | **Written** | Never compiled. Needs a Mac: [the first check](OWNER-STEPS.md#step-3-try-apple-needs-a-mac) is one script. |
+| iPhone, iPad | **Written** | Never compiled. Needs a Mac, as above. |
 | Mac | **Written** | Never compiled. |
 | Windows 7 | **Not started** | Needs the owner's decision: see [the design](DESIGN.md#windows-7). |
 | LG webOS, Samsung Tizen | **Not started** | The connect screen they would use works without the desktop app, in the same browser engine as the desktop app. Older TV browsers are untested, and no package exists. |
@@ -177,7 +177,7 @@ rows off the screen and a remote's focus with them. A server now only leaves the
 between devices and has known problems on some. Everything else is in [Android, as of 0.2.1](#android-as-of-021).
 
 **The Apple apps have never been compiled by Apple's tools,** as that needs a Mac. Expect compile errors. See
-[Apple, as of 0.2.0](#apple-as-of-020) for exactly what has and hasn't been checked.
+[Apple, as of 0.3.1](#apple-as-of-031) for exactly what has and hasn't been checked.
 
 **Known limits of the identity check,** on every client: the very first connection trusts whatever key it
 is shown, so someone already impersonating the server at that moment gets pinned, and would see a code
@@ -196,23 +196,81 @@ again from the start, without following the redirect.
 
 ## Features
 
-| Feature | Desktop | Android | Apple |
-|---|---|---|---|
-| Home, libraries, shows, item pages | Ran | Ran on an emulator | Written |
-| Video with resume | Ran | Ran on an emulator | Written |
-| Audio and subtitle tracks | Web interface; not checked here | Ran on an emulator. Subtitles were seen; audio only by the player's own log, as the emulators had no sound | Written |
-| Skip intro, next episode countdown | Web interface; not checked here | Ran on an emulator | Written |
-| Themes | Ran, including the title bar | Colours from the server's theme only, no picker | Colours from the server's theme only, no picker |
-| Search | Web interface; not checked here | Ran on an emulator, for films and shows, with the TV's keyboard too | Written, for films and shows |
-| Music, audiobooks, podcasts | Web interface; not checked here | Not started | Listed, with a note that they play in a browser for now |
-| Books and comics | Web interface; not checked here | Not started | Not started |
-| Disc menus | Web interface; not checked here | Not started | Not started |
-| Games on someone's own PC | Web interface, with Moonlight as the fallback. Written; its rules ran in unit tests | Its Game PCs page opened on an emulator, no further: see below | Written; its rules ran in unit tests on Linux |
-| Gaming, channels, tuners, photos | Arrive with the server | Not started | Not started |
-| Own log, with errors reported to the server | The log's logic ran in tests; never run inside the app | Written and shown in the app on an emulator. A report reaching the server wasn't checked | The log's logic ran in tests on Linux; its use in the app was not compiled, and catching crashes only builds on Apple |
+Every client reaches everything the server does, except where this says it can't. Video has the native apps' own screens. Everything else opens
+**the server's own page inside the app**, signed in: in a web view on Android and on iPhone and iPad, with big screen mode at 1920 wide on a TV. Apple TV
+has no web view, as tvOS doesn't offer one to apps, so it has screens of its own for what it can do, and says plainly what it can't.
 
-Native apps say plainly that an item can't play yet, rather than failing, for anything but video and
-games on someone's own PC.
+Checked on 2026-11-01 against a real server with every module, with made-up films, shows, music, audiobooks, podcasts, photos and a channel, and the real DVDs,
+books and comics in the test media. **Ran** on the desktop is the real app under Linux on a virtual display, driven by real key events. **Emulator** is Android 16:
+1080p TV with arrow keys, OK and Back, a phone and a tablet by touch. **Page** means the server's own page in the app.
+
+| What the server does | Desktop | Android TV | Android phone, tablet | Apple TV | iPhone, iPad |
+|---|---|---|---|---|---|
+| Finding a server, a code, a password | Ran | Emulator | Emulator | Written | Written |
+| Home, libraries, shows, item pages | Ran | Emulator | Emulator | Written | Written |
+| Films and episodes, with resume | Ran: clock moved, place saved | Emulator | Emulator | Written | Written |
+| Audio and subtitle tracks | Ran: French subtitles seen on the picture | Emulator (0.2.1) | Emulator (0.2.1) | Written | Written |
+| Next episode | Ran: offered | Emulator (0.2.1) | Emulator (0.2.1) | Written | Written |
+| Skip intro | Not seen here: no intros in this media | Emulator (0.2.1) | Emulator (0.2.1) | Written | Written |
+| Search | Ran | Emulator, films and shows; everything else in the server's page | The same | Written, films and shows | Written, films and shows |
+| Music: albums, artists, playlists, lyrics | Ran: opens and plays | Page: its clock moved | Page: played, by touch | Own screen, written: albums and tracks only | Page, written |
+| Audiobooks, podcasts | Ran: clock moved | Page: audiobook's clock moved | Page: both played | Own screen, written: as music | Page, written |
+| Radio | Page opens. No station played: none set up | The same | The same | **Not available**: says so. Could be built | Page, written |
+| Books, comics, PDF | Ran: reader opens | Page: reader opens, Back leaves it | Page: reader opens | **Not available**: no web view to read in, and it says so | Page, written |
+| Photos | Ran: grid and viewer | Page: viewer with arrows, OK and Back | Page: viewer by touch, Back closes it | Own screen, written: left and right through a library | Page, written |
+| DVDs | Ran: the film plays | Page: the film plays, and the menu seen | Page: the film plays | **Not available**: discs need a player of their own, and it says so | Page, written |
+| Blu-ray, audio CDs | Not in this test server | Not in this test server | Not in this test server | **Not available**, as DVDs | Page, written |
+| TV guide | Ran: the page, with arrows | Page, on the top bar, by arrows and by controller: the grid, what's on, Back | Page: opened, upright and on its side | Own screen, written: each channel with what's on now and next, in the colours of the account's WittyTV theme. It isn't the grid: a theme's layout, type and preview don't come across | Page, written |
+| Watching a channel | Ran: a channel plays | Page: plays. Arrows, channel buttons and a controller change channel, OK shows what's on, Back returns to the guide | Page: a channel plays by touch | Own screen, written: up and down change channel, with what's on shown over the picture. Its requests were checked against the real server with `curl` | Page, written |
+| On TV now, on Home | Ran: the server's own row | A row of the app's own | A row of the app's own | A row of the app's own, written | A row of the app's own, written |
+| Tuners, recordings | Page opens. No tuner here | The same | The same | Tuner channels listed, written. Recordings **not available** | Page, written |
+| Home videos | Page opens | Page opens | Page opens | Written | Written |
+| Collections | Page opens, none made | Page opens | Page opens | **Not available**: their titles still appear in libraries | Page, written |
+| Games in the page | Page opens. **No game played**: no core installed in the test server | The same | The same | **Not available** | Page, written |
+| Games on someone's own PC | See [below](#games-on-someones-own-pc) | See below | See below | See below | See below |
+| Settings: libraries, profiles, modules, backup, logs and the rest | Ran: every page opened with no errors | Page opens | Page opens | **Not available**: use a phone or computer | Page, written |
+| Uploading from the device | Written: it opens the system's picker, not run here so as not to open a window | Written | Emulator: the picker opens, and Back returns to the page. No file sent | No | Written, the system's own |
+| Downloading to the device | Written | Written | Emulator: a book saved to Downloads | No | Written: saved where Files can see it |
+| Going full screen | Ran | The page already fills the screen | Emulator: in and out, and Back leaves it first | The system's player | Written |
+| The server's themes | Ran, with light, paper and high contrast looked at | Colours of the server's theme, seen in light and dark | The same | Colours of the server's theme | Colours of the server's theme |
+| WittyTV's themes | Ran: all nine in big screen mode with arrow keys, and as a window | Page: all nine at 1920 with a virtual controller: first focus, into the grid, no sideways page, and pictures looked at | Page: all nine upright on a phone, three on their side, no sideways page, and pictures looked at. Tablet not repeated | Colours only, written. The account's choice and its changed colours, which WittyKit's tests hold to the server's own code. The app theme's suggestion isn't read | Page follows them, written |
+| A long name for the server | Ran: 40 letters wrap in the side menu | Seen | Seen | Written | Written |
+| Own log, with errors reported to the server | The log's logic ran in tests | Written and shown in the app | Written and shown in the app | The log's logic ran in tests on Linux | As Apple TV |
+
+**Limits of the server's page inside the Android and iPhone apps:**
+
+- **Sound stops when you leave its page,** and with it the player on the lock screen. It's the web view playing, so leaving that screen ends it, and nothing
+  tells the system that sound is playing. Staying on the page with the screen off hasn't been tried. A player of the app's own, with a media session, is what would change this.
+- **A web view older than version 87 can't show these pages,** and says so. Android 6 comes with version 44 and needs an update of Android System WebView.
+  Films and shows still play there. Versions just above that line haven't been tried: this was seen on 143.
+- **What a page builds itself to save can't be downloaded,** such as a backup or a zipped log. It says to use a browser. A file the server sends by address can be.
+- **Uploading by remote on a TV:** whether a TV has a file picker at all differs by device. It says so if it hasn't.
+- **Remote and controller:** only emulated key presses and virtual controllers have reached the pages on a TV. See [Controllers](#controllers).
+
+## Controllers
+
+The app has to let a controller through, and what each button then does is the same on every client: D-pad or left stick to move, the confirm button to choose, the back button to go back.
+
+| | Xbox | DualSense | DualShock 4 | Nintendo Switch Pro |
+|---|---|---|---|---|
+| Android TV, this app's own screens | Emulator | Emulator | Emulator | Emulator |
+| Android TV, the server's page | Emulator | Emulator | Emulator | Emulator |
+| Android TV, this app's own player | Not repeated | Emulator: play and pause, skip, leave | Not repeated | Not repeated |
+| Android phone, tablet | Not run: the same code as TV | Not run | Not run | Not run |
+| Desktop | Ran once: a virtual pad on Plasma Bigscreen, as a key press each. See below | The page's own tests only | The page's own tests only | The page's own tests only |
+| Apple TV | Written: the system's focus engine moves for any controller it knows, and nothing in this app stands in the way | As Xbox | As Xbox | As Xbox |
+| iPhone, iPad | Not available on this app's own screens: iOS doesn't move focus for a controller. In the server's page, written | As Xbox | As Xbox | As Xbox |
+
+**How Android was run.** Android's own `uinput` tool made a device with the real maker and product numbers on the TV emulator, so its real layout files and input system decided what each press meant, on Android 16. Nothing real was held in a hand.
+
+- **Own screens and the page:** D-pad as a hat and left stick to move, confirm and back. In the page, the D-pad and buttons of all four.
+- **A Nintendo pad's labels are obeyed, on an assumption.** Android names buttons by where they sit, and Linux's driver reports A as the right-hand button, so this app and the page both read A as confirm. On an older device whose driver differs, A and B could be the wrong way round. A real pad on a cheap stick is what would tell.
+- **The DualShock 4 ran on the layout for the older driver,** as this tool can't set the version a newer one reports. The newer layout is the DualSense's.
+- **The first press in a newly opened page counts.** A web view hides a controller from a page until a button is pressed, and the first press after opening a page didn't even do that, so A on the guide's first button did nothing the first time. The app now presses the left stick for the page when it loads, until the page can see the controller. On a TV it does this for any controller plugged in, and on a phone only if a controller was what opened the page. Seen on the TV emulator.
+
+**Found by running it:** a DualSense gets no named layout from Android's web view, and the page looked for its D-pad in the wrong place, so it did nothing there. B at the top of a page did nothing either, as a web view keeps a controller's buttons for the page. Both are fixed.
+
+**Not seen:** any real controller, Bluetooth, a game played with one in a web view, the Gamepad API in iOS's web view, and a Guide button on a real remote. The emulator's system took that key before this app got it.
 
 ## Games on someone's own PC
 
@@ -296,20 +354,22 @@ Reopening with the kept sign-in. Android 7 to 15 haven't been run, and nor has t
 - **A real network:** see [Connecting](#connecting).
 - **TalkBack speaking,** and any other screen reader.
 - **HDR, surround and passthrough, 4K, frame-rate switching.** The emulator reports none of them.
-- **Tablets, foldables, gesture navigation** (three buttons were on), very large text, Google TV and Fire TV.
+- **Foldables, gesture navigation** (three buttons were on), very large text, Google TV and Fire TV.
 - **A game controller,** Moonlight, and playing a game on a PC: no part of it reached a real PC.
-- **The light themes on TV,** two-factor accounts, and a server that has moved to a new address.
+- Two-factor accounts, and a server that has moved to a new address.
 - **Hardware decoders.** The emulator's are software or its own.
 
-## Apple, as of 0.2.0
+## Apple, as of 0.3.1
 
 **Run, on Linux with Swift 6.1 in a container:** every test in `apple/WittyKit` with `swift test`, including real connections to a
 stand-in server: redirects not followed, oversized answers dropped, version and revision checks, and cancelling. Signatures can't be
 verified on Linux, as it has no CryptoKit. Every answer is refused there, and those tests only run on Apple platforms.
 
-**Only checked for syntax:** every file in `apple/App` and `apple/TopShelf`, with `swiftc -parse`. The app's own files were also
-type-checked against small stand-ins written for SwiftUI, AVFoundation and the rest, for each of the three platforms. That catches
-wrong names and types between the app's own files, and says nothing about whether Apple's real frameworks accept the code.
+**Only checked for syntax:** every file in `apple/App` and `apple/TopShelf`, with `swiftc -parse`. Before 0.3.0 the app's own files were also
+type-checked against small stand-ins written for SwiftUI, AVFoundation and the rest, for each of the three platforms. That wasn't repeated for what
+0.3.0 added: the server's pages on iPhone and iPad, and Apple TV's screens in `TvViews.swift`. Expect those to need the most fixing.
+
+`apple/scripts/check-on-mac.sh` is the first real check: see [the steps](OWNER-STEPS.md#step-3-try-apple-needs-a-mac).
 
 **Never done:** compiling with Xcode, running on any device or simulator, focus with a real remote, VoiceOver, AVPlayer playing
 anything, the Keychain, the web view, the Top Shelf, or generating the Xcode project from `project.yml`, which has only been read.
@@ -322,6 +382,8 @@ anything, the Keychain, the web view, the Top Shelf, or generating the Xcode pro
 | Top Shelf | **Written** | Whether poster files in the App Group load, and the App Group's signing |
 | Device capabilities | **Written** | What each device really reports, and whether the choices fit real files |
 | Picture in picture | **Written** | Whether pausing in the background interferes. Plain video pauses when the app goes to the background |
+| The server's pages, iPhone and iPad | **Written** | Whether the sign-in cookie reaches them, saving a file, and whether the page's own bars sit well under the system's |
+| Music, photos and channels on Apple TV | **Written** | Focus on the lists, a song with no picture in the system's player, the next track following, and whether up and down reach a player that isn't the system's |
 
 **Known limits:**
 
@@ -331,15 +393,17 @@ anything, the Keychain, the web view, the Top Shelf, or generating the Xcode pro
   own when music arrives.
 - Posters are kept in memory, not on disk, so they're fetched again each time the app starts.
 - The hero is one picture from the server's featured list, and doesn't turn or page.
-- Music and every other type the app can't open only say so. Search finds films and shows, not episodes or music.
+- Search in the app's own screen finds films and shows, not episodes or music. On iPhone and iPad, the server's page finds the rest.
+- Apple TV shows one album's tracks from the first 500 items of a library, as the server has no list by album name.
 - A two-factor prompt on password sign-in isn't built. Those accounts can sign in by code.
+- Apple TV's guide has WittyTV's colours and the owner's own channel logos, not its themes' layouts, type or preview, nor logos from the logo service. An app theme that suggests a WittyTV theme is only followed in the page.
 - There are no tests of the screens themselves. Anything that can be tested without one is in WittyKit.
 
 ## Not done yet in the native apps
 
 - A prompt for two-factor codes on password sign-in. Those accounts can use code sign-in instead.
-- On Android: playing in the background or picture in picture, TV channels, Live TV, a choice between a file's several pictures,
-  and a baseline profile for faster starts.
+- On Android: playing in the background or picture in picture, a choice between a file's several pictures, and a baseline profile
+  for faster starts. Music and live channels play, in the server's page.
 - App icons and TV artwork. Android has a placeholder, Apple has none, and the desktop app has
   Electron's default icon.
 
@@ -380,8 +444,7 @@ checked package, no `file://` privileges):
 - A server asking for a client certificate, which needs one in the system's store.
 - Installers on a real Windows, and very low-end hardware.
 - Screen readers. Roles, labels and live regions are checked as they appear in the page, but no screen reader has read them.
-- Audio and subtitle tracks, and everything else marked "not checked here" above. They are the web
-  interface's own features, displayed unchanged.
+- Everything marked as not seen in [Features](#features). They are the web interface's own features, displayed unchanged.
 - A real look on screen. A capture of the whole window looks right, with a pale strip around its edge
   that is almost certainly how the capture draws the invisible Windows resize border.
 

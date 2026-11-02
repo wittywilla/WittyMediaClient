@@ -2,8 +2,10 @@ package com.wittywilla.wittymediaclient
 
 import android.app.Application
 import android.app.UiModeManager
+import android.content.pm.ApplicationInfo
 import android.content.res.Configuration
 import android.os.Build
+import android.webkit.WebView
 import coil3.ImageLoader
 import coil3.PlatformContext
 import coil3.SingletonImageLoader
@@ -22,6 +24,17 @@ import okio.Path.Companion.toOkioPath
 
 class WittyApp : Application(), SingletonImageLoader.Factory {
     val store by lazy { SessionStore(this) }
+
+    // What a remote's Guide button does, while the app's screens are up.
+    var onGuideKey: (() -> Unit)? = null
+
+    // While the server's page is up, a controller's buttons are the page's to read.
+    @Volatile
+    var showingPage = false
+
+    // The controller last used, if the last thing pressed was on one.
+    @Volatile
+    var lastPad = -1
 
     // For work that must outlive the screen that started it.
     val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
@@ -43,6 +56,8 @@ class WittyApp : Application(), SingletonImageLoader.Factory {
 
     override fun onCreate() {
         super.onCreate()
+        // Developer builds only: lets a computer look inside the server's page, as nothing else can.
+        if (applicationInfo.flags and ApplicationInfo.FLAG_DEBUGGABLE != 0) WebView.setWebContentsDebuggingEnabled(true)
         val version = runCatching { packageManager.getPackageInfo(packageName, 0).versionName }.getOrNull().orEmpty()
         // Reports go only to the server this app is signed in to.
         ClientLog.start(filesDir.resolve("logs"), "WittyMediaClient $platformName", version, "$deviceName, Android ${Build.VERSION.RELEASE}", scope) {

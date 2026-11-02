@@ -72,6 +72,23 @@ enum Route: Hashable {
     case player(Int64, startOver: Bool)
     /// The server's own page for playing a game: iPhone and iPad only, see WebPlayerView.
     case web(String)
+    /// Any other page of the server's. A Mac opens these in its browser, and Apple TV has none.
+    case page(String)
+    /// An album or a book's chapters, on Apple TV.
+    case album(library: Int64, name: String)
+    /// A photo and the ones around it, on Apple TV.
+    case photo(library: Int64, id: Int64)
+    /// Live channels, on Apple TV.
+    case guide
+    case channel(key: String)
+}
+
+/// A list of tracks being played, in order, on Apple TV.
+extension AppModel {
+    func play(_ tracks: [Item], from track: Item) {
+        playingList = tracks.map(\.id)
+        path.append(.player(track.id, startOver: true))
+    }
 }
 
 enum SignInWay: Hashable {
@@ -95,6 +112,13 @@ final class AppModel: ObservableObject {
     @Published var tab: AppTab = .home
     /// Where each tab has got to, so coming back to one finds it as it was left.
     @Published var paths: [AppTab: [Route]] = [:]
+    /// The tracks being played in order, on Apple TV. Only what's in this goes on by itself.
+    var playingList: [Int64] = []
+    /// The channels as the guide last had them, for the remote to go through while one plays.
+    var channels: [GuideChannel] = []
+    /// The account's WittyTV colours and whether it wants logos, once the guide has asked.
+    var tvColours: TvColours?
+    var tvLogos = true
     @Published var themeId: String?
     @Published var user: User?
     @Published var libraries: [Library] = []
@@ -166,6 +190,19 @@ final class AppModel: ObservableObject {
     }
 
     var palette: Palette { Palette(SharedData.theme(themeId)?.colours) }
+    /// What the owner set, in the guide, and what this account chose, for Apple TV's guide and channels.
+    func learnTvLook(from guide: Guide, client: WittyClient) async {
+        let saved = try? await client.tvSaved()
+        tvColours = TvLook.colours(saved: saved, ownerTheme: guide.theme, ownerLayout: guide.layout, ownerSkin: guide.skin, app: tvAppColours)
+        tvLogos = saved?.logos ?? true
+    }
+
+    /// The app's theme, for the WittyTV themes that follow it.
+    var tvAppColours: TvAppColours {
+        guard let c = SharedData.theme(themeId)?.colours else { return .fallback }
+        return TvAppColours(bg: c.background, bg2: c.panel, bg3: c.card, bg4: c.border, fg: c.text, fg2: c.textSecondary,
+                            accent: c.accent, accentText: c.accentText ?? c.accent, accentFg: c.onAccent, border: c.border)
+    }
     var scheme: ColorScheme { SharedData.theme(themeId)?.scheme == "light" ? .light : .dark }
 
     /// Only for a server whose identity has just been checked.

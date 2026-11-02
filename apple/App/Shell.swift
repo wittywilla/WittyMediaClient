@@ -83,11 +83,31 @@ private struct TabRoot: View {
                     case .player(let id, let startOver): PlayerScreen(id: id, startOver: startOver).id(id)
                     case .web(let path):
                         #if os(iOS)
-                        WebPlayerView(path: path)
+                        WebPlayerView(path: path, keptToGames: true)
                         #else
                         // Nothing on these devices opens this: see WittyKit's Rigs.swift.
                         ProblemView(words: "That can only be played on an iPhone or iPad.")
                         #endif
+                    case .page(let path):
+                        #if os(iOS)
+                        WebPlayerView(path: path, keptToGames: false)
+                        #else
+                        ElsewhereNote(path: path)
+                        #endif
+                    #if os(tvOS)
+                    case .album(let library, let name):
+                        AlbumView(library: library, name: name)
+                    case .photo(let library, let id):
+                        PhotoView(library: library, id: id)
+                    case .guide:
+                        GuideView()
+                    case .channel(let key):
+                        ChannelPlayer(start: key)
+                    #else
+                    // Apple TV's own screens. These devices show the server's page for all of them.
+                    case .album, .photo, .guide, .channel:
+                        ElsewhereNote(path: ServerPages.guide)
+                    #endif
                     }
                 }
         }
@@ -193,7 +213,7 @@ private struct SideShell: View {
             model.paths[tab] = []
         case .library(let library)?:
             model.tab = .home
-            model.paths[.home] = [.library(library)]
+            model.paths[.home] = [library.opensHere ? .library(library) : .page(ServerPages.path(library))]
         case nil:
             break
         }
@@ -205,10 +225,9 @@ private struct SideShell: View {
                 ForEach(AppTab.allCases) { tab in
                     Label(tab.title, systemImage: tab.icon).tag(Choice.tab(tab))
                 }
-                let openable = model.libraries.filter(\.opensHere)
-                if !openable.isEmpty {
+                if !model.libraries.isEmpty {
                     Section("Libraries") {
-                        ForEach(openable) { library in
+                        ForEach(model.libraries) { library in
                             Text(library.name).tag(Choice.library(library))
                         }
                     }
@@ -223,8 +242,8 @@ private struct SideShell: View {
 }
 #endif
 
-/// Music has no player in this app yet. Rather than hide what's on the server, this lists it and says
-/// plainly where it plays for now.
+/// What's on the server to listen to. On iPhone and iPad each opens the server's own page, with its albums,
+/// lyrics and all. On Apple TV, which has no web view, this app's own screens play it.
 struct MusicView: View {
     @EnvironmentObject private var model: AppModel
     @Environment(\.palette) private var palette
@@ -238,7 +257,15 @@ struct MusicView: View {
                     EmptyMessage(title: "No music here yet", detail: "This server has no music, audiobooks or podcasts this account can open.")
                 } else {
                     ForEach(listening) { library in
-                        BrowserOnlyNote(library: library)
+                        #if os(tvOS)
+                        if library.opensOnAppleTV {
+                            NavigationLink(library.name, value: Route.library(library))
+                        } else {
+                            BrowserOnlyNote(library: library)
+                        }
+                        #else
+                        NavigationLink(library.name, value: Route.page(ServerPages.path(library)))
+                        #endif
                     }
                 }
             }
@@ -250,7 +277,30 @@ struct MusicView: View {
     }
 }
 
-/// A library this app can't open yet, and where it can be. Never pretends otherwise.
+#if !os(iOS)
+/// One of the server's pages, on a device that can't show it inside this app.
+struct ElsewhereNote: View {
+    @EnvironmentObject private var model: AppModel
+    @Environment(\.palette) private var palette
+    let path: String
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: Tokens.Space.s3) {
+            #if os(tvOS)
+            Text("Apple TV can't show this, as it has no way to open your server's own pages. Open \(model.client.base) on a phone, tablet or computer.")
+            #else
+            if let url = model.client.mediaURL(path), WebPlayer.isWebLink(url) {
+                Link("Open in your browser", destination: url)
+            }
+            #endif
+        }
+        .padding(Tokens.gutter)
+        .pageBackground(palette)
+    }
+}
+#endif
+
+/// A library Apple TV can't show, and where it can be seen. Never pretends otherwise.
 struct BrowserOnlyNote: View {
     @EnvironmentObject private var model: AppModel
     @Environment(\.palette) private var palette
@@ -259,11 +309,11 @@ struct BrowserOnlyNote: View {
     var body: some View {
         VStack(alignment: .leading, spacing: Tokens.Space.s2) {
             Text(library.name).font(.wmSection).accessibilityAddTraits(.isHeader)
-            Text("This plays in a web browser for now.").foregroundStyle(palette.textSecondary)
             #if os(tvOS)
             // No browser on Apple TV, so this can only say where to go.
-            Text("Open \(model.client.base) on a phone or computer.").foregroundStyle(palette.textSecondary)
+            Text("Apple TV can't show this, as it has no way to open your server's own pages. Open \(model.client.base) on a phone, tablet or computer.").foregroundStyle(palette.textSecondary)
             #else
+            Text("This opens in your web browser.").foregroundStyle(palette.textSecondary)
             if let url = URL(string: model.client.base), WebPlayer.isWebLink(url) {
                 Link("Open in your browser", destination: url)
             }
@@ -302,7 +352,10 @@ struct ProfileView: View {
                 }
                 fact("This app", "\(say("appName")) \(WittyClient.appVersion)")
                 Text(say("legalConnect")).font(.footnote).foregroundStyle(palette.textSecondary)
-                Button("Switch profile") { model.signOut() }.firstFocus(in: scope)
+                #if os(iOS)
+                NavigationLink("Server settings", value: Route.page(ServerPages.settings))
+                #endif
+                Button("Sign out") { model.signOut() }.firstFocus(in: scope)
                 Button(say("changeServer")) { model.changeServer() }
             }
             .frame(maxWidth: 640, alignment: .leading)

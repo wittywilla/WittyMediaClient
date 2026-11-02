@@ -98,8 +98,12 @@ public struct Item: Decodable, Identifiable, Equatable {
     public let introEnd: Double?
     public let console: String?
     public let tagline: String?
+    public let album: String?
+    public let albumArtist: String?
+    public let artist: String?
+    public let track: Int?
 
-    /// Only video plays in these apps for now: see docs/DESIGN.md.
+    /// Video plays in these apps' own player. Anything else opens the server's page: see ServerPages.swift.
     public var isPlayable: Bool { kind == "video" }
     /// A game on someone's own PC, which plays in the Moonlight app: see Rigs.swift.
     public var isRigGame: Bool { kind == "game" && console == "rig" }

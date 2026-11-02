@@ -54,21 +54,29 @@ import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import com.wittywilla.wittymediaclient.net.COLLECTIONS_PATH
 import com.wittywilla.wittymediaclient.net.GAME_PCS_PATH
+import com.wittywilla.wittymediaclient.net.GUIDE_PATH
+import com.wittywilla.wittymediaclient.net.GuideChannel
 import com.wittywilla.wittymediaclient.net.Home
 import com.wittywilla.wittymediaclient.net.Item
 import com.wittywilla.wittymediaclient.net.Library
 import com.wittywilla.wittymediaclient.net.Show
 import com.wittywilla.wittymediaclient.net.ShowDetail
+import com.wittywilla.wittymediaclient.net.albumsOnce
+import com.wittywilla.wittymediaclient.net.channelPath
+import com.wittywilla.wittymediaclient.net.fraction
+import com.wittywilla.wittymediaclient.net.minutesLeft
+import com.wittywilla.wittymediaclient.net.onNow
+import com.wittywilla.wittymediaclient.net.programmeAt
+import com.wittywilla.wittymediaclient.net.hasOwnScreen
 import com.wittywilla.wittymediaclient.net.isRigGame
 import com.wittywilla.wittymediaclient.net.isRigGames
+import com.wittywilla.wittymediaclient.net.pagePath
 import com.wittywilla.wittymediaclient.net.problemWords
 import kotlinx.coroutines.CancellationException
 import kotlin.math.absoluteValue
 
-// What plays in this app for now. Discs, books and games stay in the web interface until their
-// phases, and say so: see docs/DESIGN.md.
-private val PLAYABLE = setOf("video", "audio", "radio")
 private const val MUSIC_KIND = "audio"
 
 fun episodeLabel(it: Item): String {
@@ -79,7 +87,10 @@ fun episodeLabel(it: Item): String {
     return if (season == 0) "Special · $ep" else "S$season · $ep"
 }
 
-private fun itemSubtitle(it: Item) = episodeLabel(it).ifEmpty { it.year?.toString().orEmpty() }
+private fun itemSubtitle(it: Item) = when {
+    it.kind == MUSIC_KIND -> it.albumArtist.ifEmpty { it.artist }
+    else -> episodeLabel(it).ifEmpty { it.year?.toString().orEmpty() }
+}
 
 private fun progressOf(it: Item): Float? {
     val p = it.progress ?: return null
@@ -90,7 +101,7 @@ private fun progressOf(it: Item): Float? {
 @Composable
 fun ItemCard(nav: Nav, it: Item, requestFocus: Boolean = false, scope: String = "") {
     PosterCard(
-        it.showTitle?.takeIf { s -> s.isNotEmpty() } ?: it.title, itemSubtitle(it), nav.app.api.posterUrl(it), { nav.push(Route.Item(it.id)) },
+        it.showTitle?.takeIf { s -> s.isNotEmpty() } ?: it.title, itemSubtitle(it), nav.app.api.posterUrl(it), { nav.open(it) },
         aspect = if (it.kind == MUSIC_KIND) 1f else 2f / 3f, focusKey = "$scope-i${it.id}", requestFocus = requestFocus, progress = progressOf(it),
     )
 }
@@ -111,7 +122,7 @@ private fun LoadFailed(nav: Nav, message: String, retry: () -> Unit) {
 }
 
 private fun Item.playRoute(): Route =
-    if (kind in PLAYABLE) Route.Player(id, false) else Route.Item(id)
+    if (hasOwnScreen && !isRigGame) Route.Player(id, false) else if (hasOwnScreen) Route.Item(id) else Route.Page(pagePath())
 
 // The first thing on Home. On a phone, posters to swipe through, with the one in front named below
 // and a Play pill, in the layout people know from the big music and video apps. On a TV, the
@@ -142,7 +153,7 @@ private fun PhoneHero(nav: Nav, featured: List<Item>) {
             ) { page ->
                 val item = featured[page]
                 FocusBox(
-                    { nav.push(Route.Item(item.id)) },
+                    { nav.open(item) },
                     // Read as it draws, so a swipe costs a redraw and not a whole recomposition.
                     Modifier.graphicsLayer {
                         val apart = (pager.currentPage - page + pager.currentPageOffsetFraction).absoluteValue.coerceIn(0f, 1f)
@@ -188,7 +199,7 @@ private fun TvHero(nav: Nav, item: Item) {
             if (item.overview.isNotEmpty()) Secondary(item.overview, maxLines = 2)
             Row(Modifier.remoteRow(), horizontalArrangement = Arrangement.spacedBy(Space.S3)) {
                 ActionButton("Play", { nav.push(item.playRoute()) }, primary = true, pill = true, icon = Icons.Filled.PlayArrow, focusKey = "hero-play", requestFocus = true)
-                ActionButton("More", { nav.push(Route.Item(item.id)) }, pill = true, focusKey = "hero-more")
+                ActionButton("More", { nav.open(item) }, pill = true, focusKey = "hero-more")
             }
         }
     }
@@ -204,9 +215,49 @@ private fun LibraryTabs(nav: Nav, libraries: List<Library>, extra: @Composable (
         horizontalArrangement = Arrangement.spacedBy(Space.S2),
     ) {
         items(libraries, key = { it.id }) { lib ->
-            ActionButton(lib.name, { nav.push(Route.Library(lib)) }, pill = true, focusKey = "lib-${lib.id}")
+            ActionButton(lib.name, { nav.open(lib) }, pill = true, focusKey = "lib-${lib.id}")
         }
         item(key = "extra") { extra() }
+    }
+}
+
+// What's on the channels right now, as on the server's own Home. Choosing one watches it.
+@Composable
+private fun OnNowRow(nav: Nav, channels: List<GuideChannel>) {
+    val metrics = LocalMetrics.current
+    val scheme = MaterialTheme.colorScheme
+    val width = metrics.cardWidth * ON_NOW_WIDTH
+    val now = remember { System.currentTimeMillis() / 1000 }
+    Column(verticalArrangement = Arrangement.spacedBy(Space.S2)) {
+        SectionTitle("On TV now", Modifier.padding(horizontal = metrics.gutter))
+        LazyRow(
+            Modifier.remoteRow(),
+            contentPadding = PaddingValues(horizontal = metrics.gutter, vertical = Space.S1),
+            horizontalArrangement = Arrangement.spacedBy(Space.S3),
+        ) {
+            items(channels, key = { it.key }) { channel ->
+                val on = channel.programmeAt(now)
+                val words = on?.title ?: "Nothing listed"
+                FocusBox(
+                    { nav.push(Route.Page(channelPath(channel.key))) }, Modifier.width(width),
+                    label = "Channel ${channel.number}, ${channel.name}: $words", focusKey = "onnow-${channel.key}",
+                ) {
+                    Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(Space.S1)) {
+                        Box(Modifier.fillMaxWidth().aspectRatio(16f / 9f).clip(Radius.MD).background(scheme.surfaceVariant)) {
+                            on?.itemId?.let { ServerImage(nav.app.api.itemBackdropUrl(it), width, 16f / 9f, Modifier.fillMaxSize()) }
+                            Text(channel.number, color = Color.White, style = MaterialTheme.typography.labelLarge, modifier = Modifier.padding(Space.S2).background(Color(0x99000000), Radius.XS).padding(horizontal = Space.S1))
+                            if (on != null) {
+                                Box(Modifier.align(Alignment.BottomStart).fillMaxWidth().padding(Space.S1).background(Color(0x99000000), Radius.XS)) {
+                                    Box(Modifier.fillMaxWidth(on.fraction(now)).height(Space.S1).background(scheme.primary, Radius.XS))
+                                }
+                            }
+                        }
+                        Text(words, color = scheme.onBackground, maxLines = 2, overflow = TextOverflow.Ellipsis, style = MaterialTheme.typography.titleSmall, modifier = Modifier.padding(horizontal = Space.S1))
+                        Text(channel.name + if (on != null) " · ${on.minutesLeft(now)} min left" else "", color = scheme.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis, style = MaterialTheme.typography.bodySmall, modifier = Modifier.padding(horizontal = Space.S1))
+                    }
+                }
+            }
+        }
     }
 }
 
@@ -217,10 +268,13 @@ fun HomeScreen(nav: Nav, s: Map<String, String>) {
     var error by remember { mutableStateOf("") }
     var attempt by remember { mutableIntStateOf(0) }
     var gamePcs by remember { mutableStateOf(false) }
+    var onNow by remember { mutableStateOf(emptyList<GuideChannel>()) }
     val sideways = LocalConfiguration.current.orientation == Configuration.ORIENTATION_LANDSCAPE
     // Phones and tablets only: see rigChoice for why TVs don't play in the page.
     LaunchedEffect(Unit) {
         if (!nav.app.isTv && !nav.app.isFireTv) gamePcs = runCatching { nav.app.api.couchStatus().allowed }.getOrDefault(false)
+        nav.hasGuide = runCatching { "live-tv" in nav.app.api.capabilities().features }.getOrDefault(false)
+        if (nav.hasGuide) onNow = runCatching { onNow(nav.app.api.guide(ON_NOW_HOURS, ON_NOW_CHANNELS).channels) }.getOrDefault(emptyList())
     }
     LaunchedEffect(attempt) {
         error = ""
@@ -261,9 +315,15 @@ fun HomeScreen(nav: Nav, s: Map<String, String>) {
             }
             item(key = "libraries") {
                 LibraryTabs(nav, h.libraries.distinctBy { it.id }) {
-                    if (gamePcs) ActionButton("Game PCs", { nav.push(Route.Web(GAME_PCS_PATH)) }, pill = true, focusKey = "gamepcs")
+                    Row(horizontalArrangement = Arrangement.spacedBy(Space.S2)) {
+                        // On a TV it's along the top. A phone has no room for it there.
+                        if (nav.hasGuide && !metrics.tv) ActionButton("TV guide", { nav.push(Route.Page(GUIDE_PATH)) }, pill = true, focusKey = "guide")
+                        ActionButton("Collections", { nav.push(Route.Page(COLLECTIONS_PATH)) }, pill = true, focusKey = "collections")
+                        if (gamePcs) ActionButton("Game PCs", { nav.push(Route.Web(GAME_PCS_PATH)) }, pill = true, focusKey = "gamepcs")
+                    }
                 }
             }
+            if (onNow.isNotEmpty()) item(key = "onnow") { OnNowRow(nav, onNow) }
             items(hubs, key = { it.key }) { hub ->
                 Column(verticalArrangement = Arrangement.spacedBy(Space.S2)) {
                     SectionTitle(hub.title, Modifier.padding(horizontal = metrics.gutter))
@@ -272,7 +332,7 @@ fun HomeScreen(nav: Nav, s: Map<String, String>) {
                         contentPadding = PaddingValues(horizontal = metrics.gutter, vertical = Space.S1),
                         horizontalArrangement = Arrangement.spacedBy(Space.S3),
                     ) {
-                        items(hub.items.distinctBy { it.id }, key = { "i${it.id}" }) { ItemCard(nav, it, scope = hub.key) }
+                        items(albumsOnce(hub.items.distinctBy { it.id }), key = { "i${it.id}" }) { ItemCard(nav, it, scope = hub.key) }
                         items(hub.shows.distinctBy { it.id }, key = { "s${it.id}" }) { ShowCard(nav, it, scope = hub.key) }
                     }
                 }
@@ -381,9 +441,12 @@ fun ShowScreen(nav: Nav, s: Map<String, String>, id: Long) {
             d == null -> Loading()
             else -> {
                 val selected = season ?: d.seasons.firstOrNull()?.number
+                // The picture behind, fading into the page, as on an item.
+                ServerImage(nav.app.api.showBackdropUrl(d.show), 960.dp, 16f / 9f, Modifier.fillMaxWidth().height(BACKDROP_HEIGHT).alpha(0.4f))
+                Box(Modifier.fillMaxWidth().height(BACKDROP_HEIGHT).background(Brush.verticalGradient(0.2f to Color.Transparent, 1f to MaterialTheme.colorScheme.background)))
                 LazyColumn(
                     Modifier.safeDrawingPadding(),
-                    contentPadding = PaddingValues(horizontal = metrics.gutter, vertical = Space.S4),
+                    contentPadding = PaddingValues(horizontal = metrics.gutter, vertical = if (metrics.tv) metrics.edge else Space.S4),
                     verticalArrangement = Arrangement.spacedBy(Space.S2),
                 ) {
                     item {
@@ -412,9 +475,17 @@ fun ShowScreen(nav: Nav, s: Map<String, String>, id: Long) {
                             label = "${episodeLabel(ep)}, ${ep.title}", state = if (watched) "Watched" else null,
                             focusKey = "ep-${ep.id}", filled = MaterialTheme.colorScheme.surface,
                         ) {
-                            Column(Modifier.padding(Space.S3)) {
-                                Text("${episodeLabel(ep)}  ${ep.title}", color = MaterialTheme.colorScheme.onBackground)
-                                if (watched) Secondary("Watched")
+                            Row(Modifier.padding(Space.S2), horizontalArrangement = Arrangement.spacedBy(Space.S3), verticalAlignment = Alignment.CenterVertically) {
+                                ServerImage(nav.app.api.posterUrl(ep), EPISODE_PICTURE, 16f / 9f, Modifier.width(EPISODE_PICTURE).aspectRatio(16f / 9f).clip(Radius.SM))
+                                Column(Modifier.weight(1f)) {
+                                    Text("${episodeLabel(ep)}  ${ep.title}", color = MaterialTheme.colorScheme.onBackground, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                                    Secondary(listOfNotNull(runtimeText(ep.runtimeSec).ifEmpty { null }, if (watched) "Watched" else null).joinToString(" · "))
+                                    progressOf(ep)?.let { part ->
+                                        Box(Modifier.padding(top = Space.S1).fillMaxWidth().height(Space.S1).background(MaterialTheme.colorScheme.outline, Radius.XS)) {
+                                            Box(Modifier.fillMaxWidth(part.coerceIn(0f, 1f)).height(Space.S1).background(MaterialTheme.colorScheme.primary, Radius.XS))
+                                        }
+                                    }
+                                }
                             }
                         }
                     }
@@ -427,7 +498,7 @@ fun ShowScreen(nav: Nav, s: Map<String, String>, id: Long) {
 private fun runtimeText(sec: Double): String {
     if (sec <= 0) return ""
     val h = (sec / 3600).toInt()
-    val m = ((sec % 3600) / 60).toInt()
+    val m = ((sec % 3600 + 30) / 60).toInt()
     return if (h > 0) "$h h $m min" else "$m min"
 }
 
@@ -455,14 +526,19 @@ fun ItemScreen(nav: Nav, s: Map<String, String>, id: Long) {
         when {
             it == null && error.isNotEmpty() -> LoadFailed(nav, error) { attempt++ }
             it == null -> Loading()
-            else -> FlowRow(
-                Modifier.fillMaxSize().verticalScroll(rememberScrollState()).safeDrawingPadding().padding(horizontal = metrics.gutter, vertical = Space.S6),
-                horizontalArrangement = Arrangement.spacedBy(Space.S6),
+            else -> Box(Modifier.fillMaxSize().verticalScroll(rememberScrollState())) {
+                // The picture behind, fading into the page, as on Home.
+                ServerImage(nav.app.api.backdropUrl(it), 960.dp, 16f / 9f, Modifier.fillMaxWidth().height(BACKDROP_HEIGHT).alpha(0.4f))
+                Box(Modifier.fillMaxWidth().height(BACKDROP_HEIGHT).background(Brush.verticalGradient(0.2f to Color.Transparent, 1f to MaterialTheme.colorScheme.background)))
+                val upright = !metrics.tv && LocalConfiguration.current.screenWidthDp < UPRIGHT_BELOW_DP
+                FlowRow(
+                Modifier.fillMaxWidth().safeDrawingPadding().padding(horizontal = metrics.gutter, vertical = Space.S6),
+                horizontalArrangement = Arrangement.spacedBy(Space.S6, if (upright) Alignment.CenterHorizontally else Alignment.Start),
                 verticalArrangement = Arrangement.spacedBy(Space.S4),
             ) {
                 // Beside the words where there's room, above them on a phone held upright.
                 ServerImage(nav.app.api.posterUrl(it), metrics.cardWidth * 1.4f, 2f / 3f, Modifier.width(metrics.cardWidth * 1.4f).aspectRatio(2f / 3f).clip(Radius.LG), placeholder = it.title)
-                Column(Modifier.widthIn(min = 280.dp, max = 640.dp).weight(1f, fill = false), verticalArrangement = Arrangement.spacedBy(Space.S3)) {
+                Column((if (upright) Modifier.fillMaxWidth() else Modifier.widthIn(min = 280.dp, max = 640.dp).weight(1f, fill = false)), verticalArrangement = Arrangement.spacedBy(Space.S3)) {
                     if (!it.showTitle.isNullOrEmpty()) Secondary("${it.showTitle} · ${episodeLabel(it)}")
                     Heading(it.title)
                     Secondary(listOfNotNull(it.year?.toString(), runtimeText(it.runtimeSec).ifEmpty { null }, it.contentRating.ifEmpty { null }).joinToString(" · "))
@@ -471,7 +547,7 @@ fun ItemScreen(nav: Nav, s: Map<String, String>, id: Long) {
                     if (it.isRigGame) {
                         if (it.tagline.isNotEmpty()) Secondary(it.tagline)
                         RigPlayPanel(nav, it)
-                    } else if (it.kind in PLAYABLE) {
+                    } else if (it.hasOwnScreen) {
                         // The server decides where Resume goes; 0 means start over.
                         val resume = (it.progress?.resumeSec ?: 0.0) > 0
                         Row(Modifier.remoteRow(), horizontalArrangement = Arrangement.spacedBy(Space.S3)) {
@@ -479,12 +555,19 @@ fun ItemScreen(nav: Nav, s: Map<String, String>, id: Long) {
                             if (resume) ActionButton("Start over", { nav.push(Route.Player(it.id, true)) }, pill = true, focusKey = "startover")
                         }
                     } else {
-                        Secondary("This kind of item can't play in this app yet. Open it in a web browser.")
-                        ActionButton("Back", nav::pop, requestFocus = true)
+                        ActionButton("Open", { nav.replace(Route.Page(it.pagePath())) }, primary = true, pill = true, icon = Icons.Filled.PlayArrow, requestFocus = true)
                     }
                     if (it.overview.isNotEmpty()) Text(it.overview, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
             }
+            }
         }
     }
 }
+
+private val BACKDROP_HEIGHT = 340.dp
+private const val ON_NOW_HOURS = 1
+private const val ON_NOW_CHANNELS = 20
+private const val ON_NOW_WIDTH = 1.5f
+private val EPISODE_PICTURE = 120.dp
+private const val UPRIGHT_BELOW_DP = 600

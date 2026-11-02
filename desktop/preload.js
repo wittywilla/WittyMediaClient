@@ -5,8 +5,17 @@
 const { contextBridge, ipcRenderer } = require('electron')
 
 const TV = process.argv.includes('--wittymedia-tv')
-// What has its own idea of Back in the server's page, so it isn't this app's to answer.
-const HAS_OWN_BACK = '[role=dialog], [role=alertdialog], [role=menu], .modal, .picker-backdrop, .view-settings, .audio-bar.full, .reader, .player:not(.mini):not(.inline)'
+// What has its own idea of Back in the server's page, so it isn't this app's to answer. The page says
+// in <html data-own-back>. A server older than that gets this list, as it was when it stopped changing.
+const OLDER_OWN_BACK = '[role=dialog], [role=alertdialog], [role=menu], .modal, .picker-backdrop, .view-settings, .audio-bar.full, .reader, .player:not(.mini):not(.inline)'
+
+function pageHasOwnBack() {
+  try {
+    return !!document.querySelector(document.documentElement.dataset.ownBack || OLDER_OWN_BACK)
+  } catch {
+    return false // the page's own selector, and not one a browser can read
+  }
+}
 
 // A TV's Back arrives as Escape from Plasma Bigscreen and HDMI-CEC remotes, and as BrowserBack
 // from others. The server's page goes back a page on BrowserBack, and on Escape only closes what
@@ -15,7 +24,7 @@ function listenForBack() {
   window.addEventListener('keydown', (e) => {
     if (e.ctrlKey || e.altKey || e.metaKey) return
     if (e.key !== 'Escape' && e.key !== 'BrowserBack' && e.key !== 'GoBack') return
-    if (document.fullscreenElement || document.querySelector(HAS_OWN_BACK)) return
+    if (document.fullscreenElement || pageHasOwnBack()) return
     if (e.key !== 'Escape') { ipcRenderer.send('tv-back', false); return }
     if (!e.isTrusted) return // a controller's B: the page follows it with GoBack
     // Listeners on the page come after this one, so look once they've all had their turn.
