@@ -76,6 +76,10 @@ enum Route: Hashable {
     case page(String)
     /// An album or a book's chapters, on Apple TV.
     case album(library: Int64, name: String)
+    /// An album, a book or a podcast, asked for by its name and whose it is: see ListeningViews.swift.
+    case listeningAlbum(library: Int64, album: String, artist: String)
+    /// Everything of one artist's or author's in a library.
+    case artist(library: Int64, name: String)
     /// A photo and the ones around it, on Apple TV.
     case photo(library: Int64, id: Int64)
     /// Live channels, on Apple TV.
@@ -124,6 +128,8 @@ final class AppModel: ObservableObject {
     var tvLogos = true
     @Published var themeId: String?
     @Published var user: User?
+    /// Music, audiobooks and podcasts, which carry on whatever screen is showing.
+    let listening = Listening()
     @Published var libraries: [Library] = []
     /// Something worth saying that isn't a failure of the screen in front of the person.
     @Published var notice = ""
@@ -228,6 +234,7 @@ final class AppModel: ObservableObject {
     }
 
     private func forgetSignIn() {
+        listening.forget()
         Keychain.clear()
         TopShelfWriter.clear()
         ArtCache.shared.removeAllObjects()
@@ -316,6 +323,7 @@ final class AppModel: ObservableObject {
         let proof = await WittyClient.identify(using.url, saved: [using])
         guard proof.state == .different || proof.state == .bad else { return }
         current = nil
+        listening.forget()
         client = WittyClient(base: "")
         paths = [:]
         stage = proof.state == .bad ? .connect(message: say("identityBad")) : .mismatch(proof.saved(url: using.url, name: using.name))
@@ -439,10 +447,15 @@ final class AppModel: ObservableObject {
         }
     }
 
+    /// The last place listened to is sent before the sign-in ends.
     private func endSession() {
         let old = client
+        let placeSent = listening.forget()
         guard !old.token.isEmpty else { return }
-        Task { try? await old.logout() }
+        Task {
+            await placeSent?.value
+            try? await old.logout()
+        }
     }
 
     func signOut() {

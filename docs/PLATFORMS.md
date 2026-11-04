@@ -198,7 +198,7 @@ again from the start, without following the redirect.
 
 ## Features
 
-Every client reaches everything the server does, except where this says it can't. Video has the native apps' own screens, and on Android so do music, audiobooks and
+Every client reaches everything the server does, except where this says it can't. Video has the native apps' own screens, and on Android and the Apple apps so do music, audiobooks and
 podcasts. Everything else opens **the server's own page inside the app**, signed in: in a web view on Android and on iPhone and iPad, with big screen mode at 1920 wide on a TV.
 Apple TV has no web view, as tvOS doesn't offer one to apps, so it has screens of its own for what it can do, and says plainly what it can't.
 
@@ -215,9 +215,9 @@ books and comics in the test media. **Ran** on the desktop is the real app under
 | Next episode | Ran: offered | Emulator (0.2.1) | Emulator (0.2.1) | Written | Written |
 | Skip intro | Not seen here: no intros in this media | Emulator (0.2.1) | Emulator (0.2.1) | Written | Written |
 | Search | Ran | Emulator, films and shows; everything else in the server's page | The same | Written, films and shows | Written, films and shows |
-| Music: albums, artists, songs, a queue | Ran: opens and plays | Own screens, Emulator: [below](#music-audiobooks-and-podcasts-on-android) | Own screens, Emulator: [below](#music-audiobooks-and-podcasts-on-android) | Own screen, written: albums and tracks only | Page, written |
-| Playlists, lyrics, a song's radio, following a podcast | Ran: opens | Page, behind More. Its sound stops when you leave it | The same | Not available | Page, written |
-| Audiobooks, podcasts | Ran: clock moved | Own screens, Emulator: place saved, Resume, speed | Own screens, Emulator: the same | Own screen, written: as music | Page, written |
+| Music: albums, artists, songs, a queue | Ran: opens and plays | Own screens, Emulator: [below](#music-audiobooks-and-podcasts-on-android) | Own screens, Emulator: [below](#music-audiobooks-and-podcasts-on-android) | Own screens, compiled: [below](#music-audiobooks-and-podcasts-on-apple) | Own screens, Simulator: [below](#music-audiobooks-and-podcasts-on-apple) |
+| Playlists, lyrics, a song's radio, following a podcast | Ran: opens | Page, behind More. Its sound stops when you leave it | The same | Not available | Page, behind More, written |
+| Audiobooks, podcasts | Ran: clock moved | Own screens, Emulator: place saved, Resume, speed | Own screens, Emulator: the same | Own screens, compiled | Own screens, Simulator: place saved, Resume, speed, with music standing in for a book |
 | Radio | Page opens. No station played: none set up | The same | The same | **Not available**: says so. Could be built | Page, written |
 | Books, comics, PDF | Ran: reader opens | Page: reader opens, Back leaves it | Page: reader opens | **Not available**: no web view to read in, and it says so | Page, written |
 | Photos | Ran: grid and viewer | Page: viewer with arrows, OK and Back | Page: viewer by touch, Back closes it | Own screen, written: left and right through a library | Page, written |
@@ -285,6 +285,33 @@ Android 16 phone and 1080p TV emulators, against a real server with `saveMetadat
 - **What a page builds itself to save can't be downloaded,** such as a backup or a zipped log. It says to use a browser. A file the server sends by address can be.
 - **Uploading by remote on a TV:** whether a TV has a file picker at all differs by device. It says so if it hasn't.
 - **Remote and controller:** only emulated key presses and virtual controllers have reached the pages on a TV. See [Controllers](#controllers).
+
+### Music, audiobooks and podcasts on Apple
+
+The same screens and player as Android's, in SwiftUI on one `AVPlayer` (`apple/App/Listening.swift`), on iPhone, iPad, Apple Vision Pro and Apple TV. Seen on 2026-11-04
+in the iOS 27 simulator on an iPhone 18 Pro, against a real server with two made-up albums of MP3s. It has no audiobook or podcast library, so a build with a
+temporary switch treated music as books, and another forced the server to convert every song. Neither switch is in the code. Apple TV and Apple Vision Pro
+were compiled, for the simulator and for devices, and not run.
+
+| What | iPhone simulator |
+|---|---|
+| A library's albums and an album's page | Seen. Artists, Songs and More weren't opened |
+| Play, a track's row, the mini player above the pill, the whole-screen player upright and sideways | Seen |
+| Next, a seek on the bar, the next track by itself, the end of the queue, Play starting it again | Seen |
+| Queue: Change, move, remove | Seen. Add, Shuffle, Repeat and Clear weren't pressed |
+| Screen locked | Carried on to the next track. The system's now-playing service had title, artist, album, cover (768 × 768), queue place and the commands: books get Back 15 and Forward 30, songs Previous and Next. **The simulator draws no player on its lock screen,** so none was seen |
+| A song the server converts | Plays, seeks by asking for a new stream from that time (`timeOffsetSec`), and moves on at its end |
+| A book's place on pausing, and at the end of a part | Read back from the server: 5.5 seconds in, and the part before marked finished |
+| Resume, Start over, a part's "0:05 in" and "Finished", speed | Seen. Resume asked for the part from 5.5 seconds. Speed went to 1.25× |
+
+**Not seen:** any real device, and so no sound heard, nothing on a lock screen or in Control Center, no headphone or media keys, no phone call, no AirPlay or CarPlay.
+Nor the network dropping and coming back, a film pausing the music, signing out while playing, VoiceOver, an iPad, Apple Vision Pro or Apple TV running.
+
+**Limits:**
+
+- **The queue is kept while the app runs.** If the system ends it, the queue is gone. Books and podcasts keep their place on the server.
+- **One track after another, not gapless:** the next track is asked for when the last one ends.
+- **Sound in the server's page,** behind More, is a separate player, as on Android.
 
 ## Controllers
 
@@ -422,18 +449,18 @@ anything, the Keychain, the web view, the Top Shelf, or generating the Xcode pro
 | Device capabilities | **Written** | What each device really reports, and whether the choices fit real files |
 | Picture in picture | **Written** | Whether pausing in the background interferes. Plain video pauses when the app goes to the background |
 | The server's pages, iPhone and iPad | **Written** | Whether the sign-in cookie reaches them, saving a file, and whether the page's own bars sit well under the system's |
-| Music, photos and channels on Apple TV | **Written** | Focus on the lists, a song with no picture in the system's player, the next track following, and whether up and down reach a player that isn't the system's |
+| Music, audiobooks and podcasts | **Simulator**, iPhone | A real device's lock screen, Control Center, headphones and calls, and Apple TV's focus through the lists and the queue |
+| Photos and channels on Apple TV | **Written** | Whether up and down reach a player that isn't the system's |
 
 **Known limits:**
 
 - The server's growing streams start the player's clock at the place they start from, so the system's seek bar shows time from there,
   not the film's own time. It can only seek within what exists so far. Going further needs a track change or a new start.
-- Now-playing information comes from the system's player. It isn't written by hand, so a screen other than the player would need its
-  own when music arrives.
+- A film's now-playing information comes from the system's player. Music, audiobooks and podcasts write their own.
 - Posters are kept in memory, not on disk, so they're fetched again each time the app starts.
 - The hero is one picture from the server's featured list, and doesn't turn or page.
 - Search in the app's own screen finds films and shows, not episodes or music. On iPhone and iPad, the server's page finds the rest.
-- Apple TV shows one album's tracks from the first 500 items of a library, as the server has no list by album name.
+- Apple TV's older album list (`AlbumView`) reads the first 500 items of a library. Nothing opens it now: albums open the listening screens.
 - A two-factor prompt on password sign-in isn't built. Those accounts can sign in by code.
 - Apple TV's guide has WittyTV's colours and the owner's own channel logos, not its themes' layouts, type or preview, nor logos from the logo service. An app theme that suggests a WittyTV theme is only followed in the page.
 - There are no tests of the screens themselves. Anything that can be tested without one is in WittyKit.

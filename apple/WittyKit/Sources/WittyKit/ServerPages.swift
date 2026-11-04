@@ -50,6 +50,13 @@ public extension Item {
     var isAudio: Bool { kind == "audio" }
     var isPhoto: Bool { kind == "photo" }
 
+    /// Whose album a track is on, which is how its album is asked for: the album's artist where
+    /// there is one, else the track's own.
+    var albumArtistName: String {
+        if let albumArtist, !albumArtist.isEmpty { return albumArtist }
+        return artist ?? ""
+    }
+
     /// The name to show on a card: a song's album, as a row shows each album once.
     var cardTitle: String {
         if isAudio, let album, !album.isEmpty { return album }

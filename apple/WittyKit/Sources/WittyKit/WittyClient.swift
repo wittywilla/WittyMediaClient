@@ -261,6 +261,43 @@ public final class WittyClient: @unchecked Sendable {
         return trimmed.addingPercentEncoding(withAllowedCharacters: safe)
     }
 
+    /// A plain list, which a Go nil sends as null.
+    private func list<T: Decodable>(_ path: String) async throws -> [T] {
+        try decoder.decode([T]?.self, from: try await call("GET", path)) ?? []
+    }
+
+    /// One value in a query, as it is: nothing in a name can add a parameter or end the address.
+    public static func queryValue(_ text: String) -> String {
+        var safe = CharacterSet.alphanumerics
+        safe.insert(charactersIn: "-._~")
+        return text.addingPercentEncoding(withAllowedCharacters: safe) ?? ""
+    }
+
+    public func libraries() async throws -> [Library] { try await list("/libraries") }
+
+    /// Albums, books or podcasts: by `title`, `artist`, `added` or `year`. With an artist, only theirs.
+    public func albums(library: Int64, sort: String, artist: String? = nil) async throws -> [Album] {
+        try await list("/music/albums?library=\(library)&sort=\(Self.queryValue(sort))" + (artist.map { "&artist=\(Self.queryValue($0))" } ?? ""))
+    }
+
+    public func artists(library: Int64) async throws -> [Artist] { try await list("/music/artists?library=\(library)") }
+
+    /// The tracks of one album, in order. An empty album or artist means none or unknown: it is still asked for by name.
+    public func tracks(library: Int64, album: String, artist: String) async throws -> [Item] {
+        try await list("/music/tracks?library=\(library)&album=\(Self.queryValue(album))&artist=\(Self.queryValue(artist))")
+    }
+
+    /// Every song in a music library, a page at a time, by title.
+    public func songs(library: Int64, offset: Int, limit: Int) async throws -> [Item] {
+        try await list("/music/songs?library=\(library)&offset=\(offset)&limit=\(limit)&sort=title")
+    }
+
+    /// Music has no place to save, but what was heard counts towards the server's yearly summary.
+    public func recordListen(_ id: Int64, seconds: Double) async throws {
+        let body = try JSONEncoder().encode(["seconds": seconds])
+        _ = try await call("POST", "/items/\(id)/view", body: body)
+    }
+
     public func playback(_ id: Int64, _ request: PlaybackRequest) async throws -> Playback {
         let body = try JSONEncoder().encode(request)
         return try decoder.decode(Playback.self, from: try await call("POST", "/items/\(id)/playback", body: body))
@@ -368,6 +405,8 @@ public final class WittyClient: @unchecked Sendable {
     }
 
     public func posterURL(_ item: Item) -> URL? { URL(string: "\(base)\(apiPath)/items/\(item.id)/poster?v=\(item.updatedAt ?? 0)") }
+    /// An album's or an artist's cover: the poster of the track the server chose for it.
+    public func coverURL(_ item: Int64) -> URL? { URL(string: "\(base)\(apiPath)/items/\(item)/poster") }
     public func posterURL(_ show: Show) -> URL? { URL(string: "\(base)\(apiPath)/shows/\(show.id)/art/poster?v=\(show.updatedAt ?? 0)") }
     public func backdropURL(_ item: Item) -> URL? { URL(string: "\(base)\(apiPath)/items/\(item.id)/backdrop?v=\(item.updatedAt ?? 0)") }
     public func backdropURL(_ show: Show) -> URL? { URL(string: "\(base)\(apiPath)/shows/\(show.id)/art/backdrop?v=\(show.updatedAt ?? 0)") }

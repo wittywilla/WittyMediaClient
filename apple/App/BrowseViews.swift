@@ -29,8 +29,9 @@ private func displayTitle(_ item: Item) -> String {
 /// page, or on Apple TV what it can do.
 private func route(for item: Item) -> Route {
     if item.isPlayable || item.isRigGame { return .item(item.id) }
+    // A song or a chapter opens its album or book, as on Android.
+    if item.isAudio, let library = item.libraryId { return .listeningAlbum(library: library, album: item.album ?? "", artist: item.albumArtistName) }
     #if os(tvOS)
-    if item.isAudio, let library = item.libraryId, let album = item.album, !album.isEmpty { return .album(library: library, name: album) }
     if item.isPhoto, let library = item.libraryId { return .photo(library: library, id: item.id) }
     return .item(item.id)
     #else
@@ -48,7 +49,7 @@ private func route(for library: Library) -> Route {
     #if os(tvOS)
     return .library(library)
     #else
-    return library.opensHere ? .library(library) : .page(ServerPages.path(library))
+    return library.opensHere || library.hasListeningScreens ? .library(library) : .page(ServerPages.path(library))
     #endif
 }
 
@@ -359,7 +360,7 @@ private struct PhoneHero: View {
                 .padding(.horizontal, Tokens.Space.s6)
                 .accessibilityAddTraits(.isHeader)
             Secondary([current.year.map(String.init), current.genres?.first].compactMap { $0 }.joined(separator: " · "))
-            NavigationLink(value: playRoute(for: current)) {
+            PlayOrOpen(item: current, route: playRoute(for: current)) {
                 Label(current.resumeSeconds == nil ? "Play" : "Resume", systemImage: "play.fill")
             }
             .mainAction()
@@ -424,7 +425,7 @@ private struct WideHero: View {
                 Secondary([item.year.map(String.init), item.genres?.first, item.contentRating].compactMap { $0 }.filter { !$0.isEmpty }.joined(separator: " · "))
                 if let overview = item.overview, !overview.isEmpty { Secondary(overview, lines: 2) }
                 HStack(spacing: Tokens.Space.s3) {
-                    NavigationLink(value: playRoute(for: item)) {
+                    PlayOrOpen(item: item, route: playRoute(for: item)) {
                         Label(item.resumeSeconds == nil ? "Play" : "Resume", systemImage: "play.fill")
                     }
                     .mainAction()

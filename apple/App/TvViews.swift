@@ -40,7 +40,11 @@ struct AlbumView: View {
                         }
                         ForEach(Array(tracks.enumerated()), id: \.element.id) { index, track in
                             Button {
-                                model.play(tracks, from: track)
+                                // The listening player, as everywhere else: the lock screen, and on after leaving.
+                                Task {
+                                    let books = ListeningRules.keepsPlace(libraryType: await model.libraryType(library))
+                                    model.startListening(tracks, start: ListeningStart(index, atSec: ListeningRules.placeOn(track, keepsPlace: books)), keepsPlace: books)
+                                }
                             } label: {
                                 Text(track.title).frame(maxWidth: .infinity, minHeight: Tokens.minTarget, alignment: .leading)
                             }

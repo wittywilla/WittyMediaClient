@@ -13,6 +13,7 @@ struct WittyMediaApp: App {
         WindowGroup {
             RootView()
                 .environmentObject(model)
+                .environmentObject(model.listening)
                 .modifier(MetricsForWidth())
                 .preferredColorScheme(model.scheme)
                 .tint(model.palette.accentText)

@@ -39,9 +39,9 @@ enum AppTab: String, CaseIterable, Identifiable, Hashable {
 struct BrowseShell: View {
     var body: some View {
         #if os(tvOS)
-        TopTabs()
+        TopTabs().nowPlayingCover()
         #else
-        PillShell()
+        PillShell().nowPlayingCover()
         #endif
     }
 }
@@ -65,7 +65,15 @@ private struct TabRoot: View {
                 .noNavigationBar()
                 .navigationDestination(for: Route.self) { route in
                     switch route {
-                    case .library(let library): LibraryView(library: library).plainNavigation()
+                    case .library(let library):
+                        if library.hasListeningScreens {
+                            ListeningLibraryView(library: library).plainNavigation()
+                        } else {
+                            LibraryView(library: library).plainNavigation()
+                        }
+                    case .listeningAlbum(let library, let album, let artist):
+                        AlbumScreen(library: library, album: album, artist: artist).plainNavigation()
+                    case .artist(let library, let name): ArtistScreen(library: library, name: name).plainNavigation()
                     case .show(let id): ShowView(id: id).plainNavigation()
                     case .item(let id): ItemView(id: id).plainNavigation()
                     // A new identity for each thing played, so the next episode gets a new player
@@ -120,6 +128,7 @@ private struct TopTabs: View {
         TabView(selection: $model.tab) {
             ForEach(AppTab.allCases) { tab in
                 TabRoot(tab: tab)
+                    .safeAreaInset(edge: .bottom) { MiniPlayerSlot(tab: tab) }
                     .tabItem { Label(tab.title, systemImage: tab.icon) }
                     .tag(tab)
             }
@@ -137,7 +146,11 @@ private struct PillShell: View {
             ForEach(AppTab.allCases) { tab in
                 TabRoot(tab: tab)
                     .safeAreaInset(edge: .bottom) {
-                        if !model.hidesBars { PillBar() }
+                        // The mini player sits above the pill, as on Android.
+                        VStack(spacing: Tokens.Space.s2) {
+                            MiniPlayerSlot(tab: tab)
+                            if !model.hidesBars { PillBar() }
+                        }
                     }
                     .toolbar(.hidden, for: .tabBar)
                     .tag(tab)

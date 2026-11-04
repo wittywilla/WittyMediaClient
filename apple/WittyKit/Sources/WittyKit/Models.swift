@@ -63,6 +63,9 @@ public struct Library: Decodable, Identifiable, Hashable {
     public var opensHere: Bool { ["movies", "shows", "anime", "videos", "discs"].contains(type) || isRigGames }
     /// Sound of some kind, which goes under Music.
     public var isListening: Bool { ["music", "audiobooks", "podcasts", "radio"].contains(type) }
+    /// Music, audiobooks and podcasts have these apps' own screens and player, as on Android. Radio is
+    /// the server's page.
+    public var hasListeningScreens: Bool { ["music", "audiobooks", "podcasts"].contains(type) }
 }
 
 public struct CouchStatus: Decodable, Equatable {
@@ -74,6 +77,8 @@ public struct Progress: Decodable, Equatable {
     public let durationSec: Double?
     public let watched: Bool?
     public let resumeSec: Double?
+    /// When the place was last saved, in seconds since 1970: which book was left off most recently.
+    public let updatedAt: Int64?
 }
 
 public struct Item: Decodable, Identifiable, Equatable {
@@ -128,6 +133,28 @@ public struct Item: Decodable, Identifiable, Equatable {
         if let episodeEnd, episodeEnd != 0 { label += "–\(episodeEnd)" }
         return season == 0 ? "Special · \(label)" : "S\(season) · \(label)"
     }
+}
+
+/// An album, a book or a podcast. The server groups them from their tracks, so they have no ID of
+/// their own: they're asked for by name. `coverItem` is a track whose poster is the cover.
+public struct Album: Decodable, Equatable, Hashable {
+    public let artist: String?
+    public let title: String?
+    public let year: Int?
+    public let tracks: Int?
+    public let durationSec: Double?
+    public let coverItem: Int64?
+
+    /// One album to a name and an artist, as a list shows each once.
+    public var key: String { "\(artist ?? "")|\(title ?? "")" }
+}
+
+/// An artist or an author, and how many of their albums or books the library has.
+public struct Artist: Decodable, Equatable, Hashable {
+    public let name: String?
+    public let albums: Int?
+    public let tracks: Int?
+    public let coverItem: Int64?
 }
 
 public struct Show: Decodable, Identifiable, Equatable {
@@ -286,13 +313,17 @@ public struct PlaybackRequest: Encodable {
     public var audio: Int?
     public var subtitle: Int?
     public var startSec: Double?
+    /// This device couldn't decode what it was sent: ask for a conversion instead.
+    public var forceTranscode: Bool?
 
-    public init(profile: String, capabilities: DeviceCapabilities? = nil, audio: Int? = nil, subtitle: Int? = nil, startSec: Double? = nil) {
+    public init(profile: String, capabilities: DeviceCapabilities? = nil, audio: Int? = nil, subtitle: Int? = nil, startSec: Double? = nil,
+                forceTranscode: Bool? = nil) {
         self.profile = profile
         self.capabilities = capabilities
         self.audio = audio
         self.subtitle = subtitle
         self.startSec = startSec
+        self.forceTranscode = forceTranscode
     }
 }
 

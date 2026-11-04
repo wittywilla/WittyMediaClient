@@ -5,6 +5,11 @@ What changed in WittyMediaClient, newest first. What changed before it had a rep
 
 ## Unreleased
 
+- **Apple: music, audiobooks and podcasts have a player of their own, as on Android.** On iPhone, iPad, Apple Vision Pro and Apple TV: albums, artists or authors,
+  songs and podcast episodes have the app's own screens, with a queue you can add to, rearrange and shuffle, and a mini player above the bar. Sound carries on
+  with the screen off and after leaving the app, with the player on the lock screen and in Control Center, and headphone and media keys work. Books and
+  podcasts save their place and resume it, go back 15 and forward 30 seconds, and keep a chosen speed. A song the server converts seeks like any other, and it
+  tries again by itself when the network comes back. Playlists, lyrics and following a podcast are behind More, in the server's own page.
 - **Apple: the iPhone and iPad app looks and works like the Android app.** The same filled buttons with the main one in the accent colour, outlined fields,
   posters with their titles under them, and Android's spacing and type. Home, Search and Profile are in the same floating bar on iPhone, iPad and Apple Vision Pro,
   and music is reached from Home's library pills. Home has the posters to swipe through with Play; items and shows have their picture behind them, with season
