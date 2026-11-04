@@ -260,8 +260,9 @@ fun ConnectScreen(nav: Nav, s: Map<String, String>, message: String) {
             Secondary(s["legalConnect"].orEmpty())
         }
         // Side by side, so that a long list of servers doesn't scroll the words out of sight.
+        // The padding is inside the scrolling column, which clips: room for a focused row to grow at either end.
         LocalMetrics.current.tv -> SideBySide(words = words, actions = {
-            Column(notesMoved.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(12.dp)) { servers() }
+            Column(notesMoved.verticalScroll(rememberScrollState()).padding(vertical = Space.S3), verticalArrangement = Arrangement.spacedBy(12.dp)) { servers() }
         })
         else -> Centred {
             Column(notesMoved, verticalArrangement = Arrangement.spacedBy(12.dp)) {
