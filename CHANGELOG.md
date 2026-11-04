@@ -18,6 +18,7 @@ What changed in WittyMediaClient, newest first. What changed before it had a rep
   its side, rows run to the edge rather than stop short of the camera. Profile says who's signed in.
 - **Apple: the same, not yet compiled.** On iPhone and iPad everything else opens in the server's page. Apple TV has no web view, so it gets screens for music, photos and
   live channels, and says plainly what it can't show. The apps are now called WittyMediaClient. `apple/scripts/check-on-mac.sh` is the first check on a Mac.
+- **Android TV:** Back from the code screen puts focus on the server that was chosen, not the first in the list, so OK can't open a different server by mistake ([#7](https://github.com/wittywilla/WittyMediaClient/issues/7)).
 - **WittyTV on Android:** TV guide is on the TV's top bar, and Home has a row of what's on now, on phones too. Channel buttons, arrows and a controller change channel. A remote's Guide button opens the guide, though no emulator has passed that button on yet.
 - **WittyTV on Apple TV, not yet compiled:** the guide and the channel banner take the colours of the WittyTV theme chosen on the account, from any device, and show the owner's channel logos.
 - **WittyTV on Apple, not yet compiled:** Apple TV has a guide with what's on now and next, and a player where up and down change channel, with what's on shown over the picture. Home has the row too. iPhone and iPad have the server's guide.
