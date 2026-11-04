@@ -108,6 +108,8 @@
     if (!listAvailable) return addressScreen(message)
 
     const foundList = el('div', { className: 'list' })
+    const recentList = el('div', { className: 'list' }, ...recent.map(serverButton))
+    const recentHeading = el('h2', { textContent: S.recentServers })
     const status = el('p', { role: 'status', textContent: S.findSearching })
     const children = [el('h1', { textContent: S.findTitle })]
     if (message) children.push(el('p', { className: 'error', role: 'alert', textContent: message }))
@@ -117,7 +119,7 @@
       children.push(el('p', { textContent: S.findNotSupported }))
     }
     if (recent.length) {
-      children.push(el('h2', { textContent: S.recentServers }), el('div', { className: 'list' }, ...recent.map(serverButton)))
+      children.push(recentHeading, recentList)
     }
     const enterAddress = button(S.enterAddress, () => { listFocus = ENTER_ADDRESS; addressScreen() })
     children.push(el('div', { className: 'row' }, enterAddress))
@@ -142,11 +144,19 @@
         const fallback = neighbour || app.querySelector('button')
         if (fallback) fallback.focus()
       } else if (!userMoved && foundList.firstChild) foundList.firstChild.focus()
+      // A remembered server that has just been found is listed once, under what was found.
+      Array.from(recentList.children).forEach((b) => {
+        const twin = Array.from(foundList.children).find((f) => f.dataset.url === b.dataset.url)
+        const wasFocused = document.activeElement === b
+        b.hidden = !!twin
+        if (wasFocused && twin) twin.focus()
+      })
+      recentHeading.hidden = recentList.children.length > 0 && Array.from(recentList.children).every((b) => b.hidden)
     }
     const startedAt = Date.now()
     renderFound()
     // Coming back: to the thing that was chosen, and discovery leaves it there.
-    const cameFrom = listFocus === ENTER_ADDRESS ? enterAddress : Array.from(app.querySelectorAll('button')).find((b) => b.dataset.url === listFocus)
+    const cameFrom = listFocus === ENTER_ADDRESS ? enterAddress : Array.from(app.querySelectorAll('button:not([hidden])')).find((b) => b.dataset.url === listFocus)
     if (cameFrom) {
       cameFrom.focus()
       userMoved = true
@@ -302,7 +312,7 @@
   // left and right belong to the text, so only up and down leave it.
   function moveFocus(dir) {
     const cur = document.activeElement
-    const all = Array.from(app.querySelectorAll('button:not(:disabled), input'))
+    const all = Array.from(app.querySelectorAll('button:not(:disabled):not([hidden]), input'))
     if (!all.length) return false
     if (!all.includes(cur)) { all[0].focus(); return true }
     const a = cur.getBoundingClientRect()

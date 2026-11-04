@@ -23,6 +23,7 @@ What changed in WittyMediaClient, newest first. What changed before it had a rep
 - **WittyTV on Apple, not yet compiled:** Apple TV has a guide with what's on now and next, and a player where up and down change channel, with what's on shown over the picture. Home has the row too. iPhone and iPad have the server's guide.
 - **Controllers on Android:** the first press on a page opened with a controller now counts. It used to do nothing, so opening the TV guide took A twice to watch.
 - **Controllers on Android:** Xbox, DualSense, DualShock 4 and Switch Pro layouts all move and choose, on the app's own screens and in the server's page. A Nintendo pad's A is confirm, as printed. B now leaves a server page when there's nothing left to go back through.
+- **Desktop 0.2.4:** a server that was used before and is also found on the network is listed once, under On your network, instead of twice ([#9](https://github.com/wittywilla/WittyMediaClient/issues/9)).
 - **Desktop:** what has its own Back on a TV is read from the server's page, with the old list for older servers, so the two can't drift apart.
 - `docs/PLATFORMS.md` now has what every server feature does on every client, and how far each was seen.
 

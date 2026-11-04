@@ -2,7 +2,7 @@
   "name": "wittymediaclient",
   "productName": "WittyMediaClient",
   "desktopName": "wittymediaclient.desktop",
-  "version": "0.2.3",
+  "version": "0.2.4",
   "description": "Watch and listen from your WittyMediaServer",
   "author": "WittyWilla",
   "homepage": "https://github.com/wittywilla/WittyMediaClient",
