@@ -5,6 +5,8 @@ What changed in WittyMediaClient, newest first. What changed before it had a rep
 
 ## Unreleased
 
+- **Apple Vision Pro:** the iPhone and iPad app also builds for visionOS 2 and later, as an app of its own rather than the iPad one in a window. It takes the iPad's layout,
+  opens the server's pages inside the app, and reports its errors as visionOS. Compiled, never run. CI builds it where the Mac runner's Xcode has the visionOS SDK.
 - **Android 0.3.0: music, audiobooks and podcasts have a player of their own.** Sound carries on with the screen off, after leaving the app and after swiping it away, with the
   player on the lock screen, in the system's controls and on a TV's home screen, and headphone and media keys work. Albums, artists or authors, songs and podcast episodes have the app's own screens,
   with a queue you can add to, rearrange and shuffle, and a mini player over the rest of the app. Books and podcasts save their place and resume it, go back 15 and forward 30 seconds, and keep a

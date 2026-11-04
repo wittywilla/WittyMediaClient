@@ -147,19 +147,27 @@ jobs:
         working-directory: apple
         run: xcodegen generate
       # Compile only: nothing is signed, and nothing here can run on a device.
-      - name: Build for Apple TV, iPhone and iPad, and Mac
+      - name: Build for Apple TV, iPhone and iPad, Mac, and Apple Vision Pro
         working-directory: apple
         run: |
-          for pair in "WittyMedia-tvOS|generic/platform=tvOS" "WittyMedia-iOS|generic/platform=iOS" "WittyMedia-macOS|generic/platform=macOS"; do
+          pairs="WittyMedia-tvOS|generic/platform=tvOS WittyMedia-iOS|generic/platform=iOS WittyMedia-macOS|generic/platform=macOS"
+          # The iPhone and iPad target builds for Apple Vision Pro too, where the runner's Xcode has its SDK.
+          if xcodebuild -showsdks | grep -q -- '-sdk xros'; then
+            pairs="$pairs WittyMedia-iOS|generic/platform=visionOS"
+          else
+            echo "::notice title=visionOS::This runner's Xcode has no visionOS SDK, so Apple Vision Pro wasn't built"
+          fi
+          for pair in $pairs; do
             scheme=${pair%|*}
             destination=${pair#*|}
-            echo "== $scheme"
+            platform=${destination#generic/platform=}
+            echo "== $scheme for $platform"
             if ! xcodebuild -project WittyMedia.xcodeproj -scheme "$scheme" -destination "$destination" \
-              -configuration Debug CODE_SIGNING_ALLOWED=NO build -quiet > "$RUNNER_TEMP/$scheme.log" 2>&1; then
-              tail -60 "$RUNNER_TEMP/$scheme.log"
+              -configuration Debug CODE_SIGNING_ALLOWED=NO build -quiet > "$RUNNER_TEMP/$scheme-$platform.log" 2>&1; then
+              tail -60 "$RUNNER_TEMP/$scheme-$platform.log"
               # Annotations can be read without signing in; the log can't.
-              grep -E 'error:' "$RUNNER_TEMP/$scheme.log" | sort -u | head -10 | while IFS= read -r line; do
-                echo "::error title=$scheme::${line##*/}"
+              grep -E 'error:' "$RUNNER_TEMP/$scheme-$platform.log" | sort -u | head -10 | while IFS= read -r line; do
+                echo "::error title=$scheme ($platform)::${line##*/}"
               done
               exit 1
             fi

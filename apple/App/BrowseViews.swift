@@ -240,14 +240,14 @@ private struct OnNowRow: View {
 /// tall poster on a phone. It doesn't turn by itself: nothing moves that nobody asked to move.
 private struct HeroView: View {
     @Environment(\.client) private var client
-    #if os(iOS)
+    #if os(iOS) || os(visionOS)
     @Environment(\.horizontalSizeClass) private var sizeClass
     #endif
     let item: Item
     let scope: Namespace.ID
 
     private var wide: Bool {
-        #if os(iOS)
+        #if os(iOS) || os(visionOS)
         return sizeClass == .regular
         #else
         return true
@@ -305,7 +305,7 @@ struct HomeView: View {
     @EnvironmentObject private var model: AppModel
     @Environment(\.client) private var client
     @Environment(\.palette) private var palette
-    #if os(iOS)
+    #if os(iOS) || os(visionOS)
     @Environment(\.horizontalSizeClass) private var sizeClass
     #endif
     @State private var home: Home?
@@ -322,7 +322,7 @@ struct HomeView: View {
     private var showsTabs: Bool {
         #if os(macOS)
         return false
-        #elseif os(iOS)
+        #elseif os(iOS) || os(visionOS)
         return sizeClass != .regular
         #else
         return true
@@ -340,7 +340,7 @@ struct HomeView: View {
             let words = model.handle(error)
             if home == nil, !words.isEmpty { self.error = words }
         }
-        #if os(iOS)
+        #if os(iOS) || os(visionOS)
         gamePCs = (try? await client.couchStatus())?.allowed == true
         #endif
         let guide = try? await client.guide()
@@ -639,7 +639,7 @@ struct ItemView: View {
             }
             .remoteSection()
         } else {
-            #if os(iOS)
+            #if os(iOS) || os(visionOS)
             NavigationLink(value: Route.page(ServerPages.path(item))) {
                 Label("Open", systemImage: "play.fill")
             }

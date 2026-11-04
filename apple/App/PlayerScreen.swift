@@ -69,6 +69,10 @@ final class PlaybackModel: ObservableObject {
         #elseif os(macOS)
         if AVPlayer.eligibleForHDRPlayback { hdr = ["hdr10", "hlg"] }
         let kind = DeviceFacts.Kind.computer
+        #elseif os(visionOS)
+        // A headset is held to what suits an iPad: one person, a large screen, often on battery.
+        if AVPlayer.eligibleForHDRPlayback { hdr = ["hdr10", "hlg"] }
+        let kind = DeviceFacts.Kind.tablet
         #else
         if AVPlayer.eligibleForHDRPlayback { hdr = ["hdr10", "hlg"] }
         let kind: DeviceFacts.Kind = UIDevice.current.userInterfaceIdiom == .pad ? .tablet : .phone
@@ -542,7 +546,7 @@ private struct PlayerHost: UIViewControllerRepresentable {
 
         init(_ playback: PlaybackModel) { self.playback = playback }
 
-        #if os(iOS)
+        #if os(iOS) || os(visionOS)
         func playerViewControllerWillStartPictureInPicture(_ controller: AVPlayerViewController) {
             Task { @MainActor [playback] in playback.inPictureInPicture = true }
         }
@@ -689,7 +693,7 @@ struct PlayerScreen: View {
         #if os(tvOS)
         .toolbar(.hidden, for: .tabBar)
         #endif
-        #if os(iOS)
+        #if os(iOS) || os(visionOS)
         .navigationBarTitleDisplayMode(.inline)
         .navigationTitle(playback.item?.title ?? "")
         #endif
