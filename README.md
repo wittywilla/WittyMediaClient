@@ -45,7 +45,7 @@ to that server and nowhere else: there is no telemetry and no other address. The
 
 | App | The file | How to reach it |
 |---|---|---|
-| Desktop | `logs/client.log` in the app's data folder, 2 MB and three files at most | **Help** in the title bar: "Open logs folder" and "Copy diagnostic info". The connect screen has the link too |
+| Desktop | `logs/client.log` in the app's data folder, 2 MB and three files at most | **Help** in the title bar, or in the menu bar on a Mac: "Open logs folder" and "Copy diagnostic info". The connect screen has the link too |
 | Android | `logs/client.log` in the app's private storage, 1 MB and three files at most | Profile, "This app's log". Errors reach the server's log |
 | Apple | `logs/client.log` in the app's caches, 1 MB and three files at most | Not yet: no screen for it. Errors reach the server's log |
 
@@ -101,7 +101,7 @@ The FreeBSD package holds only the app, under a megabyte, and uses the system's 
 | Linux | `.deb`, `.rpm` and `.pacman` installed, opened on a virtual screen, upgraded and removed in containers. The `.rpm` also ran on Fedora 44 in a virtual machine, and it ran from source on Ubuntu 26.04 |
 | FreeBSD 15.1 and 14.4, amd64 | In virtual machines, as an installed package: picture and sound seen on 15.1, as far as the connect screen on 14.4. Not a real FreeBSD desktop |
 | KDE Plasma Bigscreen | The real shell in a virtual machine: opened from its launcher, video and sound seen, keys through the real input stack. Never on a TV or with a real remote |
-| macOS | The workflow is set up to build it, and that has not run yet. It has never been launched |
+| macOS | Run from source on macOS 27 on Apple silicon, where `npm run test:app` passes, and opened as a packaged app. Not run on an Intel Mac |
 | Android TV | Run on an emulator, Android 16, with arrow keys and OK only |
 | Android phones | Run on emulators, Android 16 and Android 6. Android 7 to 15 not run |
 | Android on x86 and ARM | One APK carries all four. The emulators were 64-bit x86, and the other three are compiled, never run |
@@ -139,6 +139,8 @@ WMC_SERVER=http://192.168.1.20:8096 WMC_USER=me WMC_PASSWORD=... npm run test:re
 On FreeBSD, run Electron yourself, as the `electron` npm package has no build for it: `/usr/local/share/electron42/electron test/app/real-server.js --tv`. Set `WMC_APP` to an installed `app.asar` to test that instead of this folder.
 
 In the app, Tab moves around the page. **F6** moves between the page and the title bar, where the arrow keys move along the bar and Escape goes back to the page. **Change server** signs out of the server you're leaving.
+
+On a Mac the window has the system's own red, yellow and green buttons, at the left of the title bar, and the app has a menu bar: Help is there, and Change server is under **Server**. A double-click on the title bar does what System Settings say.
 
 **Android.** CI uses Java 17 and Gradle 9.8.2.
 

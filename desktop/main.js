@@ -1,8 +1,8 @@
-// WittyMediaClient for Windows, Linux and FreeBSD: a frameless window with two views.
-// The title bar is our own local page. Below it, the content view shows the
-// connect screen and then the server's web UI, which has no access to Node or
-// to the app beyond reporting its theme colours and asking for Moonlight.
-const { app, BaseWindow, Menu, WebContentsView, clipboard, ipcMain, net, protocol, session, shell } = require('electron')
+// WittyMediaClient for Windows, macOS, Linux and FreeBSD: a window with two views, and no
+// title bar of the system's. Ours is a local page, which on a Mac has the system's buttons on
+// it. Below it, the content view shows the connect screen and then the server's web UI, which
+// has no access to Node or to the app beyond reporting its theme colours and asking for Moonlight.
+const { app, BaseWindow, Menu, WebContentsView, clipboard, ipcMain, net, protocol, session, shell, systemPreferences } = require('electron')
 const fs = require('fs')
 const os = require('os')
 const path = require('path')
@@ -14,6 +14,7 @@ const moonlight = require('./moonlight.js')
 const { createClientLog } = require('./clientlog.js')
 const state = require('./state.js')
 const tv = require('./tv.js')
+const mac = require('./mac.js')
 
 const TITLE_BAR = 32
 const CONNECT_PAGE = guards.CONNECT_PAGE
@@ -33,6 +34,8 @@ const TV = tv.wanted(process.argv, process.env)
 // FreeBSD's Electron is the system's own and starts this app from the outside, so it
 // never counts as packaged. Being inside its archive is what says this is an installed copy.
 const INSTALLED = app.isPackaged || __dirname.includes('.asar')
+// On a Mac, the system's window buttons and menu bar. A TV is the same everywhere.
+const MAC = process.platform === 'darwin' && !TV
 
 const stateFile = () => path.join(app.getPath('userData'), 'state.json')
 let saved = {}
@@ -128,10 +131,16 @@ function openOutside(url) {
 
 const isF6 = (input) => input.type === 'keyDown' && input.key === 'F6' && !input.control && !input.alt && !input.shift && !input.meta
 
+let windowButtons = true
+
 function layout() {
   const { width, height } = win.getContentBounds()
   const full = TV || win.isFullScreen() || htmlFullScreen
   bar.setVisible(!full)
+  if (MAC) {
+    const buttons = mac.windowButtonsShown(!full, win.isFullScreen())
+    if (buttons !== windowButtons) win.setWindowButtonVisibility(windowButtons = buttons)
+  }
   bar.setBounds({ x: 0, y: 0, width, height: TITLE_BAR })
   const top = full ? 0 : TITLE_BAR
   content.setBounds({ x: 0, y: top, width, height: Math.max(0, height - top) })
@@ -184,6 +193,7 @@ function showConnect(query) {
   startedAfresh = true
   bar.webContents.send('server', '')
   bar.webContents.send('theme', BAR_THEME)
+  updateMenu()
   quietly(content.webContents.loadURL(query ? `${CONNECT_PAGE}?${new URLSearchParams(query)}` : CONNECT_PAGE))
 }
 
@@ -194,6 +204,7 @@ function showServer(url) {
   shown = null
   startedAfresh = true
   bar.webContents.send('server', url)
+  updateMenu()
   quietly(content.webContents.loadURL(TV ? tv.tenFootAddress(url) : url))
   log.kick()
 }
@@ -419,11 +430,46 @@ function servePages() {
   })
 }
 
+// The Mac's menu bar, which is where the title bar's Help is on a Mac.
+function macMenu() {
+  return Menu.buildFromTemplate(mac.menu({
+    connected: Boolean(server), changeServer: () => leaveServer(), zoom: zoomPage, openLogs, copyDiagnostics,
+  }))
+}
+
+function updateMenu() {
+  const item = MAC && Menu.getApplicationMenu() && Menu.getApplicationMenu().getMenuItemById('change-server')
+  if (item) item.enabled = Boolean(server)
+}
+
+// In half steps, as Electron's own menu does. Nought is back to normal.
+function zoomPage(step) {
+  const wc = content.webContents
+  wc.setZoomLevel(step ? wc.getZoomLevel() + step / 2 : 0)
+}
+
+// A double-click on the title bar does what the Mac is set to do. The system can answer it
+// itself, so the app only does it if, a moment later, the window hasn't changed.
+function titleDoubleClicked() {
+  const action = mac.doubleClickAction(systemPreferences.getUserDefault('AppleActionOnDoubleClick', 'string'))
+  if (action === 'none') return
+  const look = () => ({ bounds: win.getBounds(), minimized: win.isMinimized() })
+  const before = look()
+  setTimeout(() => {
+    if (win.isDestroyed() || mac.windowChanged(before, look())) return
+    if (action === 'minimize') win.minimize()
+    else if (win.isMaximized()) win.unmaximize()
+    else win.maximize()
+  }, mac.SETTLE_MS)
+}
+
 function createWindow() {
   const size = saved.window || {}
+  // On a Mac the window keeps the system's buttons, over the left of the app's own title bar.
+  const frame = MAC ? { titleBarStyle: 'hidden', trafficLightPosition: mac.windowButtonsAt(TITLE_BAR) } : { frame: false }
   win = new BaseWindow({
     width: size.width || 1280, height: size.height || 800, minWidth: 480, minHeight: 360, fullscreen: TV,
-    frame: false, backgroundColor: '#0f1115', title: 'WittyMediaClient', show: true,
+    ...frame, backgroundColor: '#0f1115', title: 'WittyMediaClient', show: true,
   })
   win.setMenu(null)
 
@@ -468,6 +514,11 @@ function createWindow() {
   win.on('leave-full-screen', layout)
   win.on('maximize', () => bar.webContents.send('maximized', true))
   win.on('unmaximize', () => bar.webContents.send('maximized', false))
+  // The title fades with the system's buttons when another window is in front.
+  if (MAC) {
+    win.on('focus', () => bar.webContents.send('active', true))
+    win.on('blur', () => bar.webContents.send('active', false))
+  }
   win.on('closed', () => { endDiscovery(); saveState(); app.quit() })
 
   bar.webContents.loadURL(BAR_PAGE).then(startUp).catch((err) => {
@@ -512,6 +563,7 @@ ipcMain.on('window', (e, action, at) => {
   else if (action === 'close') win.close()
   else if (action === 'change-server') leaveServer()
   else if (action === 'help') showHelpMenu(at)
+  else if (action === 'double-click' && MAC) titleDoubleClicked()
   else if (action === 'focus-page') content.webContents.focus()
 })
 
@@ -530,7 +582,8 @@ ipcMain.on('tv-menu', (e, action) => {
   else if (action === 'quit') win.close()
 })
 
-// Every page gets the sandbox, whatever made it. The default menu's shortcuts aren't for this app.
+// Every page gets the sandbox, whatever made it. The default menu's shortcuts aren't for this app,
+// and a Mac gets its own once the app is ready.
 app.enableSandbox()
 if (TV && process.platform !== 'win32' && process.platform !== 'darwin') for (const [name, value] of tv.switches(process.env)) app.commandLine.appendSwitch(name, value)
 Menu.setApplicationMenu(null)
@@ -583,6 +636,7 @@ else {
       log.warn('network', 'A download was refused', { where: item.getURL().slice(0, 200) })
     })
     createWindow()
+    if (MAC) Menu.setApplicationMenu(macMenu())
   }).catch((err) => {
     // There's no window and never will be, and an app with none can't be closed.
     log.noteError('error', 'crash', 'The app could not start', err, { page: 'main process' })

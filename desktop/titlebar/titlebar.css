@@ -35,5 +35,14 @@ svg { width: 10px; height: 10px; fill: currentColor; }
 /* The colour people know from every other window's close button, in every theme. */
 .close:hover, .close:focus-visible { background: #d4293a; color: #fff; }
 .close:focus-visible { outline-color: #fff; }
+/* On a Mac the system draws the window's buttons, over the space left for them on the
+   left, and has Help in the menu bar. The title is in the middle of the window, in the system's font. */
+.mac body { display: grid; grid-template-columns: 1fr minmax(0, auto) 1fr; font-family: -apple-system, BlinkMacSystemFont, system-ui, sans-serif; }
+.mac body::before { content: ""; min-width: 78px; }
+.mac .title { padding: 0; font-weight: 600; text-align: center; }
+.mac .tools { justify-self: end; }
+.mac #help, .mac .ctl { display: none; }
+.mac button { margin: 4px 6px; padding: 0 10px; border-radius: 6px; }
+.mac.inactive .title { opacity: .5; }
 @media (prefers-reduced-motion: reduce) { button { transition: none; } }
 @media (forced-colors: active) { svg { fill: ButtonText; } }
