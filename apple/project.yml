@@ -35,6 +35,9 @@ targetTemplates:
       - path: ../shared/data
         type: folder
         buildPhase: resources
+      # What Profile's Licences page shows: every third-party part and its licence.
+      - path: ../NOTICE
+        buildPhase: resources
     dependencies:
       - package: WittyKit
     info:

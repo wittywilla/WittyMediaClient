@@ -81,6 +81,9 @@ enum Route: Hashable {
     /// Live channels, on Apple TV.
     case guide
     case channel(key: String)
+    /// The licences of what this app ships, and its own log, from Profile.
+    case notices
+    case logs
 }
 
 /// A list of tracks being played, in order, on Apple TV.
@@ -159,6 +162,8 @@ final class AppModel: ObservableObject {
         return "tvOS"
         #elseif os(macOS)
         return "macOS"
+        #elseif os(visionOS)
+        return "visionOS"
         #else
         return "iOS"
         #endif
@@ -171,6 +176,8 @@ final class AppModel: ObservableObject {
         return given.isEmpty ? "Apple TV" : given
         #elseif os(macOS)
         return "Mac"
+        #elseif os(visionOS)
+        return "Apple Vision Pro"
         #else
         return UIDevice.current.userInterfaceIdiom == .pad ? "iPad" : "iPhone"
         #endif

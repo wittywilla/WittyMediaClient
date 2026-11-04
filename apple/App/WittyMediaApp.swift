@@ -15,8 +15,9 @@ struct WittyMediaApp: App {
                 .environmentObject(model)
                 .environment(\.palette, model.palette)
                 .environment(\.client, model.client)
+                .modifier(MetricsForWidth())
                 .preferredColorScheme(model.scheme)
-                .tint(model.palette.accent)
+                .tint(model.palette.accentText)
                 .task { await model.start() }
         }
     }

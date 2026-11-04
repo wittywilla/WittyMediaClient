@@ -1,17 +1,18 @@
 import SwiftUI
 import WittyKit
 
-/// The app's top level. The same four places on every device, arranged for each: a floating pill along
-/// the bottom on iPhone, a sidebar on iPad and Mac, and the system's top tabs on Apple TV.
+/// The app's top level, as on Android (ui/Shell.kt): Home, Search and Profile. A phone, a tablet and
+/// Apple Vision Pro have them in a floating pill at the bottom, within reach of a thumb; Apple TV has
+/// the system's tabs along the top, where up from the first row gets to them. Music and the other
+/// libraries are on Home, as they are on Android.
 enum AppTab: String, CaseIterable, Identifiable, Hashable {
-    case home, music, search, profile
+    case home, search, profile
 
     var id: String { rawValue }
 
     var title: String {
         switch self {
         case .home: return "Home"
-        case .music: return "Music"
         case .search: return "Search"
         case .profile: return "Profile"
         }
@@ -20,7 +21,6 @@ enum AppTab: String, CaseIterable, Identifiable, Hashable {
     var icon: String {
         switch self {
         case .home: return "house"
-        case .music: return "music.note"
         case .search: return "magnifyingglass"
         case .profile: return "person"
         }
@@ -31,27 +31,17 @@ enum AppTab: String, CaseIterable, Identifiable, Hashable {
         switch self {
         case .home: return "house.fill"
         case .profile: return "person.fill"
-        case .music, .search: return icon
+        case .search: return icon
         }
     }
 }
 
 struct BrowseShell: View {
-    #if os(iOS) || os(visionOS)
-    @Environment(\.horizontalSizeClass) private var sizeClass
-    #endif
-
     var body: some View {
         #if os(tvOS)
         TopTabs()
-        #elseif os(macOS)
-        SideShell()
         #else
-        if sizeClass == .regular {
-            SideShell()
-        } else {
-            PillShell()
-        }
+        PillShell()
         #endif
     }
 }
@@ -64,7 +54,6 @@ private struct TabRoot: View {
     @ViewBuilder private var first: some View {
         switch tab {
         case .home: HomeView()
-        case .music: MusicView()
         case .search: SearchView()
         case .profile: ProfileView()
         }
@@ -73,14 +62,17 @@ private struct TabRoot: View {
     var body: some View {
         NavigationStack(path: model.pathBinding(tab)) {
             first
+                .noNavigationBar()
                 .navigationDestination(for: Route.self) { route in
                     switch route {
-                    case .library(let library): LibraryView(library: library)
-                    case .show(let id): ShowView(id: id)
-                    case .item(let id): ItemView(id: id)
+                    case .library(let library): LibraryView(library: library).plainNavigation()
+                    case .show(let id): ShowView(id: id).plainNavigation()
+                    case .item(let id): ItemView(id: id).plainNavigation()
                     // A new identity for each thing played, so the next episode gets a new player
                     // and not the last one's state.
                     case .player(let id, let startOver): PlayerScreen(id: id, startOver: startOver).id(id)
+                    case .notices: NoticesView().plainNavigation()
+                    case .logs: LogsView().plainNavigation()
                     case .web(let path):
                         #if os(iOS) || os(visionOS)
                         WebPlayerView(path: path, keptToGames: true)
@@ -134,12 +126,11 @@ private struct TopTabs: View {
         }
     }
 }
-#endif
-
-#if os(iOS) || os(visionOS)
-/// The system's tab view holds the four stacks, with its own bar hidden and the pill in its place.
+#else
+/// The system's tab view holds the three stacks, with its own bar hidden and the pill in its place.
 private struct PillShell: View {
     @EnvironmentObject private var model: AppModel
+    @Environment(\.palette) private var palette
 
     var body: some View {
         TabView(selection: $model.tab) {
@@ -152,11 +143,23 @@ private struct PillShell: View {
                     .tag(tab)
             }
         }
+        // What scrolls under the clock and the battery fades out, so they can still be read.
+        .overlay(alignment: .top) {
+            if !model.hidesBars {
+                GeometryReader { geo in
+                    LinearGradient(colors: [palette.background.opacity(0.92), palette.background.opacity(0)], startPoint: .top, endPoint: .bottom)
+                        .frame(height: geo.safeAreaInsets.top)
+                        .ignoresSafeArea(edges: .top)
+                }
+                .allowsHitTesting(false)
+                .accessibilityHidden(true)
+            }
+        }
     }
 }
 
-/// Real buttons, each saying which section it is and whether it's the one open. Nearly solid, as
-/// blur costs a frame on every scroll under it.
+/// Android's floating bar: the open section filled in the accent colour with its name, the others
+/// as their icons. Real buttons, each saying which section it is and whether it's the one open.
 private struct PillBar: View {
     @EnvironmentObject private var model: AppModel
     @Environment(\.palette) private var palette
@@ -177,109 +180,28 @@ private struct PillBar: View {
                 Button {
                     press(tab)
                 } label: {
-                    Image(systemName: open ? tab.openIcon : tab.icon)
-                        .font(.title3)
-                        .foregroundStyle(open ? palette.background : palette.text)
-                        .frame(maxWidth: .infinity, minHeight: Tokens.minTarget)
-                        .background(Capsule().fill(open ? palette.text : Color.clear))
-                        .contentShape(Capsule())
+                    HStack(spacing: Tokens.Space.s2) {
+                        Image(systemName: open ? tab.openIcon : tab.icon).font(.body.weight(.semibold))
+                        if open { Text(tab.title).font(.wmLabel) }
+                    }
+                    .foregroundStyle(open ? palette.onAccent : palette.text)
+                    .padding(.horizontal, open ? Tokens.Space.s5 : Tokens.Space.s4)
+                    .padding(.vertical, Tokens.Space.s3)
                 }
-                .buttonStyle(.plain)
+                .buttonStyle(SurfaceStyle(fill: open ? palette.accent : nil, radius: 999))
                 .accessibilityLabel(tab.title)
                 .accessibilityAddTraits(open ? [.isSelected] : [])
             }
         }
         .padding(Tokens.Space.s1)
-        .background(Capsule().fill(palette.panel.opacity(0.97)))
+        .background(Capsule().fill(palette.panel))
         .overlay(Capsule().stroke(palette.border, lineWidth: 1))
         .shadow(color: .black.opacity(0.25), radius: 8, y: 2)
-        .padding(.horizontal, Tokens.Space.s6)
-        .padding(.bottom, Tokens.Space.s1)
+        .padding(.bottom, Tokens.Space.s3)
+        .frame(maxWidth: .infinity)
     }
 }
 #endif
-
-#if !os(tvOS)
-/// iPad and Mac have the room to show the libraries all the time.
-private struct SideShell: View {
-    private enum Choice: Hashable {
-        case tab(AppTab)
-        case library(Library)
-    }
-
-    @EnvironmentObject private var model: AppModel
-    @State private var choice: Choice? = .tab(.home)
-
-    private func apply(_ new: Choice?) {
-        switch new {
-        case .tab(let tab)?:
-            model.tab = tab
-            model.paths[tab] = []
-        case .library(let library)?:
-            model.tab = .home
-            model.paths[.home] = [library.opensHere ? .library(library) : .page(ServerPages.path(library))]
-        case nil:
-            break
-        }
-    }
-
-    var body: some View {
-        NavigationSplitView {
-            List(selection: $choice) {
-                ForEach(AppTab.allCases) { tab in
-                    Label(tab.title, systemImage: tab.icon).tag(Choice.tab(tab))
-                }
-                if !model.libraries.isEmpty {
-                    Section("Libraries") {
-                        ForEach(model.libraries) { library in
-                            Text(library.name).tag(Choice.library(library))
-                        }
-                    }
-                }
-            }
-            .navigationTitle(say("appName"))
-        } detail: {
-            TabRoot(tab: model.tab).id(model.tab)
-        }
-        .onChange(of: choice) { apply($0) }
-    }
-}
-#endif
-
-/// What's on the server to listen to. On iPhone and iPad each opens the server's own page, with its albums,
-/// lyrics and all. On Apple TV, which has no web view, this app's own screens play it.
-struct MusicView: View {
-    @EnvironmentObject private var model: AppModel
-    @Environment(\.palette) private var palette
-
-    var body: some View {
-        let listening = model.libraries.filter(\.isListening)
-        ScrollView {
-            VStack(alignment: .leading, spacing: Tokens.Space.s4) {
-                Text("Music").font(.wmPage).accessibilityAddTraits(.isHeader)
-                if listening.isEmpty {
-                    EmptyMessage(title: "No music here yet", detail: "This server has no music, audiobooks or podcasts this account can open.")
-                } else {
-                    ForEach(listening) { library in
-                        #if os(tvOS)
-                        if library.opensOnAppleTV {
-                            NavigationLink(library.name, value: Route.library(library))
-                        } else {
-                            BrowserOnlyNote(library: library)
-                        }
-                        #else
-                        NavigationLink(library.name, value: Route.page(ServerPages.path(library)))
-                        #endif
-                    }
-                }
-            }
-            .frame(maxWidth: 900, alignment: .leading)
-            .padding(.horizontal, Tokens.gutter)
-            .padding(.vertical, Tokens.edge)
-        }
-        .pageBackground(palette)
-    }
-}
 
 #if !os(iOS) && !os(visionOS)
 /// One of the server's pages, on a device that can't show it inside this app.
@@ -291,10 +213,10 @@ struct ElsewhereNote: View {
     var body: some View {
         VStack(alignment: .leading, spacing: Tokens.Space.s3) {
             #if os(tvOS)
-            Text("Apple TV can't show this, as it has no way to open your server's own pages. Open \(model.client.base) on a phone, tablet or computer.")
+            Secondary("Apple TV can't show this, as it has no way to open your server's own pages. Open \(model.client.base) on a phone, tablet or computer.")
             #else
             if let url = model.client.mediaURL(path), WebPlayer.isWebLink(url) {
-                Link("Open in your browser", destination: url)
+                Link("Open in your browser", destination: url).action(primary: true)
             }
             #endif
         }
@@ -312,14 +234,14 @@ struct BrowserOnlyNote: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: Tokens.Space.s2) {
-            Text(library.name).font(.wmSection).accessibilityAddTraits(.isHeader)
+            SectionTitle(library.name)
             #if os(tvOS)
             // No browser on Apple TV, so this can only say where to go.
-            Text("Apple TV can't show this, as it has no way to open your server's own pages. Open \(model.client.base) on a phone, tablet or computer.").foregroundStyle(palette.textSecondary)
+            Secondary("Apple TV can't show this, as it has no way to open your server's own pages. Open \(model.client.base) on a phone, tablet or computer.")
             #else
-            Text("This opens in your web browser.").foregroundStyle(palette.textSecondary)
+            Secondary("This opens in your web browser.")
             if let url = URL(string: model.client.base), WebPlayer.isWebLink(url) {
-                Link("Open in your browser", destination: url)
+                Link("Open in your browser", destination: url).action()
             }
             #endif
         }
@@ -330,44 +252,105 @@ struct BrowserOnlyNote: View {
     }
 }
 
-/// Who's signed in, to what, and the ways out.
+/// Who's signed in and to what, and the ways out of that, as on Android's Profile.
 struct ProfileView: View {
     @EnvironmentObject private var model: AppModel
     @Environment(\.palette) private var palette
+    @Environment(\.metrics) private var metrics
     @Namespace private var scope
-
-    private func fact(_ name: String, _ value: String) -> some View {
-        VStack(alignment: .leading) {
-            Text(name).font(.caption).foregroundStyle(palette.textSecondary)
-            Text(value)
-        }
-        .accessibilityElement(children: .combine)
-    }
 
     var body: some View {
         ScrollView {
-            VStack(alignment: .leading, spacing: Tokens.Space.s4) {
-                Text(model.user?.name ?? "Profile").font(.wmPage).accessibilityAddTraits(.isHeader)
+            VStack(alignment: .leading, spacing: Tokens.Space.s3) {
+                Heading("Profile")
                 if !model.notice.isEmpty { ProblemLine(model.notice) }
+                if let name = model.user?.name, !name.isEmpty { Secondary("Signed in as \(name)") }
                 if let server = model.current {
-                    fact("Server", server.name)
-                    fact("Address", server.url)
-                    if !server.fingerprint.isEmpty { fact(say("fingerprintLabel"), server.fingerprint) }
+                    SectionTitle(server.name)
+                    Secondary(server.url)
+                    if !server.fingerprint.isEmpty { Secondary("\(say("fingerprintLabel")): \(server.fingerprint)") }
                 }
-                fact("This app", "\(say("appName")) \(WittyClient.appVersion)")
-                Text(say("legalConnect")).font(.footnote).foregroundStyle(palette.textSecondary)
                 #if os(iOS) || os(visionOS)
-                NavigationLink("Server settings", value: Route.page(ServerPages.settings))
+                NavigationLink("Server settings", value: Route.page(ServerPages.settings)).action(wide: true)
                 #endif
-                Button("Sign out") { model.signOut() }.firstFocus(in: scope)
-                Button(say("changeServer")) { model.changeServer() }
+                Button("Sign out") { model.signOut() }.action(wide: true).firstFocus(in: scope)
+                Button(say("changeServer")) { model.changeServer() }.action(wide: true)
+                SectionTitle("About this app").padding(.top, Tokens.Space.s3)
+                Secondary("\(say("appName")) \(WittyClient.appVersion)")
+                NavigationLink("Licences", value: Route.notices).action(wide: true)
+                NavigationLink("This app's log", value: Route.logs).action(wide: true)
+                Secondary(say("legalConnect"))
             }
             .frame(maxWidth: 640, alignment: .leading)
-            .padding(.horizontal, Tokens.gutter)
-            .padding(.vertical, Tokens.edge)
+            .padding(.horizontal, metrics.gutter)
+            .padding(.vertical, Tokens.Space.s4)
+            .frame(maxWidth: .infinity, alignment: .leading)
         }
         .focusRoot(scope)
         .pageBackground(palette)
+    }
+}
+
+/// Words to read and nothing else: the licences, or this app's log. On Apple TV each paragraph can
+/// take the focus, which is how the remote scrolls through it.
+private struct TextPage: View {
+    @Environment(\.palette) private var palette
+    @Environment(\.metrics) private var metrics
+    let title: String
+    let paragraphs: [String]
+
+    var body: some View {
+        ScrollView {
+            LazyVStack(alignment: .leading, spacing: Tokens.Space.s3) {
+                Heading(title)
+                ForEach(Array(paragraphs.enumerated()), id: \.offset) { _, words in
+                    Text(words)
+                        .font(.wmSecondary)
+                        .foregroundStyle(palette.textSecondary)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        #if os(tvOS)
+                        .focusable()
+                        #else
+                        .textSelection(.enabled)
+                        #endif
+                }
+            }
+            .padding(.horizontal, metrics.gutter)
+            .padding(.vertical, Tokens.Space.s4)
+        }
+        .pageBackground(palette)
+    }
+}
+
+/// Every third-party part this app ships and its licence: the repository's NOTICE, bundled.
+struct NoticesView: View {
+    private var paragraphs: [String] {
+        guard let url = Bundle.main.url(forResource: "NOTICE", withExtension: nil),
+              let text = try? String(contentsOf: url, encoding: .utf8) else {
+            return ["The licence notes couldn't be read from this copy of the app."]
+        }
+        return text.components(separatedBy: "\n\n").map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }.filter { !$0.isEmpty }
+    }
+
+    var body: some View {
+        TextPage(title: "Licences", paragraphs: paragraphs)
+    }
+}
+
+/// What this app has written about itself on this device. It is cleaned as it's written, and nothing
+/// leaves the device from here.
+struct LogsView: View {
+    private static let lines = 200
+
+    private var paragraphs: [String] {
+        let file = ClientLog.defaultDirectory.appendingPathComponent("client.log")
+        let text = (try? String(contentsOf: file, encoding: .utf8)) ?? ""
+        let all = text.split(separator: "\n").suffix(Self.lines).map(String.init)
+        return all.isEmpty ? ["Nothing has been logged yet."] : all
+    }
+
+    var body: some View {
+        TextPage(title: "This app's log", paragraphs: paragraphs)
     }
 }
 
@@ -377,6 +360,7 @@ struct SearchView: View {
     @Environment(\.client) private var client
     @EnvironmentObject private var model: AppModel
     @Environment(\.palette) private var palette
+    @Environment(\.metrics) private var metrics
     @State private var query = ""
     @State private var results: SearchResults?
     @State private var error = ""
@@ -407,29 +391,27 @@ struct SearchView: View {
 
     var body: some View {
         ScrollView {
-            VStack(alignment: .leading, spacing: Tokens.Space.s4) {
-                Text("Search").font(.wmPage).accessibilityAddTraits(.isHeader)
+            VStack(alignment: .leading, spacing: Tokens.Space.s3) {
+                Heading("Search")
                 // On Apple TV choosing this opens the system's keyboard, which a phone can also type into.
-                TextField("Films and shows", text: $query)
-                    .plainEntry()
-                    .accessibilityLabel("Search films and shows")
-                    .focused($focused, equals: "field")
+                OutlinedField(label: "Titles, shows and songs", text: $query)
                 if !error.isEmpty {
                     ProblemLine(error)
-                    Button("Try again") { Task { await run(query) } }
+                    Button("Try again") { Task { await run(query) } }.action()
                 } else if searching && results == nil {
                     LoadingView()
                 } else if let results {
                     if results.isEmpty {
-                        EmptyMessage(title: "Nothing found", detail: "Try fewer words, or check the spelling.")
+                        Secondary("Nothing found for that.")
                     } else {
                         CardGrid(items: results.items, shows: results.shows, focus: $focused)
                     }
                 }
             }
-            .padding(.horizontal, Tokens.gutter)
-            .padding(.vertical, Tokens.edge)
+            .padding(.horizontal, metrics.gutter)
+            .padding(.vertical, Tokens.Space.s4)
         }
+        .scrollDismissesKeyboardIfAvailable()
         .pageBackground(palette)
         .task(id: query) { await run(query) }
     }

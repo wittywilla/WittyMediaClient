@@ -2,36 +2,9 @@ import CoreImage
 import SwiftUI
 import WittyKit
 
-private struct Panel<Content: View>: View {
-    @ViewBuilder let content: Content
-    var body: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: Tokens.Space.s4) { content }
-                .frame(maxWidth: 640, alignment: .leading)
-                .padding(Tokens.Space.s8)
-                .frame(maxWidth: .infinity)
-        }
-    }
-}
-
-/// The heading of a sign-in screen, which is what a screen reader jumps between.
-private struct Heading: View {
-    let words: String
-    init(_ words: String) { self.words = words }
-    var body: some View {
-        Text(words).font(.wmPage).accessibilityAddTraits(.isHeader)
-    }
-}
-
-/// A sentence that explains something. Not a button, so never needs to change when focused.
-private struct Quiet: View {
-    @Environment(\.palette) private var palette
-    let words: String
-    init(_ words: String) { self.words = words }
-    var body: some View {
-        Text(words).foregroundStyle(palette.textSecondary).fixedSize(horizontal: false, vertical: true)
-    }
-}
+// Finding a server and signing in, laid out as the Android app's ConnectScreens.kt: one column of
+// words and full-width buttons, with the main one in the accent colour. On a TV the words and the
+// buttons sit side by side.
 
 struct ConnectView: View {
     private enum Spot: Hashable {
@@ -41,6 +14,7 @@ struct ConnectView: View {
     }
 
     @EnvironmentObject private var model: AppModel
+    @Environment(\.metrics) private var metrics
     let initialMessage: String
     @State private var address = ""
     @State private var error = ""
@@ -54,6 +28,7 @@ struct ConnectView: View {
     @State private var offered: Spot?
     @State private var lastSpot: Spot?
     @FocusState private var spot: Spot?
+    @State private var wantField = false
     @Namespace private var scope
 
     /// A server that moves to https gets one more go, at the address it asked for.
@@ -112,55 +87,60 @@ struct ConnectView: View {
         if new != nil { lastSpot = new }
     }
 
-    private func row(name: String, url: String) -> some View {
-        Button {
-            Task { await connect(url) }
-        } label: {
-            VStack(alignment: .leading) {
-                Text(name)
-                Text(url).font(.caption).foregroundStyle(.secondary)
-            }
-            .frame(maxWidth: .infinity, alignment: .leading)
+    @ViewBuilder private var words: some View {
+        Heading(say("findTitle"))
+        Secondary(say("legalConnect"))
+        if !error.isEmpty { ProblemLine(error) }
+        if busy { Secondary(say("connecting")) }
+    }
+
+    @ViewBuilder private func servers(_ others: [SavedServer]) -> some View {
+        Secondary(say("foundServers")).accessibilityAddTraits(.isHeader)
+        if found.isEmpty {
+            Secondary(refused ? say("findNotSupported") : searchedLong ? say("findNone") : say("findSearching"))
         }
-        .accessibilityLabel("\(name), \(url)")
+        ForEach(found) { server in
+            ServerRow(name: server.name, url: server.url) { Task { await connect(server.url) } }
+                .focused($spot, equals: .found(server.id))
+        }
+        if !others.isEmpty {
+            Secondary(say("recentServers")).accessibilityAddTraits(.isHeader)
+            ForEach(others) { server in
+                ServerRow(name: server.name, url: server.url) { Task { await connect(server.url) } }
+                    .focused($spot, equals: .recent(server.url))
+            }
+        }
+        Button(say("enterAddress")) {
+            showForm = true
+            error = ""
+        }
+        .action(wide: true)
+        .focused($spot, equals: .enterAddress)
+        .firstFocus(in: scope, when: found.isEmpty)
     }
 
     var body: some View {
         let others = uniqued(model.recent).filter { saved in !found.contains { $0.url == saved.url || $0.id == saved.serverId } }
-        Panel {
+        Group {
             if showForm {
-                Heading(say("addressTitle"))
-                Quiet(say("addressHint"))
-                Quiet(say("legalConnect")).font(.footnote)
-                TextField(say("addressLabel"), text: $address)
-                    .plainEntry()
-                    .onSubmit(submit)
-                    .accessibilityLabel(say("addressLabel"))
-                if !error.isEmpty { ProblemLine(error) }
-                // Never disabled: on a TV that would take the focus away from under the person.
-                Button(busy ? say("connecting") : say("connect")) { if !busy { submit() } }
-                Button(say("back"), action: closeForm)
+                Centred {
+                    Heading(say("addressTitle"))
+                    Secondary(say("addressHint"))
+                    OutlinedField(label: say("addressLabel"), text: $address, kind: .address, request: $wantField, onSubmit: submit)
+                    if !error.isEmpty { ProblemLine(error) }
+                    // Never disabled: on a TV that would take the focus away from under the person.
+                    Button(busy ? say("connecting") : say("connect")) { if !busy { submit() } }
+                        .action(primary: true, wide: true)
+                    Button(say("back"), action: closeForm).action(wide: true)
+                    Secondary(say("legalConnect"))
+                }
+                .task { wantField = true }
             } else {
-                Heading(say("findTitle"))
-                Quiet(say("legalConnect")).font(.footnote)
-                if !error.isEmpty { ProblemLine(error) }
-                if busy { Quiet(say("connecting")) }
-                Quiet(say("foundServers")).accessibilityAddTraits(.isHeader)
-                if found.isEmpty {
-                    Quiet(refused ? say("findNotSupported") : searchedLong ? say("findNone") : say("findSearching"))
+                SideBySide {
+                    words
+                } actions: {
+                    servers(others)
                 }
-                ForEach(found) { server in
-                    row(name: server.name, url: server.url).focused($spot, equals: .found(server.id))
-                }
-                if !others.isEmpty {
-                    Quiet(say("recentServers")).accessibilityAddTraits(.isHeader)
-                    ForEach(others) { server in
-                        row(name: server.name, url: server.url).focused($spot, equals: .recent(server.url))
-                    }
-                }
-                Button(say("enterAddress")) { showForm = true; error = "" }
-                    .focused($spot, equals: .enterAddress)
-                    .firstFocus(in: scope, when: found.isEmpty)
             }
         }
         .focusRoot(scope)
@@ -184,17 +164,35 @@ struct ConnectView: View {
     }
 }
 
+/// A key of the number pad: the card colour, a large digit, and room for a thumb.
+private struct PadKey: View {
+    @Environment(\.palette) private var palette
+    @Environment(\.metrics) private var metrics
+    let label: String
+    var small = false
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            Text(label)
+                .font(small ? .wmLabel : .title3.weight(.semibold))
+                .foregroundStyle(palette.text)
+                .frame(maxWidth: .infinity, minHeight: metrics.minTarget + Tokens.Space.s2)
+        }
+        .buttonStyle(SurfaceStyle(fill: palette.card))
+    }
+}
+
 /// A new server is opened with a six-digit code from someone already signed in. See
 /// docs/CLIENT-API.md, "The code is typed on the device". Works with only a remote:
 /// the zero is twice as wide, so the focus engine finds something below every digit.
 struct CodeView: View {
     @EnvironmentObject private var model: AppModel
+    @Environment(\.palette) private var palette
     let server: SavedServer
     let fromSignIn: Bool
     @State private var entry = CodeEntry()
     @State private var problem = ""
-    /// The digits are the one fixed-size text in the app, because they have to line up.
-    @ScaledMetric(relativeTo: .largeTitle) private var digitSize: CGFloat = 44
     @Namespace private var scope
 
     private func press(_ digit: Character) {
@@ -219,50 +217,47 @@ struct CodeView: View {
     }
 
     private func key(_ digit: Character) -> some View {
-        Button {
-            press(digit)
-        } label: {
-            Text(String(digit)).font(.title2.weight(.semibold)).frame(maxWidth: .infinity, minHeight: Tokens.minTarget)
-        }
-        .buttonStyle(.bordered)
-        .digitShortcut(digit)
+        PadKey(label: String(digit)) { press(digit) }.digitShortcut(digit)
     }
 
     var body: some View {
-        Panel {
+        SideBySide {
             Heading(say("codeTitle"))
-            Quiet(say("codeHint"))
+            // Several servers can look alike in the list: this says which one the code goes to.
+            Secondary("\(server.name) · \(server.url)")
+            Secondary(say("codeHint"))
             Text(entry.shown)
-                .font(.system(size: digitSize, weight: .bold, design: .monospaced))
+                .font(.system(.largeTitle, design: .monospaced).weight(.bold))
+                .foregroundStyle(palette.text)
                 .accessibilityLabel(say("codeLabel"))
                 .accessibilityValue("\(entry.digits.count) \(say("codeEntered"))")
-            if entry.busy {
-                Quiet(say("connecting"))
-            } else if !problem.isEmpty {
-                ProblemLine(problem)
+            // Room is kept for the message, or the keys would move under a finger as it comes and goes.
+            Group {
+                if entry.busy {
+                    Secondary(say("connecting"))
+                } else if !problem.isEmpty {
+                    ProblemLine(problem)
+                }
             }
-            Grid(horizontalSpacing: Tokens.Space.s3, verticalSpacing: Tokens.Space.s3) {
+            .frame(minHeight: 40, alignment: .topLeading)
+            Secondary("\(say("fingerprintLabel")): \(server.fingerprint)")
+        } actions: {
+            Grid(horizontalSpacing: Tokens.Space.s2, verticalSpacing: Tokens.Space.s2) {
                 GridRow { key("1").firstFocus(in: scope); key("2"); key("3") }
                 GridRow { key("4"); key("5"); key("6") }
                 GridRow { key("7"); key("8"); key("9") }
                 GridRow {
-                    Button {
-                        entry.erase()
-                    } label: {
-                        Text(say("codeDelete")).frame(maxWidth: .infinity, minHeight: Tokens.minTarget)
-                    }
-                    .buttonStyle(.bordered)
+                    PadKey(label: say("codeDelete"), small: true) { entry.erase() }
                     key("0").gridCellColumns(2)
                 }
             }
             .remoteSection()
-            VStack(alignment: .leading, spacing: Tokens.Space.s4) {
-                Button(say("usePassword")) { model.signIn(to: server, way: .password) }
-                Button(say("showCodeInstead")) { model.signIn(to: server, way: .shownCode) }
-                Button(say("back"), action: back)
+            VStack(alignment: .leading, spacing: Tokens.Space.s3) {
+                Button(say("usePassword")) { model.signIn(to: server, way: .password) }.action(wide: true)
+                Button(say("showCodeInstead")) { model.signIn(to: server, way: .shownCode) }.action(wide: true)
+                Button(say("back"), action: back).action(wide: true)
             }
             .remoteSection()
-            Quiet("\(say("fingerprintLabel")): \(server.fingerprint)").font(.caption)
         }
         .focusRoot(scope)
         .onRemoteBack(back)
@@ -283,12 +278,12 @@ struct MismatchView: View {
     }
 
     var body: some View {
-        Panel {
+        Centred {
             Heading(say("identityTitle"))
-            Quiet(say("identityHint"))
-            Quiet("\(server.url) · \(say("fingerprintLabel")): \(server.fingerprint)").font(.caption)
+            Secondary(say("identityHint"))
+            Secondary("\(server.url) · \(say("fingerprintLabel")): \(server.fingerprint)")
             if !problem.isEmpty { ProblemLine(problem) }
-            Button(say("back"), action: back).focused($onSafeChoice)
+            Button(say("back"), action: back).action(primary: true, wide: true).focused($onSafeChoice)
             Button(busy ? say("connecting") : say("identityTrust")) {
                 guard !busy else { return }
                 busy = true
@@ -297,6 +292,7 @@ struct MismatchView: View {
                     busy = false
                 }
             }
+            .action(wide: true)
         }
         .onRemoteBack(back)
         .task { onSafeChoice = true }
@@ -328,7 +324,6 @@ private struct PairPanel: View {
     @State private var qr: CGImage?
     @State private var problem = ""
     @State private var starting = true
-    @ScaledMetric(relativeTo: .largeTitle) private var codeSize: CGFloat = 56
     @Namespace private var scope
 
     #if os(tvOS)
@@ -388,33 +383,39 @@ private struct PairPanel: View {
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: Tokens.Space.s4) {
+        SideBySide {
             Heading(say("pairTitle"))
             if starting && code.isEmpty && problem.isEmpty { LoadingView() }
             if !code.isEmpty {
-                Quiet(say("pairHint"))
-                if let qr {
-                    Image(qr, scale: 1, label: Text("A code for a phone's camera, leading to the address below"))
-                        .interpolation(.none)
-                        .resizable()
-                        .scaledToFit()
-                        .frame(width: qrSize, height: qrSize)
-                        .padding(Tokens.Space.s4)
-                        .background(Color.white)
-                        .clipShape(RoundedRectangle(cornerRadius: Tokens.Radius.md))
-                }
-                Text(approveAt)
-                Text(code).font(.system(size: codeSize, weight: .bold, design: .monospaced))
+                Secondary(say("pairHint"))
+                Text(approveAt).foregroundStyle(palette.text)
+                Text(code)
+                    .font(.system(size: 44, weight: .bold, design: .monospaced))
+                    .foregroundStyle(palette.text)
                     .accessibilityLabel(code.map(String.init).joined(separator: " "))
-                Quiet(say("pairWaiting"))
+                Secondary(say("pairWaiting"))
             }
             if !problem.isEmpty { ProblemLine(problem) }
-            if code.isEmpty && !problem.isEmpty {
-                Button(say("pairNew")) { round += 1 }.firstFocus(in: scope)
+        } actions: {
+            if !code.isEmpty, let qr {
+                Secondary(say("pairScan"))
+                Image(qr, scale: 1, label: Text("A code for a phone's camera, leading to the address on screen"))
+                    .interpolation(.none)
+                    .resizable()
+                    .scaledToFit()
+                    .frame(width: qrSize, height: qrSize)
+                    .padding(Tokens.Space.s4)
+                    .background(Color.white)
+                    .clipShape(RoundedRectangle(cornerRadius: Tokens.Radius.md))
             }
-            if model.canTypeCode { Button(say("codeTitle")) { model.askForCode() }.firstFocus(in: scope, when: !code.isEmpty) }
-            Button(say("usePassword"), action: onUsePassword)
-            Button(say("changeServer")) { model.changeServer() }
+            if code.isEmpty && !problem.isEmpty {
+                Button(say("pairNew")) { round += 1 }.action(primary: true, wide: true).firstFocus(in: scope)
+            }
+            if model.canTypeCode {
+                Button(say("codeTitle")) { model.askForCode() }.action(wide: true)
+            }
+            Button(say("usePassword"), action: onUsePassword).action(wide: true).firstFocus(in: scope, when: !code.isEmpty)
+            Button(say("changeServer")) { model.changeServer() }.action(wide: true)
         }
         .focusRoot(scope)
         .task(id: round) { await run() }
@@ -431,6 +432,8 @@ struct SignInView: View {
     @State private var password = ""
     @State private var error = ""
     @State private var busy = false
+    @State private var wantPassword = false
+    @Namespace private var scope
 
     init(way: SignInWay) {
         switch way {
@@ -473,47 +476,60 @@ struct SignInView: View {
         }
     }
 
+    /// The other ways in, under whatever the screen is mainly for.
+    @ViewBuilder private var otherWays: some View {
+        if model.canTypeCode { Button(say("codeTitle")) { model.askForCode() }.action(wide: true) }
+        Button(say("useCode")) { useCode = true }.action(wide: true)
+        Button(say("changeServer")) { model.changeServer() }.action(wide: true)
+    }
+
     var body: some View {
-        Panel {
+        Group {
             if useCode {
                 PairPanel { useCode = false }
-            } else if let chosen {
-                Heading(chosen.name)
-                SecureField("Password", text: $password)
-                    .boxedField()
-                    .textContentType(.password)
-                    .onSubmit { login(chosen.name, password) }
-                if !error.isEmpty { ProblemLine(error) }
-                Button(busy ? say("connecting") : "Sign in") { login(chosen.name, password) }
-                Button(say("back"), action: back)
-            } else if let list = profiles?.profiles, profiles?.style == "profiles", !useForm, !list.isEmpty {
-                Heading("Who's watching?")
-                if !error.isEmpty { ProblemLine(error) }
-                ForEach(uniqued(list)) { profile in
-                    Button(profile.name) {
-                        if profile.hasPassword == false { login(profile.name, "") } else { chosen = profile }
+            } else {
+                Centred {
+                    if let chosen {
+                        Heading(chosen.name)
+                        OutlinedField(label: "Password", text: $password, kind: .password, request: $wantPassword) { login(chosen.name, password) }
+                        if !error.isEmpty { ProblemLine(error) }
+                        Button(busy ? say("connecting") : "Sign in") { login(chosen.name, password) }.action(primary: true, wide: true)
+                        Button(say("back"), action: back).action(wide: true)
+                    } else if let list = profiles?.profiles, profiles?.style == "profiles", !useForm, !list.isEmpty {
+                        Heading("Who's watching?")
+                        if !error.isEmpty { ProblemLine(error) }
+                        FlowLayout {
+                            ForEach(Array(uniqued(list).enumerated()), id: \.element.id) { index, profile in
+                                Button(profile.name) {
+                                    if profile.hasPassword == false { login(profile.name, "") } else { chosen = profile }
+                                }
+                                .action()
+                                .firstFocus(in: scope, when: index == 0)
+                            }
+                        }
+                        .remoteSection()
+                        Button("Sign in with another account") { useForm = true }.action(wide: true)
+                        otherWays
+                    } else if profiles != nil {
+                        Heading("Sign in")
+                        OutlinedField(label: "Name", text: $name, kind: .name) { wantPassword = true }
+                        OutlinedField(label: "Password", text: $password, kind: .password, request: $wantPassword) { login(name, password) }
+                        if !error.isEmpty { ProblemLine(error) }
+                        Button(busy ? say("connecting") : "Sign in") { login(name, password) }.action(primary: true, wide: true)
+                        if !(profiles?.profiles ?? []).isEmpty {
+                            Button(say("back")) { useForm = false; error = "" }.action(wide: true)
+                        }
+                        otherWays
+                    } else {
+                        LoadingView()
                     }
                 }
-                Button("Sign in with another account") { useForm = true }
-                if model.canTypeCode { Button(say("codeTitle")) { model.askForCode() } }
-                Button(say("useCode")) { useCode = true }
-                Button(say("changeServer")) { model.changeServer() }
-            } else if profiles != nil {
-                Heading("Sign in")
-                TextField("Name", text: $name).plainEntry().textContentType(.username)
-                SecureField("Password", text: $password)
-                    .boxedField()
-                    .textContentType(.password)
-                    .onSubmit { login(name, password) }
-                if !error.isEmpty { ProblemLine(error) }
-                Button(busy ? say("connecting") : "Sign in") { login(name, password) }
-                if !(profiles?.profiles ?? []).isEmpty { Button(say("back")) { useForm = false; error = "" } }
-                if model.canTypeCode { Button(say("codeTitle")) { model.askForCode() } }
-                Button(say("useCode")) { useCode = true }
-                Button(say("changeServer")) { model.changeServer() }
-            } else {
-                LoadingView()
+                .focusRoot(scope)
             }
+        }
+        .onChange(of: chosen?.id) { picked in
+            // The password box is the next thing to use, as on Android.
+            if picked != nil { wantPassword = true }
         }
         .onRemoteBack(back)
         .task {

@@ -65,15 +65,24 @@ enum Tokens {
     static let heroPosterWidth: CGFloat = 240
 }
 
+/// The Android app's type scale (ui/Theme.kt), as the nearest text styles, so it still follows the
+/// person's own text size.
 extension Font {
-    /// The title over a picture.
-    static let wmDisplay = Font.largeTitle.weight(.bold)
-    /// The one heading of a page.
+    /// The title over a wide picture (Android's displaySmall).
+    static let wmDisplay = Font.title.weight(.bold)
+    /// The title under the posters at the top of Home on a phone (headlineSmall).
+    static let wmHero = Font.title3.weight(.semibold)
+    /// The one heading of a page (headlineMedium).
     static let wmPage = Font.title2.weight(.semibold)
-    /// Above a row of cards.
+    /// Above a row of cards (titleMedium).
     static let wmSection = Font.headline
-    static let wmCard = Font.footnote
+    /// A poster's title (titleSmall), and what's under it (bodySmall).
+    static let wmCard = Font.subheadline.weight(.medium)
     static let wmCardSub = Font.caption
+    /// Explanations and facts (bodyMedium).
+    static let wmSecondary = Font.footnote
+    /// The words on a button (labelLarge).
+    static let wmLabel = Font.subheadline.weight(.medium)
 }
 
 /// The theme's colours, ready to use. Plain data until now, in shared/data/themes.json.
