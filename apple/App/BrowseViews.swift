@@ -315,6 +315,8 @@ private struct PhoneHero: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     let heroes: [Item]
     let scope: Namespace.ID
+    /// The room the clock and battery take at the top.
+    var clock: CGFloat = 0
     @State private var front: Int64?
     private let posterWidth: CGFloat = 220
 
@@ -364,20 +366,20 @@ private struct PhoneHero: View {
             .firstFocus(in: scope)
             .accessibilityLabel("\(current.resumeSeconds == nil ? "Play" : "Resume") \(displayTitle(current))")
         }
-        .padding(.top, Tokens.Space.s12)
+        .padding(.top, clock + Tokens.Space.s12)
         .frame(maxWidth: .infinity)
         // The front poster's own colours would need a blur. A dimmed backdrop fading into the page
         // gives much the same depth, and runs up under the clock.
         .background(alignment: .top) {
-            ArtImage(url: client.backdropURL(current), width: 600, blank: true)
-                .aspectRatio(1, contentMode: .fill)
-                .frame(maxWidth: .infinity)
-                .opacity(0.35)
-                .overlay(LinearGradient(stops: [.init(color: .clear, location: 0.3), .init(color: palette.background, location: 1)],
-                                        startPoint: .top, endPoint: .bottom))
-                .clipped()
-                .ignoresSafeArea(edges: .top)
-                .accessibilityHidden(true)
+            GeometryReader { geo in
+                ArtImage(url: client.backdropURL(current), width: 600, blank: true)
+                    .frame(width: geo.size.width, height: geo.size.width)
+                    .opacity(0.35)
+                    .overlay(LinearGradient(stops: [.init(color: .clear, location: 0.3), .init(color: palette.background, location: 1)],
+                                            startPoint: .top, endPoint: .bottom))
+                    .clipped()
+            }
+            .accessibilityHidden(true)
         }
     }
 }
@@ -393,6 +395,8 @@ private struct WideHero: View {
     #endif
     let item: Item
     let scope: Namespace.ID
+    /// The room the clock and battery take at the top, which the picture runs under.
+    var clock: CGFloat = 0
 
     private var height: CGFloat {
         if metrics.tv { return Tokens.heroHeight }
@@ -407,7 +411,7 @@ private struct WideHero: View {
         ZStack(alignment: .leading) {
             ArtImage(url: client.backdropURL(item), width: 1280, blank: true)
                 .frame(maxWidth: .infinity)
-                .frame(height: height)
+                .frame(height: height + clock)
                 .opacity(0.5)
                 .clipped()
                 .overlay(LinearGradient(stops: [.init(color: palette.background, location: 0), .init(color: .clear, location: 0.75)],
@@ -434,8 +438,9 @@ private struct WideHero: View {
             }
             .frame(maxWidth: 560, alignment: .leading)
             .padding(.horizontal, metrics.gutter)
+            .padding(.top, clock)
         }
-        .frame(height: height)
+        .frame(height: height + clock)
     }
 }
 
@@ -506,13 +511,17 @@ struct HomeView: View {
     @ViewBuilder private func page(_ home: Home) -> some View {
         let heroes = heroes(home)
         let hubs = uniqued(home.hubs ?? []).filter { !$0.isEmpty }
+        // The picture at the top runs up under the clock, as on Android, so the page itself does too
+        // and keeps the clock's room in its own spacing.
+        GeometryReader { outer in
+        let clock = outer.safeAreaInsets.top
         ScrollView {
             LazyVStack(alignment: .leading, spacing: Tokens.Space.s5) {
                 if let first = heroes.first {
                     if phoneUpright {
-                        PhoneHero(heroes: heroes, scope: scope)
+                        PhoneHero(heroes: heroes, scope: scope, clock: clock)
                     } else {
-                        WideHero(item: first, scope: scope)
+                        WideHero(item: first, scope: scope, clock: clock)
                     }
                 }
                 if !model.notice.isEmpty {
@@ -525,10 +534,12 @@ struct HomeView: View {
                     EmptyMessage(title: "Nothing here yet", detail: "Add a library on the server, or ask whoever runs it.")
                 }
             }
-            .padding(.top, heroes.isEmpty ? Tokens.Space.s4 : 0)
+            .padding(.top, heroes.isEmpty ? clock + Tokens.Space.s4 : 0)
             .padding(.bottom, Tokens.Space.s6)
         }
+        .ignoresSafeArea(edges: .top)
         .focusRoot(scope)
+        }
     }
 
     var body: some View {
@@ -848,25 +859,31 @@ struct ItemView: View {
                     .frame(width: posterWidth, height: posterWidth * 1.5)
                     .clipShape(RoundedRectangle(cornerRadius: Tokens.Radius.lg, style: .continuous))
                     .accessibilityHidden(true)
-                ScrollView {
-                    Group {
-                        if upright {
-                            VStack(alignment: .leading, spacing: Tokens.Space.s4) {
-                                poster.frame(maxWidth: .infinity)
-                                words(item)
-                            }
-                        } else {
-                            HStack(alignment: .top, spacing: Tokens.Space.s6) {
-                                poster
-                                words(item).frame(minWidth: 280, maxWidth: 640, alignment: .leading)
+                // The page runs up under the bar and the clock, as on Android, so its picture can.
+                GeometryReader { outer in
+                    let top = outer.safeAreaInsets.top
+                    ScrollView {
+                        Group {
+                            if upright {
+                                VStack(alignment: .leading, spacing: Tokens.Space.s4) {
+                                    poster.frame(maxWidth: .infinity)
+                                    words(item)
+                                }
+                            } else {
+                                HStack(alignment: .top, spacing: Tokens.Space.s6) {
+                                    poster
+                                    words(item).frame(minWidth: 280, maxWidth: 640, alignment: .leading)
+                                }
                             }
                         }
+                        .padding(.horizontal, metrics.gutter)
+                        .padding(.top, top + Tokens.Space.s6)
+                        .padding(.bottom, Tokens.Space.s6)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        // The picture behind, fading into the page, as on Home. It scrolls with the page.
+                        .background(alignment: .top) { PageBackdrop(url: client.backdropURL(item), height: 340 + top) }
                     }
-                    .padding(.horizontal, metrics.gutter)
-                    .padding(.vertical, Tokens.Space.s6)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    // The picture behind, fading into the page, as on Home. It scrolls with the page.
-                    .background(alignment: .top) { PageBackdrop(url: client.backdropURL(item)).ignoresSafeArea(edges: .top) }
+                    .ignoresSafeArea(edges: .top)
                 }
                 .focusRoot(scope)
             } else if !error.isEmpty {

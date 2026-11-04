@@ -21,7 +21,7 @@ should be expected to have some too.
 | Platform | Status | Notes |
 |---|---|---|
 | Windows 10 and later | **Ran** | From source and as a packaged app. The setup and uninstaller ran under Wine, not yet on a real Windows. |
-| macOS | **Written** | The desktop app builds for it in CI, and has never been launched. Its uninstaller only ran on Linux with a stand-in home folder. |
+| macOS | **Ran** | The desktop app, packaged on a Mac (macOS 27) for Apple silicon and Intel. The Apple silicon one was opened, connected to a server and used by the owner. Its uninstaller only ran on Linux with a stand-in home folder. It's the Mac's only client: the Apple project no longer builds a Mac app of its own. |
 | Linux | **Ran** | `.deb` and `.rpm` installed, opened on a virtual screen, upgraded and removed in containers. `.pacman` the same. The `.rpm` also ran on Fedora 44 in a virtual machine, and from source on Ubuntu 26.04. See [below](#freebsd-plasma-bigscreen-and-linux). |
 | FreeBSD 15.1, amd64 | **Ran** | In a virtual machine, as an installed package: picture and sound seen. Needs the system's Electron from the ports tree. See [below](#freebsd-plasma-bigscreen-and-linux). |
 | FreeBSD 14.4, amd64 | **Ran** | The same package, in a virtual machine: installed on a bare system, opened as far as the connect screen, upgraded and removed. No video played on it. |
@@ -37,9 +37,9 @@ should be expected to have some too.
 | Android phones | **Ran on an emulator** | Android 16 in full, and Android 6 (API 23, the oldest it supports) for connecting, playing and a network drop. No real phone yet. |
 | Android tablets | **Ran on an emulator** | Android 16, 2560×1600, sideways: signing in, Home, a library, an item, and the server's pages. They use the phone's screens with wider margins. |
 | Apple TV | **Compiled** | By Xcode 27 on macOS 27, unsigned, for the device and the simulator. Never run. [The first check](OWNER-STEPS.md#step-3-try-apple-needs-a-mac) is one script. |
-| iPhone, iPad | **Compiled** | The same. Never run. |
-| Mac | **Compiled** | The same, for Apple silicon and Intel in one app. Never run. |
-| Apple Vision Pro | **Compiled** | The iPhone and iPad app, built for visionOS 2 and later as an app of its own, with the iPad's layout: the sidebar, the server's pages in a web view, and picture in picture. Never run, not even in the simulator. |
+| iPhone | **Ran in the simulator** | iPhone 17, iOS 27: connected by address, signed in with a password, Home, a library, an item page, and a film played. Never on a real iPhone. |
+| iPad | **Compiled** | The same app as the iPhone, with the tablet's wider margins and cards. |
+| Apple Vision Pro | **Compiled** | The iPhone and iPad app, built for visionOS 2 and later as an app of its own, with the iPad's layout: the floating bar, the server's pages in a web view, and picture in picture. Never run, not even in the simulator. |
 | Apple Watch | **Not started** | watchOS has no web view and no player like the others', so it would be a different app, such as a remote. |
 | Windows 7 | **Not started** | Needs the owner's decision: see [the design](DESIGN.md#windows-7). |
 | LG webOS, Samsung Tizen | **Not started** | The connect screen they would use works without the desktop app, in the same browser engine as the desktop app. Older TV browsers are untested, and no package exists. |
@@ -477,7 +477,7 @@ checked package, no `file://` privileges):
 - **Sound.** Nothing here listens to it.
 - **Game controllers** and real TV remotes. Key presses were simulated.
 - **Linux** on a real computer. It ran in containers and virtual machines.
-- **macOS** at all.
+- **macOS** beyond opening it and using it with a server: not the uninstaller, the firewall's question, or an Intel Mac.
 - **The network search with real sockets** on this version: it would ask the Windows firewall.
 - The package check failing as it should when the package is changed.
 - A server asking for a client certificate, which needs one in the system's store.

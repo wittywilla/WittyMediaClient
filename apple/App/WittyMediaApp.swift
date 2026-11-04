@@ -13,8 +13,6 @@ struct WittyMediaApp: App {
         WindowGroup {
             RootView()
                 .environmentObject(model)
-                .environment(\.palette, model.palette)
-                .environment(\.client, model.client)
                 .modifier(MetricsForWidth())
                 .preferredColorScheme(model.scheme)
                 .tint(model.palette.accentText)
@@ -26,11 +24,10 @@ struct WittyMediaApp: App {
 struct RootView: View {
     @EnvironmentObject private var model: AppModel
     @Environment(\.scenePhase) private var scenePhase
-    @Environment(\.palette) private var palette
 
     var body: some View {
         ZStack {
-            palette.background.ignoresSafeArea()
+            model.palette.background.ignoresSafeArea()
             switch model.stage {
             case .starting:
                 LoadingView()
@@ -46,6 +43,10 @@ struct RootView: View {
                 BrowseShell()
             }
         }
+        // From here, which redraws with the model, and not from the scene above it, which can draw a
+        // moment later: a screen that has just appeared must never ask with the connection before.
+        .environment(\.palette, model.palette)
+        .environment(\.client, model.client)
         .onChange(of: scenePhase) { phase in
             if phase == .active { Task { await model.recheck() } }
         }

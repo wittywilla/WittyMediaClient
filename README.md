@@ -31,7 +31,7 @@ Native apps say plainly that an item can't play yet, rather than failing, for an
 |---|---|
 | [`desktop/`](desktop) | Windows, macOS, Linux, FreeBSD and KDE's Plasma Bigscreen: a frameless window around the server's web interface, in Electron |
 | [`android/`](android) | Android TV, Google TV, Fire TV, phones and tablets, one APK for ARM and x86, 32-bit and 64-bit: Kotlin, Compose, Media3 |
-| [`apple/`](apple) | Apple TV, iPhone, iPad, Mac and Apple Vision Pro: SwiftUI, AVPlayer |
+| [`apple/`](apple) | Apple TV, iPhone, iPad and Apple Vision Pro: SwiftUI, AVPlayer, laid out as the Android app. A Mac has the desktop app |
 | [`shared/`](shared) | What every app shares, as plain data: themes, wording, button meanings and test cases |
 | [`docs/`](docs) | [Installing and removing](docs/INSTALLING.md), [design](docs/DESIGN.md), [status](docs/PLATFORMS.md), [porting to TVs](docs/PORTING.md), [what the owner needs to do](docs/OWNER-STEPS.md) |
 
@@ -90,7 +90,7 @@ The FreeBSD package holds only the app, under a megabyte, and uses the system's 
 - A WittyMediaServer to connect to. The native apps talk to its client API, which is in **Help** inside the server.
 - **Desktop:** Windows 10 or later, macOS, Linux on x64, FreeBSD on amd64, or Plasma Bigscreen. It brings its own Electron, except on FreeBSD, where the package brings in the system's.
 - **Android:** Android 6 or later, on ARM or x86, 32-bit or 64-bit, in one APK. Fire TV needs Fire OS 6 or later.
-- **Apple:** iOS 16, tvOS 16, macOS 13, or visionOS 2, or later.
+- **Apple:** iOS 16, tvOS 16, or visionOS 2, or later. A Mac has the desktop app.
 - **Games on a PC:** the Moonlight app, installed separately, only where it's the fallback.
 
 ## Platforms
@@ -101,12 +101,13 @@ The FreeBSD package holds only the app, under a megabyte, and uses the system's 
 | Linux | `.deb`, `.rpm` and `.pacman` installed, opened on a virtual screen, upgraded and removed in containers. The `.rpm` also ran on Fedora 44 in a virtual machine, and it ran from source on Ubuntu 26.04 |
 | FreeBSD 15.1 and 14.4, amd64 | In virtual machines, as an installed package: picture and sound seen on 15.1, as far as the connect screen on 14.4. Not a real FreeBSD desktop |
 | KDE Plasma Bigscreen | The real shell in a virtual machine: opened from its launcher, video and sound seen, keys through the real input stack. Never on a TV or with a real remote |
-| macOS | The workflow is set up to build it, and that has not run yet. It has never been launched |
+| macOS | Packaged on a Mac for Apple silicon and Intel. The Apple silicon one was opened and used with a server on macOS 27 |
 | Android TV | Run on an emulator, Android 16, with arrow keys and OK only |
 | Android phones | Run on emulators, Android 16 and Android 6. Android 7 to 15 not run |
 | Android on x86 and ARM | One APK carries all four. The emulators were 64-bit x86, and the other three are compiled, never run |
 | Google TV, Fire TV, tablets | Compiled, never run |
-| Apple TV, iPhone, iPad, Mac, Apple Vision Pro | Compiled by Xcode 27 on a Mac, unsigned, for the devices and their simulators. Never run |
+| iPhone | Run in the iOS 27 simulator: connected, signed in, Home, a library, an item, and a film played. Never on a real iPhone |
+| Apple TV, iPad, Apple Vision Pro | Compiled by Xcode 27 on a Mac, unsigned, for the devices and their simulators |
 
 **No real device or remote has touched any of the Android builds,** and finding servers hasn't been tried on a real network anywhere. [Platform status](docs/PLATFORMS.md) says exactly what was seen and what wasn't.
 

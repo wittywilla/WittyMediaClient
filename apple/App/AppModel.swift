@@ -128,7 +128,8 @@ final class AppModel: ObservableObject {
     /// Something worth saying that isn't a failure of the screen in front of the person.
     @Published var notice = ""
 
-    private(set) var client = WittyClient(base: "") {
+    // Published, so the screens that get it from the environment never see the one before it.
+    @Published private(set) var client = WittyClient(base: "") {
         didSet { ClientLog.shared.use(client) }
     }
 

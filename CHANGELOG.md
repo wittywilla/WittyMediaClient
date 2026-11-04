@@ -5,6 +5,12 @@ What changed in WittyMediaClient, newest first. What changed before it had a rep
 
 ## Unreleased
 
+- **Apple: the iPhone and iPad app looks and works like the Android app.** The same filled buttons with the main one in the accent colour, outlined fields,
+  posters with their titles under them, and Android's spacing and type. Home, Search and Profile are in the same floating bar on iPhone, iPad and Apple Vision Pro,
+  and music is reached from Home's library pills. Home has the posters to swipe through with Play; items and shows have their picture behind them, with season
+  pills and episode rows. Profile has the licences and this app's log, as on Android. A sign-in is kept between runs, and Home no longer says it lost the
+  server the first time it opens.
+- **Mac: the desktop app is the Mac's client.** The Apple project no longer builds a separate Mac app, which looked and worked differently from the others.
 - **Apple Vision Pro:** the iPhone and iPad app also builds for visionOS 2 and later, as an app of its own rather than the iPad one in a window. It takes the iPad's layout,
   opens the server's pages inside the app, and reports its errors as visionOS. Compiled, never run. CI builds it where the Mac runner's Xcode has the visionOS SDK.
 - **Android 0.3.0: music, audiobooks and podcasts have a player of their own.** Sound carries on with the screen off, after leaving the app and after swiping it away, with the

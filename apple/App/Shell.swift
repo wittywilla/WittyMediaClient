@@ -144,13 +144,17 @@ private struct PillShell: View {
             }
         }
         // What scrolls under the clock and the battery fades out, so they can still be read.
-        .overlay(alignment: .top) {
+        .overlay {
             if !model.hidesBars {
+                // Measured from the very top of the screen, so the inset it reports is the clock's.
                 GeometryReader { geo in
-                    LinearGradient(colors: [palette.background.opacity(0.92), palette.background.opacity(0)], startPoint: .top, endPoint: .bottom)
-                        .frame(height: geo.safeAreaInsets.top)
-                        .ignoresSafeArea(edges: .top)
+                    VStack(spacing: 0) {
+                        LinearGradient(colors: [palette.background.opacity(0.92), palette.background.opacity(0)], startPoint: .top, endPoint: .bottom)
+                            .frame(height: geo.safeAreaInsets.top)
+                        Spacer(minLength: 0)
+                    }
                 }
+                .ignoresSafeArea()
                 .allowsHitTesting(false)
                 .accessibilityHidden(true)
             }
