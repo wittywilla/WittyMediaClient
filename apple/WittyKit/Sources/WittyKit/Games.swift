@@ -89,6 +89,14 @@ public struct GameConsole: Decodable, Identifiable, Equatable {
     public let count: Int?
     public let needsGpu: Bool?
     public let bios: [GameBIOS]?
+    /// `first`, `8-bit`, `16-bit`, `early-3d`, `disc` or `pocket`, and its years, roughly.
+    public let era: String?
+    public let launched: Int?
+    public let ended: Int?
+    /// `cart`, `pocket` or `disc`.
+    public let media: String?
+    /// How its games stand on a shelf: its case and its cartridge.
+    public let shelf: ShelfLook?
 
     public var shortName: String { (short ?? "").isEmpty ? name : short! }
 }
