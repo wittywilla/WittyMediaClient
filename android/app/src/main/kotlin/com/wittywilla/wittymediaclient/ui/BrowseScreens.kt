@@ -126,7 +126,7 @@ private fun Nav.play(item: Item) = when {
     item.isTrack -> playTrack(item)
     item.isRigGame -> push(Route.Item(item.id))
     item.hasOwnScreen -> push(Route.Player(item.id, false))
-    else -> push(Route.Page(item.pagePath()))
+    else -> push(gamesRouteFor(item) ?: Route.Page(item.pagePath()))
 }
 
 // The first thing on Home. On a phone, posters to swipe through, with the one in front named below

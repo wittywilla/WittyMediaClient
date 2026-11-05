@@ -6,6 +6,8 @@ import android.annotation.SuppressLint
 import android.os.Bundle
 import android.view.InputDevice
 import android.view.KeyEvent
+import android.view.MotionEvent
+import com.wittywilla.wittymediaclient.games.GameInputHub
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import com.wittywilla.wittymediaclient.player.OPEN_NOW_PLAYING
@@ -43,6 +45,8 @@ class MainActivity : ComponentActivity() {
     // Lint reads this as the library's own override. It's the system's, on Activity, which any app may have.
     @SuppressLint("RestrictedApi")
     override fun dispatchKeyEvent(event: KeyEvent): Boolean {
+        // A game on screen reads controllers first: see games/GameInput.kt.
+        if (GameInputHub.key(event)) return true
         if (event.action == KeyEvent.ACTION_DOWN) {
             (application as WittyApp).lastPad = if (event.device?.supportsSource(InputDevice.SOURCE_GAMEPAD) == true) event.deviceId else -1
         }
@@ -59,4 +63,7 @@ class MainActivity : ComponentActivity() {
         }
         return super.dispatchKeyEvent(event)
     }
+
+    // A controller's sticks, triggers and hat, while a game is on screen.
+    override fun dispatchGenericMotionEvent(event: MotionEvent): Boolean = GameInputHub.motion(event) || super.dispatchGenericMotionEvent(event)
 }
