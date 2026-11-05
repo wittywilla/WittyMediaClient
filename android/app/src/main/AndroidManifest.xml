@@ -8,6 +8,10 @@
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK" />
     <uses-permission android:name="android.permission.WAKE_LOCK" />
+    <!-- A game's rumble, on the controller that plays it. -->
+    <uses-permission android:name="android.permission.VIBRATE" />
+    <!-- A controller is enough to play a game: nobody needs a touch screen or a gamepad to install the app. -->
+    <uses-feature android:name="android.hardware.gamepad" android:required="false" />
 
     <!-- One app for phones, tablets and TVs: nothing here is required of the device. -->
     <uses-feature android:name="android.software.leanback" android:required="false" />
