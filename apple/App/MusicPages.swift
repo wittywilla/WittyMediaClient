@@ -3,9 +3,9 @@ import SwiftUI
 import WittyKit
 
 // The website's music, audiobook and podcast pages at phone size (web/src/pages/AudioLibrary.tsx, music/parts.tsx,
-// music/CoverFlow.tsx, music/ArtistPage.tsx, music.css, audio.css): a library's Home with its cover flow and rows, and
-// its Albums, Artists, Songs and Playlists; an album or a book; an artist or an author. Apple TV keeps its own
-// (ListeningViews.swift).
+// music/CoverFlow.tsx, music/ArtistPage.tsx, music/MusicVideos.tsx, music.css, audio.css): a library's Home with its
+// cover flow and rows, and its Albums, Artists, Songs, Music videos and Playlists; an album or a book; an artist or an
+// author. Apple TV keeps its own (ListeningViews.swift).
 
 // MARK: - Small parts
 
@@ -454,6 +454,8 @@ private struct MusicHeader: View {
     @Environment(\.metrics) private var metrics
     let library: Library
     let tab: MusicTab
+    /// Whether a music library has Music videos.
+    let videos: Bool
     let sorts: [MusicSort]
     let sort: String
     let desc: Bool
@@ -493,7 +495,7 @@ private struct MusicHeader: View {
                     }
                 }
             }
-            SegmentRow(choices: MusicTab.tabs(libraryType: library.type), chosen: tab, label: "Parts of \(library.name)", choose: chooseTab)
+            SegmentRow(choices: MusicTab.tabs(libraryType: library.type, musicVideos: videos), chosen: tab, label: "Parts of \(library.name)", choose: chooseTab)
                 .padding(.top, Tokens.Space.s1)
         }
     }
@@ -524,6 +526,8 @@ struct MusicLibraryPage: View {
 
     private var books: Bool { library.type == "audiobooks" }
     private var pods: Bool { library.type == "podcasts" }
+    /// A music library has Music videos when this person can see a music videos library.
+    private var videos: Bool { library.type == "music" && MusicVideos.available(in: model.libraries) }
 
     private func choose(_ next: MusicTab) {
         tab = next
@@ -537,7 +541,7 @@ struct MusicLibraryPage: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 0) {
                 ScrollTop()
-                MusicHeader(library: library, tab: tab, sorts: MusicSort.options(tab: tab, libraryType: library.type, songView: songView),
+                MusicHeader(library: library, tab: tab, videos: videos, sorts: MusicSort.options(tab: tab, libraryType: library.type, songView: songView),
                             sort: sort, desc: desc, admin: model.user?.isAdmin == true,
                             chooseTab: choose, chooseSort: { sort = $0; desc = $1 }, tools: { toolsOpen = true })
                     .padding(.horizontal, metrics.gutter)
@@ -551,6 +555,7 @@ struct MusicLibraryPage: View {
                     case .albums: AlbumsTab(library: library, sort: sort, desc: desc, artist: $artistFilter)
                     case .artists: ArtistsTab(library: library, sort: sort, desc: desc)
                     case .songs: SongsTab(library: library, view: $songView, sort: sort, desc: desc)
+                    case .videos: if videos { MusicVideosTab(library: library) }
                     case .playlists: PlaylistsTab(library: library, openSongs: { view in choose(.songs); songView = view })
                     }
                 }
@@ -585,9 +590,12 @@ private struct MusicHomeTab: View {
     @State private var home: MusicHome?
     @State private var failed = false
     @State private var hero = 0
+    /// The newest music videos, for their shelf.
+    @State private var videos: [MusicVideoCard] = []
 
     private var books: Bool { library.type == "audiobooks" }
     private var pods: Bool { library.type == "podcasts" }
+    private var showsVideos: Bool { library.type == "music" && MusicVideos.available(in: model.libraries) }
 
     private func playAlbum(_ album: Album, at track: Int64? = nil) async {
         await playAlbum(title: album.title ?? "", artist: album.artist ?? "", at: track)
@@ -621,6 +629,10 @@ private struct MusicHomeTab: View {
         }
         .task(id: library.id) {
             do { home = try await client.musicHome(library: library.id) } catch { failed = true }
+        }
+        .task(id: "\(library.id)|\(showsVideos)") {
+            guard showsVideos else { videos = []; return }
+            videos = (try? await client.latestMusicVideos().videos) ?? []
         }
     }
 
@@ -713,9 +725,21 @@ private struct MusicHomeTab: View {
             }
             if !books && !pods {
                 shelf("Songs", count: home.counts?.songs, seeAll: { seeAll(.songs) }) { songGrid(home.songs) }
-                if !home.recent.isEmpty {
-                    shelf("Played lately", seeAll: { seeAll(.songs) }) { songGrid(home.recent) }
+            }
+            if showsVideos, !videos.isEmpty {
+                shelf("Music videos", seeAll: { seeAll(.videos) }) {
+                    ScrollView(.horizontal, showsIndicators: false) {
+                        HStack(alignment: .top, spacing: 10) {
+                            ForEach(videos) { video in
+                                MusicVideoTile(video: video, library: library.id).frame(width: min(260, screenSize.width * 0.7))
+                            }
+                        }
+                        .padding(.horizontal, metrics.gutter).padding(.vertical, 3)
+                    }
                 }
+            }
+            if !books && !pods, !home.recent.isEmpty {
+                shelf("Played lately", seeAll: { seeAll(.songs) }) { songGrid(home.recent) }
             }
         }
     }
@@ -973,6 +997,8 @@ private struct FindField: View {
     @Environment(\.palette) private var palette
     let placeholder: String
     @Binding var text: String
+    /// What it's called when that isn't what it says inside.
+    var label: String?
 
     var body: some View {
         HStack(spacing: 6) {
@@ -984,7 +1010,7 @@ private struct FindField: View {
         .frame(maxWidth: .infinity)
         .background(RoundedRectangle(cornerRadius: Tokens.Radius.md, style: .continuous).fill(palette.card))
         .overlay(RoundedRectangle(cornerRadius: Tokens.Radius.md, style: .continuous).strokeBorder(palette.control, lineWidth: 1))
-        .accessibilityLabel(placeholder)
+        .accessibilityLabel(label ?? placeholder)
     }
 }
 
@@ -1087,6 +1113,246 @@ private struct SongsTab: View {
             songs = (try? await client.songs(library: library.id, view: view, sort: sort, desc: desc, genre: genre, search: search, limit: 2000)) ?? []
         }
         .task(id: library.id) { genres = (try? await client.genres(library: library.id)) ?? [] }
+    }
+}
+
+// MARK: - Music videos
+
+/// Music videos (music/MusicVideos.tsx): the videos of every music video library this person can see, in artist order
+/// from the server, each tile naming its artist; a video tied to a song says so under it. 120 at a time, the next as
+/// the last comes into view or with Show more. A video opens on the server's own page for it, as the website's does.
+private struct MusicVideosTab: View {
+    @Environment(\.client) private var client
+    @Environment(\.palette) private var palette
+    @Environment(\.metrics) private var metrics
+    let library: Library
+    @State private var videos: [MusicVideoCard]?
+    @State private var more = false
+    @State private var query = ""
+    @State private var search = ""
+    @State private var busy = false
+    /// A newer search makes an older answer stale.
+    @State private var asked = 0
+
+    private func load(from: Int) async {
+        if busy && from > 0 { return }
+        busy = true
+        asked += 1
+        let mine = asked
+        defer { if mine == asked { busy = false } }
+        do {
+            let page = try await client.musicVideos(search: search, offset: from)
+            guard mine == asked else { return }
+            if from == 0 || videos == nil {
+                videos = page.videos
+            } else if let have = videos {
+                let seen = Set(have.map(\.id))
+                videos = have + page.videos.filter { !seen.contains($0.id) }
+            }
+            more = page.more
+        } catch {
+            if mine == asked, videos == nil, !Task.isCancelled { videos = [] }
+        }
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: Tokens.Space.s4) {
+            VStack(alignment: .leading, spacing: Tokens.Space.s2) {
+                if let videos {
+                    Text(MusicVideos.count(videos.count, more: more)).pageFont(.secondary).foregroundStyle(palette.textHint)
+                }
+                FindField(placeholder: "Find a video or an artist…", text: $query, label: "Find a music video")
+            }
+            .padding(.horizontal, metrics.gutter)
+            if let shown = videos {
+                if shown.isEmpty {
+                    let words = MusicVideos.empty(searching: !search.isEmpty)
+                    EmptyState(icon: "play.rectangle", title: words.title, detail: words.text)
+                } else {
+                    VStack(spacing: Tokens.Space.s2) {
+                        LazyVGrid(columns: [GridItem(.adaptive(minimum: 260), spacing: Tokens.Space.s4, alignment: .top)], alignment: .leading, spacing: 22) {
+                            ForEach(shown) { video in
+                                MusicVideoTile(video: video, library: library.id)
+                                    .task { if video.id == shown.last?.id, more { await load(from: videos?.count ?? 0) } }
+                            }
+                        }
+                        .padding(.horizontal, metrics.gutter)
+                        if more {
+                            Button("Show more") { Task { await load(from: videos?.count ?? 0) } }
+                                .pageButton(.ghost)
+                                .padding(.bottom, Tokens.Space.s6)
+                        }
+                    }
+                }
+            } else {
+                ProgressView().frame(maxWidth: .infinity).padding(.vertical, Tokens.Space.s8)
+            }
+        }
+        .task(id: query) {
+            try? await Task.sleep(nanoseconds: 250_000_000)
+            guard !Task.isCancelled else { return }
+            search = query.trimmingCharacters(in: .whitespaces)
+        }
+        .task(id: search) {
+            videos = nil
+            more = false
+            await load(from: 0)
+        }
+    }
+}
+
+/// A video, and under it the song it's tied to: its album when that's in this library, else its artist.
+private struct MusicVideoTile: View {
+    @Environment(\.palette) private var palette
+    let video: MusicVideoCard
+    let library: Int64
+
+    private func route(_ song: MusicLinkSide) -> Route {
+        switch MusicVideos.songPlace(song, library: library) {
+        case .album(let library, let album, let artist): return .listeningAlbum(library: library, album: album, artist: artist)
+        case .artist(let library, let name): return .artist(library: library, name: name)
+        }
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            NavigationLink(value: Route.page(MusicVideos.watchPath(videoId: video.id))) { VideoTileBody(video: video) }
+                .buttonStyle(PressStyle())
+            // music.css `.mh-video-song`: 13 in `textSecondary` on a pill of `panel`, 2 by 8 inside.
+            if let song = video.song, let words = video.songWords {
+                NavigationLink(value: route(song)) {
+                    HStack(spacing: 6) {
+                        Image(systemName: "music.note").font(.system(size: 12, weight: .semibold))
+                        Text(words).lineLimit(1)
+                    }
+                    .font(.system(size: 13))
+                    .foregroundStyle(palette.textSecondary)
+                    .padding(.horizontal, 8).padding(.vertical, 2)
+                    .background(Capsule().fill(palette.panel))
+                    .contentShape(Capsule())
+                }
+                .buttonStyle(.plain)
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+}
+
+/// The website's video tile (creators/parts.tsx `VideoTile`, creators.css `.cr-tile`): the picture 16:9, or 9:16 for a
+/// vertical video, on `card` with the medium radius, its length at the lower right, a tick once watched and how far in
+/// along the bottom; 8 under it the creator's picture at 34, and 10 beside that the title in 14 semibold (two lines),
+/// the creator, and the views and how long ago in 12 `textHint`.
+private struct VideoTileBody: View {
+    @Environment(\.client) private var client
+    @Environment(\.palette) private var palette
+    let video: MusicVideoCard
+
+    var body: some View {
+        let facts = video.facts()
+        VStack(alignment: .leading, spacing: Tokens.Space.s2) {
+            Color.clear
+                .aspectRatio(video.vertical ? 9.0 / 16.0 : 16.0 / 9.0, contentMode: .fit)
+                .overlay { ArtImage(url: client.videoThumbURL(id: video.id, width: 480, version: video.updatedAt), width: 260, blank: true) }
+                .overlay(alignment: .bottomTrailing) {
+                    if video.durationSec > 0 {
+                        Text(PlayerTime.format(video.durationSec))
+                            .font(.system(size: 12, weight: .semibold).monospacedDigit())
+                            .foregroundStyle(.white)
+                            .padding(.horizontal, 6).padding(.vertical, 1)
+                            .background(RoundedRectangle(cornerRadius: Tokens.Radius.xs, style: .continuous).fill(palette.scrim))
+                            .padding(6)
+                    }
+                }
+                .overlay(alignment: .topLeading) {
+                    if video.watched {
+                        Image(systemName: "checkmark").font(.system(size: 11, weight: .bold)).foregroundStyle(.white)
+                            .frame(width: 22, height: 22)
+                            .background(Circle().fill(palette.scrim))
+                            .padding(6)
+                            .accessibilityLabel("Watched")
+                    }
+                }
+                .overlay(alignment: .bottom) {
+                    if video.progress > 0 {
+                        GeometryReader { geo in
+                            ZStack(alignment: .leading) {
+                                Rectangle().fill(Color.white.opacity(0.3))
+                                Rectangle().fill(palette.accent).frame(width: geo.size.width * video.progress)
+                            }
+                        }
+                        .frame(height: 4)
+                        .accessibilityHidden(true)
+                    }
+                }
+                .background(palette.card)
+                .clipShape(RoundedRectangle(cornerRadius: Tokens.Radius.md, style: .continuous))
+            HStack(alignment: .top, spacing: 10) {
+                CreatorAvatar(id: video.creatorId, name: video.creator, has: video.hasAvatar, size: 34)
+                VStack(alignment: .leading, spacing: 1) {
+                    Text(video.title).font(.system(size: 14, weight: .semibold)).foregroundStyle(palette.text)
+                        .lineLimit(2).multilineTextAlignment(.leading)
+                    Text(video.creator).font(.system(size: 12)).foregroundStyle(palette.textHint).lineLimit(1)
+                    if !facts.isEmpty { Text(facts).font(.system(size: 12)).foregroundStyle(palette.textHint).lineLimit(1) }
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+            }
+        }
+        .contentShape(Rectangle())
+        .accessibilityElement(children: .combine)
+    }
+}
+
+/// A creator's round picture, or their initial in bold white on a colour of their own when there's none
+/// (creators/parts.tsx `Avatar`).
+private struct CreatorAvatar: View {
+    @Environment(\.client) private var client
+    @Environment(\.palette) private var palette
+    @Environment(\.displayScale) private var displayScale
+    let id: Int64
+    let name: String
+    let has: Bool
+    let size: CGFloat
+    @State private var image: CGImage?
+    @State private var broken = false
+
+    var body: some View {
+        ZStack {
+            if has && !broken {
+                palette.raised
+                if let image { Image(decorative: image, scale: 1).resizable().scaledToFill() }
+            } else {
+                Color(hex: MusicVideos.avatarColour(name))
+                Text(AvatarLook.initial(of: name)).font(.system(size: size * 0.45, weight: .bold)).foregroundStyle(.white)
+            }
+        }
+        .frame(width: size, height: size)
+        .clipShape(Circle())
+        .accessibilityHidden(true)
+        .task(id: has ? id : 0) { await load() }
+    }
+
+    private func load() async {
+        image = nil
+        broken = false
+        guard has, let url = client.creatorAvatarURL(id: id) else { return }
+        let pixels = Int(size * displayScale)
+        let key = "\(url.absoluteString)#\(pixels)" as NSString
+        if let cached = ArtCache.shared.object(forKey: key) {
+            image = cached
+            return
+        }
+        guard let data = try? await client.imageData(url) else {
+            if !Task.isCancelled { broken = true }
+            return
+        }
+        let decoded = await Task.detached(priority: .utility) { decodeArt(data, maxPixels: pixels) }.value
+        guard !Task.isCancelled else { return }
+        guard let decoded else {
+            broken = true
+            return
+        }
+        ArtCache.shared.setObject(decoded, forKey: key, cost: decoded.bytesPerRow * decoded.height)
+        image = decoded
     }
 }
 

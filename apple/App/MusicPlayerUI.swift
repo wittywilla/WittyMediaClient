@@ -382,17 +382,19 @@ private struct NPButton: View {
     }
 }
 
-/// The website's chip: a pill of white at 10%, white with black when it's on.
+/// The website's chip: a pill of white at 10%, white with black when it's on. `video` is Watch the video under the
+/// title (`.np-video`): the small chip's words, 40 high.
 private struct NPChipStyle: ButtonStyle {
     var on = false
     var small = false
+    var video = false
 
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
-            .font(.system(size: small ? 13 : 14, weight: .semibold))
+            .font(.system(size: small || video ? 13 : 14, weight: .semibold))
             .foregroundStyle(on ? Color.black : NPInk.fg)
             .padding(.horizontal, small ? 12 : 16)
-            .frame(minHeight: small ? 36 : 44)
+            .frame(minHeight: small ? 36 : video ? 40 : 44)
             .background(Capsule().fill(on ? Color.white : configuration.isPressed ? NPInk.chip2 : NPInk.chip))
     }
 }
@@ -480,6 +482,8 @@ struct PhoneNowPlaying: View {
     @State private var saidTask: Task<Void, Never>?
     @StateObject private var words = LyricsModel()
     @State private var extras: [Extra] = []
+    /// The song's music video, the first it's tied to.
+    @State private var video: MusicLink?
     @State private var karaoke = false
     @State private var viz = VisualizerPrefs()
     @State private var vizLoaded = false
@@ -516,6 +520,14 @@ struct PhoneNowPlaying: View {
         close()
         menu = nil
         model.paths[model.tab, default: []].append(route)
+    }
+
+    /// The song's music video, on its page as the website's, from here when the two line up. The song stops there.
+    private func watchVideo() {
+        guard let video else { return }
+        let path = MusicVideos.watchPath(video, songAt: listening.positionSec())
+        if listening.isPlaying { listening.toggle() }
+        go(.page(path))
     }
 
     var body: some View {
@@ -588,6 +600,13 @@ struct PhoneNowPlaying: View {
             extras = []
             guard music, let id = now?.item.id else { return }
             extras = (try? await client.extras(item: id)) ?? []
+        }
+        // A song's music video, to go to at the same place: not for audiobooks and podcasts.
+        .task(id: music ? now?.item.id : nil) {
+            video = nil
+            guard music, let id = now?.item.id else { return }
+            let found = try? await client.musicLinks(item: id).tied.first
+            if !Task.isCancelled { video = found }
         }
         .onChange(of: lyricsWanted) { _ in words.want(now?.item.id, wanted: lyricsWanted, client: client, model: model) }
         .onChange(of: now?.item.id) { _ in words.want(now?.item.id, wanted: lyricsWanted, client: client, model: model) }
@@ -838,6 +857,17 @@ struct PhoneNowPlaying: View {
                     .font(.system(size: clamp(16, height * 0.021, 20.8), weight: .semibold))
                     .foregroundStyle(NPInk.fg2)
                     .padding(.horizontal, 8).padding(.vertical, 2)
+            }
+            if video != nil {
+                Button(action: watchVideo) {
+                    HStack(spacing: 8) {
+                        Image(systemName: "play.fill").font(.system(size: 14))
+                        Text("Watch the video")
+                    }
+                }
+                .buttonStyle(NPChipStyle(video: true))
+                .padding(.top, 8)
+                .accessibilityHint("Watch the video, from here when the two line up")
             }
             if !listening.problem.isEmpty {
                 Text(listening.problem).font(.system(size: 13)).foregroundStyle(NPInk.fg2).multilineTextAlignment(.center)
@@ -1151,6 +1181,12 @@ struct PhoneNowPlaying: View {
                 }
                 if music, !now.item.albumArtistName.isEmpty, let library {
                     NPMenuRow(words: "Go to artist") { go(.artist(library: library, name: now.item.albumArtistName)) }
+                }
+            }
+            if video != nil {
+                NPMenuRow(words: "Watch the video") {
+                    menu = nil
+                    watchVideo()
                 }
             }
             NPMenuRow(words: "Stop and close", symbol: "xmark") {

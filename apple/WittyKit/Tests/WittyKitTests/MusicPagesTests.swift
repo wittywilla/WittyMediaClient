@@ -6,6 +6,11 @@ final class MusicPagesTests: XCTestCase {
         XCTAssertEqual(MusicTab.tabs(libraryType: "music").map(\.1), ["Home", "Albums", "Artists", "Songs", "Playlists"])
         XCTAssertEqual(MusicTab.tabs(libraryType: "audiobooks").map(\.1), ["Home", "Books", "Authors"])
         XCTAssertEqual(MusicTab.tabs(libraryType: "podcasts").map(\.1), ["Home", "Podcasts"])
+        // A music videos library somewhere gives music, and only music, its Music videos between Songs and Playlists.
+        XCTAssertEqual(MusicTab.tabs(libraryType: "music", musicVideos: true).map(\.1), ["Home", "Albums", "Artists", "Songs", "Music videos", "Playlists"])
+        XCTAssertEqual(MusicTab.tabs(libraryType: "music", musicVideos: true).map(\.0)[4], .videos)
+        XCTAssertEqual(MusicTab.tabs(libraryType: "audiobooks", musicVideos: true).map(\.1), ["Home", "Books", "Authors"])
+        XCTAssertTrue(MusicSort.options(tab: .videos, libraryType: "music", songView: "").isEmpty)
     }
 
     func testSortsFollowTheTab() {
