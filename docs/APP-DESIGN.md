@@ -719,7 +719,7 @@ TV, which has none, everything is native.
 | Shorts, creators, channel videos | Page | To build |
 | Radio | Page | To build |
 | Live TV guide and watching, WittyTV's looks | Page | Native, every WittyTV look and layout |
-| Recordings and series rules | Page | Native on Apple TV (with reminders); Android TV to build |
+| Recordings and series rules | Page | Native on both TVs, with reminders |
 | Games (WittyPlay) | Native: WittyPlay's Shelves home, collections and game page ([WITTYPLAY-EXPERIENCE.md](WITTYPLAY-EXPERIENCE.md)), and the shared Apple player (Games everywhere, above) with the account's touch layout. A website's game page opened in the app hands its Play to the same player | Native on Apple TV: the same Shelves home (with the TV's preview and prompt bar), collections and game page, and a player for the server's stream (the server runs every game: see [WITTYPLAY-STREAMING.md](WITTYPLAY-STREAMING.md)). Native on Android TV: couch mode and the stream player, to be restyled to [WITTYPLAY-EXPERIENCE.md](WITTYPLAY-EXPERIENCE.md) |
 | Game PCs and rigs (Moonlight) | Native | Native |
 | DVD and Blu-ray menus, the disc remote, CD player | Page: the server's player, whose remote is a sheet (Discs and the remote, above). A native disc player to build | To build: the disc player, with the real remote mapped and the remote from the player's controls (Discs and the remote, above). The page on Android TV until then |
@@ -800,7 +800,8 @@ Apple TV and Android TV are the same app to look at. Sizes are given in TV units
   owner's default in `/guide`: the colours of each of its themes (`modern`, `classic`, `satellite`, `teletext`,
   `listings`, `bigpicture`, `outline`, `compact`, `custom`) are worked out as `web/src/pages/tv/tvThemes.ts` does, and
   each theme's layout (`web/src/pages/tv/tvthemes.css`: row height, cell shape, the now line, the preview's place, the
-  font) is built natively to match, on both TVs.
+  font) is built natively to match, on both TVs (Apple TV's `apple/App/Tv*.swift`, Android TV's `android/…/tv/`, one
+  port of the other). The now line stands at the current time, with the time centred over it, as the page draws it.
 - **Recording** is offered only where the server says it can be: a channel's `canRecord` (true only for tuner
   channels the profile may record; never for channels made from the library). Record and series record are hidden,
   not greyed, when it's false or missing, on every device and on the website alike; no app works it out for itself,
