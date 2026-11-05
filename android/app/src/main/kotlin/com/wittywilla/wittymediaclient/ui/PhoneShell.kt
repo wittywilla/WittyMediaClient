@@ -131,6 +131,8 @@ fun HeroPage(on: Boolean = true) {
 // The website's top pages (TopBar.tsx): Home, the TV guide, Search, You, Settings and every place in the strip.
 private fun isTopPage(route: Route, menu: List<MenuEntry>): Boolean =
     route == Route.Home || route == Route.Search || route == Route.Profile || menu.any { it.route.key == route.key } ||
+        // A library in the strip stays a top page with its choices set (/library/{id}?genre=…), as the website's path does.
+        (route is Route.Library && menu.any { (it.route as? Route.Library)?.library?.id == route.library.id }) ||
         (route as? Route.Page)?.path?.substringBefore('?')?.let { it == GUIDE_PATH || it == "/settings" } == true
 
 @Composable
@@ -185,10 +187,15 @@ private fun TopBar(nav: Nav, scroll: ShellScroll, status: Dp, top: Boolean) {
             Modifier.fillMaxWidth().height(status + (TOP_BAR + 32).dp).graphicsLayer { alpha = shade }
                 .background(Brush.verticalGradient(0f to page.copy(alpha = 0.8f), 0.31f to page.copy(alpha = 0.7f), 1f to page.copy(alpha = 0f))),
         )
-        if (surface > 0f) Box(
-            Modifier.fillMaxWidth().height(status + TOP_BAR.dp).graphicsLayer { alpha = surface }.background(page.copy(alpha = 0.85f))
-                .drawWithContent { drawContent(); drawRect(border, Offset(0f, size.height), Size(size.width, 1.dp.toPx())) },
-        )
+        // Under the clock the page colour is solid, as a browser's own bar is above the website; the strip itself is
+        // the page colour at 85%, as the website's (which also blurs what's behind it).
+        if (surface > 0f) Column(Modifier.fillMaxWidth().graphicsLayer { alpha = surface }) {
+            Box(Modifier.fillMaxWidth().height(status).background(page))
+            Box(
+                Modifier.fillMaxWidth().height(TOP_BAR.dp).background(page.copy(alpha = 0.85f))
+                    .drawWithContent { drawContent(); drawRect(border, Offset(0f, size.height), Size(size.width, 1.dp.toPx())) },
+            )
+        }
         Row(
             Modifier.padding(top = status).fillMaxWidth().height(TOP_BAR.dp).padding(vertical = 4.dp),
             verticalAlignment = Alignment.CenterVertically,

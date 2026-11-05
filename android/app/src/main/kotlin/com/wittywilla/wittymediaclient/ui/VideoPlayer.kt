@@ -28,6 +28,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.aspectRatio
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -217,7 +218,8 @@ private fun SmallButton(
 ) {
     Pressable(onClick, Modifier.height(44.dp).widthIn(min = minWidth), shape = RoundedCornerShape(10.dp), fill = fill, label = label, pressScale = 0.97f, ring = false) {
         Row(
-            Modifier.fillMaxSize().border(1.dp, border, RoundedCornerShape(10.dp)).padding(horizontal = padding),
+            // As wide as its words: the row it sits in is wide, and the button mustn't stretch to fill it.
+            Modifier.fillMaxHeight().border(1.dp, border, RoundedCornerShape(10.dp)).padding(horizontal = padding),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(6.dp, Alignment.CenterHorizontally),
         ) {
