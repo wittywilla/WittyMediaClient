@@ -114,8 +114,13 @@ struct MiniPlayerSlot: View {
             AudioBar(width: width)
                 // Room above for the place, which straddles the bar's top, and on a wide one for the artwork.
                 .padding(.top, listening.barCollapsed ? 0 : width >= 900 ? 22 : 7)
-                .background(GeometryReader { geo in Color.clear.preference(key: BarWidth.self, value: geo.size.width) })
-                .onPreferenceChange(BarWidth.self) { width = $0 }
+                // Measured directly: a preference from here didn't reach the slot inside the tab's bottom inset, so
+                // the bar stayed the phone's at any width.
+                .background(GeometryReader { geo in
+                    Color.clear
+                        .onAppear { width = geo.size.width }
+                        .onChange(of: geo.size.width) { width = $0 }
+                })
             #else
             if metrics.tv {
                 MiniPlayer()
@@ -129,11 +134,6 @@ struct MiniPlayerSlot: View {
             #endif
         }
     }
-}
-
-private struct BarWidth: PreferenceKey {
-    static var defaultValue: CGFloat = 0
-    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) { value = nextValue() }
 }
 
 /// The whole-screen player over everything, opened from the mini player.
