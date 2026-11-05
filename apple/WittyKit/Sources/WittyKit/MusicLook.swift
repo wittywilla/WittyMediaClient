@@ -8,6 +8,15 @@ public struct LyricLine: Decodable, Equatable {
     public let t: Double
     public let end: Double?
     public let text: String
+    /// When each word starts, where the file says.
+    public let words: [LyricWord]?
+
+    public init(t: Double, end: Double? = nil, text: String, words: [LyricWord]? = nil) {
+        self.t = t
+        self.end = end
+        self.text = text
+        self.words = words
+    }
 }
 
 /// What the server found for a song: `/music/lyrics/{id}`.
@@ -15,6 +24,7 @@ public struct Lyrics: Decodable, Equatable {
     public let itemId: Int64?
     public let source: String?
     public let sourceName: String?
+    public let creditUrl: String?
     public let synced: Bool?
     public let lines: [LyricLine]?
     public let plain: String?
@@ -26,6 +36,8 @@ public struct Lyrics: Decodable, Equatable {
     public let online: Bool?
     public let tried: Bool?
     public let canEdit: Bool?
+    /// Another song's look-up is under way: ask again in a few seconds.
+    public let retry: Bool?
 
     public var timed: [LyricLine] { synced == true ? (lines ?? []) : [] }
     public var hasWords: Bool { !timed.isEmpty || !(plain ?? "").trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }

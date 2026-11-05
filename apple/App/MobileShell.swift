@@ -152,25 +152,31 @@ private struct BackBar: ViewModifier {
     @Environment(\.palette) private var palette
     @Environment(\.metrics) private var metrics
     let overPicture: Bool
+    var hidden = false
 
     func body(content: Content) -> some View {
-        // Where the website's has it: in a bar 52 high, the circle 6 from its top and 16 from the side.
+        // Where the website's has it: in a bar 52 high, the circle 6 from its top and 16 from the side. Hidden, it
+        // leaves the page where it is: a server's page underneath mustn't be made again, which would reload it.
         if overPicture {
             content.overlay(alignment: .topLeading) {
-                PageBackButton().padding(.leading, metrics.gutter - 2).padding(.top, Tokens.Space.s1)
+                if !hidden {
+                    PageBackButton().padding(.leading, metrics.gutter - 2).padding(.top, Tokens.Space.s1)
+                }
             }
         } else {
             content.safeAreaInset(edge: .top, spacing: 0) {
-                HStack { PageBackButton(); Spacer(minLength: 0) }
-                    .padding(.horizontal, metrics.gutter - 2)
-                    .padding(.vertical, Tokens.Space.s1)
-                    .background {
-                        ZStack {
-                            Rectangle().fill(.ultraThinMaterial)
-                            palette.background.opacity(0.85)
+                if !hidden {
+                    HStack { PageBackButton(); Spacer(minLength: 0) }
+                        .padding(.horizontal, metrics.gutter - 2)
+                        .padding(.vertical, Tokens.Space.s1)
+                        .background {
+                            ZStack {
+                                Rectangle().fill(.ultraThinMaterial)
+                                palette.background.opacity(0.85)
+                            }
+                            .ignoresSafeArea(edges: .top)
                         }
-                        .ignoresSafeArea(edges: .top)
-                    }
+                }
             }
         }
     }
@@ -179,9 +185,9 @@ private struct BackBar: ViewModifier {
 extension View {
     /// A screen pushed onto a tab: no system bar, and the round Back at the top left. Over a picture it floats
     /// on it; otherwise the page starts below it.
-    @ViewBuilder func plainNavigation(overPicture: Bool = false) -> some View {
+    @ViewBuilder func plainNavigation(overPicture: Bool = false, hidden: Bool = false) -> some View {
         #if os(iOS) || os(visionOS)
-        self.toolbar(.hidden, for: .navigationBar).modifier(BackBar(overPicture: overPicture))
+        self.toolbar(.hidden, for: .navigationBar).modifier(BackBar(overPicture: overPicture, hidden: hidden))
         #else
         self
         #endif

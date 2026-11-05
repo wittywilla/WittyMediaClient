@@ -179,6 +179,8 @@ final class AppModel: ObservableObject {
     @Published var libraries: [Library] = []
     /// The phone's Menu: the drawer of libraries from the left.
     @Published var menuOpen = false
+    /// The server's page on top is in one of its own players (a disc, the CD player): see WebPlayer.isPlayer.
+    @Published var pagePlaying = false
     /// Whether this server lets this person play its game PCs, which the Menu then offers.
     @Published var gamePCs = false
     /// The video playing on a phone or tablet, on its screen or in the dock above the bar once that's left, as the
@@ -213,6 +215,7 @@ final class AppModel: ObservableObject {
     var hidesBars: Bool {
         switch path.last {
         case .player?, .web?: return true
+        case .page?: return pagePlaying
         default: return false
         }
     }

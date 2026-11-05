@@ -76,7 +76,27 @@ final class Listening: ObservableObject {
     /// Which kind each library is, for what lists of tracks don't say. Asked for once.
     var libraryTypes: [Int64: String] = [:]
 
-    private let player = AVPlayer()
+    /// The deck that's playing. The website has two that take turns, so the next song can start right as this one
+    /// ends, or cross into it: `standby` is the other.
+    private var player = AVPlayer()
+    private struct Standby {
+        let entry: Int
+        let trackId: Int
+        let player: AVPlayer
+        let item: AVPlayerItem
+        let answer: Playback
+        let tap: SoundTap?
+    }
+    private var standby: Standby?
+    private var preparing: Int?
+    private var handoffTask: Task<Void, Never>?
+    private var fadeTask: Task<Void, Never>?
+    private var fadingOut: AVPlayer?
+    private var deckFade: [ObjectIdentifier: Float] = [:]
+    /// How it sounds on this device: the website's Sound panel.
+    @Published private(set) var sound = SoundStore().load()
+    private var loudnessKnown: [Int64: Loudness] = [:]
+    private var tap: SoundTap?
     private var queue = ListeningQueue<QueuedTrack>()
     private var serial = 0
     /// The connection this queue started on. Reports go with it, as the app may have moved on.
@@ -114,6 +134,12 @@ final class Listening: ObservableObject {
     private let defaults = UserDefaults.standard
 
     init() {
+        watchPlayer()
+        watchSession()
+        applySound()
+    }
+
+    private func watchPlayer() {
         controlObserver = player.observe(\.timeControlStatus, options: [.new]) { [weak self] observed, _ in
             let status = observed.timeControlStatus
             Task { @MainActor [weak self] in self?.controlChanged(status) }
@@ -121,7 +147,12 @@ final class Listening: ObservableObject {
         timeObserver = player.addPeriodicTimeObserver(forInterval: CMTime(seconds: 1, preferredTimescale: 1), queue: .main) { [weak self] _ in
             Task { @MainActor [weak self] in self?.tick() }
         }
-        watchSession()
+    }
+
+    private func unwatchPlayer() {
+        controlObserver = nil
+        if let timeObserver { player.removeTimeObserver(timeObserver) }
+        timeObserver = nil
     }
 
     private var savedBookSpeed: Float {
@@ -214,6 +245,9 @@ final class Listening: ObservableObject {
     func pause() {
         wantsToPlay = false
         resumeAfterInterruption = false
+        handoffTask?.cancel()
+        handoffTask = nil
+        finishFade()
         player.pause()
         publish()
         updateNowPlaying()
@@ -251,6 +285,8 @@ final class Listening: ObservableObject {
         let target = max(0, duration > 0 ? min(seconds, duration) : seconds)
         ended = false
         jumps += 1
+        handoffTask?.cancel()
+        handoffTask = nil
         guard let stream, placeWhileOpening == nil, player.currentItem?.status == .readyToPlay else {
             open(startSec: target, play: wantsToPlay)
             return
@@ -340,6 +376,197 @@ final class Listening: ObservableObject {
         updateNowPlaying()
     }
 
+    // MARK: The sound
+
+    /// A change from the Sound panel or karaoke. The voice and the key aren't kept for another day.
+    func setSound(_ change: (inout SoundSettings) -> Void) {
+        var next = sound
+        change(&next)
+        guard next != sound else { return }
+        let leveling = next.replayGain != sound.replayGain
+        sound = next
+        SoundStore().save(next)
+        applySound()
+        if leveling { loadLoudness() }
+    }
+
+    private func applySound() {
+        let now = sound
+        SoundEngine.shared.set {
+            $0.eqOn = now.eqOn
+            $0.gains = now.eqGains
+            $0.preampDb = now.preamp
+            $0.vocalCut = now.vocalCut
+            $0.keyShift = now.keyShift
+        }
+        level(player)
+        if let fadingOut { level(fadingOut) }
+    }
+
+    /// How loud a deck is: the volume, times where it is in a crossfade.
+    private func level(_ deck: AVPlayer) {
+        deck.volume = Float(sound.muted ? 0 : sound.volume) * (deckFade[ObjectIdentifier(deck)] ?? 1)
+    }
+
+    /// A song tagged with how loud it is, brought to one level: music only.
+    private func loadLoudness() {
+        guard let track = queue.now, !track.keepsPlace, sound.replayGain != .off, let client else {
+            SoundEngine.shared.set { $0.loudnessDb = 0 }
+            return
+        }
+        let id = track.item.id
+        let choice = sound.replayGain
+        if let known = loudnessKnown[id] {
+            SoundEngine.shared.set { $0.loudnessDb = known.gain(choice) }
+            return
+        }
+        Task { [weak self] in
+            guard let found = try? await client.loudness(item: id), let self else { return }
+            self.loudnessKnown[id] = found
+            guard self.queue.now?.item.id == id else { return }
+            SoundEngine.shared.set { $0.loudnessDb = found.gain(self.sound.replayGain) }
+        }
+    }
+
+    // MARK: Between songs
+
+    /// As a song plays: the next one made ready on the other deck, then started at the right moment, right as this
+    /// one ends or crossing into it (the website's watchEnd). Only songs sent as they are.
+    private func watchEnd() {
+        #if os(iOS) || os(visionOS)
+        guard let track = queue.now, !track.keepsPlace, wantsToPlay, placeWhileOpening == nil, queue.repeatMode != .one,
+              sleep != .afterThis, sound.gapless || sound.crossfade > 0, player.timeControlStatus == .playing else { return }
+        let duration = durationSec()
+        guard duration > 0, let entry = queue.afterEnd, entry != queue.current else { return }
+        let next = queue.entries[entry]
+        let left = (duration - positionSec()) / Double(max(speed, 0.1))
+        let crossing = sound.fade(from: track.album, to: next.album)
+        guard left <= crossing + 20 else { return }
+        guard let ready = standby, ready.trackId == next.id else {
+            if preparing != next.id { prepare(entry, next) }
+            return
+        }
+        if handoffTask == nil, left <= crossing + 1.5, ready.item.status == .readyToPlay {
+            let wait = max(0, left - crossing - 0.025)
+            handoffTask = Task { [weak self] in
+                try? await Task.sleep(nanoseconds: UInt64(wait * 1_000_000_000))
+                guard !Task.isCancelled, let self else { return }
+                self.handoffTask = nil
+                self.handOff(crossing)
+            }
+        }
+        #endif
+    }
+
+    private func prepare(_ entry: Int, _ next: QueuedTrack) {
+        dropStandby()
+        guard let client else { return }
+        preparing = next.id
+        let run = generation
+        let request = PlaybackRequest(profile: Self.profile, startSec: 0, forceTranscode: nil)
+        Task { [weak self] in
+            guard let answer = try? await client.playback(next.item.id, request), answer.decision == "audio-direct",
+                  let url = client.mediaURL(answer.url) else { return }
+            let item = AVPlayerItem(url: url)
+            item.audioTimePitchAlgorithm = .timeDomain
+            let found = await SoundEngine.shared.attach(to: item)
+            guard let self, run == self.generation, self.preparing == next.id else { return }
+            let deck = AVPlayer(playerItem: item)
+            deck.defaultRate = self.speed
+            self.deckFade[ObjectIdentifier(deck)] = 0
+            self.level(deck)
+            self.standby = Standby(entry: entry, trackId: next.id, player: deck, item: item, answer: answer, tap: found)
+        }
+    }
+
+    /// The next song starts on the other deck, which becomes the one playing; the old one fades out, or stops.
+    private func handOff(_ seconds: Double) {
+        guard let ready = standby, wantsToPlay, ready.item.status == .readyToPlay, queue.entries.indices.contains(ready.entry),
+              queue.entries[ready.entry].id == ready.trackId else { return }
+        let left = (durationSec() - positionSec()) / Double(max(speed, 0.1))
+        guard left <= seconds + 2 else { return }
+        standby = nil
+        preparing = nil
+        // What was playing counts as heard to its end.
+        if let track = queue.now {
+            foldHeard()
+            _ = report(track, positionSec: durationSec(), reachedEnd: true)
+            heardSeconds = 0
+        }
+        generation += 1
+        let old = player
+        removeItemObservers()
+        unwatchPlayer()
+        player = ready.player
+        watchPlayer()
+        queue.jump(to: ready.entry)
+        stream = ready.answer
+        tap = ready.tap
+        SoundEngine.shared.listen(to: ready.tap)
+        observe(ready.item, run: generation)
+        deckFade[ObjectIdentifier(player)] = seconds > 0 ? 0 : 1
+        level(player)
+        player.playImmediately(atRate: speed)
+        placeWhileOpening = nil
+        pendingSeek = nil
+        lastPlace = 0
+        ended = false
+        jumps += 1
+        publish()
+        updateNowPlaying()
+        loadLoudness()
+        fadingOut = old
+        let oldId = ObjectIdentifier(old)
+        fadeTask?.cancel()
+        fadeTask = Task { [weak self] in
+            if seconds <= 0 {
+                try? await Task.sleep(nanoseconds: 400_000_000)
+            } else {
+                // Equal power, so the middle of the fade isn't a dip.
+                let began = Date()
+                while !Task.isCancelled {
+                    let part = min(1, Date().timeIntervalSince(began) / seconds)
+                    guard let self else { return }
+                    self.deckFade[ObjectIdentifier(self.player)] = Float(sin(part * .pi / 2))
+                    self.deckFade[oldId] = Float(cos(part * .pi / 2))
+                    self.level(self.player)
+                    self.level(old)
+                    if part >= 1 { break }
+                    try? await Task.sleep(nanoseconds: 60_000_000)
+                }
+            }
+            guard !Task.isCancelled, let self else { return }
+            self.finishFade()
+        }
+    }
+
+    /// The deck going out stops now.
+    private func finishFade() {
+        fadeTask?.cancel()
+        fadeTask = nil
+        if let old = fadingOut {
+            old.pause()
+            old.replaceCurrentItem(with: nil)
+            deckFade[ObjectIdentifier(old)] = nil
+        }
+        fadingOut = nil
+        if deckFade[ObjectIdentifier(player)] != 1 {
+            deckFade[ObjectIdentifier(player)] = 1
+            level(player)
+        }
+    }
+
+    private func dropStandby() {
+        handoffTask?.cancel()
+        handoffTask = nil
+        preparing = nil
+        if let ready = standby {
+            ready.player.replaceCurrentItem(with: nil)
+            deckFade[ObjectIdentifier(ready.player)] = nil
+        }
+        standby = nil
+    }
+
     /// Clears the queue. Where it got to is saved first.
     func stop() {
         problem = ""
@@ -388,6 +615,8 @@ final class Listening: ObservableObject {
         let run = generation
         retryTask?.cancel()
         stallTask?.cancel()
+        dropStandby()
+        finishFade()
         wantsToPlay = play
         ended = false
         placeWhileOpening = startSec
@@ -411,7 +640,7 @@ final class Listening: ObservableObject {
                     self.failed(APIError(status: 0, message: "The server sent an address that can't be used."), giveUp: true)
                     return
                 }
-                self.load(url, answer: answer, startSec: startSec, run: run)
+                await self.load(url, answer: answer, startSec: startSec, run: run)
             } catch {
                 guard let self, run == self.generation, !(error is CancellationError) else { return }
                 self.failed(error)
@@ -419,11 +648,32 @@ final class Listening: ObservableObject {
         }
     }
 
-    private func load(_ url: URL, answer: Playback, startSec: Double, run: Int) {
-        stream = answer
+    private func load(_ url: URL, answer: Playback, startSec: Double, run: Int) async {
         let next = AVPlayerItem(url: url)
         // Speech at a faster speed stays clear with this, and it costs nothing for music.
         next.audioTimePitchAlgorithm = .timeDomain
+        #if os(iOS) || os(visionOS)
+        // The Sound panel's tap goes on first: the player would read the same tracks before playing anyway.
+        let found = await SoundEngine.shared.attach(to: next)
+        guard run == generation else { return }
+        tap = found
+        SoundEngine.shared.listen(to: found)
+        #endif
+        stream = answer
+        observe(next, run: run)
+        // A file is told where to start once it's ready. A conversion starts there already.
+        if !answer.mustReopenToSeekFar {
+            let at = answer.startAtSec ?? startSec
+            pendingSeek = at > 0.5 ? at : nil
+        }
+        deckFade[ObjectIdentifier(player)] = 1
+        level(player)
+        player.replaceCurrentItem(with: next)
+        if wantsToPlay, pendingSeek == nil { player.play() }
+        loadLoudness()
+    }
+
+    private func observe(_ next: AVPlayerItem, run: Int) {
         removeItemObservers()
         let itemId = ObjectIdentifier(next)
         itemObservers.append(NotificationCenter.default.addObserver(forName: .AVPlayerItemDidPlayToEndTime, object: next, queue: .main) { [weak self] _ in
@@ -444,13 +694,6 @@ final class Listening: ObservableObject {
                 }
             }
         }
-        // A file is told where to start once it's ready. A conversion starts there already.
-        if !answer.mustReopenToSeekFar {
-            let at = answer.startAtSec ?? startSec
-            pendingSeek = at > 0.5 ? at : nil
-        }
-        player.replaceCurrentItem(with: next)
-        if wantsToPlay, pendingSeek == nil { player.play() }
     }
 
     private func isCurrent(_ itemId: ObjectIdentifier) -> Bool {
@@ -608,6 +851,7 @@ final class Listening: ObservableObject {
         guard placeWhileOpening == nil, player.currentItem != nil else { return }
         let at = positionSec()
         if at.isFinite { lastPlace = at }
+        watchEnd()
     }
 
     // MARK: Telling the server
@@ -736,6 +980,8 @@ final class Listening: ObservableObject {
         pauseCheck?.cancel()
         stopWaitingForNetwork()
         removeItemObservers()
+        dropStandby()
+        finishFade()
         player.pause()
         player.replaceCurrentItem(with: nil)
         let mode = queue.repeatMode

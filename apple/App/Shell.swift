@@ -106,7 +106,7 @@ private struct TabRoot: View {
                         #endif
                     case .page(let path):
                         #if os(iOS) || os(visionOS)
-                        WebPlayerView(path: path, keptToGames: false).plainNavigation()
+                        WebPlayerView(path: path, keptToGames: false).plainNavigation(hidden: model.pagePlaying && model.paths[tab]?.last == .page(path))
                         #else
                         ElsewhereNote(path: path)
                         #endif

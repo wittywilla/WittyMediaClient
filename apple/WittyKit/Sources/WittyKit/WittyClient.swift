@@ -309,6 +309,59 @@ public final class WittyClient: @unchecked Sendable {
         _ = try await call("PUT", "/music/lyrics/\(item)/offset", body: try JSONEncoder().encode(["offsetMs": ms]))
     }
 
+    /// The volume correction a song is tagged with.
+    public func loudness(item: Int64) async throws -> Loudness { try await get("/music/loudness/\(item)") }
+
+    /// Booklets and text beside a song's album.
+    public func extras(item: Int64) async throws -> [Extra] { try await list("/music/extras/\(item)") }
+
+    /// One of those, as text.
+    public func extraText(item: Int64, name: String) async throws -> String {
+        struct Text: Decodable { let text: String }
+        let text: Text = try await get("/music/extras/\(item)/file?name=\(name.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? name)")
+        return text.text
+    }
+
+    /// One of those as it is: a booklet's PDF.
+    public func extraFile(item: Int64, name: String) -> URL? {
+        URL(string: "\(base)\(apiPath)/music/extras/\(item)/file?name=\(name.addingPercentEncoding(withAllowedCharacters: .alphanumerics) ?? name)")
+    }
+
+    /// Other versions of a song's words online (an owner's).
+    public func searchLyrics(item: Int64, query: String) async throws -> [FoundLyrics] {
+        try decoder.decode([FoundLyrics].self, from: try await call("POST", "/music/lyrics/\(item)/search", body: try JSONEncoder().encode(["q": query])))
+    }
+
+    /// Corrects a song's words on this server: one found online, the listener's own text, or none at all.
+    public func chooseLyrics(item: Int64, provider: String, id: String) async throws {
+        _ = try await call("PUT", "/music/lyrics/\(item)", body: try JSONEncoder().encode(["provider": provider, "id": id]))
+    }
+
+    public func saveLyrics(item: Int64, text: String) async throws {
+        _ = try await call("PUT", "/music/lyrics/\(item)", body: try JSONEncoder().encode(["text": text]))
+    }
+
+    public func markInstrumental(item: Int64) async throws {
+        _ = try await call("PUT", "/music/lyrics/\(item)", body: try JSONEncoder().encode(["instrumental": true]))
+    }
+
+    /// Back to what was found.
+    public func forgetLyrics(item: Int64) async throws { _ = try await call("DELETE", "/music/lyrics/\(item)") }
+
+    /// The person's interface choices, kept whole on the server: one part is changed and the rest kept.
+    public func interfaceChoice<T: Decodable>(_ key: String, as type: T.Type) async throws -> T? {
+        let data = try await call("GET", "/me/ui")
+        guard let whole = try JSONSerialization.jsonObject(with: data) as? [String: Any], let part = whole[key] else { return nil }
+        return try decoder.decode(T.self, from: try JSONSerialization.data(withJSONObject: part, options: [.fragmentsAllowed]))
+    }
+
+    public func setInterfaceChoice<T: Encodable>(_ key: String, _ value: T) async throws {
+        let data = try await call("GET", "/me/ui")
+        var whole = (try? JSONSerialization.jsonObject(with: data) as? [String: Any]) ?? [:]
+        whole[key] = try JSONSerialization.jsonObject(with: try JSONEncoder().encode(value), options: [.fragmentsAllowed])
+        _ = try await call("PUT", "/me/ui", body: try JSONSerialization.data(withJSONObject: whole))
+    }
+
     /// The songs this person likes in a library.
     public func likes(library: Int64) async throws -> [Int64] { try await list("/music/likes?library=\(library)") }
 

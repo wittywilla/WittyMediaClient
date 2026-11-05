@@ -217,10 +217,10 @@ struct AudioBar: View {
 
 // MARK: - Now Playing
 
-private enum NPPanel { case queue, lyrics }
+private enum NPPanel { case queue, lyrics, sound, read }
 
 /// The menus that open under a button, as the website's pop-ups.
-private enum NPMenu: Hashable { case addThis, addQueue, sleep, more }
+private enum NPMenu: Hashable { case addThis, addQueue, sleep, more, volume, shuffle }
 
 private struct MenuAnchors: PreferenceKey {
     static var defaultValue: [NPMenu: Anchor<CGRect>] = [:]
@@ -339,9 +339,26 @@ struct PhoneNowPlaying: View {
     @State private var maxSpeed: Double?
     @State private var said = ""
     @State private var saidTask: Task<Void, Never>?
+    @StateObject private var words = LyricsModel()
+    @State private var extras: [Extra] = []
+    @State private var karaoke = false
+    @State private var viz = VisualizerPrefs()
+    @State private var vizLoaded = false
+    @State private var vizHere = true
+    /// What shuffle is showing now, if it's on.
+    @State private var shownStyle = ""
 
     private var now: QueuedTrack? { listening.now }
     private var music: Bool { !(now?.keepsPlace ?? false) }
+    private var lyricsWanted: Bool { music && (panel == .lyrics || panel == .read || karaoke) }
+    private var style: String { shownStyle.isEmpty ? viz.nativeStyle : shownStyle }
+
+    /// Kept for the person on the server, with their other interface choices.
+    private func setViz(_ change: (inout VisualizerPrefs) -> Void) {
+        change(&viz)
+        let saved = viz
+        Task { try? await client.setInterfaceChoice("musicPlayer", saved) }
+    }
 
     private func say(_ words: String) {
         said = words
@@ -371,6 +388,9 @@ struct PhoneNowPlaying: View {
             ZStack(alignment: .top) {
                 Color.black
                 glowLayer(full)
+                if vizHere, vizLoaded, viz.viz {
+                    VisualizerBackground(style: style, slow: viz.slow, colour: glow, playing: listening.isPlaying)
+                }
                 VStack(spacing: 0) {
                     header(phone: phone, compact: compact)
                         .padding(.top, safe.top + max(14 - safe.top, 0))
@@ -387,6 +407,12 @@ struct PhoneNowPlaying: View {
                         .padding(.bottom, safe.bottom + 24)
                         .transition(.opacity)
                         .accessibilityHidden(true)
+                }
+                if karaoke, let item = now?.item {
+                    KaraokeView(item: item, lyrics: words.lyrics, loading: words.loading || (words.lyrics == nil && words.failed.isEmpty), glow: glow,
+                                offset: words.offset, setOffset: { words.setOffset($0, client: client) }, close: { karaoke = false },
+                                insets: EdgeInsets(top: safe.top, leading: 0, bottom: safe.bottom, trailing: 0))
+                        .transition(.move(edge: .bottom))
                 }
             }
             .ignoresSafeArea()
@@ -407,12 +433,40 @@ struct PhoneNowPlaying: View {
         }
         .task(id: now.map { client.posterURL($0.item) } ?? nil) { await loadArt() }
         .task(id: now?.item.libraryId) { await loadLikes() }
-        .task { maxSpeed = (try? await client.prefs())?.maxSpeed }
+        .task {
+            let prefs = try? await client.prefs()
+            maxSpeed = prefs?.maxSpeed
+            vizHere = prefs?.visualizer != false
+            if let saved = try? await client.interfaceChoice("musicPlayer", as: VisualizerPrefs.self) { viz = saved }
+            vizLoaded = true
+        }
+        .task(id: music ? now?.item.id : nil) {
+            extras = []
+            guard music, let id = now?.item.id else { return }
+            extras = (try? await client.extras(item: id)) ?? []
+        }
+        .onChange(of: lyricsWanted) { _ in words.want(now?.item.id, wanted: lyricsWanted, client: client, model: model) }
+        .onChange(of: now?.item.id) { _ in words.want(now?.item.id, wanted: lyricsWanted, client: client, model: model) }
+        // Shuffle: only ever because someone chose it, among the player's own styles.
+        .task(id: "\(viz.viz)-\(viz.shuffleEvery)-\(viz.style)") {
+            shownStyle = ""
+            guard viz.viz, viz.shuffleEvery > 0 else { return }
+            while !Task.isCancelled {
+                try? await Task.sleep(nanoseconds: UInt64(viz.shuffleEvery) * 1_000_000_000)
+                guard !Task.isCancelled else { return }
+                let others = VisualizerPrefs.styles.map(\.id).filter { $0 != style }
+                shownStyle = others.randomElement() ?? shownStyle
+            }
+        }
         // The queue was cleared, from here or from elsewhere.
         .onChange(of: now == nil) { gone in if gone { close() } }
-        .onChange(of: music) { isMusic in if !isMusic, panel == .lyrics { panel = nil } }
+        .onChange(of: music) { isMusic in
+            if !isMusic, panel == .lyrics || panel == .read { panel = nil }
+            if !isMusic { karaoke = false }
+        }
+        .animation(.easeOut(duration: 0.25), value: karaoke)
         .accessibilityAction(.escape) {
-            if menu != nil { menu = nil } else if panel != nil { panel = nil } else { close() }
+            if karaoke { karaoke = false } else if menu != nil { menu = nil } else if panel != nil { panel = nil } else { close() }
         }
     }
 
@@ -490,6 +544,12 @@ struct PhoneNowPlaying: View {
                 .accessibilityElement(children: .combine)
             }
             HStack(spacing: phone ? 2 : 4) {
+                // Phones have their own volume, as on the website.
+                if !phone {
+                    let silent = listening.sound.muted || listening.sound.volume == 0
+                    NPButton(symbol: silent ? "speaker.slash.fill" : "speaker.wave.2.fill", label: "Volume", on: menu == .volume) { toggle(.volume) }
+                        .anchorPreference(key: MenuAnchors.self, value: .bounds) { [.volume: $0] }
+                }
                 NPButton(symbol: "text.badge.plus", label: "Add to a playlist", on: menu == .addThis) { toggle(.addThis) }
                     .anchorPreference(key: MenuAnchors.self, value: .bounds) { [.addThis: $0] }
                 sleepButton
@@ -578,7 +638,7 @@ struct PhoneNowPlaying: View {
                     titleBlock(height: height)
                     seek
                     transport(play: clamp(66, height * 0.1, 96), taller: taller, tall: tall, gap: clamp(6, full.width * 0.012, 16))
-                    tools
+                    tools(compact: compact)
                 }
                 .padding(.vertical, 4)
                 .frame(maxWidth: .infinity)
@@ -703,39 +763,139 @@ struct PhoneNowPlaying: View {
         }
     }
 
-    private var tools: some View {
-        HStack(spacing: 6) {
-            if music {
-                Button { panel = panel == .lyrics ? nil : .lyrics } label: {
+    /// Lyrics, Karaoke and Read, the visualizer's choices and the speed. On a narrow screen the words come first:
+    /// they're what a thumb came here for.
+    private func tools(compact: Bool) -> some View {
+        FlowRow(spacing: compact ? 6 : 8, lineSpacing: compact ? 6 : 8) {
+            if compact { wordsChips }
+            if vizHere {
+                Button { setViz { $0.viz.toggle() } } label: {
                     HStack(spacing: 8) {
-                        Image(systemName: "music.mic").font(.system(size: 18))
-                        Text("Lyrics")
+                        Image(systemName: "waveform").font(.system(size: 20))
+                        Text("Visualizer")
                     }
+                    .font(.system(size: 15, weight: .semibold))
+                    .foregroundStyle(NPInk.fg)
+                    .padding(.horizontal, 18)
+                    .frame(minHeight: compact ? 44 : 48)
+                    .background(Capsule().fill(viz.viz ? glow.opacity(0.45) : NPInk.plate))
+                    .overlay(Capsule().strokeBorder(viz.viz ? Color.white : Color.white.opacity(0.45), lineWidth: 2))
                 }
-                .buttonStyle(NPChipStyle(on: panel == .lyrics))
-                .accessibilityAddTraits(panel == .lyrics ? [.isSelected] : [])
-            }
-            Menu {
-                Picker("Playback speed", selection: Binding(get: { listening.speed }, set: { listening.choose(speed: $0) })) {
-                    ForEach(ListeningSpeeds.offered(max: maxSpeed), id: \.self) { speed in
-                        Text(PlayerSpeeds.button(Double(speed))).tag(speed)
+                .buttonStyle(BarPressStyle())
+                .accessibilityAddTraits(viz.viz ? [.isSelected] : [])
+                if viz.viz {
+                    HStack(spacing: 2) {
+                        ForEach(VisualizerPrefs.styles, id: \.id) { choice in
+                            let on = style == choice.id
+                            Button(choice.name) {
+                                shownStyle = ""
+                                setViz {
+                                    $0.style = choice.id
+                                    $0.viz = true
+                                }
+                                UIAccessibility.post(notification: .announcement, argument: "Visualizer: \(choice.name)")
+                            }
+                            .font(.system(size: 14, weight: .semibold))
+                            .foregroundStyle(on ? Color.black : NPInk.fg)
+                            .padding(.horizontal, 16).frame(minHeight: 40)
+                            .background(Capsule().fill(on ? Color.white : .clear))
+                            .accessibilityAddTraits(on ? [.isSelected] : [])
+                        }
                     }
+                    .padding(3)
+                    .background(Capsule().fill(NPInk.chip))
+                    .accessibilityElement(children: .contain)
+                    .accessibilityLabel("Visualizer style")
                 }
-            } label: {
-                HStack(spacing: 4) {
-                    Text(PlayerSpeeds.button(Double(listening.speed)))
-                    Image(systemName: "chevron.up.chevron.down").font(.system(size: 10, weight: .semibold))
-                }
-                .font(.system(size: 14, weight: .semibold))
-                .foregroundStyle(NPInk.fg)
-                .padding(.horizontal, 10)
-                .frame(minHeight: 44)
-                .background(Capsule().fill(NPInk.chip))
             }
-            .accessibilityLabel("Playback speed")
-            .accessibilityValue(PlayerSpeeds.words(Double(listening.speed)))
+            if !compact {
+                if vizHere, viz.viz { vizExtras }
+                if vizHere { NPInk.line.frame(width: 1, height: 30).padding(.horizontal, 4) }
+                wordsChips
+            }
+            speedChoice
+            if compact, vizHere, viz.viz { vizExtras }
         }
         .padding(.top, 2).padding(.bottom, 6)
+    }
+
+    @ViewBuilder private var wordsChips: some View {
+        if music {
+            Button { panel = panel == .lyrics ? nil : .lyrics } label: {
+                HStack(spacing: 8) {
+                    Image(systemName: "music.mic").font(.system(size: 18))
+                    Text("Lyrics")
+                }
+            }
+            .buttonStyle(NPChipStyle(on: panel == .lyrics))
+            .accessibilityAddTraits(panel == .lyrics ? [.isSelected] : [])
+            Button { karaoke = true } label: {
+                HStack(spacing: 8) {
+                    Image(systemName: "music.microphone").font(.system(size: 18))
+                    Text("Karaoke")
+                }
+            }
+            .buttonStyle(NPChipStyle())
+            Button { panel = panel == .read ? nil : .read } label: {
+                HStack(spacing: 8) {
+                    Image(systemName: "book").font(.system(size: 18))
+                    Text("Read")
+                    if !extras.isEmpty {
+                        Text("\(extras.count)").font(.system(size: 11, weight: .bold))
+                            .foregroundStyle(panel == .read ? Color.white : Color.black)
+                            .frame(minWidth: 20, minHeight: 20)
+                            .background(Capsule().fill(panel == .read ? Color.black : Color.white))
+                    }
+                }
+            }
+            .buttonStyle(NPChipStyle(on: panel == .read))
+            .accessibilityHint("Read the words, or the album's booklet")
+            .accessibilityAddTraits(panel == .read ? [.isSelected] : [])
+        }
+    }
+
+    /// Slow, and changing style by itself.
+    @ViewBuilder private var vizExtras: some View {
+        Button { setViz { $0.slow.toggle() } } label: {
+            HStack(spacing: 8) {
+                Image(systemName: "tortoise").font(.system(size: 18))
+                Text("Slow")
+            }
+        }
+        .buttonStyle(NPChipStyle(on: viz.slow))
+        .accessibilityHint("A slower, gentler pace")
+        .accessibilityAddTraits(viz.slow ? [.isSelected] : [])
+        Button { toggle(.shuffle) } label: {
+            HStack(spacing: 8) {
+                Image(systemName: "shuffle").font(.system(size: 16))
+                Text(viz.shuffleEvery > 0 ? VisualizerPrefs.everyWords(viz.shuffleEvery).replacingOccurrences(of: "Every ", with: "") : "Styles")
+            }
+        }
+        .buttonStyle(NPChipStyle(on: viz.shuffleEvery > 0 || menu == .shuffle))
+        .anchorPreference(key: MenuAnchors.self, value: .bounds) { [.shuffle: $0] }
+        .accessibilityLabel(viz.shuffleEvery > 0 ? "Shuffling visualizers: \(VisualizerPrefs.everyWords(viz.shuffleEvery))" : "Shuffle visualizers")
+    }
+
+    private var speedChoice: some View {
+        Menu {
+            Picker("Playback speed", selection: Binding(get: { listening.speed }, set: { listening.choose(speed: $0) })) {
+                ForEach(ListeningSpeeds.offered(max: maxSpeed), id: \.self) { speed in
+                    Text(PlayerSpeeds.button(Double(speed))).tag(speed)
+                }
+            }
+        } label: {
+            HStack(spacing: 4) {
+                Text(PlayerSpeeds.button(Double(listening.speed)))
+                Image(systemName: "chevron.up.chevron.down").font(.system(size: 10, weight: .semibold))
+            }
+            .font(.system(size: 14, weight: .semibold))
+            .foregroundStyle(NPInk.fg)
+            .padding(.horizontal, 10)
+            .frame(minHeight: 44)
+            .background(Capsule().fill(NPInk.chip))
+        }
+        .accessibilityLabel("Playback speed")
+        .accessibilityValue(PlayerSpeeds.words(Double(listening.speed)))
     }
 
     // MARK: The panels
@@ -747,7 +907,13 @@ struct PhoneNowPlaying: View {
             QueuePanelView(glow: glow, close: { panel = nil }, save: { toggle(.addQueue) }, saving: menu == .addQueue)
         case .lyrics:
             if let item = now?.item {
-                LyricsPanelView(item: item, screenHeight: height, close: { panel = nil }, go: go).id(item.id)
+                LyricsPanelView(words: words, item: item, screenHeight: height, close: { panel = nil }, go: go, said: say).id(item.id)
+            }
+        case .sound:
+            SoundPanelView(close: { panel = nil })
+        case .read:
+            if let item = now?.item {
+                ReadPanelView(item: item, extras: extras, lyrics: words.lyrics, loading: words.loading, close: { panel = nil }).id(item.id)
             }
         }
     }
@@ -783,6 +949,10 @@ struct PhoneNowPlaying: View {
                 ScrollView { sleepRows }.frame(maxHeight: maxHeight)
             case .more:
                 ScrollView { moreRows }.frame(maxHeight: maxHeight)
+            case .volume:
+                VolumeCard()
+            case .shuffle:
+                ScrollView { shuffleRows }.frame(maxHeight: maxHeight)
             }
         }
         .padding(6)
@@ -812,8 +982,25 @@ struct PhoneNowPlaying: View {
         }
     }
 
+    private var shuffleRows: some View {
+        VStack(alignment: .leading, spacing: 1) {
+            Text("Change style by itself. It stays still unless you choose this.")
+                .font(.system(size: 13)).foregroundStyle(NPInk.fg2).padding(.horizontal, 12).padding(.vertical, 6)
+            ForEach(VisualizerPrefs.shuffleChoices, id: \.self) { every in
+                NPMenuRow(words: VisualizerPrefs.everyWords(every), chosen: viz.shuffleEvery == every) {
+                    setViz { $0.shuffleEvery = every }
+                    menu = nil
+                }
+            }
+        }
+    }
+
     private var moreRows: some View {
         VStack(spacing: 1) {
+            NPMenuRow(words: "Sound: equaliser and more", symbol: "slider.horizontal.3") {
+                menu = nil
+                panel = panel == .sound ? nil : .sound
+            }
             if let now {
                 let library = now.item.libraryId
                 if music {
@@ -1047,80 +1234,138 @@ private struct QueuePanelView: View {
 
 // MARK: - The words
 
+/// A song's words, shared by Lyrics, Read and karaoke, and asked for only when one of them is open (lyrics.ts).
+@MainActor
+final class LyricsModel: ObservableObject {
+    @Published private(set) var lyrics: Lyrics?
+    @Published private(set) var loading = false
+    @Published private(set) var failed = ""
+    @Published private(set) var offset = 0.0
+    private var itemId: Int64?
+    private var held: [Int64: Lyrics] = [:]
+    private var task: Task<Void, Never>?
+    private var saving: Task<Void, Never>?
+
+    /// The words of this song, if they're wanted now.
+    func want(_ id: Int64?, wanted: Bool, client: WittyClient, model: AppModel) {
+        failed = ""
+        guard let id, wanted else {
+            if id != itemId {
+                task?.cancel()
+                loading = false
+                itemId = id
+                lyrics = id.flatMap { held[$0] }
+                offset = lyrics?.offsetMs ?? 0
+            }
+            return
+        }
+        if itemId == id, lyrics != nil || loading { return }
+        itemId = id
+        if let have = held[id] {
+            lyrics = have
+            offset = have.offsetMs ?? 0
+            return
+        }
+        lyrics = nil
+        load(id, client: client, model: model)
+    }
+
+    /// After someone has corrected them.
+    func reload(client: WittyClient, model: AppModel) {
+        guard let itemId else { return }
+        held[itemId] = nil
+        lyrics = nil
+        load(itemId, client: client, model: model)
+    }
+
+    private func load(_ id: Int64, client: WittyClient, model: AppModel) {
+        task?.cancel()
+        loading = true
+        task = Task { [weak self] in
+            // The server was busy with another song: ask again after a while, a few times.
+            for attempt in 0..<5 {
+                do {
+                    let found = try await client.lyrics(item: id)
+                    guard let self, !Task.isCancelled, self.itemId == id else { return }
+                    if found.retry == true, attempt < 4 {
+                        try? await Task.sleep(nanoseconds: 3_000_000_000)
+                        continue
+                    }
+                    if (found.failed ?? "").isEmpty { self.held[id] = found }
+                    self.lyrics = found
+                    self.offset = found.offsetMs ?? 0
+                    self.loading = false
+                    return
+                } catch {
+                    guard let self, !Task.isCancelled, self.itemId == id else { return }
+                    self.failed = model.handle(error)
+                    self.loading = false
+                    return
+                }
+            }
+        }
+    }
+
+    /// The listener's own timing, saved a moment after the last change.
+    func setOffset(_ ms: Double, client: WittyClient) {
+        guard let itemId else { return }
+        let clamped = max(-120_000, min(120_000, ms))
+        offset = clamped
+        saving?.cancel()
+        saving = Task {
+            try? await Task.sleep(nanoseconds: 500_000_000)
+            guard !Task.isCancelled else { return }
+            try? await client.setLyricsOffset(item: itemId, ms: clamped)
+        }
+    }
+}
+
 private struct LyricsPanelView: View {
     @EnvironmentObject private var listening: Listening
     @EnvironmentObject private var model: AppModel
     @Environment(\.client) private var client
+    @ObservedObject var words: LyricsModel
     let item: Item
     let screenHeight: CGFloat
     let close: () -> Void
     let go: (Route) -> Void
-    @State private var lyrics: Lyrics?
-    @State private var loading = true
-    @State private var failed = ""
-    @State private var offset = 0.0
+    let said: (String) -> Void
     @State private var index = -1
     @State private var heldUntil = Date.distantPast
-    @State private var saving: Task<Void, Never>?
+    @State private var fixing = false
     private let tick = Timer.publish(every: 0.25, on: .main, in: .common).autoconnect()
 
-    private func load() async {
-        loading = true
-        failed = ""
-        do {
-            let found = try await client.lyrics(item: item.id)
-            lyrics = found
-            offset = found.offsetMs ?? 0
-        } catch {
-            failed = model.handle(error)
-        }
-        loading = false
-    }
-
-    private func nudge(to ms: Double) {
-        offset = ms
-        saving?.cancel()
-        let id = item.id
-        saving = Task {
-            try? await Task.sleep(nanoseconds: 500_000_000)
-            guard !Task.isCancelled else { return }
-            try? await client.setLyricsOffset(item: id, ms: ms)
-        }
-    }
-
     var body: some View {
+        let lyrics = words.lyrics
+        let loading = words.loading
+        let offset = words.offset
         let lines = lyrics?.timed ?? []
         VStack(spacing: 0) {
-            HStack(spacing: 10) {
-                Text("Lyrics").font(.system(size: 17, weight: .bold)).foregroundStyle(NPInk.fg)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .accessibilityAddTraits(.isHeader)
+            NPSideHead(title: "Lyrics", closeLabel: "Close the lyrics", close: close) {
                 if let source = lyrics?.sourceName, !source.isEmpty {
-                    Text(source).font(.system(size: 12)).foregroundStyle(NPInk.fg2)
+                    if let link = lyrics?.creditUrl.flatMap(URL.init(string:)) {
+                        Link(source, destination: link).font(.system(size: 12)).foregroundStyle(NPInk.fg2).underline()
+                    } else {
+                        Text(source).font(.system(size: 12)).foregroundStyle(NPInk.fg2)
+                    }
                 }
-                NPButton(symbol: "xmark", label: "Close the lyrics", plain: true, action: close)
             }
-            .padding(.leading, 18).padding(.trailing, 8).padding(.top, 12).padding(.bottom, 8)
             if loading {
                 Text("Looking for the words…").font(.system(size: 13)).foregroundStyle(NPInk.fg2)
                     .frame(maxWidth: .infinity, alignment: .leading).padding(.horizontal, 18).padding(.vertical, 6)
             }
-            if !failed.isEmpty {
-                Text(failed).font(.system(size: 13)).foregroundStyle(NPInk.fg)
-                    .padding(.horizontal, 12).padding(.vertical, 10)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .background(RoundedRectangle(cornerRadius: Tokens.Radius.md, style: .continuous).fill(NPInk.rule))
-                    .padding(.horizontal, 18).padding(.vertical, 8)
+            if !words.failed.isEmpty {
+                NPNote(words: words.failed).padding(.horizontal, 18).padding(.vertical, 8)
             }
             if let lyrics, !loading {
                 if lyrics.instrumental == true {
                     empty(["This one has no words."])
                 } else if !lyrics.hasWords {
-                    empty(LyricWords.none(lyrics, fixHere: false), links: lyrics.online != true && lyrics.tried != true && (lyrics.failed ?? "").isEmpty)
+                    empty(LyricWords.none(lyrics), links: lyrics.online != true && lyrics.tried != true && (lyrics.failed ?? "").isEmpty)
                 }
             }
             if !lines.isEmpty {
-                lineList(lines)
+                lineList(lines, offset: offset)
             } else if let plain = lyrics?.plain, !plain.isEmpty {
                 ScrollView {
                     Text(plain).font(.system(size: 17)).foregroundStyle(NPInk.fg)
@@ -1132,27 +1377,41 @@ private struct LyricsPanelView: View {
             } else {
                 Spacer(minLength: 0)
             }
-            if !lines.isEmpty {
+            if let lyrics, !(lyrics.plain ?? "").isEmpty || lyrics.canEdit == true {
                 HStack(spacing: 6) {
-                    Button("Sooner") { nudge(to: LyricWords.nudge(offset, by: -250)) }
-                        .buttonStyle(NPChipStyle(small: true))
-                        .accessibilityHint("The words come sooner")
-                    Text(LyricWords.offset(offset))
-                        .font(.system(size: 13).monospacedDigit()).foregroundStyle(NPInk.fg2)
-                        .frame(minWidth: 62)
-                    Button("Later") { nudge(to: LyricWords.nudge(offset, by: 250)) }
-                        .buttonStyle(NPChipStyle(small: true))
-                        .accessibilityHint("The words come later")
-                    if offset != 0 {
-                        Button("Reset") { nudge(to: 0) }.buttonStyle(NPChipStyle(small: true))
+                    if !lines.isEmpty {
+                        Button("Sooner") { words.setOffset(LyricWords.nudge(offset, by: -250), client: client) }
+                            .buttonStyle(NPChipStyle(small: true))
+                            .accessibilityHint("The words come sooner")
+                        Text(LyricWords.offset(offset))
+                            .font(.system(size: 13).monospacedDigit()).foregroundStyle(NPInk.fg2)
+                            .frame(minWidth: 62)
+                        Button("Later") { words.setOffset(LyricWords.nudge(offset, by: 250), client: client) }
+                            .buttonStyle(NPChipStyle(small: true))
+                            .accessibilityHint("The words come later")
+                        if offset != 0 {
+                            Button("Reset") { words.setOffset(0, client: client) }.buttonStyle(NPChipStyle(small: true))
+                        }
                     }
                     Spacer(minLength: 0)
+                    if lyrics.canEdit == true {
+                        Button { fixing = true } label: { Label("Fix", systemImage: "pencil") }
+                            .buttonStyle(NPChipStyle(small: true))
+                    }
                 }
                 .padding(.horizontal, 12).padding(.top, 8).padding(.bottom, 12)
                 .overlay(alignment: .top) { NPInk.line.frame(height: 1) }
             }
         }
-        .task { await load() }
+        .overlay {
+            if fixing, let lyrics {
+                FixLyricsView(item: item, lyrics: lyrics, close: { fixing = false }) { done in
+                    fixing = false
+                    said(done)
+                    words.reload(client: client, model: model)
+                }
+            }
+        }
         .onReceive(tick) { _ in
             guard let lyrics else { return }
             let at = lyrics.lineAt(seconds: listening.positionSec(), offset: offset)
@@ -1188,7 +1447,7 @@ private struct LyricsPanelView: View {
         .padding(.horizontal, 18).padding(.vertical, 8)
     }
 
-    private func lineList(_ lines: [LyricLine]) -> some View {
+    private func lineList(_ lines: [LyricLine], offset: Double) -> some View {
         GeometryReader { box in
             ScrollViewReader { proxy in
                 ScrollView(showsIndicators: false) {

@@ -150,6 +150,8 @@ public enum Scenes {
 public struct ServerPrefs: Decodable, Equatable {
     /// The fastest speed offered; 4 when it says nothing.
     public let maxSpeed: Double?
+    /// False when the owner has taken the visualizer off the server.
+    public let visualizer: Bool?
 }
 
 /// What to watch after something with no next episode: `/items/{id}/recommend`.

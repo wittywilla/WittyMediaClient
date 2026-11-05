@@ -94,6 +94,10 @@ public enum WebPlayer {
         path == gamePCsPath || path.hasPrefix(gamePCsPath + "/") || path.hasPrefix("/couch-rig/")
     }
 
+    /// The server's page is in one of its own players, which fill the screen: a film or a disc (`/play/`) or the
+    /// CD player (`/cd/`). The app's own bars step aside for it.
+    public static func isPlayer(path: String) -> Bool { path.hasPrefix("/play/") || path.hasPrefix("/cd/") }
+
     public static func sameServer(_ url: URL, base: String) -> Bool {
         guard let server = URL(string: base), let scheme = url.scheme?.lowercased(), scheme == "https" || scheme == "http" else { return false }
         return Origin.same(url, server)

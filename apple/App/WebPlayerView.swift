@@ -21,6 +21,8 @@ private struct WebPlayerPage: UIViewRepresentable {
     let onLeave: () -> Void
     let onFail: () -> Void
     let onSaved: (URL) -> Void
+    /// Where a server's page has gone within itself, such as into its own player.
+    var onPath: (String) -> Void = { _ in }
 
     final class Coordinator: NSObject, WKNavigationDelegate, WKDownloadDelegate {
         let parent: WebPlayerPage
@@ -132,10 +134,12 @@ private struct WebPlayerPage: UIViewRepresentable {
         web.allowsLinkPreview = false // a preview would load another address, outside the checks above
         // This fires when the page changes its own address, which is how it closes its player.
         web.allowsBackForwardNavigationGestures = !keptToGames
-        if keptToGames {
-            context.coordinator.watching = web.observe(\.url, options: [.new]) { [onLeave] view, _ in
-                guard let path = view.url?.path, !path.isEmpty else { return }
+        context.coordinator.watching = web.observe(\.url, options: [.new]) { [onLeave, onPath, keptToGames] view, _ in
+            guard let path = view.url?.path, !path.isEmpty else { return }
+            if keptToGames {
                 if !WebPlayer.staysInside(path: path) { DispatchQueue.main.async { onLeave() } }
+            } else {
+                DispatchQueue.main.async { onPath(path) }
             }
         }
         // The sign-in reaches the page as the server's own cookie, set only for its address, and only
@@ -164,6 +168,7 @@ private struct WebPlayerPage: UIViewRepresentable {
 
 struct WebPlayerView: View {
     @EnvironmentObject private var model: AppModel
+    @EnvironmentObject private var listening: Listening
     @Environment(\.client) private var client
     let path: String
     let keptToGames: Bool
@@ -175,12 +180,23 @@ struct WebPlayerView: View {
         if model.path.last == (keptToGames ? Route.web(path) : Route.page(path)) { model.path.removeLast() }
     }
 
+    /// In the page's own player, the app's bars step aside and its music stops, as the website's does.
+    private func entered(_ at: String) {
+        guard model.path.last == .page(path) else { return }
+        let playing = WebPlayer.isPlayer(path: at)
+        if playing, !model.pagePlaying {
+            listening.pauseForVideo()
+            if model.video?.isRunning == true { model.video?.togglePlay() }
+        }
+        if model.pagePlaying != playing { model.pagePlaying = playing }
+    }
+
     var body: some View {
         ZStack {
             if failed || client.token.isEmpty {
                 ProblemView(words: "This page couldn't open. Check the server is on, then try again.", retry: { failed = false }, back: leave)
             } else if let url = client.mediaURL(path) {
-                WebPlayerPage(base: client.base, token: client.token, url: url, keptToGames: keptToGames, theme: model.themeChoice == "custom" ? "" : model.themeChoice, onLeave: leave, onFail: { failed = true }, onSaved: { saved = $0.lastPathComponent })
+                WebPlayerPage(base: client.base, token: client.token, url: url, keptToGames: keptToGames, theme: model.themeChoice == "custom" ? "" : model.themeChoice, onLeave: leave, onFail: { failed = true }, onSaved: { saved = $0.lastPathComponent }, onPath: entered)
                     .ignoresSafeArea(.container, edges: .bottom)
             } else {
                 ProblemView(words: "The server sent an address that can't be used.", back: leave)
@@ -195,7 +211,10 @@ struct WebPlayerView: View {
         }
         // A game played on a controller never touches the screen.
         .onAppear { UIApplication.shared.isIdleTimerDisabled = true }
-        .onDisappear { UIApplication.shared.isIdleTimerDisabled = false }
+        .onDisappear {
+            UIApplication.shared.isIdleTimerDisabled = false
+            if !keptToGames { model.pagePlaying = false }
+        }
     }
 }
 #endif
