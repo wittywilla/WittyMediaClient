@@ -106,7 +106,11 @@ private struct TabRoot: View {
                     #else
                     // Apple TV's own screens. These devices show the server's page for all of them.
                     case .album, .photo, .guide, .channel:
+                        #if os(iOS)
+                        WebPlayerView(path: ServerPages.guide, keptToGames: false)
+                        #else
                         ElsewhereNote(path: ServerPages.guide)
+                        #endif
                     #endif
                     }
                 }
