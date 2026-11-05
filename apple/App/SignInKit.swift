@@ -169,15 +169,42 @@ struct TvSignInPage<Words: View, Actions: View>: View {
     }
 }
 
-/// A sign-in screen in the right shape for the device: one column, or side by side on a TV.
-struct SignInLayout<Words: View, Actions: View>: View {
+/// One centred column on a TV, for a screen about one person: their face stays where Who's watching had it.
+struct TvCentredPage<Words: View, Actions: View>: View {
+    @Environment(\.palette) private var palette
     @Environment(\.metrics) private var metrics
-    var back: (() -> Void)?
     @ViewBuilder let words: Words
     @ViewBuilder let actions: Actions
 
     var body: some View {
-        if metrics.tv {
+        ZStack {
+            palette.background.ignoresSafeArea()
+            SignInGlow()
+            VStack(spacing: Tokens.Space.s8) {
+                VStack(spacing: Tokens.Space.s5) { words }
+                VStack(spacing: Tokens.Space.s4) { actions }
+                    .frame(width: 640)
+            }
+            .frame(maxWidth: .infinity)
+            .padding(.horizontal, metrics.gutter)
+            .padding(.vertical, metrics.edge)
+        }
+    }
+}
+
+/// A sign-in screen in the right shape for the device: one column, or side by side on a TV, or one centred
+/// column on a TV when `centred`.
+struct SignInLayout<Words: View, Actions: View>: View {
+    @Environment(\.metrics) private var metrics
+    var back: (() -> Void)?
+    var centred = false
+    @ViewBuilder let words: Words
+    @ViewBuilder let actions: Actions
+
+    var body: some View {
+        if metrics.tv && centred {
+            TvCentredPage { words } actions: { actions }
+        } else if metrics.tv {
             // The remote's Back button goes back on a TV.
             TvSignInPage { words } actions: { actions }
         } else {

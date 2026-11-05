@@ -660,17 +660,20 @@ struct SignInView: View {
 
     /// 5: one person's password, or the authenticator's code after it.
     @ViewBuilder private func passwordStep(_ profile: Profile) -> some View {
-        SignInLayout(back: back) {
+        // One centred column on every device: the face, its names centred under it, then the way in.
+        SignInLayout(back: back, centred: true) {
             VStack(spacing: Tokens.Space.s2) {
                 AvatarTile(name: profile.shownName, size: metrics.tv ? 200 : 120)
+                    .padding(.bottom, metrics.tv ? Tokens.Space.s2 : 0)
                 Text(profile.shownName).font(.wmHero).foregroundStyle(palette.text).lineLimit(1)
                 if profile.showsUsername {
                     Text("@\(profile.name)").font(.wmSecondary).foregroundStyle(palette.textSecondary)
                 }
             }
-            .frame(maxWidth: .infinity, alignment: metrics.tv ? .leading : .center)
+            .multilineTextAlignment(.center)
+            .frame(maxWidth: .infinity, alignment: .center)
             .accessibilityElement(children: .combine)
-            SignInHeading(title: needsCode ? twoFactorTitle : "", detail: needsCode ? twoFactorHint : say("passwordHint"))
+            SignInHeading(title: needsCode ? twoFactorTitle : "", detail: needsCode ? twoFactorHint : say("passwordHint"), centred: true)
         } actions: {
             if needsCode {
                 twoFactorEntry { login(profile.name, password, code: $0) }
@@ -684,7 +687,7 @@ struct SignInView: View {
                 Button { login(profile.name, password) } label: { BusyText(say("signIn"), busy: busy) }
                     .action(.primary, wide: true, tall: true)
                 Button(say("forgotPassword")) { help = forgotURL }.action(.quiet)
-                    .frame(maxWidth: .infinity, alignment: metrics.tv ? .leading : .center)
+                    .frame(maxWidth: .infinity, alignment: .center)
             }
         }
     }
@@ -718,6 +721,12 @@ struct SignInView: View {
     private var twoFactorTitle: String { say(useRecovery ? "recoveryTitle" : "twoFactorTitle") }
     private var twoFactorHint: String { say(useRecovery ? "recoveryHint" : "twoFactorHint") }
 
+    /// The password screen is one centred column, TVs included; the sign-in form keeps a TV's two halves.
+    private var twoFactorCentred: Bool {
+        if case .password = step { return true }
+        return !metrics.tv
+    }
+
     @ViewBuilder private func twoFactorEntry(_ send: @escaping (String) -> Void) -> some View {
         if useRecovery {
             let typed = recoveryCode.trimmingCharacters(in: .whitespaces)
@@ -732,7 +741,7 @@ struct SignInView: View {
                 .disabled(typed.isEmpty || busy)
         } else {
             CodeBoxes(digits: twoFactorCode, checking: busy, wrongTries: wrongCodes)
-                .frame(maxWidth: .infinity, alignment: metrics.tv ? .leading : .center)
+                .frame(maxWidth: .infinity, alignment: twoFactorCentred ? .center : .leading)
             #if os(tvOS)
             NumberPad(onDigit: { digit in
                 guard twoFactorCode.count < 6 else { return }
@@ -751,7 +760,7 @@ struct SignInView: View {
             if useRecovery { wantRecovery = true }
         }
         .action(.quiet)
-        .frame(maxWidth: .infinity, alignment: metrics.tv ? .leading : .center)
+        .frame(maxWidth: .infinity, alignment: twoFactorCentred ? .center : .leading)
     }
 
     var body: some View {
