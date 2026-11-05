@@ -5,6 +5,13 @@ What changed in WittyMediaClient, newest first. What changed before it had a rep
 
 ## Unreleased
 
+- **Android: the server's games play in the app, on phones, tablets and Android TV.** The server runs every game and streams it; the app shows the picture
+  (H.264 through the device's own decoder, drawn as soon as it's decoded, or a picture a frame where the server has no encoder), plays the sound and sends the
+  controls. Controllers play by the console's layout with the account's own profile over it, up to four at once, plugged in or out while playing, with rumble.
+  A keyboard plays too. Phones and tablets show the account's touch controls from the server, and the DS's touch screen works with a finger. On a TV the remote
+  is for the menus. Around the player: the games library in couch mode, a game's page with Play or Resume, save states and other versions, and the game menu
+  (save, load, quick save and load, controllers, Press Start and Select, reset, save and quit). A game the server can't play says why, in the server's words.
+  Going to the background pauses the game and comes back to it; saves are the server's, so a game carries on from the same place on any device.
 - **Apple TV plays the server's games.** A games library opens as the website's couch mode: covers at the top with one at the front, tinted by its
   colour, then Continue playing, the consoles, the shelves and every game. A game's page has Play or Resume, Start over, a favourite, where you left off,
   its save states and how it plays. The game plays on the server, as it does for the website, and streams to the Apple TV, which decodes it in hardware and

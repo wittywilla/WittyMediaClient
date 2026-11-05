@@ -1,0 +1,83 @@
+# WittyPlay on Android
+
+How the server's games play in the Android app on phones, tablets and Android TV. The server runs every game and streams
+it; the app shows the picture, plays the sound and sends the controls (WittyMediaServer `docs/GAMING-API.md`). No emulator
+and no game file is ever on the device. The design is [How the apps look](APP-DESIGN.md), "Games everywhere"; the
+protocol choices are the Apple player's (`docs/WITTYPLAY-STREAMING.md` on the Apple TV branch), made the same way here.
+
+## The connection
+
+| Mode | On Android | When |
+|---|---|---|
+| `ws-h264` | H.264 Annex B from the WebSocket into `MediaCodec`, asynchronous, onto a `SurfaceView`. `KEY_LOW_LATENCY` where the decoder has it, realtime priority, and each frame released to the screen the moment it's decoded. More than three frames waiting means the stream is behind: they're dropped and the decoder waits for the next keyframe, asking for one (`0xF7`) | First, whenever the server offers it |
+| `ws-jpeg` | One JPEG a frame, decoded into a reused bitmap and drawn on the same surface, sharp unless `display.scaling` is smooth | No picture 12 seconds after connecting, or the server's `hello` says `jpeg` |
+| `webrtc` | Not used: it needs libwebrtc in the app | Later, for playing away from home |
+
+Sound is PCM at the console's own rate into a low-latency `AudioTrack`, written without ever waiting. The track's buffer
+is `audio.latency` long (50, 90 or 160 ms, by `setBufferSizeInFrames`), so that's the most that can wait: a write that
+doesn't fit is cut short, and the sound stays with the picture. The system starts a streaming track only once its buffer
+is full, and again by itself after an underrun, so the app just writes on. `audio.volume` and `audio.mute` apply.
+
+The game menu's **Connection** is the website's: Automatic, or the WebSocket with H.264 or with JPEG, kept on this device. The sign-in goes in the WebSocket upgrade's `Authorization` header, by the app's own HTTP client, never in an address.
+
+A dropped connection is made again within the server's minute; past it, or if the server has stopped the game, the player
+offers Resume from the automatic save. Leaving the app lets go of every control, pauses the game when
+`emulation.pauseHidden` says so, and closes the connection; coming back reconnects and unpauses. Save and quit is
+`DELETE /play/{sid}` and waits for the save; leaving the player any other way still stops the game on the server.
+
+## Transports
+
+The player talks to a `GameTransport` (`games/GameTransport.kt`): media and events in, input and events out. Two are built:
+
+- **Version 1:** `GET /play/{sid}/ws?video=h264|jpeg` (WittyMediaServer `docs/GAMING-API.md`), used by servers today.
+- **Version 2:** `GET /play/{sid}/stream` as a WebSocket (WittyMediaServer `docs/GAMING-STREAM.md`), used whenever a mode in the
+  session's `modes` says `"stream": 2`. The hello goes first (this device's id and name, `seats`, `display.hz` and size,
+  `latency`, `video: ["h264"]` or `["jpeg"]` for a picture a frame, `audio: ["pcm"]`); frames come as `0x11` with their number and 90 kHz time,
+  and a `{"type":"report","delayMs":N}` goes twice a second (`ArrivalDelay`), so a slow link can't fill with seconds of video.
+  The stream's description sets the shape, rate and seats; `seats` follow the controllers plugged in; refusals and
+  `ended` codes show in plain words; rumble lasts its `ms` unless renewed.
+
+On Android TV the picture's surface asks for the game's own frame rate (`Surface.setFrameRate`, Android 11+), and the new
+refresh rate goes to the server as a `report`, which version 2 uses to pace the game to the screen. Controllers show their
+player number on their own lights where Android 12+ has them.
+
+Not yet: WebRTC through libwebrtc (version 2's first choice), Opus over the WebSocket (PCM is asked for instead), several
+fingers (`0xFE`), motion (`0xE1`) and the game's `led` lights. Version 2 is covered by unit tests only: the test server
+doesn't serve it yet. `GameTransportTest.playsOverTheServersTransports` runs each transport a server offers against a real
+game when `WMS_LIVE_URL`, `WMS_LIVE_TOKEN` and `WMS_LIVE_GAME` are set.
+
+## Controls
+
+- **Gamepads** arrive as key and joystick events, read into the W3C standard layout by position, which is how Android names
+  them too (a Nintendo pad's A, on the right, is `BUTTON_B`). The right stick is `Z`/`RZ`, or `RX`/`RY` on pads without
+  them; triggers are `LTRIGGER`/`RTRIGGER` or `BRAKE`/`GAS`; a hat is the D-pad. The mapping is the console's
+  `defaults.gamepad`, then the layout saved under the pad's name, then the account's profile for `vendor:product` from
+  `/game-profiles/resolve`; its dead zone, press point, stick-as-D-pad, turbo and no-rumble apply here. Start and Select
+  together open the menu; the person's Select shortcuts (`hotkeys.pad.*`) fast-forward, rewind, quick save and so on.
+- **Players**: each pad takes the next free player, 1 to 4, when it's plugged in, and keeps it; the game menu can move
+  one to another player. Unplugging lets go of everything it held.
+- **Rumble** goes to the pad on that player through `VibratorManager` (the strong motor on the first vibrator, the weak on
+  the second, where it has two), or its `Vibrator`: until it changes on version 1, for its `ms` on version 2.
+- **A keyboard** plays as player 1 by the console's keyboard layout; Escape opens the menu, and the person's key shortcuts work.
+- **A TV remote** is for the menus (APP-DESIGN): Back or OK opens the game menu, which has Press Start and Press Select.
+- **Touch**, on phones and tablets with no controller in use: the account's layout for this device and orientation from
+  `/consoles/{console}/controls`, drawn and read with the website player's own sums. On a console with a touch screen
+  (the DS), a finger that misses every control is the stylus on the picture. Upright, the picture sits in the top half.
+
+## The screens
+
+| Part | Files |
+|---|---|
+| Library in couch mode: covers, Continue playing, consoles, shelves, every game with the website's sorts, a console's page, search | `games/GameLibrary.kt` |
+| A game's page: Play or Resume (by `states.resume`), Start over, favourite, default settings, Pick up where you left off, save states, other versions, how it plays, controls, and the server's own reason where it can't play | `games/GamePage.kt` |
+| The player, loading steps, problems, the game menu | `games/GamePlayer.kt`, `games/GameTouchControls.kt` |
+| A session, the stream, sound, input | `games/GamePlay.kt`, `games/GameMedia.kt`, `games/GameInput.kt` |
+| Data, routes, and the logic the tests cover | `games/GameData.kt`, `games/GamesApi.kt`, `games/GamePad.kt`, `games/GameTouch.kt`, `games/GameStream.kt` |
+| How the game arrives: version 1 and version 2 | `games/GameTransport.kt` |
+| Into the app | `ui/GamesRoute.kt`, and one line each in `Nav.open`, AppRoot and `MainActivity` |
+
+## Not yet
+
+WebRTC; the `display.*` effects beyond shape, whole multiples and rotation (scanlines, masks, bezels); arranging the touch
+controls on the device (a touch layout belongs to the device that saved it, so until then this device uses the console's
+default; the save route is in `GamesApi.saveTouchLayout`); game settings, cheats and patches (the website's).
