@@ -180,7 +180,7 @@ private final class GamePipeline: @unchecked Sendable {
                 }
             case .pcm(let rate, let samples):
                 sound.play(samples, rate: rate)
-            case .timing, .unknown:
+            case .timing, .unknown, .opus:
                 break
             }
         }
@@ -310,6 +310,8 @@ final class GamePlayerModel: ObservableObject {
             guard let self else { return }
             self.padsConnected = self.input.hasPads
             self.players = self.input.players
+            // On the second stream, the server is told which players this device now holds.
+            self.transport?.sendEvent(GameHello.seatsText(self.input.ports))
         }
         input.onTouchRumble = { strength in Self.touchRumble(strength) }
         host.screen.onPress = { [weak self] name, down in self?.input.press(name, down: down) }
@@ -459,7 +461,7 @@ final class GamePlayerModel: ObservableObject {
         transport?.close()
         let id = pipeline?.restart() ?? 0
         let mode = modes[min(modeAt, modes.count - 1)]
-        guard let transport = GameTransports.make(mode: mode, session: session.id, client: client) else {
+        guard let transport = GameTransports.make(mode: mode, session: session.id, client: client, hello: hello()) else {
             phase = .failed("This server's address can't be used for a game.")
             return
         }
@@ -580,9 +582,36 @@ final class GamePlayerModel: ObservableObject {
             finish(saying: "")
         case .ended(let text):
             finish(saying: text.isEmpty ? "The game stopped." : text)
-        case .hello, .unknown:
+        case .stream(let s):
+            // The second stream says the shape and turns as the session does.
+            if let shape = s.aspect, shape > 0 { aspect = shape }
+            turns = s.turns
+            updateLayout()
+        case .refused(let code, let text, _):
+            say(text.isEmpty ? "The game refused that (\(code))." : text)
+        case .hello, .seats, .unknown:
             break
         }
+    }
+
+    /// What this device says about itself on the second stream.
+    private func hello() -> GameHello {
+        #if os(tvOS)
+        let platform = "tvOS"
+        #elseif os(visionOS)
+        let platform = "visionOS"
+        #else
+        let platform = "iOS"
+        #endif
+        let version = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? ""
+        #if os(visionOS)
+        let display = GameHello.Display(hz: 90, width: 0, height: 0)
+        #else
+        let screen = UIScreen.main
+        let display = GameHello.Display(hz: Double(screen.maximumFramesPerSecond), width: Int(screen.nativeBounds.width), height: Int(screen.nativeBounds.height))
+        #endif
+        return GameHello(app: "WittyMedia \(platform) \(version)", device: Self.deviceId, name: UIDevice.current.name, seats: input.ports,
+                         display: display, latency: settings.text("emulation.latency", "auto"))
     }
 
     private func finish(saying words: String) {

@@ -487,6 +487,9 @@ final class GameInput {
 
     private var activePorts: Set<UInt8> { Set(pads.values.map(\.port)).union([0]) }
 
+    /// The players this device plays: player 1 always (the remote, the keyboard or touch), and each pad's.
+    var ports: [Int] { activePorts.map(Int.init).sorted() }
+
     private func flush(port: UInt8, force: Bool = false) {
         guard enabled else { return }
         var state = merged(port: port)

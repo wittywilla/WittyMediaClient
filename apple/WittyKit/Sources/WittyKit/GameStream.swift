@@ -11,6 +11,8 @@ public enum GameStreamMessage: Equatable {
     case jpeg(Data)
     /// Signed 16-bit little-endian stereo, at any rate a console uses, such as 32040.
     case pcm(rate: Int, samples: Data)
+    /// The second stream's sound: one 10 ms packet, 48 kHz stereo, with its 48 kHz timestamp.
+    case opus(timestamp: UInt32, packet: Data)
     /// An answer on the timing channel, which this app doesn't ask for.
     case timing(Data)
     case unknown(UInt8)
@@ -55,6 +57,12 @@ public enum GameEvent: Equatable {
     case disc(index: Int, count: Int)
     /// What the core really draws changed.
     case frame(width: Int, height: Int)
+    /// The second stream's description of itself, first thing on a connection.
+    case stream(GameStreamDescription)
+    /// Who holds which player, whenever that changes.
+    case seats([GameSeat])
+    /// Something this device asked for was refused: `seat-taken` (with the port), `bad-seat`, `bad-message`, `bad-hello`.
+    case refused(code: String, text: String, port: Int?)
     case unknown(String)
 
     public static func parse(_ text: String) -> GameEvent? {
@@ -71,12 +79,65 @@ public enum GameEvent: Equatable {
         case "rotation": return .rotation(turns: int("turns"))
         case "avinfo": return .avinfo(aspect: double("aspect"), fps: double("fps"), rate: double("rate"))
         case "shutdown": return .shutdown
-        case "ended": return .ended(words("text"))
+        case "ended":
+            let text = words("text")
+            return .ended(text.isEmpty ? GameStreamDescription.endedWords(words("code")) : text)
         case "disc": return .disc(index: int("index"), count: int("count"))
         case "frame": return .frame(width: int("width"), height: int("height"))
+        case "stream":
+            return .stream(GameStreamDescription(conn: words("conn"), transport: words("transport"), video: words("video"), audio: words("audio"),
+                                                 width: int("width"), height: int("height"), aspect: double("aspect"), fps: double("fps"),
+                                                 rate: int("rate"), turns: int("turns"), ports: int("ports"), motion: object["motion"] as? Bool ?? false,
+                                                 pace: double("pace") ?? 0, kbps: int("kbps"), away: object["away"] as? Bool ?? false))
+        case "seats":
+            let list = object["seats"] as? [[String: Any]] ?? []
+            return .seats(list.map { GameSeat(port: ($0["port"] as? NSNumber)?.intValue ?? 0, conn: $0["conn"] as? String ?? "",
+                                              name: $0["name"] as? String ?? "", you: $0["you"] as? Bool ?? false) })
+        case "error":
+            return .refused(code: words("code"), text: words("text"), port: (object["port"] as? NSNumber)?.intValue)
         default: return .unknown(type)
         }
     }
+}
+
+/// What the second stream says about a connection (`{"type": "stream", ...}`).
+public struct GameStreamDescription: Equatable {
+    public var conn: String
+    public var transport: String
+    public var video: String
+    public var audio: String
+    public var width: Int
+    public var height: Int
+    public var aspect: Double?
+    public var fps: Double?
+    public var rate: Int
+    public var turns: Int
+    public var ports: Int
+    public var motion: Bool
+    /// The refresh rate the game runs at when matched to a screen, or 0.
+    public var pace: Double
+    public var kbps: Int
+    public var away: Bool
+
+    /// What to tell a person when the game ended and the server said only why.
+    public static func endedWords(_ code: String) -> String {
+        switch code {
+        case "stopped": return "The game was saved and stopped. It may have been started on another device."
+        case "quit": return "The game shut itself down."
+        case "crashed": return "The game stopped working. What was saved is still there."
+        case "idle": return "The game was saved and stopped after 30 minutes with nothing pressed."
+        case "evicted": return "Too many devices were connected to this game, and this one was the oldest."
+        default: return "The game stopped."
+        }
+    }
+}
+
+/// One player and the device holding it.
+public struct GameSeat: Equatable {
+    public var port: Int
+    public var conn: String
+    public var name: String
+    public var you: Bool
 }
 
 /// H.264 as it comes, Annex B with start codes, into the length-prefixed form VideoToolbox takes.
@@ -154,12 +215,20 @@ public enum AnnexB {
 /// Which of the server's ways of sending a game this app tries, in order. Apple TV has no WebRTC
 /// stack of its own, so it's the WebSocket with H.264, then with a JPEG a frame.
 public enum GameModes {
-    public static let supported = ["ws-h264", "ws-jpeg"]
+    /// The second stream's WebSocket, `/play/{sid}/stream`: this app's own name for it, since the
+    /// server lists the second stream by the modes it reaches, each marked `"stream": 2`.
+    public static let streamWebSocket = "stream2-ws"
+    public static let supported = [streamWebSocket, "ws-h264", "ws-jpeg"]
 
     /// The server's order, best first, of what this app can use. Ids it doesn't know are ignored.
+    /// Where the server has the second stream, its WebSocket comes first and the first stream's
+    /// stay behind it.
     public static func order(_ offered: [GameMode]?) -> [String] {
-        let ids = (offered ?? []).map(\.id).filter { supported.contains($0) }
-        return ids.isEmpty ? supported : ids
+        let offered = offered ?? []
+        var ids = offered.map(\.id).filter { supported.contains($0) && $0 != streamWebSocket }
+        if ids.isEmpty { ids = ["ws-h264", "ws-jpeg"] }
+        if offered.contains(where: { $0.stream == 2 }) { ids.insert(streamWebSocket, at: 0) }
+        return ids
     }
 
     /// `h264` or `jpeg`, for the WebSocket's address.

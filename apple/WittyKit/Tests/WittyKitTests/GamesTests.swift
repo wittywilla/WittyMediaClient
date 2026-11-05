@@ -122,8 +122,9 @@ final class GamesTests: XCTestCase {
         XCTAssertTrue(GameTransports.make(mode: "ws-h264", session: "s", client: client) is GameWebSocketTransport)
         XCTAssertTrue(GameTransports.make(mode: "ws-jpeg", session: "s", client: client) is GameWebSocketTransport)
         XCTAssertNil(GameTransports.make(mode: "webrtc", session: "s", client: client), "not one this app has yet")
+        let hello = GameHello(app: "a", device: "d", name: "n", seats: [0], display: .init(hz: 60, width: 1, height: 1))
         for mode in GameModes.supported {
-            XCTAssertNotNil(GameTransports.make(mode: mode, session: "s", client: client), "every mode the app asks for has a transport")
+            XCTAssertNotNil(GameTransports.make(mode: mode, session: "s", client: client, hello: hello), "every mode the app asks for has a transport")
         }
     }
 

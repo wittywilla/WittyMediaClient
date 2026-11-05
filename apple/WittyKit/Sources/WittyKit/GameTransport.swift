@@ -15,9 +15,15 @@ public protocol GameTransport: AnyObject {
     func open()
     /// A controller state or a pointer message. A newer one always follows, so one may be lost.
     func sendInput(_ data: Data)
+    /// A JSON event to the game, such as which players this device holds. Only the second stream has them.
+    func sendEvent(_ text: String)
     /// The decoder lost its place: the next frame should be a keyframe.
     func askKeyframe()
     func close()
+}
+
+public extension GameTransport {
+    func sendEvent(_ text: String) {}
 }
 
 public enum GameTransportEnd: Equatable {
@@ -35,9 +41,12 @@ public enum GameTransportEnd: Equatable {
 
 public enum GameTransports {
     /// A transport for one of `GameModes.supported`, for a session; nil for a mode this app
-    /// can't use or an address that can't be made.
-    public static func make(mode: String, session: String, client: WittyClient) -> GameTransport? {
+    /// can't use or an address that can't be made. The second stream needs the device's hello.
+    public static func make(mode: String, session: String, client: WittyClient, hello: GameHello? = nil) -> GameTransport? {
         switch mode {
+        case GameModes.streamWebSocket:
+            guard let hello, let request = client.gameStreamRequest(session) else { return nil }
+            return GameWebSocketTransport(request: request, hello: hello)
         case "ws-h264", "ws-jpeg":
             guard let request = client.gameSocketRequest(session, video: GameModes.video(for: mode)) else { return nil }
             return GameWebSocketTransport(request: request)
@@ -47,10 +56,17 @@ public enum GameTransports {
     }
 }
 
-/// The server's first stream: one WebSocket per viewer (`GET /play/{sid}/ws?video=h264|jpeg`),
-/// binary media first-byte tagged, events as text, controller states up the same socket.
+/// A game over a WebSocket: binary media first-byte tagged, events as text, controller states up
+/// the same socket. Without a hello, the first stream (`GET /play/{sid}/ws?video=h264|jpeg`). With
+/// one, the second (`GET /play/{sid}/stream`): the hello goes first, frames carry timestamps, and
+/// how late they arrive goes back twice a second.
 public final class GameWebSocketTransport: NSObject, GameTransport, URLSessionWebSocketDelegate, @unchecked Sendable {
     private let request: URLRequest
+    private let hello: GameHello?
+    private let queue = DispatchQueue(label: "wittyplay.socket")
+    private var delay = ArrivalDelay()
+    private var reports: DispatchSourceTimer?
+    private let clock = Date()
     private var session: URLSession?
     private var task: URLSessionWebSocketTask?
     private let lock = NSLock()
@@ -59,9 +75,12 @@ public final class GameWebSocketTransport: NSObject, GameTransport, URLSessionWe
     public var onEvent: (@Sendable (GameEvent) -> Void)?
     public var onEnd: (@Sendable (GameTransportEnd) -> Void)?
 
-    public init(request: URLRequest) {
+    public init(request: URLRequest, hello: GameHello? = nil) {
         self.request = request
+        self.hello = hello
     }
+
+    public var isSecondStream: Bool { hello != nil }
 
     public func open() {
         let config = URLSessionConfiguration.ephemeral
@@ -75,7 +94,37 @@ public final class GameWebSocketTransport: NSObject, GameTransport, URLSessionWe
         self.session = session
         self.task = task
         task.resume()
+        if let hello {
+            task.send(.string(hello.text())) { _ in }
+            startReports()
+        }
         receive()
+    }
+
+    /// Twice a second, the worst lateness since the last report.
+    private func startReports() {
+        let timer = DispatchSource.makeTimerSource(queue: queue)
+        timer.schedule(deadline: .now() + 0.5, repeating: 0.5)
+        timer.setEventHandler { [weak self] in
+            guard let self, !self.isClosed, let ms = self.delay.report() else { return }
+            self.task?.send(.string(ArrivalDelay.reportText(ms))) { _ in }
+        }
+        reports = timer
+        timer.resume()
+    }
+
+    private func take(_ data: Data) {
+        guard hello != nil else {
+            if let message = GameStreamMessage.parse(data) { onMessage?(message) }
+            return
+        }
+        guard let parsed = GameStreamV2.parse(data) else { return }
+        let message = parsed.message
+        if let timing = parsed.timing {
+            let now = Date().timeIntervalSince(clock) * 1000
+            queue.async { self.delay.arrived(timestamp: timing.timestamp, now: now) }
+        }
+        onMessage?(message)
     }
 
     private var isClosed: Bool {
@@ -96,7 +145,7 @@ public final class GameWebSocketTransport: NSObject, GameTransport, URLSessionWe
             guard let self, !self.isClosed else { return }
             switch result {
             case .success(.data(let data)):
-                if let message = GameStreamMessage.parse(data) { self.onMessage?(message) }
+                self.take(data)
                 self.receive()
             case .success(.string(let text)):
                 if let event = GameEvent.parse(text) { self.onEvent?(event) }
@@ -114,17 +163,24 @@ public final class GameWebSocketTransport: NSObject, GameTransport, URLSessionWe
         task?.send(.data(data)) { _ in }
     }
 
+    public func sendEvent(_ text: String) {
+        guard hello != nil, !isClosed else { return }
+        task?.send(.string(text)) { _ in }
+    }
+
     /// The server's 0xF7.
     public func askKeyframe() { sendInput(Data([0xF7])) }
 
     private func finish() {
         guard markClosed() else { return }
+        reports?.cancel()
         onEnd?(GameTransportEnd(upgradeStatus: (task?.response as? HTTPURLResponse)?.statusCode ?? 0))
         session?.invalidateAndCancel()
     }
 
     public func close() {
         guard markClosed() else { return }
+        reports?.cancel()
         task?.cancel(with: .normalClosure, reason: nil)
         session?.finishTasksAndInvalidate()
     }

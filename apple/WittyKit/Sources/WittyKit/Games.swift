@@ -179,10 +179,13 @@ public struct GameDetails: Decodable, Equatable {
 public struct GameMode: Decodable, Equatable {
     public let id: String
     public let video: [String]?
+    /// 2 when the mode is reached through the second stream, `/play/{sid}/stream`.
+    public let stream: Int?
 
-    public init(id: String, video: [String]? = nil) {
+    public init(id: String, video: [String]? = nil, stream: Int? = nil) {
         self.id = id
         self.video = video
+        self.stream = stream
     }
 
     /// Either an object or, from older servers, just its name.
@@ -191,9 +194,9 @@ public struct GameMode: Decodable, Equatable {
             self.init(id: name)
             return
         }
-        struct Full: Decodable { let id: String; let video: [String]? }
+        struct Full: Decodable { let id: String; let video: [String]?; let stream: Int? }
         let full = try Full(from: decoder)
-        self.init(id: full.id, video: full.video)
+        self.init(id: full.id, video: full.video, stream: full.stream)
     }
 }
 
