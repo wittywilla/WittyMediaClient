@@ -24,6 +24,8 @@ import androidx.media3.common.util.Util
 import androidx.media3.datasource.HttpDataSource
 import androidx.media3.exoplayer.DefaultRenderersFactory
 import androidx.media3.exoplayer.ExoPlayer
+import androidx.media3.exoplayer.audio.AudioSink
+import androidx.media3.exoplayer.audio.DefaultAudioSink
 import androidx.media3.session.CacheBitmapLoader
 import androidx.media3.session.CommandButton
 import androidx.media3.session.DefaultMediaNotificationProvider
@@ -70,7 +72,9 @@ class ListeningService : MediaSessionService() {
         super.onCreate()
         val app = application as WittyApp
         val resolver = TrackResolver(app)
-        val player = ExoPlayer.Builder(this, DefaultRenderersFactory(this).setEnableDecoderFallback(true))
+        val shaper = SoundShaper()
+        SoundShaping.heard = shaper
+        val player = ExoPlayer.Builder(this, ShapedRenderers(this, shaper).setEnableDecoderFallback(true))
             .setMediaSourceFactory(TrackSources(resolver))
             .setAudioAttributes(soundFor(false), true)
             .setHandleAudioBecomingNoisy(true)
@@ -102,6 +106,7 @@ class ListeningService : MediaSessionService() {
 
     override fun onDestroy() {
         (application as WittyApp).listening.serviceRunning = false
+        SoundShaping.heard = null
         keeper?.release()
         keeper = null
         session?.run {
@@ -140,6 +145,13 @@ class ListeningService : MediaSessionService() {
             .setContentType(if (speech) C.AUDIO_CONTENT_TYPE_SPEECH else C.AUDIO_CONTENT_TYPE_MUSIC)
             .build()
     }
+}
+
+// The usual renderers, with the sound going through the shaper on its way out (SoundShaper.kt).
+@OptIn(UnstableApi::class)
+class ShapedRenderers(context: android.content.Context, private val shaper: SoundShaper) : DefaultRenderersFactory(context) {
+    override fun buildAudioSink(context: android.content.Context, enableFloatOutput: Boolean, enableAudioTrackPlaybackParams: Boolean): AudioSink =
+        DefaultAudioSink.Builder(context).setAudioProcessors(arrayOf(shaper)).build()
 }
 
 // A cover from the server, with the sign-in, for the lock screen and the notification.
@@ -335,6 +347,10 @@ class ListeningKeeper(
             }
             else -> app.listening.problem = failureWords(e.errorCode, status)
         }
+    }
+
+    // The Sound panel, the volume or karaoke changed something. The shape itself is already set (SoundShaping).
+    fun soundChanged(levelingChanged: Boolean) {
     }
 
     // A person pressing Try again, or Play, after it gave up.

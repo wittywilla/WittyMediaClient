@@ -1,6 +1,9 @@
 package com.wittywilla.wittymediaclient.ui
 
+import com.wittywilla.wittymediaclient.net.LyricLine
 import com.wittywilla.wittymediaclient.net.Lyrics
+import com.wittywilla.wittymediaclient.net.lineIndex
+import com.wittywilla.wittymediaclient.player.number
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
@@ -9,7 +12,8 @@ import kotlinx.serialization.json.doubleOrNull
 import java.util.Locale
 
 // The rest of the website's Now Playing, as rules apart from the screen so they can be tested: the visualizer's
-// choices (web/src/audio/NowPlaying.tsx, backdrop.ts), the words (LyricsPanel.tsx, lyrics.ts). The iPhone has the
+// choices (web/src/audio/NowPlaying.tsx, backdrop.ts), the words (LyricsPanel.tsx, lyrics.ts) and karaoke
+// (Karaoke.tsx). The iPhone has the
 // same in WittyKit's SoundLook.swift and MusicLook.swift.
 
 // The visualizer's choices, kept for the person on the server with their other interface choices (/me/ui,
@@ -106,4 +110,74 @@ object LyricFile {
 
     // What Tap along times: the timed lines' words, or the plain words.
     fun tapText(lyrics: Lyrics): String = lyrics.timed.let { timed -> if (timed.isEmpty()) lyrics.plain else timed.joinToString("\n") { it.text } }
+}
+
+// A word of a line and when it's sung, in milliseconds.
+data class TimedWord(val text: String, val from: Double, val to: Double)
+
+// Karaoke's rules (Karaoke.tsx, lyrics.ts).
+object Karaoke {
+    // The voice: on, lower, lowest, as how much of the middle of the mix is taken away.
+    val VOCALS = listOf(0.0 to "Voice on", 0.6 to "Voice lower", 1.0 to "Voice lowest")
+    private const val COUNT_FROM_MS = 3000.0
+    private const val LONG_GAP_MS = 5000.0
+
+    // When each word of a line is sung (wordTimes): its own times, each to the next word or a second and a half on,
+    // within the line; or the line's time spread by length over its words, each with the space after it, taking at
+    // least 1.2 seconds and 95 ms a letter, but no longer than the line has.
+    fun words(line: LyricLine, next: Double?): List<TimedWord> {
+        val end = line.end ?: next ?: (line.t + 5000)
+        val timed = line.words.orEmpty()
+        if (timed.isNotEmpty()) {
+            return timed.mapIndexed { at, word -> TimedWord(word.text, word.t, timed.getOrNull(at + 1)?.t ?: minOf(end, word.t + 1500)) }
+        }
+        val parts = ArrayList<String>()
+        val current = StringBuilder()
+        for (c in line.text) {
+            current.append(c)
+            if (c.isWhitespace()) { parts += current.toString(); current.clear() }
+        }
+        if (current.isNotEmpty()) parts += current.toString()
+        val singing = minOf(end - line.t, maxOf(1200.0, line.text.length * 95.0))
+        val total = parts.sumOf { it.length }.takeIf { it > 0 } ?: 1
+        var at = line.t
+        return parts.map { text ->
+            val span = text.length.toDouble() / total * singing
+            TimedWord(text, at, at + span).also { at += span }
+        }
+    }
+
+    // How far through a word is, 0 to 1.
+    fun fill(word: TimedWord, ms: Double): Double = when {
+        ms <= word.from -> 0.0
+        ms >= word.to -> 1.0
+        else -> (ms - word.from) / maxOf(1.0, word.to - word.from)
+    }
+
+    // The count-in before a line after a break: 3, 2, 1, or 0 for none. Only when the next line is three seconds
+    // off or less, nothing is being sung, and the last line began at least five seconds before it.
+    fun countIn(lines: List<LyricLine>, ms: Double): Int {
+        val at = lineIndex(lines, ms)
+        val up = lines.getOrNull(at + 1) ?: return 0
+        val here = lines.getOrNull(at)
+        val left = up.t - ms
+        val quiet = here == null || up.t - (here.end ?: here.t) > 0 || here.text.isEmpty()
+        val longGap = here == null || up.t - here.t >= LONG_GAP_MS
+        return if (left > 0 && left <= COUNT_FROM_MS && quiet && longGap) kotlin.math.ceil(left / 1000).toInt() else 0
+    }
+
+    // "Key +2", "Key 0".
+    fun keyWords(semitones: Double): String = "Key ${if (semitones > 0) "+" else ""}${number(semitones)}"
+
+    // "Words on time", "Words +0.3 s".
+    fun timingWords(ms: Double): String = if (ms == 0.0) "Words on time" else "Words ${if (ms > 0) "+" else ""}${String.format(Locale.ROOT, "%.1f", ms / 1000)} s"
+
+    // The line under the controls. `lineHasWordTimes` is whether the line being sung has its own word times.
+    fun note(mono: Boolean, vocalCut: Double, keyShift: Double, timed: Boolean, lineHasWordTimes: Boolean): String = when {
+        mono -> "This recording is close to mono, so there's no way to separate the voice from it."
+        vocalCut > 0 -> "The voice is turned down by removing what's in the middle of the mix. Echoes of it, and songs that spread it wide, will still come through."
+        keyShift != 0.0 -> "A changed key can warble a little on long notes."
+        timed && !lineHasWordTimes -> "Lines are timed; the fill within a line is an estimate."
+        else -> ""
+    }
 }

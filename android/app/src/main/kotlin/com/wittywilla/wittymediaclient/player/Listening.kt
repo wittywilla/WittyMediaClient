@@ -51,6 +51,8 @@ class Listening(private val app: WittyApp) {
         private set
     var speed by mutableFloatStateOf(1f)
         private set
+    var pitch by mutableFloatStateOf(1f)
+        private set
     var canGoNext by mutableStateOf(false)
         private set
 
@@ -105,6 +107,32 @@ class Listening(private val app: WittyApp) {
     private val waiting = ArrayList<(MediaController) -> Unit>()
     private val prefs by lazy { app.getSharedPreferences("listening", Context.MODE_PRIVATE) }
 
+    // How it sounds on this device, kept on it as the website keeps it per browser (`wms.sound`): speakers differ.
+    var sound by mutableStateOf(SoundSettings())
+        private set
+
+    init {
+        sound = SoundSettings.read(prefs.getString(KEY_SOUND, null))
+        shapeSound()
+    }
+
+    // A change from the Sound panel, the volume or karaoke. The voice and the key aren't kept for another day.
+    fun setSound(change: (SoundSettings) -> SoundSettings) {
+        val before = sound
+        val next = change(before)
+        if (next == before) return
+        sound = next
+        prefs.edit { putString(KEY_SOUND, next.toJson()) }
+        shapeSound()
+        if (next.keyShift != before.keyShift) controller?.let { it.playbackParameters = PlaybackParameters(it.playbackParameters.speed, pitchFor(next.keyShift)) }
+        keeper?.soundChanged(levelingChanged = next.replayGain != before.replayGain)
+    }
+
+    private fun shapeSound() {
+        val now = sound
+        SoundShaping.set { it.copy(eqOn = now.eqOn, gains = now.eqGains, preampDb = now.preamp, vocalCut = now.vocalCut) }
+    }
+
     val keepsPlace: Boolean get() = now?.mediaMetadata?.extras?.getBoolean(EXTRA_KEEPS_PLACE) == true
 
     private val listener = object : Player.Listener {
@@ -124,6 +152,7 @@ class Listening(private val app: WittyApp) {
         shuffle = player.shuffleModeEnabled
         repeat = player.repeatMode
         speed = player.playbackParameters.speed
+        pitch = player.playbackParameters.pitch
         canGoNext = player.hasNextMediaItem()
         queue = readQueue(player)
     }
@@ -203,7 +232,7 @@ class Listening(private val app: WittyApp) {
         problem = ""
         val items = tracks.map { trackItem(it, books) }
         connect { c ->
-            c.playbackParameters = PlaybackParameters(savedSpeed(books))
+            c.playbackParameters = PlaybackParameters(savedSpeed(books), pitchFor(sound.keyShift))
             c.shuffleModeEnabled = false
             c.setMediaItems(items, start.index.coerceIn(0, items.lastIndex), (start.atSec * 1000).toLong())
             c.prepare()
@@ -317,7 +346,7 @@ class Listening(private val app: WittyApp) {
 
     // The website's speed menu: a chosen speed, kept for books.
     fun chooseSpeed(chosen: Float) {
-        controller?.playbackParameters = PlaybackParameters(chosen)
+        controller?.playbackParameters = PlaybackParameters(chosen, pitch)
         if (keepsPlace) prefs.edit { putFloat(KEY_BOOK_SPEED, chosen) }
     }
 
@@ -351,7 +380,7 @@ class Listening(private val app: WittyApp) {
 
     fun cycleSpeed() {
         val chosen = nextSpeed(speed)
-        controller?.playbackParameters = PlaybackParameters(chosen)
+        controller?.playbackParameters = PlaybackParameters(chosen, pitch)
         if (keepsPlace) prefs.edit { putFloat(KEY_BOOK_SPEED, chosen) }
     }
 
@@ -384,5 +413,6 @@ class Listening(private val app: WittyApp) {
 
     private companion object {
         const val KEY_BOOK_SPEED = "bookSpeed"
+        const val KEY_SOUND = "wms.sound"
     }
 }

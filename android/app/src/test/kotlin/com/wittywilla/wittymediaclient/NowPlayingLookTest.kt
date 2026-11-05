@@ -1,8 +1,13 @@
 package com.wittywilla.wittymediaclient
 
 import com.wittywilla.wittymediaclient.net.FoundLyrics
+import com.wittywilla.wittymediaclient.net.LyricLine
+import com.wittywilla.wittymediaclient.net.LyricWord
 import com.wittywilla.wittymediaclient.net.Lyrics
 import com.wittywilla.wittymediaclient.net.json
+import com.wittywilla.wittymediaclient.player.nearlyMono
+import com.wittywilla.wittymediaclient.player.pitchFor
+import com.wittywilla.wittymediaclient.ui.Karaoke
 import com.wittywilla.wittymediaclient.ui.LyricFile
 import com.wittywilla.wittymediaclient.ui.LyricWords
 import com.wittywilla.wittymediaclient.ui.VisualizerPrefs
@@ -101,5 +106,59 @@ class NowPlayingLookTest {
         assertEquals("plain words", LyricFile.draft(Lyrics(plain = "plain words")))
         assertTrue("lrclib" in LyricFile.STARTS_OVER)
         assertFalse("file" in LyricFile.STARTS_OVER)
+    }
+
+    @Test
+    fun karaokeFillsWordsAndCountsIn() {
+        val words = Karaoke.words(LyricLine(t = 10_000.0, text = "la la la"), 14_000.0)
+        assertEquals(listOf("la ", "la ", "la"), words.map { it.text })
+        assertEquals(10_000.0, words.first().from, 0.0)
+        // Short lines are sung over at least 1.2 s.
+        assertEquals(11_200.0, words.last().to, 0.01)
+        assertEquals(0.0, Karaoke.fill(words[0], 9_000.0), 0.0)
+        assertEquals(1.0, Karaoke.fill(words[0], 20_000.0), 0.0)
+        // "la " is three of the line's eight letters: 450 ms.
+        assertEquals(0.5, Karaoke.fill(words[0], 10_225.0), 0.0001)
+        // A long line at 95 ms a letter, but no longer than it has.
+        val long = Karaoke.words(LyricLine(t = 0.0, text = "x".repeat(30)), 2_000.0)
+        assertEquals(2_000.0, long.last().to, 0.01)
+        val timed = LyricLine(t = 0.0, text = "a b", words = listOf(LyricWord(0.0, "a "), LyricWord(400.0, "b")))
+        assertEquals(listOf(400.0, 1_900.0), Karaoke.words(timed, 3_000.0).map { it.to })
+        // The last word stops at the line's own end, when it has one.
+        assertEquals(1_000.0, Karaoke.words(timed.copy(end = 1_000.0), 3_000.0).last().to, 0.0)
+
+        val lines = listOf(LyricLine(t = 1_000.0, end = 2_000.0, text = "one"), LyricLine(t = 9_000.0, text = "two"), LyricLine(t = 10_000.0, text = "three"))
+        assertEquals(3, Karaoke.countIn(lines, 6_500.0))
+        assertEquals(1, Karaoke.countIn(lines, 8_100.0))
+        assertEquals(0, Karaoke.countIn(lines, 9_500.0))
+        assertEquals(1, Karaoke.countIn(lines, 0.0))
+        assertEquals(0, Karaoke.countIn(lines, 5_000.0))
+        assertEquals(0, Karaoke.countIn(lines, 11_000.0))
+        assertEquals("Key +2", Karaoke.keyWords(2.0))
+        assertEquals("Key -6", Karaoke.keyWords(-6.0))
+        assertEquals("Key 0", Karaoke.keyWords(0.0))
+        assertEquals("Words on time", Karaoke.timingWords(0.0))
+        assertEquals("Words -0.3 s", Karaoke.timingWords(-300.0))
+        assertEquals("Words +1.2 s", Karaoke.timingWords(1_200.0))
+        assertEquals(listOf("Voice on", "Voice lower", "Voice lowest"), Karaoke.VOCALS.map { it.second })
+        assertEquals(listOf(0.0, 0.6, 1.0), Karaoke.VOCALS.map { it.first })
+    }
+
+    @Test
+    fun karaokeSaysWhatItsDoing() {
+        assertEquals("This recording is close to mono, so there's no way to separate the voice from it.", Karaoke.note(true, 1.0, 2.0, true, false))
+        assertTrue(Karaoke.note(false, 0.6, 2.0, true, false).startsWith("The voice is turned down"))
+        assertEquals("A changed key can warble a little on long notes.", Karaoke.note(false, 0.0, -1.0, true, false))
+        assertEquals("Lines are timed; the fill within a line is an estimate.", Karaoke.note(false, 0.0, 0.0, true, false))
+        assertEquals("", Karaoke.note(false, 0.0, 0.0, true, true))
+        assertEquals("", Karaoke.note(false, 0.0, 0.0, false, false))
+        // The key is the player's pitch: an octave doubles it.
+        assertEquals(2f, pitchFor(12.0), 0.0001f)
+        assertEquals(1f, pitchFor(0.0), 0.0f)
+        assertEquals(0.7937f, pitchFor(-4.0), 0.0001f)
+        // Nothing off-centre is mono; silence can't tell.
+        assertEquals(true, nearlyMono(0.0001, 1.0))
+        assertEquals(false, nearlyMono(0.5, 1.0))
+        assertEquals(null, nearlyMono(0.0, 0.0))
     }
 }

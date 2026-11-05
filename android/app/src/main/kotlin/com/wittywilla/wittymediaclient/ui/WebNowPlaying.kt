@@ -367,9 +367,13 @@ fun WebNowPlaying(nav: Nav) {
     fun togglePanel(chosen: NpPanel) { panel = if (panel == chosen) NpPanel.None else chosen }
     // The words, shared by Lyrics, Read and karaoke, and only asked for while one of them is open. Music only.
     val words = remember { LyricsWords(listening, { nav.app.api }, scope, nav.app.scope) }
-    val lyricsWanted = music && (panel == NpPanel.Lyrics || panel == NpPanel.Read)
+    var karaoke by remember { mutableStateOf(false) }
+    val lyricsWanted = music && (panel == NpPanel.Lyrics || panel == NpPanel.Read || karaoke)
     LaunchedEffect(trackId, lyricsWanted) { words.want(trackId, lyricsWanted) }
-    LaunchedEffect(music) { if (!music && (panel == NpPanel.Lyrics || panel == NpPanel.Read)) panel = NpPanel.None }
+    LaunchedEffect(music) {
+        if (!music && (panel == NpPanel.Lyrics || panel == NpPanel.Read)) panel = NpPanel.None
+        if (!music) karaoke = false
+    }
     val title = about.title?.toString().orEmpty()
     val artistName = about.artist?.toString().orEmpty().ifEmpty { about.albumArtist?.toString().orEmpty() }
     val runtime = (about.durationMs ?: 0L) / 1000.0
@@ -465,6 +469,7 @@ fun WebNowPlaying(nav: Nav) {
                             // The words' chips, for music.
                             if (music) {
                                 NpChip("Lyrics", on = panel == NpPanel.Lyrics, icon = WebIcons.Mic) { togglePanel(NpPanel.Lyrics) }
+                                NpChip("Karaoke", icon = NpIcons.Karaoke) { karaoke = true }
                                 // How many things there are to read beside the album, in a white circle.
                                 NpChip(
                                     "Read", on = panel == NpPanel.Read, icon = NpIcons.ReadOpen, label = "Read the words, or the album's booklet" + if (extras.isNotEmpty()) ", ${extras.size}" else "",
@@ -532,6 +537,7 @@ fun WebNowPlaying(nav: Nav) {
             NpMenu.Playlist -> PlaylistMenu(nav, listOf(trackId), at(NpMenu.Playlist), { toast = it }) { menu = NpMenu.None }
             else -> {}
         }
+        if (karaoke) KaraokeScreen(nav, words, title, artistName, tint) { karaoke = false }
         if (toast.isNotEmpty()) Toast(toast, { toast = "" }, Modifier.align(Alignment.BottomCenter).padding(bottom = 140.dp))
         Spoken(said)
     }
