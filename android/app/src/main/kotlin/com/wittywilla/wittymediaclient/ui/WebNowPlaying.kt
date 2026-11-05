@@ -108,6 +108,7 @@ private object NpIcons {
     val Heart by lazy { webIconPath("heart", "M12 20.6l-1.3-1.2C6 15.200 3 12.500 3 9.100 3 6.400 5.100 4.400 7.700 4.400c1.600 0 3.200.8 4.300 2 1.100-1.200 2.700-2 4.300-2C18.900 4.400 21 6.400 21 9.100c0 3.400-3 6.100-7.700 10.300zm-.1-2.700l.1.100.1-.1c4.100-3.700 6.900-6.200 6.900-8.800 0-1.700-1.300-2.900-3-2.900-1.300 0-2.600.8-3.100 2h-1.900c-.5-1.200-1.800-2-3.100-2-1.700 0-3 1.200-3 2.900 0 2.600 2.800 5.100 7 8.800z") }
     val HeartOn by lazy { webIconPath("heart-on", "M12 20.600l-1.300-1.200C6 15.200 3 12.500 3 9.100 3 6.400 5.100 4.400 7.700 4.400c1.600 0 3.200.8 4.300 2 1.100-1.200 2.700-2 4.300-2C18.900 4.400 21 6.400 21 9.100c0 3.400-3 6.100-7.700 10.300z") }
     val Station by lazy { webIconPath("station", "M12 10a2 2 0 110 4 2 2 0 010-4zM7.800 7.800a6 6 0 000 8.400l-1.400 1.400a8 8 0 010-11.200zm8.400 0l1.400-1.400a8 8 0 010 11.200l-1.400-1.400a6 6 0 000-8.400zM5 5a10 10 0 000 14l-1.400 1.400a12 12 0 010-16.800zm14 0l1.400-1.400a12 12 0 010 16.800L19 19a10 10 0 000-14z") }
+    val AddList by lazy { webIconPath("add-list", "M3 6h13v2H3zm0 5h13v2H3zm0 5h9v2H3zm15-3h2v3h3v2h-3v3h-2v-3h-3v-2h3z") }
     // The jump arrow; forward is the same, mirrored.
     val Jump by lazy { webIconPath("jump", "M12 4V1L7 5l5 4V6a7.5 7.5 0 11-7.5 7.5h-2A9.5 9.5 0 1012 4z") }
 }
@@ -180,7 +181,7 @@ private fun PopMenu(items: List<MenuItem>, modifier: Modifier, close: () -> Unit
                 .border(1.dp, Np.line, RoundedCornerShape(14.dp)).padding(6.dp).verticalScroll(rememberScrollState()),
         ) {
             items.forEach { item ->
-                Pressable({ close(); item.run() }, Modifier.fillMaxWidth().heightIn(min = 44.dp), shape = RoundedCornerShape(10.dp), fill = Color.Transparent, label = item.words, selected = item.chosen, ring = false) {
+                Pressable({ item.run(); close() }, Modifier.fillMaxWidth().heightIn(min = 44.dp), shape = RoundedCornerShape(10.dp), fill = Color.Transparent, label = item.words, selected = item.chosen, ring = false) {
                     Row(Modifier.fillMaxWidth().heightIn(min = 44.dp).padding(horizontal = 12.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                         if (item.icon != null) Icon(item.icon, null, tint = Np.fg, modifier = Modifier.size(18.dp))
                         Text((if (item.chosen) "✓ " else "") + item.words, color = Np.fg, fontSize = 14.sp, fontWeight = if (item.chosen) FontWeight.Bold else FontWeight.Normal, maxLines = 1)
@@ -191,7 +192,7 @@ private fun PopMenu(items: List<MenuItem>, modifier: Modifier, close: () -> Unit
     }
 }
 
-private enum class NpMenu { None, Sleep, More, Speed }
+private enum class NpMenu { None, Playlist, Sleep, More, Speed }
 
 @Composable
 fun WebNowPlaying(nav: Nav) {
@@ -220,6 +221,7 @@ fun WebNowPlaying(nav: Nav) {
     LaunchedEffect(library) { if (!books && library > 0) liked = runCatching { nav.app.api.likes(library).toSet() }.getOrDefault(emptySet()) }
     var panel by remember { mutableStateOf(false) }
     var menu by remember { mutableStateOf(NpMenu.None) }
+    var toast by remember { mutableStateOf("") }
     var maxSpeed by remember { mutableStateOf(4.0) }
     LaunchedEffect(Unit) { maxSpeed = runCatching { nav.app.api.playerPrefs().maxSpeed }.getOrDefault(4.0) }
     // Opening: a fade and a 16 rise over 240 ms.
@@ -251,6 +253,7 @@ fun WebNowPlaying(nav: Nav) {
                 NpRound(NpIcons.Down, "Close the full player", 44.dp, 20.dp) { nav.pop() }
                 Spacer(Modifier.weight(1f))
                 Row(horizontalArrangement = Arrangement.spacedBy(2.dp)) {
+                    if (trackId > 0) NpRound(NpIcons.AddList, "Add to a playlist", 44.dp, 20.dp) { menu = NpMenu.Playlist }
                     val sleepSet = listening.sleepAt != null || listening.sleepAfterThis
                     NpRound(NpIcons.Moon, if (sleepSet) "Sleep timer: stops ${listening.sleepAt?.let { "at " + SimpleDateFormat("HH:mm", locale).format(Date(it)) } ?: "after this one"}" else "Sleep timer", 44.dp, 20.dp, on = sleepSet) { menu = NpMenu.Sleep }
                     NpRound(if (books) WebIcons.Chapters else NpIcons.List, if (books) "Chapters" else "Queue", 44.dp, 20.dp, on = panel) { panel = !panel }
@@ -347,8 +350,10 @@ fun WebNowPlaying(nav: Nav) {
                     Modifier.align(Alignment.TopEnd).padding(top = maxOf(14.dp, status) + 52.dp, end = 12.dp),
                 ) { menu = NpMenu.None }
             }
+            NpMenu.Playlist -> PlaylistMenu(nav, trackId, Modifier.align(Alignment.TopEnd).padding(top = maxOf(14.dp, status) + 52.dp, end = 12.dp), { toast = it }) { menu = NpMenu.None }
             NpMenu.None -> {}
         }
+        if (toast.isNotEmpty()) Toast(toast, { toast = "" }, Modifier.align(Alignment.BottomCenter).padding(bottom = 140.dp))
     }
 }
 
@@ -455,5 +460,39 @@ private fun QueuePanel(nav: Nav, glow: Triple<Int, Int, Int>, modifier: Modifier
                 }
             }
         }
+    }
+}
+
+// Add to a playlist (web/src/audio/controls.tsx, PlaylistPicker): New playlist, then each of this person's own
+// playlists; choosing one adds the song and says so. A new one is named in a field and made with "Make it".
+@Composable
+private fun PlaylistMenu(nav: Nav, trackId: Long, modifier: Modifier, said: (String) -> Unit, close: () -> Unit) {
+    val scope = rememberCoroutineScope()
+    var lists by remember { mutableStateOf<List<com.wittywilla.wittymediaclient.net.Collection>?>(null) }
+    var making by remember { mutableStateOf(false) }
+    var name by remember { mutableStateOf("") }
+    LaunchedEffect(Unit) { lists = runCatching { nav.app.api.collections().filter { it.kind == "manual" && it.system.isEmpty() } }.getOrDefault(emptyList()) }
+    fun add(id: Long, called: String) = scope.launch {
+        runCatching { nav.app.api.addToCollection(id, com.wittywilla.wittymediaclient.net.CollectionItems(listOf(trackId))) }
+            .onSuccess { said("Added to $called"); close() }
+            .onFailure { said(it.message ?: "Couldn't add it") }
+    }
+    if (making) {
+        Box(Modifier.fillMaxSize().clickable(remember { MutableInteractionSource() }, null, onClick = close)) {
+            Row(
+                modifier.widthIn(min = 220.dp, max = 340.dp).clip(RoundedCornerShape(14.dp)).background(Np.menu).border(1.dp, Np.line, RoundedCornerShape(14.dp)).padding(6.dp),
+                verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp),
+            ) {
+                WebInput(name, { name = it.take(120) }, "Name", Modifier.weight(1f))
+                WebButton("Make it", {
+                    val n = name.trim()
+                    if (n.isNotEmpty()) scope.launch { runCatching { nav.app.api.newCollection(n) }.onSuccess { add(it.id, n) }.onFailure { said(it.message ?: "Couldn't make it") } }
+                }, WebButtonKind.Primary, small = true)
+            }
+        }
+        return
+    }
+    PopMenu(listOf(MenuItem("New playlist", WebIcons.Plus) { making = true }) + lists.orEmpty().map { c -> MenuItem(c.name) { add(c.id, c.name) } }, modifier) {
+        if (!making) close()
     }
 }
