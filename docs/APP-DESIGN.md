@@ -124,6 +124,11 @@ SF Symbols on Apple, Material Symbols (rounded) on Android, mapped one to one:
 | Sign out | `rectangle.portrait.and.arrow.right` | `logout` |
 | Warning | `exclamationmark.triangle.fill` | `warning` |
 | Check | `checkmark` | `check` |
+| Home | `house` | `home` |
+| Libraries | `books.vertical` | `video_library` |
+| Games | `gamecontroller` | `sports_esports` |
+| Live TV | `tv` | `live_tv` |
+| Search | `magnifyingglass` | `search` |
 
 ## Themes
 
@@ -710,8 +715,22 @@ Apple TV and Android TV are the same app to look at. Sizes are given in TV units
   grows 1.06, as both systems' own keyboards do; a grid of rings would crowd the keys. Pressed, it dims as any button.
   Digits on a remote's number keys also type.
 - **Fields** open the system's keyboard; on Android TV the IME, on Apple TV the system keyboard, which a phone can type into.
-- **Top bar:** the phone's five, Home, TV guide, Search, Libraries (the Menu's list as a page) and You, as pills along
-  the top, 24 from the top edge, the chosen one with `accent` at 14% and its name; up from the first row reaches it.
+- **Top bar:** six pills along the top, the same on both TVs and in this order: **Home, Libraries, Games, Live TV,
+  Search, You**. Each pill is its icon and its name in Label; You is the person's avatar at 28 with their name. The bar
+  is 24 from the top edge and starts at the gutter, the pills 16 apart; the chosen pill has `accent` at 14% behind it
+  and its words in `accentText`, the others are `textSecondary`. Focused, a pill takes the ring and scale as any
+  control. Up from a tab's first row reaches the bar. Back from inside a tab goes to the bar; Back from the bar goes to
+  Home's bar; Back on Home's bar leaves the app. A screen opened from a tab has the whole screen, and Back from it
+  returns to the tab.
+  - **Libraries:** every library the profile can see, as a grid of tiles (the phone Menu's library list as a page):
+    each tile is the library's icon in `accentText` on `accent` at 14%, then its name. Each opens the library as Home's
+    rows do; a games library opens Games' view of it.
+  - **Games:** WittyPlay's couch library. With one games library it opens straight in; with several, one row per
+    library, and each row opens that library.
+  - **Live TV:** the WittyTV guide (below) in the account's WittyTV look, with Recordings reachable from it.
+  - All six always show. A server with no games or no live TV shows that tab with a plain empty state saying what's
+    missing and that an owner adds it on the server's website (`gamesNone` / `gamesNoneDetail`, `liveTvNone` /
+    `liveTvNoneDetail`). Never a broken or blank page.
 - **Themes** are the same as on a phone, through the same translation (see Themes).
 - **WittyTV** (the guide and live channels) keeps its own looks, chosen per account in `/me/ui` → `tvLook` with the
   owner's default in `/guide`: the colours of each of its themes (`modern`, `classic`, `satellite`, `teletext`,
