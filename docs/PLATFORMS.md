@@ -469,6 +469,10 @@ checked package, no `file://` privileges):
   key, and trusting that key rather than a later one.
 - Starting with a remembered server, another key at it, a server that has gone, a damaged state file and a bad
   certificate, which also proves that listening to `certificate-error` doesn't accept one.
+- A code shown on the screen for a phone to approve: refused, then a new code, then approved and signed in, with the
+  secret that collects it never reaching the page, and nothing asked once the screen is left.
+- TV mode in a window: the words on the left and the actions on the right, the four-unit focus ring, Back, and with Reduce
+  Motion and forced colours emulated, nothing spinning and the QR code still black on white.
 
 On macOS 27 on Apple silicon, `npm run test:app` passes from source too. There it also checks the menu bar (Help, Change server
 only with a server open, zooming the page and not the title bar) and that the title bar leaves the window's buttons and Help to
