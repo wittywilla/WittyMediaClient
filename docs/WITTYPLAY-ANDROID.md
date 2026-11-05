@@ -13,9 +13,12 @@ protocol choices are the Apple player's (`docs/WITTYPLAY-STREAMING.md` on the Ap
 | `ws-jpeg` | One JPEG a frame, decoded into a reused bitmap and drawn on the same surface, sharp unless `display.scaling` is smooth | No picture 12 seconds after connecting, or the server's `hello` says `jpeg` |
 | `webrtc` | Not used: it needs libwebrtc in the app | Later, for playing away from home |
 
-Sound is PCM at the console's own rate into a low-latency `AudioTrack`, written without ever waiting; what's queued is
-kept within `audio.latency` (50, 90 or 160 ms) by dropping, so it stays with the picture. `audio.volume` and `audio.mute`
-apply. The sign-in goes in the WebSocket upgrade's `Authorization` header, by the app's own HTTP client, never in an address.
+Sound is PCM at the console's own rate into a low-latency `AudioTrack`, written without ever waiting. The track's buffer
+is `audio.latency` long (50, 90 or 160 ms, by `setBufferSizeInFrames`), so that's the most that can wait: a write that
+doesn't fit is cut short, and the sound stays with the picture. The system starts a streaming track only once its buffer
+is full, and again by itself after an underrun, so the app just writes on. `audio.volume` and `audio.mute` apply.
+
+The game menu's **Connection** is the website's: Automatic, or the WebSocket with H.264 or with JPEG, kept on this device. The sign-in goes in the WebSocket upgrade's `Authorization` header, by the app's own HTTP client, never in an address.
 
 A dropped connection is made again within the server's minute; past it, or if the server has stopped the game, the player
 offers Resume from the automatic save. Leaving the app lets go of every control, pauses the game when

@@ -394,7 +394,7 @@ private fun GameMenuSheet(play: GamePlay, page: GameMenu, touchScreen: Boolean, 
     val first = remember(page) { FocusRequester() }
     LaunchedEffect(page) { runCatching { first.requestFocus() } }
     val columns = when {
-        look.tv -> 4
+        look.tv -> 3
         windowDp().first >= 600 -> 3
         else -> 2
     }
@@ -404,7 +404,7 @@ private fun GameMenuSheet(play: GamePlay, page: GameMenu, touchScreen: Boolean, 
     ) {
         Column(
             Modifier
-                .widthIn(max = if (look.tv) 540.dp else 760.dp)
+                .widthIn(max = if (look.tv) 720.dp else 760.dp)
                 .fillMaxWidth()
                 .verticalScroll(rememberScrollState())
                 .padding(horizontal = look.gutter.coerceAtMost(48.dp), vertical = 20.dp),

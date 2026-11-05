@@ -241,7 +241,6 @@ class JpegPlayer(private val onPicture: () -> Unit) {
 class GameSound(latencySeconds: Double) {
     private var track: AudioTrack? = null
     private var rate = 0
-    private var written = 0L
     private var playing = false
     private val most = latencySeconds.coerceIn(0.03, 0.3)
 
@@ -256,7 +255,7 @@ class GameSound(latencySeconds: Double) {
         track?.setVolume(volume)
     }
 
-    // While the menu is up or the app is away: nothing plays, and what was waiting is let go.
+    // While the app is away or the game is being saved: nothing plays, and what was waiting is let go.
     fun hold(on: Boolean) {
         held = on
         synchronized(this) {
@@ -265,31 +264,19 @@ class GameSound(latencySeconds: Double) {
                 runCatching { it.flush() }
             }
             playing = false
-            written = 0
         }
     }
 
-    // From the socket's thread. Never waits: what doesn't fit is dropped.
+    // From the socket's thread. Never waits. The track's buffer is audio.latency long (setBufferSizeInFrames), so
+    // that's the most that can wait: a write that doesn't fit is cut short, and what's heard stays close to what's
+    // seen. The system starts playing a track once its buffer is full, and again by itself after an underrun once
+    // it's full again, so writing on is all it takes.
     fun play(pcm: StreamMessage.Pcm) {
         if (held || pcm.length <= 0 || pcm.rate !in 4000..192000) return
         synchronized(this) {
             val out = trackFor(pcm.rate) ?: return
-            val frames = pcm.length / 4
-            val queued = written - (out.playbackHeadPosition.toLong() and 0xffffffffL)
-            // Too far behind: drop this, so what's heard stays close to what's seen.
-            if (playing && queued + frames > most * rate) return
-            if (playing && queued <= 0) {
-                // Ran dry: start again from here, a little ahead.
-                runCatching { out.pause(); out.flush() }
-                playing = false
-                written = 0
-            }
-            val n = out.write(pcm.data, pcm.offset, pcm.length, AudioTrack.WRITE_NON_BLOCKING)
-            if (n > 0) written += n / 4
-            if (!playing && written >= rate * most / 2) {
-                runCatching { out.play() }
-                playing = true
-            }
+            out.write(pcm.data, pcm.offset, pcm.length, AudioTrack.WRITE_NON_BLOCKING)
+            if (!playing && runCatching { out.play() }.isSuccess) playing = true
         }
     }
 
@@ -309,8 +296,9 @@ class GameSound(latencySeconds: Double) {
             builder.build()
         }.getOrNull()
         made?.setVolume(volume)
+        // Twice the latency is allocated; the latency itself is used, where the device lets it be set.
+        if (made != null && Build.VERSION.SDK_INT >= 24) runCatching { made.setBufferSizeInFrames(maxOf(minimum / 4, (at * most).toInt())) }
         track = made
-        written = 0
         playing = false
         return made
     }
@@ -322,7 +310,6 @@ class GameSound(latencySeconds: Double) {
         }
         track = null
         playing = false
-        written = 0
     }
 
     fun close() = synchronized(this) { release() }

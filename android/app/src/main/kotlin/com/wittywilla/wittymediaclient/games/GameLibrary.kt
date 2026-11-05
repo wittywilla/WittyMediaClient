@@ -49,6 +49,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusProperties
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.TransformOrigin
@@ -435,6 +436,7 @@ private fun Hero(nav: GamesNav, api: GamesApi, list: List<GameItem>, consoles: M
     val flowH: Dp = if (look.tv) 208.dp else min(windowW * 0.62f, windowH * 0.38f).dp
     val density = LocalDensity.current
     val front = remember { FocusRequester() }
+    val mainButton = remember { FocusRequester() }
     var flowFocused by remember { mutableStateOf(false) }
     // Focus stays on the front cover as it changes; a TV starts there, as a console does.
     LaunchedEffect(index) { if (flowFocused) runCatching { front.requestFocus() } }
@@ -492,6 +494,7 @@ private fun Hero(nav: GamesNav, api: GamesApi, list: List<GameItem>, consoles: M
                             Modifier
                                 .width(artW)
                                 .height(flowH)
+                                .then(if (d == 0) Modifier.focusProperties { down = mainButton } else Modifier)
                                 .then(if (d == 0) Modifier.onPreviewKeyEvent { e ->
                                     if (e.nativeKeyEvent.action != KeyEvent.ACTION_DOWN) return@onPreviewKeyEvent false
                                     when (e.nativeKeyEvent.keyCode) {
@@ -522,8 +525,8 @@ private fun Hero(nav: GamesNav, api: GamesApi, list: List<GameItem>, consoles: M
             val meta = listOfNotNull(c?.name?.ifEmpty { null } ?: c?.shortName, game.year?.toString(), game.studio.ifEmpty { null }).joinToString("  ·  ")
             if (meta.isNotEmpty()) Text(meta, color = GameColours.secondary, fontSize = look.small, textAlign = TextAlign.Center, maxLines = 1, overflow = TextOverflow.Ellipsis)
             Row(Modifier.padding(top = 4.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                if (ready) GameButton(if (resume) "Resume" else "Play", { nav.play(game.id, GameStart(resume = resume)) }, kind = ButtonKind.Primary, icon = GameIcons.Play)
-                else GameButton("Needs setting up", { nav.openGame(game.id) }, icon = GameIcons.Settings)
+                if (ready) GameButton(if (resume) "Resume" else "Play", { nav.play(game.id, GameStart(resume = resume)) }, kind = ButtonKind.Primary, icon = GameIcons.Play, focusRequester = mainButton)
+                else GameButton("Needs setting up", { nav.openGame(game.id) }, icon = GameIcons.Settings, focusRequester = mainButton)
                 GameButton("About this game", { nav.openGame(game.id) }, kind = ButtonKind.Ghost)
             }
         }
