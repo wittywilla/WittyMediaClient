@@ -91,12 +91,14 @@ jobs:
           release: '15.1'
           usesh: true
           # A FreeBSD release installs from the quarterly packages, and so does this: the image
-          # comes set to latest, whose Electron for amd64 can be missing for weeks while it builds.
+          # comes set to latest, whose Electron for amd64 can be missing for weeks while it builds,
+          # and a package depending on an Electron people's systems don't have couldn't be installed.
           # On FreeBSD 15 the packages are FreeBSD-ports; FreeBSD is the base system.
           prepare: |
             mkdir -p /usr/local/etc/pkg/repos
             echo 'FreeBSD-ports: { url: "pkg+https://pkg.FreeBSD.org/${ABI}/quarterly", mirror_type: "srv" }' > /usr/local/etc/pkg/repos/FreeBSD-ports.conf
             pkg update -f
+            pkg -vv | grep -A2 'FreeBSD-ports:' || true
             pkg install -y node22 npm-node22
           run: |
             set -e
