@@ -118,14 +118,13 @@ private struct TabRoot: View {
                     case .artist(let library, let name): ArtistScreen(library: library, name: name).plainNavigation()
                     case .show(let id): ShowView(id: id).plainNavigation()
                     case .item(let id): ItemView(id: id).plainNavigation()
-                    #if os(tvOS)
+                    // WittyPlay's own screens on every device: the Shelves home or a collection, and a game's page.
                     case .gameLibrary(let library, let console): GamesLibraryView(library: library, console: console).plainNavigation()
                     case .game(let id): GameDetailView(id: id).plainNavigation()
+                    #if os(tvOS)
                     // A new identity for each game, so a second one gets a new player.
                     case .playGame(let id, let start): GamePlayerScreen(id: id, start: start).id("\(id)\(start)")
                     #else
-                    case .gameLibrary(let library, _): LibraryView(library: library).plainNavigation()
-                    case .game(let id): ItemView(id: id).plainNavigation()
                     // The same player as Apple TV's, with the account's touch controls.
                     case .playGame(let id, let start): GamePlayerView(gameId: id, start: start).id("\(id)\(start)")
                     #endif
@@ -196,11 +195,7 @@ struct LibraryScreen: View {
 
     var body: some View {
         if library.hasGameScreens {
-            #if os(tvOS)
             GamesLibraryView(library: library, console: nil)
-            #else
-            LibraryView(library: library)
-            #endif
         } else if library.hasListeningScreens {
             ListeningLibraryView(library: library)
         } else {

@@ -83,3 +83,13 @@ final class GameShelvesTests: XCTestCase {
         defaults.removePersistentDomain(forName: "wittyplay-shelves-test")
     }
 }
+
+final class GamesQueryTests: XCTestCase {
+    func testMadeForTwoAsksForPlayers() {
+        XCTAssertEqual(WittyClient.gamesPath(library: 4, players: 2, limit: 24),
+                       "/items?library=4&kind=game&sort=popular&desc=0&offset=0&limit=24&players=2")
+        XCTAssertEqual(WittyClient.gamesPath(library: 4, console: "nes", sort: "added"),
+                       "/items?library=4&kind=game&sort=added&desc=1&offset=0&limit=60&console=nes")
+        XCTAssertFalse(WittyClient.gamesPath(library: 4, players: 1).contains("players"), "one player is every game")
+    }
+}
