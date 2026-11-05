@@ -166,6 +166,11 @@ public struct Item: Decodable, Identifiable, Equatable {
     public let albumArtist: String?
     public let artist: String?
     public let track: Int?
+    /// Which disc of a set a track is on, and the CD image it was ripped from, if it was.
+    public let discNo: Int?
+    public let cdDisc: Int64?
+    /// A podcast episode's date, as the server writes it.
+    public let aired: String?
 
     /// Video plays in these apps' own player. Anything else opens the server's page: see ServerPages.swift.
     public var isPlayable: Bool { kind == "video" }
@@ -200,6 +205,7 @@ public struct Album: Decodable, Equatable, Hashable {
     public let artist: String?
     public let title: String?
     public let year: Int?
+    public let genre: String?
     public let tracks: Int?
     public let durationSec: Double?
     public let coverItem: Int64?

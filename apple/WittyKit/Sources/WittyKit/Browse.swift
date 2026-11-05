@@ -218,6 +218,8 @@ public struct TitleCollection: Decodable, Equatable, Identifiable {
     public let count: Int?
     /// One the server keeps itself, such as Liked songs: nothing is added to it by hand.
     public let system: String?
+    /// A title whose picture stands for the collection.
+    public let coverId: Int64?
 
     /// Only a hand-made collection takes titles; a smart one fills itself.
     public var takesTitles: Bool { kind != "smart" }

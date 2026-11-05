@@ -194,6 +194,18 @@ final class Listening: ObservableObject {
     }
 
     /// At the end of the queue, or a queue of its own if there isn't one.
+    /// Straight after the one playing, as the website's Play next.
+    func playNext(_ tracks: [Item], client: WittyClient) {
+        guard !tracks.isEmpty else { return }
+        if queue.isEmpty {
+            play(tracks, start: ListeningStart(0), keepsPlace: false, client: client)
+            return
+        }
+        queue.insertNext(tracks.map { made($0, keepsPlace) })
+        publish()
+        updateNowPlaying()
+    }
+
     func addToQueue(_ tracks: [Item], keepsPlace books: Bool, client: WittyClient) {
         guard !tracks.isEmpty else { return }
         if queue.isEmpty {

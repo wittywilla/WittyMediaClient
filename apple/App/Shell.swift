@@ -77,13 +77,24 @@ private struct TabRoot: View {
                     case .library(let library):
                         // A library's page is a top of its own, with the strip and no Back, as on the website.
                         if library.hasListeningScreens {
+                            #if os(iOS) || os(visionOS)
+                            MusicLibraryPage(library: library).noNavigationBar()
+                            #else
                             ListeningLibraryView(library: library).noNavigationBar()
+                            #endif
                         } else {
                             LibraryView(library: library).noNavigationBar()
                         }
+                    #if os(iOS) || os(visionOS)
+                    // The website's album and artist pages, over their artwork's colour.
+                    case .listeningAlbum(let library, let album, let artist):
+                        MusicAlbumPage(library: library, album: album, artist: artist).plainNavigation(overPicture: true)
+                    case .artist(let library, let name): MusicArtistPage(library: library, name: name).plainNavigation(overPicture: true)
+                    #else
                     case .listeningAlbum(let library, let album, let artist):
                         AlbumScreen(library: library, album: album, artist: artist).plainNavigation()
                     case .artist(let library, let name): ArtistScreen(library: library, name: name).plainNavigation()
+                    #endif
                     case .show(let id): ShowView(id: id).plainNavigation(overPicture: true)
                     case .item(let id): ItemView(id: id).plainNavigation(overPicture: true)
                     // A new identity for each thing played, so the next episode gets a new player

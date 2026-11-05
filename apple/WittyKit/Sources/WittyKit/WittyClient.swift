@@ -445,6 +445,48 @@ public final class WittyClient: @unchecked Sendable {
 
     public func artists(library: Int64) async throws -> [Artist] { try await list("/music/artists?library=\(library)") }
 
+    /// A listening library's front page.
+    public func musicHome(library: Int64) async throws -> MusicHome { try await get("/music/home?library=\(library)") }
+
+    /// Albums of one genre, or of one artist, in an order.
+    public func albums(library: Int64, sort: String, genre: String) async throws -> [Album] {
+        try await list("/music/albums?library=\(library)&sort=\(Self.queryValue(sort))&genre=\(Self.queryValue(genre))")
+    }
+
+    /// The songs the Songs tab shows: a view (liked, played, recent, added), sorted, of a genre, matching words.
+    public func songs(library: Int64, view: String, sort: String, desc: Bool, genre: String, search: String, limit: Int) async throws -> [Item] {
+        var path = "/music/songs?library=\(library)&limit=\(limit)"
+        if !view.isEmpty { path += "&view=\(Self.queryValue(view))" }
+        if view.isEmpty || view == "liked" {
+            path += "&sort=\(Self.queryValue(sort))"
+            if desc { path += "&desc=1" }
+        }
+        if !genre.isEmpty { path += "&genre=\(Self.queryValue(genre))" }
+        if !search.isEmpty { path += "&search=\(Self.queryValue(search))" }
+        return try await list(path)
+    }
+
+    /// Every song, in a random order: Play my music.
+    public func shuffledSongs(library: Int64, limit: Int = 500) async throws -> [Item] {
+        try await list("/music/songs?library=\(library)&sort=random&limit=\(limit)")
+    }
+
+    /// The genres in a library.
+    public func genres(library: Int64) async throws -> [String] { try await list("/genres?library=\(library)") }
+
+    /// An artist's or author's page.
+    public func artistPage(library: Int64, name: String) async throws -> ArtistPageInfo {
+        try await get("/music/artist?library=\(library)&name=\(Self.queryValue(name))")
+    }
+
+    /// An artist's picture, or a cover of theirs.
+    public func artistPhotoURL(library: Int64, name: String) -> URL? {
+        URL(string: "\(base)\(apiPath)/music/artist-photo?library=\(library)&name=\(Self.queryValue(name))")
+    }
+
+    /// A title's picture by its number, for an album or a playlist cover.
+    public func posterURL(id: Int64) -> URL? { URL(string: "\(base)\(apiPath)/items/\(id)/poster") }
+
     /// The tracks of one album, in order. An empty album or artist means none or unknown: it is still asked for by name.
     public func tracks(library: Int64, album: String, artist: String) async throws -> [Item] {
         try await list("/music/tracks?library=\(library)&album=\(Self.queryValue(album))&artist=\(Self.queryValue(artist))")
