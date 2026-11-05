@@ -677,7 +677,7 @@ private fun WhoStep(
         }
         return
     }
-    SignInPage {
+    SignInPage(wide = metrics.tablet) {
         Lockup(nav.brandName, nav.brandLogo)
         SignInHeading(s["whoTitle"].orEmpty(), display = true)
         Gap(8)

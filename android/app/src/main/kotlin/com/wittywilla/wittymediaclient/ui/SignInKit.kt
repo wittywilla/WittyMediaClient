@@ -67,9 +67,10 @@ private val COLUMN_ROOM = 32.dp
 
 // One column in the middle, no wider than reads well, with the glow behind it. A third of the way down
 // when it's short, and scrolling when it isn't. Back, where there's somewhere to go back to, is an arrow
-// top left as well as the system's gesture.
+// top left as well as the system's gesture. `wide` lets the column use the room, as a tablet's
+// profile grid does.
 @Composable
-fun SignInPage(onBack: (() -> Unit)? = null, content: @Composable ColumnScope.() -> Unit) {
+fun SignInPage(onBack: (() -> Unit)? = null, wide: Boolean = false, content: @Composable ColumnScope.() -> Unit) {
     val metrics = LocalMetrics.current
     val accent = MaterialTheme.colorScheme.primary
     BackHandler(enabled = onBack != null) { onBack?.invoke() }
@@ -77,7 +78,7 @@ fun SignInPage(onBack: (() -> Unit)? = null, content: @Composable ColumnScope.()
         BoxWithConstraints(Modifier.fillMaxSize().safeDrawingPadding().imePadding()) {
             val view = constraints.maxHeight
             val room = with(LocalDensity.current) { COLUMN_ROOM.roundToPx() }
-            val most = with(LocalDensity.current) { COLUMN_MOST.roundToPx() }
+            val most = if (wide) Int.MAX_VALUE else with(LocalDensity.current) { COLUMN_MOST.roundToPx() }
             val side = with(LocalDensity.current) { metrics.gutter.roundToPx() }
             Layout(
                 content = {
