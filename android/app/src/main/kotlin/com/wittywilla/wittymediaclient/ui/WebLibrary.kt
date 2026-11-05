@@ -87,7 +87,12 @@ private fun noun(type: String, n: Int): String {
 // artHue: the title's own hue for generated art.
 private fun artHue(name: String): Float {
     var h = 0L
-    name.codePoints().forEach { h = (h * 31 + it) % 360 }
+    var i = 0
+    while (i < name.length) {
+        val c = Character.codePointAt(name, i)
+        h = (h * 31 + c) % 360
+        i += Character.charCount(c)
+    }
     return h.toFloat()
 }
 
