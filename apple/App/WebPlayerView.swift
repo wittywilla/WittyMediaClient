@@ -21,6 +21,11 @@ private struct WebPlayerPage: UIViewRepresentable {
     let onLeave: () -> Void
     let onFail: () -> Void
     let onSaved: (URL) -> Void
+    /// Where a server's page has gone within itself, such as into its own player.
+    var onPath: (String) -> Void = { _ in }
+    /// The website's Play for one of the server's games (`/game/12?resume=1`), which this app plays itself: the
+    /// address, and whether the page had already got there (rather than only asking to).
+    var onGame: (String, Bool) -> Void = { _, _ in }
 
     final class Coordinator: NSObject, WKNavigationDelegate, WKDownloadDelegate {
         let parent: WebPlayerPage
@@ -32,6 +37,12 @@ private struct WebPlayerPage: UIViewRepresentable {
 
         func webView(_ webView: WKWebView, decidePolicyFor action: WKNavigationAction, decisionHandler: @escaping (WKNavigationActionPolicy) -> Void) {
             guard let url = action.request.url else { return decisionHandler(.cancel) }
+            // A server game's Play (see gameLinks): this app's own player instead of the website's.
+            if !parent.keptToGames, action.targetFrame?.isMainFrame != false, WebPlayer.sameServer(url, base: parent.base),
+               WebPlayer.serverGame(WebPlayerPage.address(url)) != nil {
+                parent.onGame(WebPlayerPage.address(url), false)
+                return decisionHandler(.cancel)
+            }
             if WebPlayer.sameServer(url, base: parent.base) { return decisionHandler(action.shouldPerformDownload ? .download : .allow) }
             // Only a link the person actually followed, so a page can't fling them out to a browser or
             // another app by itself.
@@ -95,6 +106,36 @@ private struct WebPlayerPage: UIViewRepresentable {
 
     func makeCoordinator() -> Coordinator { Coordinator(self) }
 
+    /// A server's page inside this app sits under the app's own strip, Back, activity button and floating bar, so it's
+    /// told it's in the app (`data-app` on its root, which the website reads to leave its own phone bars off), and its
+    /// bars are hidden here too, the activity button's included, as the app draws its own. The
+    /// server's content security policy refuses a `<style>` element, so the rules go in as a constructed sheet
+    /// (iOS 16.4 and later; before that the page keeps its bars). Fixed words, with nothing of this app's or the
+    /// person's in them.
+    static let insideTheApp = """
+    try{document.documentElement.setAttribute('data-app','wittymediaclient');\
+    var c=new CSSStyleSheet();\
+    c.replaceSync('@media (max-width:700px){html[data-app] .tabbar,html[data-app] .section-row,html[data-app] .section-row-brand,\
+    html[data-app] .top-back,html[data-app] .app .topbar{display:none!important}}');\
+    document.adoptedStyleSheets=document.adoptedStyleSheets.concat([c])}catch(e){}
+    """
+
+    /// A server game's Play, Resume, Start over and save slots are links to `/game/…` (web/src/pages/games). A tap on one
+    /// becomes a plain navigation, which the check above turns into this app's player before the website's starts. Still
+    /// no script handler: the page can only ask to go somewhere, and the app decides.
+    static let gameLinks = """
+    document.addEventListener('click',function(e){try{if(e.defaultPrevented||e.button!==0||e.metaKey||e.ctrlKey||e.shiftKey||e.altKey)return;\
+    var a=e.target&&e.target.closest&&e.target.closest('a[href]');if(!a)return;var u=new URL(a.href,location.href);\
+    if(u.origin!==location.origin||!/^\\/game\\/\\d+$/.test(u.pathname))return;\
+    e.preventDefault();e.stopImmediatePropagation();location.assign(u.href)}catch(x){}},true)
+    """
+
+    /// A same-server address as the website writes it: its path, and its query if it has one.
+    static func address(_ url: URL) -> String {
+        let query = url.query ?? ""
+        return url.path + (query.isEmpty ? "" : "?" + query)
+    }
+
     func makeUIView(context: Context) -> WKWebView {
         let config = WKWebViewConfiguration()
         config.allowsInlineMediaPlayback = true
@@ -107,6 +148,10 @@ private struct WebPlayerPage: UIViewRepresentable {
         let id = theme.filter { $0.isASCII && ($0.isLetter || $0.isNumber || $0 == "-") }
         let choice = id.isEmpty ? "localStorage.removeItem('wms.theme')" : "localStorage.setItem('wms.theme','\(id)')"
         config.userContentController.addUserScript(WKUserScript(source: "try{\(choice)}catch(e){}", injectionTime: .atDocumentStart, forMainFrameOnly: true))
+        if !keptToGames {
+            config.userContentController.addUserScript(WKUserScript(source: Self.insideTheApp, injectionTime: .atDocumentStart, forMainFrameOnly: true))
+            config.userContentController.addUserScript(WKUserScript(source: Self.gameLinks, injectionTime: .atDocumentStart, forMainFrameOnly: true))
+        }
         let web = WKWebView(frame: .zero, configuration: config)
         web.isOpaque = false
         web.backgroundColor = .black
@@ -114,10 +159,16 @@ private struct WebPlayerPage: UIViewRepresentable {
         web.allowsLinkPreview = false // a preview would load another address, outside the checks above
         // This fires when the page changes its own address, which is how it closes its player.
         web.allowsBackForwardNavigationGestures = !keptToGames
-        if keptToGames {
-            context.coordinator.watching = web.observe(\.url, options: [.new]) { [onLeave] view, _ in
-                guard let path = view.url?.path, !path.isEmpty else { return }
+        context.coordinator.watching = web.observe(\.url, options: [.new]) { [onLeave, onPath, onGame, keptToGames] view, _ in
+            guard let url = view.url, !url.path.isEmpty else { return }
+            let path = url.path
+            if keptToGames {
                 if !WebPlayer.staysInside(path: path) { DispatchQueue.main.async { onLeave() } }
+            } else if WebPlayer.serverGame(Self.address(url)) != nil {
+                // The page went into its own game player by itself (a menu's choice rather than a link).
+                DispatchQueue.main.async { onGame(Self.address(url), true) }
+            } else {
+                DispatchQueue.main.async { onPath(path) }
             }
         }
         // The sign-in reaches the page as the server's own cookie, set only for its address, and only
@@ -146,6 +197,7 @@ private struct WebPlayerPage: UIViewRepresentable {
 
 struct WebPlayerView: View {
     @EnvironmentObject private var model: AppModel
+    @EnvironmentObject private var listening: Listening
     @Environment(\.client) private var client
     let path: String
     let keptToGames: Bool
@@ -157,12 +209,31 @@ struct WebPlayerView: View {
         if model.path.last == (keptToGames ? Route.web(path) : Route.page(path)) { model.path.removeLast() }
     }
 
+    /// A server game plays in this app's player, the same as Apple TV's, with the account's touch controls. The game's
+    /// page stays under it, unless the page had already gone into its own player: then it goes, so only one plays.
+    private func play(game address: String, reached: Bool) {
+        guard let found = WebPlayer.serverGame(address), model.path.last == .page(path) else { return }
+        if reached { model.path.removeLast() }
+        model.path.append(.playGame(found.id, found.start))
+    }
+
+    /// In the page's own player, the app's bars step aside and its music stops, as the website's does.
+    private func entered(_ at: String) {
+        guard model.path.last == .page(path) else { return }
+        let playing = WebPlayer.isPlayer(path: at)
+        if playing, !model.pagePlaying {
+            listening.pauseForVideo()
+            if model.video?.isRunning == true { model.video?.togglePlay() }
+        }
+        if model.pagePlaying != playing { model.pagePlaying = playing }
+    }
+
     var body: some View {
         ZStack {
             if failed || client.token.isEmpty {
                 ProblemView(words: "This page couldn't open. Check the server is on, then try again.", retry: { failed = false }, back: leave)
             } else if let url = client.mediaURL(path) {
-                WebPlayerPage(base: client.base, token: client.token, url: url, keptToGames: keptToGames, theme: model.themeChoice == "custom" ? "" : model.themeChoice, onLeave: leave, onFail: { failed = true }, onSaved: { saved = $0.lastPathComponent })
+                WebPlayerPage(base: client.base, token: client.token, url: url, keptToGames: keptToGames, theme: model.themeChoice == "custom" ? "" : model.themeChoice, onLeave: leave, onFail: { failed = true }, onSaved: { saved = $0.lastPathComponent }, onPath: entered, onGame: play)
                     .ignoresSafeArea(.container, edges: .bottom)
             } else {
                 ProblemView(words: "The server sent an address that can't be used.", back: leave)
@@ -177,7 +248,10 @@ struct WebPlayerView: View {
         }
         // A game played on a controller never touches the screen.
         .onAppear { UIApplication.shared.isIdleTimerDisabled = true }
-        .onDisappear { UIApplication.shared.isIdleTimerDisabled = false }
+        .onDisappear {
+            UIApplication.shared.isIdleTimerDisabled = false
+            if !keptToGames { model.pagePlaying = false }
+        }
     }
 }
 #endif

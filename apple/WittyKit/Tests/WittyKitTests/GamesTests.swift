@@ -489,4 +489,17 @@ final class GamesTests: XCTestCase {
         """.utf8))
         XCTAssertNil(snes.padForNewPlayer(plugged: nil), "not on Auto: left as the server plugged it")
     }
+
+    func testTheWebsitesPlayAddressStartsTheSameWay() {
+        XCTAssertEqual(WebPlayer.serverGame("/game/12")?.id, 12)
+        XCTAssertEqual(WebPlayer.serverGame("/game/12")?.start, .fresh, "Play and Start over")
+        XCTAssertEqual(WebPlayer.serverGame("/game/12?resume=1")?.start, .resume)
+        XCTAssertEqual(WebPlayer.serverGame("/game/12?slot=3")?.start, .slot(3))
+        XCTAssertEqual(WebPlayer.serverGame("/game/12?slot=0")?.start, .fresh)
+        XCTAssertEqual(WebPlayer.serverGame("/game/12?safe=1&resume=1")?.start, .safe(resume: true))
+        XCTAssertEqual(WebPlayer.serverGame("/game/12?safe=1")?.start, .safe(resume: false))
+        XCTAssertNil(WebPlayer.serverGame("/games/game/12"))
+        XCTAssertNil(WebPlayer.serverGame("/game/x"))
+        XCTAssertNil(WebPlayer.serverGame("/item/12"))
+    }
 }

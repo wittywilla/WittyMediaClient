@@ -94,6 +94,30 @@ public enum WebPlayer {
         path == gamePCsPath || path.hasPrefix(gamePCsPath + "/") || path.hasPrefix("/couch-rig/")
     }
 
+    /// The server's page is in one of its own players, which fill the screen: a film or a disc (`/play/`) or the
+    /// CD player (`/cd/`). The app's own bars step aside for it.
+    public static func isPlayer(path: String) -> Bool { path.hasPrefix("/play/") || path.hasPrefix("/cd/") }
+
+    /// The website's address for playing a server's game, `/game/12?resume=1` (pages/games/data.ts `play`), as the game
+    /// and how this app's player starts it: `slot=N` loads that slot, `safe=1` starts with the defaults (resuming too
+    /// with `resume=1`), `resume=1` alone resumes, and nothing starts over, as the website's GamePage reads them.
+    public static func serverGame(_ address: String) -> (id: Int64, start: GameStart)? {
+        let parts = address.split(separator: "?", maxSplits: 1, omittingEmptySubsequences: false)
+        let route = parts[0].split(separator: "/", omittingEmptySubsequences: true)
+        guard route.count == 2, route[0] == "game", let id = Int64(route[1]), id > 0 else { return nil }
+        var fields: [String: String] = [:]
+        if parts.count > 1 {
+            for pair in parts[1].split(separator: "&") {
+                let kv = pair.split(separator: "=", maxSplits: 1, omittingEmptySubsequences: false)
+                if let key = kv.first, fields[String(key)] == nil { fields[String(key)] = kv.count > 1 ? String(kv[1]) : "" }
+            }
+        }
+        let resume = fields["resume"] == "1"
+        if let slot = fields["slot"].flatMap({ Int($0) }), slot > 0 { return (id, .slot(slot)) }
+        if fields["safe"] == "1" { return (id, .safe(resume: resume)) }
+        return (id, resume ? .resume : .fresh)
+    }
+
     public static func sameServer(_ url: URL, base: String) -> Bool {
         guard let server = URL(string: base), let scheme = url.scheme?.lowercased(), scheme == "https" || scheme == "http" else { return false }
         return Origin.same(url, server)

@@ -256,13 +256,4 @@ public struct GuideHit: Decodable, Equatable {
     public let sub: String?
 }
 
-/// What the logo service has for a network or studio. It has nothing until the owner agrees to the download.
-public struct LogoInfo: Decodable, Equatable {
-    public let id: Int64?
-    public let kind: String
-    public let name: String
-    public let has: Bool?
-    public let version: Int64?
-    /// A picture with its own background, shown on a plate.
-    public let opaque: Bool?
-}
+// LogoInfo, what the logo service has for a network or studio, is LibraryLook.swift's: the library page reads it too.

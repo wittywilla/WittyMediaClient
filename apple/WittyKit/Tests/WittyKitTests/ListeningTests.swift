@@ -232,7 +232,7 @@ final class ListeningTests: XCTestCase {
         }
         let client = WittyClient(base: stand.address, token: "t")
         let albums = try await client.albums(library: 3, sort: "year", artist: "Aurora Lane")
-        XCTAssertEqual(albums, [Album(artist: "Aurora Lane", title: "Paper Satellites", year: 2023, tracks: 4, durationSec: 96, coverItem: 1)])
+        XCTAssertEqual(albums, [Album(artist: "Aurora Lane", title: "Paper Satellites", year: 2023, genre: "Ambient", tracks: 4, durationSec: 96, coverItem: 1)])
         XCTAssertEqual(albums.first?.key, "Aurora Lane|Paper Satellites")
         try await client.recordListen(9, seconds: 31)
         XCTAssertEqual(stand.requests.map(\.path), ["/api/v1/music/albums?library=3&sort=year&artist=Aurora%20Lane", "/api/v1/items/9/view"])

@@ -89,7 +89,7 @@ public struct GuideProgramme: Decodable, Equatable {
     public let genre: String?
     public let rating: String?
     public let year: Int?
-    /// What in the library it plays, for a library channel.
+    /// What in the library it plays, for a library channel: its backdrop is the programme's picture.
     public let itemId: Int64?
     public let showId: Int64?
     public let season: Int?
