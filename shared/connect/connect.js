@@ -136,15 +136,8 @@
       foundList.textContent = ''
       for (const s of found) foundList.appendChild(serverButton(s))
       status.textContent = found.length ? '' : (Date.now() - startedAt > NONE_AFTER_MS ? S.findNone : S.findSearching)
-      const same = Array.from(foundList.children).find((b) => b.dataset.url === focusedUrl)
-      if (same && hadFocus) same.focus()
-      else if (hadFocus) {
-        // The focused server went away. Without this, a remote has nothing to move from.
-        const neighbour = foundList.children[Math.min(focusedIndex, foundList.children.length - 1)]
-        const fallback = neighbour || app.querySelector('button')
-        if (fallback) fallback.focus()
-      } else if (!userMoved && foundList.firstChild) foundList.firstChild.focus()
-      // A remembered server that has just been found is listed once, under what was found.
+      // A remembered server that has just been found is listed once, under what was found. This comes
+      // before focus moves, so nothing below can land on a row that's about to be hidden.
       Array.from(recentList.children).forEach((b) => {
         const twin = Array.from(foundList.children).find((f) => f.dataset.url === b.dataset.url)
         const wasFocused = document.activeElement === b
@@ -152,6 +145,16 @@
         if (wasFocused && twin) twin.focus()
       })
       recentHeading.hidden = recentList.children.length > 0 && Array.from(recentList.children).every((b) => b.hidden)
+      const same = Array.from(foundList.children).find((b) => b.dataset.url === focusedUrl)
+      if (same && hadFocus) same.focus()
+      else if (hadFocus) {
+        // The focused server went away. Without this, a remote has nothing to move from: its
+        // remembered row if it has one, the next server, or the first thing left.
+        const remembered = Array.from(recentList.children).find((b) => b.dataset.url === focusedUrl && !b.hidden)
+        const neighbour = foundList.children[Math.min(focusedIndex, foundList.children.length - 1)]
+        const fallback = remembered || neighbour || app.querySelector('button:not([hidden])')
+        if (fallback) fallback.focus()
+      } else if (!userMoved && foundList.firstChild) foundList.firstChild.focus()
     }
     const startedAt = Date.now()
     renderFound()
