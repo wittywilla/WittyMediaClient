@@ -475,37 +475,52 @@ struct LibraryTile: View {
     }
 }
 
-/// Landscape 16:9, the large radius: a picture of something in it under the hero's gradient, and the name in
-/// 20 semibold over the count in 12, 12 from the lower left.
+/// The website's category card (`.lib-cat`): 16:9 with the theme's radius, a picture of something in it over a
+/// gradient in the name's own colour, the scrim over its lower 60%, and in white 16 in from the left and 12 up
+/// the name in 20 semibold over the count in 13 at 90%. A small shadow under it.
 struct CategoryCard: View {
     @Environment(\.palette) private var palette
     @Environment(\.client) private var client
     let name: String
     let count: Int?
     let art: CategoryArt?
+    /// 220 on a phone: the website's `clamp(220px, 26vw, 340px)`.
     var width: CGFloat = 220
 
     var body: some View {
-        let shape = RoundedRectangle(cornerRadius: Tokens.Radius.lg, style: .continuous)
+        let shape = RoundedRectangle(cornerRadius: Tokens.Radius.md, style: .continuous)
+        let height = width * 9 / 16
+        let colours = CategoryLook.colours(name)
+        let ends = CategoryLook.ends(degrees: 155, aspect: 16.0 / 9.0)
         Color.clear
-            .frame(width: width, height: width * 9 / 16)
+            .frame(width: width, height: height)
+            .background(LinearGradient(colors: [Color(hex: colours.from), Color(hex: colours.to)],
+                                       startPoint: UnitPoint(x: ends.start.x, y: ends.start.y), endPoint: UnitPoint(x: ends.end.x, y: ends.end.y)))
             .overlay {
-                ZStack {
-                    PlaceholderArt(title: name, lines: 0)
-                    if let art { ArtImage(url: client.backdropURL(art), width: width, blank: true) }
-                }
+                // A picture that won't load leaves the gradient, as the website hides a broken one.
+                if let art { ArtImage(url: client.backdropURL(art), width: width, blank: true) }
             }
-            .overlay(HeroShade())
+            .overlay(alignment: .bottom) {
+                LinearGradient(colors: [palette.scrim, palette.scrim.opacity(0)], startPoint: .bottom, endPoint: .top)
+                    .frame(height: height * 0.6)
+                    .allowsHitTesting(false)
+            }
             .overlay(alignment: .bottomLeading) {
                 VStack(alignment: .leading, spacing: 0) {
-                    Text(name).pageFont(.section).foregroundStyle(palette.text).lineLimit(1)
+                    // Over a picture, so white in every theme, as the website's `--on-image`.
+                    Text(name).pageFont(.section).multilineTextAlignment(.leading)
                     if let count {
-                        Text("\(count) \(count == 1 ? "title" : "titles")").pageFont(.small).foregroundStyle(palette.textSecondary)
+                        Text("\(count) \(count == 1 ? "title" : "titles")").pageFont(.secondary).opacity(0.9)
                     }
                 }
-                .padding(Tokens.Space.s3)
+                .foregroundStyle(.white)
+                .padding(.horizontal, Tokens.Space.s4)
+                .padding(.bottom, Tokens.Space.s3)
             }
             .clipShape(shape)
+            // The website's `--e-1`: resting artwork.
+            .shadow(color: .black.opacity(0.16), radius: 1, y: 1)
+            .shadow(color: .black.opacity(0.14), radius: 4, y: 2)
             .contentShape(shape)
             .accessibilityElement(children: .ignore)
             .accessibilityLabel(count.map { "\(name), \($0) \($0 == 1 ? "title" : "titles")" } ?? name)
