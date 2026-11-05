@@ -16,7 +16,15 @@ private final class Pad {
     var port: UInt8
     var mapper: PadMapper
     var shortcuts: PadShortcuts
-    var haptics: CHHapticEngine?
+    /// A Core Haptics engine for each motor the game has used, and what each is playing.
+    var engines: [RumbleMotor: CHHapticEngine] = [:]
+    var playing: [RumbleMotor: CHHapticPatternPlayer] = [:]
+
+    func stopRumble() {
+        for engine in engines.values { engine.stop(completionHandler: nil) }
+        engines = [:]
+        playing = [:]
+    }
     var last = PadState()
     /// The account's profile in use for it here, if any.
     var profile = ""
@@ -137,10 +145,12 @@ final class GameInput {
         for o in observers { NotificationCenter.default.removeObserver(o) }
         observers = []
         GCController.stopWirelessControllerDiscovery()
+        motionWants = [:]
+        updateMotion()
         for pad in pads.values {
             pad.controller.extendedGamepad?.valueChangedHandler = nil
             pad.controller.microGamepad?.valueChangedHandler = nil
-            pad.haptics?.stop()
+            pad.stopRumble()
             Self.keepButtons(pad.controller, forGame: false)
         }
         pads = [:]
@@ -167,9 +177,14 @@ final class GameInput {
 
     // MARK: Controllers
 
+    /// How many players the game takes: 4, or up to 8 where the second stream says its core has a multitap.
+    var maxPorts = 4 {
+        didSet { maxPorts = min(8, max(1, maxPorts)) }
+    }
+
     private func freePort() -> UInt8 {
         let taken = Set(pads.values.map(\.port))
-        return (0...3).map(UInt8.init).first { !taken.contains($0) } ?? 3
+        return (0..<UInt8(maxPorts)).first { !taken.contains($0) } ?? UInt8(maxPorts - 1)
     }
 
     private func attach(_ controller: GCController, announce: Bool) {
@@ -215,6 +230,7 @@ final class GameInput {
         if announce { onNotice?("\(controller.vendorName ?? "A controller") is player \(port + 1)") }
         onJoin?(Int(port))
         onPadsChanged?()
+        updateMotion()
         Task { await loadProfile(for: id) }
         updateTurboTimer()
     }
@@ -222,7 +238,8 @@ final class GameInput {
     private func detach(_ controller: GCController) {
         let id = ObjectIdentifier(controller)
         guard let pad = pads.removeValue(forKey: id) else { return }
-        pad.haptics?.stop()
+        pad.stopRumble()
+        if let motion = controller.motion, motion.sensorsRequireManualActivation { motion.sensorsActive = false }
         Self.keepButtons(controller, forGame: false)
         if pad.pointer.pressed { sendPointer(PointerState(pressed: false, x: pad.pointer.x, y: pad.pointer.y), times: 3) }
         // Fast-forward or rewind held on it stops with it.
@@ -568,27 +585,88 @@ final class GameInput {
             send?(released.encoded())
             sent[port] = released
         }
-        for pad in pads.values { pad.haptics?.stop(completionHandler: nil); pad.haptics = nil }
+        for pad in pads.values { pad.stopRumble() }
     }
 
     // MARK: Rumble
 
-    func rumble(port: Int, strength: Double) {
+    /// A motor at a strength for `ms` (the server renews it while it's on), replacing what that
+    /// motor was doing; 0 stops it at once. The strong motor is the left handle's, the weak the right's.
+    func rumble(port: Int, strength: Double, motor: RumbleMotor = .either, ms: Int? = nil) {
         guard let pad = pads.values.first(where: { Int($0.port) == port }) else {
             if port == 0, strength > 0 { onTouchRumble?(strength) }
             return
         }
         guard pad.mapper.options.noRumble != true else { return }
-        if pad.haptics == nil {
-            pad.haptics = pad.controller.haptics?.createEngine(withLocality: .default)
-            try? pad.haptics?.start()
-        }
-        guard let engine = pad.haptics, strength > 0 else { return }
+        try? pad.playing[motor]?.stop(atTime: CHHapticTimeImmediate)
+        pad.playing[motor] = nil
+        guard strength > 0, let engine = engine(pad, motor) else { return }
+        let seconds = ms.map { max(0.02, Double($0) / 1000) } ?? 0.12
         let event = CHHapticEvent(eventType: .hapticContinuous,
-                                  parameters: [CHHapticEventParameter(parameterID: .hapticIntensity, value: Float(strength))],
-                                  relativeTime: 0, duration: 0.12)
+                                  parameters: [CHHapticEventParameter(parameterID: .hapticIntensity, value: Float(strength)),
+                                               CHHapticEventParameter(parameterID: .hapticSharpness, value: motor == .weak ? 0.8 : 0.2)],
+                                  relativeTime: 0, duration: seconds)
         if let pattern = try? CHHapticPattern(events: [event], parameters: []), let player = try? engine.makePlayer(with: pattern) {
             try? player.start(atTime: CHHapticTimeImmediate)
+            pad.playing[motor] = player
+        }
+    }
+
+    private func engine(_ pad: Pad, _ motor: RumbleMotor) -> CHHapticEngine? {
+        if let engine = pad.engines[motor] { return engine }
+        guard let haptics = pad.controller.haptics else { return nil }
+        let wanted: GCHapticsLocality = motor == .strong ? .leftHandle : motor == .weak ? .rightHandle : .default
+        let locality = haptics.supportedLocalities.contains(wanted) ? wanted : .default
+        guard let engine = haptics.createEngine(withLocality: locality) else { return nil }
+        try? engine.start()
+        pad.engines[motor] = engine
+        return engine
+    }
+
+    // MARK: Motion
+
+    /// The players whose motion the game reads, and how.
+    private var motionWants: [UInt8: GameMotionWant] = [:]
+    private var motionTimer: Timer?
+
+    /// What the game said it wants of one player's motion.
+    func setMotion(_ want: GameMotionWant) {
+        guard let port = want.port, (0...7).contains(port) else { return }
+        motionWants[UInt8(port)] = want.wanted ? want : nil
+        updateMotion()
+    }
+
+    /// Sensors on only for the players wanted, and sent as often as the game asks, up to 60 a second.
+    private func updateMotion() {
+        for pad in pads.values {
+            if let motion = pad.controller.motion, motion.sensorsRequireManualActivation {
+                motion.sensorsActive = motionWants[pad.port] != nil
+            }
+        }
+        motionTimer?.invalidate()
+        motionTimer = nil
+        guard let hz = motionWants.values.map(\.hz).max(), hz > 0 else { return }
+        motionTimer = Timer.scheduledTimer(withTimeInterval: 1 / min(60, hz), repeats: true) { [weak self] _ in
+            Task { @MainActor in self?.sendMotion() }
+        }
+    }
+
+    private func sendMotion() {
+        guard enabled else { return }
+        for pad in pads.values {
+            guard let want = motionWants[pad.port], let m = pad.controller.motion else { continue }
+            var accel = (x: 0.0, y: 0.0, z: 0.0), gyro = (x: 0.0, y: 0.0, z: 0.0)
+            if want.accel {
+                if m.hasGravityAndUserAcceleration {
+                    accel = (m.gravity.x + m.userAcceleration.x, m.gravity.y + m.userAcceleration.y, m.gravity.z + m.userAcceleration.z)
+                } else {
+                    accel = (m.acceleration.x, m.acceleration.y, m.acceleration.z)
+                }
+            }
+            if want.gyro, m.hasRotationRate {
+                gyro = (m.rotationRate.x, m.rotationRate.y, m.rotationRate.z)
+            }
+            send?(GameMotion.encoded(port: pad.port, accel: accel, gyro: gyro))
         }
     }
 }

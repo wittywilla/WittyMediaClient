@@ -131,3 +131,22 @@ public struct ArrivalDelay {
 
     public static func reportText(_ delayMs: Int) -> String { #"{"delayMs":\#(delayMs),"type":"report"}"# }
 }
+
+/// A controller's motion, for a game that reads it: 14 bytes, `0xE1`, the player, then the
+/// accelerometer and the gyroscope as the controller is held: X right, Y up, Z towards the player.
+public enum GameMotion {
+    /// - accel: in g, gravity included. Sent in 1/4096 g, up to 8 g either way.
+    /// - gyro: in radians a second, anticlockwise positive. Sent in 1/16 degree a second.
+    public static func encoded(port: UInt8, accel: (x: Double, y: Double, z: Double), gyro: (x: Double, y: Double, z: Double)) -> Data {
+        func i16(_ v: Double) -> Int16 { Int16(max(-32767, min(32767, v.rounded()))) }
+        let perDegree = 180 / Double.pi * 16
+        let values = [accel.x * 4096, accel.y * 4096, accel.z * 4096, gyro.x * perDegree, gyro.y * perDegree, gyro.z * perDegree].map(i16)
+        var out = Data([0xE1, port])
+        for v in values {
+            let u = UInt16(bitPattern: v)
+            out.append(UInt8(u & 0xff))
+            out.append(UInt8(u >> 8))
+        }
+        return out
+    }
+}

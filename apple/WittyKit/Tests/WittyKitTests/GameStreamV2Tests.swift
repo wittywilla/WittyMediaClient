@@ -105,4 +105,56 @@ final class GameStreamV2Tests: XCTestCase {
         XCTAssertEqual(delay.report(), 0)
         XCTAssertEqual(ArrivalDelay.reportText(12), #"{"delayMs":12,"type":"report"}"#)
     }
+
+    // MARK: A whole controller
+
+    func testRumbleSaysWhichMotorAndForHowLong() {
+        XCTAssertEqual(GameEvent.parse(#"{"type":"rumble","port":0,"effect":0,"motor":"strong","strength":65535,"ms":300}"#),
+                       .rumble(port: 0, strength: 1, motor: .strong, ms: 300))
+        XCTAssertEqual(GameEvent.parse(#"{"type":"rumble","port":2,"effect":1,"motor":"weak","strength":0,"ms":0}"#),
+                       .rumble(port: 2, strength: 0, motor: .weak, ms: 0), "0 stops it at once")
+        XCTAssertEqual(GameEvent.parse(#"{"type":"rumble","port":0,"effect":1,"strength":32768}"#),
+                       .rumble(port: 0, strength: 32768.0 / 65535, motor: .weak, ms: nil), "the first stream's effect")
+        XCTAssertEqual(GameEvent.parse(#"{"type":"rumble","port":0,"strength":100}"#),
+                       .rumble(port: 0, strength: 100.0 / 65535, motor: .either, ms: nil))
+    }
+
+    func testMotionIsSentOnlyWhileWanted() throws {
+        guard case .motion(let want)? = GameEvent.parse(#"{"type":"motion","offered":true,"port":1,"accel":true,"gyro":false,"hz":60}"#) else {
+            return XCTFail("not motion")
+        }
+        XCTAssertEqual(want, GameMotionWant(port: 1, accel: true, gyro: false, hz: 60))
+        XCTAssertTrue(want.wanted)
+        guard case .motion(let any)? = GameEvent.parse(#"{"type":"motion","offered":true}"#) else { return XCTFail("not motion") }
+        XCTAssertFalse(any.wanted, "only that the game can read it")
+        guard case .motion(let off)? = GameEvent.parse(#"{"type":"motion","offered":true,"port":1,"accel":false,"gyro":false,"hz":60}"#) else {
+            return XCTFail("not motion")
+        }
+        XCTAssertFalse(off.wanted, "neither on: stop")
+        guard case .motion(let fast)? = GameEvent.parse(#"{"type":"motion","port":0,"accel":true,"gyro":true,"hz":200}"#) else {
+            return XCTFail("not motion")
+        }
+        XCTAssertEqual(fast.hz, 60, "never more than 60 a second")
+
+        guard case .stream(let s)? = GameEvent.parse("""
+        {"type":"stream","motion":true,"motionOn":[{"port":0,"accel":true,"gyro":true,"hz":60}],"leds":[{"index":0,"state":1}],"ports":4}
+        """) else { return XCTFail("not a stream") }
+        XCTAssertTrue(s.motion)
+        XCTAssertEqual(s.motionOn, [GameMotionWant(port: 0, accel: true, gyro: true, hz: 60)])
+        XCTAssertEqual(s.leds, [GameLight(index: 0, state: 1)])
+        XCTAssertEqual(GameEvent.parse(#"{"type":"led","index":1,"state":200}"#), .led(index: 1, state: 200))
+    }
+
+    func testMotionsBytes() {
+        // Held still and level: 1 g up; turning anticlockwise about Z at 90 degrees a second.
+        let data = GameMotion.encoded(port: 1, accel: (0, 1, 0), gyro: (0, 0, Double.pi / 2))
+        XCTAssertEqual(data.count, 14)
+        XCTAssertEqual(Array(data.prefix(2)), [0xE1, 1])
+        func i16(_ at: Int) -> Int16 { Int16(bitPattern: UInt16(data[at]) | UInt16(data[at + 1]) << 8) }
+        XCTAssertEqual(i16(2), 0)
+        XCTAssertEqual(i16(4), 4096, "1 g")
+        XCTAssertEqual(i16(12), 1440, "90 degrees a second in sixteenths")
+        let hard = GameMotion.encoded(port: 0, accel: (-20, 0, 0), gyro: (0, 0, 0))
+        XCTAssertEqual(Int16(bitPattern: UInt16(hard[2]) | UInt16(hard[3]) << 8), -32767, "held at the edge of the range")
+    }
 }

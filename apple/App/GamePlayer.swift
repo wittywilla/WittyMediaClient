@@ -560,7 +560,8 @@ final class GamePlayerModel: ObservableObject {
 
     private func handle(_ event: GameEvent) {
         switch event {
-        case .rumble(let port, let strength): input.rumble(port: port, strength: strength)
+        case .rumble(let port, let strength, let motor, let ms): input.rumble(port: port, strength: strength, motor: motor, ms: ms)
+        case .motion(let want): input.setMotion(want)
         case .message(let text): say(text)
         case .geometry(let width, let height, let shape):
             if let shape, shape > 0 { aspect = shape }
@@ -583,13 +584,17 @@ final class GamePlayerModel: ObservableObject {
         case .ended(let text):
             finish(saying: text.isEmpty ? "The game stopped." : text)
         case .stream(let s):
-            // The second stream says the shape and turns as the session does.
+            // The second stream says the shape and turns as the session does, how many players the
+            // game takes, and whose motion it reads.
             if let shape = s.aspect, shape > 0 { aspect = shape }
             turns = s.turns
+            if s.ports > 0 { input.maxPorts = s.ports }
+            for want in s.motionOn { input.setMotion(want) }
             updateLayout()
         case .refused(let code, let text, _):
             say(text.isEmpty ? "The game refused that (\(code))." : text)
-        case .hello, .seats, .unknown:
+        // A core's lights: libretro has no light bar, so each pad keeps its player's colour.
+        case .hello, .seats, .led, .unknown:
             break
         }
     }

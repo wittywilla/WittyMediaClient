@@ -73,25 +73,24 @@ As documented in `docs/GAMING-API.md`, "Controller states", and nothing new:
 |---|---|---|
 | MFi, Xbox, DualShock 4, DualSense, Switch Pro, Joy-Cons (a pair, or one on its side), and anything else GameController knows | Read through GameController. A Joy-Con on its own is a small pad: its stick is the D-pad | Yes |
 | Every button, the D-pad, both sticks at full range, analog triggers | Read in the W3C standard layout the profiles are written in; triggers go out as 0 to 255 as well as their button bits | Yes: 16 buttons, two i16 sticks, two u8 triggers |
-| Four players | Each controller gets the next free player, keeps it while connected, and a pad that goes lets go of everything at once. The Siri Remote plays as player 1 alongside a pad. A console that needed an adapter for players 3 and 4 needs it plugged in: on an NES, a controller that joins as player 3 or 4 plugs a gamepad into that port when it's on "Auto", which turns the Four Score on. On a Super Nintendo, the Multitap goes into player 2's port from the game menu's Controllers page | Yes, ports 0 to 3, and `device` actions. No more than four |
+| Players | Each controller gets the next free player, keeps it while connected, and a pad that goes lets go of everything at once. The Siri Remote plays as player 1 alongside a pad. Four, or up to eight where the second stream says the game's core has a multitap. A console that needed an adapter for players 3 and 4 needs it plugged in: on an NES, a controller that joins as player 3 or 4 plugs a gamepad into that port when it's on "Auto", which turns the Four Score on. On a Super Nintendo, the Multitap goes into player 2's port from the game menu's Controllers page. On the second stream, the server is told which players this device holds | Ports 0 to 3 on the first stream; 0 to 7 on the second, with `seats`; and `device` actions |
 | The account's profiles | `/game-profiles/resolve` per controller, console and game; dead zone, press point, stick-as-D-pad, turbo and no rumble applied on the device | Yes |
-| Rumble | Core Haptics on the player's pad, by the strength the event gives | Yes: `rumble` with `strength`. The two motors' `effect` isn't told apart yet |
+| Rumble | Core Haptics on the player's pad: the strong motor on the left handle and the weak on the right where the pad has two, each held for as long as the event says and replaced by the next; 0 stops it | Yes: `rumble` with `motor` (or the first stream's `effect`), `strength` and, on the second stream, `ms` |
 | DualSense and DualShock 4 touchpad, for a console with a touch screen (DS, 3DS) | The touchpad is the touch screen: where the finger is, and a click to press. A press is sent again every 250 ms, and a release three times | Yes: the 6-byte pointer message. One point only |
-| Light bar | Set to the player's colour (blue, red, green, pink) | **No.** Nothing from a core reaches it |
-| Motion (gyro and accelerometer) | Not read | **No** |
+| Light bar | Set to the player's colour (blue, red, green, pink). A core's own lights arrive as `led` events; libretro has no colour light bar, so the pad keeps its player's colour | `led` on the second stream |
+| Motion (gyro and accelerometer) | Read from the pad's sensors, switched on only for the players the game asks about, and sent as often as it asks, up to 60 a second: gravity and movement in g, turning in radians a second, as the protocol's 1/4096 g and 1/16 degree a second | On the second stream: `0xE1`, while `motion` events (or the stream's `motionOn`) want it. No core reads motion yet |
 | Adaptive triggers, the DualSense's speaker and microphone | Not used | **No** |
 | Home | Opens the game menu where tvOS lets an app have it, and tvOS is asked not to act on a controller's buttons while a game plays | Not needed |
 | Options (Start) | Start for the game; held for a second it opens the game menu. Start and Select together open it at once, as on the website | Not needed |
 | Siri Remote | Its D-pad, select and Play/Pause by the console's `defaults.remote`; Back opens the game menu; it steers the menu | Yes |
 | A keyboard | By the console's `defaults.keyboard`; Escape opens the menu | Yes |
 
-**What the server's protocol would need** to pass the rest through:
+**What the second stream added** (WittyMediaServer#296, WittyPlay#37), and this app uses: motion (`0xE1`), lights (`led`),
+the two rumble motors with how long to hold them, and up to eight players. It also has several touches at once (`0xFE`);
+this app sends the one stylus a DS or 3DS needs with the single-touch message, which still works.
 
-- **Motion.** A message for each player's motion, say `[254, port, ax, ay, az, gx, gy, gz]` as i16 in g and degrees a second, which the runner gives to the core through libretro's sensor interface (`RETRO_ENVIRONMENT_GET_SENSOR_INTERFACE`). 3DS games that steer by tilting need it.
-- **Lights.** An event when a core sets an LED (`RETRO_ENVIRONMENT_GET_LED_INTERFACE`), `{"type": "led", "led": n, "state": 0 or 1}`, which a pad's light could show. Few cores use it.
-- **Rumble's two motors.** The event has `effect`; the client could play the strong and weak motors on a pad's two handles once it's documented which is which.
-- **More touch.** One point only, with no hover. Enough for DS and 3DS styluses.
-- **Players past four,** for the consoles that had multitaps.
+**What's still missing:**
+
 - **Which adapter a third player needs.** The session lists each port's devices, but not that an
   NES's players 3 and 4 need a gamepad in their own ports while a Super Nintendo's need a Multitap
   in player 2's. The server could plug in what four players need when the app says how many are

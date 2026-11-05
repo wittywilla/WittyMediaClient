@@ -44,8 +44,12 @@ public enum GameStreamMessage: Equatable {
 /// A message from the game, as JSON text. Types this app doesn't know are ignored.
 public enum GameEvent: Equatable {
     case hello(video: String)
-    /// Strength from 0 to 1.
-    case rumble(port: Int, strength: Double)
+    /// Strength from 0 to 1, held for `ms` unless another for that motor comes; 0 stops it at once.
+    case rumble(port: Int, strength: Double, motor: RumbleMotor = .either, ms: Int? = nil)
+    /// Whether the game wants a player's motion, and how often.
+    case motion(GameMotionWant)
+    /// A light the game set: 0 off, else on (or how bright, up to 255).
+    case led(index: Int, state: Int)
     case message(String)
     case geometry(width: Int, height: Int, aspect: Double?)
     case rotation(turns: Int)
@@ -73,7 +77,23 @@ public enum GameEvent: Equatable {
         func words(_ key: String) -> String { object[key] as? String ?? "" }
         switch type {
         case "hello": return .hello(video: words("video"))
-        case "rumble": return .rumble(port: int("port"), strength: min(1, max(0, (double("strength") ?? 0) / 65535)))
+        case "rumble":
+            let motor: RumbleMotor
+            switch object["motor"] as? String {
+            case "strong"?: motor = .strong
+            case "weak"?: motor = .weak
+            default:
+                // The first stream says only `effect`: 0 the strong motor, 1 the weak.
+                switch (object["effect"] as? NSNumber)?.intValue {
+                case 0?: motor = .strong
+                case 1?: motor = .weak
+                default: motor = .either
+                }
+            }
+            return .rumble(port: int("port"), strength: min(1, max(0, (double("strength") ?? 0) / 65535)), motor: motor,
+                           ms: (object["ms"] as? NSNumber)?.intValue)
+        case "motion": return .motion(GameMotionWant(object))
+        case "led": return .led(index: int("index"), state: int("state"))
         case "message": return .message(words("text"))
         case "geometry": return .geometry(width: int("width"), height: int("height"), aspect: double("aspect"))
         case "rotation": return .rotation(turns: int("turns"))
@@ -88,7 +108,11 @@ public enum GameEvent: Equatable {
             return .stream(GameStreamDescription(conn: words("conn"), transport: words("transport"), video: words("video"), audio: words("audio"),
                                                  width: int("width"), height: int("height"), aspect: double("aspect"), fps: double("fps"),
                                                  rate: int("rate"), turns: int("turns"), ports: int("ports"), motion: object["motion"] as? Bool ?? false,
-                                                 pace: double("pace") ?? 0, kbps: int("kbps"), away: object["away"] as? Bool ?? false))
+                                                 pace: double("pace") ?? 0, kbps: int("kbps"), away: object["away"] as? Bool ?? false,
+                                                 motionOn: (object["motionOn"] as? [[String: Any]] ?? []).map(GameMotionWant.init),
+                                                 leds: (object["leds"] as? [[String: Any]] ?? []).map {
+                                                     GameLight(index: ($0["index"] as? NSNumber)?.intValue ?? 0, state: ($0["state"] as? NSNumber)?.intValue ?? 0)
+                                                 }))
         case "seats":
             let list = object["seats"] as? [[String: Any]] ?? []
             return .seats(list.map { GameSeat(port: ($0["port"] as? NSNumber)?.intValue ?? 0, conn: $0["conn"] as? String ?? "",
@@ -118,6 +142,10 @@ public struct GameStreamDescription: Equatable {
     public var pace: Double
     public var kbps: Int
     public var away: Bool
+    /// The players whose motion the game reads now.
+    public var motionOn: [GameMotionWant] = []
+    /// The lights the game has set.
+    public var leds: [GameLight] = []
 
     /// What to tell a person when the game ended and the server said only why.
     public static func endedWords(_ code: String) -> String {
@@ -130,6 +158,47 @@ public struct GameStreamDescription: Equatable {
         default: return "The game stopped."
         }
     }
+}
+
+/// Which of a controller's two motors: the heavy low one in the left handle, the light high one in the right.
+public enum RumbleMotor: String, Equatable {
+    case strong, weak, either
+}
+
+/// What the game wants of a player's motion sensors.
+public struct GameMotionWant: Equatable {
+    /// The game can read motion at all.
+    public var offered: Bool
+    /// Which player this is about, or none when it only says the game can read motion.
+    public var port: Int?
+    public var accel: Bool
+    public var gyro: Bool
+    /// How often to send, up to 60 a second.
+    public var hz: Double
+
+    public init(offered: Bool = true, port: Int?, accel: Bool, gyro: Bool, hz: Double) {
+        self.offered = offered
+        self.port = port
+        self.accel = accel
+        self.gyro = gyro
+        self.hz = hz
+    }
+
+    init(_ object: [String: Any]) {
+        offered = object["offered"] as? Bool ?? true
+        port = (object["port"] as? NSNumber)?.intValue
+        accel = object["accel"] as? Bool ?? false
+        gyro = object["gyro"] as? Bool ?? false
+        hz = min(60, max(0, (object["hz"] as? NSNumber)?.doubleValue ?? 60))
+    }
+
+    /// Something to send for this player.
+    public var wanted: Bool { offered && port != nil && (accel || gyro) && hz > 0 }
+}
+
+public struct GameLight: Equatable {
+    public var index: Int
+    public var state: Int
 }
 
 /// One player and the device holding it.

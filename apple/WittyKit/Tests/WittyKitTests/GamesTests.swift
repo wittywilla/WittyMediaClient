@@ -418,7 +418,7 @@ final class GamesTests: XCTestCase {
 
     func testEvents() {
         XCTAssertEqual(GameEvent.parse(#"{"type":"hello","video":"h264"}"#), .hello(video: "h264"))
-        XCTAssertEqual(GameEvent.parse(#"{"type":"rumble","port":1,"effect":0,"strength":65535}"#), .rumble(port: 1, strength: 1))
+        XCTAssertEqual(GameEvent.parse(#"{"type":"rumble","port":1,"effect":0,"strength":65535}"#), .rumble(port: 1, strength: 1, motor: .strong))
         XCTAssertEqual(GameEvent.parse(#"{"type":"geometry","width":320,"height":240,"aspect":1.333}"#), .geometry(width: 320, height: 240, aspect: 1.333))
         XCTAssertEqual(GameEvent.parse(#"{"type":"ended","text":"The game stopped responding."}"#), .ended("The game stopped responding."))
         XCTAssertEqual(GameEvent.parse(#"{"type":"disc","index":1,"count":3}"#), .disc(index: 1, count: 3))
