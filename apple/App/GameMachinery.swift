@@ -405,6 +405,57 @@ func decodeGameJPEG(_ data: Data) -> CGImage? {
 
 // MARK: - Sound
 
+/// The second stream's sound over its WebSocket: Opus, one 10 ms 48 kHz stereo packet at a time,
+/// into the signed 16-bit stereo the sound plays.
+final class GameOpusDecoder {
+    static let rate = 48_000
+    private let input: AVAudioFormat
+    private let output: AVAudioFormat
+    private let converter: AVAudioConverter
+
+    init?() {
+        var description = AudioStreamBasicDescription(mSampleRate: Double(Self.rate), mFormatID: kAudioFormatOpus, mFormatFlags: 0,
+                                                      mBytesPerPacket: 0, mFramesPerPacket: 480, mBytesPerFrame: 0,
+                                                      mChannelsPerFrame: 2, mBitsPerChannel: 0, mReserved: 0)
+        guard let input = AVAudioFormat(streamDescription: &description),
+              let output = AVAudioFormat(commonFormat: .pcmFormatInt16, sampleRate: Double(Self.rate), channels: 2, interleaved: true),
+              let converter = AVAudioConverter(from: input, to: output) else { return nil }
+        self.input = input
+        self.output = output
+        self.converter = converter
+    }
+
+    /// Whether this device can decode Opus, so the hello can ask for it.
+    static let available: Bool = GameOpusDecoder() != nil
+
+    func reset() { converter.reset() }
+
+    func decode(_ packet: Data) -> Data? {
+        guard !packet.isEmpty else { return nil }
+        let compressed = AVAudioCompressedBuffer(format: input, packetCapacity: 1, maximumPacketSize: packet.count)
+        packet.withUnsafeBytes { compressed.data.copyMemory(from: $0.baseAddress!, byteCount: packet.count) }
+        compressed.byteLength = UInt32(packet.count)
+        compressed.packetCount = 1
+        compressed.packetDescriptions?[0] = AudioStreamPacketDescription(mStartOffset: 0, mVariableFramesInPacket: 0,
+                                                                          mDataByteSize: UInt32(packet.count))
+        // Room for the longest Opus packet, 120 ms.
+        guard let out = AVAudioPCMBuffer(pcmFormat: output, frameCapacity: 5760) else { return nil }
+        var given = false
+        var error: NSError?
+        let status = converter.convert(to: out, error: &error) { _, state in
+            if given {
+                state.pointee = .noDataNow
+                return nil
+            }
+            given = true
+            state.pointee = .haveData
+            return compressed
+        }
+        guard status != .error, out.frameLength > 0, let samples = out.int16ChannelData?[0] else { return nil }
+        return Data(bytes: samples, count: Int(out.frameLength) * 4)
+    }
+}
+
 /// PCM as it comes, at whatever rate the console makes it. What's waiting to be played is kept
 /// short, by the person's `audio.latency`: past that, a little is left out to catch up, as the
 /// browser's player does.

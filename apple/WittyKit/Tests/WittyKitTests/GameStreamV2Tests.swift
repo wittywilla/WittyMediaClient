@@ -41,6 +41,8 @@ final class GameStreamV2Tests: XCTestCase {
         XCTAssertEqual(GameHello(app: String(repeating: "a", count: 99), device: "d", name: String(repeating: "n", count: 99), seats: [],
                                  display: .init(hz: 60, width: 1, height: 1)).name.count, 40, "names are kept short")
         XCTAssertEqual(GameHello.seatsText([1, 0]), #"{"ports":[0,1],"take":false,"type":"seats"}"#)
+        XCTAssertEqual(GameHello.reportText(hz: 50), #"{"hz":50,"type":"report"}"#)
+        XCTAssertEqual(GameHello.reportText(hz: 59.94006), #"{"hz":59.94,"type":"report"}"#)
     }
 
     func testTheStreamsEvents() throws {

@@ -1,4 +1,6 @@
 #if os(tvOS) || os(iOS) || os(visionOS)
+import AVKit
+import CoreMedia
 import GameController
 import MetalKit
 import SwiftUI
@@ -130,6 +132,8 @@ private struct GameScreen: UIViewControllerRepresentable {
 private final class GamePipeline: @unchecked Sendable {
     let renderer: GamePictureRenderer?
     let sound = GameSound()
+    /// For the second stream's Opus, where this device can decode it.
+    let opus = GameOpusDecoder()
     private var decoder: GameVideoDecoder!
     private weak var view: MTKView?
     private let lock = NSLock()
@@ -159,6 +163,7 @@ private final class GamePipeline: @unchecked Sendable {
         lock.unlock()
         queue.async { [self] in
             decoder.reset()
+            opus?.reset()
             sound.flush()
         }
         return id
@@ -180,7 +185,9 @@ private final class GamePipeline: @unchecked Sendable {
                 }
             case .pcm(let rate, let samples):
                 sound.play(samples, rate: rate)
-            case .timing, .unknown, .opus:
+            case .opus(_, let packet):
+                if let samples = opus?.decode(packet) { sound.play(samples, rate: GameOpusDecoder.rate) }
+            case .timing, .unknown:
                 break
             }
         }
@@ -587,6 +594,7 @@ final class GamePlayerModel: ObservableObject {
         case .stream(let s):
             // The second stream says the shape and turns as the session does, how many players the
             // game takes, and whose motion it reads.
+            matchRefresh(fps: s.fps, width: s.width, height: s.height)
             if let shape = s.aspect, shape > 0 { aspect = shape }
             turns = s.turns
             if s.ports > 0 { input.playerPorts = GamePorts.players(count: s.ports, devices: session?.devices) }
@@ -616,11 +624,60 @@ final class GamePlayerModel: ObservableObject {
         let screen = UIScreen.main
         let display = GameHello.Display(hz: Double(screen.maximumFramesPerSecond), width: Int(screen.nativeBounds.width), height: Int(screen.nativeBounds.height))
         #endif
-        return GameHello(app: "WittyMedia \(platform) \(version)", device: Self.deviceId, name: UIDevice.current.name, seats: input.ports,
+        return GameHello(app: "WittyMedia \(platform) \(version)", device: Self.deviceId, name: UIDevice.current.name,
+                         audio: GameOpusDecoder.available ? ["opus", "pcm"] : ["pcm"], seats: input.ports,
                          display: display, latency: settings.text("emulation.latency", "auto"))
     }
 
+    // MARK: The TV's refresh rate
+
+    #if os(tvOS)
+    private var matchedDisplay = false
+    #endif
+
+    /// Where the person lets apps switch the TV to what they show (Settings, Video and Audio, Match
+    /// Content), the TV switches to the game's rate: 50 Hz for a PAL game, so no frame is dropped or
+    /// shown twice. Once it has, the server is told, and paces the game to it.
+    private func matchRefresh(fps: Double?, width: Int, height: Int) {
+        #if os(tvOS)
+        guard #available(tvOS 17.0, *), let fps, fps > 0, !matchedDisplay,
+              let manager = host.view.window?.avDisplayManager, manager.isDisplayCriteriaMatchingEnabled else { return }
+        var format: CMVideoFormatDescription?
+        CMVideoFormatDescriptionCreate(allocator: nil, codecType: kCMVideoCodecType_H264, width: Int32(max(1, width)),
+                                       height: Int32(max(1, height)), extensions: nil, formatDescriptionOut: &format)
+        guard let format else { return }
+        manager.preferredDisplayCriteria = AVDisplayCriteria(refreshRate: Float(fps), formatDescription: format)
+        matchedDisplay = true
+        reportRefresh(after: 1, tries: 8)
+        #endif
+    }
+
+    #if os(tvOS)
+    /// Once the switch is done, the screen's rate as it is now.
+    private func reportRefresh(after seconds: Double, tries: Int) {
+        DispatchQueue.main.asyncAfter(deadline: .now() + seconds) { [weak self] in
+            guard let self, !self.stopped else { return }
+            if host.view.window?.avDisplayManager.isDisplayModeSwitchInProgress == true, tries > 0 {
+                self.reportRefresh(after: 0.5, tries: tries - 1)
+                return
+            }
+            let hz = Double(host.view.window?.screen.maximumFramesPerSecond ?? 0)
+            if hz > 0 { self.transport?.sendEvent(GameHello.reportText(hz: hz)) }
+        }
+    }
+    #endif
+
+    /// The TV goes back to what the rest of the app shows.
+    private func unmatchRefresh() {
+        #if os(tvOS)
+        guard matchedDisplay else { return }
+        matchedDisplay = false
+        host.view.window?.avDisplayManager.preferredDisplayCriteria = nil
+        #endif
+    }
+
     private func finish(saying words: String) {
+        unmatchRefresh()
         stopped = true
         transport?.close()
         input.stop()
@@ -785,6 +842,7 @@ final class GamePlayerModel: ObservableObject {
 
     /// Leaving any other way still saves and stops it, without waiting.
     func abandon() {
+        unmatchRefresh()
         guard !stopped else { return }
         stopped = true
         input.stop()

@@ -59,6 +59,15 @@ public struct GameHello: Encodable, Equatable {
         return String(decoding: out, as: UTF8.self)
     }
 
+    /// The screen's refresh rate now, after a TV switched to the game's: the server paces the game to it.
+    public static func reportText(hz: Double) -> String {
+        // To a thousandth, as written by hand: JSON's own writer gives 59.94 as 59.939999999999998.
+        var number = String(format: "%.3f", max(0, hz))
+        while number.hasSuffix("0") { number.removeLast() }
+        if number.hasSuffix(".") { number.removeLast() }
+        return #"{"hz":\#(number),"type":"report"}"#
+    }
+
     /// Changing which players this device holds, once connected.
     public static func seatsText(_ ports: [Int], take: Bool = false) -> String {
         let object: [String: Any] = ["type": "seats", "ports": ports.sorted(), "take": take]
