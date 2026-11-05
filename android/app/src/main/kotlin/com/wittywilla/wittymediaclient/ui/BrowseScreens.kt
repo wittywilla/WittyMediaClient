@@ -120,7 +120,7 @@ fun LoadFailed(nav: Nav, message: String, retry: () -> Unit) {
     }
 }
 
-private fun Nav.play(item: Item) = when {
+fun Nav.play(item: Item) = when {
     item.isTrack -> playTrack(item)
     item.isRigGame -> push(Route.Item(item.id))
     item.hasOwnScreen -> push(Route.Player(item.id, false))
@@ -267,6 +267,11 @@ private fun OnNowRow(nav: Nav, channels: List<GuideChannel>) {
 @Composable
 fun HomeScreen(nav: Nav, s: Map<String, String>) {
     val metrics = LocalMetrics.current
+    // A phone or tablet has the website's Home.
+    if (!metrics.tv) {
+        PhoneHome(nav, s)
+        return
+    }
     var home by remember { mutableStateOf(nav.remembered<Home>("home")) }
     var error by remember { mutableStateOf("") }
     var attempt by remember { mutableIntStateOf(0) }
