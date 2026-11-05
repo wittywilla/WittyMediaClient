@@ -8,6 +8,9 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.foundation.layout.IntrinsicSize
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -188,7 +191,7 @@ fun ConnectScreen(nav: Nav, s: Map<String, String>, message: String) {
         actions = {
             Column(noticeMoves.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(LocalMetrics.current.u(24))) {
                 Problem(problem)
-                Column(verticalArrangement = Arrangement.spacedBy(LocalMetrics.current.u(8))) {
+                Column(verticalArrangement = Arrangement.spacedBy(LocalMetrics.current.u(if (tv) 16 else 8))) {
                     SectionLabel(s["foundServers"].orEmpty(), searching = !cantSearch)
                     found.forEachIndexed { i, server ->
                         key(server.id) {
@@ -207,7 +210,7 @@ fun ConnectScreen(nav: Nav, s: Map<String, String>, message: String) {
                     }
                 }
                 if (others.isNotEmpty()) {
-                    Column(verticalArrangement = Arrangement.spacedBy(LocalMetrics.current.u(8))) {
+                    Column(verticalArrangement = Arrangement.spacedBy(LocalMetrics.current.u(if (tv) 16 else 8))) {
                         SectionLabel(s["recentServers"].orEmpty())
                         others.forEachIndexed { i, server ->
                             key(server.url) {
@@ -663,8 +666,9 @@ private fun WhoStep(
             ) {
                 Lockup(nav.brandName, nav.brandLogo)
                 Text(s["whoTitle"].orEmpty(), color = MaterialTheme.colorScheme.onBackground, style = MaterialTheme.typography.display, modifier = Modifier.semantics { heading() })
+                // 24 units of room inside the scroll, so a lifted, grown, ringed avatar is never cut off.
                 Row(
-                    Modifier.horizontalScroll(rememberScrollState()).padding(metrics.u(16)).remoteRow(),
+                    Modifier.horizontalScroll(rememberScrollState()).padding(metrics.u(24)).remoteRow(),
                     horizontalArrangement = Arrangement.spacedBy(metrics.u(48)),
                 ) { tiles() }
                 Problem(problem)
@@ -717,7 +721,6 @@ private fun PasswordStep(
 ) {
     val metrics = LocalMetrics.current
     val field = remember { FocusRequester() }
-    val shown = avatarName(who.displayName, who.name)
     // On the first look; coming back, as from the help, focus goes back where it was.
     val firstLook = LocalFocusMemory.current.last == null
     LaunchedEffect(who.id) { if (firstLook) runCatching { field.requestFocus() } }
@@ -725,11 +728,9 @@ private fun PasswordStep(
         onBack,
         words = {
             val centre = if (metrics.tv) Modifier else Modifier.align(Alignment.CenterHorizontally)
-            Avatar(shown, metrics.u(if (metrics.tv) 200 else 120), centre)
-            Column(centre, horizontalAlignment = if (metrics.tv) Alignment.Start else Alignment.CenterHorizontally) {
-                Text(shown, color = MaterialTheme.colorScheme.onBackground, style = MaterialTheme.typography.headline)
-                if (showsUsername(who.displayName, who.name)) Text("@${who.name}", color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.secondary)
-            }
+            // The face and its names are one group, the names centred under it: in the middle on a phone,
+            // at the start of the words on a TV.
+            FaceWithNames(who, metrics.u(if (metrics.tv) 200 else 120), centre)
             Text(s["passwordHint"].orEmpty(), color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.body, modifier = centre)
         },
         actions = {
@@ -742,6 +743,20 @@ private fun PasswordStep(
             ForgotPassword(nav, s, if (metrics.tv) Modifier else Modifier.align(Alignment.CenterHorizontally))
         },
     )
+}
+
+// docs/APP-DESIGN.md, Avatar 5: wherever a face shows with its names, they're centred under it.
+@Composable
+fun FaceWithNames(who: Profile, size: androidx.compose.ui.unit.Dp, modifier: Modifier = Modifier) {
+    val shown = avatarName(who.displayName, who.name)
+    Column(modifier.width(IntrinsicSize.Max).widthIn(min = size), horizontalAlignment = Alignment.CenterHorizontally) {
+        Avatar(shown, size)
+        Spacer(Modifier.height(LocalMetrics.current.u(12)))
+        Text(shown, color = MaterialTheme.colorScheme.onBackground, style = MaterialTheme.typography.headline, textAlign = TextAlign.Center)
+        if (showsUsername(who.displayName, who.name)) {
+            Text("@${who.name}", color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.secondary, textAlign = TextAlign.Center)
+        }
+    }
 }
 
 @Composable

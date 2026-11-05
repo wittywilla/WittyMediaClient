@@ -20,6 +20,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.CornerBasedShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardActions
@@ -47,6 +48,8 @@ import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.geometry.CornerRadius
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Shape
@@ -91,12 +94,21 @@ private const val PRESS_ALPHA = 0.85f
 private const val DISABLED_ALPHA = 0.55f
 private const val FOCUS_TRIES = 4
 
-// A ring around something, `gap` out from its edge, drawn outside it so nothing moves when it shows.
+// A ring around something, `gap` out from its edge, drawn outside it so nothing moves when it shows. It's
+// concentric: each corner is the thing's own radius plus the distance out, so a radius 14 key's 4-wide ring 4 out
+// has an outer radius of 22, never the key's radius drawn larger.
 fun Modifier.ringOutside(shape: Shape, colour: Color, gap: Dp, width: Dp): Modifier = drawWithContent {
     drawContent()
-    val out = gap.toPx() + width.toPx() / 2
-    val outline = shape.createOutline(Size(size.width + 2 * out, size.height + 2 * out), layoutDirection, this)
-    translate(-out, -out) { drawOutline(outline, colour, style = Stroke(width.toPx())) }
+    val stroke = width.toPx()
+    val out = gap.toPx() + stroke / 2
+    val radius = (shape as? CornerBasedShape)?.topStart?.toPx(size, this) ?: 0f
+    drawRoundRect(
+        colour,
+        topLeft = Offset(-out, -out),
+        size = Size(size.width + 2 * out, size.height + 2 * out),
+        cornerRadius = CornerRadius(radius + out),
+        style = Stroke(stroke),
+    )
 }
 
 // What the sign-in screens and the pieces from docs/APP-DESIGN.md are pressed with. Held, it shrinks a
@@ -120,6 +132,8 @@ fun Pressable(
     pressScale: Float = PRESS_SCALE,
     pressAlpha: Float = PRESS_ALPHA,
     ring: Boolean = true,
+    // Off for something whose own part reacts instead, as a profile tile's avatar does.
+    grows: Boolean = true,
     // Off for something that draws outside itself, as a profile tile's lifted, ringed avatar does.
     clip: Boolean = true,
     content: @Composable (active: Boolean) -> Unit,
@@ -148,7 +162,7 @@ fun Pressable(
     }
     val showsFocus = focused && keyboard
     val grow = when {
-        reduce -> 1f
+        reduce || !grows -> 1f
         showsFocus -> metrics.focusScale
         pressed -> pressScale
         else -> 1f
@@ -520,15 +534,25 @@ fun ProfileTile(
     }.joinToString(", ")
     Pressable(
         onClick, modifier.width(avatarSize), shape = LocalMetrics.current.corner(10), label = spoken, focusKey = focusKey, requestFocus = requestFocus,
-        pressScale = 1f, pressAlpha = 1f, ring = false, clip = false,
+        pressScale = 1f, pressAlpha = 1f, ring = false, grows = false, clip = false,
     ) { active ->
+        // A phone: lift 3, rings 3 and 3. A TV: lift 6 units and grow 1.06, rings 4 and 4 units.
         val gap = if (metrics.tv) metrics.focusRing else 3.dp
-        Column(horizontalAlignment = Alignment.CenterHorizontally) {
-            Box(contentAlignment = Alignment.BottomCenter) {
+        val lift = if (metrics.tv) metrics.u(6) else 3.dp
+        val grow = if (active && metrics.tv && !reduce) metrics.focusScale else 1f
+        Column(Modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally) {
+            // Only the avatar reacts, and the badge moves with it; the names keep their size.
+            Box(
+                Modifier.graphicsLayer {
+                    translationY = if (active && !reduce) -lift.toPx() else 0f
+                    scaleX = grow
+                    scaleY = grow
+                },
+                contentAlignment = Alignment.BottomCenter,
+            ) {
                 Avatar(
                     shown, avatarSize,
                     Modifier
-                        .graphicsLayer { translationY = if (active && !reduce) -LIFT.toPx() else 0f }
                         .then(
                             if (active) {
                                 Modifier
@@ -559,19 +583,18 @@ fun ProfileTile(
             Text(
                 shown, color = if (active) scheme.onBackground else scheme.onSurfaceVariant,
                 style = MaterialTheme.typography.label.copy(fontWeight = FontWeight.SemiBold),
-                maxLines = 1, overflow = TextOverflow.Ellipsis, textAlign = TextAlign.Center,
+                maxLines = 1, overflow = TextOverflow.Ellipsis, textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth(),
             )
             if (showsUsername(profile.displayName, profile.name)) {
                 Text(
                     "@${profile.name}", color = scheme.onSurfaceVariant, style = MaterialTheme.typography.secondary,
-                    maxLines = 1, overflow = TextOverflow.Ellipsis, textAlign = TextAlign.Center,
+                    maxLines = 1, overflow = TextOverflow.Ellipsis, textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth(),
                 )
             }
         }
     }
 }
 
-private val LIFT = 3.dp
 
 private fun Modifier.border1(colour: Color) = this.then(
     Modifier.drawWithContent {

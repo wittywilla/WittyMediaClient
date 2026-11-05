@@ -34,8 +34,10 @@ class AvatarTest {
         assertEquals("?", avatarInitial("  "))
     }
 
+    // Exactly, not ignoring capitals: the username is what's typed, so "Ziggy" keeps "@ziggy" under it.
     @Test
     fun theUsernameShowsOnlyWhenItSaysSomethingElse() {
+        assertTrue(showsUsername("Ziggy", "ziggy"))
         assertTrue(showsUsername("Ann", "ann"))
         assertFalse(showsUsername("", "ann"))
         assertFalse(showsUsername("ann", "ann"))

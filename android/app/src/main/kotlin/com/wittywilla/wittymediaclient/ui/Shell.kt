@@ -144,7 +144,7 @@ fun Shell(nav: Nav, content: @Composable () -> Unit) {
                 // docs/APP-DESIGN.md, "On a TV": pills along the top, 24 units down. Up from the first row reaches them.
                 Row(
                     Modifier.fillMaxWidth().padding(start = metrics.gutter, end = metrics.gutter, top = metrics.u(24), bottom = metrics.u(16)).remoteRow(),
-                    horizontalArrangement = Arrangement.spacedBy(metrics.u(12)),
+                    horizontalArrangement = Arrangement.spacedBy(metrics.u(16)),
                 ) {
                     TABS.forEach { TabButton(nav, it, wide = true) }
                     if (nav.hasGuide) {

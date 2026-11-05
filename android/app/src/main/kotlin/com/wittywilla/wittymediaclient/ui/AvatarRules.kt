@@ -33,5 +33,6 @@ fun avatarInitial(name: String): String {
     return String(Character.toChars(trimmed.codePointAt(0))).uppercase()
 }
 
-// The username goes under the profile name only when there is one and it says something else.
+// The username goes under the profile name whenever there is one that isn't exactly the username, even when only
+// the capitals differ ("Ziggy" over "@ziggy"): the username is what's typed to sign in.
 fun showsUsername(displayName: String, username: String): Boolean = displayName.isNotEmpty() && displayName != username

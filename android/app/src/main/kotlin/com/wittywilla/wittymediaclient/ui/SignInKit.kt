@@ -122,7 +122,7 @@ fun TvSignInPage(onBack: (() -> Unit)? = null, words: @Composable ColumnScope.()
         Box(Modifier.weight(1f).fillMaxHeight(), contentAlignment = Alignment.CenterStart) {
             Column(
                 // Room for a focused control to grow and show its ring without being cut off.
-                Modifier.verticalScroll(rememberScrollState()).padding(start = metrics.u(32), end = metrics.gutter, top = metrics.edge, bottom = metrics.edge),
+                Modifier.verticalScroll(rememberScrollState()).padding(start = metrics.u(48), end = metrics.gutter, top = metrics.edge, bottom = metrics.edge),
                 verticalArrangement = Arrangement.spacedBy(metrics.u(16)),
                 content = actions,
             )
@@ -318,7 +318,8 @@ private const val CARET_MS = 530
 fun NumberPad(onDigit: (Char) -> Unit, onDelete: () -> Unit, modifier: Modifier = Modifier, firstFocus: Boolean = false) {
     val metrics = LocalMetrics.current
     val keys = remember { List(PAD_KEYS.size) { FocusRequester() } }
-    val gap = metrics.u(8)
+    // 16 apart on a TV, so a focused key growing 1.06 never covers its neighbour.
+    val gap = metrics.u(if (metrics.tv) 16 else 8)
     // Columns of the same width all the way down, so the 0 spans exactly two of them and the gap between.
     BoxWithConstraints(modifier) {
         val column = (maxWidth - gap * 2) / 3
@@ -344,6 +345,8 @@ private fun PadKey(key: Int, keys: List<FocusRequester>, requestFocus: Boolean, 
     val scheme = MaterialTheme.colorScheme
     val metrics = LocalMetrics.current
     val delete = key == PAD_DELETE
+    // A focused key on a TV has no ring: it fills with `text` and its digit turns `background`, as the
+    // systems' own keyboards do. A phone's keys have no focus look at all.
     Pressable(
         onClick,
         modifier.focusProperties {
@@ -352,12 +355,17 @@ private fun PadKey(key: Int, keys: List<FocusRequester>, requestFocus: Boolean, 
             padMove(key, PadMove.Left)?.let { left = keys[it] }
             padMove(key, PadMove.Right)?.let { right = keys[it] }
         },
-        shape = LocalMetrics.current.corner(14), fill = scheme.surfaceVariant, focusRequester = keys[key], requestFocus = requestFocus,
-        label = if (delete) LocalWords.current["codeDelete"] else null,
-    ) {
-        Box(Modifier.fillMaxWidth().height(metrics.u(if (metrics.tv) 96 else 64)), contentAlignment = Alignment.Center) {
-            if (delete) Icon(Symbols.DeleteDigit, contentDescription = null, tint = scheme.onSurface, modifier = Modifier.size(metrics.u(26)))
-            else Text(PAD_KEYS[key], color = scheme.onSurface, style = MaterialTheme.typography.headline)
+        shape = LocalMetrics.current.corner(14), focusRequester = keys[key], requestFocus = requestFocus,
+        label = if (delete) LocalWords.current["codeDelete"] else null, ring = false,
+    ) { active ->
+        val lit = active && metrics.tv
+        val ink = if (lit) scheme.background else scheme.onSurface
+        Box(
+            Modifier.fillMaxWidth().height(metrics.u(if (metrics.tv) 96 else 64)).background(if (lit) scheme.onBackground else scheme.surfaceVariant),
+            contentAlignment = Alignment.Center,
+        ) {
+            if (delete) Icon(Symbols.DeleteDigit, contentDescription = null, tint = ink, modifier = Modifier.size(metrics.u(26)))
+            else Text(PAD_KEYS[key], color = ink, style = MaterialTheme.typography.headline)
         }
     }
 }
