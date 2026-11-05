@@ -382,6 +382,14 @@ public struct LibraryState: Equatable, Hashable {
         all = fields["view"] == "all"
     }
 
+    /// A library page's address, `/library/3?genre=Drama&sort=rating`: which library, and what's chosen on it.
+    public static func page(_ path: String) -> (library: Int64, state: LibraryState)? {
+        let parts = path.split(separator: "?", maxSplits: 1, omittingEmptySubsequences: false)
+        let route = parts[0].split(separator: "/", omittingEmptySubsequences: true)
+        guard route.count == 2, route[0] == "library", let id = Int64(route[1]) else { return nil }
+        return (id, parts.count > 1 ? LibraryState(query: String(parts[1])) : LibraryState())
+    }
+
     /// What Save this view keeps: the filters, then the sort and its direction (not a shuffle's seed).
     public var savedQuery: String { written(whole: false) }
 

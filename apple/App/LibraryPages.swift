@@ -18,7 +18,7 @@ struct LibraryPage: View {
     @Environment(\.metrics) private var metrics
     @ScaledMetric(relativeTo: .subheadline) private var countSize: CGFloat = 14
     let library: Library
-    @State private var state = LibraryState()
+    @State private var state: LibraryState
     @State private var shelves: Shelves?
     @State private var listing: ListingStatus?
     @State private var views: [SavedView] = []
@@ -121,6 +121,12 @@ struct LibraryPage: View {
 
     private func open(_ route: Route) {
         model.path.append(route)
+    }
+
+    /// From a saved view or a link that asks for one genre, studio or sort: as the website's `/library/3?genre=Drama`.
+    init(library: Library, start: LibraryState = LibraryState()) {
+        self.library = library
+        _state = State(initialValue: start)
     }
 
     var body: some View {

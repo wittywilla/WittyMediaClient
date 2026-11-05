@@ -124,7 +124,11 @@ private struct TabRoot: View {
                     case .page(let path):
                         #if os(iOS) || os(visionOS)
                         let playing = model.pagePlaying && model.paths[tab]?.last == .page(path)
-                        if model.isTopPage(path) {
+                        if let found = model.libraryPage(path) {
+                            // A saved view, or a genre, studio or network from an item's page: the app's own library
+                            // page with that chosen, as the website opens /library/3?genre=Drama.
+                            LibraryView(library: found.library, start: found.state).noNavigationBar()
+                        } else if model.isTopPage(path) {
                             // Collections, Game PCs and modules' pages are sections of their own, under the strip.
                             WebPlayerView(path: path, keptToGames: false).underStrip(path: path, hidden: playing)
                         } else {

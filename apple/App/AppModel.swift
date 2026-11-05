@@ -699,6 +699,15 @@ final class AppModel: ObservableObject {
     /// A server page that's a top of its own (Collections, Game PCs, a module's page): it gets the strip, not Back.
     func isTopPage(_ path: String) -> Bool { stripPlaces.contains { $0.path == path } }
 
+    /// A film or TV library's page with something chosen (`/library/3?genre=Drama`), which this app shows itself.
+    /// Nil for anything else, and for a library the app hands to the server's page.
+    func libraryPage(_ path: String) -> (library: Library, state: LibraryState)? {
+        guard let (id, state) = LibraryState.page(path), state != LibraryState(),
+              let library = libraries.first(where: { $0.id == id }),
+              library.opensHere, !library.isRigGames else { return nil }
+        return (library, state)
+    }
+
     /// The menus' arrangement, modules' pages and the legal notices, asked for once a person is in.
     func loadNavigation() async {
         async let bundles = try? client.moduleBundles()

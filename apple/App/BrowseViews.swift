@@ -587,9 +587,10 @@ struct LibraryContent: View {
 struct LibraryView: View {
     @Environment(\.metrics) private var metrics
     let library: Library
+    var start = LibraryState()
 
     var body: some View {
-        if metrics.tv { TvLibraryView(library: library) } else { LibraryPage(library: library) }
+        if metrics.tv { TvLibraryView(library: library) } else { LibraryPage(library: library, start: start) }
     }
 }
 

@@ -65,6 +65,7 @@ private struct HubPageRow: View {
 
     private var seeAll: Route? {
         guard let id = hub.libraryId else { return nil }
+        // The view's own choices: the app's library page opens with them (Shell reads the address, AppModel.libraryPage).
         if let query = hub.query, !query.isEmpty { return .page("/library/\(id)?\(query)") }
         return library.map(libraryRoute) ?? .page("/library/\(id)")
     }

@@ -157,6 +157,17 @@ final class BrowseTests: XCTestCase {
         XCTAssertEqual(LibraryState(filters: ["genre": String(repeating: "Drama ", count: 20)]).suggestedName.count, 60)
     }
 
+    func testALibraryAddressOpensThatLibraryWithItsChoices() throws {
+        let page = try XCTUnwrap(LibraryState.page("/library/3?genre=Sci-Fi+%26+Fantasy&sort=rating&desc=1"))
+        XCTAssertEqual(page.library, 3)
+        XCTAssertEqual(page.state, LibraryState(sort: "rating", descending: true, filters: ["genre": "Sci-Fi & Fantasy"]))
+        XCTAssertEqual(LibraryState.page("/library/12")?.state, LibraryState())
+        XCTAssertEqual(LibraryState.page("/library/4?tag=a%2Bb")?.state.filters, ["tag": "a+b"])
+        XCTAssertNil(LibraryState.page("/library/3/fix"))
+        XCTAssertNil(LibraryState.page("/brand/studio/Pixar?library=3"))
+        XCTAssertNil(LibraryState.page("/library/x?genre=Drama"))
+    }
+
     func testTheFiltersSheetIsInTheWebsitesOrder() {
         XCTAssertEqual(FilterSection.all.map(\.title), ["Category", "Type", "Studio", "Network", "Listed on", "Decade", "Year", "Age rating",
                                                         "Score", "Watched", "Picture", "Sound", "Audio language", "Subtitles", "Edition", "Tags"])
