@@ -2,8 +2,6 @@ package com.wittywilla.wittymediaclient.ui
 
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
@@ -11,7 +9,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.Dp
 import com.google.zxing.BarcodeFormat
 import com.google.zxing.WriterException
 import com.google.zxing.qrcode.QRCodeWriter
@@ -27,16 +25,15 @@ fun qrCells(text: String): List<BooleanArray>? = try {
     null
 }
 
+// Drawn on white, for a QR card to put round it.
 @Composable
-fun QrCode(text: String, modifier: Modifier = Modifier) {
+fun QrCode(text: String, size: Dp, modifier: Modifier = Modifier) {
     val cells = remember(text) { qrCells(text) } ?: return
-    Box(modifier.background(Color.White).padding(Space.S3)) {
-        Canvas(Modifier.size(180.dp)) {
-            val side = size.width / cells.size
-            cells.forEachIndexed { y, row ->
-                row.forEachIndexed { x, dark ->
-                    if (dark) drawRect(Color.Black, Offset(x * side, y * side), Size(side + 0.5f, side + 0.5f))
-                }
+    Canvas(modifier.size(size).background(Color.White)) {
+        val side = this.size.width / cells.size
+        cells.forEachIndexed { y, row ->
+            row.forEachIndexed { x, dark ->
+                if (dark) drawRect(Color.Black, Offset(x * side, y * side), Size(side + 0.5f, side + 0.5f))
             }
         }
     }

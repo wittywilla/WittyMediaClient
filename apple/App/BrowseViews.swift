@@ -32,6 +32,7 @@ private func route(for item: Item) -> Route {
     // A song or a chapter opens its album or book, as on Android.
     if item.isAudio, let library = item.libraryId { return .listeningAlbum(library: library, album: item.album ?? "", artist: item.albumArtistName) }
     #if os(tvOS)
+    if item.isServerGame { return .game(item.id) }
     if item.isPhoto, let library = item.libraryId { return .photo(library: library, id: item.id) }
     return .item(item.id)
     #else

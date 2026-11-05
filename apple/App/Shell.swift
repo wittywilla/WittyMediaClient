@@ -91,7 +91,13 @@ private struct TabRoot: View {
                 .navigationDestination(for: Route.self) { route in
                     switch route {
                     case .library(let library):
-                        if library.hasListeningScreens {
+                        if library.hasGameScreens {
+                            #if os(tvOS)
+                            GamesLibraryView(library: library, console: nil).plainNavigation()
+                            #else
+                            LibraryView(library: library).plainNavigation()
+                            #endif
+                        } else if library.hasListeningScreens {
                             ListeningLibraryView(library: library).plainNavigation()
                         } else {
                             LibraryView(library: library).plainNavigation()
@@ -101,6 +107,17 @@ private struct TabRoot: View {
                     case .artist(let library, let name): ArtistScreen(library: library, name: name).plainNavigation()
                     case .show(let id): ShowView(id: id).plainNavigation()
                     case .item(let id): ItemView(id: id).plainNavigation()
+                    #if os(tvOS)
+                    case .gameLibrary(let library, let console): GamesLibraryView(library: library, console: console).plainNavigation()
+                    case .game(let id): GameDetailView(id: id).plainNavigation()
+                    // A new identity for each game, so a second one gets a new player.
+                    case .playGame(let id, let start): GamePlayerScreen(id: id, start: start).id("\(id)\(start)")
+                    #else
+                    // The website plays games on these devices: see WebPlayerView.
+                    case .gameLibrary(let library, _): LibraryView(library: library).plainNavigation()
+                    case .game(let id): ItemView(id: id).plainNavigation()
+                    case .playGame(let id, _): ItemView(id: id).plainNavigation()
+                    #endif
                     // A new identity for each thing played, so the next episode gets a new player
                     // and not the last one's state.
                     case .player(let id, let startOver): PlayerScreen(id: id, startOver: startOver).id(id)
