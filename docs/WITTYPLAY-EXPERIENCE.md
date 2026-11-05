@@ -86,6 +86,7 @@ into `strings.en.json` and the website as they are, and change only together.
 | Going back in time | **Rewind** (held); "Let go to play from here" | `wpRewind`, `wpRewindHint` | `rewind` |
 | How the picture is drawn | **Look**: Clean, Scanlines, CRT TV, Arcade, Handheld LCD, Smooth | `wpLook` | `display.*` presets |
 | A player's place, 1 to 4 | **Seat**; Free; Join a game; Watching | `wpSeats`, `wpSeatFree`, `wpJoinGame`, `wpWatching` | port |
+| Playing with someone on another server (reserved, not built) | **Multiplayer**, greyed out; "Play with someone on another server. Coming later." | `wpMultiplayer`, `wpMultiplayerLater` | — |
 | The pause menu | **Game menu** | `wpGameMenu` | game menu |
 | A collection playing by itself | **Channel**; on a TV left alone, **Leave it on** | `wpChannels`, `wpLeaveItOn` | — |
 | Moving a running game here | **Continue here**; "Playing on {device}", "Moved from {device}" | `wpContinueHere`, `wpPlayingOn`, `wpMovedFrom` | — |
@@ -99,6 +100,7 @@ your server", `wpConnectingTo` "Connecting to this {device}", `wpResetGame` "Res
 touch controls", `wpPressStart` "Press Start", `wpPressSelect` "Press Select", `wpMomentSaved` "Moment saved",
 `wpCantPlayYet` "Can't play yet", `wpScreens` "Screens", `wpSwapScreens` "Swap screens", `wpDiscs` "Discs",
 `wpChangeDisc` "Change disc", `wpMemoryCards` "Memory cards", `wpShortcuts` "Shortcuts", `wpButtonHints` "Button hints",
+`wpMultiplayer` "Multiplayer", `wpMultiplayerLater` "Play with someone on another server. Coming later.",
 and the states' words under [States](#states).
 
 ## The games home: Shelves
@@ -319,7 +321,7 @@ APP-DESIGN's item page, for a game:
 5. **Where you left off:** a `panel` card with the slot 0 picture 96×72 and its ribbon, "{when} · {device}" and "{time}
    played".
 6. **Moments** row (200×150), **About this game**, **How you play it** (Ready on your server or why not; Look; Seats;
-   Controls; Rewind), **Pictures**, **More like this**, **Your notes**.
+   **Multiplayer**, greyed out, right under Seats; Controls; Rewind), **Pictures**, **More like this**, **Your notes**.
 
 A game that can't play replaces 4 and 5 with its [state card](#states); Play never appears for it.
 
@@ -398,6 +400,7 @@ core](#adapts-to-each-core)):
 7. **Look:** 96×72 previews of this very picture in each Look; the chosen one ringed.
 8. **Seats:** as many as the console has ports (four with a multitap, "With a multitap" on the extra ones); each with the
    avatar, name and how they play, and the controller type when the core offers types ("DualShock ▾", "Light gun ▾").
+   Under the seats, **Multiplayer**, greyed out (see [Multiplayer](#multiplayer-reserved)).
 9. **Memory cards** (when the core keeps them): each card, whose it is ("This game's own", "Shared by your PlayStation
    games") and how many saves.
 10. Rows: Controllers (with "Light gun: aim with touch, a mouse or the right stick" for a light-gun console), Arrange
@@ -424,6 +427,22 @@ who's watching. Pressing a button on a new controller takes the next free seat; 
 
 **Who can take a seat:** the host's own devices always; other adults and Kids profiles on the server, with the code;
 Guest only with the code. Saves, moments and play time stay the host's. The host can free any seat.
+
+### Multiplayer (reserved)
+
+Playing a game together with someone on **another WittyMediaServer** is reserved and **not built**. It's separate from
+Seats, which are for people on this server. Every device shows it so that it reads as the natural next step after
+Seats, and every device shows it the same way:
+
+- **Where:** in the game menu, a row right under the seats; on a game's page, a row in How you play it right under
+  Seats. A game for two or more players (Made for two) shows it the same as any other.
+- **How:** a grouped-list row in its normal place and size, at 55% opacity: a 28 icon tile (`globe` / `public`,
+  quiet), **Multiplayer** (`wpMultiplayer`) in Body, and under it in Secondary `textHint` "Play with someone on
+  another server. Coming later." (`wpMultiplayerLater`). No chevron, no value, no press state.
+- **Not an action:** it does nothing when pressed, is left out of the focus order on a TV and with a pad or keyboard,
+  and a screen reader reads it as "Multiplayer, unavailable. Play with someone on another server. Coming later."
+  (`aria-disabled` on the web; the `.notEnabled` trait on Apple; `isEnabled = false` on Android).
+- **Server:** nothing, and no API. When it's built, it gets its own design and its own section here.
 
 ### Controllers
 
@@ -720,7 +739,8 @@ as a line. Below: Moments (304×228), About, How you play it (pills: Look, Seats
 The picture at full height on black; nothing else. **Back opens the game menu** as the split: the picture card on the left
 55% with the title in 38 and the seats; on the right (640 wide), Resume focused, the tiles 2×2 (296×120, icon 32 over
 24), Moments 240×180, Screens and Discs as on the phone at TV size, Look 200×150, Seats 140, rows 72 high: Controllers,
-Game settings (a QR card to the server's page), Press Start, Press Select, Reset the game, Save and quit. Back resumes.
+Game settings (a QR card to the server's page), Press Start, Press Select, Reset the game, Save and quit; Multiplayer
+sits greyed under the seats and focus passes over it. Back resumes.
 
 ### Seats on a TV
 
@@ -764,6 +784,7 @@ Identical to the phone above (APP-DESIGN's one mobile design). The website's pla
 ## Server work
 
 Nothing here blocks the first native build: everything marked "exists" in the prototype's notes ships first.
+Multiplayer needs nothing: it's reserved and shown greyed out.
 
 1. **Capabilities** per console and per running core (see [Adapts to each core](#adapts-to-each-core)), on
    `/games/consoles` and the session, with the core-option mapping for screens and the layout names.

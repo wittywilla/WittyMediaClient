@@ -198,5 +198,7 @@
   "foundOnNetwork": "Found on your network",
   "themeMadeByYou": "Made by you",
   "themeLooksPlainer": "Looks plainer in the app",
-  "themeWebOnly": "Some themes add pictures and effects that only the website can show; their colours still come across."
+  "themeWebOnly": "Some themes add pictures and effects that only the website can show; their colours still come across.",
+  "wpMultiplayer": "Multiplayer",
+  "wpMultiplayerLater": "Play with someone on another server. Coming later."
 }
