@@ -6,6 +6,9 @@ other**. Apple Vision Pro takes the tablet's. The desktop apps (Windows, macOS, 
 Plasma Bigscreen) are the server's own web interface in a window: only their connect screen,
 `shared/connect/`, is the apps', and it follows the same look.
 
+On a phone, the reference is the server's own website at phone size: the apps look and work like it, and what this
+page improves on it goes back to the website, so there is one mobile design (see One mobile design with the website).
+
 This is the contract both codebases are built and checked against. Where Apple and Android differ, it's
 only where each system has its own convention: the status bar, the back gesture, the keyboard. Wording
 comes from `shared/data/strings.en.json`, so every app says the same thing. Every feature the server
@@ -13,6 +16,8 @@ offers is reachable from every app: arranged for the device, never left out. See
 
 - [Principles](#principles)
 - [Foundations](#foundations)
+- [Themes](#themes)
+- [One mobile design with the website](#one-mobile-design-with-the-website)
 - [Brand](#brand)
 - [Components](#components)
 - [Signing in](#signing-in)
@@ -22,6 +27,11 @@ offers is reachable from every app: arranged for the device, never left out. See
 - [Checking a build against this](#checking-a-build-against-this)
 
 ## Principles
+
+0. **Everything everywhere.** Every feature of the server works on every device: phones, tablets, Apple TV, Android TV,
+   Vision Pro and the desktop apps. Each is built the way that's best for that device, natively where the device can't
+   show the server's pages (Apple TV has no web engine, so WittyTV's looks and WittyPlay are built natively there). No
+   feature is "on another device only".
 
 1. **The pictures are the colour.** Posters and backdrops carry the colour; everything around them is
    quiet, in the theme's neutrals. The accent marks one thing per screen: the main action, or what's chosen.
@@ -40,7 +50,7 @@ offers is reachable from every app: arranged for the device, never left out. See
 
 ### Colour roles
 
-From the server's theme (`shared/data/themes.json`, chosen by `/api/status` → `theme`):
+From the theme in use, translated from the server's theme tokens (see Themes):
 
 | Role | Use |
 |---|---|
@@ -90,9 +100,9 @@ styles, so Dynamic Type still works; on Android they're `sp`.
 |---|---|
 | A button pressed | 0.97 scale and 85% opacity while held |
 | A screen pushed | The system's own transition |
-| A profile tile chosen | The avatar lifts 3 and gains a ring (`background` 3, then `text` 3), as on the web |
+| A profile tile chosen | The avatar lifts 3 and gains two rings concentric with it, `background` 3 then `text` 3, as on the web (on a TV: lifts 6, grows 1.06, rings 4 and 4) |
 | Something appearing | 200 ms fade, and 8 up |
-| Focus on a TV | 1.06 scale and a 4-wide ring in `text`, no animation beyond that |
+| Focus on a TV | 1.06 scale and a concentric 4-wide ring in `text`; number pad keys fill with `text` instead (see On a TV) |
 
 ### Icons
 
@@ -115,16 +125,196 @@ SF Symbols on Apple, Material Symbols (rounded) on Android, mapped one to one:
 | Warning | `exclamationmark.triangle.fill` | `warning` |
 | Check | `checkmark` | `check` |
 
+## Themes
+
+Every theme the server has works in every app: the built-in ones, any the owner uploaded or made for everyone, and the
+look a person made for themselves with the theme maker. The apps read them as data and translate them; nothing is
+drawn from CSS.
+
+### Where they come from
+
+- `GET /api/v1/themes` lists them: `id`, `name`, `scheme` (`dark` or `light`), `preview` (`bg`, `surface`, `text`,
+  `accent`), `webOnly`, and which is the server's `default`.
+- `GET /api/v1/themes/{id}/tokens.json` is one theme: `colors` by CSS variable name (`--bg-2` is `bg-2`), `lengths`
+  (`radius`), `scheme`.
+- `GET /api/v1/me/ui` → `customTheme` (`name`, `scheme`, `accent`, `tint`, `corners`) is the person's own, made with the
+  theme maker.
+- `shared/data/themes.json` (the built-ins) ships in the apps, so the first screen has colours before any answer, and a
+  server that can't be reached still looks right.
+
+Each theme read is kept per server on the device, by id and the theme list's `modTime`, and read again only when that
+changes.
+
+### Translation
+
+| App role | Web token | Missing? |
+|---|---|---|
+| `background` | `bg` | `preview.bg` |
+| `panel` | `bg-2` | `background` mixed 4% towards `text` |
+| `card` | `bg-3` | `preview.surface`, else `background` mixed 9% towards `text` |
+| `raised` (a chosen chip, a pressed row) | `bg-4` | `card` mixed 6% towards `text` |
+| `border` | `border` | `text` at 10% |
+| `control` (outlines of fields and ghost buttons) | `control-line` | `text` at 20% |
+| `text` | `fg` | `preview.text` |
+| `textSecondary` | `fg-2` | `text` at 72% over `background` |
+| `textHint` | `fg-3` | `text` at 55% over `background` |
+| `accent` | `accent` | `preview.accent` |
+| `accentPressed` | `accent-2` | `accent` mixed 10% towards black |
+| `onAccent` | `accent-fg` | white or `#0e1013`, whichever reads better on `accent` |
+| `accentText` | `accent-text` | `accent` |
+| `danger`, `ok`, `warn` | `danger`, `ok`, `warn` | the default theme's |
+| `scrim` | `overlay` | black at 60% |
+| radius | `lengths.radius` | 10 |
+| light or dark | `scheme` | from `background`'s lightness |
+
+- **Colours** are read as `#RGB`, `#RRGGBB` or `#RRGGBBAA`; anything else counts as missing. Anything missing after
+  the fallbacks comes from the default theme. A colour with alpha (the web's `border` is `fg` at 10%) is kept with it.
+- **Corners follow the theme:** `radius` is the medium radius (buttons, fields, posters). Small is `radius − 4` (at
+  least 2), large is `radius + 4` (cards, grouped lists, library tiles), extra is `radius + 10` (sheets). Pills stay
+  round, and avatars stay 22% of their size.
+- **The theme maker** is ported exactly from the server's `web/src/ui/themeMaker.ts` (`makeTheme`): the same HSL
+  steps and the same contrast checks, so a person's own look is the same colour on every device. Both apps test it
+  against `shared/data/theme-maker-examples.json`, worked out by running that code.
+- **`webOnly` themes** still work; they're marked "Looks plainer in the app" in the list, as their extra CSS can't come.
+
+### Choosing
+
+You → Theme (see You and settings) lists: Automatic (light or dark with the device: `light` or `default`), the
+server's choice (named), "Made by you" when the account has a `customTheme`, then every theme from `GET /themes` with
+a swatch drawn from its `preview`. The choice is kept per server on the device, as the web keeps it per browser.
+Choosing applies at once, with a 200 ms cross-fade; the server's pages inside the app are told the same choice.
+
+TVs use the same layer and the same list. WittyTV's guide keeps its own looks on top: see On a TV.
+
 ## Brand
 
 - **Mark:** the server's icon (`web/public/icon.svg` in WittyMediaServer), drawn natively: a 64×64
   rounded square (radius 14) in `#1b1e25`, a ring of radius 20 and width 5, and a play triangle with
   points (27,23), (41,32), (27,41), both in a gradient from `#9d7bff` (top left) to `#5b3df5` (bottom right).
-- **Wordmark:** "Witty**Media**Server" in Headline weight bold, with "Media" in `accentText`. When the server
-  has a name of its own (`/api/status` → `brandName`), that name replaces the wordmark, in `text`.
-- **Custom logo:** when `/api/status` → `brandLogo` isn't empty, the mark is the server's logo,
-  `/api/branding/logo?v=<brandLogo>`, in the same rounded square.
-- **Lockup:** mark then wordmark, 10 apart. Sizes: 32 mark on the connect and profile screens, 48 on a TV.
+- **The app is WittyMediaClient.** Its name on the device, and its wordmark wherever no server has been added yet,
+  is "Witty**Media**Client" in Headline weight bold, with "Media" in `accentText`, after the mark. WittyMediaServer is
+  the server's name, never the app's.
+- **A server's identity comes only once it's added.** Until a server has been added to the app (its address entered or
+  chosen, and its identity checked), the app shows nothing the server says about itself: no name, no logo. After that,
+  wherever that server is meant (its sign-in screens, its card under "Used before", You's This server card), its
+  identity is:
+  - **Name:** `/api/status` → `brandName`, or "Witty**Media**Server" (styled as the wordmark) when it has none.
+  - **Logo:** when `/api/status` → `brandLogo` isn't empty, `/api/branding/logo?v=<brandLogo>` in the mark's rounded
+    square; otherwise the mark.
+  - Both are kept with the saved server (the logo's picture too, cached by its version), so the server list shows
+    them before the server answers, and they're refreshed each time it does.
+- **Lockup:** mark then wordmark. On a phone or tablet: a 32 mark, the wordmark in Headline (20) bold, 10 apart. **On a
+  TV it reads from across the room:** a 72 mark, the wordmark in 48 bold (the size of Display), 20 apart, and a
+  server's own logo at the same 72. Choose your server and Enter an address show the app's lockup; the screens of one
+  server show that server's. Where a TV names the server in a line (the sign-in screens' foot, You), it's Label (24)
+  with a 32 logo, not Secondary.
+
+## One mobile design with the website
+
+The server's own website, on a phone, is the reference for the phone apps: the same shell, the same pages, the same
+measurements, so moving between the website and an app is seamless. Where this page improves on the website, the
+website takes the improvement too (marked **→ web**), so there is one mobile design, not two. Sizes are from the
+website at 375 wide.
+
+### The shell
+
+- **The floating bar** sits 16 from the sides and the bottom (above the home indicator): a pill 60 high, `card` fill,
+  1-wide `control` outline, the shadow `0 10 30` black 45%, 4 inside. Five buttons share its width, 50 high, icons only
+  (24): **Home**, **TV guide**, **Search**, **Menu**, and **You** (the person's avatar, a 32 circle). The chosen one has
+  a pill of `accent` at 14% behind it and its icon in `accentText`; the others are `textSecondary`. Spoken as their
+  names ("You, Willow").
+- **The library strip** runs along the top of Home and the library pages: the libraries' names, 15, `textSecondary`,
+  20 apart, 44 high, scrolling sideways, the current one in `text` with a 2-high `accent` underline. Over a picture it
+  has no background; once the page scrolls under it, it gains `background` at 85% with a blur, and a hairline
+  (**→ web**: the website's strip stays transparent and floats over the cards).
+- **Back** (**→ web**): every page below Home, a library or a tab's first page has a 40 round Back button, top left, a
+  `background` at 70% circle with a chevron, over the picture where there is one. The library strip isn't shown there.
+- **The activity button** (an admin's task activity) sits at the top right, 40, and never over the strip's words
+  (**→ web**: it covers the last library name).
+- **Menu** opens a side drawer from the left, 280 wide (at most 80%), `panel`: the lockup, then `LIBRARIES` as a
+  Caption, then every library as a row 44 high with its icon in `textSecondary` and its name in Label. A scrim of
+  `scrim` covers everything else, the floating bar and the activity button included (**→ web**: they show through it).
+  Swiping left or tapping the scrim closes it.
+- **Loading** (**→ web**): a page shows grey shapes where its content is coming (`card` at 60%, a slow 1.2 s shimmer;
+  still with Reduce Motion), never an empty page with the version line in the middle.
+
+### Home
+
+1. **The hero** is the full width and 536 high on a phone (about two-thirds of the screen; 66% of the height at most
+   on other sizes): the backdrop, darkened from the bottom by `background` at 100% / 94% at 34% / 72% at 56% / 0 at
+   82%. Over it, 16 from the sides: the title in 30 semibold, letters −0.66, two lines at most; the facts (year · length ·
+   genres) in 15 `textSecondary`, 8 below; the synopsis in 15 `textSecondary`, two lines, 12 below; then 20 below,
+   **Play** (Primary) and **Details** (Ghost) side by side. Pager dots at the top right under the strip, with
+   pause; it moves on every 8 s, and not at all with Reduce Motion.
+2. **Your libraries**: Section title (20 semibold) with Quiet "Manage ›" for admins; a two-column grid, 8 apart, of
+   library tiles.
+3. **Rows**, each a Section title with "See all ›" (13 medium, `textSecondary`): Continue watching, Next up, Because you
+   watch…, Recently added in each library. Each row scrolls sideways with snapping, 16 from the left edge.
+
+### Playback and the media player
+
+Playing looks and works as the website's player does on a phone, control for control; only the engine underneath is
+the device's own (AVPlayer on Apple, ExoPlayer/Media3 on Android), for smooth playback, picture in picture, AirPlay and
+Chromecast, and the lock screen. The website's code is the reference, in the server's `web/src/player/` and
+`web/src/audio/`:
+
+- **Video** (`player/VideoPlayer.tsx`, `player/Controls.tsx`, `player/chrome.tsx`, `player/TrackPicker.tsx`,
+  `player/PlayInfoPanel.tsx`, `player/ViewSettings.tsx`, `player/PickIntroBar.tsx`): the same controls in the same
+  places, the seek bar with chapter marks and preview, skip intro and credits, next episode, the audio and subtitle
+  picker, speed, picture fit, the info panel, and the same timing for hiding the controls. Leaving the player for
+  the rest of the app keeps it playing in the mini player dock, as `/play` does.
+- **Discs** (`player/DvdPlayer.tsx`, `player/CdPlayer.tsx`, `player/InsertDisc.tsx`, `player/Remote.tsx`): menus,
+  chapters, the remote, insert-disc, and the CD player.
+- **Music, audiobooks, podcasts** (`audio/MiniPlayer.tsx`, `audio/NowPlaying.tsx`, `audio/controls.tsx`,
+  `audio/QueuePanel.tsx`, `audio/LyricsPanel.tsx`, `audio/Karaoke.tsx`, `audio/SoundPanel.tsx`, `audio/visualizer.tsx`,
+  `audio/nowplaying.css`): the mini bar above the floating bar, and Now Playing full screen with its artwork,
+  backdrop, lyrics, karaoke, queue, Sound (EQ, loudness, vocals, key), sleep timer, repeat, shuffle, song radio and
+  the visualizer.
+
+Nothing is invented on top: where the app and the website differ, the website wins, unless this page marks an
+improvement for both (**→ web**).
+
+### Components
+
+| Component | Look |
+|---|---|
+| **Button, Primary** | `accent` fill, `onAccent` words 14 semibold, 44 high, 16 inside, radius `radius`, an optional 18 icon 8 before |
+| **Button, Ghost** | No fill, 1-wide `control` outline, `text` words; otherwise as Primary |
+| **Button, Secondary** | `card` fill, `text` words |
+| **Library tile** | 64 high, 10 inside, `panel` fill, 1-wide `border`, radius large; a 38 icon square (radius medium) in `accent` at 14% with the icon in `accentText`; 10 after it, the name in 15 semibold over the count in 12 `textHint`; one line each |
+| **Poster card** | 104 wide on a phone (128 on a tablet), the poster 2:3, radius medium; under it 8 apart, the title in 14 semibold (two lines) and the facts in 12 `textHint`. 16 between cards |
+| **Placeholder poster** (**→ web**) | No artwork: a gradient from the title's colour (the avatar rule on the title) to `card`, with the title in 15 semibold white over its lower third |
+| **Category card** | Landscape 16:9, radius large, the backdrop with the hero's gradient, the name in 20 semibold and the count in 12, 12 from the lower left |
+| **Section title** | 20 semibold, letters −0.24; its action on the right in 13 medium `textSecondary` with a chevron |
+| **Chip** | 32 high, 12 inside, radius full, 13 medium; chosen: `raised` fill, `text`; others `textSecondary` |
+
+### Library pages
+
+The library strip; the library's name in Title with its count in 15 `textHint` beside it, and a Ghost **Filters**
+button on the right; the sort chips in one sideways row (`SORT` as a Caption before them); then the library's
+categories as category cards, studios, and rows. **An admin's tools** (All films, Fix matches, Categories, Scan) go
+behind one Ghost "⋯" button that opens a sheet of rows (**→ web**: they take two rows of the screen today).
+
+### An item
+
+Back; the backdrop across the top, 220 high, fading into `background` (no hard line under it: **→ web**); the poster,
+120 wide, overlapping it by 60 at the left; then the library's name as a Caption, the title in 30 semibold, the
+tagline in italic `textSecondary`, the facts. Actions in one row: **Play** (Primary, `Resume` when started), **Save**
+(Secondary), and "⋯" for everything else, admin tools included (**→ web**: five buttons in two rows and two styles
+today). Then the synopsis, cast, extras and related, as rows.
+
+### Search
+
+The field 44 high, radius medium, `card`, with a search icon; results grouped (Films, Shows, Music, Books…), each as
+poster cards three across on a phone (**→ web**: two across, which makes a poster fill half the screen).
+
+### You
+
+The avatar in the floating bar opens **You**. In the apps it is the You page (see You and settings). On the website,
+on a phone, it opens a sheet from the bottom (**→ web**: a small menu today) with the same header (avatar 64, profile
+name, `@username · Role`, Switch profile) and the same first rows (Your year, Appearance, Controllers, Settings, Help,
+Sign in a TV, Sign out). Its Settings page uses the grouped list (**→ web**: tinted icon tiles, chevrons and cards,
+keeping its one-line descriptions under each row, which the apps show too for the Server and Maintenance rows).
 
 ## Components
 
@@ -138,6 +328,9 @@ SF Symbols on Apple, Material Symbols (rounded) on Android, mapped one to one:
 | Destructive | `card` fill, `danger` words | Sign out, forget, remove |
 
 Full width in a column on the sign-in screens, 52 high, words centred, an optional leading icon 8 before the words.
+**On a TV every button is a pill** (fully round), 66 high, the height of the systems' own text fields, with 32
+inside, so a field and its buttons look like one family; a Quiet one is 56 high and takes the pill only as its focus
+ring. Number pad keys stay rounded squares, as the systems' keyboards have them. No square-cornered button on a TV.
 While busy, the words are replaced by a spinner in the words' colour and the button keeps its size; it stays
 focusable on a TV. Disabled only where pressing would do harm, at 55% opacity.
 
@@ -161,13 +354,18 @@ The same as the web's, so each person keeps their colour on every device:
    `#0a6fb8`, `"Émile"` → `#0e7c6f` and `"Mum 👩"` → `#99690a` (an emoji outside the first plane) against this rule.
 3. **Initial:** the first letter of the trimmed name, upper case, white, bold, at 43% of the tile's size.
 4. **Shape:** a rounded square, radius 22% of its size. Small avatars (36 and under) are circles.
-5. **Sizes:** 28 in the floating bar, 64 in You's header, 104 in the phone's profile grid, 120 on the password
+5. **Names with a face:** wherever an avatar shows with the person's names (profile tiles, the password screen, You's
+   header, Sign in a TV), the profile name and the `@username` under it are **centred under the avatar**, on every
+   device. Where the screen's words start at the left, as on a TV's sign-in screens, the avatar and its names move
+   there together as one centred group; the names never align to the left edge on their own.
+6. **Sizes:** 28 in the floating bar, 88 in You's header (120 on a tablet), 104 in the phone's profile grid, 120 on the password
    screen, 140 in a tablet's grid, 200 on a TV.
 
 ### Profile tile
 
 The avatar, then 10 below it the profile name in Label semibold, then the username as `@name` in Secondary,
-**only when a profile name is set and differs from the username**: so a person sees both, or just the one there is.
+**whenever a profile name is set and is not exactly the username**, even when the two differ only in capitals
+("Ziggy" over "@ziggy" stays, since the username is what to type): so a person sees both, or just the one there is.
 Kids and Guest profiles carry a badge on the avatar's lower edge, centred, half over it: a pill in `background`
 with a 1-wide `border`, Caption words "Kids" or "Guest". A profile that signs in without a password (Kids or Guest
 at home) goes straight in; the others open the password screen. Pressed or focused, the avatar lifts and gains the
@@ -175,8 +373,9 @@ ring (see Motion); the words brighten from `textSecondary` to `text`. Spoken as 
 
 ### Server card
 
-A `card` row, radius 14, 16 inside: the server mark (the brand mark at 40, or the server's own logo once known),
-then its name in Label semibold over its address in Secondary, then a chevron in `textHint`. The one last used carries
+A `card` row, radius 14, 16 inside: for a saved server, its logo at 40 (see Brand) and its name in Label semibold over
+its address in Secondary; for one only found, the plain server icon in a 40 `raised` square and its address over
+`foundOnNetwork`; then a chevron in `textHint`. The one last used carries
 "Last used" as a Caption pill in `border`. Pressed: 0.98 scale. Connecting: the chevron becomes a spinner.
 
 ### Grouped list
@@ -214,12 +413,15 @@ back gesture or a top-left arrow on Android.
 
 ### 1. Choose your server
 
-1. Lockup.
+1. The app's lockup (WittyMediaClient).
 2. Display: `findTitle` ("Choose your server"). Under it in Body, `textSecondary`: `findSubtitle`.
 3. Section: `foundServers` ("On your network"), with a small pulsing dot in `accent` beside it while searching.
-4. Server cards for what's found. While nothing is: a Note with a spinner and `findSearching`; after six seconds
+4. Server cards for what's found, each showing **only its address** (host and port, as Label semibold) over
+   `foundOnNetwork` ("Found on your network") in Secondary, with the plain server icon: a server says nothing about
+   itself until it's added. While nothing is found: a Note with a spinner and `findSearching`; after six seconds
    `findNone`; where the device can't search, `findNotSupported`.
-5. Section `recentServers` ("Used before") and its cards, the last used first.
+5. Section `recentServers` ("Used before") and its cards, the last used first, each with that server's own logo and
+   name (see Brand) over its address. A found server that's also saved shows only under Used before.
 6. `enterAddress` ("Enter an address"): Primary when nothing has been found or used, Secondary otherwise.
 7. The legal note, `legalConnect`, in Caption, `textHint`, centred, at the bottom.
 
@@ -248,14 +450,21 @@ When the server shows no profiles (`style` isn't `profiles`), this screen is the
 
 ### 5. Password
 
-Back to the profiles. The avatar at 120, centred; the profile name in Headline; `@username` in Secondary when it differs;
+Back to the profiles. The avatar at 120 (200 on a TV), with the profile name in Headline and `@username` in Secondary
+(when it differs) centred under it, as one group: centred on a phone, at the start of the words on a TV;
 Body `passwordHint` ("Enter your password or PIN."); the password field ("Password", lock icon, show/hide), focused at
 once; Problem; Primary `signIn` ("Sign in"); Quiet `forgotPassword` ("Forgot your password?"), which opens the server's
 help on it inside the app (on Apple TV: a QR card to it).
 
+A wrong password (401) clears the field, keeps the focus in it, outlines it and its label in `danger`, shakes it once
+(not with Reduce Motion) and says `errWrongPassword`; typing again takes the red away. On the sign-in form both fields
+turn red and the words are `errWrongNameOrPassword`. A 429 shows the server's own words, which say how long to wait.
+
 When the server asks for a second step (two-factor), the same screen asks for `twoFactorTitle` with the six code boxes
 and an authenticator note, without a number pad on a phone (the system keyboard, numeric, with one-time-code
-autofill), with it on a TV.
+autofill), with it on a TV. A wrong code shakes the boxes and says `errWrongCode`. Under them, Quiet `useRecoveryCode`
+swaps the boxes for one field, `recoveryLabel` (key icon), with `recoveryTitle` and `recoveryHint` above and Primary
+`signIn`; Quiet `useAuthenticatorCode` swaps back. A wrong one says `errWrongRecovery`.
 
 ### 6. Sign in
 
@@ -269,7 +478,7 @@ number pad; Quiet `usePassword` and `showCodeInstead`; the fingerprint in Captio
 
 ### 8. Sign in with a code
 
-Back. Title `pairTitle`; Body `pairHint`; the address in Label, `accentText`, selectable; the code in Display monospaced,
+Back. Lockup; Title `pairTitle`; Body `pairHint`; the address in Label, `accentText`, selectable; the code in Display monospaced,
 letters 8 apart, in a `panel` card radius 14; the QR card with `pairScan`; a spinner and `pairWaiting`; when it ends,
 Problem and Primary `pairNew`. Quiet: `codeTitle`, `usePassword`, `changeServer`.
 
@@ -280,28 +489,239 @@ centred: nothing stretches to the edges.
 
 ## You and settings
 
-*To follow, from the feature inventory: the You tab's header and groups, every per-person setting natively,
-and every server-wide setting reachable.*
+The third tab, **You** (`youTab`), holds the person, their account, this device's choices and, for an administrator,
+the server. Its icon in the floating bar (and the TV's top bar) is the person's avatar at 28, a circle, ringed in
+`accent` 2 wide when the tab is chosen. One rule decides where each thing lives:
+
+- **What belongs to the person** is native: their names, password, two-step sign-in, devices, signing in a TV, and
+  this device's theme.
+- **What the server's owner manages** (libraries, profiles of others, transcoding, backups…) opens the server's own
+  page for it inside the app, signed in, titled with the row's name and with a native Back. On Apple TV, which has no
+  browser, the row opens the QR card for that page instead, and Android TV shows the same card.
+- Every row the server would refuse is hidden, not greyed: no Server group for a non-administrator, no password row
+  for a Kids or Guest profile, no game rows without a games library.
+
+### The page
+
+A single column, gutter 16, at most 640 wide and centred on a tablet; it scrolls under the floating bar.
+
+1. **Header**, centred: the avatar at 88 (120 on a tablet); 12 below it the profile name in Title; under that
+   `@username · Role` in Secondary, `textSecondary`, where Role is `roleAdmin`, `roleAdult`, `roleKids` or `roleGuest`
+   (the @username is always shown here: this is the account). Then 16 below, Secondary button `switchProfile`
+   ("Switch profile", icon `person.2` / `group`), which ends this sign-in and opens Who's watching.
+2. The **groups**, each a grouped list (see Components) with its caption, 24 apart:
+
+| Group | Row | Icon tile | Value | Opens | Shown to |
+|---|---|---|---|---|---|
+| `groupAccount` | `rowNames` Name and username | `person.text.rectangle` / `badge`, `#0a6fb8` | the profile name | Names (native) | everyone |
+| | `rowPassword` Password | `key` / `key`, `#3e5bd0` | | Password (native) | adults, admins |
+| | `rowTwoStep` Two-step sign-in | `lock.shield` / `shield_lock`, `#2e7d3c` | `on` / `off` | Two-step (native) | adults, admins, when the server offers it |
+| | `rowDevices` Your devices | `ipad.and.iphone` / `devices`, `#7f46b8` | how many | Devices (native) | everyone |
+| `groupHousehold` | `rowSignInTv` Sign in a TV | `tv` / `tv`, `#bd2f85` | | Sign in a TV (native) | adults, admins; not on a TV |
+| | `rowProfiles` Profiles and parental limits | `figure.2.and.child.holdinghands` / `family_restroom`, `#b8500d` | | `/settings/users` | adults, admins |
+| `groupYours` | `rowYourYear` Your year | `sparkles` / `auto_awesome`, `#c9302f` | | `/review` | everyone |
+| | `rowCollections` Collections and playlists | `square.stack` / `library_books`, `#0e7c6f` | | `/collections` | everyone |
+| | `rowShareLinks` Share links | `link` / `link`, `#0a6fb8` | | `/settings/sharing` | everyone |
+| | `rowActivity` Activity | `waveform.path.ecg` / `monitoring`, `#99690a` | | `/settings/activity` | everyone |
+| | `rowGameSettings` Game settings | `gamecontroller` / `sports_esports`, `#7f46b8` | | `/settings/games` | with a games library |
+| | `rowControllers` Controllers | `dpad` / `gamepad`, `#3e5bd0` | | `/controllers` | with a games library |
+| `groupDevice` | `rowTheme` Theme | `paintpalette` / `palette`, `#0e7c6f` | the theme's name | Theme (native) | everyone |
+| `groupServer` | `rowLibraries` Libraries | `books.vertical` / `video_library`, `#5d6474` | | `/settings/libraries` | admins |
+| | `rowMetadata` Metadata and artwork | `photo.on.rectangle` / `image_search` | | `/settings/metadata` | admins |
+| | `rowFixMatches` Fix matches | `wand.and.stars` / `auto_fix_high` | | `/fix-matches` | admins |
+| | `rowPlayback` Playback and discs | `play.rectangle` / `smart_display` | | `/settings/playback` | admins |
+| | `rowLiveTv` Live TV and tuners | `antenna.radiowaves.left.and.right` / `live_tv` | | `/settings/channels` | admins |
+| | `rowGaming` Consoles and cores | `gamecontroller` / `sports_esports` | | `/settings/gaming` | admins |
+| | `rowGamePcs` Game PCs | `desktopcomputer` / `computer` | | `/settings/couch` | admins |
+| | `rowTranscoding` Live transcoding | `bolt` / `bolt` | | `/settings/transcoding` | admins |
+| | `rowLibraryTranscoding` Library transcoding | `arrow.triangle.2.circlepath` / `autorenew` | | `/settings/library-transcoding` | admins |
+| | `rowRemote` Remote access | `globe` / `public` | | `/settings/remote` | admins |
+| | `rowAppearance` Appearance and branding | `paintbrush` / `brush` | | `/settings/appearance` | admins |
+| | `rowWittyRigs` WittyRigs | `server.rack` / `dns` | | `/settings/wittyrigs` | admins |
+| `groupMaintenance` | `rowLogs` WittyLog | `doc.text.magnifyingglass` / `article` | | `/settings/logs` | admins |
+| | `rowDiagnoser` WittyDiagnoser | `stethoscope` / `stethoscope` | | `/settings/diagnoser` | admins |
+| | `rowModules` Modules | `puzzlepiece.extension` / `extension` | | `/settings/modules` | admins |
+| | `rowBackup` Backup | `externaldrive` / `backup` | | `/settings/backup` | admins |
+| | `rowRepair` Repair | `wrench.and.screwdriver` / `build` | | `/settings/repair` | admins |
+| | `rowReset` Reset | `arrow.counterclockwise` / `restart_alt`, `danger` | | `/settings/reset` | admins |
+| `groupHelp` | `rowHelp` Help | `questionmark.circle` / `help`, `#99690a` | | `/help` | everyone |
+| | `rowAboutServer` About this server | `info.circle` / `info`, `#5d6474` | the server's version | `/settings/about` | everyone |
+| | `rowLegal` Legal | `doc.plaintext` / `gavel`, `#5d6474` | | `/legal` | everyone |
+| | `rowLicences` Licences | `text.book.closed` / `menu_book`, `#5d6474` | | Licences (native) | everyone |
+| | `rowAppLog` This app's log | `list.bullet.rectangle` / `receipt_long`, `#5d6474` | | Log (native) | everyone |
+
+   Server and Maintenance rows all take `#5d6474` unless the table says otherwise: a quiet group for the owner's tools.
+
+3. **This server**: a server card (not pressable) with its name, address and, under it in Caption `textHint`, the
+   fingerprint; then Secondary `changeServer` and Destructive `signOut` ("Sign out", icon sign-out), full width, 12 apart.
+4. A Caption line, centred, `textHint`: the app's name and version.
+
+### Names
+
+Back; Title `rowNames`. The profile-name field (`profileNameLabel`, at most 60) with `profileNameHint` under it; the
+username field (`usernameLabel`, at most 40) with `usernameHint`; for Kids and Guest the username is shown, not editable,
+with `usernameKidsHint`. A toggle row in a grouped list: `showUsernameLabel` with `showUsernameHint`. Primary `save`,
+busy while saving, then `saved` as an ok-coloured line for 2 seconds. The avatar at 64 above the fields follows the
+profile name as it's typed, so its colour can be seen changing. `PUT /api/v1/users/{me}/profile`.
+
+### Password
+
+Back; Title `rowPassword`; Body `passwordChangeHint` ("At least 8 characters. Your other devices will be signed out.").
+Fields: `currentPasswordLabel`, `newPasswordLabel`, `repeatPasswordLabel`, all password fields with the eye. Checked
+before sending: `errPasswordShort`, `errPasswordsDiffer`. A 403 is `errCurrentPassword` on the first field, in red as on
+sign-in. Primary `changePassword`; when it's done, a check, `passwordChanged`, and Back. `PUT /api/v1/users/{me}/password`.
+
+### Two-step sign-in
+
+Back; Title `rowTwoStep`. From `GET /api/v1/me/2fa`:
+
+- **Off:** Body `twoStepIntro`; Primary `twoStepTurnOn`. Then, one step at a time in the same screen:
+  1. `twoStepConfirmTitle`: the password field; Primary `continue` → `POST /me/2fa/setup`.
+  2. `twoStepScanTitle`: the QR card of the `uri`, 200 (on a phone also Secondary `twoStepOpenApp`, which opens the
+     `otpauth:` address so an authenticator on this phone takes it); under it `twoStepKeyLabel` and the secret in
+     monospaced Label, in groups of four, with a copy button. Then the six code boxes and the numeric keyboard (number
+     pad on a TV); six digits send `POST /me/2fa/confirm`. Wrong: shake and `errWrongCode`.
+  3. `twoStepSavedTitle`: Body `twoStepSavedHint`; the recovery codes in a `panel` card, monospaced, two columns;
+     Secondary `copyAll`; Primary `twoStepDone`, which is the only way on, so they aren't skipped by accident.
+- **On:** a `panel` card with a check in `ok`, `twoStepOnTitle` and `twoStepCodesLeft` (how many recovery codes are
+  left; under 3, in `danger`). Destructive `twoStepTurnOff` asks for the password and a code in a sheet, then
+  `POST /me/2fa/disable`.
+
+### Your devices
+
+Back; Title `rowDevices`; Body `devicesHint`. A grouped list from `GET /api/v1/sessions`, this device first: an icon
+tile by kind (`iphone` / `smartphone` for phones, `ipad` / `tablet`, `tv` / `tv`, `desktopcomputer` / `computer`,
+`globe` / `language` for a browser), the device's name in Label, and in Secondary where it is (`whereMachine`,
+`whereHome`, `whereVpn`, `whereInternet`) and when it was last seen ("Active now" within 5 minutes, then relative).
+This device has a `thisDevice` pill in `border`; any other has a trailing Quiet `signOut` (on a TV: OK on the row,
+then a confirmation). Under the list, Destructive `signOutOthers`, with a confirmation, when there are others.
+`DELETE /api/v1/sessions/{id}`, `DELETE /api/v1/sessions`.
+
+### Sign in a TV
+
+Back; Title `rowSignInTv`; Body `signInTvHint` ("Type the code your TV shows."). **Eight letter boxes**, four, a dash,
+then four, as the TV shows its code (`ABCD-EFGH`, letters from `BCDFGHJKLMNPQRSTVWXZ`), over the system keyboard in
+capitals; any case typed counts, and the dash and spaces are ignored. On a phone the boxes are 34 wide and 48 high, 6
+apart, so eight fit. The eighth letter sends `POST /pair/info` with the code as typed. (The six digits are the other
+direction: the code `/pair/invite` makes, which the TV types on Enter the security code.) Then a `panel` card: the device's name in Label, platform and address in
+Secondary, and `signInTvAs` with the profiles it may sign in as (the person, and Kids and Guest profiles they look
+after) as profile tiles at 72, the person first and chosen. Primary `signInTvApprove`, Quiet `signInTvDeny`. Done:
+a check in `ok` and `signInTvDone`. Quiet `signInTvInvite` ("The TV asks for a code?") makes one instead
+(`POST /pair/invite`) and shows it in Display monospaced in a `panel` card with how long it lasts.
+
+### Theme
+
+Back; Title `rowTheme`; Body `themeHint` ("Only on this device. The server's own pages follow it too."). A grouped
+list: `themeAutomatic` (light or dark with the device), `themeServer` (the server's choice, named), then each theme in
+`shared/data/themes.json` with a 28 swatch (its background, a card stripe and an accent dot) and a check on the
+chosen one. Choosing applies at once, with a 200 ms cross-fade. Kept per server on the device.
+
+### On a tablet and a TV
+
+A tablet uses the same page at 640 wide. A TV puts the header on the left third (avatar 200, names, `switchProfile`,
+`signOut`), vertically centred, and the groups in a focusable list on the right two-thirds; a row's screen replaces
+the list. The TV's rows are 72 high with 32 icon tiles, Label at TV size, and the focus ring around the whole row.
+
+## Games everywhere (WittyPlay)
+
+Every game the server can run plays on every device. The server always runs the game and streams it
+(`docs/GAMING-API.md` in the server: sessions, `ws-h264` video with `ws-jpeg` as the fallback, PCM sound, input up the same
+socket); a device only shows the picture and sends the controls, so nothing about a console has to be on the device.
+
+| Device | Player | Controls |
+|---|---|---|
+| Website (desktop and phone), desktop apps | The website's own player | Gamepad API, keyboard, and its touch layout on a phone |
+| iPhone, iPad, Vision Pro | The one native Apple player (shared with Apple TV): VideoToolbox H.264, AVAudioEngine sound | GameController (Xbox, PlayStation, Switch, MFi): every button, analog sticks and triggers, rumble and light bar, touchpad and motion where the console uses them; up to four at once. With no controller, the account's touch layout from the server, drawn over the picture |
+| Apple TV | The same native Apple player | GameController as above; the Siri Remote for menus and as a fallback pad |
+| Android phone, tablet, Android TV | A native Android player: MediaCodec H.264, AudioTrack sound | Android's gamepad input (every button, sticks, triggers, rumble), several at once; the touch layout on phones and tablets; the TV remote for menus |
+
+Around the player, every device shows the same things as the website's games: the library in couch mode, a game's page
+(Play or Resume, saves, versions), the pause menu (save state, load state, controller settings, quit), and the
+account's controller profiles (`/game-profiles`). A game the server can't run says why on its page (see the server's
+readiness check), on every device alike; Play never appears for it. Saves are the server's, so a game started on one
+device carries on from the same place on any other.
 
 ## Feature map
 
-*To follow: every feature of the server, and where it is in each app (native screen, the server's page inside the app,
-or on Apple TV a QR card to open it on a phone).*
+Where every part of the server is in the apps, and what's still to build: every feature reaches every device (see
+Principles). **Native** is built into the app. **Page** is the server's own page inside the app (signed in, with a
+native Back), used on phones and tablets for the owner's tools. **To build** is a native screen still to come on that
+device; until it's there, that device shows a QR card for the page, which is a stopgap, not the design. Desktop apps
+are the website, so everything is there. On Android TV, which has a web engine, a page may stand in as well; on Apple
+TV, which has none, everything is native.
+
+| Feature | Phone and tablet | TV |
+|---|---|---|
+| Choosing a server, address, security code, pairing | Native | Native |
+| Who's watching, password, two-step, recovery code, sign-in form | Native | Native |
+| Home: hero, libraries, Jump back in, Next up, Recently added | Native | Native |
+| Search | Native | Native |
+| Movies, shows, seasons, episodes, item pages | Native | Native |
+| Video playback, resume, next episode | Native | Native |
+| Music, audiobooks, podcasts: browse and player | Native | Native |
+| Photos | Page | Native viewer |
+| Books, comics, PDF reader | Page | To build |
+| Shorts, creators, channel videos | Page | To build |
+| Radio | Page | To build |
+| Live TV guide and watching, WittyTV's looks | Page | Native, every WittyTV look and layout |
+| Recordings and series rules | Page | Native on Apple TV (with reminders); Android TV to build |
+| Games (WittyPlay) | Page (iPhone and iPad), the emulator in the app | To build: native emulator cores on Apple TV, the page on Android TV |
+| Game PCs and rigs (Moonlight) | Native | Native |
+| DVD and Blu-ray menus, CD player | Page | To build |
+| Collections and smart playlists | Page | To build |
+| Your year, history | Page | To build |
+| Names, password, two-step sign-in, devices | Native | Native |
+| Sign in a TV | Native | — (a TV is what gets signed in) |
+| Theme on this device | Native | Native |
+| Profiles of others, parental limits, sign-in screen style | Page | To build |
+| Share links, activity, game settings, controllers | Page | To build |
+| Every server setting (Server and Maintenance groups) | Page | To build |
+| Help, legal, about the server | Page | To build |
+| Licences and this app's log | Native | Native |
+| Server setup (first run) | Page, in the browser | To build |
+
+Anything added to the server's menus later goes in the table above before it ships: as a Page row at least.
 
 ## On a TV
 
 Apple TV and Android TV are the same app to look at. Sizes are given in TV units: one TV unit is one point on Apple TV
 (1920×1080) and half a dp on Android TV (960×540 dp), so a layout measured in one is the same in the other.
 
-- **Focus** is a 4-wide ring in `text` around the focused thing, 4 outside it, and a 1.06 scale. No system highlight,
-  no parallax: the same on both. Focus starts on the screen's main action and comes back where it was left.
+- **Focus** is a 4-wide ring in `text`, 4 outside the focused thing, and a 1.06 scale. The ring is **concentric**: each
+  of its corners is the thing's own radius plus its distance out (so a radius 14 key has a ring whose outer edge is
+  radius 22), never the thing's radius drawn larger. The ring scales with the thing. Focusable things sit at least 16
+  apart, so a focused one's ring never touches or covers a neighbour, and nothing that can take focus sits in a row or
+  list that clips it: rows leave 24 above and below for the ring. No system highlight, no parallax: the same on both.
+  Focus starts on the screen's main action and comes back where it was left.
 - **Sign-in screens** put the words on the left half and the actions on the right half, vertically centred, inside the
-  90 gutter; the glow sits behind the words. Who's watching is the exception: centred, with the tiles in one row.
-- **Profile tiles** are 200 avatars in one centred row, 48 apart, with the names under them.
-- **The code pad** is on the right, the code boxes on the left. Digits on a remote's number keys also type.
+  90 gutter; the glow sits behind the words. **Who's watching and the password screen are centred instead**, as one
+  column: the person chosen stays in the middle of the screen. The password screen on a TV: the avatar at 200, the
+  profile name in 38 semibold and `@username` in 24 `textSecondary` centred under it, `passwordHint` in 24
+  `textSecondary` centred, then 32 below, the password field and Sign in, 640 wide, centred, then Forgot your
+  password? centred. Two-step's code boxes and pad sit in the same column.
+- **A focused field** on a TV shows only the focus ring (`text`, 4 wide, 4 out, concentric); its own outline stays
+  `control`, and its label stays clear of the ring. Two outlines at once (`accent` and the ring) never show.
+- **Profile tiles** are 200 avatars in one centred row, 48 apart, with the names under them. Focused, **only the
+  avatar** reacts: it lifts 6 and grows 1.06, with a `background` band 4 wide and then the `text` ring 4 wide around it,
+  both concentric with its corners. The name brightens from `textSecondary` to `text` and keeps its size; the badge
+  moves with the avatar. The row leaves 24 above the avatars, so the lifted ring is never cut off.
+- **The code pad** is on the right, the code boxes on the left. Its keys are `card`, radius 14, 96 high and **16
+  apart**. A focused key has **no ring**: it fills with `text`, its digit or the delete icon turns `background`, and it
+  grows 1.06, as both systems' own keyboards do; a grid of rings would crowd the keys. Pressed, it dims as any button.
+  Digits on a remote's number keys also type.
 - **Fields** open the system's keyboard; on Android TV the IME, on Apple TV the system keyboard, which a phone can type into.
-- **Top bar:** Home, Search and You as pills along the top, 24 from the top edge, the chosen one filled `accent` with
-  its name; up from the first row reaches it.
+- **Top bar:** the phone's five, Home, TV guide, Search, Libraries (the Menu's list as a page) and You, as pills along
+  the top, 24 from the top edge, the chosen one with `accent` at 14% and its name; up from the first row reaches it.
+- **Themes** are the same as on a phone, through the same translation (see Themes).
+- **WittyTV** (the guide and live channels) keeps its own looks, chosen per account in `/me/ui` → `tvLook` with the
+  owner's default in `/guide`: the colours of each of its themes (`modern`, `classic`, `satellite`, `teletext`,
+  `listings`, `bigpicture`, `outline`, `compact`, `custom`) are worked out as `web/src/pages/tv/tvThemes.ts` does, and
+  each theme's layout (`web/src/pages/tv/tvthemes.css`: row height, cell shape, the now line, the preview's place, the
+  font) is built natively to match, on both TVs.
+- **Recording** is offered only where the server says it can be: a channel's `canRecord` (true only for tuner
+  channels the profile may record; never for channels made from the library). Record and series record are hidden,
+  not greyed, when it's false or missing, on every device and on the website alike; no app works it out for itself,
+  and the server refuses otherwise.
 - **What a TV can't show** (the server's pages on Apple TV) is a QR card to open that page on a phone, with its address
   under it. Android TV shows the same card, so the two stay the same.
 

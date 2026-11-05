@@ -9,6 +9,8 @@ public struct ServerStatus: Decodable, Equatable {
     public let version: String?
     public let setupRequired: Bool?
     public let brandName: String?
+    /// Set when the owner gave the server a logo of its own: the version to ask for, see `WittyClient.brandLogoURL`.
+    public let brandLogo: String?
     public let theme: String?
     public let user: User?
 
@@ -21,16 +23,73 @@ public struct ServerStatus: Decodable, Equatable {
 
 public struct User: Decodable, Equatable {
     public let id: Int64
+    /// The username: unique, and what signing in uses.
     public let name: String
+    /// The profile name, which anyone may choose and share. Empty means the username.
+    public let displayName: String?
+    /// The person asked for their username, not their profile name, in the corner of the screen.
+    public let showUsername: Bool?
     public let isAdmin: Bool?
     public let kind: String?
+    public let hasPassword: Bool?
+    public let twoFactor: Bool?
+
+    public init(id: Int64, name: String, displayName: String? = nil, showUsername: Bool? = nil, isAdmin: Bool? = nil,
+                kind: String? = nil, hasPassword: Bool? = nil, twoFactor: Bool? = nil) {
+        self.id = id
+        self.name = name
+        self.displayName = displayName
+        self.showUsername = showUsername
+        self.isAdmin = isAdmin
+        self.kind = kind
+        self.hasPassword = hasPassword
+        self.twoFactor = twoFactor
+    }
+
+    /// What a person is called on screen, as on the web: the profile name, or the username.
+    public var shownName: String { ProfileNames.shown(name: name, displayName: displayName) }
+    /// Whether "@username" goes under the shown name: only when a profile name differs from it.
+    public var showsUsername: Bool { ProfileNames.showsUsername(name: name, displayName: displayName) }
+    /// What the corner of the screen says, which is each person's choice.
+    public var cornerName: String { showUsername == true ? name : shownName }
 }
 
 public struct Profile: Decodable, Identifiable, Equatable {
     public let id: Int64
+    /// The username, which signing in needs.
     public let name: String
+    /// The profile name. Empty or missing means the username.
+    public let displayName: String?
     public let kind: String?
     public let hasPassword: Bool?
+
+    public init(id: Int64, name: String, displayName: String? = nil, kind: String? = nil, hasPassword: Bool? = nil) {
+        self.id = id
+        self.name = name
+        self.displayName = displayName
+        self.kind = kind
+        self.hasPassword = hasPassword
+    }
+
+    public var shownName: String { ProfileNames.shown(name: name, displayName: displayName) }
+    public var showsUsername: Bool { ProfileNames.showsUsername(name: name, displayName: displayName) }
+    public var isKids: Bool { kind == "kids" }
+    public var isGuest: Bool { kind == "guest" }
+}
+
+/// The two names a person has, and which to show. The same rules as the server's web pages.
+public enum ProfileNames {
+    public static func shown(name: String, displayName: String?) -> String {
+        let profile = PlainWords.clean(displayName ?? "", limit: 60)
+        return profile.isEmpty ? PlainWords.clean(name, limit: 60) : profile
+    }
+
+    /// Even when the two differ only in capitals: "Ziggy" keeps "@ziggy" under it, which is the
+    /// sign-in name to type.
+    public static func showsUsername(name: String, displayName: String?) -> Bool {
+        let profile = PlainWords.clean(displayName ?? "", limit: 60)
+        return !profile.isEmpty && profile != name
+    }
 }
 
 public struct Profiles: Decodable, Equatable {
@@ -63,6 +122,9 @@ public struct Library: Decodable, Identifiable, Hashable {
     public var opensHere: Bool { ["movies", "shows", "anime", "videos", "discs"].contains(type) || isRigGames }
     /// Sound of some kind, which goes under Music.
     public var isListening: Bool { ["music", "audiobooks", "podcasts", "radio"].contains(type) }
+    /// Music, audiobooks and podcasts have these apps' own screens and player, as on Android. Radio is
+    /// the server's page.
+    public var hasListeningScreens: Bool { ["music", "audiobooks", "podcasts"].contains(type) }
 }
 
 public struct CouchStatus: Decodable, Equatable {
@@ -74,6 +136,8 @@ public struct Progress: Decodable, Equatable {
     public let durationSec: Double?
     public let watched: Bool?
     public let resumeSec: Double?
+    /// When the place was last saved, in seconds since 1970: which book was left off most recently.
+    public let updatedAt: Int64?
 }
 
 public struct Item: Decodable, Identifiable, Equatable {
@@ -128,6 +192,28 @@ public struct Item: Decodable, Identifiable, Equatable {
         if let episodeEnd, episodeEnd != 0 { label += "–\(episodeEnd)" }
         return season == 0 ? "Special · \(label)" : "S\(season) · \(label)"
     }
+}
+
+/// An album, a book or a podcast. The server groups them from their tracks, so they have no ID of
+/// their own: they're asked for by name. `coverItem` is a track whose poster is the cover.
+public struct Album: Decodable, Equatable, Hashable {
+    public let artist: String?
+    public let title: String?
+    public let year: Int?
+    public let tracks: Int?
+    public let durationSec: Double?
+    public let coverItem: Int64?
+
+    /// One album to a name and an artist, as a list shows each once.
+    public var key: String { "\(artist ?? "")|\(title ?? "")" }
+}
+
+/// An artist or an author, and how many of their albums or books the library has.
+public struct Artist: Decodable, Equatable, Hashable {
+    public let name: String?
+    public let albums: Int?
+    public let tracks: Int?
+    public let coverItem: Int64?
 }
 
 public struct Show: Decodable, Identifiable, Equatable {
@@ -286,13 +372,17 @@ public struct PlaybackRequest: Encodable {
     public var audio: Int?
     public var subtitle: Int?
     public var startSec: Double?
+    /// This device couldn't decode what it was sent: ask for a conversion instead.
+    public var forceTranscode: Bool?
 
-    public init(profile: String, capabilities: DeviceCapabilities? = nil, audio: Int? = nil, subtitle: Int? = nil, startSec: Double? = nil) {
+    public init(profile: String, capabilities: DeviceCapabilities? = nil, audio: Int? = nil, subtitle: Int? = nil, startSec: Double? = nil,
+                forceTranscode: Bool? = nil) {
         self.profile = profile
         self.capabilities = capabilities
         self.audio = audio
         self.subtitle = subtitle
         self.startSec = startSec
+        self.forceTranscode = forceTranscode
     }
 }
 

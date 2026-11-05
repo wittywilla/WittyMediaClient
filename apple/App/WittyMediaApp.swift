@@ -13,10 +13,10 @@ struct WittyMediaApp: App {
         WindowGroup {
             RootView()
                 .environmentObject(model)
-                .environment(\.palette, model.palette)
-                .environment(\.client, model.client)
+                .environmentObject(model.listening)
+                .modifier(MetricsForWidth())
                 .preferredColorScheme(model.scheme)
-                .tint(model.palette.accent)
+                .tint(model.palette.accentText)
                 .task { await model.start() }
         }
     }
@@ -25,11 +25,12 @@ struct WittyMediaApp: App {
 struct RootView: View {
     @EnvironmentObject private var model: AppModel
     @Environment(\.scenePhase) private var scenePhase
-    @Environment(\.palette) private var palette
+    /// The device's own, while the automatic theme leaves it be; otherwise the theme's.
+    @Environment(\.colorScheme) private var colorScheme
 
     var body: some View {
         ZStack {
-            palette.background.ignoresSafeArea()
+            model.palette.background.ignoresSafeArea()
             switch model.stage {
             case .starting:
                 LoadingView()
@@ -44,6 +45,15 @@ struct RootView: View {
             case .browsing:
                 BrowseShell()
             }
+        }
+        // From here, which redraws with the model, and not from the scene above it, which can draw a
+        // moment later: a screen that has just appeared must never ask with the connection before.
+        .environment(\.palette, model.palette)
+        .environment(\.client, model.client)
+        .animation(.easeInOut(duration: 0.2), value: model.effectiveThemeId)
+        .onAppear { model.systemScheme = colorScheme }
+        .onChange(of: colorScheme) { scheme in
+            if model.themeChoice == "auto" || model.scheme == nil { model.systemScheme = scheme }
         }
         .onChange(of: scenePhase) { phase in
             if phase == .active { Task { await model.recheck() } }

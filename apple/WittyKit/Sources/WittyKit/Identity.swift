@@ -21,18 +21,30 @@ public struct SavedServer: Codable, Identifiable, Equatable {
     public let serverId: String
     public let publicKey: String
     public let fingerprint: String
+    /// The version of the owner's logo for this server (`/api/status` → `brandLogo`), learned once it was added;
+    /// empty for none. The picture itself is kept on the device by the app.
+    public let brandLogo: String
     public var id: String { url }
 
     private enum CodingKeys: String, CodingKey {
-        case url, name, serverId, publicKey, fingerprint
+        case url, name, serverId, publicKey, fingerprint, brandLogo
     }
 
-    public init(url: String, name: String, serverId: String = "", publicKey: String = "", fingerprint: String = "") {
+    public init(url: String, name: String, serverId: String = "", publicKey: String = "", fingerprint: String = "",
+                brandLogo: String = "") {
         self.url = url
         self.name = name
         self.serverId = serverId
         self.publicKey = publicKey
         self.fingerprint = fingerprint
+        self.brandLogo = brandLogo
+    }
+
+    /// The same server with what it now says it's called and looks like.
+    public func with(name newName: String, brandLogo logo: String) -> SavedServer {
+        let shown = newName.trimmingCharacters(in: .whitespaces)
+        return SavedServer(url: url, name: shown.isEmpty ? name : shown, serverId: serverId, publicKey: publicKey,
+                           fingerprint: fingerprint, brandLogo: logo)
     }
 
     /// Servers saved before keys were pinned have none of the last three.
@@ -43,10 +55,12 @@ public struct SavedServer: Codable, Identifiable, Equatable {
         serverId = try values.decodeIfPresent(String.self, forKey: .serverId) ?? ""
         publicKey = try values.decodeIfPresent(String.self, forKey: .publicKey) ?? ""
         fingerprint = try values.decodeIfPresent(String.self, forKey: .fingerprint) ?? ""
+        brandLogo = try values.decodeIfPresent(String.self, forKey: .brandLogo) ?? ""
     }
 
     public func moved(to newURL: String) -> SavedServer {
-        SavedServer(url: newURL, name: name, serverId: serverId, publicKey: publicKey, fingerprint: fingerprint)
+        SavedServer(url: newURL, name: name, serverId: serverId, publicKey: publicKey, fingerprint: fingerprint,
+                    brandLogo: brandLogo)
     }
 
     /// The most recent first, once per address and once per server.
@@ -84,8 +98,8 @@ public struct ServerProof: Equatable {
         self.fingerprint = fingerprint
     }
 
-    public func saved(url: String, name: String) -> SavedServer {
-        SavedServer(url: url, name: name, serverId: serverId, publicKey: publicKey, fingerprint: fingerprint)
+    public func saved(url: String, name: String, brandLogo: String = "") -> SavedServer {
+        SavedServer(url: url, name: name, serverId: serverId, publicKey: publicKey, fingerprint: fingerprint, brandLogo: brandLogo)
     }
 }
 

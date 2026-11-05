@@ -68,7 +68,6 @@ if build WittyMedia-iOS "iOS Simulator" build-ios; then
   open_in_simulator "iPhone" Debug-iphonesimulator iphone
   open_in_simulator "iPad" Debug-iphonesimulator ipad
 fi
-build WittyMedia-macOS "macOS" build-macos
 if xcodebuild -showsdks | grep -q -- '-sdk xros'; then
   if build WittyMedia-iOS "visionOS Simulator" build-visionos; then open_in_simulator "Apple Vision Pro" Debug-xrsimulator visionpro; fi
 else
