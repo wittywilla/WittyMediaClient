@@ -11,6 +11,21 @@ struct WittyMediaApp: App {
 
     var body: some Scene {
         WindowGroup {
+            #if DEBUG && os(iOS)
+            // For checking the touch controls with no game: `-WittyPlayTouchPreview snes` at launch.
+            if let console = UserDefaults.standard.string(forKey: "WittyPlayTouchPreview") {
+                TouchPreviewScreen(console: console)
+            } else {
+                rootView
+            }
+            #else
+            rootView
+            #endif
+        }
+    }
+
+    private var rootView: some View {
+        Group {
             RootView()
                 .environmentObject(model)
                 .environmentObject(model.listening)

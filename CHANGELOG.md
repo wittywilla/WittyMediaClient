@@ -5,6 +5,12 @@ What changed in WittyMediaClient, newest first. What changed before it had a rep
 
 ## Unreleased
 
+- **Games over WebRTC on every Apple device, and Apple TV now needs tvOS 17.** Where the server has its second stream, the Apple
+  player connects over WebRTC first (LiveKit's build of libwebrtc), with the stream's WebSocket behind it, and plays Opus sound;
+  every rumble motor, motion, lights and up to eight players pass through. tvOS 17 runs on every Apple TV HD and 4K.
+- **iPhone, iPad and Apple Vision Pro play the server's games in the same player as Apple TV.** With no controller connected, the account's touch
+  controls from the server are drawn over the game as the website draws them, in the layout saved for this device, upright or sideways; on a DS or
+  3DS a finger on the picture is the stylus. Controllers work as on Apple TV.
 - **Android: games stream over WebRTC first where the server has version 2 of its game stream.** Late frames are dropped rather than
   waited for, so a game keeps up on a poor network. The WebSocket takes over if WebRTC hasn't connected in 5 seconds or shown a
   picture in 8.

@@ -73,25 +73,24 @@ As documented in `docs/GAMING-API.md`, "Controller states", and nothing new:
 |---|---|---|
 | MFi, Xbox, DualShock 4, DualSense, Switch Pro, Joy-Cons (a pair, or one on its side), and anything else GameController knows | Read through GameController. A Joy-Con on its own is a small pad: its stick is the D-pad | Yes |
 | Every button, the D-pad, both sticks at full range, analog triggers | Read in the W3C standard layout the profiles are written in; triggers go out as 0 to 255 as well as their button bits | Yes: 16 buttons, two i16 sticks, two u8 triggers |
-| Four players | Each controller gets the next free player, keeps it while connected, and a pad that goes lets go of everything at once. The Siri Remote plays as player 1 alongside a pad. A console that needed an adapter for players 3 and 4 needs it plugged in: on an NES, a controller that joins as player 3 or 4 plugs a gamepad into that port when it's on "Auto", which turns the Four Score on. On a Super Nintendo, the Multitap goes into player 2's port from the game menu's Controllers page | Yes, ports 0 to 3, and `device` actions. No more than four |
+| Players | Each controller gets the next free player, keeps it while connected, and a pad that goes lets go of everything at once. The Siri Remote plays as player 1 alongside a pad. Four, or up to eight where the second stream says the game takes more and the session's devices for those further ports take a controller: a Super Nintendo's fifth through its multitap, but not an NES's fifth, the Famicom's expansion port. A console that needed an adapter for players 3 and 4 needs it plugged in: on an NES, a controller that joins as player 3 or 4 plugs a gamepad into that port when it's on "Auto", which turns the Four Score on. On a Super Nintendo, the Multitap goes into player 2's port from the game menu's Controllers page. On the second stream, the server is told which players this device holds | Ports 0 to 3 on the first stream; 0 to 7 on the second, with `seats`; and `device` actions |
 | The account's profiles | `/game-profiles/resolve` per controller, console and game; dead zone, press point, stick-as-D-pad, turbo and no rumble applied on the device | Yes |
-| Rumble | Core Haptics on the player's pad, by the strength the event gives | Yes: `rumble` with `strength`. The two motors' `effect` isn't told apart yet |
+| Rumble | Core Haptics on the player's pad: the strong motor on the left handle and the weak on the right where the pad has two, each held for as long as the event says and replaced by the next; 0 stops it | Yes: `rumble` with `motor` (or the first stream's `effect`), `strength` and, on the second stream, `ms` |
 | DualSense and DualShock 4 touchpad, for a console with a touch screen (DS, 3DS) | The touchpad is the touch screen: where the finger is, and a click to press. A press is sent again every 250 ms, and a release three times | Yes: the 6-byte pointer message. One point only |
-| Light bar | Set to the player's colour (blue, red, green, pink) | **No.** Nothing from a core reaches it |
-| Motion (gyro and accelerometer) | Not read | **No** |
+| Light bar | Set to the player's colour (blue, red, green, pink). A core's own lights arrive as `led` events; libretro has no colour light bar, so the pad keeps its player's colour | `led` on the second stream |
+| Motion (gyro and accelerometer) | Read from the pad's sensors, switched on only for the players the game asks about, and sent as often as it asks, up to 60 a second: gravity and movement in g, turning in radians a second, as the protocol's 1/4096 g and 1/16 degree a second | On the second stream: `0xE1`, while `motion` events (or the stream's `motionOn`) want it. No core reads motion yet |
 | Adaptive triggers, the DualSense's speaker and microphone | Not used | **No** |
 | Home | Opens the game menu where tvOS lets an app have it, and tvOS is asked not to act on a controller's buttons while a game plays | Not needed |
 | Options (Start) | Start for the game; held for a second it opens the game menu. Start and Select together open it at once, as on the website | Not needed |
 | Siri Remote | Its D-pad, select and Play/Pause by the console's `defaults.remote`; Back opens the game menu; it steers the menu | Yes |
 | A keyboard | By the console's `defaults.keyboard`; Escape opens the menu | Yes |
 
-**What the server's protocol would need** to pass the rest through:
+**What the second stream added** (WittyMediaServer#296, WittyPlay#37), and this app uses: motion (`0xE1`), lights (`led`),
+the two rumble motors with how long to hold them, and up to eight players. It also has several touches at once (`0xFE`);
+this app sends the one stylus a DS or 3DS needs with the single-touch message, which still works.
 
-- **Motion.** A message for each player's motion, say `[254, port, ax, ay, az, gx, gy, gz]` as i16 in g and degrees a second, which the runner gives to the core through libretro's sensor interface (`RETRO_ENVIRONMENT_GET_SENSOR_INTERFACE`). 3DS games that steer by tilting need it.
-- **Lights.** An event when a core sets an LED (`RETRO_ENVIRONMENT_GET_LED_INTERFACE`), `{"type": "led", "led": n, "state": 0 or 1}`, which a pad's light could show. Few cores use it.
-- **Rumble's two motors.** The event has `effect`; the client could play the strong and weak motors on a pad's two handles once it's documented which is which.
-- **More touch.** One point only, with no hover. Enough for DS and 3DS styluses.
-- **Players past four,** for the consoles that had multitaps.
+**What's still missing:**
+
 - **Which adapter a third player needs.** The session lists each port's devices, but not that an
   NES's players 3 and 4 need a gamepad in their own ports while a Super Nintendo's need a Multitap
   in player 2's. The server could plug in what four players need when the app says how many are
@@ -136,16 +135,24 @@ Unchanged. A game in a `console: rig` library plays on a real PC through Sunshin
 (`apple/WittyKit/Sources/WittyKit/Rigs.swift`). The server answers 409 with `rig: true` if one is
 started with `POST /games/{id}/play`.
 
-## The Apple TV client
+## The Apple client
+
+One player for Apple TV, iPhone, iPad and Apple Vision Pro: the same engine, input and model on all
+of them, with `#if os(...)` only where a device differs (the Siri Remote, focus, touch).
+`GamePlayerView(gameId:)` is the screen to show for a server game on any of them. The library, the
+game's page and the menu's look wait for the new WittyPlay design; on iPhone and iPad the library
+and game's page are the server's page until then.
 
 | Part | How | Files |
 |---|---|---|
-| The library | Couch mode's look at TV size: covers at the top, one at the front and the rest turned away on a shiny floor, the page tinted by the front cover's colour; Continue playing with each save's picture; Consoles; Recently added, Favourites, Most played, series and genre shelves; every game with the website's sorts; a console's own page | `apple/App/GamesViews.swift` |
-| A game's page | Its box, Play or Resume (by `states.resume`), Start over, favourite, start with default settings, "Pick up where you left off", about and facts, save states (play from one, hold to delete), how it plays, its controls | `GamesViews.swift` |
+| The library (Apple TV) | Couch mode's look at TV size: covers at the top, one at the front and the rest turned away on a shiny floor, the page tinted by the front cover's colour; Continue playing with each save's picture; Consoles; Recently added, Favourites, Most played, series and genre shelves; every game with the website's sorts; a console's own page | `apple/App/GamesViews.swift` |
+| A game's page (Apple TV) | Its box, Play or Resume (by `states.resume`), Start over, favourite, start with default settings, "Pick up where you left off", about and facts, save states (play from one, hold to delete), how it plays, its controls | `GamesViews.swift` |
+| The connection | A `GameTransport` (WittyKit), chosen by the session's mode. Where the server has its second stream (a mode marked `"stream": 2`), WebRTC comes first: libwebrtc (LiveKit's build, 144.7559.15) with one `POST /play/{sid}/stream` carrying the hello and the offer, receive-only picture and sound, and data channels `input` (unordered, never resent) and `events`. It decodes the picture in hardware and the player draws it through its own Metal path, so display settings still apply; it plays the sound itself, for playback only, so the microphone is never touched. If it hasn't connected within 5 seconds, or shown a picture within 8, the second stream's WebSocket takes over: `/play/{sid}/stream`, opening with the device's hello (its id, name, screen, the players it holds, `emulation.latency`), frames with timestamps, `seats`, `stream`, refusals and endings with their codes, and how late frames arrive (`delayMs`) twice a second so a slow network doesn't fill with video. The first stream's WebSocket (`ws-h264`, `ws-jpeg`) stays behind it, and is all a server without the second stream offers. Sound is Opus, decoded with AVAudioConverter, or PCM where a device can't. On Apple TV, where the person lets apps match the TV to what they show, the TV switches to the game's rate (50 Hz for a PAL game) and the server is told the new rate, so it paces the game to it; it goes back on leaving. Apple TV needs tvOS 17 for this | `apple/WittyKit/Sources/WittyKit/GameTransport.swift`, `GameStreamV2.swift` |
 | The picture | `ws-h264` into VideoToolbox, drawn with Metal the moment a frame is decoded; `ws-jpeg` if no picture comes in 12 seconds; a new connection after 4 seconds with none | `apple/App/GameMachinery.swift` |
 | The person's picture settings | `display.*`, applied on the device as the server asks: sharp, pixel or smooth scaling, whole multiples, shape, crop, rotation, scanlines, a curved screen, a phosphor mask, a vignette, an LCD grid, brightness, contrast, saturation and gamma in one Metal shader; a bezel colour or image with its inset. Not yet: glow, blend, flicker | `GameMachinery.swift` |
 | Sound | PCM at the console's own rate into AVAudioEngine, kept within `audio.latency`; volume and mute | `GameMachinery.swift` |
 | Controllers, remote, keyboard | As above | `apple/App/GameInput.swift`, `apple/WittyKit/Sources/WittyKit/GamePad.swift` |
+| Touch controls (iPhone, iPad) | Below | `apple/App/GameTouch.swift`, `apple/WittyKit/Sources/WittyKit/TouchControls.swift` |
 | The pause menu | Resume, Save state (slots, with pictures), Load state, Quick save and load (`states.quickSlot`), Press Start, Press Select, Change disc, Controllers (who's on which player, their profile, and what the console's emulator lets each player plug in), Reset, Save and quit, asking first where `states.confirm` says. Opened by the remote's Back, Home, Options held, or Start and Select together | `apple/App/GamePlayer.swift` |
 | Models and API | | `apple/WittyKit/Sources/WittyKit/Games.swift`, `GamesAPI.swift`, `GameStream.swift` |
 
@@ -155,6 +162,43 @@ device, so they follow every theme and WittyTV look as the rest of the app does.
 **Consoles:** every console the server plays, since the TV only shows its stream. The Nintendo DS and
 3DS need a DualSense or DualShock 4 for their touch screen, whose touchpad becomes it; without one,
 games that need the stylus are for a browser or a phone, and the game's page says so.
+
+### Touch controls
+
+With no controller connected, iPhone and iPad draw the account's touch layout over the game, as the
+website's WittyPlay player does, so a layout arranged on the website looks and plays the same here.
+
+- **The layout** is the server's: `GET /consoles/{console}/controls?device=<this device>` has the
+  console's `controls`, `defaults.touch` for portrait and landscape, and `saved.touch`, what was saved
+  for this device id, which replaces those controls' placements. A placement is a centre as fractions
+  of the screen and a size as a fraction of its shorter side. There are no touch profiles.
+- **Drawn** as the website draws them: tinted glass by the console's controller, a rounded plus for the
+  D-pad with arrows that light, round face buttons (PlayStation marks, Nintendo 64 C arrows), shoulder
+  buttons rounder at the bottom, pills for Start and Select, a stick with a cap that follows the finger.
+- **Played** as the website plays them: any number of fingers; sliding off one button onto another;
+  hit circles a little larger than the buttons; an eight-way D-pad with a small dead middle; a stick
+  that a finger takes only by landing on it, with a 0.12 radial dead zone; C buttons push the right
+  stick. A short tap for each new press. Start and Select together open the menu, as on a pad.
+- **Upright,** the picture moves into the top 52% and the controls sit below it; sideways the picture
+  has the whole screen and the controls sit over it.
+- **DS and 3DS:** a finger that lands on no control is the stylus until it lifts, and with a controller
+  connected any finger on the picture is. Its position is taken from where the picture was really
+  drawn, with any turn undone, so it lands where the finger is.
+- **Hiding them:** a button beside the menu's, and Show or Hide touch controls in the menu. The choice
+  stays on this device. They hide on their own while a controller is connected, and come back when it goes.
+- **Vision Pro** plays with a controller by default; the touch controls can be turned on from the menu.
+
+**Checked on an iPhone simulator** (iPhone 18 Pro), with debug builds' `-WittyPlayTouchPreview snes` and `nds`. These show
+the real overlay with the server's SNES layout and log each press, since no game could start with the media shares
+unmounted:
+
+- **Upright:** the picture's area took the top 52%, with L and R, the D-pad, the face buttons as a diamond, and Select and
+  Start below it, as the website places them. Tapping each logged a, b, y, x, l, r, select and start. The D-pad gave up,
+  right, down, left and up+right for a diagonal. One finger sliding from Y to A logged y, then a.
+- **Sideways:** the landscape layout covered the whole screen, and A and the D-pad still pressed in their new places.
+- **DS:** a tap on the picture was the stylus at that point, and a tap on A was A.
+
+Not checked: a real game's picture under the controls, the tap felt on a phone, and an iPad.
 
 ## Which consoles play from this Mac's server
 
@@ -194,6 +238,21 @@ suites' controller tests.
 
 Still to try with real hardware: rumble, the light bar, the touchpad itself (its pointer was sent as
 the app sends it), Home and Options, and analog sticks and triggers in a game that shows them.
+
+## The second stream, against a stand-in
+
+Before a server with the second stream was running, the Apple player's transport, decoder and input ran on the Mac
+against the stand-in WittyPlay's `wittyplay-probe run` makes from the stream's own branch (on 127.0.0.1 only):
+
+| Game | What came, and what it did |
+|---|---|
+| The probe's test core | The hello was taken and the stream described itself (WebSocket, H.264, PCM, 512×448, four players), paced to the 60 Hz screen the hello said. 911 frames in 15 seconds, every one decoded by VideoToolbox with no keyframe asked for; 2.8 MB of PCM. A held: the strong motor at full for 300 ms, renewed every 200 ms, then stopped. Select: light 0 on, then off. The core asked for player 1's accelerometer and gyroscope at 60 a second, and two seconds of motion went in without a refusal |
+| An NES game (FCEUmm) | 834 frames, every one decoded; sound at 47,920 Hz, because the game's 60.0998 Hz was paced to the screen's 60 and its sound resampled to match |
+| The same, asking for Opus | 962 Opus packets, every one decoded to 10 ms of 48 kHz stereo by the app's decoder |
+| The test core over WebRTC | The app's WebRTC transport: the stream said `webrtc`, H.264 and Opus; the first picture 0.64 seconds after connecting, then 926 in 16 seconds, every one handed to the Metal path as BGRA. A and Select over the `input` channel brought the rumble and the light back on `events`, as over the WebSocket |
+
+What the stand-in can't show: sign-in, `/api/play/{sid}`, `modes` and the server's error codes, which the server's own
+tests cover; nor a TV switching its refresh rate, which needs a real Apple TV. It's also what's left to run on a device.
 
 ## Testing it without a server that plays
 
