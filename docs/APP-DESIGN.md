@@ -724,6 +724,12 @@ Apple TV and Android TV are the same app to look at. Sizes are given in TV units
   right from Search reaches You. Up from a tab's first row lands on that tab's own pill. Back from inside a tab goes
   to the bar; Back from the bar goes to Home's pill; Back on Home's pill leaves the app. A screen opened from a tab
   has the whole screen, and Back from it returns to the tab.
+  - **Libraries in the bar:** You → On this device → **Top menu** (TVs only) lists every library the profile can see,
+    each with a tick when it's in the bar. Each one ticked there joins the bar after Search, as its library icon and
+    name, in the server's order of libraries, and is a tab of its own: the library's page under the bar, opened as
+    Home's rows open it. The choice is kept on the TV, per server and per profile. When the pills on the left don't fit,
+    they scroll sideways with focus, so the focused pill is always in view; **You never moves**: it stays pinned at the
+    right edge, always visible, with at least 32 of space before it.
   - **Libraries:** every library the profile can see, as a grid of tiles (the phone Menu's library list as a page):
     each tile is the library's icon in `accentText` on `accent` at 14%, then its name. Each opens the library as Home's
     rows do; a games library opens Games' view of it.
