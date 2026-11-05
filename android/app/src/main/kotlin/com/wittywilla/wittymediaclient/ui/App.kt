@@ -709,11 +709,19 @@ fun AppRoot(app: WittyApp) {
                         Route.Profile -> Shell(nav) { YouScreen(nav, strings) }
                         Route.Notices -> NoticesScreen(nav)
                         Route.Logs -> LogsScreen(nav)
-                        is Route.Library -> PageShell(nav) { if (route.library.isListening) ListeningLibraryScreen(nav, strings, route.library) else if (LocalMetrics.current.tv) LibraryScreen(nav, strings, route.library) else PhoneLibrary(nav, route.library, route.chosen) }
+                        is Route.Library -> PageShell(nav) {
+                            val tv = LocalMetrics.current.tv
+                            when {
+                                route.library.isListening && tv -> ListeningLibraryScreen(nav, strings, route.library)
+                                route.library.isListening -> PhoneMusicLibrary(nav, route.library, route.chosen)
+                                tv -> LibraryScreen(nav, strings, route.library)
+                                else -> PhoneLibrary(nav, route.library, route.chosen)
+                            }
+                        }
                         is Route.Show -> PageShell(nav) { if (LocalMetrics.current.tv) ShowScreen(nav, strings, route.id) else PhoneShow(nav, strings, route.id, route.season) }
                         is Route.Item -> PageShell(nav) { if (LocalMetrics.current.tv) ItemScreen(nav, strings, route.id) else PhoneItem(nav, strings, route.id) }
-                        is Route.Album -> PageShell(nav) { AlbumScreen(nav, strings, route) }
-                        is Route.Artist -> PageShell(nav) { ArtistScreen(nav, strings, route.library, route.name) }
+                        is Route.Album -> PageShell(nav) { if (LocalMetrics.current.tv) AlbumScreen(nav, strings, route) else PhoneAlbum(nav, route) }
+                        is Route.Artist -> PageShell(nav) { if (LocalMetrics.current.tv) ArtistScreen(nav, strings, route.library, route.name) else PhoneArtist(nav, route.library, route.name) }
                         Route.NowPlaying -> if (LocalMetrics.current.tv) NowPlayingScreen(nav) else WebNowPlaying(nav)
                         is Route.Player -> if (LocalMetrics.current.tv) PlayerScreen(nav, route.id, route.startOver) else VideoPlayerScreen(nav, route)
                         is Route.Web -> ServerPageScreen(nav, route, route.path, keptToGames = true)

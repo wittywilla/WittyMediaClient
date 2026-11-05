@@ -43,12 +43,14 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.BiasAlignment
@@ -109,9 +111,25 @@ import java.util.Locale
 data class SheetRow(val words: String, val icon: ImageVector?, val danger: Boolean = false, val enabled: Boolean = true, val run: () -> Unit)
 
 // The website's sheet on a phone: from the foot, panel colour, radius 20 at the top, the title 20 and a 44 close
-// button; the "⋯" and Filters sheets slide in 24 from the right as they do there.
+// button; the "⋯" and Filters sheets slide in 24 from the right as they do there. In the phone's shell it's drawn
+// over the shell's bars as well, as the website's sheets are above its floating bar.
 @Composable
 fun WebSheet(title: String, close: () -> Unit, fromRight: Boolean = true, footer: (@Composable () -> Unit)? = null, content: @Composable () -> Unit) {
+    val host = LocalOverShell.current
+    if (host == null) {
+        SheetPanel(title, close, fromRight, footer, content)
+        return
+    }
+    val panel = rememberUpdatedState<@Composable () -> Unit> { SheetPanel(title, close, fromRight, footer, content) }
+    DisposableEffect(host) {
+        val shown: @Composable () -> Unit = { panel.value() }
+        host.sheets += shown
+        onDispose { host.sheets -= shown }
+    }
+}
+
+@Composable
+private fun SheetPanel(title: String, close: () -> Unit, fromRight: Boolean, footer: (@Composable () -> Unit)?, content: @Composable () -> Unit) {
     val scheme = MaterialTheme.colorScheme
     val inset = with(LocalDensity.current) { WindowInsets.navigationBars.getBottom(this).toDp() }
     BackHandler { close() }

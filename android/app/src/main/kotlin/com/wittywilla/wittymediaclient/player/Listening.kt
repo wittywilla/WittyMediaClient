@@ -7,6 +7,7 @@ import androidx.annotation.OptIn
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.core.content.edit
@@ -62,6 +63,32 @@ class Listening(private val app: WittyApp) {
 
     // Asked for by a tap on the notification, or a TV starting a queue, for when the screens are ready.
     var wantsScreen by mutableStateOf(false)
+
+    // Liked songs, for the hearts on the music pages, as the website's player keeps them: one set for the app, each
+    // library's asked for once.
+    val liked = mutableStateMapOf<Long, Boolean>()
+    private val likesAsked = HashSet<Long>()
+
+    fun loadLikes(library: Long) {
+        if (library <= 0 || !likesAsked.add(library)) return
+        val api = app.api
+        app.scope.launch {
+            runCatching { api.likes(library) }.onSuccess { ids -> ids.forEach { liked[it] = true } }.onFailure { likesAsked.remove(library) }
+        }
+    }
+
+    // Shown at once, and put back if the server says no, with its words.
+    fun toggleLike(id: Long, said: (String) -> Unit) {
+        val on = liked[id] != true
+        if (on) liked[id] = true else liked.remove(id)
+        val api = app.api
+        app.scope.launch {
+            runCatching { api.react(id, if (on) 1 else 0) }.onFailure {
+                if (on) liked.remove(id) else liked[id] = true
+                said(it.message.orEmpty())
+            }
+        }
+    }
 
     var serviceRunning = false
     var keeper: ListeningKeeper? = null
@@ -342,6 +369,8 @@ class Listening(private val app: WittyApp) {
         }
         clear()
         problem = ""
+        liked.clear()
+        likesAsked.clear()
         return app.scope.launch { sent?.join() }
     }
 

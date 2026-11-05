@@ -129,14 +129,26 @@ class Api(val base: String, val token: String, private val quick: Boolean = fals
     suspend fun searchShows(text: String, limit: Int): ShowPage = get("/shows?search=${query(text)}&limit=$limit")
 
     suspend fun libraries(): List<Library> = getList("/libraries")
-    suspend fun albums(library: Long, sort: String, artist: String? = null): List<Album> =
-        getList("/music/albums?library=$library&sort=$sort" + if (artist != null) "&artist=${query(artist)}" else "")
+    suspend fun albums(library: Long, sort: String, artist: String? = null, genre: String = ""): List<Album> =
+        getList("/music/albums?library=$library&sort=$sort" + (if (genre.isNotEmpty()) "&genre=${query(genre)}" else "") + if (artist != null) "&artist=${query(artist)}" else "")
     suspend fun artists(library: Long): List<Artist> = getList("/music/artists?library=$library")
     // An empty album or artist means none or unknown: it is still asked for by name.
     suspend fun tracks(library: Long, album: String, artist: String): List<Item> =
         getList("/music/tracks?library=$library&album=${query(album)}&artist=${query(artist)}")
     suspend fun songs(library: Long, offset: Int, limit: Int): List<Item> =
         getList("/music/songs?library=$library&offset=$offset&limit=$limit&sort=title")
+    // The music pages (web/src/pages/AudioLibrary.tsx, music/ArtistPage.tsx): a library's front page, an artist's
+    // page, the genres to narrow a list by, and songs as the Songs tab asks for them (MusicLook.songsQuery).
+    suspend fun musicHome(library: Long): MusicHome = get("/music/home?library=$library")
+    suspend fun artistInfo(library: Long, name: String): ArtistInfo = get("/music/artist?library=$library&name=${query(name)}")
+    suspend fun genres(library: Long): List<String> = getList("/genres?library=$library")
+    suspend fun musicSongs(library: Long, rest: String): List<Item> = getList("/music/songs?library=$library&$rest")
+    // A CD image that has gone, which an album's page doesn't offer to insert.
+    suspend fun discGone(id: Long): Boolean = try {
+        raw("GET", "/cd/$id", null).status.let { it == 404 || it == 422 }
+    } catch (e: IOException) {
+        false
+    }
 
     suspend fun playback(id: Long, request: PlaybackRequest): Playback =
         json.decodeFromString(call("POST", "/items/$id/playback", json.encodeToString(request)))
@@ -334,6 +346,7 @@ class Api(val base: String, val token: String, private val quick: Boolean = fals
 
     fun posterUrl(it: Item) = "$base$API/items/${it.id}/poster?v=${it.updatedAt}"
     fun coverUrl(item: Long) = "$base$API/items/$item/poster"
+    fun artistPhotoUrl(library: Long, name: String) = "$base$API/music/artist-photo?library=$library&name=${query(name)}"
     fun backdropUrl(it: Item) = "$base$API/items/${it.id}/backdrop?v=${it.updatedAt}"
     fun itemBackdropUrl(id: Long) = "$base$API/items/$id/backdrop"
     fun showPosterUrl(s: Show) = "$base$API/shows/${s.id}/art/poster?v=${s.updatedAt}"

@@ -124,6 +124,13 @@ object WebIcons {
     val Remote: ImageVector by lazy { webIcon("remote", "M15 2H9a3 3 0 00-3 3v14a3 3 0 003 3h6a3 3 0 003-3V5a3 3 0 00-3-3zm-3 3a2.5 2.5 0 110 5 2.5 2.5 0 010-5zM9.5 13h1.5v1.5H9.5zm3.5 0h1.5v1.5H13zm-3.5 3h1.5v1.5H9.5zm3.5 0h1.5v1.5H13z") }
     val Mini: ImageVector by lazy { webIcon("mini", "M19 11h-8v6h8zm4 8V5a2 2 0 00-2-2H3a2 2 0 00-2 2v14a2 2 0 002 2h18a2 2 0 002-2zm-2 0H3V5h18z") }
     val Expand: ImageVector by lazy { webIcon("expand", "M4 4h7v2H7.4l4.3 4.3-1.4 1.4L6 7.4V11H4zm16 16h-7v-2h3.6l-4.3-4.3 1.4-1.4 4.3 4.3V13h2z") }
+
+    // The music player's own (web/src/audio/icons.tsx), which the music pages use too. Its "⋯" sits a little wider.
+    val Heart: ImageVector by lazy { webIcon("heart", "M12 20.6l-1.3-1.2C6 15.200 3 12.500 3 9.100 3 6.400 5.100 4.400 7.700 4.400c1.600 0 3.200.8 4.300 2 1.100-1.200 2.700-2 4.300-2C18.900 4.400 21 6.400 21 9.100c0 3.400-3 6.100-7.700 10.300zm-.1-2.700l.1.100.1-.1c4.100-3.700 6.900-6.200 6.900-8.800 0-1.700-1.300-2.900-3-2.900-1.300 0-2.600.8-3.100 2h-1.900c-.5-1.200-1.800-2-3.100-2-1.700 0-3 1.200-3 2.900 0 2.600 2.800 5.100 7 8.800z") }
+    val HeartOn: ImageVector by lazy { webIcon("heart-on", "M12 20.600l-1.300-1.200C6 15.200 3 12.500 3 9.100 3 6.400 5.100 4.400 7.700 4.400c1.600 0 3.200.8 4.300 2 1.100-1.200 2.700-2 4.300-2C18.900 4.400 21 6.400 21 9.100c0 3.400-3 6.100-7.700 10.300z") }
+    val Station: ImageVector by lazy { webIcon("station", "M12 10a2 2 0 110 4 2 2 0 010-4zM7.800 7.800a6 6 0 000 8.400l-1.400 1.400a8 8 0 010-11.200zm8.400 0l1.400-1.400a8 8 0 010 11.200l-1.400-1.400a6 6 0 000-8.400zM5 5a10 10 0 000 14l-1.400 1.400a12 12 0 010-16.800zm14 0l1.400-1.400a12 12 0 010 16.800L19 19a10 10 0 000-14z") }
+    val AddList: ImageVector by lazy { webIcon("add-list", "M3 6h13v2H3zm0 5h13v2H3zm0 5h9v2H3zm15-3h2v3h3v2h-3v3h-2v-3h-3v-2h3z") }
+    val AudioMore: ImageVector by lazy { webIcon("audio-more", "M6 10a2 2 0 110 4 2 2 0 010-4zm6 0a2 2 0 110 4 2 2 0 010-4zm6 0a2 2 0 110 4 2 2 0 010-4z") }
 }
 
 // CSS's box-shadow under a rounded shape: offset, blur and colour as the website writes them. Compose's own

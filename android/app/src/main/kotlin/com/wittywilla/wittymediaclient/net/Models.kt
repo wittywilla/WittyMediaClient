@@ -127,6 +127,9 @@ data class Item(
     val subLangs: List<String>? = null,
     val sizeBytes: Long = 0,
     val aired: String = "",
+    // A track's disc in a set of several, and the CD image a track was ripped from, which plays it.
+    val discNo: Int? = null,
+    val cdDisc: Long? = null,
 ) {
     val isDisc: Boolean get() = kind in setOf("dvd-iso", "dvd-folder", "bluray-iso", "bluray-folder")
 }
@@ -148,6 +151,7 @@ data class Album(
     val tracks: Int = 0,
     val durationSec: Double = 0.0,
     val coverItem: Long = 0,
+    val genre: String = "",
 )
 
 @Serializable
@@ -156,6 +160,35 @@ data class Artist(
     val albums: Int = 0,
     val tracks: Int = 0,
     val coverItem: Long = 0,
+)
+
+// GET /music/home: a listening library's front page in one answer, for the cover flow and the rows under it.
+@Serializable
+data class MusicHome(
+    val hero: List<Album> = emptyList(),
+    val albums: List<Album> = emptyList(),
+    val artists: List<Artist> = emptyList(),
+    val songs: List<Item> = emptyList(),
+    val recent: List<Item> = emptyList(),
+    @SerialName("continue") val resume: List<Item> = emptyList(),
+    val genres: List<String> = emptyList(),
+    val counts: MusicCounts = MusicCounts(),
+)
+
+@Serializable
+data class MusicCounts(val albums: Int = 0, val artists: Int = 0, val songs: Int = 0, val liked: Int = 0)
+
+// GET /music/artist: an artist's or author's page, with a biography when the owner has turned that on.
+@Serializable
+data class ArtistInfo(
+    val name: String = "",
+    val albums: List<Album> = emptyList(),
+    val tracks: List<Item> = emptyList(),
+    val top: List<Item> = emptyList(),
+    val genres: List<String> = emptyList(),
+    val online: Boolean = false,
+    val bio: String = "",
+    val bioUrl: String = "",
 )
 
 @Serializable
@@ -515,7 +548,16 @@ data class UserIdOnly(val userId: Long)
 
 // A collection, for Save to: its owner, and whether it's a system one such as Watch later.
 @Serializable
-data class Collection(val id: Long = 0, val ownerId: Long = 0, val name: String = "", val kind: String = "manual", val system: String = "")
+data class Collection(
+    val id: Long = 0,
+    val ownerId: Long = 0,
+    val name: String = "",
+    val kind: String = "manual",
+    val system: String = "",
+    // For a playlist's row on the music pages: how many, and a track whose poster is its picture.
+    val count: Int = 0,
+    val coverId: Long = 0,
+)
 
 @Serializable
 data class CollectionItems(val items: List<Long> = emptyList(), val shows: List<Long> = emptyList())

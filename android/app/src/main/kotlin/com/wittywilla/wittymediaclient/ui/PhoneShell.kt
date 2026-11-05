@@ -45,6 +45,8 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.compositionLocalOf
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
+import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -96,6 +98,13 @@ val LocalShellScroll = compositionLocalOf { ShellScroll() }
 // Room a page leaves at its top for the bar (status bar + 52 + 8), and at its bottom for the floating bar and docks.
 val LocalTopRoom = compositionLocalOf { 0.dp }
 
+// What a page has open over everything, its sheets: drawn after the bars, as the website's sit above its floating bar.
+class OverShell {
+    val sheets = mutableStateListOf<@Composable () -> Unit>()
+}
+
+val LocalOverShell = compositionLocalOf<OverShell?> { null }
+
 private const val TOP_BAR = 52
 private const val TAB_BAR = 60
 private const val DOCK_SPACE = 88
@@ -142,6 +151,7 @@ fun PhoneShell(nav: Nav, content: @Composable () -> Unit) {
     val status = with(density) { WindowInsets.statusBars.getTop(this).toDp() }
     val inset = with(density) { WindowInsets.navigationBars.getBottom(this).toDp() }
     val scroll = remember(nav.current.key) { ShellScroll() }
+    val over = remember { OverShell() }
     var drawer by remember { mutableStateOf(false) }
     LaunchedEffect(nav.app.api.token) { nav.loadMenu() }
     LaunchedEffect(Unit) { if (nav.me == null) nav.me = runCatching { nav.app.api.status().user }.getOrNull() }
@@ -158,7 +168,7 @@ fun PhoneShell(nav: Nav, content: @Composable () -> Unit) {
     val top = isTopPage(nav.current, nav.menu)
 
     Box(Modifier.fillMaxSize().background(scheme.background)) {
-        CompositionLocalProvider(LocalShellScroll provides scroll, LocalBottomRoom provides bottomRoom, LocalTopRoom provides topRoom) {
+        CompositionLocalProvider(LocalShellScroll provides scroll, LocalBottomRoom provides bottomRoom, LocalTopRoom provides topRoom, LocalOverShell provides over) {
             content()
         }
         TopBar(nav, scroll, status, top)
@@ -170,6 +180,7 @@ fun PhoneShell(nav: Nav, content: @Composable () -> Unit) {
 
         TabBar(nav, inset, Modifier.align(Alignment.BottomCenter)) { drawer = true }
         Drawer(nav, drawer, status) { drawer = false }
+        over.sheets.forEach { sheet -> key(sheet) { sheet() } }
     }
 }
 
@@ -233,6 +244,8 @@ private fun LibraryStrip(nav: Nav, modifier: Modifier, overPicture: Boolean) {
     val accentText = LocalExtraColours.current.accentText
     val state = rememberScrollState()
     val current = nav.current.key
+    // A library opened with something chosen (?genre=, ?tab=) is still that library's place in the strip.
+    val currentLibrary = (nav.current as? Route.Library)?.library?.id
     var target by remember(current) { mutableStateOf<Pair<Int, Int>?>(null) }
     val viewWidth = remember { mutableStateOf(0) }
     LaunchedEffect(target, viewWidth.value) {
@@ -258,13 +271,13 @@ private fun LibraryStrip(nav: Nav, modifier: Modifier, overPicture: Boolean) {
         verticalAlignment = Alignment.CenterVertically,
     ) {
         nav.menu.forEach { entry ->
-            val on = entry.route.key == current
+            val on = entry.route.key == current || (currentLibrary != null && (entry.route as? Route.Library)?.library?.id == currentLibrary)
             Box(
                 Modifier
                     .heightIn(min = 44.dp)
                     .fillMaxHeight()
                     .onGloballyPositioned { if (on) target = it.positionInParent().x.toInt() to it.size.width }
-                    .clickable(remember { MutableInteractionSource() }, null) { if (!on) nav.openMenu(entry) }
+                    .clickable(remember { MutableInteractionSource() }, null) { if (entry.route.key != current) nav.openMenu(entry) }
                     .semantics { role = Role.Tab }
                     .drawWithContent {
                         drawContent()
