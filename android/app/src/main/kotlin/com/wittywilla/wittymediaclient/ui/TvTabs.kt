@@ -61,6 +61,8 @@ import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
+import com.wittywilla.wittymediaclient.games.GamesNav
+import com.wittywilla.wittymediaclient.games.GamesLibraryScreen
 import com.wittywilla.wittymediaclient.net.GUIDE_PATH
 import com.wittywilla.wittymediaclient.net.Item
 import com.wittywilla.wittymediaclient.net.Library
@@ -144,6 +146,7 @@ private fun PageInTab(nav: Nav, route: Route, path: String) {
 @Composable
 fun PinnedLibraryScreen(nav: Nav, s: Map<String, String>, library: Library) {
     when {
+        gamesRouteFor(library) != null -> GamesLibraryInTab(nav, library)
         library.isListening -> ListeningLibraryScreen(nav, s, library)
         library.hasOwnScreen -> LibraryScreen(nav, s, library)
         else -> PageInTab(nav, Route.Pinned(library), library.pagePath())
@@ -420,10 +423,21 @@ fun GamesTabScreen(nav: Nav, s: Map<String, String>) {
     }
 }
 
-// One games library as the tab's own page, with Back from it going up to the bar.
+// One games library as the tab's own: WittyPlay's couch mode under the bar. Its games, the player and its other
+// libraries open over the whole screen, as they do from anywhere else; Back from couch mode itself goes up to the bar.
 @Composable
 private fun GamesLibraryInTab(nav: Nav, library: Library) {
-    PageInTab(nav, Route.Games, library.pagePath())
+    val bar = LocalTvBar.current
+    val games = remember(nav, nav.app.api) {
+        GamesNav(
+            api = nav.app.api,
+            back = { bar?.focusPill() },
+            openGame = { id -> nav.push(GamesRoute(GamesScreen.Game(id))) },
+            play = { id, start -> nav.push(GamesRoute(GamesScreen.Play(id, start))) },
+            openLibrary = { id -> nav.push(GamesRoute(GamesScreen.Library(id))) },
+        )
+    }
+    GamesLibraryScreen(games, library.id)
 }
 
 // One games library's row: its name and a pill that opens it, then its covers.
