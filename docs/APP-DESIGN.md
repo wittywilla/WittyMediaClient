@@ -622,6 +622,25 @@ A tablet uses the same page at 640 wide. A TV puts the header on the left third 
 `signOut`), vertically centred, and the groups in a focusable list on the right two-thirds; a row's screen replaces
 the list. The TV's rows are 72 high with 32 icon tiles, Label at TV size, and the focus ring around the whole row.
 
+## Games everywhere (WittyPlay)
+
+Every game the server can run plays on every device. The server always runs the game and streams it
+(`docs/GAMING-API.md` in the server: sessions, `ws-h264` video with `ws-jpeg` as the fallback, PCM sound, input up the same
+socket); a device only shows the picture and sends the controls, so nothing about a console has to be on the device.
+
+| Device | Player | Controls |
+|---|---|---|
+| Website (desktop and phone), desktop apps | The website's own player | Gamepad API, keyboard, and its touch layout on a phone |
+| iPhone, iPad, Vision Pro | The one native Apple player (shared with Apple TV): VideoToolbox H.264, AVAudioEngine sound | GameController (Xbox, PlayStation, Switch, MFi): every button, analog sticks and triggers, rumble and light bar, touchpad and motion where the console uses them; up to four at once. With no controller, the account's touch layout from the server, drawn over the picture |
+| Apple TV | The same native Apple player | GameController as above; the Siri Remote for menus and as a fallback pad |
+| Android phone, tablet, Android TV | A native Android player: MediaCodec H.264, AudioTrack sound | Android's gamepad input (every button, sticks, triggers, rumble), several at once; the touch layout on phones and tablets; the TV remote for menus |
+
+Around the player, every device shows the same things as the website's games: the library in couch mode, a game's page
+(Play or Resume, saves, versions), the pause menu (save state, load state, controller settings, quit), and the
+account's controller profiles (`/game-profiles`). A game the server can't run says why on its page (see the server's
+readiness check), on every device alike; Play never appears for it. Saves are the server's, so a game started on one
+device carries on from the same place on any other.
+
 ## Feature map
 
 Where every part of the server is in the apps, and what's still to build: every feature reaches every device (see
@@ -645,7 +664,7 @@ TV, which has none, everything is native.
 | Shorts, creators, channel videos | Page | To build |
 | Radio | Page | To build |
 | Live TV guide and watching, WittyTV's looks | Page | Native, every WittyTV look and layout |
-| Recordings and series rules | Page | To build |
+| Recordings and series rules | Page | Native on Apple TV (with reminders); Android TV to build |
 | Games (WittyPlay) | Page (iPhone and iPad), the emulator in the app | To build: native emulator cores on Apple TV, the page on Android TV |
 | Game PCs and rigs (Moonlight) | Native | Native |
 | DVD and Blu-ray menus, CD player | Page | To build |
@@ -699,6 +718,10 @@ Apple TV and Android TV are the same app to look at. Sizes are given in TV units
   `listings`, `bigpicture`, `outline`, `compact`, `custom`) are worked out as `web/src/pages/tv/tvThemes.ts` does, and
   each theme's layout (`web/src/pages/tv/tvthemes.css`: row height, cell shape, the now line, the preview's place, the
   font) is built natively to match, on both TVs.
+- **Recording** is offered only where the server says it can be: a channel's `canRecord` (true only for tuner
+  channels the profile may record; never for channels made from the library). Record and series record are hidden,
+  not greyed, when it's false or missing, on every device and on the website alike; no app works it out for itself,
+  and the server refuses otherwise.
 - **What a TV can't show** (the server's pages on Apple TV) is a QR card to open that page on a phone, with its address
   under it. Android TV shows the same card, so the two stay the same.
 
