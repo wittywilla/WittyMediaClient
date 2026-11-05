@@ -641,6 +641,8 @@ account's controller profiles (`/game-profiles`). A game the server can't run sa
 readiness check), on every device alike; Play never appears for it. Saves are the server's, so a game started on one
 device carries on from the same place on any other.
 
+What those screens look like, on every device and the website, is [WittyPlay: the games experience](WITTYPLAY-EXPERIENCE.md).
+
 ## Feature map
 
 Where every part of the server is in the apps, and what's still to build: every feature reaches every device (see
@@ -665,7 +667,7 @@ TV, which has none, everything is native.
 | Radio | Page | To build |
 | Live TV guide and watching, WittyTV's looks | Page | Native, every WittyTV look and layout |
 | Recordings and series rules | Page | To build |
-| Games (WittyPlay) | Page (iPhone and iPad), the emulator in the app | To build: native emulator cores on Apple TV, the page on Android TV |
+| Games (WittyPlay) | To build: the native player and screens in [WITTYPLAY-EXPERIENCE.md](WITTYPLAY-EXPERIENCE.md); the page until then | To build: the same, natively on both TVs |
 | Game PCs and rigs (Moonlight) | Native | Native |
 | DVD and Blu-ray menus, CD player | Page | To build |
 | Collections and smart playlists | Page | To build |
