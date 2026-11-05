@@ -153,6 +153,8 @@ class Nav(val app: WittyApp, private val s: Map<String, String>) {
         private set
     var serverVersion by mutableStateOf("")
         private set
+    var legal by mutableStateOf<com.wittywilla.wittymediaclient.net.LegalNotices?>(null)
+        private set
     private var menuFor = ""
 
     suspend fun loadMenu() {
@@ -168,6 +170,7 @@ class Nav(val app: WittyApp, private val s: Map<String, String>) {
         }
         menu = list
         serverVersion = runCatching { api.status().version }.getOrDefault("")
+        legal = runCatching { api.legalNotices() }.getOrNull()
     }
 
     // A place in the menus opens as a page of its own, with nothing to go back to: Home is below it.

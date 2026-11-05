@@ -135,6 +135,7 @@ fun PhoneHome(nav: Nav, s: Map<String, String>) {
             }
         }
         item(key = "shuffle") { CantDecide(nav) }
+        item(key = "foot") { PageFoot(nav) }
     }
 }
 

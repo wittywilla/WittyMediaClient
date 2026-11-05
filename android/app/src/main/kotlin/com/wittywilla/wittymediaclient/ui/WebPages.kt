@@ -388,6 +388,7 @@ fun PhoneItem(nav: Nav, s: Map<String, String>, id: Long) {
                     BackLink(if (it.showId != null) "Back to ${it.showTitle}" else "Back to library") {
                         if (it.showId != null) nav.push(Route.Show(it.showId)) else if (library != null) nav.openMenu(library) else nav.back()
                     }
+                    PageFoot(nav, "metadata")
                 }
             }
         }
@@ -467,6 +468,7 @@ fun PhoneShow(nav: Nav, s: Map<String, String>, id: Long) {
                         d.episodes.filter { it.season == chosen }.forEach { ep -> EpisodeRow(nav, ep) }
                     }
                     BackLink("Back to library") { if (library != null) nav.openMenu(library) else nav.back() }
+                    PageFoot(nav, "metadata")
                 }
             }
         }
@@ -579,6 +581,7 @@ fun PhoneSearch(nav: Nav, s: Map<String, String>) {
                 ThreeAcross(found.size) { i -> WebItemCard(nav, found[i]) }
             }
         }
+        PageFoot(nav, "search")
     }
 }
 

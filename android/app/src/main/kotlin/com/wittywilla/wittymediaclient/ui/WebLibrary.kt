@@ -206,6 +206,7 @@ fun PhoneLibrary(nav: Nav, library: Library) {
                         hit.show?.let { WebShowCard(nav, it) }
                     }
                 }
+                item(span = { GridItemSpan(maxLineSpan) }) { PageFoot(nav, "metadata") }
                 if (gridTotal == 0) item(span = { GridItemSpan(maxLineSpan) }) {
                     Column(Modifier.fillMaxWidth().padding(vertical = 64.dp, horizontal = 20.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(8.dp)) {
                         Box(Modifier.size(56.dp).clip(RoundedCornerShape(50)).background(scheme.surfaceVariant), contentAlignment = Alignment.Center) { Icon(WebIcons.Film, null, tint = scheme.onSurfaceVariant, modifier = Modifier.size(26.dp)) }
@@ -254,6 +255,7 @@ private fun ShelvesView(nav: Nav, library: Library, s: Shelves, openGenre: (Stri
             val g = c.genre.ifEmpty { c.name }
             BrowseRow(nav, library, c.name, "genre=${api.encode(g)}&sort=rating&desc=1", if (c.count > 20) "See all ${c.count}" else null) { openGenre(g) }
         }
+        Box(Modifier.layoutBleed()) { PageFoot(nav, "metadata") }
     }
 }
 

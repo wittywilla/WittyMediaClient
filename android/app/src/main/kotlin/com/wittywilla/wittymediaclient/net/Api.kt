@@ -219,6 +219,7 @@ class Api(val base: String, val token: String, private val quick: Boolean = fals
     suspend fun modulePages(): List<Pair<String, ModulePage>> = get<ModuleBundles>("/modules/web").bundles.flatMap { b -> b.pages.map { b.id to it } }
     suspend fun guide(hours: Int, limit: Int): Guide = get("/guide?hours=$hours&limit=$limit")
     suspend fun forYou(): ForYou = get("/me/recommended")
+    suspend fun legalNotices(): LegalNotices = get("/legal/notices")
     // Music: a station from a song, this person's liked songs in a library, and liking one.
     suspend fun songRadio(id: Long): List<Item> = getList("/music/radio/$id")
     suspend fun likes(library: Long): List<Long> = getList("/music/likes?library=$library")

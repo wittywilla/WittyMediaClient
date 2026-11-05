@@ -363,13 +363,10 @@ private fun Drawer(nav: Nav, open: Boolean, status: Dp, close: () -> Unit) {
                 }
                 Spacer(Modifier.weight(1f))
                 if (nav.serverVersion.isNotEmpty()) {
-                    val (number, stage) = nav.serverVersion.split('-', limit = 2).let { it[0] to it.getOrNull(1).orEmpty() }
+                    val (number, stage) = com.wittywilla.wittymediaclient.net.versionParts(nav.serverVersion)
                     Row(Modifier.padding(start = 12.dp, end = 12.dp, top = 16.dp, bottom = 8.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                         Text("WittyMediaServer $number", color = extra.hint, fontSize = 12.sp)
-                        if (stage.isNotEmpty()) Text(
-                            stage, color = extra.accentText, fontSize = 11.sp, fontWeight = FontWeight.Bold,
-                            modifier = Modifier.clip(RoundedCornerShape(4.dp)).background(scheme.primary.copy(alpha = 0.14f)).padding(horizontal = 6.dp),
-                        )
+                        if (stage.isNotEmpty()) StagePill(stage)
                     }
                 }
             }

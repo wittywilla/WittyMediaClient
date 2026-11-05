@@ -528,3 +528,17 @@ data class BrowsePage(val results: List<BrowseHit> = emptyList(), val total: Int
 
 @Serializable
 data class Facet(val value: String = "", val label: String = "", val count: Int = 0)
+
+// GET /legal/notices: the short notices every client shows at the foot of a page, and the words for the link.
+@Serializable
+data class LegalNotice(val text: String = "", val section: String = "")
+
+@Serializable
+data class LegalNotices(val linkText: String = "", val notices: Map<String, LegalNotice> = emptyMap())
+
+// "0.6.2-alpha" as the website shows it (components/common.tsx VersionTag): the number, and the stage in capitals.
+fun versionParts(version: String): Pair<String, String> {
+    val match = Regex("""^v?(\d+\.\d+\.\d+)(?:-([a-zA-Z]+)[.\d]*)?""").find(version)
+        ?: return (version.ifEmpty { "dev" }) to (if (version == "dev") "DEV" else "")
+    return match.groupValues[1] to match.groupValues[2].uppercase()
+}

@@ -1,5 +1,9 @@
 package com.wittywilla.wittymediaclient.ui
 
+import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.animation.core.CubicBezierEasing
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.animateFloat
@@ -280,3 +284,46 @@ fun Skel(modifier: Modifier, radius: Dp = 4.dp) {
         },
     )
 }
+
+// The foot of a page, as the website's (App.tsx, components/common.tsx LegalNote and VersionTag): the server's short
+// legal notice with a link to Legal, then "WittyMediaServer 0.6.2" and its stage. A page with a notice of its own
+// (an item's "metadata") shows that one instead of the general one.
+@Composable
+fun PageFoot(nav: Nav, notice: String = "general") {
+    val scheme = MaterialTheme.colorScheme
+    val extra = LocalExtraColours.current
+    val (number, stage) = com.wittywilla.wittymediaclient.net.versionParts(nav.serverVersion)
+    Column(Modifier.fillMaxWidth().padding(start = 16.dp, end = 16.dp, top = 28.dp), verticalArrangement = Arrangement.spacedBy(28.dp)) {
+        nav.legal?.notices?.get(notice)?.let { n ->
+            val link = nav.legal?.linkText?.ifEmpty { null } ?: "Legal"
+            val words = androidx.compose.ui.text.buildAnnotatedString {
+                append(n.text + " ")
+                pushStyle(androidx.compose.ui.text.SpanStyle(color = extra.accentText, textDecoration = androidx.compose.ui.text.style.TextDecoration.Underline))
+                append(link)
+                pop()
+            }
+            Text(
+                words, color = extra.hint, fontSize = 12.sp, lineHeight = 18.sp,
+                modifier = Modifier.semantics { contentDescription = "Legal notice: ${n.text}" }
+                    .clickableNoRipple { nav.push(Route.Page("/settings/legal" + if (n.section.isEmpty()) "" else "#${n.section}", link)) },
+            )
+        }
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp, Alignment.CenterHorizontally), verticalAlignment = Alignment.CenterVertically) {
+            Text("WittyMediaServer $number", color = scheme.onBackground, fontSize = 15.sp)
+            if (stage.isNotEmpty()) StagePill(stage)
+        }
+    }
+}
+
+// The stage after a version: 11 bold in accentText on the accent at 16%, radius 4.
+@Composable
+fun StagePill(stage: String) {
+    Text(
+        stage.uppercase(), color = LocalExtraColours.current.accentText, fontSize = 11.sp, fontWeight = FontWeight.Bold, letterSpacing = 0.05.em,
+        modifier = Modifier.clip(RoundedCornerShape(4.dp)).background(MaterialTheme.colorScheme.primary.copy(alpha = 0.16f)).padding(horizontal = 6.dp),
+    )
+}
+
+private fun Modifier.clickableNoRipple(onClick: () -> Unit): Modifier = this.then(
+    Modifier.pointerInput(onClick) { detectTapGestures { onClick() } },
+)
