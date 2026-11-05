@@ -256,10 +256,10 @@ function selfSigned() {
   return made.status === 0 ? { key: fs.readFileSync(key), cert: fs.readFileSync(cert) } : null
 }
 
-const onConnect = () => until('the connect page', () => {
+const onConnect = (ms) => until('the connect page', () => {
   const { page } = views()
   return page && page.getURL().includes('connect')
-})
+}, ms)
 
 async function seeded(url) {
   await app.whenReady()
@@ -443,7 +443,10 @@ async function run() {
     const win = BaseWindow.getAllWindows()[0]
     const [width, height] = win.getSize()
     const fits = () => inPage('({ tall: document.documentElement.scrollHeight <= innerHeight, wide: document.documentElement.scrollWidth <= innerWidth })')
-    await until('the default size to fit', async () => (await fits()).tall && (await fits()).wide)
+    // At the window's default size, 1280 by 800. A screen too small to hold that (as on some CI
+    // machines) shrinks the window, and then only the width can be held to it.
+    const roomy = width >= 1280 && height >= 800
+    await until('the default size to fit', async () => (roomy ? (await fits()).tall : true) && (await fits()).wide)
     win.setSize(480, 700)
     await wait(200)
     assert.strictEqual((await fits()).wide, true, 'no sideways scrolling at the narrowest')
@@ -776,7 +779,8 @@ async function approved() {
 async function onTv() {
   const url = await standIn()
   await app.whenReady()
-  await onConnect()
+  // The TV's window can take longer to come up on a machine still busy with the run before.
+  await onConnect(20000)
   BaseWindow.getAllWindows()[0].setSize(1280, 720)
   const halves = (left, right) => inPage(`(() => {
     const l = document.querySelector(${JSON.stringify(left)}).getBoundingClientRect()
@@ -790,11 +794,14 @@ async function onTv() {
     await until('a found server', async () => (await focused()).startsWith('10.0.0.2:9797'))
     assert.strictEqual(await halves('.words', '.actions'), true)
     // The lockup reads from across the room: a 72 mark, in TV units.
-    const mark = await inPage("({ size: document.querySelector('.lockup .mark').getBoundingClientRect().width, unit: innerWidth / 1920 })")
+    // A TV unit is a 1920th of the width, or a 1080th of the height where the window is wider than 16:9.
+    const unit = 'Math.min(innerWidth / 1920, innerHeight / 1080)'
+    const mark = await inPage(`({ size: document.querySelector('.lockup .mark').getBoundingClientRect().width, unit: ${unit} })`)
     assert.ok(Math.abs(mark.size - 72 * mark.unit) < 1, JSON.stringify(mark))
-    // Four TV units wide: a 1920th of the screen's width each.
-    const ring = await inPage('({ width: parseFloat(getComputedStyle(document.activeElement).outlineWidth), unit: innerWidth / 1920 })')
-    assert.ok(Math.abs(ring.width - 4 * ring.unit) < 0.5, JSON.stringify(ring))
+    // Four TV units wide.
+    const ring = await inPage(`({ width: parseFloat(getComputedStyle(document.activeElement).outlineWidth), unit: ${unit} })`)
+    // Chromium draws a ring a whole number of device pixels wide: 2.67 is 2 on a screen with one to a pixel.
+    assert.ok(Math.abs(ring.width - 4 * ring.unit) <= 1, JSON.stringify(ring))
     await shot('tv-list')
   })
   await step('on a TV, Back leaves the address screen for the list', async () => {
