@@ -6,6 +6,8 @@ import com.wittywilla.wittymediaclient.player.Equaliser
 import com.wittywilla.wittymediaclient.player.FilterKind
 import com.wittywilla.wittymediaclient.player.Leveling
 import com.wittywilla.wittymediaclient.player.SoundSettings
+import com.wittywilla.wittymediaclient.player.Spectrum
+import com.wittywilla.wittymediaclient.player.VisualizerLevels
 import com.wittywilla.wittymediaclient.player.gain
 import com.wittywilla.wittymediaclient.player.towards
 import org.junit.Assert.assertEquals
@@ -13,7 +15,9 @@ import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import kotlin.math.log10
+import kotlin.math.PI
 import kotlin.math.pow
+import kotlin.math.sin
 
 // The website's Sound panel and Web Audio graph (sound.ts, SoundPanel.tsx, player.tsx), ported from the iPhone's
 // SoundLookTests so both apps shape the sound the same way.
@@ -126,5 +130,44 @@ class SoundRulesTest {
         assertEquals(12.0, Loudness(trackDb = 15.0).gain(Leveling.Track), 0.0)
         assertEquals(0.0, Loudness().gain(Leveling.Album), 0.0)
         assertEquals(listOf("Off", "Each song the same", "Keep each album's balance"), Leveling.entries.map { it.words })
+    }
+
+    @Test
+    fun theVisualizersLevelsAreTheWebsites() {
+        // Each level takes the loudest of its bins, from about 43 Hz to 7 kHz.
+        assertEquals(2 until 3, VisualizerLevels.bins(0))
+        assertTrue(VisualizerLevels.bins(22).last < 341)
+        (0 until VisualizerLevels.COUNT - 1).forEach { assertTrue(VisualizerLevels.bins(it).last < VisualizerLevels.bins(it + 1).first + 1) }
+        assertEquals(0.0, VisualizerLevels.level(0, 5), 0.0)
+        assertEquals(1.0, VisualizerLevels.level(255, 0), 1e-12)
+        // The top of the range is lifted a little.
+        assertTrue(VisualizerLevels.level(128, 20) > VisualizerLevels.level(128, 0))
+        // Up quickly, down slowly, and slower still when it's gentle.
+        assertEquals(0.14, VisualizerLevels.follow(0.0, 1.0, 0.01, false), 1e-12)
+        assertEquals(0.968, VisualizerLevels.follow(1.0, 0.0, 0.01, false), 1e-12)
+        assertEquals(0.025, VisualizerLevels.follow(0.0, 1.0, 0.01, true), 1e-12)
+        assertEquals(1.0, VisualizerLevels.follow(0.0, 1.0, 0.2, false), 0.0)
+        // With nothing to read, a gentle swell around 0.18.
+        assertTrue((0 until VisualizerLevels.COUNT).all { VisualizerLevels.swell(12_345.0, it) in 0.03..0.33 })
+    }
+
+    @Test
+    fun theSpectrumIsReadAsWebAudiosAnalyserReadsIt() {
+        val spectrum = Spectrum()
+        val bins = IntArray(1024)
+        // Silence is nothing at all.
+        spectrum.bins(FloatArray(2048), bins)
+        assertTrue(bins.all { it == 0 })
+        // A quiet tone right on bin 100 is loudest there, and far quieter a long way off.
+        val tone = FloatArray(2048) { n -> (0.01 * sin(2 * PI * 100 * n / 2048)).toFloat() }
+        repeat(20) { spectrum.bins(tone, bins) }
+        assertEquals(100, bins.indices.maxByOrNull { bins[it] })
+        // |X|/N under the Blackman window is 0.01 × 0.42 / 2, which is −53.6 dB: 169 of 255.
+        assertEquals(169.0, bins[100].toDouble(), 1.0)
+        assertEquals(0, bins[400])
+        val re = doubleArrayOf(1.0, 0.0, 0.0, 0.0)
+        val im = DoubleArray(4)
+        Spectrum.fft(re, im)
+        assertTrue(re.all { it == 1.0 } && im.all { it == 0.0 })
     }
 }

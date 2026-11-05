@@ -398,6 +398,8 @@ fun WebNowPlaying(nav: Nav) {
                 drawContent()
             },
     ) {
+        // Behind everything but the glow: the visualizer, when the server has it and it's on.
+        if (vizHere && vizLoaded && viz.viz) VisualizerBackground(style, viz.slow, tint, listening.isPlaying)
         Column(Modifier.fillMaxSize()) {
             // The top bar: Close at the start; Add to a playlist, Sleep, Queue, Like and More at the end.
             Row(Modifier.fillMaxWidth().padding(start = 12.dp, end = 12.dp, top = maxOf(14.dp, status), bottom = 4.dp), verticalAlignment = Alignment.CenterVertically) {
