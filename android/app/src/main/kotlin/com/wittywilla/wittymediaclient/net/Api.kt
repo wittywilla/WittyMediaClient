@@ -219,6 +219,10 @@ class Api(val base: String, val token: String, private val quick: Boolean = fals
     suspend fun modulePages(): List<Pair<String, ModulePage>> = get<ModuleBundles>("/modules/web").bundles.flatMap { b -> b.pages.map { b.id to it } }
     suspend fun guide(hours: Int, limit: Int): Guide = get("/guide?hours=$hours&limit=$limit")
     suspend fun forYou(): ForYou = get("/me/recommended")
+    // Music: a station from a song, this person's liked songs in a library, and liking one.
+    suspend fun songRadio(id: Long): List<Item> = getList("/music/radio/$id")
+    suspend fun likes(library: Long): List<Long> = getList("/music/likes?library=$library")
+    suspend fun react(id: Long, value: Int) { call("PUT", "/items/$id/reaction", "{\"value\":$value}") }
     suspend fun shelves(library: Long): Shelves = get("/browse/shelves?library=$library")
     // The query is the website's: sort, desc, seed and the filters, already encoded.
     suspend fun browse(library: Long, query: String, offset: Int, limit: Int): BrowsePage = get("/browse?library=$library&$query&offset=$offset&limit=$limit")

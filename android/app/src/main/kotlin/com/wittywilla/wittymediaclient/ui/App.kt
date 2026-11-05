@@ -702,7 +702,7 @@ fun AppRoot(app: WittyApp) {
                         is Route.Item -> PageShell(nav) { if (LocalMetrics.current.tv) ItemScreen(nav, strings, route.id) else PhoneItem(nav, strings, route.id) }
                         is Route.Album -> PageShell(nav) { AlbumScreen(nav, strings, route) }
                         is Route.Artist -> PageShell(nav) { ArtistScreen(nav, strings, route.library, route.name) }
-                        Route.NowPlaying -> NowPlayingScreen(nav)
+                        Route.NowPlaying -> if (LocalMetrics.current.tv) NowPlayingScreen(nav) else WebNowPlaying(nav)
                         is Route.Player -> if (LocalMetrics.current.tv) PlayerScreen(nav, route.id, route.startOver) else VideoPlayerScreen(nav, route)
                         is Route.Web -> ServerPageScreen(nav, route, route.path, keptToGames = true)
                         is Route.Page -> ServerPageScreen(nav, route, route.path, keptToGames = false, title = route.title)
@@ -715,7 +715,9 @@ fun AppRoot(app: WittyApp) {
         }
         // A phone's tabs float at the bottom, and the shell puts the mini player above them. Elsewhere it has its
         // own strip along the bottom, which also takes care of the system's bar.
-        val tabs = !metrics.tv && (route == Route.Home || route == Route.Search || route == Route.Profile)
+        // On a phone or tablet every page in the website's shell has the shell's own mini bar.
+        val tabs = !metrics.tv && (route == Route.Home || route == Route.Search || route == Route.Profile || route is Route.Library ||
+            route is Route.Show || route is Route.Item || route is Route.Album || route is Route.Artist)
         if (hasQueue && route.hasMiniPlayer && !tabs) {
             Column(Modifier.fillMaxSize()) {
                 Box(Modifier.weight(1f).consumeWindowInsets(WindowInsets.navigationBars)) { showing() }

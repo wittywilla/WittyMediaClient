@@ -59,6 +59,7 @@ private const val BOOK_BACK_MS = 15_000L
 private const val BOOK_FORWARD_MS = 30_000L
 const val OPEN_NOW_PLAYING = "com.wittywilla.wittymediaclient.NOW_PLAYING"
 const val EXTRA_KEEPS_PLACE = "keepsPlace"
+const val EXTRA_LIBRARY = "library"
 
 @OptIn(UnstableApi::class)
 class ListeningService : MediaSessionService() {

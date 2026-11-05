@@ -205,7 +205,7 @@ class Listening(private val app: WittyApp) {
             .setIsPlayable(true)
             .setIsBrowsable(false)
             .setMediaType(if (books) MediaMetadata.MEDIA_TYPE_AUDIO_BOOK_CHAPTER else MediaMetadata.MEDIA_TYPE_MUSIC)
-            .setExtras(Bundle().apply { putBoolean(EXTRA_KEEPS_PLACE, books) })
+            .setExtras(Bundle().apply { putBoolean(EXTRA_KEEPS_PLACE, books); putLong(EXTRA_LIBRARY, track.libraryId) })
             .build()
         return MediaItem.Builder().setMediaId(track.id.toString()).setMediaMetadata(metadata).build()
     }
@@ -277,6 +277,40 @@ class Listening(private val app: WittyApp) {
                 Player.REPEAT_MODE_OFF -> Player.REPEAT_MODE_ALL
                 Player.REPEAT_MODE_ALL -> Player.REPEAT_MODE_ONE
                 else -> Player.REPEAT_MODE_OFF
+            }
+        }
+    }
+
+    // The website's speed menu: a chosen speed, kept for books.
+    fun chooseSpeed(chosen: Float) {
+        controller?.playbackParameters = PlaybackParameters(chosen)
+        if (keepsPlace) prefs.edit { putFloat(KEY_BOOK_SPEED, chosen) }
+    }
+
+    // The sleep timer, as the website's: a clock time to pause at, or the end of what's playing. Not kept.
+    var sleepAt by mutableStateOf<Long?>(null)
+        private set
+    var sleepAfterThis by mutableStateOf(false)
+        private set
+    private var sleeper: Job? = null
+
+    fun sleep(atMillis: Long?, afterThis: Boolean) {
+        sleeper?.cancel()
+        sleepAt = atMillis
+        sleepAfterThis = afterThis
+        if (atMillis == null && !afterThis) return
+        val track = now?.mediaId
+        sleeper = app.scope.launch {
+            while (true) {
+                kotlinx.coroutines.delay(250)
+                val left = durationSec() - positionSec()
+                val due = (atMillis != null && System.currentTimeMillis() >= atMillis) || (afterThis && (now?.mediaId != track || (durationSec() > 0 && left < 0.35)))
+                if (due) {
+                    pause()
+                    sleepAt = null
+                    sleepAfterThis = false
+                    break
+                }
             }
         }
     }
