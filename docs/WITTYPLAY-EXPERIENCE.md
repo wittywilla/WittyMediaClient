@@ -51,7 +51,10 @@ copies nothing of any console maker's.
 - **No layouts, menus, sounds, icons, colours or trade dress.** Every screen is built from APP-DESIGN's components and
   the shapes below: shelves and spines, the shrinking picture card, tiles. Icons are SF Symbols and Material Symbols as
   APP-DESIGN maps them, or our own drawings. A console's colour comes from its own covers, never its maker's brand.
-- **Spines are ours.** A spine is a tinted strip with the title, the console's short name and the era's grain. It never
+- **Cases, cartridges and spines are ours.** A case or a cartridge is drawn here as a plain shape in its console's
+  proportions and material (a cardboard box, a plastic clamshell, a CD jewel case, a DVD-style keep case; a cartridge,
+  a card, a disc) around the game's own cover. Never a maker's banner, logo, colour, label design or exact outline. A
+  spine is a tinted strip with the title, the console's short name and the era's grain. None of them ever
   reproduces a box's real spine, label or packaging art.
 - **No console logos or brand artwork.** WittyPlay's screens never show a console logo, even where the server's owner
   has downloaded logos for its own pages. Controllers are the server's generic drawings (`pad.art`: `one`, `two`,
@@ -76,7 +79,8 @@ into `strings.en.json` and the website as they are, and change only together.
 | The games part | WittyPlay | — | WittyPlay module |
 | A console's games, as a row | **Shelf**, named by the console ("NES") | `wpShelf` | console filter |
 | A console's own page | **Collection** | `wpCollection` | console view |
-| One game on a shelf | **Spine**; turned to show its cover, **face out** | — | item |
+| One game on a shelf | **Case** (cover showing), **Cartridge** (or card, or disc), or **Spine**; turned to show its cover, **face out** | `wpCase`, `wpCartridge` | item |
+| How games stand on the shelves | **Cases**, **Cartridges**, **Shelf** | `wpViewCases`, `wpViewCartridges`, `wpViewShelf` | — |
 | A group of consoles by time or kind | **Era**: 8-bit, 16-bit, Early 3D, Disc era, Pocket | `wpEras` | — |
 | Games for two or more | **Made for two** | `wpMadeForTwo` | `players` facet |
 | A game in progress | a **ribbon** in its spine | — | slot 0 exists |
@@ -107,15 +111,26 @@ and the states' words under [States](#states).
 
 Decided on 5 November 2026, from three directions explored in the prototype (Shelves, a Timeline of eras, Channels).
 
-**Shelves is the games home.** Each console is a shelf of **spines**, standing on a ledge, in its covers' colour. The
-shelf's first game is turned **face out**. Touch a spine and it **pulls out** to face you, with Resume or Play under the
-shelf. A game in progress has a **ribbon** in its spine; a favourite a small star. Long shelves get **letter dividers**,
-like a record shop's. Above the shelves, the one obvious next step: **Where you left off**, the last moment's picture,
-large.
+**Shelves is the games home.** Each console is a shelf, and its games stand on it one of three ways, a switch above the
+shelves that each device remembers:
 
-It scales: 415 SNES games are a long shelf with dividers, not a wall of covers. Every input moves along it naturally:
-along a shelf, between shelves, a letter at a time on the triggers. Each console gets a personality (colour, grain,
-type, the shape of its spines) without a logo. Resume points have a physical place: the ribbon. It costs the server
+- **Cases** (the default): every game in **its console's own kind of case**, cover showing: a cardboard box for NES,
+  SNES, N64 and the Game Boy family (a handheld's box smaller, an SNES or N64 box on its side), a plastic clamshell for
+  Mega Drive and Master System, a CD jewel case for PlayStation and Dreamcast, a DVD-style keep case for PlayStation 2,
+  a small keep case for DS, 3DS and PSP.
+- **Cartridges**: every game as its cartridge (in its console's proportions), its card (DS, 3DS, PC Engine) or its disc,
+  the cover on its label.
+- **Shelf**: the bookshelf: **spines** in their covers' colours, the shelf's first game turned **face out**, and long
+  shelves with **letter dividers**, like a record shop's.
+
+Touch a game and it **pulls out**, with Resume or Play under the shelf. A game in progress has a **ribbon**; a favourite
+a small star. Above the shelves, the one obvious next step: **Where you left off**, the last moment's picture, large.
+The cases and cartridges are the server's data (`shelf` on `/games/consoles`: each one's kind, shape and height), so every
+device draws the same ones.
+
+It scales: 415 SNES games are a long shelf, not a wall of covers, and the Shelf view fits the most. Every input moves
+along it naturally: along a shelf, between shelves, a letter at a time on the triggers. Each console gets a personality
+(its cases, its cartridges, colour, grain, type) without a logo. Resume points have a physical place: the ribbon. It costs the server
 nothing, and it belongs to a media server that keeps books and records as well as games.
 
 The other two directions live inside it:
@@ -141,7 +156,7 @@ without design work:
 | Colour | The tint of its covers (a 16-pixel copy, colourful parts counting more), at least 38% saturation and 30% lightness on spines and bands | NES teal from its covers; Pocket a warm brown |
 | Grain | The era's pixel: dots 12 apart for 8-bit, 10 for 16-bit, 7 for Pocket, a triangle mesh for Early 3D, rings for Disc era, at 16–35% | Behind the band, on spines, on era tiles |
 | Type | The era's treatment of the console's name, in the platform's own faces (SF and SF Mono on Apple, Roboto and Roboto Mono on Android, the website's): 8-bit in monospaced capitals with 6% tracking; Pocket monospaced over a faint LCD grid; 16-bit extra-bold, tight; Early 3D bold italic; Disc era light, wide capitals | "NES" and "MASTER SYSTEM" in monospaced capitals |
-| Spine shape | The console's media: cartridges 176 high; handheld boxes 136; disc cases thin (24 wide) with a sheen | A Pocket shelf sits lower |
+| Case and cartridge | The server's `shelf`: the case's kind (box, clamshell, jewel, keep), the front's shape and how tall it stands; the cartridge's kind (cart, card, disc) and shape. Spines: 176 high, 136 handheld, disc cases 24 wide | An SNES box lies on its side; a Game Boy's box and cartridge stand lower |
 | Sound | The era's short boot motif (see Sound and haptics) | A square-wave rise for 8-bit |
 | Look | The era's default Look | Scanlines for 8-bit, Handheld LCD for Pocket |
 
@@ -259,17 +274,28 @@ The Games library page in the shell (library strip, floating bar), top to bottom
    progress line of time played (`accent` on white 30%), title 14 semibold, "time played · when" 12 `textHint`; then a
    **Moments** card (`panel`, the moment icon) that opens every moment.
 4. **Shelves**, 26 apart. Each: a heading (the console's name in its era's type, the era in Caption `textHint`, the count
-   in 13 `textHint`, "All ›" for its collection), then the **ledge**: spines in a row, 3 apart, 26 above for ribbons and
-   the lift, standing on a 3-high line of `text` at 13% with a soft shadow under it. Order: one shelf per console (most
+   in 13 `textHint`, "All ›" for its collection), then the **ledge**: its games in a row (12 apart as cases and
+   cartridges, 3 apart as spines), 32 above for ribbons and the lift, standing on a 3-high line of `text` at 13% with a
+   soft shadow under it. Above the first shelf, the switch: **Cases**, **Cartridges**, **Shelf** as chips (32 high).
+   Pulling out and focus work the same in all three. Order: one shelf per console (most
    games first), Made for two, the server's genre and series shelves, Favourites, Recently added, **Every game, A to Z**
    with letter dividers, and a **Channels** row last.
+   - **Case:** 176 × the case's height (a full-size box or keep case 176; a handheld's box 106; an SNES or N64 box, on
+     its side, 120) and the front's shape across. Drawn as its kind: a **box** is the cover with its top lit and its
+     right edge shaded; a **clamshell** and a **keep case** put the cover under clear plastic in a frame of `text` 12%
+     over `raised` (a keep case's corners rounder); a **jewel case** is square with a hinge strip down the left. Clear
+     plastic carries a faint diagonal shine. The shadow `0 10 30` black 45%.
+   - **Cartridge:** 150 × its height, its shape across. A **cart** is a plastic shell (`text` 12% over `raised`) with
+     the cover on a label in its top two-thirds and grip lines below; a **card** is flat, mostly label, with a row of
+     contacts along its foot; a **disc** is round, the cover printed on it, a clear ring and the hole in the middle.
    - **Spine:** 34 + up to 14 by title length wide (rounded to whole points), 176 high (136 handheld, 24 wide for disc
      cases), radius 4 at the top; the tint with a left-lit gradient (white 14% to 0 at 28%, black 22% at the right); the
      era's grain at the top fading by 70%; the title vertical, 12.5 semibold white with a 1-down shadow, from 24 below
      the top; the console's short name in a 18-high chip (black 28%) at the foot, 9 bold monospaced.
    - **Face out:** 120×160 (104×136 handheld), radius 6, the cover (the box art; with none, the first screenshot),
      lifted 6 with a shadow `0 14 22` black 60%.
-   - **Pulled out:** the chosen spine becomes face out with a 2 `accent` ring (2 out); under the ledge, a `panel` card
+   - **Pulled out:** a case or cartridge lifts 10 with a 2 `accent` ring (2 out); a spine becomes face out with the
+     ring. Under the ledge, a `panel` card
      (radius large): title 17 semibold, "console · maker · genre · players" 13, Where you left off when there is one,
      and **Resume** or **Play** (Primary pill) and **About** (Ghost pill). Pulling another closes the first.
    - **Letter dividers:** 22×64 tabs in `card` with a `border` outline, the letter in 11 bold monospaced at the top.
@@ -719,9 +745,10 @@ As the prototype's TV screen:
   −1.4), facts in 24, Where you left off in 22 with an `accent` dot, then **Resume** (or Play) and **More** as 66-high
   pills. It follows focus after 140 ms, so flicking along a shelf doesn't flicker it. **Focus starts on Resume.**
 - **Shelves** from 560, in a clipped area above the prompt bar: Continue playing as 360×270 cards with ribbons and
-  captions; then each console's shelf with its heading in the era's type at 26–28, spines 66×300 (232 handheld), the
-  first face out 228×300. Focused, a spine lifts 28 and grows 1.06 inside the ring; the shelf scrolls to keep it in view
-  and the shelves move up so the focused one sits under the preview.
+  captions; then each console's shelf with its heading in the era's type at 26–28, its games as cases (300 × the case's
+  height), cartridges (256 × theirs) or spines (66×300, 232 handheld, the first face out 228×300), as chosen; the
+  switch is the first row of the shelves. Focused, a spine lifts 28 and grows 1.06 inside the ring; the shelf scrolls to keep it in view
+  and the shelves move up so the focused one sits under the preview. A focused case or cartridge lifts the same way.
 - **Prompt bar** along the bottom, 72 high: the input's hints, 36 apart (a remote: OK Open, Back Back, Play/Pause Play
   now, Hold OK More; a pad: the pad's labels for Open, Back, Favourite, Search, and the bumpers for Shelves; a keyboard:
   the keys, and ? Shortcuts).
@@ -787,7 +814,8 @@ Nothing here blocks the first native build: everything marked "exists" in the pr
 Multiplayer needs nothing: it's reserved and shown greyed out.
 
 1. **Capabilities** per console and per running core (see [Adapts to each core](#adapts-to-each-core)), on
-   `/games/consoles` and the session, with the core-option mapping for screens and the layout names.
+   `/games/consoles` and the session, with the core-option mapping for screens and the layout names; and each
+   console's case and cartridge (`shelf`).
 2. **The running game:** `GET /games/playing` → `{id, itemId, title, console, startedAt, device: {id, name, kind},
    seats}` or 204; a device sends its name and kind with play; a `moved` event names the device that took over.
 3. **Moments' names and devices:** `PUT /games/{id}/saves/{slot}` `{name}`; `name` and `device` in the list; quick save's
@@ -862,6 +890,9 @@ Confirmed by the user on 5 November 2026:
    the host. Same-account joining ships first with today's API.
 5. **Rewind is on by default** for 8-bit, 16-bit and Pocket consoles (20 seconds, within the administrator's memory
    limit).
+
+Asked for by the user on 5 November 2026, after these: games stand as **game cases** that match their console, covers
+showing, by default; a **Cartridges** view as well; and a switch back to the bookshelf (**Shelf**).
 
 Defaults that stand: one WittyPlay home per games library, as today; menu sounds off until turned on; haptics following
 the system.
