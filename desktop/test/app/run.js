@@ -579,6 +579,16 @@ async function run() {
     await shot('list-recent')
   })
 
+  await step('a remembered server that is also found is listed once, under what was found', async () => {
+    announce([{ id: SERVER_ID, name: 'Test home', url }])
+    await until('the found card', async () => (await inPage(`document.querySelectorAll('.server').length`)) === 2)
+    const rows = await inPage(`Array.from(document.querySelectorAll('.server')).map((b) => ({ shown: !b.hidden, lastUsed: !!b.querySelector('.pill') }))`)
+    assert.deepStrictEqual(rows, [{ shown: true, lastUsed: true }, { shown: false, lastUsed: true }])
+    assert.strictEqual(await inPage(`Array.from(document.querySelectorAll('h2')).find((h) => h.textContent === ${JSON.stringify(S.recentServers)}).hidden`), true)
+    announce([])
+    await until('the remembered row again', async () => (await inPage(`document.querySelectorAll('.server:not([hidden])').length`)) === 1)
+  })
+
   await step('a remembered server opens straight away, with nothing to prove again', async () => {
     await clickText('Test home')
     await until('the server page', () => views().page.getURL().startsWith(url))
