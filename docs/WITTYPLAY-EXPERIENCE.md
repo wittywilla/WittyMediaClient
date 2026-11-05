@@ -315,8 +315,9 @@ on this device, and moves up above the prompt bar when one shows.
 A console's page: a **band** 260 high in the console's colour with its grain fading down; "{era} · Collection" in Caption
 at 80% white, the name in 48 extra-bold in its era's type, "{full name} · {count} games" in 15 at 85%. On a light theme
 the band is pale and its words `text`. Then sort chips (Most popular, A to Z, Newest first, Made for two); **Yours on
-{console}** (Look, Controls, Settings for this console: the per-console settings, where people expect them); Continue
-playing for this console; the shelf of every game, and a grid three across for a long collection.
+{console}** (Look, Controls, Settings for this console: the per-console settings, where people expect them); **Where
+{console} games run** (see [Where each core runs](#where-each-core-runs)); Continue playing for this console; the shelf
+of every game, and a grid three across for a long collection.
 
 ### Eras
 
@@ -606,6 +607,40 @@ the running core reports fills in the rest (whether it can save states, its cont
 
 (Port counts and devices come from each core; the table is what to expect, not a rule.)
 
+### Where each core runs
+
+Every device plays every game the server can run, because the server runs it and streams it. What differs is the
+**server**: a core may have no build for a platform, and a console drawn with a graphics card may draw on the processor
+instead, slower, or not at all. The user asked for this to be shown wherever a core is.
+
+**The data** (agreed with the server games session, PRs #293 and #298; `docs/GAMING-API.md` in the server): per
+console in `/games/consoles` and `/gaming`, `coreSupport.<coreId>` is `{here: {build, draws, api?, note}, platforms:
+[{os, arch, build, draws, api?, note}]}`, with `os` windows, linux, macos or freebsd, `arch` x64, arm64 or arm32, `draws`
+gpu (the server's graphics card), cpu (the processor, as this core always draws), cpu-fallback (the processor in place of a
+graphics card, slower; `note` says by how much) or none, `build` false where no download exists, and `api` (opengl,
+vulkan, metal) where it's known. `/games/{id}/check` adds `runsOn` (where this console plays) and `alternative` (a core
+not installed that would play it here) when a game can't play here. Installing a core with no build answers 409 with
+`noBuild`, `platform` and `alternative`.
+
+**The words:** macos/arm64 is "Mac with Apple silicon", macos/x64 "Intel Mac", arm64 elsewhere "{OS} on Arm"; `draws` is
+"the graphics card" (with "(Metal)", "(OpenGL)" or "(Vulkan)" when `api` says), "the processor", or "the processor, slower
+than a graphics card"; `note` is the speed note, as the server words it. Platforms that draw the same way are grouped:
+"Windows and Linux (graphics card); Mac with Apple silicon (processor, slower)". "Every device plays it: the server runs
+the game and streams it." is said once, never per device.
+
+**Where it shows:**
+
+- **A console's collection page:** "Where {console} games run", a grouped list with a row per core: its name (with "On
+  this server" in `ok` when installed), "Here: {how it draws}. {note}" (or "no download for this server"), and "Runs on
+  {platforms}"; then the every-device line.
+- **The game menu's core choice** (Game settings → Core, and an administrator's per-game choice on a game's page): each
+  core in the list carries its "Here: …" line, and the chosen one also "Runs on {platforms}".
+- **A game's page:** How you play it's core row adds "Here it draws on {how}. Runs on {platforms}. {every device}".
+- **Not on this server:** a state card in Play's place, naming the platforms that would play it, and the core that would
+  play it here when there's one (see [States](#states)).
+
+A server that doesn't send `coreSupport` yet shows none of this; nothing is worked out on the device.
+
 ## Input, for every screen
 
 Every screen works by touch, game controller, TV remote and keyboard, and shows hints for the one in use (the last one
@@ -845,6 +880,7 @@ from a refused start in the player. On a TV: 24 and 20, a 48 circle, pill action
 | **No core** | `/check` `reason: core`; 409 `needCore` | "This server can't play {console} games yet" · "It needs a core for this console. Ask whoever runs the server." | Administrators: **Install a core** |
 | **BIOS needed** | `reason: bios`, `bios[]`; 409 `needBios` | "{console} games need a BIOS file" · "From a console you own. Put it in a folder named `BIOS` inside your {console} games folder." Each file, needed or found | **Try again**. Never where to get one |
 | **Needs a graphics card** | `needsGpu` and a refused start | "This game needs a graphics card" · "Its console is drawn with one, and this server has none it can use." | — |
+| **Not on this server** | `/check` not ready with `runsOn` (and `alternative`) | "Not on this server" · "This game plays on a server running {platforms, grouped by how they draw}. Every device plays it: the server runs the game and streams it." With an `alternative`: "{core} would play it here" | Administrators: **Install {core}** |
 | **Not playable here** | console `unavailable` | The server's words | — |
 | **Encrypted** | 422 `encrypted` | "This game file is encrypted" · "WittyPlay plays unencrypted copies only. Nothing here decrypts a file, so this one will never start." | None; it stays listed |
 | **Getting it ready** | `prepare` | "Unpacking from its archive · {done} of {total}", or "Waiting for other games to unpack" | Cancel |
