@@ -188,6 +188,18 @@ website's WittyPlay player does, so a layout arranged on the website looks and p
   stays on this device. They hide on their own while a controller is connected, and come back when it goes.
 - **Vision Pro** plays with a controller by default; the touch controls can be turned on from the menu.
 
+**Checked on an iPhone simulator** (iPhone 18 Pro), with debug builds' `-WittyPlayTouchPreview snes` and `nds`. These show
+the real overlay with the server's SNES layout and log each press, since no game could start with the media shares
+unmounted:
+
+- **Upright:** the picture's area took the top 52%, with L and R, the D-pad, the face buttons as a diamond, and Select and
+  Start below it, as the website places them. Tapping each logged a, b, y, x, l, r, select and start. The D-pad gave up,
+  right, down, left and up+right for a diagonal. One finger sliding from Y to A logged y, then a.
+- **Sideways:** the landscape layout covered the whole screen, and A and the D-pad still pressed in their new places.
+- **DS:** a tap on the picture was the stylus at that point, and a tap on A was A.
+
+Not checked: a real game's picture under the controls, the tap felt on a phone, and an iPad.
+
 ## Which consoles play from this Mac's server
 
 Tried from Apple TV's own decoding code against the local server, with one game from each console that has games there. Retail games were used for testing only.
