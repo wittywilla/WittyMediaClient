@@ -100,8 +100,9 @@ Other strings: `wpContinuePlaying` "Continue playing", `wpEveryGame` "Every game
 {console}", `wpLookFor` "Look for {console} games", `wpControlsFor` "Controls for {console} games", `wpHowYouPlay` "How
 you play it", `wpMoreLikeThis` "More like this", `wpYourNotes` "Your notes", `wpStartOver` "Start over",
 `wpStartDefault` "Start with default settings", `wpGettingReady` "Getting it ready", `wpStartingOnServer` "Starting on
-your server", `wpConnectingTo` "Connecting to this {device}", `wpResetGame` "Reset the game", `wpArrangeTouch` "Arrange
-touch controls", `wpPressStart` "Press Start", `wpPressSelect` "Press Select", `wpMomentSaved` "Moment saved",
+your server", `wpConnectingTo` "Connecting to this {device}", `wpResetGame` "Reset the game", `wpEditLayout` "Edit
+layout" (with `wpLayoutSave`, `wpLayoutReset` "Reset to default", `wpLayoutResetAsk`, `wpFaceTogether`,
+`wpScreensTogether`, `wpLayoutFor` "For {console} on {shape}"), `wpPressStart` "Press Start", `wpPressSelect` "Press Select", `wpMomentSaved` "Moment saved",
 `wpCantPlayYet` "Can't play yet", `wpScreens` "Screens", `wpSwapScreens` "Swap screens", `wpDiscs` "Discs",
 `wpChangeDisc` "Change disc", `wpMemoryCards` "Memory cards", `wpShortcuts` "Shortcuts", `wpButtonHints` "Button hints",
 `wpMultiplayer` "Multiplayer", `wpMultiplayerLater` "Play with someone on another server. Coming later.",
@@ -242,7 +243,7 @@ Games library (WittyPlay home: Shelves)      /library/{id}
         └── Game menu (built from the core's capabilities)
             ├── Moments, Screens, Discs, Look, Seats, Memory cards
             ├── Controllers                  /controllers?console=…
-            ├── Arrange touch controls
+            ├── Edit layout                  where the controls, the menu button and the picture or screens sit
             ├── Shortcuts
             └── Game settings                the server's settings screen, drawn from its schema
 Join a game                                  /play/join?code=…                  (server work: seats)
@@ -379,7 +380,7 @@ Quiet Cancel. A mode that shows no picture in 12 seconds is dropped for the next
   to open the game menu with that input ("View + Menu or Home: game menu", "Esc: game menu · ?: shortcuts").
 - **Touch controls** (our drawing): D-pad a plus of two `card` bars with `control` outline and `text` arrows at 60%; face
   buttons `card` circles with the console's letter 22 semibold; Select and Start 72×30 pills; pressed, `accent` and a
-  haptic. Positions, sizes and opacity from the touch layout for this console, device and orientation.
+  haptic. Positions, sizes and opacity from the layout for this console and device shape ([Edit layout](#edit-layout)).
 
 ### Two screens
 
@@ -389,12 +390,93 @@ shadow) and **One at a time** from the game menu or the layout key. The screen t
 `accentText` outline; a press there is the stylus (a white ring ripples out). **Swap** in the touch bar trades the
 screens; touch follows the touch screen. The pad is the console's four-button shape with L and R above.
 
-### Arranging touch controls
+**The touch screen takes touches.** On any console whose capabilities say a screen takes touch (`screens.touch`,
+`input.pointer: "touch"`: DS, 3DS, and any core that reports one), a press anywhere on the visible touch screen is the
+stylus, except exactly on a control someone placed over it:
+- **Over the touch screen,** a control is only its drawn shape. Elsewhere a button keeps its larger, thumb-friendly reach
+  (1.18 times a button's size, 1.35 times the D-pad's).
+- **A finger keeps its first role.** One that comes down on the touch screen stays the stylus until it lifts, even as it
+  slides over a control. One that comes down on a control never becomes the stylus.
+- **Default layouts keep every control off the screens.**
+  - On a phone held upright, the screens are above and the controls below.
+  - Held sideways, the screens are in the middle at full height and the controls are in the side columns, with Start and
+    Select at the foot of those columns, never under the screens.
+  - A tablet is the same with wider margins.
+  - The defaults come from the console's data (its pad, and its screens and their shape), through `/consoles/{c}/controls`,
+    never from a table per device.
+- **With a controller in use,** the touch controls hide, as today, and the whole touch screen is the stylus.
 
-From the game menu: the game dimmed to 55%; every control outlined 1.5 dashed `accentText`, 6 out; the chosen one solid
-`accent`. Drag to move; a sheet (radius extra) with the control's name, Size and Opacity sliders with monospaced values,
-chips to show or hide each control (the touch bar's included), **Done**, Reset. "Saved for this {device}, upright.
-Sideways has its own." For two screens, the touch screen is kept clear of controls.
+### Edit layout
+
+Where everything sits while playing, rearranged by the person and put back as it came. The website builds it first, as
+the reference; the apps follow it.
+
+**Getting in.** Game menu → **Edit layout**, while a game is open, on every device: touch, mouse, keyboard, and a
+controller or remote on a TV. It replaces "Arrange touch controls". The game pauses on its last picture, at full
+brightness, since the picture is one of the things being placed.
+
+**What moves.** Each is outlined 1.5 dashed `accentText`, 6 out; the chosen one is solid `accent`.
+- **Every on-screen control:** the D-pad, each face button, shoulders, Start and Select, sticks, and the right stick's
+  buttons.
+  - **Face buttons together**, on by default: dragging any face button moves them all. Off, they move one by one.
+- **The menu button**, and the touch bar.
+- **The picture,** keeping its shape. A two-screen console has **each screen** on its own, with **Screens together** to
+  move them as one; the screen that takes touch is drawn with its outline, so it's clear what a control would cover.
+  - Placing the screens separately needs the frame to be in the core's stacked layout. The server sets that layout and
+    sends each screen's place in the frame (Server work).
+- On a TV there are no touch controls: the layout there is the picture, or its screens.
+
+**Editing.**
+- **Move:** drag.
+- **Resize:** the corner handle, two fingers pinching, the Size slider, or + and −.
+- **Opacity:** a slider for the chosen control, and one for all of them.
+- **Show or hide:** a chip for each control.
+- **Snap guides:** while dragging, an item snaps within 8 px to the area's centre lines, to a 16 px margin from each edge,
+  and to the centre lines and edges of every other item. Each line it snaps to shows as a 1 px `accent` guide. Holding
+  Alt, or a second finger down on a touch screen, moves freely.
+- **Undo:** the Undo button, or Ctrl or ⌘ + Z, back through every change since the editor opened. Shift + Ctrl or ⌘ + Z
+  redoes.
+- **Without a pointer** (keyboard, controller, remote): Tab or the D-pad goes from item to item. OK or Enter picks one up,
+  the arrows or D-pad move it (Shift, or a held shoulder, for big steps), + and − (or L and R) resize it, and OK puts it
+  down.
+
+**Leaving.** A bar along the top, always in view: **Cancel**, the shape it's for, **Undo**, **Reset to default**, **Save**.
+- **Save** keeps the layout for this console on this device shape, and the game carries on.
+- **Cancel** leaves without saving. So do Esc, B on a controller, Back on a remote, and a phone's or browser's Back.
+- **Reset to default** asks first: "Put this layout back as it came? Your arrangement for {console} on {shape} goes."
+  Answered **Reset**, the saved layout is removed and the editor closes on the console's default. On a TV this is the
+  whole of what a controller has to manage: Game menu → Edit layout → Reset to default → Reset.
+
+**Which layout.** Layouts belong to the account, so they follow the person to every device, and there's one per console
+for each device shape:
+- **phone, upright** (`phone-portrait`) and **phone, sideways** (`phone-landscape`): a touch screen whose shorter side is
+  under 600 points;
+- **tablet, upright** (`tablet-portrait`) and **tablet, sideways** (`tablet-landscape`): a touch screen 600 points or more;
+- **desktop**: a mouse or trackpad, not a TV;
+- **TV** (`tv`): TV mode or a TV app.
+
+The bar says which: "For NES on phones held sideways." With nothing saved for a shape, the console's default is used.
+For the controls that's `defaults.touch` for the shape's orientation (desktop and TV use sideways); for the picture it's
+the player's own fit.
+
+**The data**, on the existing controls route (`docs/GAMING-API.md`, Controls):
+- `GET /consoles/{c}/controls` adds `saved.layouts`: `{ "<shape>": Layout }`, everything this account saved for the
+  console.
+- `PUT /consoles/{c}/controls` with `{"kind": "layout", "key": "<shape>", "data": Layout}` saves one. `"data": null`
+  removes it (Reset to default).
+- A Layout is:
+  ```json
+  { "controls": { "<control key>": { "x": 0.13, "y": 0.62, "size": 0.36, "opacity": 0.55, "hidden": false } },
+    "menu": { "x": 0.96, "y": 0.05 }, "touchbar": { "x": 0.5, "y": 0.06 },
+    "screens": [ { "x": 0.5, "y": 0.27, "size": 0.5 }, { "x": 0.5, "y": 0.76, "size": 0.45 } ],
+    "faceTogether": true, "screensTogether": false }
+  ```
+  - Positions are the centre, as fractions of the play area.
+  - A control's `size` is a fraction of the area's shorter side, as today. A screen's `size` is its height as a fraction of
+    the area's height.
+  - `screens` left out means the player's own fit. One entry is the picture. Two are the console's screens in the core's
+    order; the one at `capabilities.screens.touch` takes touch.
+- An older per-device `touch` layout still counts for its orientation until a `layout` is saved for that shape.
 
 ### Rewind
 
@@ -430,8 +512,8 @@ core](#adapts-to-each-core)):
    Under the seats, **Multiplayer**, greyed out (see [Multiplayer](#multiplayer-reserved)).
 9. **Memory cards** (when the core keeps them): each card, whose it is ("This game's own", "Shared by your PlayStation
    games") and how many saves.
-10. Rows: Controllers (with "Light gun: aim with touch, a mouse or the right stick" for a light-gun console), Arrange
-    touch controls (touch devices), Cheats (when the core has them), Region (when the core has one; "changes next time
+10. Rows: Controllers (with "Light gun: aim with touch, a mouse or the right stick" for a light-gun console), Edit
+    layout, Cheats (when the core has them), Region (when the core has one; "changes next time
     the game starts"), Game settings, **Press Start** and **Press Select** (remotes), Reset the game, **Shortcuts**.
 11. **Save and quit**, Secondary pill, full width; "Saving…" until the server answers.
 
@@ -531,7 +613,7 @@ the server's own page inside the app (a QR card on a TV), as APP-DESIGN's settin
 | Touch screens | `pad.pointer`, the 6-byte pointer state | Touch on the touch screen; a pointer from the right stick |
 | Controls as data | `/consoles/{c}/controls` | Controllers, touch layouts, button hints, the remote's mapping |
 | Controller profiles | `/game-profiles` and resolve, copy, export, import | Controllers → scope chips and Profiles |
-| Touch layouts | `PUT /consoles/{c}/controls` kind `touch` | Arrange touch controls |
+| Layouts | `PUT /consoles/{c}/controls` kind `layout`, per console and device shape | Edit layout |
 | Background picture | `/game-background` | Controllers → Background; behind the touch controls |
 | Shortcuts | `hotkeys.*` | Shortcuts overlay; Game settings → Shortcuts |
 | One game per account; idle stop | server rules | The dock; Continue here; the Stopped while away state |
@@ -891,7 +973,14 @@ Multiplayer needs nothing: it's reserved and shown greyed out.
 9. **Shortcuts:** swap screens, next screen layout, change disc, and full screen in `hotkeys.*`; touch-bar keys in touch
    layouts; a Smooth preset; per-console default Looks.
 10. **Attract clips:** the game's metadata video, when a metadata source has one, served like its pictures.
-11. Later: screenshots into the person's Photos library, games in `/review`, soundtrack and booklet matching.
+11. **Layouts** ([Edit layout](#edit-layout)):
+    - `saved.layouts` per device shape on `GET /consoles/{c}/controls`, and kind `layout` on `PUT`.
+    - Default touch layouts that keep controls off a touch screen.
+    - Where each screen sits in the frame for a two-screen console's stacked layout: `capabilities.screens.frame`, as
+      `[{x, y, w, h}]` fractions of the frame (DS: the top half and the bottom half; 3DS: the top half, and the bottom
+      screen centred under it at 80% of the width).
+    - Setting that layout whenever a saved layout places the screens apart.
+12. Later: screenshots into the person's Photos library, games in `/review`, soundtrack and booklet matching.
 
 ## States
 
