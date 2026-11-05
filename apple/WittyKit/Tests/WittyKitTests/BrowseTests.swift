@@ -90,25 +90,6 @@ final class BrowseTests: XCTestCase {
         XCTAssertEqual(list.filter(\.takesTitles).map(\.id), [1])
     }
 
-    func testHomeMakesOneJumpBackInRowThenRecommendationsThenTheRest() throws {
-        let json = #"""
-        {"hubs":[
-          {"key":"recent-1","title":"Recently added in Films","libraryId":1,"items":[{"id":1,"title":"A"}]},
-          {"key":"continue","title":"Continue watching","items":[{"id":2,"title":"B"}]},
-          {"key":"continue-reading","title":"Continue reading","items":[{"id":3,"title":"C"}]},
-          {"key":"recent-2","title":"Recently added in Shows","libraryId":2,"items":[],"shows":[]},
-          {"key":"recent-1","title":"Twice","libraryId":1,"items":[{"id":4,"title":"D"}]}]}
-        """#
-        let home = try JSONDecoder().decode(Home.self, from: Data(json.utf8))
-        let rows = HomeRows.rows(home, recommended: Recommended(because: "Sol Levante", items: [], shows: nil))
-        XCTAssertEqual(rows.map(\.key), ["jump", "recent-1"], "an empty row, and a second row with the same key, are left out")
-        XCTAssertEqual(rows.first?.items?.map(\.id), [2, 3])
-        XCTAssertEqual(rows.first?.title, "Jump back in")
-        let picked = try JSONDecoder().decode(Recommended.self, from: Data(#"{"because":"Sol Levante","items":[{"id":9,"title":"E"}],"shows":[]}"#.utf8))
-        XCTAssertEqual(HomeRows.rows(home, recommended: picked).map(\.title), ["Jump back in", "Because you watch Sol Levante", "Recently added in Films"])
-        XCTAssertEqual(Recommended(because: "", items: nil, shows: nil).title, "Recommended for you")
-    }
-
     // MARK: A library's page, as the website's
 
     func testALibraryWithoutCategoriesStudiosOrNetworksIsAGrid() throws {

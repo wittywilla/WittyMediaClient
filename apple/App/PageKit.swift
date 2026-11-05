@@ -283,8 +283,9 @@ struct CaptionLabel: View {
 
 // MARK: - Posters
 
-/// No artwork: a gradient from the title's own colour (the avatar rule) to `card`, with the title in 15 semibold
-/// white over its lower third, on the colour, so it reads in every theme.
+/// No artwork: a gradient from `card` down to the title's own colour (the avatar rule), solid by 64%, with the title
+/// in 15 semibold white at the bottom, on the colour, so it reads in every theme. A short title sits in the middle,
+/// as on the website (styles.css, `.card .poster .ph` and `.art-ph` under 760).
 struct PlaceholderArt: View {
     @Environment(\.palette) private var palette
     let title: String
@@ -292,20 +293,19 @@ struct PlaceholderArt: View {
     var lines = 3
 
     var body: some View {
-        // The website's phone placeholder: the title's colour rising from the card's, solid by 64%, with the title
-        // in white over the lower third. Too small to read (72 or less), the colour alone.
         let colour = Color(hex: AvatarLook.colour(for: title))
         GeometryReader { geo in
             LinearGradient(stops: [.init(color: palette.card, location: 0), .init(color: colour, location: 0.64)], startPoint: .top, endPoint: .bottom)
-                .overlay(alignment: .bottomLeading) {
+                .overlay(alignment: .bottom) {
+                    // Too small to read (72 or less): the colour alone.
                     if lines > 0, geo.size.width > 72 {
                         Text(title)
                             .font(.system(size: 15, weight: .semibold))
+                            .lineSpacing(2)
                             .foregroundStyle(.white)
                             .lineLimit(min(lines, 3))
                             .multilineTextAlignment(.leading)
                             .padding(Tokens.Space.s3)
-                            .frame(maxWidth: .infinity, alignment: .leading)
                     }
                 }
         }
@@ -313,8 +313,9 @@ struct PlaceholderArt: View {
     }
 }
 
-/// The website's poster card: the poster 2:3 (square for music) with the theme's medium radius and how far
-/// through it is; 8 under it the title in 14 semibold, two lines, and the facts in 12 `textHint`.
+/// The website's poster card (`.card` in styles.css, PosterCard in ui/Surface.tsx): the picture 2:3, 16:9 or square
+/// with the theme's medium radius, resting on a small shadow, its plates in the top corners and how far through it is
+/// along the bottom; 8 under it the title in 14 semibold, two lines (one on a wide card), and the facts in 12 `textHint`.
 struct PosterCard: View {
     @Environment(\.palette) private var palette
     @Environment(\.dynamicTypeSize) private var typeSize
@@ -325,19 +326,29 @@ struct PosterCard: View {
     var aspect: CGFloat = 2.0 / 3.0
     /// The row's card width, or nil to fill a grid's column.
     var width: CGFloat?
+    var badges: [CardBadge] = []
+    var titleLines = 2
 
     var body: some View {
         let shape = RoundedRectangle(cornerRadius: Tokens.Radius.md, style: .continuous)
+        let left = badges.filter { if case .disc = $0 { return true } else { return false } }
+        let right = badges.filter { if case .disc = $0 { return false } else { return true } }
         VStack(alignment: .leading, spacing: 0) {
             Color.clear
                 .aspectRatio(aspect, contentMode: .fit)
                 .overlay { PosterArt(url: url, title: title, width: width ?? 160) }
+                .overlay(alignment: .topLeading) {
+                    if let plate = left.first { CardPlate(badge: plate).padding(Tokens.Space.s2) }
+                }
+                .overlay(alignment: .topTrailing) {
+                    if let plate = right.first { CardPlate(badge: plate).padding(Tokens.Space.s2) }
+                }
                 .overlay(alignment: .bottom) {
-                    if let progress {
+                    if let progress, progress > 0 {
                         GeometryReader { geo in
                             ZStack(alignment: .leading) {
                                 Rectangle().fill(Color.white.opacity(0.28))
-                                Rectangle().fill(palette.accent).frame(width: geo.size.width * min(max(progress, 0), 1))
+                                Rectangle().fill(palette.accent).frame(width: geo.size.width * min(progress, 1))
                             }
                         }
                         .frame(height: 3)
@@ -347,10 +358,15 @@ struct PosterCard: View {
                 // A hairline inside the edge, so dark artwork keeps its shape on a dark page.
                 .overlay(shape.strokeBorder(Color.white.opacity(0.08), lineWidth: 1))
                 .clipShape(shape)
+                .background(
+                    shape.fill(palette.card)
+                        .shadow(color: .black.opacity(0.16), radius: 1, y: 1)
+                        .shadow(color: .black.opacity(0.14), radius: 4, y: 2)
+                )
             Text(title)
                 .pageFont(.button)
                 .foregroundStyle(palette.text)
-                .lineLimit(typeSize.isAccessibilitySize ? 3 : 2)
+                .lineLimit(typeSize.isAccessibilitySize ? titleLines + 1 : titleLines)
                 .multilineTextAlignment(.leading)
                 .fixedSize(horizontal: false, vertical: true)
                 .padding(.top, Tokens.Space.s2)
@@ -445,31 +461,54 @@ extension Library {
     var countWords: String { LibraryWords.count(itemCount ?? 0, type: type) }
 }
 
-/// 64 high, 10 inside, `panel` with a hairline, the large radius: a 38 icon square in `accent` at 14% with the
-/// icon in `accentText`, then 10 after it the name in 15 semibold over the count in 12 `textHint`.
+/// The website's library tile (shell.css, `.lib-tile`): `panel` with a hairline and the large radius, an icon square
+/// in `accent` at 14% with the icon in `accentText`, then the name in 14 semibold over the count in 12 `textHint`. On a
+/// phone it's 10 inside with a 38 square; wider, 12 inside with a 44 one. "Add a library" is clear and dashed, its
+/// square in `card` with the icon in `textSecondary`.
 struct LibraryTile: View {
     @Environment(\.palette) private var palette
-    let library: Library
+    private let symbol: String
+    private let name: String
+    private let detail: String
+    private let adding: Bool
+    private let compact: Bool
+
+    init(library: Library, compact: Bool = true) {
+        symbol = library.symbol
+        name = library.name
+        detail = library.scanning == true ? "Scanning…" : library.countWords
+        adding = false
+        self.compact = compact
+    }
+
+    /// The tile that adds a library, for administrators, after the others.
+    init(addingCompact compact: Bool) {
+        symbol = "plus"
+        name = "Add a library"
+        detail = "Another folder of media"
+        adding = true
+        self.compact = compact
+    }
 
     var body: some View {
         let shape = RoundedRectangle(cornerRadius: Tokens.Radius.lg, style: .continuous)
-        HStack(spacing: 10) {
-            Image(systemName: library.symbol)
-                .font(.system(size: 17, weight: .semibold))
-                .foregroundStyle(palette.accentText)
-                .frame(width: 38, height: 38)
-                .background(RoundedRectangle(cornerRadius: Tokens.Radius.md, style: .continuous).fill(palette.accent.opacity(0.14)))
+        let square: CGFloat = compact ? 38 : 44
+        HStack(spacing: compact ? 10 : Tokens.Space.s3) {
+            Image(systemName: symbol)
+                .font(.system(size: compact ? 17 : 19, weight: .semibold))
+                .foregroundStyle(adding ? palette.textSecondary : palette.accentText)
+                .frame(width: square, height: square)
+                .background(RoundedRectangle(cornerRadius: Tokens.Radius.md, style: .continuous).fill(adding ? palette.card : palette.accent.opacity(0.14)))
                 .accessibilityHidden(true)
             VStack(alignment: .leading, spacing: 2) {
-                Text(library.name).pageFont(.strong).foregroundStyle(palette.text).lineLimit(1)
-                Text(library.countWords).pageFont(.small).foregroundStyle(palette.textHint).lineLimit(1)
+                Text(name).pageFont(.button).foregroundStyle(palette.text).lineLimit(1)
+                Text(detail).pageFont(.small).foregroundStyle(palette.textHint).lineLimit(1)
             }
             Spacer(minLength: 0)
         }
-        .padding(10)
-        .frame(minHeight: 64)
-        .background(shape.fill(palette.panel))
-        .overlay(shape.strokeBorder(palette.border, lineWidth: 1))
+        .padding(compact ? 10 : Tokens.Space.s3)
+        .background(shape.fill(adding ? Color.clear : palette.panel))
+        .overlay(shape.strokeBorder(palette.border, style: StrokeStyle(lineWidth: 1, dash: adding ? [4, 3] : [])))
         .contentShape(shape)
         .accessibilityElement(children: .combine)
     }

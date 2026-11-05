@@ -413,6 +413,26 @@ public final class WittyClient: @unchecked Sendable {
     /// Home's "Because you watch…" row.
     public func recommended() async throws -> Recommended { try await get("/me/recommended") }
 
+    /// How this person arranged Home, and the newer version they put off, in one asking.
+    public func homeChoices() async throws -> HomeChoices { try await get("/me/ui") }
+
+    public func saveHomeLayout(_ layout: HomeLayout) async throws { try await setInterfaceChoice("home", layout) }
+
+    /// Later, on the notice of a newer server: hidden until the version after this one.
+    public func putOffUpdate(_ version: String) async throws { try await setInterfaceChoice("updateLater", version) }
+
+    /// What's on the first channels now, for Home's On TV now.
+    public func onNow() async throws -> Guide { try await get("/guide?hours=1&limit=\(OnNowLook.limit)") }
+
+    /// One film or disc at random, for Can't decide?. Nil when there's nothing to choose from.
+    public func shuffle() async throws -> Item? {
+        let page: ItemPage = try await get("/items?sort=random&limit=1&noEpisodes=1&watchable=1")
+        return page.items?.first
+    }
+
+    /// What's installed and what's available, for administrators. A build that can't update itself answers 404.
+    public func updateStatus() async throws -> UpdateStatus { try await get("/update") }
+
     /// What a library's titles can be filtered by, for the Filters sheet.
     public func facets(library: Int64) async throws -> Facets { try await get("/browse/facets?library=\(library)") }
 

@@ -539,29 +539,6 @@ public struct Recommended: Decodable, Equatable {
     }
 }
 
-/// Home's rows in the website's order (web/src/pages/HomePage.tsx): everything in progress as one
-/// "Jump back in" row, then the recommendations, then every other row as the server sent it.
-public enum HomeRows {
-    public static let jumpBackIn = "jump"
-
-    public static func rows(_ home: Home, recommended: Recommended? = nil) -> [Hub] {
-        let hubs = home.hubs ?? []
-        let going = hubs.filter { $0.key.hasPrefix("continue") }
-        var rows: [Hub] = []
-        let jump = Hub(key: jumpBackIn, title: "Jump back in", libraryId: nil,
-                       items: going.flatMap { $0.items ?? [] }, shows: going.flatMap { $0.shows ?? [] })
-        if !jump.isEmpty { rows.append(jump) }
-        if let recommended {
-            let row = Hub(key: "foryou", title: recommended.title, libraryId: nil, items: recommended.items, shows: recommended.shows)
-            if !row.isEmpty { rows.append(row) }
-        }
-        rows += hubs.filter { !$0.key.hasPrefix("continue") && !$0.isEmpty }
-        // A server that sends the same row twice still shows it once.
-        var seen = Set<String>()
-        return rows.filter { seen.insert($0.key).inserted }
-    }
-}
-
 /// Search results by what they are, as docs/APP-DESIGN.md's Search has them: Films, Shows, Music, Books…
 public struct SearchGroup: Equatable, Identifiable {
     public let title: String

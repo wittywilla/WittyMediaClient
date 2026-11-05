@@ -28,7 +28,8 @@ func displayTitle(_ item: Item) -> String {
 /// Where choosing something goes: this app's own screen where it has one, and otherwise the server's
 /// page, or on Apple TV what it can do.
 func route(for item: Item) -> Route {
-    if item.isPlayable || item.isRigGame { return .item(item.id) }
+    // A disc has this app's own page, with Play and its menus, as the website's item page has.
+    if item.isPlayable || item.isRigGame || item.isDisc { return .item(item.id) }
     // A song or a chapter opens its album or book, as on Android.
     if item.isAudio, let library = item.libraryId { return .listeningAlbum(library: library, album: item.album ?? "", artist: item.albumArtistName) }
     #if os(tvOS)
@@ -73,21 +74,30 @@ struct Tile: View {
     var aspect: CGFloat = 2.0 / 3.0
     /// The row's card width, or nil to fill a grid's column.
     var width: CGFloat?
+    /// The plates on its picture, on a phone or a tablet.
+    var badges: [CardBadge] = []
+    var titleLines = 2
     let focus: FocusState<String?>.Binding
     let focusKey: String
+
+    private var spokenValue: String {
+        let watched = progress.map { ["\(Int($0 * 100)) percent watched"] } ?? []
+        return (badges.map(\.spoken) + watched).joined(separator: ", ")
+    }
 
     var body: some View {
         NavigationLink(value: route) {
             if metrics.tv {
                 tvCard
             } else {
-                PosterCard(title: title, subtitle: subtitle, url: url, progress: progress, aspect: aspect, width: width)
+                PosterCard(title: title, subtitle: subtitle, url: url, progress: progress, aspect: aspect, width: width,
+                           badges: badges, titleLines: titleLines)
             }
         }
         .tileStyle()
         .focused(focus, equals: focusKey)
         .accessibilityLabel(subtitle.isEmpty ? title : "\(title), \(subtitle)")
-        .accessibilityValue(progress.map { "\(Int($0 * 100)) percent watched" } ?? "")
+        .accessibilityValue(spokenValue)
     }
 
     /// Apple TV's card, as it was.
@@ -119,6 +129,11 @@ struct Tile: View {
     }
 }
 
+/// The website's `--card-wide-w`: 232 on a phone, 260 wider.
+func wideCardWidth(_ metrics: Metrics) -> CGFloat { metrics.cardWidth <= 104 ? 232 : 260 }
+
+/// On a phone or a tablet, the website's ItemCard (web/src/components/common.tsx): episodes as wide stills with their
+/// show's name, songs and CDs square, and the plates for a disc and for watched.
 struct ItemTile: View {
     @Environment(\.client) private var client
     @Environment(\.metrics) private var metrics
@@ -129,13 +144,21 @@ struct ItemTile: View {
     let focus: FocusState<String?>.Binding
 
     var body: some View {
-        let wideHere = wide && !metrics.tv
-        Tile(title: item.cardTitle, subtitle: item.cardSubtitle, url: wideHere ? client.backdropURL(item) : client.posterURL(item), route: route(for: item),
-             progress: item.progressFraction, aspect: wideHere ? 16.0 / 9.0 : (item.isAudio ? 1 : 2.0 / 3.0),
-             width: inRow ? (wideHere ? metrics.cardWidth * 2.5 : metrics.cardWidth) : nil, focus: focus, focusKey: "item\(item.id)")
+        if metrics.tv {
+            Tile(title: item.cardTitle, subtitle: item.cardSubtitle, url: client.posterURL(item), route: route(for: item),
+                 progress: item.progressFraction, aspect: item.isAudio ? 1 : 2.0 / 3.0,
+                 width: inRow ? metrics.cardWidth : nil, focus: focus, focusKey: "item\(item.id)")
+        } else {
+            let look = CardLook.item(item, wide: wide || item.showId != nil)
+            Tile(title: look.title, subtitle: look.subtitle, url: client.posterURL(item), route: route(for: item),
+                 progress: look.progress, aspect: look.shape.aspect,
+                 width: inRow ? (look.shape == .wide ? wideCardWidth(metrics) : metrics.cardWidth) : nil,
+                 badges: look.badges, titleLines: look.shape == .wide ? 1 : 2, focus: focus, focusKey: "item\(item.id)")
+        }
     }
 }
 
+/// On a phone or a tablet, the website's ShowCard: "2019 · 3 seasons", with how many episodes are left or a tick.
 struct ShowTile: View {
     @Environment(\.client) private var client
     @Environment(\.metrics) private var metrics
@@ -143,14 +166,31 @@ struct ShowTile: View {
     var inRow = true
     let focus: FocusState<String?>.Binding
 
-    private var subtitle: String {
+    private var tvSubtitle: String {
         if let unwatched = show.unwatched, unwatched > 0 { return "\(unwatched) unwatched" }
         return show.year.map(String.init) ?? ""
     }
 
     var body: some View {
-        Tile(title: show.title, subtitle: subtitle, url: client.posterURL(show), route: .show(show.id),
-             width: inRow ? metrics.cardWidth : nil, focus: focus, focusKey: "show\(show.id)")
+        if metrics.tv {
+            Tile(title: show.title, subtitle: tvSubtitle, url: client.posterURL(show), route: .show(show.id),
+                 width: inRow ? metrics.cardWidth : nil, focus: focus, focusKey: "show\(show.id)")
+        } else {
+            let look = CardLook.show(show)
+            Tile(title: look.title, subtitle: look.subtitle, url: client.posterURL(show), route: .show(show.id),
+                 width: inRow ? metrics.cardWidth : nil, badges: look.badges, focus: focus, focusKey: "show\(show.id)")
+        }
+    }
+}
+
+extension CardShape {
+    /// Width over height.
+    var aspect: CGFloat {
+        switch self {
+        case .poster: return 2.0 / 3.0
+        case .wide: return 16.0 / 9.0
+        case .square: return 1
+        }
     }
 }
 
