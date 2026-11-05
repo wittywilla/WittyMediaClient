@@ -96,9 +96,9 @@ builds Electron itself instead. As of November 2026 the tree has `devel/electron
   port, and on the DejaVu fonts as Electron brings none. One codebase, and Electron's security updates come through `pkg upgrade`. A native shell around a system web view, the other
   way to get here, would have meant a second window and security layer to keep right.
 - **`npm run package:freebsd`** runs on FreeBSD, finds the newest Electron with a package, and builds with `pkg create`. CI does this free of
-  charge in a virtual machine on GitHub's Linux runners, with `vmactions/freebsd-vm`, reading the quarterly packages as a released FreeBSD does.
-  The latest packages can lose Electron for days while a new one is built, and a package depending on one that people's systems don't have
-  couldn't be installed.
+  charge in a virtual machine on GitHub's Linux runners, with `vmactions/freebsd-vm`, from the quarterly packages a FreeBSD release uses. The
+  latest packages, which that virtual machine comes set to, can go weeks with no Electron for amd64 while a new one builds: in November 2026 they had none.
+  A package depending on an Electron that people's systems don't have couldn't be installed.
 - **The launcher, `desktop/build/freebsd/wittymediaclient.sh`,** sorts out what the app can't:
   - **Sound.** This Electron plays through a sound server, and a video it can't open sound for never starts its clock. FreeBSD runs none by default, so the
     launcher starts `sndiod` for as long as the app is open if nothing is running. With no sound card, it asks Chromium for no sound, and the picture plays.
