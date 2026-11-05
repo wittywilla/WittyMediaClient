@@ -15,7 +15,12 @@ import kotlin.coroutines.resume
 // Browses for servers while a screen needs them. NsdManager calls back on its own
 // threads and older Androids resolve one service at a time, so everything happens
 // on the main thread, in turn. A browse that can't start just finds nothing.
-class ServerFinder(context: Context, private val onChange: (List<FoundServer>) -> Unit) {
+// onCantSearch: this device can't browse at all, so the screen can say so rather than keep looking.
+class ServerFinder(
+    context: Context,
+    private val onCantSearch: () -> Unit = {},
+    private val onChange: (List<FoundServer>) -> Unit,
+) {
     private class Waiting(val info: NsdServiceInfo, val tries: Int)
 
     private val nsd = context.applicationContext.getSystemService(Context.NSD_SERVICE) as NsdManager
@@ -28,7 +33,7 @@ class ServerFinder(context: Context, private val onChange: (List<FoundServer>) -
     private val browse = object : NsdManager.DiscoveryListener {
         override fun onDiscoveryStarted(serviceType: String) = Unit
         override fun onDiscoveryStopped(serviceType: String) = Unit
-        override fun onStartDiscoveryFailed(serviceType: String, errorCode: Int) { main.post { browsing = false } }
+        override fun onStartDiscoveryFailed(serviceType: String, errorCode: Int) { main.post { browsing = false; onCantSearch() } }
         override fun onStopDiscoveryFailed(serviceType: String, errorCode: Int) = Unit
         override fun onServiceFound(info: NsdServiceInfo) {
             main.post {
@@ -55,7 +60,7 @@ class ServerFinder(context: Context, private val onChange: (List<FoundServer>) -
     fun start() {
         main.post {
             browsing = true
-            runCatching { nsd.discoverServices(SERVICE_TYPE, NsdManager.PROTOCOL_DNS_SD, browse) }.onFailure { browsing = false }
+            runCatching { nsd.discoverServices(SERVICE_TYPE, NsdManager.PROTOCOL_DNS_SD, browse) }.onFailure { browsing = false; onCantSearch() }
         }
     }
 
