@@ -108,8 +108,13 @@ struct ConnectView: View {
 
     private var searching: Bool { found.isEmpty && !searchedLong && !refused }
 
+    /// Servers found on the network that haven't been added.
+    private func foundOnly(_ added: [SavedServer]) -> [FoundServer] {
+        found.filter { server in !added.contains { $0.url == server.url || (!$0.serverId.isEmpty && $0.serverId == server.id) } }
+    }
+
     @ViewBuilder private var findWords: some View {
-        BrandLockup()
+        BrandLockup(app: true)
         SignInHeading(title: say("findTitle"), detail: say("findSubtitle"), display: true)
         if !error.isEmpty { ProblemLine(error) }
     }
@@ -121,15 +126,15 @@ struct ConnectView: View {
                 NoteCard(words: refused ? say("findNotSupported") : searchedLong ? say("findNone") : say("findSearching"),
                          busy: searching, icon: refused ? "wifi.slash" : "magnifyingglass")
             }
-            ForEach(found) { server in
-                ServerCard(name: server.name, url: server.url, lastUsed: server.url == model.lastUsedURL,
-                           connecting: connectingTo == server.url) { Task { await connect(server.url) } }
+            // A found server says nothing about itself until it's added: only where it is.
+            ForEach(foundOnly(others)) { server in
+                ServerCard(url: server.url, connecting: connectingTo == server.url) { Task { await connect(server.url) } }
                     .focused($spot, equals: .found(server.id))
             }
             if !others.isEmpty {
                 SearchingCaption(words: say("recentServers")).padding(.top, Tokens.Space.s2)
                 ForEach(others) { server in
-                    ServerCard(name: server.name, url: server.url, lastUsed: server.url == model.lastUsedURL,
+                    ServerCard(saved: server, url: server.url, lastUsed: server.url == model.lastUsedURL,
                                connecting: connectingTo == server.url) { Task { await connect(server.url) } }
                         .focused($spot, equals: .recent(server.url))
                 }
@@ -149,6 +154,7 @@ struct ConnectView: View {
     }
 
     @ViewBuilder private var addressWords: some View {
+        BrandLockup(app: true)
         SignInHeading(title: say("addressTitle"), detail: say("addressHint"))
     }
 
@@ -162,7 +168,8 @@ struct ConnectView: View {
     }
 
     var body: some View {
-        let others = uniqued(model.recent).filter { saved in !found.contains { $0.url == saved.url || $0.id == saved.serverId } }
+        // Every added server is listed as itself; one also found on the network isn't listed twice.
+        let others = uniqued(model.recent)
         Group {
             if showForm {
                 SignInLayout(back: closeForm) { addressWords } actions: { addressActions }
@@ -194,13 +201,16 @@ struct ConnectView: View {
 
 /// Which server a code or a sign-in goes to: its mark and name in a quiet pill.
 private struct ServerPill: View {
+    @EnvironmentObject private var model: AppModel
     @Environment(\.palette) private var palette
+    @Environment(\.metrics) private var metrics
     let name: String
 
     var body: some View {
         HStack(spacing: Tokens.Space.s2) {
-            BrandMark(size: 24)
-            Text(name).font(.wmLabel).foregroundStyle(palette.text).lineLimit(1)
+            // Big enough to read from across the room on a TV.
+            BrandMark(size: metrics.tv ? 40 : 24, logo: model.client.brandLogoURL(version: model.brandLogo))
+            Text(name).font(metrics.tv ? .wmSection : .wmLabel).foregroundStyle(palette.text).lineLimit(1)
         }
         .padding(.leading, Tokens.Space.s1)
         .padding(.trailing, Tokens.Space.s3)
@@ -600,7 +610,11 @@ struct SignInView: View {
 
     private var forgotURL: URL? { model.client.mediaURL("/help/accounts#if-you-forget-your-password") }
 
-    private var serverName: String { model.current?.name ?? "WittyMediaServer" }
+    private var serverName: String {
+        if !model.brandName.isEmpty { return model.brandName }
+        let saved = model.current?.name ?? ""
+        return saved.isEmpty ? "WittyMediaServer" : saved
+    }
 
     /// The other ways in, and which server this is, under whatever the screen is mainly for. On a TV's
     /// Who's watching, which is centred, they're one centred row, as on Android TV.
@@ -623,8 +637,10 @@ struct SignInView: View {
         .frame(maxWidth: .infinity, alignment: middle ? .center : .leading)
         .remoteSection()
         HStack(spacing: Tokens.Space.s1) {
-            Image(systemName: "server.rack").font(.caption).foregroundStyle(palette.textHint)
-            Text(serverName).font(.wmSecondary).foregroundStyle(palette.textSecondary).lineLimit(1)
+            // This server as itself: its logo and name, larger on a TV so it reads from the sofa.
+            BrandMark(size: metrics.tv ? 32 : 20, logo: model.client.brandLogoURL(version: model.brandLogo))
+                .padding(.trailing, Tokens.Space.s1)
+            Text(serverName).font(metrics.tv ? .wmLabel : .wmSecondary).foregroundStyle(palette.textSecondary).lineLimit(1)
             Button(say("changeServer")) { model.changeServer() }.action(.quiet)
         }
         .frame(maxWidth: .infinity, alignment: middle ? .center : .leading)

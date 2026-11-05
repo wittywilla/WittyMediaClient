@@ -42,38 +42,102 @@ struct BrandMark: View {
     }
 }
 
-/// "WittyMediaServer", with "Media" in the accent, or the name the owner gave the server.
+/// "WittyMediaClient" for the app itself, or a server's own name: "WittyMediaServer", with "Media" in the accent,
+/// unless the owner named it. A server's name only appears once it has been added (docs/APP-DESIGN.md, Brand).
 struct Wordmark: View {
     @Environment(\.palette) private var palette
+    @Environment(\.metrics) private var metrics
+    /// The app's own name rather than a server's.
+    var app = false
     var name = ""
 
     var body: some View {
+        let last = app ? "Client" : "Server"
         Group {
-            if name.isEmpty {
+            if app || name.isEmpty {
                 Text("Witty").foregroundColor(palette.text)
                     + Text("Media").foregroundColor(palette.accentText)
-                    + Text("Server").foregroundColor(palette.text)
+                    + Text(last).foregroundColor(palette.text)
             } else {
                 Text(name).foregroundColor(palette.text)
             }
         }
-        .font(.wmHero.weight(.bold))
+        // Read from across the room on a TV: the size of Display.
+        .font(metrics.tv ? .system(size: 48, weight: .bold) : .wmHero.weight(.bold))
         .lineLimit(1)
-        .accessibilityLabel(name.isEmpty ? "WittyMediaServer" : name)
+        .minimumScaleFactor(0.7)
+        .accessibilityLabel(app ? "WittyMediaClient" : (name.isEmpty ? "WittyMediaServer" : name))
     }
 }
 
-/// The mark and the name together, at the top of the sign-in screens.
+/// The mark and the name together, at the top of the sign-in screens: the app's before a server is added,
+/// that server's on its own screens.
 struct BrandLockup: View {
     @EnvironmentObject private var model: AppModel
     @Environment(\.metrics) private var metrics
+    var app = false
 
     var body: some View {
-        HStack(spacing: Tokens.Space.s3) {
-            BrandMark(size: metrics.tv ? 48 : 32, logo: model.client.brandLogoURL(version: model.brandLogo))
-            Wordmark(name: model.brandName)
+        HStack(spacing: metrics.tv ? Tokens.Space.s5 : 10) {
+            BrandMark(size: metrics.tv ? 72 : 32, logo: app ? nil : model.client.brandLogoURL(version: model.brandLogo))
+            Wordmark(app: app, name: model.brandName)
         }
         .accessibilityElement(children: .combine)
+    }
+}
+
+/// An added server's logo, from what the device kept, so a list of servers shows them without asking any.
+struct ServerLogo: View {
+    let server: SavedServer
+    var size: CGFloat = 40
+
+    var body: some View {
+        if let image = LogoCache.image(server: server.url, version: server.brandLogo) {
+            Image(uiImage: image)
+                .resizable()
+                .scaledToFill()
+                .frame(width: size, height: size)
+                .clipShape(RoundedRectangle(cornerRadius: size * 14 / 64, style: .continuous))
+                .accessibilityHidden(true)
+        } else {
+            BrandMark(size: size)
+        }
+    }
+}
+
+/// The owner's logo for each added server, kept on the device by its version, so the server list shows it at once
+/// and a server that can't be reached still looks like itself.
+enum LogoCache {
+    private static var folder: URL? {
+        FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask).first?.appendingPathComponent("logos", isDirectory: true)
+    }
+
+    private static func key(_ server: String) -> String {
+        Data(server.utf8).base64EncodedString()
+            .replacingOccurrences(of: "/", with: "_").replacingOccurrences(of: "+", with: "-").replacingOccurrences(of: "=", with: "")
+    }
+
+    private static func file(server: String, version: String) -> URL? {
+        let safe = version.filter { $0.isASCII && ($0.isLetter || $0.isNumber) }
+        guard !safe.isEmpty else { return nil }
+        return folder?.appendingPathComponent("\(key(server))-\(safe)")
+    }
+
+    static func image(server: String, version: String) -> UIImage? {
+        guard let file = file(server: server, version: version) else { return nil }
+        return UIImage(contentsOfFile: file.path)
+    }
+
+    /// Replaces any older logo of the same server.
+    static func keep(_ data: Data, server: String, version: String) {
+        guard let folder, let file = file(server: server, version: version), UIImage(data: data) != nil else { return }
+        let manager = FileManager.default
+        try? manager.createDirectory(at: folder, withIntermediateDirectories: true)
+        let prefix = key(server) + "-"
+        for old in (try? manager.contentsOfDirectory(atPath: folder.path)) ?? [] where old.hasPrefix(prefix) {
+            try? manager.removeItem(at: folder.appendingPathComponent(old))
+        }
+        try? data.write(to: file, options: .atomic)
     }
 }
 
@@ -389,16 +453,41 @@ private struct ProfileTileContent: View {
 /// A server in a list: its mark, its name over its address, and where it goes.
 struct ServerCard: View {
     @Environment(\.palette) private var palette
-    let name: String
+    @Environment(\.metrics) private var metrics
+    /// An added server: its own logo and name. Without one, a server only found: its address and nothing it says.
+    var saved: SavedServer?
     let url: String
     var lastUsed = false
     var connecting = false
     let action: () -> Void
 
+    /// What a found server is called here: where it is, host and port.
+    static func place(_ url: String) -> String {
+        guard let parts = URLComponents(string: url), let host = parts.host else { return url }
+        return parts.port.map { "\(host):\($0)" } ?? host
+    }
+
+    private var name: String {
+        guard let saved else { return Self.place(url) }
+        return saved.name.isEmpty ? "WittyMediaServer" : saved.name
+    }
+
+    private var detail: String { saved == nil ? say("foundOnNetwork") : url }
+
     var body: some View {
+        let mark: CGFloat = metrics.tv ? 56 : 40
         Button(action: action) {
             HStack(spacing: Tokens.Space.s3) {
-                BrandMark(size: 40)
+                if let saved {
+                    ServerLogo(server: saved, size: mark)
+                } else {
+                    Image(systemName: "server.rack")
+                        .font(.system(size: mark * 0.45, weight: .medium))
+                        .foregroundStyle(palette.textSecondary)
+                        .frame(width: mark, height: mark)
+                        .background(RoundedRectangle(cornerRadius: mark * 14 / 64, style: .continuous).fill(palette.border))
+                        .accessibilityHidden(true)
+                }
                 VStack(alignment: .leading, spacing: 2) {
                     HStack(spacing: Tokens.Space.s2) {
                         Text(name).font(.wmLabel.weight(.semibold)).foregroundStyle(palette.text).lineLimit(1)
@@ -411,7 +500,7 @@ struct ServerCard: View {
                                 .background(Capsule().fill(palette.border))
                         }
                     }
-                    Text(url).font(.wmSecondary).foregroundStyle(palette.textSecondary).lineLimit(1)
+                    Text(detail).font(.wmSecondary).foregroundStyle(palette.textSecondary).lineLimit(1)
                 }
                 Spacer(minLength: 0)
                 if connecting {
@@ -424,7 +513,7 @@ struct ServerCard: View {
             .frame(maxWidth: .infinity, alignment: .leading)
         }
         .buttonStyle(SurfaceStyle(fill: palette.card, radius: Tokens.Radius.lg))
-        .accessibilityLabel(lastUsed ? "\(name), \(url), \(say("lastUsed"))" : "\(name), \(url)")
+        .accessibilityLabel(lastUsed ? "\(name), \(detail), \(say("lastUsed"))" : "\(name), \(detail)")
     }
 }
 

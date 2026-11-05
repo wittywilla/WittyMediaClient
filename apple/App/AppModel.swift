@@ -339,7 +339,7 @@ final class AppModel: ObservableObject {
             saved = saved.moved(to: found.url)
             proof = await WittyClient.identify(found.url, saved: [saved])
         }
-        let checked = proof.saved(url: saved.url, name: saved.name)
+        let checked = proof.saved(url: saved.url, name: saved.name, brandLogo: saved.brandLogo)
         switch Identity.stepAtStart(proof.state, tokenFits: tokenFits(pin: Keychain.pin, proof: proof)) {
         case .warn:
             stage = .mismatch(checked)
@@ -370,7 +370,7 @@ final class AppModel: ObservableObject {
         listening.forget()
         client = WittyClient(base: "")
         paths = [:]
-        stage = proof.state == .bad ? .connect(message: say("identityBad")) : .mismatch(proof.saved(url: using.url, name: using.name))
+        stage = proof.state == .bad ? .connect(message: say("identityBad")) : .mismatch(proof.saved(url: using.url, name: using.name, brandLogo: using.brandLogo))
     }
 
     /// Someone chose this server, and it says it's a WittyMediaServer. Its identity
@@ -378,7 +378,7 @@ final class AppModel: ObservableObject {
     func arrive(url: String, status: ServerStatus) async -> String? {
         let proof = await WittyClient.identify(url, saved: recent)
         let pin = Keychain.pin
-        let checked = proof.saved(url: url, name: status.displayName)
+        let checked = proof.saved(url: url, name: status.displayName, brandLogo: PlainWords.clean(status.brandLogo ?? "", limit: 64))
         let step = Identity.nextStep(proof.state, tokenFits: !pin.isEmpty && tokenFits(pin: pin, proof: proof))
         if step != .refuse && step != .lost { learn(status) }
         switch step {
@@ -411,7 +411,7 @@ final class AppModel: ObservableObject {
             stage = .code(shown, fromSignIn: false)
             return nil
         case .new:
-            stage = .mismatch(proof.saved(url: shown.url, name: shown.name))
+            stage = .mismatch(proof.saved(url: shown.url, name: shown.name, brandLogo: shown.brandLogo))
             return nil
         default:
             return say("identityBad")
@@ -439,7 +439,7 @@ final class AppModel: ObservableObject {
         case .refuse:
             return say("identityBad")
         case .changed:
-            stage = .mismatch(proof.saved(url: shown.url, name: shown.name))
+            stage = .mismatch(proof.saved(url: shown.url, name: shown.name, brandLogo: shown.brandLogo))
             return say("identityBad")
         }
     }
@@ -541,6 +541,26 @@ final class AppModel: ObservableObject {
         themeChoice = defaults.string(forKey: "theme." + client.base) ?? ""
         brandName = PlainWords.clean(status.brandName ?? "", limit: 60)
         brandLogo = PlainWords.clean(status.brandLogo ?? "", limit: 64)
+        rememberLook(of: status)
+    }
+
+    /// An added server's name and logo go with it into the list of servers, the logo's picture kept on the device.
+    private func rememberLook(of status: ServerStatus) {
+        guard let saved = current else { return }
+        let updated = saved.with(name: status.displayName, brandLogo: brandLogo)
+        if updated != saved {
+            current = updated
+            recent = recent.map { $0.url == updated.url ? updated : $0 }
+        }
+        let version = brandLogo
+        guard !version.isEmpty, LogoCache.image(server: updated.url, version: version) == nil,
+              let url = client.brandLogoURL(version: version) else { return }
+        let asking = client
+        Task {
+            guard let data = try? await asking.imageData(url) else { return }
+            LogoCache.keep(data, server: updated.url, version: version)
+            objectWillChange.send()
+        }
     }
 
     /// The address of the server used last, which the connect screen marks.
