@@ -11,7 +11,10 @@ import com.wittywilla.wittymediaclient.games.GameSession
 import com.wittywilla.wittymediaclient.games.GameSettings
 import com.wittywilla.wittymediaclient.games.PictureFit
 import com.wittywilla.wittymediaclient.games.StreamMessage
+import com.wittywilla.wittymediaclient.games.GameDeviceType
+import com.wittywilla.wittymediaclient.games.GamePortDevices
 import com.wittywilla.wittymediaclient.games.blockedTitle
+import com.wittywilla.wittymediaclient.games.currentDevice
 import com.wittywilla.wittymediaclient.games.blockedWords
 import com.wittywilla.wittymediaclient.games.canPlay
 import com.wittywilla.wittymediaclient.games.problemFrom
@@ -115,6 +118,15 @@ class GameStreamTest {
         assertTrue(canPlay(null, GameConsole(ready = true), null))
         assertFalse(canPlay(GameCheck(ready = true), GameConsole(ready = true), GameDetails(problem = "This file is encrypted.")))
         assertEquals("Not today", blockedWords(null, GameConsole(unavailable = "Not today")))
+    }
+
+    @Test
+    fun theDevicePluggedInIsFoundByItsBaseType() {
+        // As the local server's SNES session says it: current 1, the joypad, and the console's own kind of it as 257.
+        val port = GamePortDevices(0, 1, listOf(GameDeviceType(0, "None"), GameDeviceType(257, "SNES Controller"), GameDeviceType(770, "SNES Mouse")))
+        assertEquals(257, currentDevice(port))
+        assertEquals(770, currentDevice(port.copy(current = 770)))
+        assertEquals(0, currentDevice(port.copy(current = 0)))
     }
 
     @Test

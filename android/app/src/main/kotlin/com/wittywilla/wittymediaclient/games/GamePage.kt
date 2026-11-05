@@ -22,6 +22,7 @@ import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.windowInsetsPadding
+import androidx.compose.foundation.layout.windowInsetsTopHeight
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
@@ -138,146 +139,148 @@ fun GamePageScreen(nav: GamesNav, gameId: Long) {
     }
 
     Box(Modifier.fillMaxSize().background(GameColours.background)) {
-        // The backdrop across the top, faint and fading into the page.
-        if (g.hasBackdrop) {
-            GamePicture(
-                api.backdropUrl(g), g.title,
-                Modifier.fillMaxWidth().height(if (look.tv) 270.dp else 360.dp).graphicsLayer { alpha = 0.24f },
-                contentScale = ContentScale.Crop,
-            )
-            Box(Modifier.fillMaxWidth().height(if (look.tv) 270.dp else 360.dp).background(Brush.verticalGradient(listOf(Color.Transparent, GameColours.background))))
-        }
-        Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).windowInsetsPadding(WindowInsets.statusBars)) {
-            if (!look.tv) {
-                Pressable(nav.back, Modifier.padding(start = look.gutter, top = 8.dp).size(40.dp), radius = 20.dp, label = "Back", fill = GameColours.background.copy(alpha = 0.7f)) {
-                    Icon(GameIcons.Back, null, Modifier.align(Alignment.Center).size(22.dp), tint = GameColours.text)
-                }
-            }
-            BoxWithConstraints(Modifier.fillMaxWidth().padding(horizontal = look.gutter, vertical = if (look.tv) 24.dp else 16.dp)) {
-                val wide = maxWidth > 720.dp
-                val narrowCover = minOf(maxWidth * 0.58f, 208.dp)
-                val cover = @Composable { m: Modifier ->
-                    Box(m.aspectRatio(0.75f), contentAlignment = Alignment.BottomCenter) {
-                        if (g.hasPoster) GamePicture(api.posterUrl(g, 800), g.title, Modifier.fillMaxSize().clip(RoundedCornerShape(10.dp)))
-                        else GamePlaceholder(g.title, console?.shortName.orEmpty(), Modifier.fillMaxSize().clip(RoundedCornerShape(10.dp)))
-                    }
-                }
-                val info = @Composable { m: Modifier ->
-                    Column(m, horizontalAlignment = if (wide) Alignment.Start else Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                        console?.let { Text(it.shortName, color = GameColours.secondary, fontSize = if (look.tv) look.small else 13.sp) }
-                        Text(g.title, color = GameColours.text, fontSize = look.display, fontWeight = FontWeight.Bold, textAlign = if (wide) TextAlign.Start else TextAlign.Center)
-                        if (g.tagline.isNotEmpty()) Text(g.tagline, color = GameColours.secondary, fontSize = if (look.tv) look.body else 17.sp, textAlign = if (wide) TextAlign.Start else TextAlign.Center)
-                        val facts = listOfNotNull(
-                            console?.name?.ifEmpty { null }, g.year?.toString(), details?.players?.takeIf { it > 0 }?.let { GameWords.players(it) },
-                            g.contentRating.ifEmpty { null }, g.rating?.let { "★ %.1f".format(it) }, g.genres.take(3).joinToString(", ").ifEmpty { null },
-                        )
-                        if (facts.isNotEmpty()) Text(facts.joinToString("  ·  "), color = GameColours.secondary, fontSize = look.small, textAlign = if (wide) TextAlign.Start else TextAlign.Center)
-                        val played = g.playedSeconds
-                        val sessions = mine?.plays ?: 0
-                        if (played > 60 || sessions > 0) {
-                            Text(
-                                listOfNotNull(if (played > 60) "${GameWords.played(played)} played" else null, if (sessions > 0) "$sessions ${if (sessions == 1) "session" else "sessions"}" else null).joinToString("   "),
-                                color = GameColours.secondary, fontSize = look.small,
-                            )
-                        }
-                        details?.problem?.takeIf { it.isNotEmpty() }?.let { Blocked(it) }
-                        FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp, if (wide) Alignment.Start else Alignment.CenterHorizontally), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                            if (ready) {
-                                GameButton(if (resumes) "Resume" else "Play", { nav.play(g.id, GameStart(resume = resumes)) }, kind = ButtonKind.Primary, icon = GameIcons.Play, focusRequester = playButton)
-                                if (auto != null) GameButton("Start over", { nav.play(g.id, GameStart(resume = false)) })
-                            }
-                            mine?.let { m ->
-                                GameIconButton(GameIcons.Star, if (m.favourite) "Favourite" else "Add to favourites", {
-                                    scope.launch { runCatching { api.setFavourite(g.id, !m.favourite) }.onSuccess { mine = it } }
-                                }, on = m.favourite, tint = if (m.favourite) Color(0xFFFFC94D) else null, focusRequester = favouriteButton)
-                            }
-                            if (ready) GameIconButton(GameIcons.More, "More for this game", { moreOpen = !moreOpen }, on = moreOpen)
-                        }
-                        if (moreOpen && ready) {
-                            GameButton("Start with default settings", { nav.play(g.id, GameStart(resume = auto != null, safeMode = true)) }, icon = GameIcons.Refresh, big = false)
-                        }
-                        if (auto != null && ready) ResumeCard(api, g, auto) { nav.play(g.id, GameStart(resume = true)) }
-                        // What stops it: the server's own words, from its readiness check.
-                        val c = check
-                        if (c != null && !c.ready) Blocked(blockedWords(c, console), title = blockedTitle(c.reason))
-                        else if (c == null && console?.ready == false) Blocked(blockedWords(null, console), title = blockedTitle(""))
-                    }
-                }
-                if (wide) {
-                    Row(horizontalArrangement = Arrangement.spacedBy(if (look.tv) 40.dp else 32.dp), verticalAlignment = Alignment.Bottom) {
-                        cover(Modifier.width(if (look.tv) 180.dp else 220.dp))
-                        info(Modifier.weight(1f))
-                    }
-                } else {
-                    Column(Modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(20.dp)) {
-                        cover(Modifier.width(narrowCover))
-                        info(Modifier.fillMaxWidth())
-                    }
-                }
-            }
-
-            Column(Modifier.padding(horizontal = look.gutter), verticalArrangement = Arrangement.spacedBy(look.sectionGap)) {
-                if (g.overview.isNotEmpty()) {
-                    Section("About this game") {
-                        Text(g.overview, color = GameColours.text, fontSize = look.body, maxLines = if (longRead) Int.MAX_VALUE else 6, overflow = TextOverflow.Ellipsis, lineHeight = look.body * 1.5f)
-                        if (g.overview.length > 420) GameButton(if (longRead) "Show less" else "Read more", { longRead = !longRead }, kind = ButtonKind.Ghost, big = false)
-                    }
-                }
-                val facts = listOfNotNull(
-                    details?.released?.takeIf { it.isNotEmpty() }?.let { "Released" to it } ?: g.year?.let { "Year" to it.toString() },
-                    g.studio.ifEmpty { null }?.let { "Developer" to it },
-                    details?.publisher?.ifEmpty { null }?.let { "Publisher" to it },
-                    details?.players?.takeIf { it > 0 }?.let { "Players" to if (it == 1) "1" else "Up to $it" },
-                    details?.franchise?.ifEmpty { null }?.let { "Series" to it },
-                    g.genres.joinToString(", ").ifEmpty { null }?.let { "Genres" to it },
+        Box(Modifier.fillMaxSize().verticalScroll(rememberScrollState())) {
+            // The backdrop across the top, faint and fading into the page, scrolling away with it.
+            if (g.hasBackdrop) {
+                GamePicture(
+                    api.backdropUrl(g), g.title,
+                    Modifier.fillMaxWidth().height(if (look.tv) 270.dp else 360.dp).graphicsLayer { alpha = 0.24f },
+                    contentScale = ContentScale.Crop,
                 )
-                if (facts.isNotEmpty()) {
-                    FlowRow(horizontalArrangement = Arrangement.spacedBy(24.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
-                        for ((name, value) in facts) Column(Modifier.widthIn(min = 140.dp, max = 320.dp)) {
-                            Text(name.uppercase(), color = GameColours.hint, fontSize = if (look.tv) look.small else 11.sp, fontWeight = FontWeight.SemiBold)
-                            Text(value, color = GameColours.text, fontSize = look.body)
+                Box(Modifier.fillMaxWidth().height(if (look.tv) 270.dp else 360.dp).background(Brush.verticalGradient(listOf(Color.Transparent, GameColours.background))))
+            }
+            Column(Modifier.fillMaxWidth().windowInsetsPadding(WindowInsets.statusBars)) {
+                if (!look.tv) {
+                    Pressable(nav.back, Modifier.padding(start = look.gutter, top = 8.dp).size(40.dp), radius = 20.dp, label = "Back", fill = GameColours.background.copy(alpha = 0.7f)) {
+                        Icon(GameIcons.Back, null, Modifier.align(Alignment.Center).size(22.dp), tint = GameColours.text)
+                    }
+                }
+                BoxWithConstraints(Modifier.fillMaxWidth().padding(horizontal = look.gutter, vertical = if (look.tv) 24.dp else 16.dp)) {
+                    val wide = maxWidth > 720.dp
+                    val narrowCover = minOf(maxWidth * 0.58f, 208.dp)
+                    val cover = @Composable { m: Modifier ->
+                        Box(m.aspectRatio(0.75f), contentAlignment = Alignment.BottomCenter) {
+                            if (g.hasPoster) GamePicture(api.posterUrl(g, 800), g.title, Modifier.fillMaxSize().clip(RoundedCornerShape(10.dp)))
+                            else GamePlaceholder(g.title, console?.shortName.orEmpty(), Modifier.fillMaxSize().clip(RoundedCornerShape(10.dp)))
+                        }
+                    }
+                    val info = @Composable { m: Modifier ->
+                        Column(m, horizontalAlignment = if (wide) Alignment.Start else Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                            console?.let { Text(it.shortName, color = GameColours.secondary, fontSize = if (look.tv) look.small else 13.sp) }
+                            Text(g.title, color = GameColours.text, fontSize = look.display, fontWeight = FontWeight.Bold, textAlign = if (wide) TextAlign.Start else TextAlign.Center)
+                            if (g.tagline.isNotEmpty()) Text(g.tagline, color = GameColours.secondary, fontSize = if (look.tv) look.body else 17.sp, textAlign = if (wide) TextAlign.Start else TextAlign.Center)
+                            val facts = listOfNotNull(
+                                console?.name?.ifEmpty { null }, g.year?.toString(), details?.players?.takeIf { it > 0 }?.let { GameWords.players(it) },
+                                g.contentRating.ifEmpty { null }, g.rating?.let { "★ %.1f".format(it) }, g.genres.take(3).joinToString(", ").ifEmpty { null },
+                            )
+                            if (facts.isNotEmpty()) Text(facts.joinToString("  ·  "), color = GameColours.secondary, fontSize = look.small, textAlign = if (wide) TextAlign.Start else TextAlign.Center)
+                            val played = g.playedSeconds
+                            val sessions = mine?.plays ?: 0
+                            if (played > 60 || sessions > 0) {
+                                Text(
+                                    listOfNotNull(if (played > 60) "${GameWords.played(played)} played" else null, if (sessions > 0) "$sessions ${if (sessions == 1) "session" else "sessions"}" else null).joinToString("   "),
+                                    color = GameColours.secondary, fontSize = look.small,
+                                )
+                            }
+                            details?.problem?.takeIf { it.isNotEmpty() }?.let { Blocked(it) }
+                            FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp, if (wide) Alignment.Start else Alignment.CenterHorizontally), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                                if (ready) {
+                                    GameButton(if (resumes) "Resume" else "Play", { nav.play(g.id, GameStart(resume = resumes)) }, kind = ButtonKind.Primary, icon = GameIcons.Play, focusRequester = playButton)
+                                    if (auto != null) GameButton("Start over", { nav.play(g.id, GameStart(resume = false)) })
+                                }
+                                mine?.let { m ->
+                                    GameIconButton(GameIcons.Star, if (m.favourite) "Favourite" else "Add to favourites", {
+                                        scope.launch { runCatching { api.setFavourite(g.id, !m.favourite) }.onSuccess { mine = it } }
+                                    }, on = m.favourite, tint = if (m.favourite) Color(0xFFFFC94D) else null, focusRequester = favouriteButton)
+                                }
+                                if (ready) GameIconButton(GameIcons.More, "More for this game", { moreOpen = !moreOpen }, on = moreOpen)
+                            }
+                            if (moreOpen && ready) {
+                                GameButton("Start with default settings", { nav.play(g.id, GameStart(resume = auto != null, safeMode = true)) }, icon = GameIcons.Refresh, big = false)
+                            }
+                            if (auto != null && ready) ResumeCard(api, g, auto) { nav.play(g.id, GameStart(resume = true)) }
+                            // What stops it: the server's own words, from its readiness check.
+                            val c = check
+                            if (c != null && !c.ready) Blocked(blockedWords(c, console), title = blockedTitle(c.reason))
+                            else if (c == null && console?.ready == false) Blocked(blockedWords(null, console), title = blockedTitle(""))
+                        }
+                    }
+                    if (wide) {
+                        Row(horizontalArrangement = Arrangement.spacedBy(if (look.tv) 40.dp else 32.dp), verticalAlignment = Alignment.Bottom) {
+                            cover(Modifier.width(if (look.tv) 180.dp else 220.dp))
+                            info(Modifier.weight(1f))
+                        }
+                    } else {
+                        Column(Modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(20.dp)) {
+                            cover(Modifier.width(narrowCover))
+                            info(Modifier.fillMaxWidth())
                         }
                     }
                 }
-                val others = versions.filter { !it.current }
-                if (others.isNotEmpty()) {
-                    Section("Other versions") {
-                        FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                            for (v in others) GameChip(v.label.ifEmpty { "Version ${v.id}" }, false, { nav.openGame(v.id) })
+
+                Column(Modifier.padding(horizontal = look.gutter), verticalArrangement = Arrangement.spacedBy(look.sectionGap)) {
+                    if (g.overview.isNotEmpty()) {
+                        Section("About this game") {
+                            Text(g.overview, color = GameColours.text, fontSize = look.body, maxLines = if (longRead) Int.MAX_VALUE else 6, overflow = TextOverflow.Ellipsis, lineHeight = look.body * 1.5f)
+                            if (g.overview.length > 420) GameButton(if (longRead) "Show less" else "Read more", { longRead = !longRead }, kind = ButtonKind.Ghost, big = false)
                         }
                     }
-                }
-                if (saves.isNotEmpty()) {
-                    Section("Save states") {
-                        val ordered = saves.sortedWith(compareBy({ it.slot != 0 }, { it.slot }))
-                        FlowRow(horizontalArrangement = Arrangement.spacedBy(16.dp), verticalArrangement = Arrangement.spacedBy(16.dp), maxItemsInEachRow = if (look.tv) 4 else 2) {
-                            for (s in ordered) {
-                                Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                                    Pressable(
-                                        { if (ready) nav.play(g.id, if (s.slot == 0) GameStart(resume = true) else GameStart(resume = false, slot = s.slot)) },
-                                        Modifier.fillMaxWidth().aspectRatio(16f / 10f),
-                                        label = "Play from ${GameWords.slotName(s.slot)}, saved ${GameWords.ago(s.updatedAt)}",
-                                        fill = GameColours.card,
-                                    ) {
-                                        if (s.hasThumb) GamePicture(api.saveThumbUrl(g.id, s.slot, s.updatedAt), "", Modifier.fillMaxSize())
-                                    }
-                                    Row(verticalAlignment = Alignment.CenterVertically) {
-                                        Column(Modifier.weight(1f)) {
-                                            Text(GameWords.slotName(s.slot), color = GameColours.text, fontSize = look.small, fontWeight = FontWeight.SemiBold, maxLines = 1)
-                                            Text(GameWords.ago(s.updatedAt), color = GameColours.secondary, fontSize = look.small, maxLines = 1)
+                    val facts = listOfNotNull(
+                        details?.released?.takeIf { it.isNotEmpty() }?.let { "Released" to it } ?: g.year?.let { "Year" to it.toString() },
+                        g.studio.ifEmpty { null }?.let { "Developer" to it },
+                        details?.publisher?.ifEmpty { null }?.let { "Publisher" to it },
+                        details?.players?.takeIf { it > 0 }?.let { "Players" to if (it == 1) "1" else "Up to $it" },
+                        details?.franchise?.ifEmpty { null }?.let { "Series" to it },
+                        g.genres.joinToString(", ").ifEmpty { null }?.let { "Genres" to it },
+                    )
+                    if (facts.isNotEmpty()) {
+                        FlowRow(horizontalArrangement = Arrangement.spacedBy(24.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
+                            for ((name, value) in facts) Column(Modifier.widthIn(min = 140.dp, max = 320.dp)) {
+                                Text(name.uppercase(), color = GameColours.hint, fontSize = if (look.tv) look.small else 11.sp, fontWeight = FontWeight.SemiBold)
+                                Text(value, color = GameColours.text, fontSize = look.body)
+                            }
+                        }
+                    }
+                    val others = versions.filter { !it.current }
+                    if (others.isNotEmpty()) {
+                        Section("Other versions") {
+                            FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                                for (v in others) GameChip(v.label.ifEmpty { "Version ${v.id}" }, false, { nav.openGame(v.id) })
+                            }
+                        }
+                    }
+                    if (saves.isNotEmpty()) {
+                        Section("Save states") {
+                            val ordered = saves.sortedWith(compareBy({ it.slot != 0 }, { it.slot }))
+                            FlowRow(horizontalArrangement = Arrangement.spacedBy(16.dp), verticalArrangement = Arrangement.spacedBy(16.dp), maxItemsInEachRow = if (look.tv) 4 else 2) {
+                                for (s in ordered) {
+                                    Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                                        Pressable(
+                                            { if (ready) nav.play(g.id, if (s.slot == 0) GameStart(resume = true) else GameStart(resume = false, slot = s.slot)) },
+                                            Modifier.fillMaxWidth().aspectRatio(16f / 10f),
+                                            label = "Play from ${GameWords.slotName(s.slot)}, saved ${GameWords.ago(s.updatedAt)}",
+                                            fill = GameColours.card,
+                                        ) {
+                                            if (s.hasThumb) GamePicture(api.saveThumbUrl(g.id, s.slot, s.updatedAt), "", Modifier.fillMaxSize())
                                         }
-                                        val asking = deleting == s.slot
-                                        Pressable({
-                                            if (!asking) {
-                                                deleting = s.slot
-                                            } else {
-                                                deleting = null
-                                                scope.launch { runCatching { api.deleteSave(g.id, s.slot) }.onSuccess { saves = saves.filter { it.slot != s.slot } } }
+                                        Row(verticalAlignment = Alignment.CenterVertically) {
+                                            Column(Modifier.weight(1f)) {
+                                                Text(GameWords.slotName(s.slot), color = GameColours.text, fontSize = look.small, fontWeight = FontWeight.SemiBold, maxLines = 1)
+                                                Text(GameWords.ago(s.updatedAt), color = GameColours.secondary, fontSize = look.small, maxLines = 1)
                                             }
-                                        }, label = if (asking) "Delete for good" else "Delete ${GameWords.slotName(s.slot)}", radius = 8.dp) {
-                                            Row(Modifier.padding(8.dp), verticalAlignment = Alignment.CenterVertically) {
-                                                Icon(GameIcons.Trash, null, Modifier.size(18.dp), tint = if (asking) GameColours.danger else GameColours.secondary)
-                                                if (asking) Text(" Delete?", color = GameColours.danger, fontSize = look.small)
+                                            val asking = deleting == s.slot
+                                            Pressable({
+                                                if (!asking) {
+                                                    deleting = s.slot
+                                                } else {
+                                                    deleting = null
+                                                    scope.launch { runCatching { api.deleteSave(g.id, s.slot) }.onSuccess { saves = saves.filter { it.slot != s.slot } } }
+                                                }
+                                            }, label = if (asking) "Delete for good" else "Delete ${GameWords.slotName(s.slot)}", radius = 8.dp) {
+                                                Row(Modifier.padding(8.dp), verticalAlignment = Alignment.CenterVertically) {
+                                                    Icon(GameIcons.Trash, null, Modifier.size(18.dp), tint = if (asking) GameColours.danger else GameColours.secondary)
+                                                    if (asking) Text(" Delete?", color = GameColours.danger, fontSize = look.small)
+                                                }
                                             }
                                         }
                                     }
@@ -285,33 +288,35 @@ fun GamePageScreen(nav: GamesNav, gameId: Long) {
                             }
                         }
                     }
-                }
-                Panel("How it plays") {
-                    Check(true, "Runs on your server", "and streams to this device, so this device needs no emulator and nothing downloads. Saves stay on the server, and follow you to every device.")
-                    check?.core?.takeIf { it.name.isNotEmpty() }?.let { Check(true, it.name, "The core that plays this game. Licence: ${it.license.ifEmpty { "not known" }}.") }
-                    if (check?.reason == "core") Check(false, "No core installed", "Ask whoever runs this server.")
-                    if (check?.needsGpu == true) Check(null, "Uses the server's graphics card", "This console is drawn with one, so it needs a server that has one.")
-                    for (b in check?.bios.orEmpty().filter { it.required || it.found }) {
-                        Check(b.found, "BIOS: ${b.file}", if (b.found) "Found. ${b.`for`}." else "Not found yet. ${b.`for`}. Put your own copy in a folder named ${check?.biosFolder?.ifEmpty { null } ?: "BIOS"} beside these games.")
-                    }
-                    console?.unavailable?.takeIf { it.isNotEmpty() }?.let { Check(false, "Not playable here yet", it) }
-                }
-                Panel("Controls") {
-                    val pad = console?.pad
-                    if (pad != null) {
-                        FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                            for (name in listOf("D-pad") + (if (pad.sticks) listOf("Stick") else emptyList()) + pad.buttons.map { it.label }) Pill(name)
+                    Panel("How it plays") {
+                        Check(true, "Runs on your server", "and streams to this device, so this device needs no emulator and nothing downloads. Saves stay on the server, and follow you to every device.")
+                        check?.core?.takeIf { it.name.isNotEmpty() }?.let { Check(true, it.name, "The core that plays this game. Licence: ${it.license.ifEmpty { "not known" }}.") }
+                        if (check?.reason == "core") Check(false, "No core installed", "Ask whoever runs this server.")
+                        if (check?.needsGpu == true) Check(null, "Uses the server's graphics card", "This console is drawn with one, so it needs a server that has one.")
+                        for (b in check?.bios.orEmpty().filter { it.required || it.found }) {
+                            Check(b.found, "BIOS: ${b.file}", if (b.found) "Found. ${b.`for`}." else "Not found yet. ${b.`for`}. Put your own copy in a folder named ${check?.biosFolder?.ifEmpty { null } ?: "BIOS"} beside these games.")
                         }
+                        console?.unavailable?.takeIf { it.isNotEmpty() }?.let { Check(false, "Not playable here yet", it) }
                     }
-                    Text(
-                        if (look.tv) "Play with a controller; the remote is for the menus. Back, or Start and Select together, opens the game menu."
-                        else "Controllers, keyboards and the touch screen all work. Start and Select together, Escape or the button in the corner open the game menu.",
-                        color = GameColours.secondary, fontSize = look.small,
-                    )
+                    Panel("Controls") {
+                        val pad = console?.pad
+                        if (pad != null) {
+                            FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                                for (name in listOf("D-pad") + (if (pad.sticks) listOf("Stick") else emptyList()) + pad.buttons.map { it.label }) Pill(name)
+                            }
+                        }
+                        Text(
+                            if (look.tv) "Play with a controller; the remote is for the menus. Back, or Start and Select together, opens the game menu."
+                            else "Controllers, keyboards and the touch screen all work. Start and Select together, Escape or the button in the corner open the game menu.",
+                            color = GameColours.secondary, fontSize = look.small,
+                        )
+                    }
+                    Spacer(Modifier.height(24.dp).windowInsetsPadding(WindowInsets.navigationBars))
                 }
-                Spacer(Modifier.height(24.dp).windowInsetsPadding(WindowInsets.navigationBars))
             }
         }
+        // What scrolls under the clock fades into the page.
+        Box(Modifier.fillMaxWidth().windowInsetsTopHeight(WindowInsets.statusBars).background(Brush.verticalGradient(listOf(GameColours.background, GameColours.background.copy(alpha = 0.6f)))))
     }
 }
 

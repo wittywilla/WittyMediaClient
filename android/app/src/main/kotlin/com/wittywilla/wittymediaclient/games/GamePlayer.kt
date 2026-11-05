@@ -525,6 +525,8 @@ private fun SlotGrid(play: GamePlay, saving: Boolean, columns: Int, first: Focus
                 }
             }
         }
+        // The last row keeps the others' widths.
+        repeat((columns - slots.size % columns) % columns) { Spacer(Modifier.weight(1f)) }
     }
     Tile(GameIcons.Back, "Back", { play.menuBack() }, Modifier.fillMaxWidth())
 }
@@ -557,7 +559,8 @@ private fun Players(play: GamePlay, touchScreen: Boolean, first: FocusRequester)
         Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
             Text("What player ${d.port + 1} plugs in", color = Color(0xFFF2F4F8), fontSize = look.body, fontWeight = FontWeight.SemiBold)
             FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                for (t in d.types) GameChip(t.name, t.id == d.current, { play.setDevice(d.port, t.id) })
+                val chosen = currentDevice(d)
+                for (t in d.types) GameChip(t.name, t.id == chosen, { play.setDevice(d.port, t.id) })
             }
         }
     }

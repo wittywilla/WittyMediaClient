@@ -287,6 +287,11 @@ data class PictureFit(val width: Float, val height: Float, val turns: Int) {
     }
 }
 
+// Which of a port's device types is plugged in. A session may name the base type (1, a joypad) where its list
+// has the console's own kind of it (257, a subclass of the joypad, as libretro numbers them).
+fun currentDevice(d: GamePortDevices): Int =
+    d.types.firstOrNull { it.id == d.current }?.id ?: d.types.firstOrNull { it.id and 0xff == d.current && it.id > 0xff }?.id ?: d.current
+
 // How much sound may wait to be played before some is dropped to catch up, by audio.latency.
 fun soundLatencySeconds(setting: String): Double = when (setting) {
     "smooth" -> 0.16
