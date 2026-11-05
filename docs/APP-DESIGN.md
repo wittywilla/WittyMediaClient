@@ -22,6 +22,7 @@ offers is reachable from every app: arranged for the device, never left out. See
 - [Components](#components)
 - [Signing in](#signing-in)
 - [You and settings](#you-and-settings)
+- [Discs and the remote](#discs-and-the-remote)
 - [Feature map](#feature-map)
 - [On a TV](#on-a-tv)
 - [Checking a build against this](#checking-a-build-against-this)
@@ -641,6 +642,53 @@ account's controller profiles (`/game-profiles`). A game the server can't run sa
 readiness check), on every device alike; Play never appears for it. Saves are the server's, so a game started on one
 device carries on from the same place on any other.
 
+## Discs and the remote
+
+DVDs and Blu-rays play with their own menus through the server's disc sessions (`/api/v1/dvd/{sid}/…`; the server's
+`docs/DVD.md` and `docs/BLURAY.md`, "The remote"). Every DVD and Blu-ray form, and every copy of a disc's film, gets
+the disc remote, named for its module. Which keys work is the server's rule, in its `web/src/player/remoteKeys.ts`
+(with its tests), and the same on every device; a key that can't work stays in its place, greyed out.
+
+| What's playing | How the app knows | Remote | Keys that work |
+|---|---|---|---|
+| A DVD image or folder | `kind` is `dvd-iso` or `dvd-folder` | WittyDVD | All but the colour keys |
+| A Blu-ray image or folder | `kind` is `bluray-iso` or `bluray-folder` | WittyBluray | All; the colour keys while a Java menu shows (the presentation's `bdj`) |
+| A disc with no menus, such as a BDAV recording | `disc.hasMenus` is false | As its disc | All but Top menu, and Menu unless the film has a pop-up menu, with the line "This disc has no menus" |
+| A copy of a disc's film: a loose VOB or m2ts, a rip | `kind` is `video`, `discSource` is `dvd` or `bluray` | WittyDVD or WittyBluray | Play, pause, stop, seeking, previous and next chapter, a chapter by its number, sound and subtitles; the menu keys greyed out, with the line "This copy has no disc menus" |
+| Any other video | `kind` is `video`, no `discSource` | WittyMedia | The same as a copy, without chapters by number or the line |
+
+- **Menu** opens a Blu-ray's pop-up menu while the film plays (the title's menu is a pop-up, or a Java menu is on),
+  and otherwise the disc's menu. **Top menu** is always the top menu, or a DVD's title menu.
+- **A Java menu** lists no buttons, yet takes the arrows, OK, the digits, the colour keys and Menu: each goes
+  as `{"type": "key", "key": …}` while `bdj` is set. A tap or click on the picture goes as
+  `{"type": "pointer", "x", "y"}` on its 1920×1080 frame, and only when `bdj.pointer` is true.
+
+**Phones** copy the website's remote at phone size (the server's `player/Remote.tsx`, `RemoteSheet`, and `.remote-sheet`
+in `player.css`). A **Remote** button is in the player's controls and in the mini player. It opens a sheet along the
+bottom, upright and on its side, opened each time it's wanted rather than remembered. Its first page has Top menu, Menu
+and Return; the D-pad with OK; Audio, Subtitle and Angle; and previous, back 10 seconds, play, pause, forward 30
+seconds, next and stop. Its second page (**1 2 3**) has the digits and the red, green, yellow and blue keys. On its
+side, the first page is one row, so the picture keeps the top of the screen. From the mini player, it opens above the
+dock, over the page. Until the apps have their own disc player, a disc opens the server's page, which has all of this.
+
+**TVs** map the real remote's buttons, and offer the same remote from the player's controls for the keys a TV remote
+lacks: Top menu, Menu (the pop-up menu), the colour keys, the digits and Angle. Apple TV and Android TV alike.
+
+| Button | Apple TV (Siri Remote) | Android TV | Does |
+|---|---|---|---|
+| Arrows and OK | The clickpad | The D-pad | The arrows and OK in a menu or a Java menu; in the film, as the player's arrows always do |
+| Back | Back | Back | Closes an open pop-up menu or the remote; in a menu, Return; otherwise as the player's Back |
+| Play and pause | Play/Pause | Play/pause, play, pause | Play and pause |
+| Previous and next chapter | None: the remote | Previous, next, and channel down and up | Previous and next chapter |
+| Digits | None: the remote | 0 to 9 | Digits |
+| Colour keys | None: the remote | Red, green, yellow, blue | The colour keys |
+| Menu | None: the remote | Menu | Menu |
+
+On a TV the remote opens from a **Remote** pill in the player's controls, as a panel along the bottom over the picture,
+with the phone's two pages and its keys in the same order. Its keys are pills, with the focus ring of On a TV; focus
+starts on OK in a menu and on play or pause in the film, and passes over greyed keys. Back closes it. The disc's
+own menu stays visible above it, so a highlight can be followed while the D-pad moves it.
+
 ## Feature map
 
 Where every part of the server is in the apps, and what's still to build: every feature reaches every device (see
@@ -667,7 +715,7 @@ TV, which has none, everything is native.
 | Recordings and series rules | Page | Native on Apple TV (with reminders); Android TV to build |
 | Games (WittyPlay) | To build: the shared Apple player (Games everywhere, above), with the account's touch layout; the page until then | Native on Apple TV: a player for the server's stream (the server runs every game: see [WITTYPLAY-STREAMING.md](WITTYPLAY-STREAMING.md)), with couch mode's library and game page. The page on Android TV |
 | Game PCs and rigs (Moonlight) | Native | Native |
-| DVD and Blu-ray menus, CD player | Page | To build |
+| DVD and Blu-ray menus, the disc remote, CD player | Page: the server's player, whose remote is a sheet (Discs and the remote, above). A native disc player to build | To build: the disc player, with the real remote mapped and the remote from the player's controls (Discs and the remote, above). The page on Android TV until then |
 | Collections and smart playlists | Page | To build |
 | Your year, history | Page | To build |
 | Names, password, two-step sign-in, devices | Native | Native |
