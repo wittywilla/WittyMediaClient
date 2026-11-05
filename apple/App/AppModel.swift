@@ -181,6 +181,9 @@ final class AppModel: ObservableObject {
     @Published var menuOpen = false
     /// Whether this server lets this person play its game PCs, which the Menu then offers.
     @Published var gamePCs = false
+    /// The video playing on a phone or tablet, on its screen or in the dock above the bar once that's left, as the
+    /// website's player keeps playing in its mini player.
+    @Published var video: PlaybackModel?
     /// Something worth saying that isn't a failure of the screen in front of the person.
     @Published var notice = ""
 
@@ -360,6 +363,8 @@ final class AppModel: ObservableObject {
         libraries = []
         menuOpen = false
         gamePCs = false
+        video?.stop()
+        video = nil
         paths = [:]
         tab = .home
     }
@@ -668,6 +673,46 @@ final class AppModel: ObservableObject {
         withTransaction(transaction) {
             tab = .home
             paths[.home] = [route]
+        }
+    }
+
+    /// The player's screen, if it's the one showing.
+    var showsPlayer: Bool { if case .player? = path.last { return true } else { return false } }
+
+    /// Back to the full player from the dock.
+    func expandVideo() {
+        guard let video, !showsPlayer else { return }
+        path.append(.player(video.id, startOver: false))
+    }
+
+    /// Back to the app, playing on in the dock.
+    func minimizeVideo() {
+        if showsPlayer { path.removeLast() }
+    }
+
+    /// Stops it, wherever it is.
+    func closeVideo() {
+        video?.stop()
+        video = nil
+        if showsPlayer { path.removeLast() }
+    }
+
+    /// The end of one: the next episode or the next in a list, on the screen it was on, or in the dock.
+    func videoFinished(next: Int64?, from id: Int64) {
+        let showing: Bool = { if case .player(let shown, _)? = path.last { return shown == id } else { return false } }()
+        guard let then = next ?? ServerPages.next(after: id, in: playingList) else {
+            closeVideo()
+            return
+        }
+        if showing {
+            path.removeLast()
+            path.append(.player(then, startOver: false))
+        } else {
+            video?.stop()
+            let following = PlaybackModel()
+            following.onFinished = { [weak self] after in self?.videoFinished(next: after, from: then) }
+            video = following
+            Task { await following.start(id: then, client: client, startOver: false) }
         }
     }
 

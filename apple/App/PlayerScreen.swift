@@ -11,9 +11,24 @@ import WittyKit
 // Lock-screen and Control Center controls come from the system's player too. It keeps the now-playing
 // information up to date itself (`updatesNowPlayingInfoCenter`, on by default) from `externalMetadata`,
 // and answers the remote commands, so writing to MPNowPlayingInfoCenter here would only fight it.
+/// Where the film is, a few times a second, for the phone's and tablet's controls. Kept apart from the model so
+/// the rest of the player isn't drawn again with every tick.
+@MainActor
+final class VideoClock: ObservableObject {
+    /// The film's time, and how far it has loaded.
+    @Published var time = 0.0
+    @Published var buffered = 0.0
+    @Published var playing = false
+    @Published var waiting = false
+    @Published var rate: Float = 1
+}
+
 @MainActor
 final class PlaybackModel: ObservableObject {
     let player = AVPlayer()
+    let clockface = VideoClock()
+    /// Played to the end with nothing after it: the website's player stays, offering something else.
+    @Published var ended = false
     @Published var item: Item?
     @Published var stream: Playback?
     @Published var error = ""
@@ -38,11 +53,12 @@ final class PlaybackModel: ObservableObject {
     private var waitingForNetwork = false
 
     private var client: WittyClient?
-    private var id: Int64 = 0
+    private(set) var id: Int64 = 0
     private var audio: Int?
     private var subtitle: Int?
 
     private var timeObserver: Any?
+    private var fastObserver: Any?
     private var endObserver: NSObjectProtocol?
     private var failObserver: NSObjectProtocol?
     private var interruptionObserver: NSObjectProtocol?
@@ -117,6 +133,28 @@ final class PlaybackModel: ObservableObject {
         }
         // Left out, startSec lets the server resume where the viewer stopped.
         await open(startSec: beginning ? 0 : nil)
+    }
+
+    /// Started and not stopped: it can be shown again from the dock.
+    var isRunning: Bool { active }
+
+    func togglePlay() {
+        if player.timeControlStatus == .paused {
+            if ended {
+                ended = false
+                seek(toFilm: 0)
+            }
+            player.play()
+        } else {
+            player.pause()
+        }
+    }
+
+    /// Faster or slower without changing the pitch of voices, and kept when the stream is replaced.
+    func setSpeed(_ rate: Float) {
+        clockface.rate = rate
+        player.defaultRate = rate
+        if player.timeControlStatus != .paused { player.rate = rate }
     }
 
     func choose(audio: Int? = nil, subtitle: Int? = nil) {
@@ -299,7 +337,15 @@ final class PlaybackModel: ObservableObject {
     private func finished() {
         guard active, countdown == nil else { return }
         saveFinished()
-        guard stream?.nextId != nil else { onFinished?(nil); return }
+        guard stream?.nextId != nil else {
+            #if os(tvOS)
+            onFinished?(nil)
+            #else
+            // The website's player stays at the end, offering something to watch next.
+            ended = true
+            #endif
+            return
+        }
         startCountdown()
     }
 
@@ -314,6 +360,12 @@ final class PlaybackModel: ObservableObject {
             }
             self?.onFinished?(self?.stream?.nextId)
         }
+    }
+
+    /// The website's Dismiss: no countdown, and nothing else changes.
+    func stopCountdown() {
+        countdownTask?.cancel()
+        countdown = nil
     }
 
     func cancelCountdown() {
@@ -399,6 +451,8 @@ final class PlaybackModel: ObservableObject {
         stallTask?.cancel()
         if let timeObserver { player.removeTimeObserver(timeObserver) }
         timeObserver = nil
+        if let fastObserver { player.removeTimeObserver(fastObserver) }
+        fastObserver = nil
         for observer in [endObserver, failObserver, interruptionObserver].compactMap({ $0 }) {
             NotificationCenter.default.removeObserver(observer)
         }
@@ -426,11 +480,35 @@ final class PlaybackModel: ObservableObject {
             let seconds = time.seconds
             Task { @MainActor [weak self] in self?.tick(seconds) }
         }
+        #if !os(tvOS)
+        if let fastObserver { player.removeTimeObserver(fastObserver) }
+        fastObserver = player.addPeriodicTimeObserver(forInterval: CMTime(seconds: 0.25, preferredTimescale: 600), queue: .main) { [weak self] time in
+            let seconds = time.seconds
+            Task { @MainActor [weak self] in self?.showTime(seconds) }
+        }
+        #endif
         // Stuck waiting for far longer than a slow network explains. The player would wait for ever.
         waitingObserver = player.observe(\.timeControlStatus) { [weak self] observed, _ in
             let waiting = observed.timeControlStatus == .waitingToPlayAtSpecifiedRate
             Task { @MainActor [weak self] in self?.waitingChanged(waiting) }
         }
+    }
+
+    private func showTime(_ inPlayer: Double) {
+        guard active, inPlayer.isFinite else { return }
+        let offset = stream?.offset ?? 0
+        let face = clockface
+        let film = max(0, inPlayer + offset)
+        if abs(face.time - film) >= 0.2 { face.time = film }
+        if let loaded = player.currentItem?.loadedTimeRanges.last?.timeRangeValue.end.seconds, loaded.isFinite {
+            let end = loaded + offset
+            if abs(face.buffered - end) >= 1 { face.buffered = end }
+        }
+        let playing = player.timeControlStatus != .paused
+        if face.playing != playing { face.playing = playing }
+        let waiting = player.timeControlStatus == .waitingToPlayAtSpecifiedRate
+        if face.waiting != waiting { face.waiting = waiting }
+        if playing, ended { ended = false }
     }
 
     private func waitingChanged(_ waiting: Bool) {
@@ -602,7 +680,22 @@ private struct PlayerHost: UIViewControllerRepresentable {
 }
 #endif
 
+/// Apple TV's player is the system's (its sessions look after it); iPhone, iPad and Apple Vision Pro have the
+/// website's controls over the picture, and leaving keeps it playing in the dock: see VideoPlayerUI.swift.
 struct PlayerScreen: View {
+    let id: Int64
+    let startOver: Bool
+
+    var body: some View {
+        #if os(iOS) || os(visionOS)
+        PhonePlayerScreen(id: id, startOver: startOver)
+        #else
+        SystemPlayerScreen(id: id, startOver: startOver)
+        #endif
+    }
+}
+
+private struct SystemPlayerScreen: View {
     @EnvironmentObject private var model: AppModel
     @Environment(\.client) private var client
     @Environment(\.scenePhase) private var scenePhase

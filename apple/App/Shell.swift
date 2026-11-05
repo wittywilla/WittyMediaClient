@@ -161,6 +161,7 @@ private struct PillShell: View {
     @State private var insets = EdgeInsets()
     /// The bar goes behind the keyboard while one is up, as on the website.
     @State private var typing = false
+    @Environment(\.scenePhase) private var scenePhase
 
     var body: some View {
         // 16 from the bottom edge, just above the home indicator, as from the sides.
@@ -172,6 +173,8 @@ private struct PillShell: View {
                         // The mini player sits above the bar.
                         VStack(spacing: Tokens.Space.s2) {
                             MiniPlayerSlot(tab: tab)
+                            // A video left for the rest of the app plays on here, as in the website's dock.
+                            if let video = model.video, !model.hidesBars { VideoDock(playback: video, clock: video.clockface) }
                             if !model.hidesBars && !typing { FloatingBar() }
                         }
                         .padding(.bottom, model.hidesBars || typing ? 0 : lift)
@@ -206,6 +209,8 @@ private struct PillShell: View {
             }
         }
         .overlay { MenuDrawer() }
+        // A video in the dock keeps its place and stops in the background, as on its own screen.
+        .onChange(of: scenePhase) { model.video?.sceneChanged($0) }
         #if os(iOS)
         .onAppear { BackSwipe.paused = model.hidesBars }
         .onChange(of: model.hidesBars) { BackSwipe.paused = $0 }

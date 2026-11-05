@@ -329,6 +329,15 @@ public struct Explanation: Decodable, Equatable {
     public let sound: String?
     public let subtitles: String?
     public let reasons: [String]?
+    /// How hard the server works: none, light or heavy.
+    public let load: String?
+    public let streaming: String?
+}
+
+/// A chapter of a video, where it starts in the film's time.
+public struct Chapter: Decodable, Equatable {
+    public let start: Double
+    public let title: String?
 }
 
 /// What POST /items/{id}/playback answers: see docs/CLIENT-API.md. The film's
@@ -353,10 +362,12 @@ public struct Playback: Decodable, Equatable {
     public let explain: Explanation?
     /// A 3D picture stored in the frame: sbs or tab. Asking with `flatten3d` shows one eye.
     public let stereo: String?
+    /// The film's chapters, for the marks on the seek bar and the Scenes panel.
+    public let chapters: [Chapter]?
 
     private enum CodingKeys: String, CodingKey {
         case decision, url, streamId, durationSec, seek, startAtSec, timeOffsetSec, audio, subtitles
-        case audioIndex, subtitleIndex, subtitleDelivery, intro, nextId, explain, stereo
+        case audioIndex, subtitleIndex, subtitleDelivery, intro, nextId, explain, stereo, chapters
         case protocolName = "protocol"
     }
 

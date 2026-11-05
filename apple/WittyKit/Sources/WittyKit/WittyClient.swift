@@ -293,6 +293,12 @@ public final class WittyClient: @unchecked Sendable {
         try await get(query.path(offset: offset, limit: limit))
     }
 
+    /// The player's settings from the server: the speed limit.
+    public func prefs() async throws -> ServerPrefs { try await get("/prefs") }
+
+    /// Something to watch next when there's no next episode, for the player's Watch next.
+    public func recommend(after item: Int64) async throws -> Recommendation { try await get("/items/\(item)/recommend") }
+
     /// Home's "Because you watch…" row.
     public func recommended() async throws -> Recommended { try await get("/me/recommended") }
 
