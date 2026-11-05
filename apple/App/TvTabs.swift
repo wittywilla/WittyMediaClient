@@ -170,7 +170,7 @@ struct LibrariesPage: View {
         return ScrollView {
             LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: gap), count: 4), spacing: gap) {
                 ForEach(libraries) { library in
-                    NavigationLink(value: Route.library(library)) { LibraryTile(library: library) }
+                    NavigationLink(value: Route.library(library)) { TvLibraryTile(library: library) }
                         .buttonStyle(SurfaceStyle(fill: palette.panel, radius: Tokens.Radius.lg))
                         .focused($focused, equals: library.id)
                         .accessibilityLabel(library.name)
@@ -210,7 +210,7 @@ struct LibrariesPage: View {
 }
 
 /// The website's library tile at a TV's size: the library's icon on the accent, then its name.
-private struct LibraryTile: View {
+private struct TvLibraryTile: View {
     @Environment(\.palette) private var palette
     let library: Library
 

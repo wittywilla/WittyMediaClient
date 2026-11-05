@@ -1,10 +1,10 @@
 import SwiftUI
 import WittyKit
 
-/// The app's top level. A phone, a tablet and Apple Vision Pro have Home, Search and You in a floating
-/// pill at the bottom, within reach of a thumb. Apple TV has six pills along the top, where up from a
-/// tab's first row gets to them: Home, Libraries, Games, Live TV, Search and You (docs/APP-DESIGN.md,
-/// On a TV, and TvTabs.swift).
+/// The app's top level. A phone, a tablet and Apple Vision Pro have the website's floating bar at the bottom,
+/// within reach of a thumb: Home, TV guide, Search, the Menu (not a tab, a drawer) and You. Apple TV has six pills
+/// along the top, where up from a tab's first row gets to them: Home, Libraries, Games, Live TV, Search and You
+/// (docs/APP-DESIGN.md, On a TV, and TvTabs.swift).
 enum AppTab: Identifiable, Hashable {
     case home, libraries, games, guide, search, profile
     /// A library this person added to Apple TV's top menu, as a tab of its own.
@@ -22,8 +22,8 @@ enum AppTab: Identifiable, Hashable {
         }
     }
 
-    /// The tabs a phone, a tablet and Vision Pro keep a stack for.
-    static let phoneTabs: [AppTab] = [.home, .search, .profile]
+    /// The tabs a phone, a tablet and Vision Pro keep a stack for: the floating bar's, the Menu aside.
+    static let phoneTabs: [AppTab] = [.home, .guide, .search, .profile]
     /// Apple TV's bar, in its order, before any libraries added to it and You.
     static let tvTabs: [AppTab] = [.home, .libraries, .games, .guide, .search]
 
@@ -33,7 +33,12 @@ enum AppTab: Identifiable, Hashable {
         case .home: return say("homeTab")
         case .libraries: return say("librariesTab")
         case .games: return say("gamesTab")
+        #if os(tvOS)
         case .guide: return say("liveTvTab")
+        #else
+        // The website's bar calls it the TV guide.
+        case .guide: return "TV guide"
+        #endif
         case .search: return say("searchTab")
         case .profile: return say("youTab")
         case .library: return ""
@@ -51,6 +56,9 @@ enum AppTab: Identifiable, Hashable {
         case .library: return "books.vertical"
         }
     }
+
+    /// The website's icons in the floating bar.
+    var barIcon: String { self == .home ? "house.fill" : icon }
 
     /// Not every one of these has a filled form. A symbol that doesn't exist draws nothing.
     var openIcon: String {
@@ -85,8 +93,14 @@ private struct TabRoot: View {
     @ViewBuilder private var first: some View {
         switch tab {
         case .home: HomeView()
+        #if os(iOS) || os(visionOS)
+        // The website's other top pages have the strip too.
+        case .search: SearchView().underStrip()
+        case .profile: YouView().underStrip()
+        #else
         case .search: SearchView()
         case .profile: YouView()
+        #endif
         #if os(tvOS)
         case .libraries: LibrariesPage()
         case .games: GamesTab()
@@ -98,8 +112,15 @@ private struct TabRoot: View {
                 LoadingView()
             }
         #else
+        case .guide:
+            // The guide and live channels: the server's page, under the strip.
+            #if os(iOS) || os(visionOS)
+            WebPlayerView(path: ServerPages.guide, keptToGames: false).underStrip(hidden: model.pagePlaying && (model.paths[.guide] ?? []).isEmpty)
+            #else
+            ElsewhereNote(path: ServerPages.guide)
+            #endif
         // Apple TV's tabs alone: these devices never show them.
-        case .libraries, .games, .guide, .library: EmptyView()
+        case .libraries, .games, .library: EmptyView()
         #endif
         }
     }
@@ -112,20 +133,37 @@ private struct TabRoot: View {
                 .navigationDestination(for: Route.self) { route in
                     switch route {
                     case .library(let library):
+                        #if os(tvOS)
                         LibraryScreen(library: library).plainNavigation()
+                        #else
+                        // A library's page is a top of its own, with the strip and no Back, as on the website. Going from one
+                        // section to another replaces the page in place, so each library is a page of its own (`id`):
+                        // otherwise the last one's shelves, count and choices stayed under the new one's name.
+                        LibraryScreen(library: library).noNavigationBar().id(library.id)
+                        #endif
+                    #if os(iOS) || os(visionOS)
+                    // The website's album and artist pages, over their artwork's colour.
+                    case .listeningAlbum(let library, let album, let artist):
+                        MusicAlbumPage(library: library, album: album, artist: artist).plainNavigation(overPicture: true)
+                    case .artist(let library, let name): MusicArtistPage(library: library, name: name).plainNavigation(overPicture: true)
+                    #else
                     case .listeningAlbum(let library, let album, let artist):
                         AlbumScreen(library: library, album: album, artist: artist).plainNavigation()
                     case .artist(let library, let name): ArtistScreen(library: library, name: name).plainNavigation()
-                    case .show(let id): ShowView(id: id).plainNavigation()
-                    case .item(let id): ItemView(id: id).plainNavigation()
-                    // WittyPlay's own screens on every device: the Shelves home or a collection, and a game's page.
-                    case .gameLibrary(let library, let console): GamesLibraryView(library: library, console: console).plainNavigation()
-                    case .game(let id): GameDetailView(id: id).plainNavigation()
+                    #endif
+                    case .show(let id): ShowView(id: id).plainNavigation(overPicture: true)
+                    case .item(let id): ItemView(id: id).plainNavigation(overPicture: true)
+                    // WittyPlay's own screens on every device: the Shelves home, which is a library's page with the
+                    // strip and no Back, or a console's collection under its band, and a game's page over its picture.
+                    case .gameLibrary(let library, nil): GamesLibraryView(library: library, console: nil).noNavigationBar().id(library.id)
+                    case .gameLibrary(let library, let console): GamesLibraryView(library: library, console: console).plainNavigation(overPicture: true)
+                    case .game(let id): GameDetailView(id: id).plainNavigation(overPicture: true)
                     #if os(tvOS)
                     // A new identity for each game, so a second one gets a new player.
                     case .playGame(let id, let start): GamePlayerScreen(id: id, start: start).id("\(id)\(start)")
                     #else
-                    // The same player as Apple TV's, with the account's touch controls.
+                    // The same player as Apple TV's, with the account's touch controls. A website's game page opened
+                    // in the app hands its Play over to it too (WebPlayerView hands over the website's /game/ address).
                     case .playGame(let id, let start): GamePlayerView(gameId: id, start: start).id("\(id)\(start)")
                     #endif
                     // A new identity for each thing played, so the next episode gets a new player
@@ -153,7 +191,17 @@ private struct TabRoot: View {
                         #endif
                     case .page(let path):
                         #if os(iOS) || os(visionOS)
-                        WebPlayerView(path: path, keptToGames: false)
+                        let playing = model.pagePlaying && model.paths[tab]?.last == .page(path)
+                        if let found = model.libraryPage(path) {
+                            // A saved view, or a genre, studio or network from an item's page: the app's own library
+                            // page with that chosen, as the website opens /library/3?genre=Drama.
+                            LibraryView(library: found.library, start: found.state).noNavigationBar().id(path)
+                        } else if model.isTopPage(path) {
+                            // Collections, Game PCs and modules' pages are sections of their own, under the strip.
+                            WebPlayerView(path: path, keptToGames: false).underStrip(path: path, hidden: playing)
+                        } else {
+                            WebPlayerView(path: path, keptToGames: false).plainNavigation(hidden: playing)
+                        }
                         #else
                         ElsewhereNote(path: path)
                         #endif
@@ -197,7 +245,11 @@ struct LibraryScreen: View {
         if library.hasGameScreens {
             GamesLibraryView(library: library, console: nil)
         } else if library.hasListeningScreens {
+            #if os(iOS) || os(visionOS)
+            MusicLibraryPage(library: library)
+            #else
             ListeningLibraryView(library: library)
+            #endif
         } else {
             LibraryView(library: library)
         }
@@ -247,92 +299,71 @@ private struct TopTabs: View {
     }
 }
 #else
-/// The system's tab view holds the three stacks, with its own bar hidden and the pill in its place.
+/// The system's tab view holds the stacks, with its own bar hidden and the website's floating bar in its place.
+/// The Menu's drawer is over all of it, the bar included.
 private struct PillShell: View {
     @EnvironmentObject private var model: AppModel
     @Environment(\.palette) private var palette
+    /// The room the clock and the home indicator take.
+    @State private var insets = EdgeInsets()
+    /// The bar goes behind the keyboard while one is up, as on the website.
+    @State private var typing = false
+    @Environment(\.scenePhase) private var scenePhase
 
     var body: some View {
+        // 8 above the home indicator's room, as the website's bar (shell.css: bottom 8 + the safe area).
+        let lift = typing ? 0 : Tokens.Space.s2
         TabView(selection: $model.tab) {
             ForEach(AppTab.phoneTabs) { tab in
                 TabRoot(tab: tab)
-                    .safeAreaInset(edge: .bottom) {
-                        // The mini player sits above the pill, as on Android.
+                    .safeAreaInset(edge: .bottom, spacing: 0) {
+                        // The mini player sits above the bar.
                         VStack(spacing: Tokens.Space.s2) {
                             MiniPlayerSlot(tab: tab)
-                            if !model.hidesBars { PillBar() }
+                            // A video left for the rest of the app plays on here, as in the website's dock.
+                            if let video = model.video, !model.hidesBars { VideoDock(playback: video, clock: video.clockface) }
+                            if !model.hidesBars && !typing { FloatingBar() }
                         }
+                        .padding(.bottom, model.hidesBars || typing ? 0 : lift)
                     }
                     .toolbar(.hidden, for: .tabBar)
                     .tag(tab)
             }
         }
+        .background {
+            GeometryReader { geo in
+                Color.clear
+                    .onAppear { insets = geo.safeAreaInsets }
+                    .onChange(of: geo.safeAreaInsets) { insets = $0 }
+            }
+            .ignoresSafeArea(.keyboard)
+        }
+        #if os(iOS)
+        .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillShowNotification)) { _ in typing = true }
+        .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillHideNotification)) { _ in typing = false }
+        #endif
         // What scrolls under the clock and the battery fades out, so they can still be read.
         .overlay {
             if !model.hidesBars {
-                // Measured from the very top of the screen, so the inset it reports is the clock's.
-                GeometryReader { geo in
-                    VStack(spacing: 0) {
-                        LinearGradient(colors: [palette.background.opacity(0.92), palette.background.opacity(0)], startPoint: .top, endPoint: .bottom)
-                            .frame(height: geo.safeAreaInsets.top)
-                        Spacer(minLength: 0)
-                    }
+                VStack(spacing: 0) {
+                    LinearGradient(colors: [palette.background.opacity(0.92), palette.background.opacity(0)], startPoint: .top, endPoint: .bottom)
+                        .frame(height: insets.top)
+                    Spacer(minLength: 0)
                 }
                 .ignoresSafeArea()
                 .allowsHitTesting(false)
                 .accessibilityHidden(true)
             }
         }
-    }
-}
-
-/// Android's floating bar: the open section filled in the accent colour with its name, the others
-/// as their icons. Real buttons, each saying which section it is and whether it's the one open.
-private struct PillBar: View {
-    @EnvironmentObject private var model: AppModel
-    @Environment(\.palette) private var palette
-
-    private func press(_ tab: AppTab) {
-        if model.tab == tab {
-            // Choosing the open section again goes back to its top, as tab bars do.
-            model.paths[tab] = []
-        } else {
-            model.tab = tab
-        }
-    }
-
-    var body: some View {
-        HStack(spacing: Tokens.Space.s1) {
-            ForEach(AppTab.phoneTabs) { tab in
-                let open = model.tab == tab
-                Button {
-                    press(tab)
-                } label: {
-                    HStack(spacing: Tokens.Space.s2) {
-                        if tab == .profile, let user = model.user {
-                            // The person's own face: who's signed in, at a glance.
-                            AvatarTile(name: user.shownName, size: 24)
-                                .overlay(Circle().strokeBorder(open ? palette.onAccent.opacity(0.9) : palette.border, lineWidth: 1.5))
-                        } else {
-                            Image(systemName: open ? tab.openIcon : tab.icon).font(.body.weight(.semibold))
-                        }
-                        if open { Text(tab.title).font(.wmLabel) }
-                    }
-                    .foregroundStyle(open ? palette.onAccent : palette.text)
-                    .padding(.horizontal, open ? Tokens.Space.s5 : Tokens.Space.s4)
-                    .padding(.vertical, Tokens.Space.s3)
-                }
-                .buttonStyle(SurfaceStyle(fill: open ? palette.accent : nil, radius: 999))
-                .accessibilityLabel(tab.title)
-                .accessibilityAddTraits(open ? [.isSelected] : [])
-            }
-        }
-        .padding(Tokens.Space.s1)
-        .background(Capsule().fill(palette.panel))
-        .overlay(Capsule().stroke(palette.border, lineWidth: 1))
-        .shadow(color: .black.opacity(0.25), radius: 8, y: 2)
-        .padding(.bottom, Tokens.Space.s3)
-        .frame(maxWidth: .infinity)
+        .overlay { MenuDrawer() }
+        // The menus' arrangement, modules' pages and the legal notices, once per server and person.
+        .task(id: "\(model.client.base)|\(model.user?.id ?? 0)") { await model.loadNavigation() }
+        // A video in the dock keeps its place and stops in the background, as on its own screen.
+        .onChange(of: scenePhase) { model.video?.sceneChanged($0) }
+        #if os(iOS)
+        .onAppear { BackSwipe.paused = model.hidesBars }
+        .onChange(of: model.hidesBars) { BackSwipe.paused = $0 }
+        #endif
     }
 }
 #endif
@@ -462,10 +493,13 @@ struct SearchView: View {
     @Environment(\.palette) private var palette
     @Environment(\.metrics) private var metrics
     @State private var query = ""
+    /// What was asked for: on a phone, the box searches when Search is pressed, as the website's does.
+    @State private var asked = ""
     @State private var results: SearchResults?
     @State private var error = ""
     @State private var searching = false
     @FocusState private var focused: String?
+    @FocusState private var typing: Bool
 
     private func run(_ words: String) async {
         error = ""
@@ -490,6 +524,14 @@ struct SearchView: View {
     }
 
     var body: some View {
+        Group {
+            if metrics.tv { tvPage } else { page }
+        }
+        .task(id: metrics.tv ? query : asked) { await run(metrics.tv ? query : asked) }
+    }
+
+    /// Apple TV's, as it was.
+    private var tvPage: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: Tokens.Space.s3) {
                 Heading("Search")
@@ -513,6 +555,142 @@ struct SearchView: View {
         }
         .scrollDismissesKeyboardIfAvailable()
         .pageBackground(palette)
-        .task(id: query) { await run(query) }
+    }
+
+    /// The website's Search on a phone: "Search" with what was asked in quotes beside it, the box, then shows and
+    /// everything else, three posters across, and the notice about results.
+    private var page: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 0) {
+                ScrollTop()
+                HStack(alignment: .firstTextBaseline, spacing: Tokens.Space.s3) {
+                    Text("Search").pageFont(.title).foregroundStyle(palette.text).accessibilityAddTraits(.isHeader)
+                    if !asked.isEmpty {
+                        Text("“\(asked)”").font(.system(size: 14)).foregroundStyle(palette.textHint).lineLimit(1)
+                    }
+                }
+                .padding(.top, Tokens.Space.s3)
+                box.padding(.top, 20)
+                results(for: asked).padding(.top, Tokens.Space.s2)
+                #if !os(tvOS)
+                PageFoot(notice: "")
+                #endif
+            }
+            .padding(.horizontal, metrics.gutter)
+            .padding(.bottom, Tokens.Space.s6)
+        }
+        .scrollDismissesKeyboardIfAvailable()
+        .pageBackground(palette)
+        .onAppear {
+            // Arriving with nothing typed, the box is the next step, as on the website.
+            if query.isEmpty { DispatchQueue.main.async { typing = true } }
+        }
+    }
+
+    /// 44 high, the theme's medium radius, `card`, with a search icon.
+    private var box: some View {
+        let shape = RoundedRectangle(cornerRadius: Tokens.Radius.md, style: .continuous)
+        return HStack(spacing: Tokens.Space.s2) {
+            Image(systemName: "magnifyingglass")
+                .font(.system(size: 16, weight: .medium))
+                .foregroundStyle(palette.textHint)
+                .frame(width: 20)
+                .accessibilityHidden(true)
+            TextField("", text: $query, prompt: Text("Search your libraries…").foregroundColor(palette.textHint))
+                .pageFont(.body)
+                .foregroundStyle(palette.text)
+                .tint(palette.accent)
+                .focused($typing)
+                .submitLabel(.search)
+                .onSubmit {
+                    let words = query.trimmingCharacters(in: .whitespacesAndNewlines)
+                    if !words.isEmpty { asked = words }
+                }
+                .autocorrectionDisabled()
+                #if os(iOS) || os(visionOS)
+                .textInputAutocapitalization(.never)
+                #endif
+                .accessibilityLabel("Search")
+            if !query.isEmpty {
+                Button {
+                    query = ""
+                    typing = true
+                } label: {
+                    Image(systemName: "xmark.circle.fill").foregroundStyle(palette.textHint).frame(width: 32, height: 32)
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("Clear")
+            }
+        }
+        .padding(.leading, Tokens.Space.s3)
+        .padding(.trailing, Tokens.Space.s1)
+        .frame(height: 44)
+        .background(shape.fill(palette.card))
+        .overlay(shape.strokeBorder(typing ? palette.accentText : palette.control, lineWidth: typing ? 2 : 1))
+        .contentShape(shape)
+        .onTapGesture { typing = true }
+    }
+
+    private func searchHead(_ title: String) -> some View {
+        Text(title).font(.system(size: 20, weight: .bold)).foregroundStyle(palette.text).accessibilityAddTraits(.isHeader)
+            .padding(.top, 28).padding(.bottom, Tokens.Space.s3)
+    }
+
+    @ViewBuilder private func results(for words: String) -> some View {
+        if WittyClient.searchQuery(words) == nil {
+            EmptyState(icon: "magnifyingglass", title: "Find anything on this server",
+                       detail: "Type a title in the search box: movies, shows, episodes, music, books and games are all included.")
+        } else if !error.isEmpty {
+            if metrics.tv {
+                VStack(alignment: .leading, spacing: Tokens.Space.s3) {
+                    ProblemLine(error)
+                    Button("Try again") { Task { await run(query) } }.pageButton(.primary)
+                }
+            } else {
+                EmptyState(icon: "magnifyingglass", title: "The search didn’t work", detail: error)
+            }
+        } else if let results, !(searching && results.isEmpty) {
+            if results.isEmpty {
+                EmptyState(icon: "magnifyingglass", title: "No results",
+                           detail: "Nothing on this server matches “\(words)”. Try a shorter or different word.")
+            } else if metrics.tv {
+                let types = Dictionary(model.libraries.map { ($0.id, $0.type) }, uniquingKeysWith: { first, _ in first })
+                VStack(alignment: .leading, spacing: Tokens.Space.s6) {
+                    ForEach(SearchGroups.group(items: results.items, shows: results.shows, libraryTypes: types)) { group in
+                        VStack(alignment: .leading, spacing: Tokens.Space.s3) {
+                            SectionHead(title: group.title)
+                            LazyVGrid(columns: posterColumns(metrics), alignment: .leading, spacing: Tokens.Space.s6) {
+                                ForEach(group.shows) { ShowTile(show: $0, inRow: false, focus: $focused) }
+                                ForEach(ServerPages.albumsOnce(group.items)) { ItemTile(item: $0, inRow: false, focus: $focused) }
+                            }
+                        }
+                    }
+                }
+                .opacity(searching ? 0.6 : 1)
+            } else {
+                // The website's two groups: shows, then everything else under its own heading only when there are shows.
+                VStack(alignment: .leading, spacing: 0) {
+                    if !results.shows.isEmpty {
+                        searchHead("Shows")
+                        LazyVGrid(columns: posterColumns(metrics), alignment: .leading, spacing: Tokens.Space.s6) {
+                            ForEach(results.shows) { ShowTile(show: $0, inRow: false, focus: $focused) }
+                        }
+                    }
+                    if !results.items.isEmpty {
+                        if !results.shows.isEmpty { searchHead("Everything else") }
+                        LazyVGrid(columns: posterColumns(metrics), alignment: .leading, spacing: Tokens.Space.s6) {
+                            ForEach(results.items) { ItemTile(item: $0, inRow: false, focus: $focused) }
+                        }
+                        .padding(.top, results.shows.isEmpty ? Tokens.Space.s5 : 0)
+                    }
+                    if let notice = model.legal?.notice("searchResults") {
+                        Text(notice.words).font(.system(size: 12)).foregroundStyle(palette.textHint).lineSpacing(3).padding(.top, Tokens.Space.s4)
+                    }
+                }
+                .opacity(searching ? 0.6 : 1)
+            }
+        } else {
+            SkeletonGrid()
+        }
     }
 }
