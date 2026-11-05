@@ -427,6 +427,7 @@ fun WebNowPlaying(nav: Nav) {
                             NpPanel.Queue -> QueuePanel(nav, glow, Modifier.fillMaxSize()) { panel = NpPanel.None }
                             NpPanel.Lyrics -> LyricsPanel(nav, words, trackId, title, artistName, runtime, { panel = NpPanel.None }) { toast = it }
                             NpPanel.Read -> ReadPanel(nav, trackId, extras, words) { panel = NpPanel.None }
+                            NpPanel.Sound -> SoundPanel(nav) { panel = NpPanel.None }
                             else -> {}
                         }
                     }
@@ -520,6 +521,7 @@ fun WebNowPlaying(nav: Nav) {
                 val artist = about.albumArtist?.toString().orEmpty().ifEmpty { about.artist?.toString().orEmpty() }
                 PopMenu(
                     listOfNotNull(
+                        MenuItem("Sound: equaliser and more", NpIcons.Sliders) { togglePanel(NpPanel.Sound) },
                         if (!books && trackId > 0) MenuItem("Start a station from this song", NpIcons.Station) {
                             scope.launch {
                                 val tracks = runCatching { api.songRadio(trackId) }.getOrDefault(emptyList())

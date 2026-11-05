@@ -154,6 +154,8 @@ fun levelingGain(choice: Leveling, trackDb: Double?, albumDb: Double?, trackPeak
     return minOf(db, room)
 }
 
+fun com.wittywilla.wittymediaclient.net.Loudness.gain(choice: Leveling): Double = levelingGain(choice, trackDb, albumDb, trackPeak, albumPeak)
+
 // MARK: filters
 
 enum class FilterKind { LowPass, HighPass, Peaking, LowShelf, HighShelf }

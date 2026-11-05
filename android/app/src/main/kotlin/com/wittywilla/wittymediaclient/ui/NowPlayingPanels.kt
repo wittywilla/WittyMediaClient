@@ -4,6 +4,30 @@ import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
+import androidx.compose.foundation.gestures.detectHorizontalDragGestures
+import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.selection.toggleable
+import androidx.compose.ui.geometry.CornerRadius
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.semantics.ProgressBarRangeInfo
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.progressBarRangeInfo
+import androidx.compose.ui.semantics.setProgress
+import androidx.compose.ui.semantics.stateDescription
+import androidx.compose.ui.unit.IntOffset
+import androidx.compose.ui.unit.IntRect
+import androidx.compose.ui.unit.IntSize
+import androidx.compose.ui.unit.LayoutDirection
+import androidx.compose.ui.window.Popup
+import androidx.compose.ui.window.PopupPositionProvider
+import androidx.compose.ui.window.PopupProperties
+import com.wittywilla.wittymediaclient.player.Equaliser
+import com.wittywilla.wittymediaclient.player.Leveling
+import com.wittywilla.wittymediaclient.player.SoundSettings
+import com.wittywilla.wittymediaclient.player.number
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.animateScrollBy
@@ -634,4 +658,168 @@ private suspend fun openBooklet(context: android.content.Context, api: com.witty
     val view = android.content.Intent(android.content.Intent.ACTION_VIEW).setDataAndType(uri, "application/pdf")
         .addFlags(android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION or android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
     context.startActivity(view)
+}
+
+// MARK: Sound
+
+// How it sounds on this device (`SoundPanel`): between songs, the volume leveling and the equaliser, each in a section
+// under a hairline. Kept on the device, as speakers differ.
+@Composable
+internal fun SoundPanel(nav: Nav, close: () -> Unit) {
+    val listening = nav.app.listening
+    val s = listening.sound
+    Column(Modifier.fillMaxSize()) {
+        NpSideHead("Sound", "Close sound settings", close)
+        Column(Modifier.weight(1f).fillMaxWidth().verticalScroll(rememberScrollState()).padding(start = 18.dp, end = 18.dp, bottom = 16.dp)) {
+            SoundSection("Between songs") {
+                NpCheck("No gaps: start the next song right as this one ends", s.gapless) { listening.setSound { it.copy(gapless = !it.gapless) } }
+                NpSelect("Crossfade", SoundSettings.CROSSFADES.map { it to SoundSettings.crossfadeWords(it) }, s.crossfade) { c -> listening.setSound { it.copy(crossfade = c) } }
+                if (s.crossfade > 0) NpCheck("Also within an album. Off keeps songs that run together as they were made", s.crossfadeAlbums) { listening.setSound { it.copy(crossfadeAlbums = !it.crossfadeAlbums) } }
+                SoundHint("Works for files sent as they are. Formats converted while playing, and CD images, follow their own rules.")
+            }
+            SoundSection("Volume leveling") {
+                NpSelect("ReplayGain", Leveling.entries.map { it to it.words }, s.replayGain) { choice -> listening.setSound { it.copy(replayGain = choice) } }
+                SoundHint("Uses the loudness tags in your files, which tagging tools such as MusicBrainz Picard or foobar2000 can add. Songs without them play as they are.")
+            }
+            SoundSection("Equaliser") {
+                NpCheck("Use the equaliser", s.eqOn) { listening.setSound { it.copy(eqOn = !it.eqOn) } }
+                val presets = Equaliser.PRESETS.map { it.id to it.name } + if (s.presetShown == "custom") listOf("custom" to "Your own") else emptyList()
+                NpSelect("Preset", presets, s.presetShown, enabled = s.eqOn) { id ->
+                    Equaliser.PRESETS.firstOrNull { it.id == id }?.let { preset -> listening.setSound { it.copy(eqPreset = preset.id, eqGains = preset.gains) } }
+                }
+                Column(Modifier.graphicsLayer { alpha = if (s.eqOn) 1f else 0.5f }, verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    Equaliser.FREQUENCIES.forEachIndexed { band, frequency ->
+                        val name = Equaliser.hertz(frequency)
+                        EqRow(name, s.eqGains[band], "$name hertz", s.eqOn) { gain ->
+                            listening.setSound { it.copy(eqGains = it.eqGains.toMutableList().also { g -> g[band] = gain }, eqPreset = "custom") }
+                        }
+                    }
+                    EqRow("Level", s.preamp, "Overall level", s.eqOn) { gain -> listening.setSound { it.copy(preamp = gain) } }
+                }
+                SoundHint("If boosting makes loud parts crackle, lower the overall level a little.")
+            }
+        }
+    }
+}
+
+// A section (`.np-sound section`): over a hairline, 10 above and 14 below, its name 14 bold, 8 between.
+@Composable
+private fun SoundSection(title: String, content: @Composable ColumnScope.() -> Unit) {
+    Column(Modifier.fillMaxWidth()) {
+        Box(Modifier.fillMaxWidth().height(1.dp).background(Np.line))
+        Column(Modifier.fillMaxWidth().padding(top = 10.dp, bottom = 14.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Text(title, color = Np.fg, fontSize = 14.sp, fontWeight = FontWeight.Bold, modifier = Modifier.semantics { heading() })
+            content()
+        }
+    }
+}
+
+@Composable
+private fun SoundHint(words: String) {
+    Text(words, color = Np.fg2, fontSize = 13.sp, lineHeight = 1.45.em)
+}
+
+// A band (`.np-eq label`): its name 44 wide in 12 semibold, the slider, and the dB 34 wide, 10 apart, at least 32 high.
+@Composable
+private fun EqRow(name: String, value: Double, label: String, enabled: Boolean, change: (Double) -> Unit) {
+    Row(Modifier.fillMaxWidth().heightIn(min = 32.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+        Text(name, color = Np.fg2, fontSize = 12.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.width(44.dp))
+        NpSlider(value, -12.0, 12.0, 1.0, label, "${number(value)} decibels", enabled, Modifier.weight(1f), change)
+        Text(Equaliser.decibels(value), color = Np.fg2, fontSize = 12.sp, textAlign = TextAlign.End, style = TextStyle(fontFeatureSettings = "tnum"), modifier = Modifier.width(34.dp))
+    }
+}
+
+// The website's checkbox on black: 20 square, white with a black tick when it's on, the words beside it in 14.
+@Composable
+internal fun NpCheck(words: String, on: Boolean, enabled: Boolean = true, flip: () -> Unit) {
+    Row(
+        Modifier.fillMaxWidth().heightIn(min = 32.dp).toggleable(on, enabled = enabled, role = Role.Checkbox) { flip() },
+        verticalAlignment = Alignment.Top, horizontalArrangement = Arrangement.spacedBy(10.dp),
+    ) {
+        Box(
+            Modifier.size(20.dp).clip(RoundedCornerShape(4.dp)).background(if (on) Color.White else Color.Transparent)
+                .border(1.5.dp, Color.White.copy(alpha = if (on) 1f else 0.4f), RoundedCornerShape(4.dp)),
+            contentAlignment = Alignment.Center,
+        ) {
+            if (on) Icon(WebIcons.Check, null, tint = Color.Black, modifier = Modifier.size(16.dp))
+        }
+        Text(words, color = Np.fg, fontSize = 14.sp, lineHeight = 1.35.em, modifier = Modifier.weight(1f))
+    }
+}
+
+// The website's small select on black: the name, then the choice on the well with its small arrow, 44 high, which
+// opens the choices under it.
+@Composable
+internal fun <T> NpSelect(label: String, choices: List<Pair<T, String>>, chosen: T, enabled: Boolean = true, choose: (T) -> Unit) {
+    var open by remember { mutableStateOf(false) }
+    val shown = choices.firstOrNull { it.first == chosen }?.second.orEmpty()
+    val maxHeight = minOf(LocalConfiguration.current.screenHeightDp * 0.6f, 460f).dp
+    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+        Text(label, color = Np.fg, fontSize = 14.sp, modifier = Modifier.weight(1f))
+        Box {
+            Pressable({ open = true }, Modifier.heightIn(min = 44.dp), shape = RoundedCornerShape(10.dp), fill = Np.well, label = "$label, $shown", enabled = enabled, disabledAlpha = 0.5f, ring = false) {
+                Row(
+                    Modifier.heightIn(min = 44.dp).border(1.dp, Np.control, RoundedCornerShape(10.dp)).padding(horizontal = 10.dp),
+                    verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    Text(shown, color = Np.fg, fontSize = 13.sp, maxLines = 1)
+                    androidx.compose.foundation.Canvas(Modifier.size(10.dp, 5.dp)) {
+                        drawPath(androidx.compose.ui.graphics.Path().apply { moveTo(0f, 0f); lineTo(size.width, 0f); lineTo(size.width / 2, size.height); close() }, Np.fg)
+                    }
+                }
+            }
+            if (open) Popup(popupPositionProvider = UnderTheRight, onDismissRequest = { open = false }, properties = PopupProperties(focusable = true)) {
+                Column(
+                    Modifier.widthIn(min = 220.dp).heightIn(max = maxHeight).cssShadow(10.dp, 30.dp, Color(0x73000000), 14.dp).clip(RoundedCornerShape(14.dp))
+                        .background(Np.menu).border(1.dp, Np.line, RoundedCornerShape(14.dp)).padding(6.dp).verticalScroll(rememberScrollState()),
+                ) {
+                    MenuRows(choices.map { (value, words) -> MenuItem(words, chosen = value == chosen) { choose(value) } }) { open = false }
+                }
+            }
+        }
+    }
+}
+
+// Right-aligned under what opened it, or over it when there's no room, 8 from it and from the window's edges.
+private object UnderTheRight : PopupPositionProvider {
+    override fun calculatePosition(anchorBounds: IntRect, windowSize: IntSize, layoutDirection: LayoutDirection, popupContentSize: IntSize): IntOffset {
+        val room = (8 * android.content.res.Resources.getSystem().displayMetrics.density).toInt()
+        val left = (anchorBounds.right - popupContentSize.width).coerceIn(room, maxOf(room, windowSize.width - popupContentSize.width - room))
+        val below = anchorBounds.bottom + room
+        val top = if (below + popupContentSize.height <= windowSize.height - room) below else maxOf(room, anchorBounds.top - popupContentSize.height - room)
+        return IntOffset(left, top)
+    }
+}
+
+// The website's range on black for a value between two ends: a 4 high track, white to the value, and a 14 thumb, in a
+// 32 high target. It moves in steps.
+@Composable
+internal fun NpSlider(value: Double, low: Double, high: Double, step: Double, label: String, spoken: String, enabled: Boolean, modifier: Modifier = Modifier, change: (Double) -> Unit) {
+    var width by remember { mutableIntStateOf(1) }
+    fun at(x: Float): Double {
+        val raw = low + (x / width).coerceIn(0f, 1f) * (high - low)
+        return (Math.round(raw / step) * step).coerceIn(low, high)
+    }
+    fun set(next: Double) { if (enabled && next != value) change(next) }
+    androidx.compose.foundation.Canvas(
+        modifier.height(32.dp).onSizeChanged { width = it.width }
+            .semantics {
+                contentDescription = label
+                stateDescription = spoken
+                progressBarRangeInfo = ProgressBarRangeInfo(value.toFloat(), low.toFloat()..high.toFloat(), ((high - low) / step).toInt() - 1)
+                if (enabled) setProgress { set((Math.round(it / step) * step).coerceIn(low, high)); true }
+            }
+            .pointerInput(enabled) { if (enabled) detectTapGestures { set(at(it.x)) } }
+            .pointerInput(enabled) { if (enabled) detectHorizontalDragGestures { change, _ -> set(at(change.position.x)) } },
+    ) {
+        val h = 4.dp.toPx()
+        val r = 7.dp.toPx()
+        val top = (size.height - h) / 2
+        val part = ((value - low) / (high - low)).toFloat().coerceIn(0f, 1f)
+        val x = r + part * (size.width - 2 * r)
+        drawRoundRect(Color.White.copy(alpha = 0.28f), Offset(0f, top), Size(size.width, h), CornerRadius(h / 2))
+        drawRoundRect(Color.White, Offset(0f, top), Size(x, h), CornerRadius(h / 2))
+        drawCircle(Color(0x73000000), r, Offset(x, size.height / 2 + 1.dp.toPx()))
+        drawCircle(Color.White, r, Offset(x, size.height / 2))
+    }
 }

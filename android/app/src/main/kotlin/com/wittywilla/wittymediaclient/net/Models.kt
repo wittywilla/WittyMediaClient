@@ -685,3 +685,7 @@ data class Extra(val name: String = "", val kind: String = "", val size: Long = 
 
 @Serializable
 data class ExtraText(val text: String = "")
+
+// The volume correction a file is tagged with (GET /music/loudness/{id}): each may be missing.
+@Serializable
+data class Loudness(val trackDb: Double? = null, val albumDb: Double? = null, val trackPeak: Double? = null, val albumPeak: Double? = null)

@@ -248,6 +248,9 @@ class Api(val base: String, val token: String, private val quick: Boolean = fals
     suspend fun saveLyrics(id: Long, text: String) { call("PUT", "/music/lyrics/$id", body(mapOf("text" to JsonPrimitive(text)))) }
     suspend fun markInstrumental(id: Long) { call("PUT", "/music/lyrics/$id", body(mapOf("instrumental" to JsonPrimitive(true)))) }
     suspend fun forgetLyrics(id: Long) { call("DELETE", "/music/lyrics/$id") }
+    // The volume correction a song is tagged with, for ReplayGain.
+    suspend fun loudness(id: Long): Loudness = get("/music/loudness/$id")
+
     // Booklets and text beside a song's album (web/src/audio/ReadPanel.tsx): the list, a text one, and a booklet as it is.
     suspend fun extras(id: Long): List<Extra> = getList("/music/extras/$id")
     suspend fun extraText(id: Long, name: String): String = get<ExtraText>("/music/extras/$id/file?name=${query(name)}").text

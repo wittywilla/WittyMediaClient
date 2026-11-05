@@ -45,6 +45,7 @@ import com.wittywilla.wittymediaclient.R
 import com.wittywilla.wittymediaclient.WittyApp
 import com.wittywilla.wittymediaclient.diag.ClientLog
 import com.wittywilla.wittymediaclient.net.Api
+import com.wittywilla.wittymediaclient.net.Loudness
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -91,7 +92,14 @@ class ListeningService : MediaSessionService() {
             .setBitmapLoader(CacheBitmapLoader(ServerPictures(app)))
             .build()
         session = made
-        keeper = ListeningKeeper(app, player, resolver, made) { stopSelf() }
+        // The second player that plays the end of a song while crossing into the next: silent until then.
+        val tail = {
+            ExoPlayer.Builder(this, ShapedRenderers(this, SoundShaper()).setEnableDecoderFallback(true))
+                .setMediaSourceFactory(TrackSources(resolver))
+                .setAudioAttributes(soundFor(false), false)
+                .build()
+        }
+        keeper = ListeningKeeper(app, player, resolver, made, tail) { stopSelf() }
         app.listening.serviceRunning = true
     }
 
@@ -192,8 +200,12 @@ class ListeningKeeper(
     private val player: ExoPlayer,
     private val resolver: TrackResolver,
     private val session: MediaSession,
+    makeTail: () -> ExoPlayer,
     private val finished: () -> Unit,
 ) : Player.Listener {
+    private val crossfade = Crossfade(app, player, resolver, makeTail) { applyVolume() }
+    private val loudnessKnown = HashMap<Long, Loudness>()
+    private var loudnessAsking: Job? = null
     private var saving: Job? = null
     private var retrying: Job? = null
     private var playingSince = 0L
@@ -205,6 +217,8 @@ class ListeningKeeper(
     init {
         player.addListener(this)
         app.listening.keeper = this
+        applyVolume()
+        applyGaps()
     }
 
     private fun MediaItem?.keepsPlace() = this?.mediaMetadata?.extras?.getBoolean(EXTRA_KEEPS_PLACE) == true
@@ -241,6 +255,7 @@ class ListeningKeeper(
     }
 
     override fun onIsPlayingChanged(isPlaying: Boolean) {
+        crossfade.playing(isPlaying)
         if (isPlaying) {
             playingSince = SystemClock.elapsedRealtime()
             app.listening.problem = ""
@@ -263,8 +278,20 @@ class ListeningKeeper(
         }
     }
 
+    override fun onPlayWhenReadyChanged(playWhenReady: Boolean, reason: Int) {
+        if (playWhenReady) return
+        crossfade.paused()
+        // No gaps turned off: at the end of each song it stopped, as the website's player does without the next one
+        // made ready, and the next starts from there.
+        if (reason == Player.PLAY_WHEN_READY_CHANGE_REASON_END_OF_MEDIA_ITEM && player.pauseAtEndOfMediaItems) {
+            if (player.hasNextMediaItem()) player.seekToNextMediaItem()
+            player.play()
+        }
+    }
+
     // The one place that hears where the last track got to, once the player has moved on from it.
     override fun onPositionDiscontinuity(oldPosition: Player.PositionInfo, newPosition: Player.PositionInfo, reason: Int) {
+        if (reason == Player.DISCONTINUITY_REASON_SEEK || reason == Player.DISCONTINUITY_REASON_REMOVE) crossfade.moved(newPosition.mediaItem?.mediaId)
         val left = oldPosition.mediaItem ?: return
         val reachedEnd = reason == Player.DISCONTINUITY_REASON_AUTO_TRANSITION
         if (left.mediaId == newPosition.mediaItem?.mediaId && !reachedEnd) return
@@ -283,10 +310,60 @@ class ListeningKeeper(
 
     override fun onMediaItemTransition(mediaItem: MediaItem?, reason: Int) {
         if (mediaItem != null) matchSound(mediaItem.keepsPlace())
+        applyGaps()
+        loadLoudness()
+    }
+
+    override fun onRepeatModeChanged(repeatMode: Int) = applyGaps()
+
+    // The Sound panel, the volume or karaoke changed something. The shape itself is already set (SoundShaping).
+    fun soundChanged(levelingChanged: Boolean) {
+        applyVolume()
+        applyGaps()
+        if (levelingChanged) loadLoudness()
+    }
+
+    // The volume, and where a crossing is: the player's own volume, after the sound's shaping, as the website's deck
+    // gain is after its graph's analyser.
+    private fun applyVolume() {
+        val sound = app.listening.sound
+        val volume = if (sound.muted) 0f else sound.volume.toFloat()
+        player.volume = (volume * crossfade.mainShare).toFloat()
+        crossfade.levelTail(volume)
+    }
+
+    // No gaps, for music: ExoPlayer runs one song into the next by itself. Turned off, with no crossfade either, each
+    // song stops at its end and the next is started from there. Not with one song on repeat.
+    private fun applyGaps() {
+        val sound = app.listening.sound
+        player.pauseAtEndOfMediaItems = !sound.gapless && sound.crossfade <= 0 && !player.currentMediaItem.keepsPlace() && player.repeatMode != Player.REPEAT_MODE_ONE
+    }
+
+    // A song tagged with how loud it is, brought to one level: music only (/music/loudness/{id}).
+    private fun loadLoudness() {
+        val item = player.currentMediaItem
+        val choice = app.listening.sound.replayGain
+        val id = item?.mediaId?.toLongOrNull()
+        loudnessAsking?.cancel()
+        if (id == null || item.keepsPlace() || choice == Leveling.Off) {
+            SoundShaping.set { it.copy(loudnessDb = 0.0) }
+            return
+        }
+        loudnessKnown[id]?.let { known ->
+            SoundShaping.set { it.copy(loudnessDb = known.gain(choice)) }
+            return
+        }
+        val api = app.api
+        loudnessAsking = app.scope.launch {
+            val found = runCatching { api.loudness(id) }.getOrNull() ?: return@launch
+            loudnessKnown[id] = found
+            if (player.currentMediaItem?.mediaId == id.toString()) SoundShaping.set { it.copy(loudnessDb = found.gain(app.listening.sound.replayGain)) }
+        }
     }
 
     override fun onTimelineChanged(timeline: androidx.media3.common.Timeline, reason: Int) {
         if (!timeline.isEmpty) return
+        crossfade.interrupted()
         retrying?.cancel()
         stopWaitingForNetwork()
         resolver.forgetAll()
@@ -349,10 +426,6 @@ class ListeningKeeper(
         }
     }
 
-    // The Sound panel, the volume or karaoke changed something. The shape itself is already set (SoundShaping).
-    fun soundChanged(levelingChanged: Boolean) {
-    }
-
     // A person pressing Try again, or Play, after it gave up.
     fun tryAgain() {
         budget.reset()
@@ -388,6 +461,7 @@ class ListeningKeeper(
     }
 
     fun release() {
+        crossfade.release()
         report(player.currentMediaItem, player.currentPosition, false)
         saving?.cancel()
         retrying?.cancel()
