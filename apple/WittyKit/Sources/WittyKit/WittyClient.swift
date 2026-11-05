@@ -963,6 +963,20 @@ public final class WittyClient: @unchecked Sendable {
     public func titleLogoURL(_ target: TitleTarget, _ id: Int64, version: Int64?) -> URL? {
         URL(string: "\(base)\(apiPath)/meta/\(target.rawValue)/\(id)/art/logo?v=\(version ?? 0)")
     }
+    /// A DVD's or a Blu-ray's sections: its feature and scenes, bonus titles and menus, with the names given them.
+    public func discView(_ item: Int64) async throws -> DiscView { try await get("/items/\(item)/disc") }
+
+    /// An administrator's names for a disc's titles and scenes, all at once; the server answers with what it kept.
+    public func setDiscLabels(_ item: Int64, _ labels: DiscLabels) async throws -> DiscLabels {
+        try decoder.decode(DiscLabels.self, from: try await call("PUT", "/items/\(item)/disc/labels", body: try JSONEncoder().encode(labels)))
+    }
+
+    /// A picture of a disc's title (scene 0) or one of its scenes, made by the server the first time it's asked for.
+    /// `retry` asks again for one that didn't come.
+    public func discThumbURL(_ item: Int64, ttn: Int, scene: Int, retry: Int = 0) -> URL? {
+        URL(string: "\(base)\(apiPath)\(DiscPage.thumbPath(item, ttn: ttn, scene: scene))" + (retry > 0 ? "?retry=\(retry)" : ""))
+    }
+
     public func seasonPosterURL(_ show: Show, season: Int) -> URL? {
         URL(string: "\(base)\(apiPath)/shows/\(show.id)/art/season?n=\(season)&v=\(show.updatedAt ?? 0)")
     }

@@ -274,6 +274,199 @@ final class TitlePageTests: XCTestCase {
         XCTAssertNotEqual(LogoAnswer.key("studio", "HBO"), LogoAnswer.key("network", "HBO"))
     }
 
+    // MARK: A disc's sections
+
+    private let discPage = #"""
+    {"main":{"ttn":2,"label":"","durationSec":9000,"angles":2,"wide":true,"audio":["en","fr Commentary","en Commentary"],"subtitles":["nl"],
+             "chapters":[{"n":1,"start":0,"label":""},{"n":2,"start":312.5,"label":"The bank"}]},
+     "extras":[{"ttn":5,"label":"Making of","durationSec":1500,"chapters":[],"audio":[],"subtitles":[],"angles":1,"wide":false},
+               {"ttn":4,"label":"","durationSec":90,"chapters":null,"audio":null,"subtitles":null,"angles":1,"wide":false}],
+     "menus":[{"kind":"root","vts":1,"label":"Main menu"},{"kind":"title","vts":0,"label":"Title menu"}]}
+    """#
+
+    func testADiscsSectionsAreReadAsTheServerSendsThem() throws {
+        let view = try JSONDecoder().decode(DiscView.self, from: Data(discPage.utf8))
+        XCTAssertEqual(view.main?.ttn, 2)
+        XCTAssertEqual(view.main?.chapters.map(\.start), [0, 312.5])
+        XCTAssertEqual(view.extras.map(\.ttn), [5, 4])
+        XCTAssertEqual(view.extras[1].chapters, [])
+        XCTAssertEqual(view.menus.map(\.kind), ["root", "title"])
+        // A disc that couldn't be read, or an answer with nothing in it, has no sections.
+        XCTAssertEqual(try JSONDecoder().decode(DiscView.self, from: Data(#"{"main":null,"extras":null}"#.utf8)), DiscView.none)
+        // The names it came with are the ones the page starts from.
+        let labels = DiscLabels(view)
+        XCTAssertEqual(labels.titles, ["5": "Making of"])
+        XCTAssertEqual(labels.chapters, ["2": ["2": "The bank"]])
+        // And what a disc's facts say of each title.
+        let info = try facts(dvd).disc
+        XCTAssertEqual(info?.titles?.last?.durationSec, 9000)
+    }
+
+    func testADiscPlaysAtTheWebsitesAddresses() {
+        XCTAssertEqual(DiscPage.titlePath(9, ttn: 2), "/play/9?mode=title&ttn=2&start=0")
+        XCTAssertEqual(DiscPage.titlePath(9, ttn: 2, chapter: 7), "/play/9?mode=title&ttn=2&chapter=7")
+        XCTAssertEqual(DiscPage.titlePath(9, ttn: 2, chapter: 0), "/play/9?mode=title&ttn=2&start=0")
+        XCTAssertEqual(DiscPage.menuPath(9, DiscView.Menu(kind: "chapter", vts: 1, label: "Scene selection")), "/play/9?mode=menu&menu=chapter&menuVts=1")
+        XCTAssertEqual(DiscPage.menuPath(9, DiscView.Menu(kind: "title", vts: 0, label: "Title menu")), "/play/9?mode=menu&menu=title")
+        let client = WittyClient(base: "http://media.local:8080", token: "t")
+        XCTAssertEqual(client.discThumbURL(9, ttn: 2, scene: 0)?.absoluteString, "http://media.local:8080/api/v1/items/9/disc/thumb/2/0")
+        XCTAssertEqual(client.discThumbURL(9, ttn: 2, scene: 4, retry: 2)?.absoluteString, "http://media.local:8080/api/v1/items/9/disc/thumb/2/4?retry=2")
+        XCTAssertEqual(DiscPage.thumbRetries, [3, 6])
+    }
+
+    func testTheFeatureSaysWhatItIs() throws {
+        let view = try JSONDecoder().decode(DiscView.self, from: Data(discPage.utf8))
+        let main = try XCTUnwrap(view.main)
+        XCTAssertEqual(DiscPage.featureLine(main), "2 h 30 min · 2 scenes · 2 video versions · widescreen")
+        XCTAssertEqual(DiscPage.featureLanguages(main), "Audio: English, French · Subtitles: Dutch")
+        XCTAssertTrue(DiscPage.showsScenes(main))
+        let short = DiscView.Title(ttn: 1, durationSec: 2700, chapters: [DiscView.Chapter(n: 1, start: 0)], subtitles: ["en"])
+        XCTAssertEqual(DiscPage.featureLine(short), "45 min · 1 scenes")
+        // As the website writes it: subtitles without audio keep their dot.
+        XCTAssertEqual(DiscPage.featureLanguages(short), " · Subtitles: English")
+        XCTAssertEqual(DiscPage.featureLanguages(DiscView.Title(ttn: 1)), "")
+        XCTAssertFalse(DiscPage.showsScenes(short))
+    }
+
+    func testTitlesAndScenesHaveTheirGivenNamesOrSayWhatTheyAre() throws {
+        let view = try JSONDecoder().decode(DiscView.self, from: Data(discPage.utf8))
+        var labels = DiscLabels(view)
+        XCTAssertEqual(DiscPage.name(view.extras[0], labels, otherwise: DiscPage.bonusName(0)), "Making of")
+        XCTAssertEqual(DiscPage.name(view.extras[1], labels, otherwise: DiscPage.bonusName(1)), "Bonus feature 2")
+        XCTAssertEqual(DiscPage.name(view.main!, labels, otherwise: "Heat"), "Heat")
+        XCTAssertEqual(DiscPage.sceneName(labels, ttn: 2, scene: 2), "The bank")
+        XCTAssertEqual(DiscPage.sceneName(labels, ttn: 2, scene: 1), "Scene 1")
+        XCTAssertEqual(DiscPage.scenePlayLabel(labels, ttn: 2, scene: 2), "Play scene 2: The bank")
+        XCTAssertEqual(DiscPage.scenePlayLabel(labels, ttn: 2, scene: 1), "Play scene 1")
+        XCTAssertEqual(DiscPage.bonusPlayLabel(view.extras[0], labels, index: 0), "Play Making of")
+        XCTAssertEqual(DiscPage.bonusPlayLabel(view.extras[1], labels, index: 1), "Play bonus feature 2")
+        labels.setTitle(2, "The film")
+        labels.setChapter(4, 1, "Opening")
+        labels.setTitle(5, "")
+        XCTAssertEqual(labels.title(2), "The film")
+        XCTAssertEqual(labels.chapter(4, 1), "Opening")
+        // An emptied name is the default again.
+        XCTAssertEqual(DiscPage.name(view.extras[0], labels, otherwise: DiscPage.bonusName(0)), "Bonus feature 1")
+        // What goes to the server is what it keeps: names by title number and scene number.
+        let sent = try JSONSerialization.jsonObject(with: JSONEncoder().encode(labels)) as? [String: Any]
+        XCTAssertEqual(sent?["titles"] as? [String: String], ["2": "The film", "5": ""])
+        XCTAssertEqual(sent?["chapters"] as? [String: [String: String]], ["2": ["2": "The bank"], "4": ["1": "Opening"]])
+    }
+
+    func testTheTableListsEveryTitleASecondLong() throws {
+        let disc = try facts(dvd).disc
+        XCTAssertEqual(DiscPage.allTitlesSummary(disc), "All 2 titles on the disc")
+        XCTAssertNil(DiscPage.allTitlesSummary(DiscInfo(titles: [])))
+        let info = DiscInfo(mainTitle: 2, titles: [
+            DiscTitle(number: 1, durationSec: 0.4),
+            DiscTitle(number: 2, durationSec: 9000, chapters: [0, 300, 600], audio: ["en ac3 6ch", "fr ac3 2ch", "en ac3 2ch", "de ac3 2ch"],
+                      subtitles: ["en", "eng", "nl"]),
+            DiscTitle(number: 3, durationSec: 95),
+        ])
+        let rows = DiscPage.titleRows(info)
+        XCTAssertEqual(rows.map(\.ttn), [2, 3])
+        XCTAssertEqual(rows[0], DiscPage.TitleRow(ttn: 2, number: "2 · Feature", length: "2:30:00", chapters: "3",
+                                                  audio: "en ac3 6ch, fr ac3 2ch, en ac3 2ch", subtitles: "English, Dutch", feature: true))
+        XCTAssertEqual(rows[1], DiscPage.TitleRow(ttn: 3, number: "3", length: "1:35", chapters: "0", audio: "", subtitles: "", feature: false))
+    }
+
+    func testAbovePhoneWidthTheWordsGoBesideThePoster() {
+        let phone = TitleLayout(width: 390, window: 844)
+        XCTAssertFalse(phone.wide)
+        XCTAssertEqual(phone.heroHeight, TitleLook.heroHeight(window: 844))
+        XCTAssertEqual(phone.rise, 96)
+        XCTAssertEqual(phone.posterWidth, 132)
+        XCTAssertEqual(phone.gap, 20)
+        XCTAssertEqual(phone.column(width: 390, gutter: 16), 358)
+        // An iPad upright: the backdrop at its tallest, the poster at its narrowest.
+        let upright = TitleLayout(width: 820, window: 1180)
+        XCTAssertTrue(upright.wide)
+        XCTAssertEqual(upright.heroHeight, 560)
+        XCTAssertEqual(upright.rise, 188.8, accuracy: 0.001)
+        XCTAssertEqual(upright.posterWidth, 170)
+        XCTAssertEqual(upright.gap, 24.6, accuracy: 0.001)
+        XCTAssertEqual(upright.column(width: 820, gutter: 32), 561.4, accuracy: 0.001)
+        // On its side.
+        let across = TitleLayout(width: 1180, window: 820)
+        XCTAssertEqual(across.heroHeight, 410, accuracy: 0.001)
+        XCTAssertEqual(across.rise, 131.2, accuracy: 0.001)
+        XCTAssertEqual(across.posterWidth, 200.6, accuracy: 0.001)
+        XCTAssertEqual(across.gap, 35.4, accuracy: 0.001)
+        XCTAssertEqual(across.column(width: 1180, gutter: 32), 880, accuracy: 0.001)
+        // The clamps' other ends.
+        let big = TitleLayout(width: 2000, window: 400)
+        XCTAssertEqual(big.heroHeight, 320)
+        XCTAssertEqual(big.rise, 120)
+        XCTAssertEqual(big.posterWidth, 248)
+        XCTAssertEqual(big.gap, 40)
+        XCTAssertFalse(TitleLook.isWide(width: 760))
+        XCTAssertTrue(TitleLook.isWide(width: 761))
+        XCTAssertTrue(TitleLook.isNarrow(width: 700))
+        XCTAssertFalse(TitleLook.isNarrow(width: 701))
+    }
+
+    func testGridsTakeAsManyColumnsAsFit() {
+        XCTAssertEqual(TitleLook.gridColumns(width: 561.4, minimum: 170, gap: 16), 3)
+        XCTAssertEqual(TitleLook.gridColumns(width: 880, minimum: 170, gap: 16), 4)
+        XCTAssertEqual(TitleLook.gridColumns(width: 100, minimum: 170, gap: 16), 1)
+        XCTAssertEqual(DiscPage.sceneColumns(page: 390, column: 358), 2)
+        XCTAssertEqual(DiscPage.sceneColumns(page: 820, column: 561.4), 3)
+        XCTAssertEqual(DiscPage.extraColumns(column: 358), 1)
+        XCTAssertEqual(DiscPage.extraColumns(column: 561.4), 2)
+        XCTAssertEqual(DiscPage.extraColumns(column: 880), 3)
+        XCTAssertEqual(DiscPage.featurePictureWidth(card: 535.4, wordsNeed: 140), 375.4, accuracy: 0.001)
+        XCTAssertEqual(DiscPage.featurePictureWidth(card: 854, wordsNeed: 140), 420)
+        XCTAssertEqual(DiscPage.featurePictureWidth(card: 300, wordsNeed: 140), 220)
+        XCTAssertEqual(TitleLook.episodeCard(width: 390).picture, 132)
+        XCTAssertEqual(TitleLook.episodeCard(width: 390).lines, 2)
+        XCTAssertEqual(TitleLook.episodeCard(width: 820).picture, 164, accuracy: 0.001)
+        XCTAssertEqual(TitleLook.episodeCard(width: 820).gap, 16)
+        XCTAssertEqual(TitleLook.episodeCard(width: 820).lines, 3)
+        XCTAssertEqual(TitleLook.episodeCard(width: 1400).picture, 240)
+        XCTAssertEqual(TitleLook.playlistPicture(width: 390), 52)
+        XCTAssertEqual(TitleLook.playlistPicture(width: 1180), 72)
+        XCTAssertEqual(TitleLook.sectionGap(width: 390), 28)
+        XCTAssertEqual(TitleLook.sectionGap(width: 1180), 40.12, accuracy: 0.001)
+        XCTAssertEqual(TitleLook.sectionGap(width: 2000), 44)
+    }
+
+    func testAWideRowHasRoomForWhatMoreHolds() throws {
+        let film = try item(film)
+        XCTAssertEqual(TitleLook.playWords(film, wide: false), "Resume")
+        XCTAssertEqual(TitleLook.playWords(film, wide: true), "Resume from 12:34")
+        XCTAssertEqual(TitleLook.playWords(try item(#"{"id":1,"title":"x","kind":"video"}"#), wide: true), "Play")
+        let row = TitleLook.wideRow(film, try facts(self.film), admin: true)
+        XCTAssertEqual(row.buttons, [.playFromStart])
+        XCTAssertEqual(row.tools, [.artwork, .edit, .refresh])
+        XCTAssertTrue(TitleLook.wideRow(film, try facts(self.film), admin: false).tools.isEmpty)
+        let disc = TitleLook.wideRow(try item(dvd), try facts(dvd), admin: true)
+        XCTAssertEqual(disc.buttons, [.resumeDisc("Resume from 1:01", path: "/play/9?mode=title&ttn=3"), .mainMenu(path: "/play/9?mode=menu")])
+        XCTAssertEqual(disc.tools, [.discSettings, .artwork, .edit, .refresh])
+        XCTAssertEqual(disc.tools.map(\.toolName), ["Disc settings", "Artwork", "Edit details", "Check for new details"])
+        XCTAssertEqual(TitleLook.showTools(wide: false), [.artwork, .edit, .refresh])
+        XCTAssertEqual(TitleLook.showTools(wide: true), [.edit, .artwork, .refresh])
+        let next = try item(#"{"id":12,"title":"c","season":2,"episode":1,"progress":{"positionSec":125,"resumeSec":120}}"#)
+        XCTAssertEqual(TitleLook.playLabel(next, wide: true).words, "Resume S2 · E1 from 2:05")
+        XCTAssertNil(TitleLook.playLabel(next, wide: true).spoken)
+        XCTAssertEqual(TitleLook.playLabel(try item(#"{"id":1,"title":"Pilot","season":1,"episode":1}"#), wide: true).words, "Play S1 · E1")
+    }
+
+    func testADiscsSectionsAndItsNamesAreOneRequestEach() async throws {
+        let body = discPage
+        let stand = try StandInServer { request in
+            request.line.hasPrefix("PUT")
+                ? StandInServer.answer(body: #"{"titles":{"2":"The film"},"chapters":{}}"#)
+                : StandInServer.answer(body: body)
+        }
+        addTeardownBlock { stand.stop() }
+        let client = WittyClient(base: stand.address, token: "t")
+        let view = try await client.discView(9)
+        XCTAssertEqual(view.main?.ttn, 2)
+        let kept = try await client.setDiscLabels(9, DiscLabels(titles: ["2": "The film", "5": " "]))
+        XCTAssertEqual(kept, DiscLabels(titles: ["2": "The film"]))
+        XCTAssertEqual(stand.requests.map(\.line), ["GET /api/v1/items/9/disc HTTP/1.1", "PUT /api/v1/items/9/disc/labels HTTP/1.1"])
+    }
+
     func testAnItemsPageIsOneRequest() async throws {
         let body = film
         let stand = try StandInServer { _ in StandInServer.answer(body: body) }

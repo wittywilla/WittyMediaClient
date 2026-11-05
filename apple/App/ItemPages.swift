@@ -2,9 +2,10 @@ import SwiftUI
 import WittyKit
 
 // An item (a film, an episode, a video, a disc) and a show on a phone and a tablet, as the server's website draws
-// them at phone size (web/src/pages/ItemPage.tsx, ShowPage.tsx, components/edit/TitleExtras.tsx, and the detail
-// rules in styles.css and player.css). The words and which rows go where are WittyKit's TitlePage.swift. Apple TV
-// has its own pages: ItemView and ShowView in BrowseViews.swift choose.
+// them (web/src/pages/ItemPage.tsx, ShowPage.tsx, components/edit/TitleExtras.tsx, and the detail rules in
+// styles.css and player.css): at phone size up to 760 across, and above it the website's wide page, the poster
+// beside the words (TitleLayout). A disc's sections are DiscSections.swift. The words and which rows go where are
+// WittyKit's TitlePage.swift. Apple TV has its own pages: ItemView and ShowView in BrowseViews.swift choose.
 
 // MARK: - Shared by both pages
 
@@ -44,7 +45,7 @@ private enum TitleLegalWords {
 }
 
 /// A picture from the server, decoded at the size it's shown and kept with the others.
-private func titlePicture(_ client: WittyClient, _ url: URL?, pixels: Int) async -> CGImage? {
+func titlePicture(_ client: WittyClient, _ url: URL?, pixels: Int) async -> CGImage? {
     guard let url else { return nil }
     let key = "\(url.absoluteString)#\(pixels)" as NSString
     if let cached = ArtCache.shared.object(forKey: key) { return cached }
@@ -55,7 +56,7 @@ private func titlePicture(_ client: WittyClient, _ url: URL?, pixels: Int) async
 }
 
 /// Pressed, it dims a little and shrinks a touch, as the website's buttons do.
-private struct TitlePress: ButtonStyle {
+struct TitlePress: ButtonStyle {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     func makeBody(configuration: Configuration) -> some View {
@@ -68,13 +69,35 @@ private struct TitlePress: ButtonStyle {
 
 /// The backdrop across the top, 38% of the window high (240 to 560). The picture itself fades out from 40% of the
 /// way down, so there's no line where it ends, and a shade of the page's colour rises over it from the bottom.
+/// Above phone width it's the whole picture under the website's stronger shade.
 private struct TitleBackdrop: View {
     @Environment(\.client) private var client
     @Environment(\.palette) private var palette
     @Environment(\.displayScale) private var displayScale
     let url: URL?
     let height: CGFloat
+    var wide = false
     @State private var image: CGImage?
+
+    private var fade: [Gradient.Stop] {
+        wide ? [.init(color: .black, location: 0), .init(color: .black, location: 1)]
+            : [.init(color: .black, location: 0.4), .init(color: .clear, location: 1)]
+    }
+
+    /// linear-gradient(0deg, bg 0%, bg/.9 24%, bg/.5 62%, bg/.2 100%) wide; bg, .7 at 30%, .35 at 65%, .15 on a phone.
+    private var shade: [Gradient.Stop] {
+        wide ? [
+            .init(color: palette.background, location: 0),
+            .init(color: palette.background.opacity(0.9), location: 0.24),
+            .init(color: palette.background.opacity(0.5), location: 0.62),
+            .init(color: palette.background.opacity(0.2), location: 1),
+        ] : [
+            .init(color: palette.background, location: 0),
+            .init(color: palette.background.opacity(0.7), location: 0.3),
+            .init(color: palette.background.opacity(0.35), location: 0.65),
+            .init(color: palette.background.opacity(0.15), location: 1),
+        ]
+    }
 
     var body: some View {
         GeometryReader { geo in
@@ -90,22 +113,15 @@ private struct TitleBackdrop: View {
         }
         .frame(height: height)
         .clipped()
-        .mask(LinearGradient(stops: [.init(color: .black, location: 0.4), .init(color: .clear, location: 1)], startPoint: .top, endPoint: .bottom))
-        .overlay(
-            LinearGradient(stops: [
-                .init(color: palette.background, location: 0),
-                .init(color: palette.background.opacity(0.7), location: 0.3),
-                .init(color: palette.background.opacity(0.35), location: 0.65),
-                .init(color: palette.background.opacity(0.15), location: 1),
-            ], startPoint: .bottom, endPoint: .top)
-        )
+        .mask(LinearGradient(stops: fade, startPoint: .top, endPoint: .bottom))
+        .overlay(LinearGradient(stops: shade, startPoint: .bottom, endPoint: .top))
         .accessibilityHidden(true)
         .task(id: url) { image = await titlePicture(client, url, pixels: Int(screenSize.width * displayScale)) }
     }
 }
 
-/// The poster: 132 wide, the large radius, with the large shadow. Blank in `card` where there's none, and a frame of
-/// the video is shown whole on a colour of its own, worked out from the title.
+/// The poster: 132 wide on a phone (its column's width wider), the large radius, with the large shadow. Blank in
+/// `card` where there's none, and a frame of the video is shown whole on a colour of its own, worked out from the title.
 private struct TitlePoster: View {
     @Environment(\.client) private var client
     @Environment(\.palette) private var palette
@@ -113,9 +129,10 @@ private struct TitlePoster: View {
     let url: URL?
     /// The frame's colour, for a poster that is a frame of the video.
     var frameHue: Int?
+    var width: CGFloat = Self.phoneWidth
     @State private var image: CGImage?
 
-    static let width: CGFloat = 132
+    static let phoneWidth: CGFloat = 132
 
     private func colour(_ hue: Int, _ saturation: Double, _ lightness: Double) -> Color {
         let (r, g, b) = TitleLook.rgb(hue: Double(hue), saturation: saturation, lightness: lightness)
@@ -124,7 +141,6 @@ private struct TitlePoster: View {
 
     var body: some View {
         let shape = RoundedRectangle(cornerRadius: Tokens.Radius.lg, style: .continuous)
-        let width = Self.width
         ZStack {
             if let hue = frameHue {
                 // linear-gradient(170deg, hsl(h 26% 26%), hsl(h+40 34% 11%))
@@ -150,7 +166,7 @@ private struct TitlePoster: View {
         .clipShape(shape)
         .background(shape.fill(palette.card).shadow(color: .black.opacity(0.45), radius: 15, y: 10))
         .accessibilityHidden(true)
-        .task(id: url) { image = await titlePicture(client, url, pixels: Int(width * 2 * displayScale)) }
+        .task(id: url) { image = await titlePicture(client, url, pixels: Int(Self.phoneWidth * 2 * displayScale)) }
     }
 }
 
@@ -196,7 +212,7 @@ private struct TitleHeading: View {
 
 /// The website's `.meta` and `.title-facts`: things in rows that wrap, each in the middle of its row's height.
 /// Something wider than the column gets the column's width and wraps inside it.
-private struct TitleWrapRow: Layout {
+struct TitleWrapRow: Layout {
     var spacing: CGFloat = Tokens.Space.s4
     var rowSpacing: CGFloat = 2
 
@@ -249,6 +265,226 @@ extension View {
                 Text("·").font(.system(size: 14)).foregroundStyle(palette.textHint).fixedSize().offset(x: -10).accessibilityHidden(true)
             }
         }
+    }
+
+    /// Running text above phone width keeps to the website's `max-width: 72ch` in its own size of type.
+    @ViewBuilder fileprivate func measured(_ size: CGFloat, _ wide: Bool) -> some View {
+        if wide { frame(maxWidth: titleMeasure(size), alignment: .leading) } else { self }
+    }
+
+    /// The same, already measured: nothing on a phone.
+    @ViewBuilder fileprivate func measuredTo(_ width: CGFloat?) -> some View {
+        if let width { frame(maxWidth: width, alignment: .leading) } else { self }
+    }
+}
+
+/// 72 characters as a browser counts them (`ch`, the width of a "0") in the system type at `size`.
+func titleMeasure(_ size: CGFloat) -> CGFloat {
+    ("0" as NSString).size(withAttributes: [.font: UIFont.systemFont(ofSize: size)]).width * CGFloat(TitleLook.measure)
+}
+
+private struct TitleWideKey: EnvironmentKey {
+    static let defaultValue = false
+}
+
+extension EnvironmentValues {
+    /// Set on a title's page above phone width, where its small print keeps to the website's 72 characters.
+    fileprivate var titleWide: Bool {
+        get { self[TitleWideKey.self] }
+        set { self[TitleWideKey.self] = newValue }
+    }
+}
+
+/// The website's small button (`.btn.sm`): 44 high on a touch screen, 12 inside, 13 semibold, a 16 icon 6 before
+/// the words; Primary in the accent, Secondary in `card`, Ghost outlined at 20%. Faded to 45% when it can't be used.
+struct TitleSmallButtonStyle: ButtonStyle {
+    var kind: PageButtonKind = .secondary
+
+    func makeBody(configuration: Configuration) -> some View {
+        TitleSmallButtonBody(label: configuration.label, pressed: configuration.isPressed, kind: kind)
+    }
+}
+
+private struct TitleSmallButtonBody<Label: View>: View {
+    @Environment(\.palette) private var palette
+    @Environment(\.isEnabled) private var enabled
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    let label: Label
+    let pressed: Bool
+    let kind: PageButtonKind
+
+    var body: some View {
+        let shape = RoundedRectangle(cornerRadius: Tokens.Radius.md, style: .continuous)
+        let fill: Color = switch kind {
+        case .primary: palette.accent
+        case .secondary: palette.card
+        case .ghost: .clear
+        }
+        label
+            .labelStyle(TitleSmallLabelStyle())
+            .font(.system(size: 13, weight: .semibold))
+            .foregroundStyle(kind == .primary ? palette.onAccent : palette.text)
+            .lineLimit(1)
+            .padding(.horizontal, Tokens.Space.s3)
+            .frame(minHeight: 44)
+            .background(shape.fill(fill))
+            .overlay { if kind == .ghost { shape.strokeBorder(palette.text.opacity(0.2), lineWidth: 1) } }
+            .contentShape(shape)
+            .scaleEffect(pressed && !reduceMotion ? 0.975 : 1)
+            .opacity(enabled ? (pressed ? 0.85 : 1) : 0.45)
+            .animation(.easeOut(duration: Tokens.Motion.press), value: pressed)
+    }
+}
+
+private struct TitleSmallLabelStyle: LabelStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        HStack(spacing: 6) {
+            configuration.icon.font(.system(size: 12, weight: .semibold)).frame(width: 16, height: 16)
+            configuration.title
+        }
+    }
+}
+
+/// The website's table at the column's width (`.titles-table`, `width: 100%`, at most `maxWidth`), laid out as a
+/// browser lays out a table: each column as wide as its widest cell and the room left over shared out in proportion
+/// to those widths, except to a column with a width of its own; with too little room, the columns whose cells wrap
+/// give way, in proportion to how much they can. Offered no width at all (sideways in a scroll view, as on a phone),
+/// it's as wide as its cells. Cells come row by row, `columns` to a row, each the height of its row.
+struct TitleTableLayout: Layout {
+    let columns: Int
+    /// Columns that keep their width, such as a picture's.
+    var fixed: Set<Int> = []
+    var maxWidth: CGFloat = .infinity
+
+    private func widths(_ subviews: Subviews, offered: CGFloat?) -> [CGFloat] {
+        var most = Array(repeating: CGFloat(0), count: columns)
+        var least = most
+        for (index, view) in subviews.enumerated() {
+            let column = index % columns
+            most[column] = max(most[column], view.sizeThatFits(.unspecified).width)
+            least[column] = max(least[column], view.sizeThatFits(ProposedViewSize(width: 0, height: nil)).width)
+        }
+        let natural = most.reduce(0, +)
+        let total = min(offered ?? natural, maxWidth)
+        if natural <= total {
+            let growing = (0..<columns).filter { !fixed.contains($0) }
+            let weight = growing.map { most[$0] }.reduce(0, +)
+            guard weight > 0 else { return most }
+            return most.indices.map { growing.contains($0) ? most[$0] + (total - natural) * most[$0] / weight : most[$0] }
+        }
+        let floor = least.reduce(0, +)
+        let give = zip(most, least).map { $0 - $1 }.reduce(0, +)
+        guard floor < total, give > 0 else { return least }
+        return most.indices.map { least[$0] + (total - floor) * (most[$0] - least[$0]) / give }
+    }
+
+    private func heights(_ subviews: Subviews, _ widths: [CGFloat]) -> [CGFloat] {
+        stride(from: 0, to: subviews.count, by: columns).map { start in
+            (start..<min(start + columns, subviews.count)).map {
+                subviews[$0].sizeThatFits(ProposedViewSize(width: widths[$0 - start], height: nil)).height
+            }.max() ?? 0
+        }
+    }
+
+    func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
+        let widths = widths(subviews, offered: proposal.width)
+        return CGSize(width: widths.reduce(0, +), height: heights(subviews, widths).reduce(0, +))
+    }
+
+    func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
+        let widths = widths(subviews, offered: bounds.width)
+        var y = bounds.minY
+        for (row, height) in heights(subviews, widths).enumerated() {
+            var x = bounds.minX
+            for column in 0..<columns where row * columns + column < subviews.count {
+                subviews[row * columns + column].place(at: CGPoint(x: x, y: y), proposal: ProposedViewSize(width: widths[column], height: height))
+                x += widths[column]
+            }
+            y += height
+        }
+    }
+}
+
+/// One cell of that table: 12 at its sides and 10 above and below (8 for a heading), as tall as its row, in the
+/// middle of it, with its line under it.
+struct TitleTableCell<Content: View>: View {
+    let line: Color
+    var head = false
+    var leading: CGFloat = Tokens.Space.s3
+    var trailing: CGFloat = Tokens.Space.s3
+    @ViewBuilder let content: Content
+
+    var body: some View {
+        content
+            .padding(.leading, leading)
+            .padding(.trailing, trailing)
+            .padding(.vertical, head ? Tokens.Space.s2 : 10)
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
+            .overlay(alignment: .bottom) { Rectangle().fill(line).frame(height: 1) }
+    }
+}
+
+/// A table's heading: 11 semibold capitals, spaced, in `textHint`.
+struct TitleTableHead: View {
+    @Environment(\.palette) private var palette
+    let words: String
+
+    var body: some View {
+        TitleTableCell(line: palette.text.opacity(0.2), head: true) {
+            Text(words.uppercased())
+                .font(.system(size: 11, weight: .semibold))
+                .tracking(0.77)
+                .foregroundStyle(palette.textHint)
+                .fixedSize()
+        }
+    }
+}
+
+/// The website's spinner where a page is coming above phone width, which keeps its grey shapes for a phone: a 28
+/// ring 3 wide in `raised` with its top quarter in the accent, turning every 0.8 s, and still with Reduce Motion.
+private struct TitleSpinner: View {
+    @Environment(\.palette) private var palette
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @State private var turned = false
+
+    var body: some View {
+        ZStack {
+            Circle().stroke(palette.raised, lineWidth: 3)
+            Circle().trim(from: 0, to: 0.25).stroke(palette.accent, lineWidth: 3).rotationEffect(.degrees(225))
+        }
+        .frame(width: 25, height: 25)
+        .rotationEffect(.degrees(turned ? 360 : 0))
+        .frame(maxWidth: .infinity)
+        .padding(Tokens.Space.s16)
+        .onAppear {
+            guard !reduceMotion else { return }
+            withAnimation(.linear(duration: 0.8).repeatForever(autoreverses: false)) { turned = true }
+        }
+        .accessibilityElement()
+        .accessibilityLabel("Loading")
+    }
+}
+
+/// A short message for three seconds, as the website's toast: 20 over the bottom, `raised` with its border and the
+/// large shadow, 14 medium. Said to a screen reader too.
+private struct TitleToast: View {
+    @Environment(\.palette) private var palette
+    let words: String
+
+    var body: some View {
+        let shape = RoundedRectangle(cornerRadius: Tokens.Radius.md, style: .continuous)
+        Text(words)
+            .font(.system(size: 14, weight: .medium))
+            .foregroundStyle(palette.text)
+            .fixedSize(horizontal: false, vertical: true)
+            .padding(.vertical, Tokens.Space.s3)
+            .padding(.horizontal, Tokens.Space.s4)
+            .background(shape.fill(palette.raised))
+            .overlay(shape.strokeBorder(palette.border, lineWidth: 1))
+            .shadow(color: .black.opacity(0.45), radius: 15, y: 10)
+            .padding(.horizontal, Tokens.Space.s4)
+            .padding(.bottom, Tokens.Space.s5)
+            .onAppear { announce(words) }
     }
 }
 
@@ -344,9 +580,11 @@ private struct TitleBrandTile: View {
     }
 }
 
-/// Small print in `textHint` with links in `accentText`, underlined so colour isn't the only sign.
+/// Small print in `textHint` with links in `accentText`, underlined so colour isn't the only sign. Above phone
+/// width it keeps to 72 characters, as the website's `.fine-print` and `.legal-note`.
 private struct TitleFinePrint: View {
     @Environment(\.palette) private var palette
+    @Environment(\.titleWide) private var wide
     let words: AttributedString
 
     init(markdown: String) {
@@ -371,6 +609,7 @@ private struct TitleFinePrint: View {
             .foregroundStyle(palette.textHint)
             .tint(palette.accentText)
             .fixedSize(horizontal: false, vertical: true)
+            .measured(12, wide)
     }
 }
 
@@ -711,7 +950,7 @@ private struct TitleSkeleton: View {
             VStack(alignment: .leading, spacing: 0) {
                 LinearGradient(colors: [palette.card.opacity(0.6), .clear], startPoint: .top, endPoint: .bottom).frame(height: hero)
                 VStack(alignment: .leading, spacing: Tokens.Space.s3) {
-                    SkeletonShape(radius: Tokens.Radius.lg).frame(width: TitlePoster.width, height: TitlePoster.width * 1.5).padding(.bottom, Tokens.Space.s5 - Tokens.Space.s3)
+                    SkeletonShape(radius: Tokens.Radius.lg).frame(width: TitlePoster.phoneWidth, height: TitlePoster.phoneWidth * 1.5).padding(.bottom, Tokens.Space.s5 - Tokens.Space.s3)
                     line(80, 12)
                     line(column * 0.6, 32)
                     line(column * 0.4)
@@ -740,6 +979,7 @@ struct ItemPage: View {
     @Environment(\.client) private var client
     @Environment(\.palette) private var palette
     @Environment(\.metrics) private var metrics
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     let id: Int64
     @State private var item: Item?
     @State private var facts = ItemFacts()
@@ -751,6 +991,8 @@ struct ItemPage: View {
     @State private var sheet: TitleSheet?
     /// What a row of "⋯" does, once its sheet has gone.
     @State private var chosen: (() -> Void)?
+    /// A short message at the bottom of the page, as the website's toast.
+    @State private var toast = ""
 
     private func load() async {
         do {
@@ -904,25 +1146,90 @@ struct ItemPage: View {
     /// "⋯": what the row has no room for, each going where the website's does. The server's own page has an
     /// administrator's tools: its edit window at Artwork or Match, and Refresh and Disc settings in its "⋯".
     private func moreRows(_ item: Item) -> [TitleSheetRow] {
-        TitleLook.moreRows(item, facts, admin: isAdmin).map { row in
-            let playable = TitleLook.playable(item, facts)
-            switch row {
-            case .resumeDisc(let words, let path), .discFromStart(let words, let path):
-                return TitleSheetRow(id: "play", icon: "play.fill", words: words, disabled: !playable) { go(.page(path)) }
-            case .mainMenu(let path):
-                return TitleSheetRow(id: "menu", icon: "line.3.horizontal", words: row.words, disabled: !playable) { go(.page(path)) }
-            case .discSettings:
-                return TitleSheetRow(id: "disc", icon: "gearshape", words: row.words) { go(.page(TitleLook.editPath(.item, item.id))) }
-            case .playFromStart:
-                return TitleSheetRow(id: "start", icon: "play.fill", words: row.words) { go(.player(item.id, startOver: true)) }
-            case .nextEpisode(let next):
-                return TitleSheetRow(id: "next", icon: "forward.end.fill", words: row.words) { go(.item(next)) }
-            case .artwork:
-                return TitleSheetRow(id: "art", icon: "photo", words: row.words) { go(.page(TitleLook.editPath(.item, item.id, section: "artwork"))) }
-            case .edit:
-                return TitleSheetRow(id: "edit", icon: "pencil", words: row.words) { go(.page(TitleLook.editPath(.item, item.id, section: "match"))) }
-            case .refresh:
-                return TitleSheetRow(id: "refresh", icon: "arrow.clockwise", words: row.words) { go(.page(TitleLook.editPath(.item, item.id))) }
+        TitleLook.moreRows(item, facts, admin: isAdmin).map { sheetRow($0, item) }
+    }
+
+    private func sheetRow(_ row: TitleLook.MoreRow, _ item: Item) -> TitleSheetRow {
+        let playable = TitleLook.playable(item, facts)
+        switch row {
+        case .resumeDisc(let words, let path), .discFromStart(let words, let path):
+            return TitleSheetRow(id: "play", icon: "play.fill", words: words, disabled: !playable) { go(.page(path)) }
+        case .mainMenu(let path):
+            return TitleSheetRow(id: "menu", icon: "line.3.horizontal", words: row.words, disabled: !playable) { go(.page(path)) }
+        case .discSettings:
+            return TitleSheetRow(id: "disc", icon: "gearshape", words: row.words) { go(.page(TitleLook.editPath(.item, item.id))) }
+        case .playFromStart:
+            return TitleSheetRow(id: "start", icon: "play.fill", words: row.words) { go(.player(item.id, startOver: true)) }
+        case .nextEpisode(let next):
+            return TitleSheetRow(id: "next", icon: "forward.end.fill", words: row.words) { go(.item(next)) }
+        case .artwork:
+            return TitleSheetRow(id: "art", icon: "photo", words: row.words) { go(.page(TitleLook.editPath(.item, item.id, section: "artwork"))) }
+        case .edit:
+            return TitleSheetRow(id: "edit", icon: "pencil", words: row.words) { go(.page(TitleLook.editPath(.item, item.id, section: "match"))) }
+        case .refresh:
+            return TitleSheetRow(id: "refresh", icon: "arrow.clockwise", words: row.words) { go(.page(TitleLook.editPath(.item, item.id))) }
+        }
+    }
+
+    /// Above phone width, the website's row with room for everything (ItemPage.tsx, not a phone): the main action,
+    /// then what "⋯" holds on a phone as buttons, Save, and an administrator's tools in Ghost. A disc has Insert
+    /// (16 inside before its icon, 20 after its words), its tools as icon squares 4 apart, and what Insert does on a
+    /// line of its own. 8 apart, wrapping.
+    @ViewBuilder private func wideActions(_ item: Item) -> some View {
+        let row = TitleLook.wideRow(item, facts, admin: isAdmin)
+        if TitleLook.isDisc(item) {
+            VStack(alignment: .leading, spacing: Tokens.Space.s2) {
+                TitleWrapRow(spacing: Tokens.Space.s2, rowSpacing: Tokens.Space.s2) {
+                    NavigationLink(value: Route.page(TitleLook.insertPath(item, facts))) {
+                        Label("Insert \(TitleLook.discName(item))", systemImage: "opticaldisc").padding(.trailing, Tokens.Space.s1)
+                    }
+                    .pageButton(.primary)
+                    .disabled(!TitleLook.playable(item, facts))
+                    ForEach(row.buttons.map { sheetRow($0, item) }) { button in
+                        Button(action: button.run) { Label(button.words, systemImage: button.icon) }
+                            .pageButton(.secondary)
+                            .disabled(button.disabled)
+                    }
+                    if !row.tools.isEmpty {
+                        HStack(spacing: Tokens.Space.s1) {
+                            ForEach(row.tools, id: \.toolName) { tool in
+                                let button = sheetRow(tool, item)
+                                Button(action: button.run) { Image(systemName: button.icon).font(.system(size: 15, weight: .semibold)) }
+                                    .squareButton()
+                                    .accessibilityLabel(tool.toolName)
+                            }
+                        }
+                        .accessibilityElement(children: .contain)
+                        .accessibilityLabel("Manage")
+                    }
+                }
+                Text(TitleLook.discHint(item, facts, admin: isAdmin))
+                    .font(.system(size: 12))
+                    .foregroundStyle(palette.textHint)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+        } else {
+            TitleWrapRow(spacing: Tokens.Space.s2, rowSpacing: Tokens.Space.s2) {
+                if item.isPlayable {
+                    NavigationLink(value: Route.player(item.id, startOver: item.resumeSeconds == nil)) {
+                        Label(TitleLook.playWords(item, wide: true), systemImage: "play.fill")
+                    }
+                    .pageButton(.primary)
+                } else if !item.isRigGame {
+                    NavigationLink(value: Route.page(ServerPages.path(item))) {
+                        Label("Open", systemImage: "arrow.up.forward.square")
+                    }
+                    .pageButton(.primary)
+                }
+                ForEach(row.buttons.map { sheetRow($0, item) }) { button in
+                    Button(action: button.run) { Label(button.words, systemImage: button.icon) }.pageButton(.secondary)
+                }
+                if canSave {
+                    Button { sheet = .save } label: { Label("Save", systemImage: "plus") }.pageButton(.secondary)
+                }
+                ForEach(row.tools.map { sheetRow($0, item) }) { button in
+                    Button(action: button.run) { Label(button.words, systemImage: button.icon) }.pageButton(.ghost)
+                }
             }
         }
     }
@@ -959,78 +1266,100 @@ struct ItemPage: View {
 
     // MARK: The page
 
-    @ViewBuilder private func page(_ item: Item, hero: CGFloat, column: CGFloat) -> some View {
+    /// The words: under the poster on a phone, beside it wider. From the caption to the legal note; above phone
+    /// width the row has room for everything, and the synopsis and the facts keep to 72 characters.
+    @ViewBuilder private func words(_ item: Item, width: CGFloat, column: CGFloat, wide: Bool) -> some View {
         let overview = item.overview ?? ""
         let credit = TitleLook.credit(provider: facts.provider, id: facts.providerId)
         let scrambled = TitleLook.isDisc(item) && facts.disc?.scrambled == true
+        VStack(alignment: .leading, spacing: 0) {
+            if !TitleLook.crumbs(item, libraryName: library(item.libraryId)?.name).isEmpty {
+                crumbs(item).padding(.bottom, Tokens.Space.s2)
+            }
+            TitleHeading(title: item.title, logo: attached?.hasLogo == true ? client.titleLogoURL(.item, item.id, version: item.updatedAt) : nil, width: column)
+                .padding(.bottom, Tokens.Space.s2)
+            if let tagline = item.tagline, !tagline.isEmpty, !item.isRigGame {
+                Text(tagline)
+                    .font(.system(size: 17).italic())
+                    .foregroundStyle(palette.textSecondary)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .padding(.bottom, Tokens.Space.s2)
+            }
+            meta(item).padding(.bottom, Tokens.Space.s5)
+            if !error.isEmpty { ProblemLine(error).padding(.bottom, Tokens.Space.s3) }
+            if item.isRigGame { RigPlayPanel(item: item).padding(.bottom, Tokens.Space.s5) }
+            if wide { wideActions(item) } else { actions(item) }
+            if !overview.isEmpty {
+                Text(overview)
+                    .font(.system(size: 15))
+                    .lineSpacing(6)
+                    .foregroundStyle(palette.text)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .measured(15, wide)
+                    .padding(.top, Tokens.Space.s6)
+            }
+            if let credit {
+                TitleFinePrint(markdown: credit).padding(.top, overview.isEmpty ? Tokens.Space.s6 : Tokens.Space.s5)
+            }
+            if scrambled {
+                Text("This disc is encrypted, so it can't be played: encrypted media isn't supported, and nothing here bypasses copy protection.")
+                    .font(.system(size: 14))
+                    .lineSpacing(3)
+                    .foregroundStyle(palette.text)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .padding(.vertical, 10)
+                    .padding(.horizontal, Tokens.Space.s3)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .background(RoundedRectangle(cornerRadius: Tokens.Radius.md, style: .continuous).fill(palette.danger.opacity(0.11)))
+                    .overlay(RoundedRectangle(cornerRadius: Tokens.Radius.md, style: .continuous).strokeBorder(palette.danger.opacity(0.5), lineWidth: 1))
+                    .padding(.top, credit != nil ? 0 : overview.isEmpty ? Tokens.Space.s6 : Tokens.Space.s5)
+            }
+            factsTable(item, width: wide ? min(column, titleMeasure(15)) : column).measured(15, wide).padding(.top, Tokens.Space.s6)
+            if let attached {
+                TitleExtrasView(target: .item, attached: attached, listings: listings, libraryId: item.libraryId, logos: logos, legal: legal)
+                    .padding(.top, Tokens.Space.s4)
+            }
+            if TitleLook.isDisc(item) {
+                DiscSections(item: item, disc: facts.disc, admin: isAdmin, playable: TitleLook.playable(item, facts), page: width, column: column,
+                             say: say)
+            }
+            Group {
+                if let show = item.showId {
+                    TitleBackLink(words: "Back to \(item.showTitle ?? "")") { openShow(show, season: item.season ?? -1) }
+                } else {
+                    TitleBackLink(words: "Back to library") { openLibrary(item.libraryId) }
+                }
+            }
+            .padding(.top, Tokens.Space.s8)
+            TitleLegalLine(notices: legal, kind: "metadata").padding(.top, Tokens.Space.s4)
+        }
+    }
+
+    @ViewBuilder private func page(_ item: Item, layout: TitleLayout, width: CGFloat, column: CGFloat) -> some View {
         let posterURL = (facts.poster ?? "").isEmpty ? nil : client.posterURL(item)
         let backdrop = (facts.poster ?? "").isEmpty && (facts.backdrop ?? "").isEmpty ? nil : client.backdropURL(item)
+        let frameHue = TitleLook.isFrame(poster: facts.poster) ? TitleLook.artHue(item.title) : nil
         ScrollView {
             VStack(alignment: .leading, spacing: 0) {
-                TitleBackdrop(url: backdrop, height: hero)
-                VStack(alignment: .leading, spacing: 0) {
-                    TitlePoster(url: posterURL, frameHue: TitleLook.isFrame(poster: facts.poster) ? TitleLook.artHue(item.title) : nil)
-                    VStack(alignment: .leading, spacing: 0) {
-                        if !TitleLook.crumbs(item, libraryName: library(item.libraryId)?.name).isEmpty {
-                            crumbs(item).padding(.bottom, Tokens.Space.s2)
-                        }
-                        TitleHeading(title: item.title, logo: attached?.hasLogo == true ? client.titleLogoURL(.item, item.id, version: item.updatedAt) : nil, width: column)
-                            .padding(.bottom, Tokens.Space.s2)
-                        if let tagline = item.tagline, !tagline.isEmpty, !item.isRigGame {
-                            Text(tagline)
-                                .font(.system(size: 17).italic())
-                                .foregroundStyle(palette.textSecondary)
-                                .fixedSize(horizontal: false, vertical: true)
-                                .padding(.bottom, Tokens.Space.s2)
-                        }
-                        meta(item).padding(.bottom, Tokens.Space.s5)
-                        if !error.isEmpty { ProblemLine(error).padding(.bottom, Tokens.Space.s3) }
-                        if item.isRigGame { RigPlayPanel(item: item).padding(.bottom, Tokens.Space.s5) }
-                        actions(item)
-                        if !overview.isEmpty {
-                            Text(overview)
-                                .font(.system(size: 15))
-                                .lineSpacing(6)
-                                .foregroundStyle(palette.text)
-                                .fixedSize(horizontal: false, vertical: true)
-                                .padding(.top, Tokens.Space.s6)
-                        }
-                        if let credit {
-                            TitleFinePrint(markdown: credit).padding(.top, overview.isEmpty ? Tokens.Space.s6 : Tokens.Space.s5)
-                        }
-                        if scrambled {
-                            Text("This disc is encrypted, so it can't be played: encrypted media isn't supported, and nothing here bypasses copy protection.")
-                                .font(.system(size: 14))
-                                .lineSpacing(3)
-                                .foregroundStyle(palette.text)
-                                .fixedSize(horizontal: false, vertical: true)
-                                .padding(.vertical, 10)
-                                .padding(.horizontal, Tokens.Space.s3)
-                                .frame(maxWidth: .infinity, alignment: .leading)
-                                .background(RoundedRectangle(cornerRadius: Tokens.Radius.md, style: .continuous).fill(palette.danger.opacity(0.11)))
-                                .overlay(RoundedRectangle(cornerRadius: Tokens.Radius.md, style: .continuous).strokeBorder(palette.danger.opacity(0.5), lineWidth: 1))
-                                .padding(.top, credit != nil ? 0 : overview.isEmpty ? Tokens.Space.s6 : Tokens.Space.s5)
-                        }
-                        factsTable(item, width: column).padding(.top, Tokens.Space.s6)
-                        if let attached {
-                            TitleExtrasView(target: .item, attached: attached, listings: listings, libraryId: item.libraryId, logos: logos, legal: legal)
-                                .padding(.top, Tokens.Space.s4)
-                        }
-                        Group {
-                            if let show = item.showId {
-                                TitleBackLink(words: "Back to \(item.showTitle ?? "")") { openShow(show, season: item.season ?? -1) }
-                            } else {
-                                TitleBackLink(words: "Back to library") { openLibrary(item.libraryId) }
-                            }
-                        }
-                        .padding(.top, Tokens.Space.s8)
-                        TitleLegalLine(notices: legal, kind: "metadata").padding(.top, Tokens.Space.s4)
+                TitleBackdrop(url: backdrop, height: CGFloat(layout.heroHeight), wide: layout.wide)
+                if layout.wide {
+                    // The website's `.detail` grid: the poster in a column of its own, and the words beside it.
+                    HStack(alignment: .top, spacing: CGFloat(layout.gap)) {
+                        TitlePoster(url: posterURL, frameHue: frameHue, width: CGFloat(layout.posterWidth))
+                        words(item, width: width, column: column, wide: true).frame(width: column, alignment: .leading)
                     }
-                    .padding(.top, Tokens.Space.s5)
+                    .padding(.top, -CGFloat(layout.rise))
+                    .padding(.horizontal, metrics.gutter)
+                    .environment(\.titleWide, true)
+                } else {
+                    VStack(alignment: .leading, spacing: 0) {
+                        TitlePoster(url: posterURL, frameHue: frameHue)
+                        words(item, width: width, column: column, wide: false).padding(.top, Tokens.Space.s5)
+                    }
+                    .frame(maxWidth: column, alignment: .leading)
+                    .padding(.top, -96)
+                    .padding(.horizontal, metrics.gutter)
                 }
-                .frame(maxWidth: column, alignment: .leading)
-                .padding(.top, -96)
-                .padding(.horizontal, metrics.gutter)
                 #if os(iOS) || os(visionOS)
                 // The page has its own notice, so the foot is the version alone, as the website hides its general one.
                 PageFoot(notice: "")
@@ -1041,21 +1370,38 @@ struct ItemPage: View {
         .refreshable { await load() }
     }
 
+    private func say(_ words: String) {
+        guard !words.isEmpty else { return }
+        withAnimation(reduceMotion ? nil : .easeOut(duration: Tokens.Motion.appear)) { toast = words }
+    }
+
     var body: some View {
         GeometryReader { outer in
             let top = outer.safeAreaInsets.top
-            let hero = CGFloat(TitleLook.heroHeight(window: Double(outer.size.height + top + outer.safeAreaInsets.bottom)))
-            let column = min(outer.size.width - metrics.gutter * 2, 720)
+            let width = outer.size.width
+            let layout = TitleLayout(width: Double(width), window: Double(outer.size.height + top + outer.safeAreaInsets.bottom))
+            let column = layout.wide ? CGFloat(layout.column(width: Double(width), gutter: Double(metrics.gutter))) : min(width - metrics.gutter * 2, 720)
             ZStack(alignment: .top) {
                 if let item {
-                    page(item, hero: hero, column: column)
+                    page(item, layout: layout, width: width, column: column)
                 } else if !error.isEmpty {
                     ProblemView(words: error, retry: { error = ""; Task { await load() } }).padding(.top, top + 48)
+                } else if layout.wide {
+                    TitleSpinner().padding(.top, top)
                 } else {
-                    TitleSkeleton(hero: hero)
+                    TitleSkeleton(hero: CGFloat(layout.heroHeight))
                 }
             }
             .ignoresSafeArea(edges: .top)
+        }
+        .overlay(alignment: .bottom) {
+            if !toast.isEmpty { TitleToast(words: toast).transition(.opacity.combined(with: .offset(y: 8))) }
+        }
+        .task(id: toast) {
+            guard !toast.isEmpty else { return }
+            try? await Task.sleep(nanoseconds: 3_000_000_000)
+            guard !Task.isCancelled else { return }
+            withAnimation(reduceMotion ? nil : .easeOut(duration: Tokens.Motion.appear)) { toast = "" }
         }
         .pageBackground(palette)
         .environment(\.openURL, OpenURLAction { url in
@@ -1322,12 +1668,34 @@ struct ShowPage: View {
     }
 
     /// An administrator's tools, on the server's own page for the show.
-    private var moreRows: [TitleSheetRow] {
-        [
-            TitleSheetRow(id: "art", icon: "photo", words: "Artwork") { go(.page(TitleLook.editPath(.show, id, section: "artwork"))) },
-            TitleSheetRow(id: "edit", icon: "pencil", words: "Edit") { go(.page(TitleLook.editPath(.show, id, section: "match"))) },
-            TitleSheetRow(id: "refresh", icon: "arrow.clockwise", words: "Refresh") { go(.page(TitleLook.editPath(.show, id))) },
-        ]
+    private var moreRows: [TitleSheetRow] { TitleLook.showTools(wide: false).map(toolRow) }
+
+    private func toolRow(_ tool: TitleLook.MoreRow) -> TitleSheetRow {
+        switch tool {
+        case .edit: return TitleSheetRow(id: "edit", icon: "pencil", words: "Edit") { go(.page(TitleLook.editPath(.show, id, section: "match"))) }
+        case .refresh: return TitleSheetRow(id: "refresh", icon: "arrow.clockwise", words: "Refresh") { go(.page(TitleLook.editPath(.show, id))) }
+        default: return TitleSheetRow(id: "art", icon: "photo", words: "Artwork") { go(.page(TitleLook.editPath(.show, id, section: "artwork"))) }
+        }
+    }
+
+    /// Above phone width, the website's row with room for everything: Play or "Resume S1 · E2 from 12:34", Save,
+    /// and an administrator's Edit, Artwork and Refresh in Ghost, 8 apart, wrapping.
+    private func wideActions(_ detail: ShowDetail) -> some View {
+        let next = detail.episodes?.first { $0.id == detail.nextUpId }
+        return TitleWrapRow(spacing: Tokens.Space.s2, rowSpacing: Tokens.Space.s2) {
+            if let next {
+                Button { play(next) } label: { Label(TitleLook.playLabel(next, wide: true).words, systemImage: "play.fill") }
+                    .pageButton(.primary)
+            }
+            if canSave {
+                Button { sheet = .save } label: { Label("Save", systemImage: "plus") }.pageButton(.secondary)
+            }
+            if isAdmin {
+                ForEach(TitleLook.showTools(wide: true).map(toolRow)) { tool in
+                    Button(action: tool.run) { Label(tool.words, systemImage: tool.icon) }.pageButton(.ghost)
+                }
+            }
+        }
     }
 
     /// A season as its poster, 108 wide, with its name and how many are left; the chosen one ringed in `accent`.
@@ -1420,7 +1788,9 @@ struct ShowPage: View {
 
     // MARK: The page
 
-    @ViewBuilder private func page(_ detail: ShowDetail, hero: CGFloat, column: CGFloat) -> some View {
+    /// The words: under the poster on a phone, beside it wider, where the row has room for everything, the synopsis
+    /// keeps to 72 characters, and the episodes and the Playlist take the website's wider shapes.
+    @ViewBuilder private func words(_ detail: ShowDetail, width: CGFloat, column: CGFloat, wide: Bool) -> some View {
         let show = detail.show
         let selected = season ?? TitleLook.openingSeason(detail, asked: nil)
         let episodes = TitleLook.episodes(detail, season: selected)
@@ -1428,62 +1798,89 @@ struct ShowPage: View {
         let view = TitleLook.episodeView(chosen: nil, show: own, server: serverView)
         let overview = show.overview ?? ""
         let network = facts.network ?? ""
-        ScrollView {
-            VStack(alignment: .leading, spacing: 0) {
-                TitleBackdrop(url: client.backdropURL(show), height: hero)
-                VStack(alignment: .leading, spacing: 0) {
-                    TitlePoster(url: client.posterURL(show))
-                    VStack(alignment: .leading, spacing: 0) {
-                        TitleHeading(title: show.title, logo: attached?.hasLogo == true ? client.titleLogoURL(.show, show.id, version: show.updatedAt) : nil, width: column)
-                            .padding(.bottom, Tokens.Space.s2)
-                        meta(detail).padding(.bottom, Tokens.Space.s5)
-                        if !error.isEmpty { ProblemLine(error).padding(.bottom, Tokens.Space.s3) }
-                        actions(detail)
-                        if !overview.isEmpty {
-                            Text(overview)
-                                .font(.system(size: 15))
-                                .lineSpacing(6)
-                                .foregroundStyle(palette.text)
-                                .fixedSize(horizontal: false, vertical: true)
-                                .padding(.top, Tokens.Space.s6)
-                        }
-                        if let attached {
-                            TitleExtrasView(target: .show, attached: attached, listings: listings, libraryId: facts.libraryId, logos: logos, legal: legal)
-                                .padding(.top, overview.isEmpty ? Tokens.Space.s6 : Tokens.Space.s5)
-                        }
-                        seasonTabs(detail, selected: selected).padding(.top, Tokens.Space.s6)
-                        viewSwitch(current: view, own: !own.isEmpty).padding(.top, Tokens.Space.s2).padding(.bottom, Tokens.Space.s3)
-                        if view == "list" {
-                            TitleEpisodeTable(episodes: episodes, open: { go(.item($0.id)) }, play: play)
+        VStack(alignment: .leading, spacing: 0) {
+            TitleHeading(title: show.title, logo: attached?.hasLogo == true ? client.titleLogoURL(.show, show.id, version: show.updatedAt) : nil, width: column)
+                .padding(.bottom, Tokens.Space.s2)
+            meta(detail).padding(.bottom, Tokens.Space.s5)
+            if !error.isEmpty { ProblemLine(error).padding(.bottom, Tokens.Space.s3) }
+            if wide { wideActions(detail) } else { actions(detail) }
+            if !overview.isEmpty {
+                Text(overview)
+                    .font(.system(size: 15))
+                    .lineSpacing(6)
+                    .foregroundStyle(palette.text)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .measured(15, wide)
+                    .padding(.top, Tokens.Space.s6)
+            }
+            if let attached {
+                TitleExtrasView(target: .show, attached: attached, listings: listings, libraryId: facts.libraryId, logos: logos, legal: legal)
+                    .padding(.top, overview.isEmpty ? Tokens.Space.s6 : Tokens.Space.s5)
+            }
+            seasonTabs(detail, selected: selected).padding(.top, Tokens.Space.s6)
+            viewSwitch(current: view, own: !own.isEmpty).padding(.top, Tokens.Space.s2).padding(.bottom, Tokens.Space.s3)
+            if view == "list" {
+                if wide {
+                    TitleEpisodeTable(episodes: episodes, open: { go(.item($0.id)) }, play: play,
+                                      widePicture: CGFloat(TitleLook.playlistPicture(width: Double(width))))
+                } else {
+                    TitleEpisodeTable(episodes: episodes, open: { go(.item($0.id)) }, play: play)
+                }
+            } else {
+                VStack(alignment: .leading, spacing: Tokens.Space.s1) {
+                    ForEach(episodes) { episode in
+                        if wide {
+                            let card = TitleLook.episodeCard(width: Double(width))
+                            TitleEpisodeRow(episode: episode, open: { go(.item(episode.id)) }, play: { play(episode) },
+                                            picture: CGFloat(card.picture), gap: CGFloat(card.gap), lines: card.lines, measure: titleMeasure(13))
                         } else {
-                            VStack(alignment: .leading, spacing: Tokens.Space.s1) {
-                                ForEach(episodes) { episode in
-                                    TitleEpisodeRow(episode: episode, open: { go(.item(episode.id)) }, play: { play(episode) })
-                                }
-                            }
-                            .padding(.horizontal, -Tokens.Space.s2)
-                        }
-                        TitleBackLink(words: "Back to library") {
-                            if let library = model.libraries.first(where: { $0.id == facts.libraryId }) {
-                                model.openLibrary(library)
-                            } else if let library = facts.libraryId {
-                                go(.page("/library/\(library)"))
-                            }
-                        }
-                        .padding(.top, Tokens.Space.s8)
-                        if let credit = TitleLook.credit(provider: facts.provider, id: facts.providerId, show: true) {
-                            TitleFinePrint(markdown: credit).padding(.top, Tokens.Space.s3)
-                        }
-                        TitleLegalLine(notices: legal, kind: "metadata").padding(.top, Tokens.Space.s4)
-                        if !network.isEmpty, logos[LogoAnswer.key("network", network)]?.has == true {
-                            TitleLegalLine(notices: legal, kind: "logos").padding(.top, Tokens.Space.s4)
+                            TitleEpisodeRow(episode: episode, open: { go(.item(episode.id)) }, play: { play(episode) })
                         }
                     }
-                    .padding(.top, Tokens.Space.s5)
                 }
-                .frame(maxWidth: column, alignment: .leading)
-                .padding(.top, -96)
-                .padding(.horizontal, metrics.gutter)
+                .padding(.horizontal, -Tokens.Space.s2)
+            }
+            TitleBackLink(words: "Back to library") {
+                if let library = model.libraries.first(where: { $0.id == facts.libraryId }) {
+                    model.openLibrary(library)
+                } else if let library = facts.libraryId {
+                    go(.page("/library/\(library)"))
+                }
+            }
+            .padding(.top, Tokens.Space.s8)
+            if let credit = TitleLook.credit(provider: facts.provider, id: facts.providerId, show: true) {
+                TitleFinePrint(markdown: credit).padding(.top, Tokens.Space.s3)
+            }
+            TitleLegalLine(notices: legal, kind: "metadata").padding(.top, Tokens.Space.s4)
+            if !network.isEmpty, logos[LogoAnswer.key("network", network)]?.has == true {
+                TitleLegalLine(notices: legal, kind: "logos").padding(.top, Tokens.Space.s4)
+            }
+        }
+    }
+
+    @ViewBuilder private func page(_ detail: ShowDetail, layout: TitleLayout, width: CGFloat, column: CGFloat) -> some View {
+        let show = detail.show
+        ScrollView {
+            VStack(alignment: .leading, spacing: 0) {
+                TitleBackdrop(url: client.backdropURL(show), height: CGFloat(layout.heroHeight), wide: layout.wide)
+                if layout.wide {
+                    // The website's `.detail` grid: the poster in a column of its own, and the words beside it.
+                    HStack(alignment: .top, spacing: CGFloat(layout.gap)) {
+                        TitlePoster(url: client.posterURL(show), width: CGFloat(layout.posterWidth))
+                        words(detail, width: width, column: column, wide: true).frame(width: column, alignment: .leading)
+                    }
+                    .padding(.top, -CGFloat(layout.rise))
+                    .padding(.horizontal, metrics.gutter)
+                    .environment(\.titleWide, true)
+                } else {
+                    VStack(alignment: .leading, spacing: 0) {
+                        TitlePoster(url: client.posterURL(show))
+                        words(detail, width: width, column: column, wide: false).padding(.top, Tokens.Space.s5)
+                    }
+                    .frame(maxWidth: column, alignment: .leading)
+                    .padding(.top, -96)
+                    .padding(.horizontal, metrics.gutter)
+                }
                 #if os(iOS) || os(visionOS)
                 // The page has its own notice, so the foot is the version alone, as the website hides its general one.
                 PageFoot(notice: "")
@@ -1497,15 +1894,18 @@ struct ShowPage: View {
     var body: some View {
         GeometryReader { outer in
             let top = outer.safeAreaInsets.top
-            let hero = CGFloat(TitleLook.heroHeight(window: Double(outer.size.height + top + outer.safeAreaInsets.bottom)))
-            let column = min(outer.size.width - metrics.gutter * 2, 720)
+            let width = outer.size.width
+            let layout = TitleLayout(width: Double(width), window: Double(outer.size.height + top + outer.safeAreaInsets.bottom))
+            let column = layout.wide ? CGFloat(layout.column(width: Double(width), gutter: Double(metrics.gutter))) : min(width - metrics.gutter * 2, 720)
             ZStack(alignment: .top) {
                 if let detail {
-                    page(detail, hero: hero, column: column)
+                    page(detail, layout: layout, width: width, column: column)
                 } else if !error.isEmpty {
                     ProblemView(words: error, retry: { error = ""; Task { await load() } }).padding(.top, top + 48)
+                } else if layout.wide {
+                    TitleSpinner().padding(.top, top)
                 } else {
-                    TitleSkeleton(hero: hero)
+                    TitleSkeleton(hero: CGFloat(layout.heroHeight))
                 }
             }
             .ignoresSafeArea(edges: .top)
@@ -1569,21 +1969,27 @@ private struct TitleSmallGhostBody<Label: View>: View {
 
 /// The website's episode card: the picture 132 wide (the theme's radius) which plays it, with how far through and
 /// a mark once watched; beside it the number in 12 `textHint` before the title in 15 semibold, when it aired and how
-/// long it is, and two lines of what happens. Anywhere else on the row opens the episode's page.
+/// long it is, and two lines of what happens. Anywhere else on the row opens the episode's page. Above phone width
+/// the picture is clamp(150px, 20vw, 240px) wide, 16 from the words, with three lines kept to 72 characters.
 private struct TitleEpisodeRow: View {
     @Environment(\.client) private var client
     @Environment(\.palette) private var palette
     let episode: Item
     let open: () -> Void
     let play: () -> Void
+    var picture: CGFloat = 132
+    var gap: CGFloat = Tokens.Space.s3
+    var lines = 2
+    /// How wide what happens may be, above phone width.
+    var measure: CGFloat?
 
     private var thumb: some View {
         let shape = RoundedRectangle(cornerRadius: Tokens.Radius.md, style: .continuous)
         return ZStack {
             palette.card
-            ArtImage(url: client.posterURL(episode), width: 132, blank: true)
+            ArtImage(url: client.posterURL(episode), width: picture, blank: true)
         }
-        .frame(width: 132, height: 132 * 9 / 16)
+        .frame(width: picture, height: picture * 9 / 16)
         .overlay(alignment: .bottom) {
             if let fraction = episode.progressFraction {
                 GeometryReader { geo in
@@ -1612,7 +2018,7 @@ private struct TitleEpisodeRow: View {
     var body: some View {
         let line = TitleLook.episodeLine(episode)
         let number = episode.episodeLabel
-        HStack(alignment: .top, spacing: Tokens.Space.s3) {
+        HStack(alignment: .top, spacing: gap) {
             Button(action: play) { thumb }
                 .buttonStyle(TitlePress())
                 .accessibilityLabel("Play \(episode.title)")
@@ -1637,7 +2043,8 @@ private struct TitleEpisodeRow: View {
                         .font(.system(size: 13))
                         .lineSpacing(3)
                         .foregroundStyle(palette.textSecondary)
-                        .lineLimit(2)
+                        .lineLimit(lines)
+                        .measuredTo(measure)
                         .padding(.top, Tokens.Space.s2)
                 }
             }
@@ -1680,6 +2087,50 @@ private struct TitleEpisodeTable: View {
     let episodes: [Item]
     let open: (Item) -> Void
     let play: (Item) -> Void
+    /// Above phone width the table is the column's width, at most 900, with the picture this wide (72) in a column
+    /// that keeps its width, 12 more, and a long title wraps. Nil on a phone.
+    var widePicture: CGFloat?
+
+    private func wideCell<Content: View>(_ episode: Item, leading: CGFloat = Tokens.Space.s3, trailing: CGFloat = Tokens.Space.s3,
+                                         @ViewBuilder _ content: () -> Content) -> some View {
+        TitleTableCell(line: palette.border, leading: leading, trailing: trailing) { content() }
+            .contentShape(Rectangle())
+            .onTapGesture { open(episode) }
+    }
+
+    private func wideTable(_ picture: CGFloat) -> some View {
+        TitleTableLayout(columns: 7, fixed: [0], maxWidth: CGFloat(TitleLook.tableWidth)) {
+            TitleTableHead(words: "")
+            TitleTableHead(words: "#")
+            TitleTableHead(words: "Title")
+            TitleTableHead(words: "Aired")
+            TitleTableHead(words: "Length")
+            TitleTableHead(words: "")
+            TitleTableHead(words: "")
+            ForEach(episodes) { episode in
+                wideCell(episode, trailing: 0) {
+                    ZStack {
+                        palette.card
+                        ArtImage(url: client.posterURL(episode), width: picture, blank: true)
+                    }
+                    .frame(width: picture, height: picture * 9 / 16)
+                    .clipShape(RoundedRectangle(cornerRadius: Tokens.Radius.xs, style: .continuous))
+                }
+                wideCell(episode) { Text(TitleLook.playlistNumber(episode)).fontWeight(.semibold).foregroundStyle(palette.textHint).fixedSize() }
+                wideCell(episode) { Text(episode.title).foregroundStyle(palette.text).fixedSize(horizontal: false, vertical: true) }
+                wideCell(episode) { Text(episode.aired ?? "").foregroundStyle(palette.textHint).fixedSize() }
+                wideCell(episode) { Text((episode.runtimeSec ?? 0) > 0 ? TitleLook.clock(episode.runtimeSec) : "").foregroundStyle(palette.text).fixedSize() }
+                wideCell(episode) { state(episode).fixedSize() }
+                wideCell(episode) {
+                    Button { play(episode) } label: { Label("Play", systemImage: "play.fill") }
+                        .buttonStyle(TitleSmallButtonStyle())
+                        .fixedSize()
+                        .accessibilityLabel("Play \(episode.title)")
+                }
+            }
+        }
+        .font(.system(size: 14).monospacedDigit())
+    }
 
     private func head(_ words: String) -> some View {
         Text(words.uppercased())
@@ -1716,6 +2167,10 @@ private struct TitleEpisodeTable: View {
     }
 
     var body: some View {
+        if let widePicture { wideTable(widePicture) } else { phoneTable }
+    }
+
+    private var phoneTable: some View {
         ScrollView(.horizontal, showsIndicators: false) {
             Grid(alignment: .leading, horizontalSpacing: 0, verticalSpacing: 0) {
                 GridRow {
