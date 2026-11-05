@@ -79,6 +79,7 @@ import com.wittywilla.wittymediaclient.net.Item
 import com.wittywilla.wittymediaclient.net.SETTINGS_PATH
 import com.wittywilla.wittymediaclient.net.Show
 import com.wittywilla.wittymediaclient.net.problemWords
+import com.wittywilla.wittymediaclient.player.Streaming
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.delay
@@ -279,6 +280,7 @@ fun ProfileScreen(nav: Nav, s: Map<String, String>) {
             Secondary(server.url)
             if (server.fingerprint.isNotEmpty()) Secondary("${s["fingerprintLabel"]}: ${server.fingerprint}")
         }
+        StreamingChoice(nav)
         ActionButton("Server settings", { nav.push(Route.Page(SETTINGS_PATH)) }, Modifier.fillMaxWidth(), focusKey = "settings")
         ActionButton("Sign out", nav::signOut, Modifier.fillMaxWidth(), focusKey = "switch")
         ActionButton(s["changeServer"].orEmpty(), nav::changeServer, Modifier.fillMaxWidth(), focusKey = "server")
@@ -287,6 +289,25 @@ fun ProfileScreen(nav: Nav, s: Map<String, String>) {
         ActionButton("Licences", { nav.push(Route.Notices) }, Modifier.fillMaxWidth(), focusKey = "notices")
         ActionButton("This app's log", { nav.push(Route.Logs) }, Modifier.fillMaxWidth(), focusKey = "logs")
         Secondary(s["legalConnect"].orEmpty())
+    }
+}
+
+// This device's own choice of how video is sent. Robust helps on a poor connection, at home too.
+@Composable
+private fun StreamingChoice(nav: Nav) {
+    var choice by remember { mutableStateOf(nav.app.store.streaming) }
+    SectionTitle("Video on this device")
+    Secondary("Robust keeps playing on a poor connection, with a softer picture. The server's choice is Standard at home.")
+    Row(horizontalArrangement = Arrangement.spacedBy(Space.S2)) {
+        for (option in Streaming.choices) {
+            ActionButton(
+                Streaming.words(option),
+                { nav.app.store.streaming = option; choice = option },
+                pill = true,
+                selected = choice == option,
+                focusKey = "streaming-$option",
+            )
+        }
     }
 }
 

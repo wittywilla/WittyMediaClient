@@ -257,6 +257,9 @@ data class PlaybackRequest(
     val maxBitrateKbps: Int? = null,
     val forceTranscode: Boolean? = null,
     val flatten3d: Boolean? = null,
+    // Robust streaming: this device's choice (auto, standard, robust) and what its connection carried.
+    val streaming: String? = null,
+    val measuredKbps: Int? = null,
 )
 
 @Serializable
@@ -269,6 +272,13 @@ data class Capabilities(
     val setupRequired: Boolean = false,
     val features: List<String> = emptyList(),
     val minClientVersions: Map<String, String> = emptyMap(),
+    val playback: PlaybackCapabilities = PlaybackCapabilities(),
+)
+
+@Serializable
+data class PlaybackCapabilities(
+    // The server's streaming mode for viewers away from home. Empty from a server without robust streaming.
+    val remoteStreaming: String = "",
 )
 
 @Serializable

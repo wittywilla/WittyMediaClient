@@ -6,6 +6,7 @@ import android.security.keystore.KeyProperties
 import android.util.Base64
 import com.wittywilla.wittymediaclient.diag.ClientLog
 import com.wittywilla.wittymediaclient.net.json
+import com.wittywilla.wittymediaclient.player.Streaming
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.encodeToString
 import java.security.GeneralSecurityException
@@ -47,6 +48,11 @@ class SessionStore(context: Context) {
     var server: String
         get() = prefs.getString(KEY_SERVER, "") ?: ""
         set(v) = prefs.edit().putString(KEY_SERVER, v).apply()
+
+    // How this device asks for video: Streaming.AUTO, STANDARD or ROBUST.
+    var streaming: String
+        get() = Streaming.clean(prefs.getString(KEY_STREAMING, null))
+        set(v) = prefs.edit().putString(KEY_STREAMING, Streaming.clean(v)).apply()
 
     val signIn: SignIn?
         get() = runCatching { json.decodeFromString<SignIn>(decrypt(prefs.getString(KEY_TOKEN, "") ?: "")) }
@@ -122,6 +128,7 @@ class SessionStore(context: Context) {
         const val KEY_SERVER = "server"
         const val KEY_TOKEN = "signin"
         const val KEY_RECENT = "recent"
+        const val KEY_STREAMING = "streaming"
         const val KEYSTORE = "AndroidKeyStore"
         const val ALIAS = "wittymediaclient-session"
         const val TRANSFORM = "AES/GCM/NoPadding"

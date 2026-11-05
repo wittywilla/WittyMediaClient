@@ -286,6 +286,8 @@ fun PlayerScreen(nav: Nav, id: Long, startOver: Boolean) {
         try {
             if (ask.waitMs > 0) delay(ask.waitMs)
             if (item == null) item = api.item(id)
+            val streaming = nav.app.store.streaming
+            val measuredKbps = nav.app.measuredKbps(streaming)
             val answer = api.playback(
                 id,
                 PlaybackRequest(
@@ -294,6 +296,8 @@ fun PlayerScreen(nav: Nav, id: Long, startOver: Boolean) {
                     maxBitrateKbps = DeviceProfile.maxBitrateKbps(context),
                     forceTranscode = if (ask.convert) true else null,
                     flatten3d = if (ask.flatten3d) true else null,
+                    streaming = streaming,
+                    measuredKbps = measuredKbps,
                 ),
             )
             val before = stream
