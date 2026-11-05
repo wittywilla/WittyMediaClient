@@ -15,8 +15,8 @@ android {
         minSdk = 23
         // Target 37 adds a local-network permission: raise this with discovery tested on a device.
         targetSdk = 36
-        versionCode = 6
-        versionName = "0.3.0"
+        versionCode = 7
+        versionName = "0.4.0"
     }
 
     // One APK for each processor, as WebRTC's native library is 7 to 16 MB a processor, and a universal APK with all four

@@ -5,6 +5,8 @@ What changed in WittyMediaClient, newest first. What changed before it had a rep
 
 ## Unreleased
 
+## 0.4.0 (2026-11-05)
+
 - **Desktop: what plays keeps playing behind other windows.** WittyTV, films and music no longer slow or stop when the
   window is minimised, hidden or covered: while something plays, the server's page isn't throttled and the system isn't
   allowed to suspend the app (the screen may still turn off), and for half a minute after, so the next episode starts.
