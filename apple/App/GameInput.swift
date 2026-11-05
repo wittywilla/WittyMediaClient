@@ -82,6 +82,15 @@ final class GameInput {
     var onNotice: ((String) -> Void)?
     /// A controller became this port's player.
     var onJoin: ((Int) -> Void)?
+    /// A controller came or went: the touch controls show only while there's none.
+    var onPadsChanged: (() -> Void)?
+    /// Rumble for player 1 while they play by touch.
+    var onTouchRumble: ((Double) -> Void)?
+    /// What the touch controls hold, as player 1, and their stylus on a touch-screen console.
+    private var touchState = PadState(port: 0)
+    private var touchPointer = PointerState()
+
+    var hasPads: Bool { !pads.isEmpty }
 
     /// Who's on which player, for the menu: the controller and the profile it plays by.
     var players: [GamePlayer] {
@@ -205,6 +214,7 @@ final class GameInput {
         // Home, where the system lets it through, opens the menu, and so do Start and Select together.
         if announce { onNotice?("\(controller.vendorName ?? "A controller") is player \(port + 1)") }
         onJoin?(Int(port))
+        onPadsChanged?()
         Task { await loadProfile(for: id) }
         updateTurboTimer()
     }
@@ -223,6 +233,7 @@ final class GameInput {
         send?(released.encoded())
         sent[pad.port] = released
         onNotice?("Player \(pad.port + 1)'s controller disconnected")
+        onPadsChanged?()
     }
 
     /// The account's profile for this controller, console and game, over the console's defaults.
@@ -428,6 +439,24 @@ final class GameInput {
         return named[code]
     }
 
+    // MARK: Touch controls
+
+    func touch(_ state: PadState) {
+        var state = state
+        state.port = 0
+        guard state != touchState else { return }
+        touchState = state
+        flush(port: 0)
+    }
+
+    /// The stylus on a DS's or 3DS's lower screen. A lost release would hold it down: it goes more than once.
+    func touchStylus(_ state: PointerState) {
+        guard state != touchPointer else { return }
+        let released = touchPointer.pressed && !state.pressed
+        touchPointer = state
+        sendPointer(state, times: released ? 5 : 1)
+    }
+
     // MARK: Sending
 
     /// Everything on one player: their pad, and on player 1 the remote and keyboard too.
@@ -442,7 +471,7 @@ final class GameInput {
         if port == 0 {
             var keys = remote.state(held: remoteHeld.union(remotePad))
             let typed = keyboard.state(held: keysHeld)
-            keys = keys.merged(typed)
+            keys = keys.merged(typed).merged(touchState)
             let filtered = remoteShortcuts.filter(keys.buttons)
             keys.buttons = filtered.buttons
             for s in filtered.started { if s == .menu { onMenu?() } else { onShortcut?(s, true) } }
@@ -509,6 +538,7 @@ final class GameInput {
             let state = sent[port] ?? PadState(port: port)
             send?(state.encoded())
         }
+        if touchPointer.pressed { send?(touchPointer.encoded()) }
         for pad in pads.values {
             if pad.pointer.pressed { send?(pad.pointer.encoded()) }
             if let at = pad.startDownAt, Date().timeIntervalSince(at) >= 1 {
@@ -525,6 +555,11 @@ final class GameInput {
         for pad in pads.values { for s in pad.shortcuts.endAll() { onShortcut?(s, false) } }
         for s in remoteShortcuts.endAll() { onShortcut?(s, false) }
         keysHeld = []
+        touchState = PadState(port: 0)
+        if touchPointer.pressed {
+            touchPointer.pressed = false
+            for _ in 0..<5 { send?(touchPointer.encoded()) }
+        }
         for port in activePorts {
             let released = PadState(port: port)
             send?(released.encoded())
@@ -536,7 +571,11 @@ final class GameInput {
     // MARK: Rumble
 
     func rumble(port: Int, strength: Double) {
-        guard let pad = pads.values.first(where: { Int($0.port) == port }), pad.mapper.options.noRumble != true else { return }
+        guard let pad = pads.values.first(where: { Int($0.port) == port }) else {
+            if port == 0, strength > 0 { onTouchRumble?(strength) }
+            return
+        }
+        guard pad.mapper.options.noRumble != true else { return }
         if pad.haptics == nil {
             pad.haptics = pad.controller.haptics?.createEngine(withLocality: .default)
             try? pad.haptics?.start()

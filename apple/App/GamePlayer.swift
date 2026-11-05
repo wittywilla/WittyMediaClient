@@ -237,6 +237,13 @@ final class GamePlayerModel: ObservableObject {
     @Published private(set) var devices: [GamePortDevices] = []
     @Published private(set) var plugged: [Int: Int] = [:]
     @Published var leave = false
+    /// The console's controls, for drawing them on a touch screen.
+    @Published private(set) var controlsData: GameControls?
+    @Published private(set) var padsConnected = false
+    /// Whether this person wants touch controls on this device; they show only with no controller.
+    @Published var touchWanted: Bool = GamePlayerModel.touchByDefault {
+        didSet { UserDefaults.standard.set(touchWanted, forKey: "wittyplay.touch") }
+    }
 
     let host = GameHostController()
     private let input = GameInput()
@@ -267,10 +274,18 @@ final class GamePlayerModel: ObservableObject {
     var quickSlot: Int { max(1, min(99, Int(settings.number("states.quickSlot", 1)))) }
     var confirms: Bool { settings.flag("states.confirm", true) }
 
+    /// Touch layouts are saved per device, as the website saves them: an id of this device's own.
     static var deviceId: String {
         let key = "wittyplay.device"
         if let saved = UserDefaults.standard.string(forKey: key) { return saved }
-        let made = "appletv-" + UUID().uuidString.prefix(12).lowercased()
+        #if os(tvOS)
+        let kind = "appletv"
+        #elseif os(visionOS)
+        let kind = "vision"
+        #else
+        let kind = UIDevice.current.userInterfaceIdiom == .pad ? "ipad" : "iphone"
+        #endif
+        let made = kind + "-" + UUID().uuidString.prefix(12).lowercased()
         UserDefaults.standard.set(made, forKey: key)
         return made
     }
@@ -291,6 +306,12 @@ final class GamePlayerModel: ObservableObject {
         input.onShortcut = { [weak self] shortcut, down in self?.shortcut(shortcut, down) }
         input.onNotice = { [weak self] words in self?.say(words) }
         input.onJoin = { [weak self] port in self?.joined(port: port) }
+        input.onPadsChanged = { [weak self] in
+            guard let self else { return }
+            self.padsConnected = self.input.hasPads
+            self.players = self.input.players
+        }
+        input.onTouchRumble = { strength in Self.touchRumble(strength) }
         host.screen.onPress = { [weak self] name, down in self?.input.press(name, down: down) }
         host.screen.onKey = { [weak self] code, down in self?.input.typed(code, down: down) }
         host.screen.onMenu = { [weak self] in self?.openMenu() }
@@ -344,10 +365,12 @@ final class GamePlayerModel: ObservableObject {
             Task.detached { [client] in try? await client.stopGame(session.id) }
             return
         }
+        controlsData = controls
         consoleButtons = Set((controls?.pad?.buttons ?? []).map(\.id)).union([RetroPad.up, RetroPad.down, RetroPad.left, RetroPad.right])
         input.start(client: client, setup: GameInput.Setup(controls: controls, settings: settings, console: console, game: id, consoleButtons: consoleButtons,
                                                            pointer: controls?.pad?.pointer == true))
         players = input.players
+        padsConnected = input.hasPads
         connect()
         watchdog = Timer.scheduledTimer(withTimeInterval: 1, repeats: true) { [weak self] _ in
             Task { @MainActor in self?.watch() }
@@ -374,6 +397,59 @@ final class GamePlayerModel: ObservableObject {
         let bezel = settings.text("display.bezel", "none")
         pipeline?.renderer?.layout = (settings, aspect, frame, turns, bezel == "none" ? 0 : settings.number("display.bezelInset", 0))
         pipeline?.draw()
+    }
+
+    // MARK: Touch controls
+
+    /// On by default where the screen is touched; a Vision Pro is played with a controller.
+    static var touchByDefault: Bool {
+        #if os(iOS)
+        return UserDefaults.standard.object(forKey: "wittyplay.touch") as? Bool ?? true
+        #else
+        return UserDefaults.standard.object(forKey: "wittyplay.touch") as? Bool ?? false
+        #endif
+    }
+
+    var touchShown: Bool {
+        #if os(tvOS)
+        return false
+        #else
+        return touchWanted && !padsConnected && !(controlsData?.controls ?? []).isEmpty
+        #endif
+    }
+
+    /// A DS or 3DS: a finger on the picture is the stylus.
+    var touchScreenConsole: Bool { controlsData?.pad?.pointer == true }
+
+    /// What the fingers hold, from the touch controls over a screen of `size` points.
+    func touched(_ out: TouchOutput, size: CGSize) {
+        input.touch(out.padState(port: 0))
+        guard touchScreenConsole else { return }
+        if let at = out.stylus, let drawn = pipeline?.renderer?.drawnPicture {
+            let picture = (x: drawn.x * size.width, y: drawn.y * size.height, width: drawn.width * size.width, height: drawn.height * size.height)
+            let pointer = touchPointer(x: at.x, y: at.y, picture: picture, turns: drawn.turns, pressed: true)
+            lastStylus = pointer
+            input.touchStylus(pointer)
+        } else if lastStylus.pressed {
+            // Lifted where it last was.
+            lastStylus.pressed = false
+            input.touchStylus(lastStylus)
+        }
+    }
+    private var lastStylus = PointerState()
+
+    /// In portrait the picture moves up above the controls; otherwise it has the whole screen.
+    func placePicture(aboveControls: Bool) {
+        let area: (x: Double, y: Double, width: Double, height: Double) = aboveControls ? (0, 0, 1, 0.52) : (0, 0, 1, 1)
+        guard let renderer = pipeline?.renderer, renderer.area != area else { return }
+        renderer.area = area
+        pipeline?.draw()
+    }
+
+    private static func touchRumble(_ strength: Double) {
+        #if os(iOS)
+        UIImpactFeedbackGenerator(style: strength > 0.5 ? .heavy : .medium).impactOccurred()
+        #endif
     }
 
     // MARK: The connection
@@ -757,6 +833,12 @@ struct GamePlayerScreen: View {
             GameScreen(host: game.host, playing: !game.menuOpen && (game.phase == .playing || game.phase == .connecting))
                 .ignoresSafeArea()
                 .accessibilityLabel(game.session?.title ?? "Game")
+            #if !os(tvOS)
+            // The touch controls, or on a DS or 3DS with a controller, just the stylus.
+            if !game.menuOpen, game.phase == .playing || game.phase == .connecting, game.touchShown || game.touchScreenConsole {
+                TouchControlsOverlay(game: game, drawn: game.touchShown)
+            }
+            #endif
             status
             if !game.notice.isEmpty, !game.menuOpen {
                 VStack {
@@ -774,24 +856,22 @@ struct GamePlayerScreen: View {
                 .transition(.opacity)
             }
             #if !os(tvOS)
-            // No remote here: the menu has a button of its own.
+            // No remote here: the menu has a button of its own, top right as on the website, and
+            // the touch controls one to hide them beside it.
             if !game.menuOpen, game.phase == .playing || game.phase == .connecting {
                 VStack {
-                    HStack {
-                        Button { game.openMenu() } label: {
-                            Image(systemName: "pause.fill")
-                                .font(.title3)
-                                .foregroundStyle(palette.text)
-                                .frame(width: 44, height: 44)
-                                .background(Circle().fill(palette.panel.opacity(0.7)))
-                        }
-                        .buttonStyle(.plain)
-                        .accessibilityLabel("Game menu")
+                    HStack(spacing: 16) {
                         Spacer()
+                        if game.touchShown {
+                            cornerButton("eye.slash", label: "Hide touch controls") { game.touchWanted = false }
+                                .opacity(0.75)
+                        }
+                        cornerButton("line.3.horizontal", label: "Game menu") { game.openMenu() }
+                            .opacity(game.padsConnected ? 0.45 : 1)
                     }
                     Spacer()
                 }
-                .padding(Tokens.Space.s3)
+                .padding(8)
             }
             #endif
             if game.menuOpen {
@@ -800,6 +880,10 @@ struct GamePlayerScreen: View {
         }
         .toolbar(.hidden, for: .navigationBar)
         .toolbar(.hidden, for: .tabBar)
+        #if os(iOS)
+        .statusBarHidden()
+        .persistentSystemOverlays(.hidden)
+        #endif
         .onChange(of: game.leave) { leave in if leave { goBack() } }
         .onChange(of: scenePhase) { game.scene($0) }
         .task {
@@ -808,7 +892,34 @@ struct GamePlayerScreen: View {
             await game.begin(id: id, start: start, client: client)
         }
         .onDisappear { game.abandon() }
+        #if !os(tvOS)
+        .background(GeometryReader { geo in
+            Color.clear
+                .onAppear { placePicture(geo.size) }
+                .onChange(of: geo.size) { placePicture($0) }
+                .onChange(of: game.touchShown) { _ in placePicture(geo.size) }
+        })
+        #endif
     }
+
+    #if !os(tvOS)
+    /// Held upright with the controls showing, the picture goes above them.
+    private func placePicture(_ size: CGSize) {
+        game.placePicture(aboveControls: game.touchShown && TouchOrientation(width: size.width, height: size.height) == .portrait)
+    }
+
+    private func cornerButton(_ icon: String, label: String, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Image(systemName: icon)
+                .font(.system(size: 18, weight: .semibold))
+                .foregroundStyle(.white)
+                .frame(width: 40, height: 40)
+                .background(RoundedRectangle(cornerRadius: 10, style: .continuous).fill(Color(red: 20 / 255, green: 22 / 255, blue: 30 / 255).opacity(0.55)))
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(label)
+    }
+    #endif
 
     @ViewBuilder private var status: some View {
         switch game.phase {
@@ -1001,6 +1112,13 @@ private struct GameMenu: View {
                 if n != game.disc { row("Change to disc \(n + 1)", "opticaldisc", key: "disc\(n)", sub: "Disc \(game.disc + 1) is in") { game.changeDisc(n) } }
             }
         }
+        #if !os(tvOS)
+        row(game.touchWanted ? "Hide touch controls" : "Show touch controls", "hand.tap", key: "touch",
+            sub: game.padsConnected ? "They show while no controller is connected" : "") {
+            game.touchWanted.toggle()
+            game.closeMenu()
+        }
+        #endif
         row("Controllers", "gamecontroller", key: "pads", sub: game.players.isEmpty ? MenuWords.noPads : "\(game.players.count) connected") { game.page = .controllers }
         row("Reset", "arrow.counterclockwise", key: "reset") { if game.confirms { game.page = .reset } else { game.reset() } }
         row("Save and quit", "xmark", key: "quit") { if game.confirms { game.page = .quit } else { Task { await game.quit() } } }

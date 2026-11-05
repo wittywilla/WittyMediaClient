@@ -677,8 +677,16 @@ final class AppModel: ObservableObject {
     }
 
     private func openWaitingLink() {
+        #if DEBUG
+        // For checking a game on the simulator: `-WittyPlayOpenGame <id>` at launch opens its page
+        // on Apple TV; `-WittyPlayPlayGame <id>` plays it, on any device.
+        let play = UserDefaults.standard.integer(forKey: "WittyPlayPlayGame")
+        if play > 0, paths[.home]?.isEmpty ?? true {
+            paths[.home] = [.playGame(Int64(play), .resume)]
+            return
+        }
+        #endif
         #if DEBUG && os(tvOS)
-        // For checking a game on the simulator: `-WittyPlayOpenGame <id>` at launch opens its page.
         let game = UserDefaults.standard.integer(forKey: "WittyPlayOpenGame")
         if game > 0, paths[.home]?.isEmpty ?? true {
             paths[.home] = [.game(Int64(game))]

@@ -88,10 +88,10 @@ private struct TabRoot: View {
                     // A new identity for each game, so a second one gets a new player.
                     case .playGame(let id, let start): GamePlayerScreen(id: id, start: start).id("\(id)\(start)")
                     #else
-                    // The website plays games on these devices: see WebPlayerView.
                     case .gameLibrary(let library, _): LibraryView(library: library).plainNavigation()
                     case .game(let id): ItemView(id: id).plainNavigation()
-                    case .playGame(let id, _): ItemView(id: id).plainNavigation()
+                    // The same player as Apple TV's, with the account's touch controls.
+                    case .playGame(let id, let start): GamePlayerView(gameId: id, start: start).id("\(id)\(start)")
                     #endif
                     // A new identity for each thing played, so the next episode gets a new player
                     // and not the last one's state.
