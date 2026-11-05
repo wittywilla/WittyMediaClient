@@ -69,6 +69,15 @@ class SessionStore(context: Context) {
         prefs.edit().putString(KEY_THEME + server, choice).apply()
     }
 
+    // The libraries this profile added to a TV's top menu, by id, in the order added. Kept per server and per
+    // profile, on this device only.
+    fun topMenu(server: String, profile: String): List<Long> =
+        (prefs.getString("$KEY_TOP_MENU$server|$profile", "") ?: "").split(',').mapNotNull { it.toLongOrNull() }
+
+    fun keepTopMenu(server: String, profile: String, ids: List<Long>) {
+        prefs.edit().putString("$KEY_TOP_MENU$server|$profile", ids.joinToString(",")).apply()
+    }
+
     // A server's themes as last read, kept by id and the list's modTime, so they're read again only when they change.
     fun themeTokens(server: String, id: String, modTime: Long): String? =
         prefs.getString("$KEY_TOKENS$server|$id|$modTime", null)
@@ -144,6 +153,7 @@ class SessionStore(context: Context) {
         const val KEY_TOKEN = "signin"
         const val KEY_RECENT = "recent"
         const val KEY_THEME = "theme:"
+        const val KEY_TOP_MENU = "topMenu:"
         const val KEY_TOKENS = "tokens:"
         const val KEYSTORE = "AndroidKeyStore"
         const val ALIAS = "wittymediaclient-session"

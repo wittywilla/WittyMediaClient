@@ -61,9 +61,11 @@ import androidx.core.view.WindowInsetsControllerCompat
 import com.wittywilla.wittymediaclient.WittyApp
 import com.wittywilla.wittymediaclient.diag.ClientLog
 import com.wittywilla.wittymediaclient.net.APP_BACK_PATH
+import com.wittywilla.wittymediaclient.net.APP_UP_PATH
 import com.wittywilla.wittymediaclient.net.ASK_OWN_BACK
 import com.wittywilla.wittymediaclient.net.ASK_SEES_PAD
 import com.wittywilla.wittymediaclient.net.OFFER_APP_BACK
+import com.wittywilla.wittymediaclient.net.OFFER_APP_UP
 import com.wittywilla.wittymediaclient.net.Api
 import com.wittywilla.wittymediaclient.net.TV_VIEWPORT
 import com.wittywilla.wittymediaclient.net.isWebLink
@@ -93,11 +95,14 @@ private class PageClient(
     private val onLoaded: () -> Unit,
     private val onAppBack: () -> Unit,
     private val isTv: Boolean,
+    // A page inside a TV's tab: Up from its top goes to the bar.
+    private val onAppUp: (() -> Unit)? = null,
 ) : WebViewClient() {
     override fun onPageCommitVisible(view: WebView, url: String) {
         // A TV counts its pixels in twos, which would give the page half the room a big screen has.
         if (isTv) view.evaluateJavascript(TV_VIEWPORT, null)
         view.evaluateJavascript(OFFER_APP_BACK, null)
+        if (onAppUp != null) view.evaluateJavascript(OFFER_APP_UP, null)
         onShowing()
     }
 
@@ -106,8 +111,11 @@ private class PageClient(
     override fun shouldOverrideUrlLoading(view: WebView, request: WebResourceRequest): Boolean {
         val url = request.url.toString()
         if (sameServer(url, base)) {
-            if (request.url.path != APP_BACK_PATH) return false
-            onAppBack()
+            when (request.url.path) {
+                APP_BACK_PATH -> onAppBack()
+                APP_UP_PATH -> onAppUp?.invoke()
+                else -> return false
+            }
             return true
         }
         if (request.isForMainFrame && isWebLink(url)) {
@@ -231,7 +239,20 @@ private fun saveDownload(context: Context, api: Api, url: String, userAgent: Str
 @Composable
 // public: a page anyone may read, opened before signing in. It goes without a sign-in cookie.
 // title: a native bar with Back and the page's name above it, as You's rows open pages.
-fun ServerPageScreen(nav: Nav, route: Route, path: String, keptToGames: Boolean, public: Boolean = false, title: String = "") {
+// `out` is where Back goes once the page has nothing of its own to close or go back to: by default the screen
+// before, and up to the bar for a TV's tab.
+fun ServerPageScreen(
+    nav: Nav,
+    route: Route,
+    path: String,
+    keptToGames: Boolean,
+    public: Boolean = false,
+    title: String = "",
+    out: (() -> Unit)? = null,
+    backEnabled: Boolean = true,
+    // A page inside a TV's tab: where Up goes from the top of the page.
+    upOut: (() -> Unit)? = null,
+) {
     val context = LocalContext.current
     val api = nav.app.api
     val background = MaterialTheme.colorScheme.background.toArgb()
@@ -276,8 +297,9 @@ fun ServerPageScreen(nav: Nav, route: Route, path: String, keptToGames: Boolean,
                 // The page follows the theme chosen on this device, as the app does.
                 if (!keptToGames) themeSyncScript(nav.themeChoice)?.let { web.evaluateJavascript(it, null) }
             },
-            onAppBack = { if (nav.current == route) nav.pop() },
+            onAppBack = { if (nav.current == route) out?.invoke() ?: nav.pop() },
             isTv = nav.app.isTv && !keptToGames,
+            onAppUp = upOut?.let { up -> { if (nav.current == route) up() } },
         )
         web.webChromeClient = PageChrome(
             onFullScreen = { view, callback -> fullScreen = view; endFullScreen = callback },
@@ -339,7 +361,7 @@ fun ServerPageScreen(nav: Nav, route: Route, path: String, keptToGames: Boolean,
         onDispose { if (whole) bars?.show(WindowInsetsCompat.Type.systemBars()) }
     }
 
-    BackHandler {
+    BackHandler(enabled = backEnabled) {
         when {
             fullScreen != null -> endFullScreen?.onCustomViewHidden()
             failed.isNotEmpty() || web == null -> nav.pop()
@@ -351,7 +373,7 @@ fun ServerPageScreen(nav: Nav, route: Route, path: String, keptToGames: Boolean,
                         web.dispatchKeyEvent(KeyEvent(KeyEvent.ACTION_UP, KeyEvent.KEYCODE_ESCAPE))
                     }
                     web.canGoBack() -> web.goBack()
-                    else -> nav.pop()
+                    else -> out?.invoke() ?: nav.pop()
                 }
             }
         }

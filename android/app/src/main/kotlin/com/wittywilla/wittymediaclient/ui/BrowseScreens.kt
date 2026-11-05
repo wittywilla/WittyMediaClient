@@ -14,6 +14,8 @@ import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.text.TextAutoSize
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawingPadding
 import androidx.compose.foundation.layout.statusBarsPadding
@@ -179,12 +181,14 @@ private fun PhoneHero(nav: Nav, featured: List<Item>) {
     }
 }
 
-// Also for a phone on its side, where a tall poster wouldn't leave room for its own title.
+// Also for a phone on its side, where a tall poster wouldn't leave room for its own title. On a TV the words may take
+// up to half the screen, and a long title wraps to three lines before it shrinks, to three quarters at most; the hero
+// grows to fit them (docs/APP-DESIGN.md, On a TV), as Apple TV's does.
 @Composable
 private fun TvHero(nav: Nav, item: Item) {
     val metrics = LocalMetrics.current
-    val height = if (metrics.tv) 340.dp else 260.dp
-    Box(Modifier.fillMaxWidth().height(height)) {
+    val title = MaterialTheme.typography.displaySmall
+    Box(Modifier.fillMaxWidth().heightIn(min = if (metrics.tv) metrics.u(TV_HERO_HEIGHT) else 260.dp)) {
         ServerImage(nav.app.api.backdropUrl(item), 960.dp, 16f / 9f, Modifier.matchParentSize().alpha(0.5f))
         Box(
             Modifier.matchParentSize().background(
@@ -196,17 +200,37 @@ private fun TvHero(nav: Nav, item: Item) {
                 Brush.verticalGradient(0.6f to Color.Transparent, 1f to MaterialTheme.colorScheme.background),
             ),
         )
-        Column(Modifier.align(Alignment.CenterStart).padding(start = metrics.gutter).widthIn(max = 560.dp), verticalArrangement = Arrangement.spacedBy(Space.S2)) {
-            Text(item.showTitle?.ifEmpty { null } ?: item.title, color = MaterialTheme.colorScheme.onBackground, style = MaterialTheme.typography.displaySmall, maxLines = 2, overflow = TextOverflow.Ellipsis)
+        Column(
+            Modifier
+                .align(Alignment.CenterStart)
+                .padding(start = metrics.gutter, top = if (metrics.tv) metrics.u(24) else 0.dp, bottom = if (metrics.tv) metrics.u(24) else 0.dp)
+                .widthIn(max = if (metrics.tv) metrics.u(TV_HERO_WORDS) else 560.dp),
+            verticalArrangement = Arrangement.spacedBy(if (metrics.tv) metrics.u(8) else Space.S2),
+        ) {
+            Text(
+                item.showTitle?.ifEmpty { null } ?: item.title,
+                color = MaterialTheme.colorScheme.onBackground,
+                style = title,
+                maxLines = if (metrics.tv) 3 else 2,
+                overflow = TextOverflow.Ellipsis,
+                autoSize = if (metrics.tv) TextAutoSize.StepBased(minFontSize = title.fontSize * 0.75f, maxFontSize = title.fontSize) else null,
+            )
             Secondary(listOfNotNull(item.year?.toString(), item.genres.firstOrNull(), item.contentRating.ifEmpty { null }).joinToString(" · "))
             if (item.overview.isNotEmpty()) Secondary(item.overview, maxLines = 2)
-            Row(Modifier.remoteRow(), horizontalArrangement = Arrangement.spacedBy(Space.S3)) {
+            Row(
+                Modifier.remoteRow().padding(top = if (metrics.tv) metrics.u(4) else 0.dp),
+                horizontalArrangement = Arrangement.spacedBy(if (metrics.tv) metrics.u(12) else Space.S3),
+            ) {
                 ActionButton("Play", { nav.play(item) }, primary = true, pill = true, icon = Icons.Filled.PlayArrow, focusKey = "hero-play", requestFocus = true)
                 ActionButton("More", { nav.open(item) }, pill = true, focusKey = "hero-more")
             }
         }
     }
 }
+
+// Apple TV's hero sizes, in TV units: at least 620 high, its words up to half the screen.
+private const val TV_HERO_HEIGHT = 620
+private const val TV_HERO_WORDS = 900
 
 // A library's name to go to, along the top like tabs.
 @Composable
@@ -267,6 +291,12 @@ private fun OnNowRow(nav: Nav, channels: List<GuideChannel>) {
 @Composable
 fun HomeScreen(nav: Nav, s: Map<String, String>) {
     val metrics = LocalMetrics.current
+    // A debug build's pinned hero (see MainActivity); nothing otherwise.
+    var pinnedHero by remember { mutableStateOf<Item?>(null) }
+    LaunchedEffect(nav.app.pinnedHero) {
+        val id = nav.app.pinnedHero
+        if (id > 0) pinnedHero = runCatching { nav.app.api.item(id) }.getOrNull()
+    }
     var home by remember { mutableStateOf(nav.remembered<Home>("home")) }
     var error by remember { mutableStateOf("") }
     var attempt by remember { mutableIntStateOf(0) }
@@ -301,7 +331,8 @@ fun HomeScreen(nav: Nav, s: Map<String, String>) {
         ) {
             val hubs = h.hubs.filter { it.items.isNotEmpty() || it.shows.isNotEmpty() }.distinctBy { it.key }
             // Featured first, and otherwise whatever someone was in the middle of.
-            val heroes = albumsOnce(h.featured.ifEmpty { hubs.firstOrNull()?.items.orEmpty() }.distinctBy { it.id }).take(HERO_ITEMS)
+            val heroes = (listOfNotNull(pinnedHero) + albumsOnce(h.featured.ifEmpty { hubs.firstOrNull()?.items.orEmpty() }.distinctBy { it.id }))
+                .distinctBy { it.id }.take(HERO_ITEMS)
             if (heroes.isNotEmpty()) {
                 item(key = "hero") { if (metrics.tv || sideways) TvHero(nav, heroes.first()) else PhoneHero(nav, heroes) }
             } else {
