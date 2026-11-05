@@ -161,7 +161,11 @@ The same as the web's, so each person keeps their colour on every device:
    `#0a6fb8`, `"Émile"` → `#0e7c6f` and `"Mum 👩"` → `#99690a` (an emoji outside the first plane) against this rule.
 3. **Initial:** the first letter of the trimmed name, upper case, white, bold, at 43% of the tile's size.
 4. **Shape:** a rounded square, radius 22% of its size. Small avatars (36 and under) are circles.
-5. **Sizes:** 28 in the floating bar, 88 in You's header (120 on a tablet), 104 in the phone's profile grid, 120 on the password
+5. **Names with a face:** wherever an avatar shows with the person's names (profile tiles, the password screen, You's
+   header, Sign in a TV), the profile name and the `@username` under it are **centred under the avatar**, on every
+   device. Where the screen's words start at the left, as on a TV's sign-in screens, the avatar and its names move
+   there together as one centred group; the names never align to the left edge on their own.
+6. **Sizes:** 28 in the floating bar, 88 in You's header (120 on a tablet), 104 in the phone's profile grid, 120 on the password
    screen, 140 in a tablet's grid, 200 on a TV.
 
 ### Profile tile
@@ -249,7 +253,8 @@ When the server shows no profiles (`style` isn't `profiles`), this screen is the
 
 ### 5. Password
 
-Back to the profiles. The avatar at 120, centred; the profile name in Headline; `@username` in Secondary when it differs;
+Back to the profiles. The avatar at 120 (200 on a TV), with the profile name in Headline and `@username` in Secondary
+(when it differs) centred under it, as one group: centred on a phone, at the start of the words on a TV;
 Body `passwordHint` ("Enter your password or PIN."); the password field ("Password", lock icon, show/hide), focused at
 once; Problem; Primary `signIn` ("Sign in"); Quiet `forgotPassword` ("Forgot your password?"), which opens the server's
 help on it inside the app (on Apple TV: a QR card to it).
