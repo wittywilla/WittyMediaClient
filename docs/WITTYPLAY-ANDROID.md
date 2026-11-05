@@ -32,7 +32,7 @@ The player talks to a `GameTransport` (`games/GameTransport.kt`): media and even
 - **Version 1:** `GET /play/{sid}/ws?video=h264|jpeg` (WittyMediaServer `docs/GAMING-API.md`), used by servers today.
 - **Version 2:** `GET /play/{sid}/stream` as a WebSocket (WittyMediaServer `docs/GAMING-STREAM.md`), used whenever a mode in the
   session's `modes` says `"stream": 2`. The hello goes first (this device's id and name, `seats`, `display.hz` and size,
-  `latency`, `video: ["h264"]` or none for JPEG, `audio: ["pcm"]`); frames come as `0x11` with their number and 90 kHz time,
+  `latency`, `video: ["h264"]` or `["jpeg"]` for a picture a frame, `audio: ["pcm"]`); frames come as `0x11` with their number and 90 kHz time,
   and a `{"type":"report","delayMs":N}` goes twice a second (`ArrivalDelay`), so a slow link can't fill with seconds of video.
   The stream's description sets the shape, rate and seats; `seats` follow the controllers plugged in; refusals and
   `ended` codes show in plain words; rumble lasts its `ms` unless renewed.

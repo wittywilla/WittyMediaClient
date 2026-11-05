@@ -64,7 +64,7 @@ data class StreamHello(
     val device: String,
     val name: String,
     val watch: Boolean = true,
-    // h264, or nothing for a JPEG a frame.
+    // h264, or jpeg for a picture a frame. An empty list means no preference, which a server answers with H.264.
     val video: List<String> = listOf("h264"),
     // pcm until this app decodes Opus.
     val audio: List<String> = listOf("pcm"),

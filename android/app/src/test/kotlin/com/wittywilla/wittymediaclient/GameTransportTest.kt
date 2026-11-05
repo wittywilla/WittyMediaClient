@@ -69,11 +69,11 @@ class GameTransportTest {
 
     @Test
     fun theHelloSaysWhatThisDeviceIs() {
-        val hello = StreamHello("WittyMediaClient Android 0.3.0", "android-abc", "Pixel 9", video = emptyList(), seats = listOf(0, 2), hz = 59.94f, width = 1080, height = 2424)
+        val hello = StreamHello("WittyMediaClient Android 0.3.0", "android-abc", "Pixel 9", video = listOf("jpeg"), seats = listOf(0, 2), hz = 59.94f, width = 1080, height = 2424)
         val o = hello.toJson(type = true)
         assertEquals("hello", o["type"]!!.jsonPrimitive.content)
         assertEquals(2, o["v"]!!.jsonPrimitive.content.toInt())
-        assertEquals(0, o["video"]!!.jsonArray.size) // a picture a frame
+        assertEquals("jpeg", o["video"]!!.jsonArray.single().jsonPrimitive.content) // a picture a frame
         assertEquals("pcm", o["audio"]!!.jsonArray[0].jsonPrimitive.content)
         assertEquals(listOf(0, 2), o["seats"]!!.jsonArray.map { it.jsonPrimitive.content.toInt() })
         assertEquals(59.94, o["display"]!!.jsonObject["hz"]!!.jsonPrimitive.content.toDouble(), 1e-3)

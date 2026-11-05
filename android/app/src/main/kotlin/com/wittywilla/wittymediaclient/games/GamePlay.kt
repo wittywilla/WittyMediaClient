@@ -303,7 +303,7 @@ class GamePlay(private val app: WittyApp, val gameId: Long, private var start: G
             app = "WittyMediaClient Android " + runCatching { app.packageManager.getPackageInfo(app.packageName, 0).versionName }.getOrNull().orEmpty(),
             device = deviceId,
             name = app.deviceName,
-            video = if (route.video == "jpeg") emptyList() else listOf("h264"),
+            video = listOf(route.video),
             seats = input.seatPorts(),
             hz = displayHz(),
             width = metrics.widthPixels,
