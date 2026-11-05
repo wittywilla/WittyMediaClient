@@ -33,6 +33,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.withFrameNanos
@@ -87,6 +88,15 @@ data class GuideSpot(val row: Int, val at: Long)
 // What the details sheet is about.
 data class GuideAsk(val channel: GuideChannel, val programme: GuideProgramme?, val cell: GuideCell, val day: Boolean = false)
 
+// What the grid's cells do, as this composition has it.
+private class GuideHandlers(
+    val focused: (Int, GuideCell, Boolean) -> Unit,
+    val activate: (GuideChannel, GuideCell) -> Unit,
+    val watch: (GuideChannel) -> Unit,
+    val earlier: () -> Unit,
+    val later: () -> Unit,
+)
+
 // Which channel to come back to when the guide shows again after watching one.
 object GuideReturn {
     var key = ""
@@ -109,7 +119,7 @@ fun Nav.watchChannel(key: String) {
 }
 
 @Composable
-fun GuideScreen(nav: Nav, inTab: Boolean) {
+fun GuideScreen(nav: Nav) {
     val api = nav.app.api
     val context = LocalContext.current
     val view = LocalView.current
@@ -302,8 +312,8 @@ fun GuideScreen(nav: Nav, inTab: Boolean) {
         }
     }
 
-    // The channel just watched, in the middle of the rows, at now, with the highlight on it. In the Live TV tab, focus
-    // stays on the tab's pill the first time, one press from the guide, as every tab's does.
+    // The channel just watched, in the middle of the rows, at now, with the highlight and focus on it: in the Live TV tab
+    // too, as Apple TV's guide places it.
     fun placeFirstFocus() {
         if (placed || store.total == null) return
         placed = true
@@ -317,37 +327,48 @@ fun GuideScreen(nav: Nav, inTab: Boolean) {
         spot = GuideSpot(r, at)
         scope.launch {
             store.ensure(r)
-            if (!inTab || back.isNotEmpty()) focusCell(r, at)
+            focusCell(r, at)
         }
     }
 
     // Focus has moved onto a cell, which the top of the page follows. Past either edge of the grid, the time moves.
-    val actions = CellActions(
-        focused = { r, cell, on ->
-            if (on) {
-                focusedKey = r to cell.start
-                spot = GuideSpot(r, maxOf(cell.start, from))
-            } else if (focusedKey == r to cell.start) {
-                focusedKey = null
-            }
-        },
-        activate = { c, cell -> activate(c, cell) },
-        more = { c, cell -> menu = c to cell },
-        watch = { c -> if (c.canTune) watch(c.key) },
-        // Past the left edge: half an hour earlier, unless it's as early as the guide goes.
-        earlier = {
-            if (from <= GuideRules.floorSlot(now) - GuideRules.EARLIEST) focusCell(spot.row, spot.at) else shift(-GuideRules.SLOT, from - GuideRules.SLOT)
-            true
-        },
-        // Past the right edge: on to what's after the cell that was highlighted.
-        later = {
-            val end = currentCell?.end ?: to
-            shift(GuideRules.SLOT, maxOf(end, to))
-            true
-        },
-        requester = { r, start -> requesters.getOrPut(r to start) { FocusRequester() } },
-        forget = { r, start, req -> if (requesters[r to start] === req) requesters.remove(r to start) },
+    // What the cells do, read afresh each time from this composition: one object for the whole grid, so a row whose
+    // own things haven't changed isn't drawn again when the highlight moves.
+    val latest = rememberUpdatedState(
+        GuideHandlers(
+            focused = { r, cell, on ->
+                if (on) {
+                    focusedKey = r to cell.start
+                    spot = GuideSpot(r, maxOf(cell.start, from))
+                } else if (focusedKey == r to cell.start) {
+                    focusedKey = null
+                }
+            },
+            activate = ::activate,
+            watch = { c -> if (c.canTune) watch(c.key) },
+            // Past the left edge: half an hour earlier, unless it's as early as the guide goes.
+            earlier = {
+                if (from <= GuideRules.floorSlot(now) - GuideRules.EARLIEST) focusCell(spot.row, spot.at) else shift(-GuideRules.SLOT, from - GuideRules.SLOT)
+            },
+            // Past the right edge: on to what's after the cell that was highlighted.
+            later = {
+                val end = currentCell?.end ?: to
+                shift(GuideRules.SLOT, maxOf(end, to))
+            },
+        ),
     )
+    val actions = remember {
+        CellActions(
+            focused = { r, cell, on -> latest.value.focused(r, cell, on) },
+            activate = { c, cell -> latest.value.activate(c, cell) },
+            more = { c, cell -> menu = c to cell },
+            watch = { c -> latest.value.watch(c) },
+            earlier = { latest.value.earlier(); true },
+            later = { latest.value.later(); true },
+            requester = { r, start -> requesters.getOrPut(r to start) { FocusRequester() } },
+            forget = { r, start, req -> if (requesters[r to start] === req) requesters.remove(r to start) },
+        )
+    }
 
     LaunchedEffect(api) {
         launch { TvLookStore.load(api, nav.effectiveThemeId(dark), appColours) }

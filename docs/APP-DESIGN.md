@@ -784,8 +784,7 @@ Apple TV and Android TV are the same app to look at. Sizes are given in TV units
   - **Games:** WittyPlay's couch library. With one games library it opens straight in; with several, one row per
     library, as Home's rows are: the library's name, its games' covers (each opens that game's page) and a pill that
     opens the whole library.
-  - **Live TV:** the WittyTV guide (below) in the account's WittyTV look, with Recordings reachable from it. Choosing
-    the tab keeps focus on its pill, as every tab does; coming back from a channel puts it on that channel's cell.
+  - **Live TV:** the WittyTV guide (below) in the account's WittyTV look, with Recordings reachable from it.
   - All six always show. A server with no games or no live TV shows that tab with a plain empty state saying what's
     missing and that an owner adds it on the server's website (`gamesNone` / `gamesNoneDetail`, `liveTvNone` /
     `liveTvNoneDetail`). Never a broken or blank page.

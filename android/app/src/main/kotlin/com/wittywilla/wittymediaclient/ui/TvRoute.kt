@@ -31,7 +31,7 @@ sealed interface TvScreen {
 @Composable
 fun TvRouteScreen(nav: Nav, route: TvRoute) {
     when (val screen = route.screen) {
-        TvScreen.Guide -> GuideScreen(nav, inTab = false)
+        TvScreen.Guide -> GuideScreen(nav)
         is TvScreen.Channel -> ChannelScreen(nav, screen.start)
         TvScreen.Recordings -> RecordingsScreen(nav)
     }

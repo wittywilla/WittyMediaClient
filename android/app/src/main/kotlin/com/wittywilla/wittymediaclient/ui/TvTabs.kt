@@ -502,7 +502,7 @@ fun LiveTvScreen(nav: Nav, s: Map<String, String>) {
         nav.hasGuide = has == true
     }
     when {
-        has == true -> GuideScreen(nav, inTab = true)
+        has == true -> GuideScreen(nav)
         has == false -> TvEmpty(s["liveTvNone"].orEmpty(), s["liveTvNoneDetail"].orEmpty())
         error.isNotEmpty() -> LoadFailed(nav, error) {
             error = ""

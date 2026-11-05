@@ -54,6 +54,9 @@ import java.util.Locale
 // RecordingsView, in the account's WittyTV look. What's recorded lands in a library the server's owner chose, which is
 // where it's played from: Play finds it there.
 
+// Apple TV's safe area at the sides, which the list keeps inside.
+private const val SAFE_SIDES = 80f
+
 // What's being asked before something goes.
 private data class Asking(val recording: Recording, val deleteFile: Boolean)
 
@@ -148,7 +151,8 @@ fun RecordingsScreen(nav: Nav) {
                 .fillMaxSize()
                 .background(p.bg)
                 .verticalScroll(rememberScrollState())
-                .padding(top = dress.pt(dress.top + 16), start = dress.pt(dress.edge), end = dress.pt(dress.edge), bottom = dress.pt(24 + dress.foot)),
+                // The page's edge inside the TV's safe area at the sides, as Apple TV's list keeps it; the top is the page's own.
+                .padding(top = dress.pt(dress.top + 16), start = dress.pt(SAFE_SIDES + dress.edge), end = dress.pt(SAFE_SIDES + dress.edge), bottom = dress.pt(24 + dress.foot)),
             verticalArrangement = Arrangement.spacedBy(dress.pt(4)),
         ) {
             Row(Modifier.fillMaxWidth().padding(bottom = dress.pt(12)), verticalAlignment = Alignment.CenterVertically) {

@@ -18,6 +18,7 @@ import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -155,6 +156,8 @@ fun TvDialog(title: String, message: String?, buttons: List<TvDialogButton>, onC
             Column(
                 Modifier
                     .width((584 * TV_UNIT).dp)
+                    // A long list keeps 60 clear above and below, and scrolls inside.
+                    .heightIn(max = ((1080 - 120) * TV_UNIT).dp)
                     .clip(RoundedCornerShape((50 * TV_UNIT).dp))
                     .background(Color(0xF21D1F23))
                     .border((1 * TV_UNIT).dp, Color.White.copy(alpha = 0.08f), RoundedCornerShape((50 * TV_UNIT).dp))
@@ -266,7 +269,8 @@ private fun SheetPage(maxWidth: Dp? = null, content: @Composable ColumnScope.() 
     val metrics = LocalMetrics.current
     Column(
         Modifier
-            .then(if (maxWidth != null) Modifier.widthIn(max = maxWidth) else Modifier.fillMaxWidth())
+            // As wide as it may be, as Apple TV's sheets are: a short programme's sheet is as wide as a long one's.
+            .then(if (maxWidth != null) Modifier.widthIn(max = maxWidth).fillMaxWidth() else Modifier.fillMaxWidth())
             .padding(horizontal = metrics.gutter, vertical = metrics.edge),
         verticalArrangement = Arrangement.spacedBy(metrics.u(16)),
         content = content,

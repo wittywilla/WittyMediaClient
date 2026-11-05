@@ -1,6 +1,5 @@
 package com.wittywilla.wittymediaclient.tv
 
-import android.graphics.Typeface
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.combinedClickable
@@ -52,6 +51,8 @@ import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.buildAnnotatedString
+import androidx.compose.ui.text.font.DeviceFontFamilyName
+import androidx.compose.ui.text.font.Font
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
@@ -125,7 +126,15 @@ class TvPaint(c: TvColours) {
 // Which family the words are in: the shape's own, or what Custom chose.
 enum class TvFamily { Plain, Narrow, Din, Mono, Serif }
 
-private val condensed: FontFamily by lazy { FontFamily(Typeface.create("sans-serif-condensed", Typeface.NORMAL)) }
+// Roboto Condensed, in each weight the page asks for: a family made from one typeface would lose its bold.
+private val condensed: FontFamily by lazy {
+    val name = DeviceFontFamilyName("sans-serif-condensed")
+    FontFamily(
+        listOf(FontWeight.Light, FontWeight.Normal, FontWeight.Medium, FontWeight.SemiBold, FontWeight.Bold, FontWeight.ExtraBold).flatMap { w ->
+            listOf(Font(name, w), Font(name, w, FontStyle.Italic))
+        },
+    )
+}
 
 // SwiftUI's weights by name, as Apple TV gives them.
 object W {
