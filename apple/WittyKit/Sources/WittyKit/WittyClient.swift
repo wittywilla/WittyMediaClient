@@ -299,6 +299,35 @@ public final class WittyClient: @unchecked Sendable {
     /// Something to watch next when there's no next episode, for the player's Watch next.
     public func recommend(after item: Int64) async throws -> Recommendation { try await get("/items/\(item)/recommend") }
 
+    // MARK: Music, as the website's player has it: see MusicLook.swift
+
+    /// A song's lyrics, looked for online when the server has none yet and may.
+    public func lyrics(item: Int64) async throws -> Lyrics { try await get("/music/lyrics/\(item)?fetch=1") }
+
+    /// The listener's own timing for a song's words.
+    public func setLyricsOffset(item: Int64, ms: Double) async throws {
+        _ = try await call("PUT", "/music/lyrics/\(item)/offset", body: try JSONEncoder().encode(["offsetMs": ms]))
+    }
+
+    /// The songs this person likes in a library.
+    public func likes(library: Int64) async throws -> [Int64] { try await list("/music/likes?library=\(library)") }
+
+    public func setLike(item: Int64, _ on: Bool) async throws {
+        _ = try await call("PUT", "/items/\(item)/reaction", body: try JSONEncoder().encode(["value": on ? 1 : 0]))
+    }
+
+    /// A station made from one song: songs like it, that one first.
+    public func radio(from item: Int64) async throws -> [Item] { try await list("/music/radio/\(item)") }
+
+    /// A new playlist of the person's own.
+    public func makePlaylist(named name: String) async throws -> TitleCollection {
+        try decoder.decode(TitleCollection.self, from: try await call("POST", "/collections", body: try JSONEncoder().encode(["name": name, "kind": "manual"])))
+    }
+
+    public func addToCollection(_ collection: Int64, items: [Int64]) async throws {
+        _ = try await call("POST", "/collections/\(collection)/items", body: try JSONEncoder().encode(["items": items]))
+    }
+
     /// Home's "Because you watch…" row.
     public func recommended() async throws -> Recommended { try await get("/me/recommended") }
 

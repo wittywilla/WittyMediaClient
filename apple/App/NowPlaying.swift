@@ -97,6 +97,7 @@ struct MiniPlayerSlot: View {
     @Environment(\.palette) private var palette
     @Environment(\.metrics) private var metrics
     let tab: AppTab
+    @State private var width: CGFloat = 0
 
     private var shows: Bool {
         guard listening.now != nil else { return false }
@@ -108,6 +109,14 @@ struct MiniPlayerSlot: View {
 
     var body: some View {
         if shows {
+            #if os(iOS) || os(visionOS)
+            // The website's bar: its phone layout, and its wider one from 900 across.
+            AudioBar(wide: width >= 900)
+                // Room above for the place, which straddles the bar's top, and on a wide one for the artwork.
+                .padding(.top, width >= 900 ? 22 : 7)
+                .background(GeometryReader { geo in Color.clear.preference(key: BarWidth.self, value: geo.size.width) })
+                .onPreferenceChange(BarWidth.self) { width = $0 }
+            #else
             if metrics.tv {
                 MiniPlayer()
             } else {
@@ -117,8 +126,14 @@ struct MiniPlayerSlot: View {
                     .shadow(color: .black.opacity(0.25), radius: 8, y: 2)
                     .padding(.horizontal, Tokens.Space.s3)
             }
+            #endif
         }
     }
+}
+
+private struct BarWidth: PreferenceKey {
+    static var defaultValue: CGFloat = 0
+    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) { value = nextValue() }
 }
 
 /// The whole-screen player over everything, opened from the mini player.
@@ -150,7 +165,15 @@ struct NowPlayingCover: ViewModifier {
             .fullScreenCover(isPresented: $listening.screenShown) { screen }
             .onPlayPauseCommand { if listening.now != nil { listening.toggle() } }
         #else
-        content.fullScreenCover(isPresented: $listening.screenShown) { screen }
+        // The website's Now Playing, always on black.
+        content.fullScreenCover(isPresented: $listening.screenShown) {
+            PhoneNowPlaying()
+                .environmentObject(model)
+                .environmentObject(listening)
+                .environment(\.palette, palette)
+                .environment(\.client, client)
+                .environment(\.metrics, metrics)
+        }
         #endif
     }
 }

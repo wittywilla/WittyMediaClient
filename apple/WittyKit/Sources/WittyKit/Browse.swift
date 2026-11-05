@@ -216,9 +216,13 @@ public struct TitleCollection: Decodable, Equatable, Identifiable {
     public let name: String
     public let kind: String?
     public let count: Int?
+    /// One the server keeps itself, such as Liked songs: nothing is added to it by hand.
+    public let system: String?
 
     /// Only a hand-made collection takes titles; a smart one fills itself.
     public var takesTitles: Bool { kind != "smart" }
+    /// A playlist songs can be added to, as the website's "Add to a playlist" lists them.
+    public var isPlaylist: Bool { kind == "manual" && (system ?? "").isEmpty }
 }
 
 public enum LibraryWords {

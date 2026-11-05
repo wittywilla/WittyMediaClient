@@ -59,6 +59,18 @@ final class Listening: ObservableObject {
     @Published private(set) var jumps = 0
     /// The whole-screen player is showing.
     @Published var screenShown = false
+    /// Opens it with the queue showing: the tablet bar's Queue button, as the website's.
+    var screenWithQueue = false
+
+    /// The website's sleep timer: stop at a time, or at the end of what's playing.
+    enum Sleep: Equatable {
+        case at(Date)
+        case afterThis
+    }
+    @Published var sleep: Sleep? {
+        didSet { scheduleSleep() }
+    }
+    private var sleepTask: Task<Void, Never>?
 
     var keepsPlace: Bool { now?.keepsPlace == true }
     /// Which kind each library is, for what lists of tracks don't say. Asked for once.
@@ -289,6 +301,33 @@ final class Listening: ObservableObject {
         publish()
     }
 
+    /// A speed chosen from the list in Now Playing.
+    func choose(speed: Float) {
+        setSpeed(speed, save: keepsPlace)
+    }
+
+    /// Takes away everything after the one playing, which carries on.
+    func clearUpNext() {
+        guard let at = rows.firstIndex(where: { $0.index == queue.current }) else { return }
+        for index in rows.suffix(from: at + 1).map(\.index).sorted(by: >) {
+            _ = queue.remove(at: index)
+        }
+        publish()
+        updateNowPlaying()
+    }
+
+    private func scheduleSleep() {
+        sleepTask?.cancel()
+        sleepTask = nil
+        guard case .at(let when) = sleep else { return }
+        sleepTask = Task { [weak self] in
+            try? await Task.sleep(nanoseconds: UInt64(max(0, when.timeIntervalSinceNow) * 1_000_000_000))
+            guard !Task.isCancelled, let self else { return }
+            self.pause()
+            self.sleep = nil
+        }
+    }
+
     func cycleSpeed() {
         setSpeed(ListeningRules.nextSpeed(after: speed), save: keepsPlace)
     }
@@ -304,6 +343,7 @@ final class Listening: ObservableObject {
     /// Clears the queue. Where it got to is saved first.
     func stop() {
         problem = ""
+        sleep = nil
         _ = reportLeaving(reachedEnd: false)
         clearAll()
     }
@@ -315,6 +355,7 @@ final class Listening: ObservableObject {
         let sent = reportLeaving(reachedEnd: false)
         clearAll()
         problem = ""
+        sleep = nil
         client = nil
         libraryTypes = [:]
         return sent
@@ -446,10 +487,17 @@ final class Listening: ObservableObject {
         _ = report(track, positionSec: duration, reachedEnd: true)
         heardSeconds = 0
         if let next = queue.afterEnd {
+            // The sleep timer's "after this one": the next is ready, and waits for Play.
+            let goOn = sleep != .afterThis
+            if !goOn {
+                sleep = nil
+                wantsToPlay = false
+            }
             queue.jump(to: next)
             publish()
-            open(startSec: 0, play: true)
+            open(startSec: 0, play: goOn)
         } else {
+            if sleep == .afterThis { sleep = nil }
             // The end of the queue. It stays, and Play starts it again.
             ended = true
             wantsToPlay = false
