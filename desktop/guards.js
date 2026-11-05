@@ -124,6 +124,25 @@ const cleanMessage = (message) => cleanText(message, MAX_MESSAGE)
 const validCode = (code) => typeof code === 'string' && code.length === CODE_DIGITS && /^[0-9]+$/.test(code)
 // A cookie's value: one line of plain characters, with nothing that ends the cookie.
 const validToken = (token) => typeof token === 'string' && token.length > 0 && token.length <= MAX_TOKEN && /^[\x21\x23-\x2b\x2d-\x3a\x3c-\x5b\x5d-\x7e]+$/.test(token)
+// A code to show for someone to approve, as the server writes it (BCDF-GHJK), and the secret
+// that collects the sign-in once they have. Nothing else gets as far as the screen or the server.
+const validPairCode = (code) => typeof code === 'string' && /^[A-Z0-9]{2,8}(-[A-Z0-9]{2,8}){0,2}$/.test(code)
+const validDeviceSecret = (secret) => typeof secret === 'string' && /^[0-9A-Za-z_-]{32,128}$/.test(secret)
+
+// A page of the server's, from a path the server gave, and only ever on that server.
+function serverPage(origin, path, fallback) {
+  const wanted = typeof path === 'string' && /^\/[\x21-\x7e]{0,200}$/.test(path) ? path : fallback
+  try {
+    const u = new URL(wanted, origin)
+    if (u.origin === origin) return u.href
+  } catch { /* the fallback, then */ }
+  return new URL(fallback, origin).href
+}
+
+// How long to wait before asking again, from what the server said: never so often it's rude.
+function pollSeconds(value, fallback = 3) {
+  return Number.isInteger(value) && value >= 1 ? Math.min(value, 60) : fallback
+}
 
 // Where the title bar asked for its menu: a point in the window, or wherever the pointer is.
 function menuPoint(at, width, height) {
@@ -133,5 +152,6 @@ function menuPoint(at, width, height) {
 
 module.exports = {
   PAGE_SCHEME, CONNECT_PAGE, BAR_PAGE, TV_MENU_PAGE, isConnectUrl, pageFile, navigation, outsideAddress, budget, downloadAllowed, readJson, whyFailed, isCertificateCode,
-  cleanText, cleanName, cleanMessage, validCode, validToken, menuPoint, MAX_ANSWER_BYTES, MAX_NAME,
+  cleanText, cleanName, cleanMessage, validCode, validToken, validPairCode, validDeviceSecret, serverPage, pollSeconds, menuPoint,
+  MAX_ANSWER_BYTES, MAX_NAME,
 }

@@ -18,7 +18,8 @@ func announce(_ words: String) {
     #endif
 }
 
-/// One line saying what went wrong.
+/// What went wrong, as on Android: a mark in the danger colour, and the words in the page's own
+/// colour so they can be read in every theme.
 struct ProblemLine: View {
     @Environment(\.palette) private var palette
     let words: String
@@ -26,12 +27,17 @@ struct ProblemLine: View {
     init(_ words: String) { self.words = words }
 
     var body: some View {
-        Label {
-            Text(words).fixedSize(horizontal: false, vertical: true)
-        } icon: {
-            Image(systemName: "exclamationmark.triangle.fill")
+        HStack(alignment: .top, spacing: Tokens.Space.s2) {
+            Text("!")
+                .font(.caption.weight(.bold))
+                .foregroundStyle(palette.background)
+                .frame(width: Tokens.Space.s5, height: Tokens.Space.s5)
+                .background(Circle().fill(palette.danger))
+            Text(words)
+                .font(.subheadline)
+                .foregroundStyle(palette.text)
+                .fixedSize(horizontal: false, vertical: true)
         }
-        .foregroundStyle(palette.danger)
         .accessibilityElement(children: .ignore)
         .accessibilityLabel("Problem: \(words)")
         .onAppear { announce("Problem: \(words)") }
@@ -46,12 +52,13 @@ struct ProblemView: View {
     var back: (() -> Void)?
 
     var body: some View {
-        VStack(spacing: Tokens.Space.s4) {
-            ProblemLine(words).frame(maxWidth: 640)
-            if let retry { Button("Try again", action: retry) }
-            if let back { Button(say("back"), action: back) }
+        VStack(alignment: .leading, spacing: Tokens.Space.s3) {
+            ProblemLine(words)
+            if let retry { Button("Try again", action: retry).action(primary: true) }
+            if let back { Button(say("back"), action: back).action() }
         }
-        .padding(Tokens.gutter)
+        .frame(maxWidth: 560, alignment: .leading)
+        .padding(Tokens.Space.s8)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 }
@@ -73,10 +80,10 @@ struct EmptyMessage: View {
 
     var body: some View {
         VStack(spacing: Tokens.Space.s2) {
-            Text(title).font(.wmSection).accessibilityAddTraits(.isHeader)
-            Text(detail).foregroundStyle(palette.textSecondary).multilineTextAlignment(.center)
+            Text(title).font(.wmSection).foregroundStyle(palette.text).accessibilityAddTraits(.isHeader)
+            Text(detail).font(.wmSecondary).foregroundStyle(palette.textSecondary).multilineTextAlignment(.center)
         }
-        .padding(Tokens.gutter)
+        .padding(Tokens.Space.s8)
         .frame(maxWidth: .infinity, minHeight: 200)
     }
 }
@@ -98,26 +105,6 @@ struct ChipLabel: View {
             .contentShape(Capsule())
     }
 }
-
-#if !os(tvOS)
-/// The one main action on a screen. Apple TV has its own: a system button lifts when focused.
-struct PillButtonStyle: ButtonStyle {
-    @Environment(\.palette) private var palette
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
-
-    func makeBody(configuration: Configuration) -> some View {
-        configuration.label
-            .font(.body.weight(.semibold))
-            .foregroundStyle(palette.onAccent)
-            .padding(.horizontal, Tokens.Space.s6)
-            .frame(minHeight: Tokens.minTarget)
-            .background(Capsule().fill(palette.accent))
-            .contentShape(Capsule())
-            .opacity(configuration.isPressed ? 0.85 : 1)
-            .scaleEffect(configuration.isPressed && !reduceMotion ? 0.975 : 1)
-    }
-}
-#endif
 
 /// Pictures are decoded at the size shown, and only so many bytes of them stay in memory: a poster
 /// held as pixels is many times the size of the file, and an Apple TV HD has 2 GB for everything.
@@ -152,11 +139,15 @@ struct ArtImage: View {
     let width: CGFloat
     /// All of it, with bars if it has to: a photo, rather than a poster that fills its card.
     var fit = false
+    /// The words that stand in for a missing picture, as on Android: usually the title.
+    var placeholder = ""
+    /// Nothing at all while there's no picture: a backdrop behind a page.
+    var blank = false
     @State private var image: CGImage?
 
     var body: some View {
         Rectangle()
-            .fill(palette.card)
+            .fill(blank ? Color.clear : palette.card)
             .overlay {
                 if let image {
                     if fit {
@@ -164,6 +155,15 @@ struct ArtImage: View {
                     } else {
                         Image(decorative: image, scale: 1).resizable().scaledToFill()
                     }
+                } else if blank {
+                    EmptyView()
+                } else if !placeholder.isEmpty {
+                    Text(placeholder)
+                        .font(.wmCardSub)
+                        .foregroundStyle(palette.textSecondary)
+                        .multilineTextAlignment(.center)
+                        .lineLimit(4)
+                        .padding(Tokens.Space.s2)
                 } else {
                     Image(systemName: "film").font(.title).foregroundStyle(palette.textHint)
                 }
@@ -218,13 +218,9 @@ extension View {
         #endif
     }
 
-    /// The main action on a screen.
-    @ViewBuilder func mainAction() -> some View {
-        #if os(tvOS)
-        self
-        #else
-        self.buttonStyle(PillButtonStyle())
-        #endif
+    /// The main action on a screen: Android's accent pill, on every device.
+    func mainAction() -> some View {
+        action(primary: true, pill: true)
     }
 
     /// Where focus goes first on Apple TV, within a scope marked by `focusRoot`.

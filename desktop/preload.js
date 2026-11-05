@@ -44,8 +44,12 @@ if (location.protocol === 'wittymedia-app:') {
     recent: () => ipcRenderer.invoke('recent'),
     open: (server) => ipcRenderer.invoke('open-server', server),
     redeem: (url, code) => ipcRenderer.invoke('redeem', url, code),
+    // A code shown here for a phone to approve. The secret that collects the sign-in stays in the app.
+    pairStart: (url) => ipcRenderer.invoke('pair-start', url),
+    pairPoll: () => ipcRenderer.invoke('pair-poll'),
+    pairStop: () => ipcRenderer.send('pair-stop'),
     openLogs: () => ipcRenderer.send('open-logs'),
-    ...(TV ? { topBack: () => ipcRenderer.send('tv-back', false) } : {}),
+    ...(TV ? { tv: true, topBack: () => ipcRenderer.send('tv-back', false) } : {}),
   })
 } else {
   if (TV) listenForBack()

@@ -21,7 +21,7 @@ should be expected to have some too.
 | Platform | Status | Notes |
 |---|---|---|
 | Windows 10 and later | **Ran** | From source and as a packaged app. The setup and uninstaller ran under Wine, not yet on a real Windows. |
-| macOS | **Ran** | The desktop app, from source and packaged, on macOS 27 on Apple silicon, where `npm run test:app` passes. Not on an Intel Mac or an older macOS. Its uninstaller only ran on Linux with a stand-in home folder. |
+| macOS | **Ran** | The desktop app, from source and packaged on a Mac (macOS 27) for Apple silicon and Intel, where `npm run test:app` passes. The Apple silicon one was opened, connected to a server and used by the owner; not run on an Intel Mac or an older macOS. Its uninstaller only ran on Linux with a stand-in home folder. It's the Mac's only client: the Apple project no longer builds a Mac app of its own. |
 | Linux | **Ran** | `.deb` and `.rpm` installed, opened on a virtual screen, upgraded and removed in containers. `.pacman` the same. The `.rpm` also ran on Fedora 44 in a virtual machine, and from source on Ubuntu 26.04. See [below](#freebsd-plasma-bigscreen-and-linux). |
 | FreeBSD 15.1, amd64 | **Ran** | In a virtual machine, as an installed package: picture and sound seen. Needs the system's Electron from the ports tree. See [below](#freebsd-plasma-bigscreen-and-linux). |
 | FreeBSD 14.4, amd64 | **Ran** | The same package, in a virtual machine: installed on a bare system, opened as far as the connect screen, upgraded and removed. No video played on it. |
@@ -37,9 +37,9 @@ should be expected to have some too.
 | Android phones | **Ran on an emulator** | Android 16 in full, and Android 6 (API 23, the oldest it supports) for connecting, playing and a network drop. No real phone yet. |
 | Android tablets | **Ran on an emulator** | Android 16, 2560×1600, sideways: signing in, Home, a library, an item, and the server's pages. They use the phone's screens with wider margins. |
 | Apple TV | **Compiled** | By Xcode 27 on macOS 27, unsigned, for the device and the simulator. Never run. [The first check](OWNER-STEPS.md#step-3-try-apple-needs-a-mac) is one script. |
-| iPhone, iPad | **Compiled** | The same. Never run. |
-| Mac | **Compiled** | The same, for Apple silicon and Intel in one app. Never run. |
-| Apple Vision Pro | **Compiled** | The iPhone and iPad app, built for visionOS 2 and later as an app of its own, with the iPad's layout: the sidebar, the server's pages in a web view, and picture in picture. Never run, not even in the simulator. |
+| iPhone | **Ran in the simulator** | iPhone 17, iOS 27: connected by address, signed in with a password, Home, a library, an item page, and a film played. Never on a real iPhone. |
+| iPad | **Compiled** | The same app as the iPhone, with the tablet's wider margins and cards. |
+| Apple Vision Pro | **Compiled** | The iPhone and iPad app, built for visionOS 2 and later as an app of its own, with the iPad's layout: the floating bar, the server's pages in a web view, and picture in picture. Never run, not even in the simulator. |
 | Apple Watch | **Not started** | watchOS has no web view and no player like the others', so it would be a different app, such as a remote. |
 | Windows 7 | **Not started** | Needs the owner's decision: see [the design](DESIGN.md#windows-7). |
 | LG webOS, Samsung Tizen | **Not started** | The connect screen they would use works without the desktop app, in the same browser engine as the desktop app. Older TV browsers are untested, and no package exists. |
@@ -198,7 +198,7 @@ again from the start, without following the redirect.
 
 ## Features
 
-Every client reaches everything the server does, except where this says it can't. Video has the native apps' own screens, and on Android so do music, audiobooks and
+Every client reaches everything the server does, except where this says it can't. Video has the native apps' own screens, and on Android and the Apple apps so do music, audiobooks and
 podcasts. Everything else opens **the server's own page inside the app**, signed in: in a web view on Android and on iPhone and iPad, with big screen mode at 1920 wide on a TV.
 Apple TV has no web view, as tvOS doesn't offer one to apps, so it has screens of its own for what it can do, and says plainly what it can't.
 
@@ -215,9 +215,9 @@ books and comics in the test media. **Ran** on the desktop is the real app under
 | Next episode | Ran: offered | Emulator (0.2.1) | Emulator (0.2.1) | Written | Written |
 | Skip intro | Not seen here: no intros in this media | Emulator (0.2.1) | Emulator (0.2.1) | Written | Written |
 | Search | Ran | Emulator, films and shows; everything else in the server's page | The same | Written, films and shows | Written, films and shows |
-| Music: albums, artists, songs, a queue | Ran: opens and plays | Own screens, Emulator: [below](#music-audiobooks-and-podcasts-on-android) | Own screens, Emulator: [below](#music-audiobooks-and-podcasts-on-android) | Own screen, written: albums and tracks only | Page, written |
-| Playlists, lyrics, a song's radio, following a podcast | Ran: opens | Page, behind More. Its sound stops when you leave it | The same | Not available | Page, written |
-| Audiobooks, podcasts | Ran: clock moved | Own screens, Emulator: place saved, Resume, speed | Own screens, Emulator: the same | Own screen, written: as music | Page, written |
+| Music: albums, artists, songs, a queue | Ran: opens and plays | Own screens, Emulator: [below](#music-audiobooks-and-podcasts-on-android) | Own screens, Emulator: [below](#music-audiobooks-and-podcasts-on-android) | Own screens, compiled: [below](#music-audiobooks-and-podcasts-on-apple) | Own screens, Simulator: [below](#music-audiobooks-and-podcasts-on-apple) |
+| Playlists, lyrics, a song's radio, following a podcast | Ran: opens | Page, behind More. Its sound stops when you leave it | The same | Not available | Page, behind More, written |
+| Audiobooks, podcasts | Ran: clock moved | Own screens, Emulator: place saved, Resume, speed | Own screens, Emulator: the same | Own screens, compiled | Own screens, Simulator: place saved, Resume, speed, with music standing in for a book |
 | Radio | Page opens. No station played: none set up | The same | The same | **Not available**: says so. Could be built | Page, written |
 | Books, comics, PDF | Ran: reader opens | Page: reader opens, Back leaves it | Page: reader opens | **Not available**: no web view to read in, and it says so | Page, written |
 | Photos | Ran: grid and viewer | Page: viewer with arrows, OK and Back | Page: viewer by touch, Back closes it | Own screen, written: left and right through a library | Page, written |
@@ -229,7 +229,7 @@ books and comics in the test media. **Ran** on the desktop is the real app under
 | Tuners, recordings | Page opens. No tuner here | The same | The same | Tuner channels listed, written. Recordings **not available** | Page, written |
 | Home videos | Page opens | Page opens | Page opens | Written | Written |
 | Collections | Page opens, none made | Page opens | Page opens | **Not available**: their titles still appear in libraries | Page, written |
-| Games in the page | Page opens. **No game played**: no core installed in the test server | The same | The same | **Not available** | Page, written |
+| Games in the page | Page opens. **No game played**: no core installed in the test server | The same | The same | **Own screens and player**: the library as couch mode, a game's page, and the server's stream in a native player with controllers, profiles, the game menu and the server's saves. Simulator, through a stand-in, as the local server's runner can't start a game on this Mac: see [WITTYPLAY-STREAMING.md](WITTYPLAY-STREAMING.md) | Page, written |
 | Games on someone's own PC | See [below](#games-on-someones-own-pc) | See below | See below | See below | See below |
 | Settings: libraries, profiles, modules, backup, logs and the rest | Ran: every page opened with no errors | Page opens | Page opens | **Not available**: use a phone or computer | Page, written |
 | Uploading from the device | Written: it opens the system's picker, not run here so as not to open a window | Written | Emulator: the picker opens, and Back returns to the page. No file sent | No | Written, the system's own |
@@ -285,6 +285,33 @@ Android 16 phone and 1080p TV emulators, against a real server with `saveMetadat
 - **What a page builds itself to save can't be downloaded,** such as a backup or a zipped log. It says to use a browser. A file the server sends by address can be.
 - **Uploading by remote on a TV:** whether a TV has a file picker at all differs by device. It says so if it hasn't.
 - **Remote and controller:** only emulated key presses and virtual controllers have reached the pages on a TV. See [Controllers](#controllers).
+
+### Music, audiobooks and podcasts on Apple
+
+The same screens and player as Android's, in SwiftUI on one `AVPlayer` (`apple/App/Listening.swift`), on iPhone, iPad, Apple Vision Pro and Apple TV. Seen on 2026-11-04
+in the iOS 27 simulator on an iPhone 18 Pro, against a real server with two made-up albums of MP3s. It has no audiobook or podcast library, so a build with a
+temporary switch treated music as books, and another forced the server to convert every song. Neither switch is in the code. Apple TV and Apple Vision Pro
+were compiled, for the simulator and for devices, and not run.
+
+| What | iPhone simulator |
+|---|---|
+| A library's albums and an album's page | Seen. Artists, Songs and More weren't opened |
+| Play, a track's row, the mini player above the pill, the whole-screen player upright and sideways | Seen |
+| Next, a seek on the bar, the next track by itself, the end of the queue, Play starting it again | Seen |
+| Queue: Change, move, remove | Seen. Add, Shuffle, Repeat and Clear weren't pressed |
+| Screen locked | Carried on to the next track. The system's now-playing service had title, artist, album, cover (768 × 768), queue place and the commands: books get Back 15 and Forward 30, songs Previous and Next. **The simulator draws no player on its lock screen,** so none was seen |
+| A song the server converts | Plays, seeks by asking for a new stream from that time (`timeOffsetSec`), and moves on at its end |
+| A book's place on pausing, and at the end of a part | Read back from the server: 5.5 seconds in, and the part before marked finished |
+| Resume, Start over, a part's "0:05 in" and "Finished", speed | Seen. Resume asked for the part from 5.5 seconds. Speed went to 1.25× |
+
+**Not seen:** any real device, and so no sound heard, nothing on a lock screen or in Control Center, no headphone or media keys, no phone call, no AirPlay or CarPlay.
+Nor the network dropping and coming back, a film pausing the music, signing out while playing, VoiceOver, an iPad, Apple Vision Pro or Apple TV running.
+
+**Limits:**
+
+- **The queue is kept while the app runs.** If the system ends it, the queue is gone. Books and podcasts keep their place on the server.
+- **One track after another, not gapless:** the next track is asked for when the last one ends.
+- **Sound in the server's page,** behind More, is a separate player, as on Android.
 
 ## Controllers
 
@@ -422,18 +449,18 @@ anything, the Keychain, the web view, the Top Shelf, or generating the Xcode pro
 | Device capabilities | **Written** | What each device really reports, and whether the choices fit real files |
 | Picture in picture | **Written** | Whether pausing in the background interferes. Plain video pauses when the app goes to the background |
 | The server's pages, iPhone and iPad | **Written** | Whether the sign-in cookie reaches them, saving a file, and whether the page's own bars sit well under the system's |
-| Music, photos and channels on Apple TV | **Written** | Focus on the lists, a song with no picture in the system's player, the next track following, and whether up and down reach a player that isn't the system's |
+| Music, audiobooks and podcasts | **Simulator**, iPhone | A real device's lock screen, Control Center, headphones and calls, and Apple TV's focus through the lists and the queue |
+| Photos and channels on Apple TV | **Written** | Whether up and down reach a player that isn't the system's |
 
 **Known limits:**
 
 - The server's growing streams start the player's clock at the place they start from, so the system's seek bar shows time from there,
   not the film's own time. It can only seek within what exists so far. Going further needs a track change or a new start.
-- Now-playing information comes from the system's player. It isn't written by hand, so a screen other than the player would need its
-  own when music arrives.
+- A film's now-playing information comes from the system's player. Music, audiobooks and podcasts write their own.
 - Posters are kept in memory, not on disk, so they're fetched again each time the app starts.
 - The hero is one picture from the server's featured list, and doesn't turn or page.
 - Search in the app's own screen finds films and shows, not episodes or music. On iPhone and iPad, the server's page finds the rest.
-- Apple TV shows one album's tracks from the first 500 items of a library, as the server has no list by album name.
+- Apple TV's older album list (`AlbumView`) reads the first 500 items of a library. Nothing opens it now: albums open the listening screens.
 - A two-factor prompt on password sign-in isn't built. Those accounts can sign in by code.
 - Apple TV's guide has WittyTV's colours and the owner's own channel logos, not its themes' layouts, type or preview, nor logos from the logo service. An app theme that suggests a WittyTV theme is only followed in the page.
 - There are no tests of the screens themselves. Anything that can be tested without one is in WittyKit.
@@ -471,6 +498,10 @@ checked package, no `file://` privileges):
   key, and trusting that key rather than a later one.
 - Starting with a remembered server, another key at it, a server that has gone, a damaged state file and a bad
   certificate, which also proves that listening to `certificate-error` doesn't accept one.
+- A code shown on the screen for a phone to approve: refused, then a new code, then approved and signed in, with the
+  secret that collects it never reaching the page, and nothing asked once the screen is left.
+- TV mode in a window: the words on the left and the actions on the right, the four-unit focus ring, Back, and with Reduce
+  Motion and forced colours emulated, nothing spinning and the QR code still black on white.
 
 On macOS 27 on Apple silicon, `npm run test:app` passes from source too. There it also checks the menu bar (Help, Change server
 only with a server open, zooming the page and not the title bar) and that the title bar leaves the window's buttons and Help to
@@ -482,7 +513,7 @@ buttons step aside for a video in full screen and come back.
 - **Sound.** Nothing here listens to it.
 - **Game controllers** and real TV remotes. Key presses were simulated.
 - **Linux** on a real computer. It ran in containers and virtual machines.
-- **macOS** on an Intel Mac or before macOS 27.
+- **macOS** beyond opening it and using it with a server: not the uninstaller or the firewall's question; not on an Intel Mac or before macOS 27.
 - On a Mac, the window's buttons and a double-click on the title bar, seen on screen: nothing here could capture the screen or click.
   Where the buttons sit matches the system's own (14 points, 9 in, in a 32-point title bar), measured with a window of its own.
   A double-click on the bar is answered by the system itself, as Chromium's source for this version of Electron shows, and the page never sees it.

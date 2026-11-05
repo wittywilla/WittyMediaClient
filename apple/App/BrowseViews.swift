@@ -1,10 +1,14 @@
 import SwiftUI
 import WittyKit
 
+// Home, libraries, shows and items, laid out as the Android app's BrowseScreens.kt: posters to swipe
+// through at the top of Home with a Play pill, the libraries as pills, rows of poster cards, and item
+// and show pages over their picture, dimmed and fading into the page.
+
 private func runtimeText(_ seconds: Double?) -> String? {
     guard let seconds, seconds > 0 else { return nil }
     let hours = Int(seconds) / 3600
-    let minutes = (Int(seconds) % 3600) / 60
+    let minutes = (Int(seconds) % 3600 + 30) / 60
     return hours > 0 ? "\(hours) h \(minutes) min" : "\(minutes) min"
 }
 
@@ -21,37 +25,81 @@ private func displayTitle(_ item: Item) -> String {
     (item.showTitle?.isEmpty == false ? item.showTitle : nil) ?? item.title
 }
 
-/// A poster with its words, all one thing to a screen reader, which also hears how far through it is.
+/// Where choosing something goes: this app's own screen where it has one, and otherwise the server's
+/// page, or on Apple TV what it can do.
+private func route(for item: Item) -> Route {
+    if item.isPlayable || item.isRigGame { return .item(item.id) }
+    // A song or a chapter opens its album or book, as on Android.
+    if item.isAudio, let library = item.libraryId { return .listeningAlbum(library: library, album: item.album ?? "", artist: item.albumArtistName) }
+    #if os(tvOS)
+    if item.isServerGame { return .game(item.id) }
+    if item.isPhoto, let library = item.libraryId { return .photo(library: library, id: item.id) }
+    return .item(item.id)
+    #else
+    return .page(ServerPages.path(item))
+    #endif
+}
+
+/// What Play does from Home: plays a film or an episode, and opens anything else where it's played.
+private func playRoute(for item: Item) -> Route {
+    if item.isPlayable { return .player(item.id, startOver: item.resumeSeconds == nil) }
+    return route(for: item)
+}
+
+private func route(for library: Library) -> Route {
+    #if os(tvOS)
+    return .library(library)
+    #else
+    return library.opensHere || library.hasListeningScreens ? .library(library) : .page(ServerPages.path(library))
+    #endif
+}
+
+// MARK: - Cards
+
+/// Android's PosterCard: the picture with its corners rounded and how far through it is, then the
+/// title and what's under it. All one thing to a screen reader. In a grid it takes the column's width.
 struct Tile: View {
+    @Environment(\.palette) private var palette
+    @Environment(\.metrics) private var metrics
     @Environment(\.dynamicTypeSize) private var typeSize
     let title: String
     let subtitle: String
     let url: URL?
     let route: Route
     var progress: Double?
+    /// Width over height: 2:3 for a poster, square for music.
+    var aspect: CGFloat = 2.0 / 3.0
+    /// The row's card width, or nil to fill a grid's column.
+    var width: CGFloat?
     let focus: FocusState<String?>.Binding
     let focusKey: String
 
     var body: some View {
         NavigationLink(value: route) {
             VStack(alignment: .leading, spacing: Tokens.Space.s1) {
-                ArtImage(url: url, width: Tokens.cardWidth)
-                    .frame(width: Tokens.cardWidth, height: Tokens.cardWidth * 1.5)
+                ArtImage(url: url, width: width ?? metrics.cardWidth, placeholder: title)
+                    .aspectRatio(aspect, contentMode: .fit)
                     .overlay(alignment: .bottom) {
-                        if let progress {
-                            ProgressView(value: progress)
-                                .progressViewStyle(.linear)
-                                .padding(Tokens.Space.s1)
-                                .accessibilityHidden(true)
-                        }
+                        if let progress { ProgressStrip(fraction: progress).padding(Tokens.Space.s1) }
                     }
-                    .clipShape(RoundedRectangle(cornerRadius: Tokens.Radius.md))
-                Text(title).font(.wmCard).lineLimit(typeSize.isAccessibilitySize ? 3 : 2)
+                    .clipShape(RoundedRectangle(cornerRadius: Tokens.Radius.md, style: .continuous))
+                Text(title)
+                    .font(.wmCard)
+                    .foregroundStyle(palette.text)
+                    .lineLimit(typeSize.isAccessibilitySize ? 3 : 2)
+                    .multilineTextAlignment(.leading)
+                    .padding(.horizontal, Tokens.Space.s1)
                 if !subtitle.isEmpty {
-                    Text(subtitle).font(.wmCardSub).foregroundStyle(.secondary).lineLimit(typeSize.isAccessibilitySize ? 2 : 1)
+                    Text(subtitle)
+                        .font(.wmCardSub)
+                        .foregroundStyle(palette.textSecondary)
+                        .lineLimit(typeSize.isAccessibilitySize ? 2 : 1)
+                        .padding(.horizontal, Tokens.Space.s1)
                 }
             }
-            .frame(width: Tokens.cardWidth, alignment: .leading)
+            .frame(width: width, alignment: .leading)
+            .frame(maxWidth: width == nil ? .infinity : nil, alignment: .leading)
+            .contentShape(Rectangle())
         }
         .tileStyle()
         .focused(focus, equals: focusKey)
@@ -62,30 +110,23 @@ struct Tile: View {
 
 private struct ItemTile: View {
     @Environment(\.client) private var client
+    @Environment(\.metrics) private var metrics
     let item: Item
+    var inRow = true
     let focus: FocusState<String?>.Binding
 
-    /// This app's own screen where it has one, and otherwise the server's page, or on Apple TV what it can do.
-    private var route: Route {
-        if item.isPlayable || item.isRigGame { return .item(item.id) }
-        #if os(tvOS)
-        if item.isAudio, let library = item.libraryId, let album = item.album, !album.isEmpty { return .album(library: library, name: album) }
-        if item.isPhoto, let library = item.libraryId { return .photo(library: library, id: item.id) }
-        return .item(item.id)
-        #else
-        return .page(ServerPages.path(item))
-        #endif
-    }
-
     var body: some View {
-        Tile(title: item.cardTitle, subtitle: item.cardSubtitle, url: client.posterURL(item), route: route,
-             progress: item.progressFraction, focus: focus, focusKey: "item\(item.id)")
+        Tile(title: item.cardTitle, subtitle: item.cardSubtitle, url: client.posterURL(item), route: route(for: item),
+             progress: item.progressFraction, aspect: item.isAudio ? 1 : 2.0 / 3.0,
+             width: inRow ? metrics.cardWidth : nil, focus: focus, focusKey: "item\(item.id)")
     }
 }
 
 private struct ShowTile: View {
     @Environment(\.client) private var client
+    @Environment(\.metrics) private var metrics
     let show: Show
+    var inRow = true
     let focus: FocusState<String?>.Binding
 
     private var subtitle: String {
@@ -95,22 +136,25 @@ private struct ShowTile: View {
 
     var body: some View {
         Tile(title: show.title, subtitle: subtitle, url: client.posterURL(show), route: .show(show.id),
-             focus: focus, focusKey: "show\(show.id)")
+             width: inRow ? metrics.cardWidth : nil, focus: focus, focusKey: "show\(show.id)")
     }
 }
 
-/// A grid of cards that fits the width. What it's given has already had repeats removed.
+/// Posters to fill the width. A card can be a little narrower than in a row: three fit across a phone.
+/// What it's given has already had repeats removed.
 struct CardGrid: View {
+    @Environment(\.metrics) private var metrics
     let items: [Item]
     let shows: [Show]
     let focus: FocusState<String?>.Binding
     var onLast: (() async -> Void)?
 
     var body: some View {
-        LazyVGrid(columns: [GridItem(.adaptive(minimum: Tokens.cardWidth), spacing: Tokens.Space.s4, alignment: .top)], spacing: Tokens.Space.s6) {
-            ForEach(shows) { ShowTile(show: $0, focus: focus) }
+        LazyVGrid(columns: [GridItem(.adaptive(minimum: metrics.cardWidth - Tokens.Space.s3), spacing: Tokens.Space.s2, alignment: .top)],
+                  alignment: .leading, spacing: Tokens.Space.s4) {
+            ForEach(shows) { ShowTile(show: $0, inRow: false, focus: focus) }
             ForEach(ServerPages.albumsOnce(items)) { item in
-                ItemTile(item: item, focus: focus).task {
+                ItemTile(item: item, inRow: false, focus: focus).task {
                     if item.id == items.last?.id { await onLast?() }
                 }
             }
@@ -122,68 +166,50 @@ struct CardGrid: View {
 /// A row of cards. On Apple TV a focus section, so moving up and down from anywhere along it finds the
 /// next row, however its cards line up.
 private struct HubRow: View {
+    @Environment(\.metrics) private var metrics
     let hub: Hub
     let focus: FocusState<String?>.Binding
 
     var body: some View {
         VStack(alignment: .leading, spacing: Tokens.Space.s2) {
-            Text(hub.title).font(.wmSection).accessibilityAddTraits(.isHeader)
-                .padding(.horizontal, Tokens.gutter)
+            SectionTitle(hub.title).padding(.horizontal, metrics.gutter)
             ScrollView(.horizontal, showsIndicators: false) {
-                LazyHStack(alignment: .top, spacing: Tokens.Space.s4) {
+                LazyHStack(alignment: .top, spacing: Tokens.Space.s3) {
                     ForEach(ServerPages.albumsOnce(uniqued(hub.items ?? []))) { ItemTile(item: $0, focus: focus) }
                     ForEach(uniqued(hub.shows ?? [])) { ShowTile(show: $0, focus: focus) }
                 }
-                .padding(.horizontal, Tokens.gutter)
-                .padding(.vertical, Tokens.focusRoom)
+                .padding(.horizontal, metrics.gutter)
+                .padding(.vertical, metrics.tv ? Tokens.focusRoom : Tokens.Space.s1)
             }
             .remoteSection()
         }
     }
 }
 
-/// The libraries along the top. Choosing one changes the page under them, with Back returning to Home.
-private struct LibraryTabs: View {
+/// The libraries as pills along the top, each opening its own screen, then the guide, collections and
+/// game PCs where there are any, as on Android.
+private struct LibraryPills: View {
+    @Environment(\.metrics) private var metrics
     let libraries: [Library]
-    @Binding var selected: Library?
+    var guide = false
     var gamePCs = false
-
-    private func tab(_ title: String, _ library: Library?) -> some View {
-        Button {
-            selected = library
-        } label: {
-            ChipLabel(title: title, selected: selected == library)
-        }
-        .buttonStyle(.plain)
-        .accessibilityAddTraits(selected == library ? [.isSelected] : [])
-    }
-
-    private func link(_ title: String, _ route: Route) -> some View {
-        NavigationLink(value: route) {
-            ChipLabel(title: title, selected: false)
-        }
-        .buttonStyle(.plain)
-    }
 
     var body: some View {
         ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: Tokens.Space.s2) {
-                tab("Home", nil)
-                #if os(tvOS)
-                link("TV guide", .guide)
-                ForEach(libraries) { tab($0.name, $0) }
-                #else
-                link("TV guide", .page(ServerPages.guide))
-                // Video opens under these tabs. The rest is the server's own page, on a screen of its own.
                 ForEach(libraries) { library in
-                    if library.opensHere { tab(library.name, library) } else { link(library.name, .page(ServerPages.path(library))) }
+                    NavigationLink(library.name, value: route(for: library)).action(pill: true)
                 }
-                link("Collections", .page(ServerPages.collections))
-                if gamePCs { link("Game PCs", .web(WebPlayer.gamePCsPath)) }
+                #if os(tvOS)
+                if guide { NavigationLink("TV guide", value: Route.guide).action(pill: true) }
+                #else
+                if guide { NavigationLink("TV guide", value: Route.page(ServerPages.guide)).action(pill: true) }
+                NavigationLink("Collections", value: Route.page(ServerPages.collections)).action(pill: true)
+                if gamePCs { NavigationLink("Game PCs", value: Route.web(WebPlayer.gamePCsPath)).action(pill: true) }
                 #endif
             }
-            .padding(.horizontal, Tokens.gutter)
-            .padding(.vertical, Tokens.focusRoom)
+            .padding(.horizontal, metrics.gutter)
+            .padding(.vertical, metrics.tv ? Tokens.focusRoom : Tokens.Space.s1)
         }
         .remoteSection()
     }
@@ -192,6 +218,7 @@ private struct LibraryTabs: View {
 /// What's on the channels right now, as on the server's own Home. Choosing one watches it.
 private struct OnNowRow: View {
     @Environment(\.palette) private var palette
+    @Environment(\.metrics) private var metrics
     let channels: [GuideChannel]
 
     private func route(_ channel: GuideChannel) -> Route {
@@ -204,129 +231,260 @@ private struct OnNowRow: View {
 
     var body: some View {
         let now = Int64(Date().timeIntervalSince1970)
+        let width = metrics.cardWidth * 1.5
         VStack(alignment: .leading, spacing: Tokens.Space.s2) {
-            Text("On TV now").font(.wmSection).accessibilityAddTraits(.isHeader)
-                .padding(.horizontal, Tokens.gutter)
+            SectionTitle("On TV now").padding(.horizontal, metrics.gutter)
             ScrollView(.horizontal, showsIndicators: false) {
-                LazyHStack(alignment: .top, spacing: Tokens.Space.s4) {
+                LazyHStack(alignment: .top, spacing: Tokens.Space.s3) {
                     ForEach(channels) { channel in
                         let on = channel.on(at: now)
+                        let words = on?.title ?? "Nothing listed"
                         NavigationLink(value: route(channel)) {
                             VStack(alignment: .leading, spacing: Tokens.Space.s1) {
-                                Text(channel.label).font(.wmCardSub).foregroundStyle(palette.textSecondary).lineLimit(1)
-                                Text(on?.title ?? "Nothing listed").font(.wmCard).lineLimit(2)
-                                if let on {
-                                    ProgressView(value: on.fraction(at: now)).progressViewStyle(.linear).accessibilityHidden(true)
-                                    Text("\(on.minutesLeft(at: now)) min left").font(.wmCardSub).foregroundStyle(palette.textSecondary)
-                                }
+                                RoundedRectangle(cornerRadius: Tokens.Radius.md, style: .continuous)
+                                    .fill(palette.card)
+                                    .aspectRatio(16.0 / 9.0, contentMode: .fit)
+                                    .overlay(alignment: .topLeading) {
+                                        if let number = channel.number, !number.isEmpty {
+                                            Text(number)
+                                                .font(.wmLabel)
+                                                .foregroundStyle(.white)
+                                                .padding(.horizontal, Tokens.Space.s1)
+                                                .background(RoundedRectangle(cornerRadius: Tokens.Radius.xs).fill(.black.opacity(0.6)))
+                                                .padding(Tokens.Space.s2)
+                                        }
+                                    }
+                                    .overlay(alignment: .center) {
+                                        Image(systemName: channel.radio == true ? "radio" : "tv")
+                                            .font(.title2)
+                                            .foregroundStyle(palette.textHint)
+                                    }
+                                    .overlay(alignment: .bottom) {
+                                        if let on { ProgressStrip(fraction: on.fraction(at: now)).padding(Tokens.Space.s1) }
+                                    }
+                                Text(words).font(.wmCard).foregroundStyle(palette.text).lineLimit(2).padding(.horizontal, Tokens.Space.s1)
+                                Text(channel.name + (on.map { " · \($0.minutesLeft(at: now)) min left" } ?? ""))
+                                    .font(.wmCardSub).foregroundStyle(palette.textSecondary).lineLimit(1)
+                                    .padding(.horizontal, Tokens.Space.s1)
                             }
-                            .frame(width: Tokens.cardWidth * 1.6, alignment: .leading)
-                            .padding(Tokens.Space.s3)
-                            .background(RoundedRectangle(cornerRadius: Tokens.Radius.md).fill(palette.card))
+                            .frame(width: width, alignment: .leading)
                         }
                         .tileStyle()
-                        .accessibilityLabel("\(channel.label): \(on?.title ?? "Nothing listed")")
+                        .accessibilityLabel("Channel \(channel.label): \(words)")
                     }
                 }
-                .padding(.horizontal, Tokens.gutter)
-                .padding(.vertical, Tokens.focusRoom)
+                .padding(.horizontal, metrics.gutter)
+                .padding(.vertical, metrics.tv ? Tokens.focusRoom : Tokens.Space.s1)
             }
             .remoteSection()
         }
     }
 }
 
-/// The big picture at the top with its one main action. A wide picture where there's room, and a
-/// tall poster on a phone. It doesn't turn by itself: nothing moves that nobody asked to move.
-private struct HeroView: View {
+// MARK: - The top of Home
+
+/// Which of the posters at the top is in front, as they scroll.
+private struct HeroFrontKey: PreferenceKey {
+    static var defaultValue: Int64?
+    static func reduce(value: inout Int64?, nextValue: () -> Int64?) { value = value ?? nextValue() }
+}
+
+private extension View {
+    /// The posters stop with one in the middle, where the system can do that.
+    @ViewBuilder func heroSnapping(side: CGFloat) -> some View {
+        if #available(iOS 17.0, tvOS 17.0, *) {
+            self.contentMargins(.horizontal, side, for: .scrollContent).scrollTargetBehavior(.viewAligned)
+        } else {
+            self
+        }
+    }
+
+    @ViewBuilder func heroSnapTargets(side: CGFloat) -> some View {
+        if #available(iOS 17.0, tvOS 17.0, *) {
+            self.scrollTargetLayout()
+        } else {
+            self.padding(.horizontal, side)
+        }
+    }
+}
+
+/// On a phone: posters to swipe through, with the one in front named below and a Play pill, in the
+/// layout people know from the big music and video apps. It's only a shortcut: every item is in the
+/// rows below too.
+private struct PhoneHero: View {
     @Environment(\.client) private var client
+    @Environment(\.palette) private var palette
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    let heroes: [Item]
+    let scope: Namespace.ID
+    /// The room the clock and battery take at the top.
+    var clock: CGFloat = 0
+    @State private var front: Int64?
+    private let posterWidth: CGFloat = 220
+
+    var body: some View {
+        let current = heroes.first { $0.id == front } ?? heroes[0]
+        VStack(spacing: Tokens.Space.s3) {
+            GeometryReader { geo in
+                let side = max((geo.size.width - posterWidth) / 2, 0)
+                ScrollView(.horizontal, showsIndicators: false) {
+                    LazyHStack(spacing: Tokens.Space.s3) {
+                        ForEach(heroes) { item in
+                            GeometryReader { place in
+                                let apart = min(abs(place.frame(in: .named("heroes")).midX - geo.size.width / 2) / (posterWidth + Tokens.Space.s3), 1)
+                                NavigationLink(value: route(for: item)) {
+                                    ArtImage(url: client.posterURL(item), width: posterWidth, placeholder: item.title)
+                                        .frame(width: posterWidth, height: posterWidth * 1.5)
+                                        .clipShape(RoundedRectangle(cornerRadius: Tokens.Radius.lg, style: .continuous))
+                                }
+                                .buttonStyle(.plain)
+                                .scaleEffect(reduceMotion ? 1 : 1 - apart * 0.12)
+                                .opacity(1 - apart * 0.4)
+                                .preference(key: HeroFrontKey.self, value: apart < 0.5 ? item.id : nil)
+                                .accessibilityLabel(displayTitle(item))
+                            }
+                            .frame(width: posterWidth, height: posterWidth * 1.5)
+                        }
+                    }
+                    .heroSnapTargets(side: side)
+                }
+                .heroSnapping(side: side)
+                .coordinateSpace(name: "heroes")
+            }
+            .frame(height: posterWidth * 1.5)
+            .onPreferenceChange(HeroFrontKey.self) { if let id = $0, id != front { front = id } }
+            Text(displayTitle(current))
+                .font(.wmHero)
+                .foregroundStyle(palette.text)
+                .lineLimit(2)
+                .multilineTextAlignment(.center)
+                .padding(.horizontal, Tokens.Space.s6)
+                .accessibilityAddTraits(.isHeader)
+            Secondary([current.year.map(String.init), current.genres?.first].compactMap { $0 }.joined(separator: " · "))
+            PlayOrOpen(item: current, route: playRoute(for: current)) {
+                Label(current.resumeSeconds == nil ? "Play" : "Resume", systemImage: "play.fill")
+            }
+            .mainAction()
+            .firstFocus(in: scope)
+            .accessibilityLabel("\(current.resumeSeconds == nil ? "Play" : "Resume") \(displayTitle(current))")
+        }
+        .padding(.top, clock + Tokens.Space.s12)
+        .frame(maxWidth: .infinity)
+        // The front poster's own colours would need a blur. A dimmed backdrop fading into the page
+        // gives much the same depth, and runs up under the clock.
+        .background(alignment: .top) {
+            GeometryReader { geo in
+                ArtImage(url: client.backdropURL(current), width: 600, blank: true)
+                    .frame(width: geo.size.width, height: geo.size.width)
+                    .opacity(0.35)
+                    .overlay(LinearGradient(stops: [.init(color: .clear, location: 0.3), .init(color: palette.background, location: 1)],
+                                            startPoint: .top, endPoint: .bottom))
+                    .clipped()
+            }
+            .accessibilityHidden(true)
+        }
+    }
+}
+
+/// On a TV, a tablet, or a phone on its side: the picture across the top with the title, its facts
+/// and Play beside it.
+private struct WideHero: View {
+    @Environment(\.client) private var client
+    @Environment(\.palette) private var palette
+    @Environment(\.metrics) private var metrics
     #if os(iOS) || os(visionOS)
     @Environment(\.horizontalSizeClass) private var sizeClass
     #endif
     let item: Item
     let scope: Namespace.ID
+    /// The room the clock and battery take at the top, which the picture runs under.
+    var clock: CGFloat = 0
 
-    private var wide: Bool {
+    private var height: CGFloat {
+        if metrics.tv { return Tokens.heroHeight }
         #if os(iOS) || os(visionOS)
-        return sizeClass == .regular
+        return sizeClass == .regular ? 340 : 260
         #else
-        return true
+        return 340
         #endif
     }
 
-    private var actions: some View {
-        HStack(spacing: Tokens.Space.s3) {
-            NavigationLink(value: Route.player(item.id, startOver: item.resumeSeconds == nil)) {
-                Label(item.resumeSeconds == nil ? "Play" : "Resume", systemImage: "play.fill")
-            }
-            .mainAction()
-            .firstFocus(in: scope)
-            .accessibilityLabel("\(item.resumeSeconds == nil ? "Play" : "Resume") \(displayTitle(item))")
-            NavigationLink(value: Route.item(item.id)) { Text("More") }
-                .buttonStyle(.bordered)
-                .accessibilityLabel("More about \(displayTitle(item))")
-        }
-    }
-
     var body: some View {
-        if wide {
-            ZStack(alignment: .bottomLeading) {
-                ArtImage(url: client.backdropURL(item), width: 1280)
-                    .frame(maxWidth: .infinity)
-                    .frame(height: Tokens.heroHeight)
-                LinearGradient(colors: [.clear, .black.opacity(0.85)], startPoint: .center, endPoint: .bottom)
-                    .accessibilityHidden(true)
-                VStack(alignment: .leading, spacing: Tokens.Space.s3) {
-                    Text(displayTitle(item)).font(.wmDisplay).foregroundStyle(.white).lineLimit(2).accessibilityAddTraits(.isHeader)
-                    Text(factLine(item)).foregroundStyle(.white.opacity(0.85))
-                    actions.padding(.top, Tokens.Space.s2).remoteSection()
+        ZStack(alignment: .leading) {
+            ArtImage(url: client.backdropURL(item), width: 1280, blank: true)
+                .frame(maxWidth: .infinity)
+                .frame(height: height + clock)
+                .opacity(0.5)
+                .clipped()
+                .overlay(LinearGradient(stops: [.init(color: palette.background, location: 0), .init(color: .clear, location: 0.75)],
+                                        startPoint: .leading, endPoint: .trailing))
+                .overlay(LinearGradient(stops: [.init(color: .clear, location: 0.6), .init(color: palette.background, location: 1)],
+                                        startPoint: .top, endPoint: .bottom))
+                .accessibilityHidden(true)
+            VStack(alignment: .leading, spacing: Tokens.Space.s2) {
+                Text(displayTitle(item)).font(.wmDisplay).foregroundStyle(palette.text).lineLimit(2).accessibilityAddTraits(.isHeader)
+                Secondary([item.year.map(String.init), item.genres?.first, item.contentRating].compactMap { $0 }.filter { !$0.isEmpty }.joined(separator: " · "))
+                if let overview = item.overview, !overview.isEmpty { Secondary(overview, lines: 2) }
+                HStack(spacing: Tokens.Space.s3) {
+                    PlayOrOpen(item: item, route: playRoute(for: item)) {
+                        Label(item.resumeSeconds == nil ? "Play" : "Resume", systemImage: "play.fill")
+                    }
+                    .mainAction()
+                    .firstFocus(in: scope)
+                    .accessibilityLabel("\(item.resumeSeconds == nil ? "Play" : "Resume") \(displayTitle(item))")
+                    NavigationLink("More", value: route(for: item)).action(pill: true)
+                        .accessibilityLabel("More about \(displayTitle(item))")
                 }
-                .padding(.horizontal, Tokens.gutter)
-                .padding(.bottom, Tokens.Space.s8)
+                .padding(.top, Tokens.Space.s1)
+                .remoteSection()
             }
-            .frame(height: Tokens.heroHeight)
-        } else {
-            VStack(spacing: Tokens.Space.s3) {
-                ArtImage(url: client.posterURL(item), width: Tokens.heroPosterWidth)
-                    .frame(width: Tokens.heroPosterWidth, height: Tokens.heroPosterWidth * 1.5)
-                    .clipShape(RoundedRectangle(cornerRadius: Tokens.Radius.lg))
-                    .shadow(color: .black.opacity(0.3), radius: 12, y: 4)
-                Text(displayTitle(item)).font(.title2.weight(.bold)).multilineTextAlignment(.center).accessibilityAddTraits(.isHeader)
-                Text(factLine(item)).font(.subheadline).foregroundStyle(.secondary)
-                actions
-            }
-            .padding(.horizontal, Tokens.gutter)
-            .frame(maxWidth: .infinity)
+            .frame(maxWidth: 560, alignment: .leading)
+            .padding(.horizontal, metrics.gutter)
+            .padding(.top, clock)
         }
+        .frame(height: height + clock)
     }
 }
+
+// MARK: - Home
 
 struct HomeView: View {
     @EnvironmentObject private var model: AppModel
     @Environment(\.client) private var client
     @Environment(\.palette) private var palette
+    @Environment(\.metrics) private var metrics
     #if os(iOS) || os(visionOS)
     @Environment(\.horizontalSizeClass) private var sizeClass
+    @Environment(\.verticalSizeClass) private var verticalSizeClass
     #endif
     @State private var home: Home?
     @State private var error = ""
     @State private var gamePCs = false
     @State private var onNow: [GuideChannel] = []
-    @State private var selected: Library?
     @FocusState private var focused: String?
     /// What had focus when this screen was left. Coming back puts it there.
     @State private var lastFocused: String?
     @Namespace private var scope
 
-    /// Sidebars list them already.
-    private var showsTabs: Bool {
-        #if os(macOS)
-        return false
-        #elseif os(iOS) || os(visionOS)
-        return sizeClass != .regular
+    /// Posters to swipe through on a phone held upright; the wide picture everywhere else.
+    private var phoneUpright: Bool {
+        #if os(iOS) || os(visionOS)
+        return sizeClass == .compact && verticalSizeClass != .compact
         #else
-        return true
+        return false
         #endif
+    }
+
+    /// Featured first, and otherwise whatever someone was in the middle of. Apple TV can only start
+    /// what it can play itself.
+    private func heroes(_ home: Home) -> [Item] {
+        let hubs = (home.hubs ?? []).filter { !$0.isEmpty }
+        let pool = (home.featured ?? []).isEmpty ? (hubs.first?.items ?? []) : (home.featured ?? [])
+        var list = ServerPages.albumsOnce(uniqued(pool))
+        #if os(tvOS)
+        list = list.filter(\.isPlayable)
+        #endif
+        return Array(list.prefix(8))
     }
 
     private func load() async {
@@ -353,28 +511,37 @@ struct HomeView: View {
     }
 
     @ViewBuilder private func page(_ home: Home) -> some View {
+        let heroes = heroes(home)
+        let hubs = uniqued(home.hubs ?? []).filter { !$0.isEmpty }
+        // The picture at the top runs up under the clock, as on Android, so the page itself does too
+        // and keeps the clock's room in its own spacing.
+        GeometryReader { outer in
+        let clock = outer.safeAreaInsets.top
         ScrollView {
-            LazyVStack(alignment: .leading, spacing: Tokens.Space.s6) {
-                if showsTabs {
-                    LibraryTabs(libraries: model.libraries, selected: $selected, gamePCs: gamePCs)
-                }
-                if !model.notice.isEmpty {
-                    ProblemLine(model.notice).padding(.horizontal, Tokens.gutter)
-                }
-                if let selected {
-                    LibraryContent(library: selected).id(selected.id)
-                } else {
-                    if let hero = home.hero { HeroView(item: hero, scope: scope) }
-                    if !onNow.isEmpty { OnNowRow(channels: onNow) }
-                    ForEach(uniqued(home.hubs ?? []).filter { !$0.isEmpty }) { HubRow(hub: $0, focus: $focused) }
-                    if home.hero == nil, (home.hubs ?? []).allSatisfy(\.isEmpty) {
-                        EmptyMessage(title: "Nothing here yet", detail: "Add a library on the server, or ask whoever runs it.")
+            LazyVStack(alignment: .leading, spacing: Tokens.Space.s5) {
+                if let first = heroes.first {
+                    if phoneUpright {
+                        PhoneHero(heroes: heroes, scope: scope, clock: clock)
+                    } else {
+                        WideHero(item: first, scope: scope, clock: clock)
                     }
                 }
+                if !model.notice.isEmpty {
+                    ProblemLine(model.notice).padding(.horizontal, metrics.gutter)
+                }
+                LibraryPills(libraries: model.libraries, guide: !model.channels.isEmpty, gamePCs: gamePCs)
+                if !onNow.isEmpty { OnNowRow(channels: onNow) }
+                ForEach(hubs) { HubRow(hub: $0, focus: $focused) }
+                if heroes.isEmpty, hubs.isEmpty {
+                    EmptyMessage(title: "Nothing here yet", detail: "Add a library on the server, or ask whoever runs it.")
+                }
             }
-            .padding(.vertical, Tokens.edge)
+            .padding(.top, heroes.isEmpty ? clock + Tokens.Space.s4 : 0)
+            .padding(.bottom, Tokens.Space.s6)
         }
+        .ignoresSafeArea(edges: .top)
         .focusRoot(scope)
+        }
     }
 
     var body: some View {
@@ -388,7 +555,6 @@ struct HomeView: View {
             }
         }
         .pageBackground(palette)
-        .onRemoteBack(selected == nil ? nil : { selected = nil })
         .onChange(of: focused) { new in
             if let new { lastFocused = new }
         }
@@ -401,7 +567,9 @@ struct HomeView: View {
     }
 }
 
-/// One library's cards, however it's framed. Grows as it's scrolled.
+// MARK: - Libraries
+
+/// One library's cards. Grows as it's scrolled.
 struct LibraryContent: View {
     @EnvironmentObject private var model: AppModel
     @Environment(\.client) private var client
@@ -447,15 +615,15 @@ struct LibraryContent: View {
     }
 
     var body: some View {
-        ZStack {
+        ZStack(alignment: .topLeading) {
             if !opens {
-                BrowserOnlyNote(library: library).padding(.horizontal, Tokens.gutter)
+                BrowserOnlyNote(library: library)
             } else if !error.isEmpty, total == nil {
                 ProblemView(words: error, retry: { error = ""; Task { await loadMore() } })
             } else if total == nil {
                 LoadingView()
             } else if total == 0 {
-                EmptyMessage(title: "Nothing in \(library.name) yet", detail: "Once the server has finished looking through its files, they'll be here.")
+                Secondary("Nothing here yet. Once the server has finished looking through its files, they'll be here.")
             } else {
                 VStack(alignment: .leading, spacing: Tokens.Space.s4) {
                     CardGrid(items: items, shows: shows, focus: $focused, onLast: {
@@ -463,47 +631,42 @@ struct LibraryContent: View {
                     })
                     if !error.isEmpty {
                         ProblemLine(error)
-                        Button("Try again") { error = ""; Task { await loadMore() } }
+                        Button("Try again") { error = ""; Task { await loadMore() } }.action()
                     }
                 }
-                .padding(.horizontal, Tokens.gutter)
             }
         }
         .task { if opens, total == nil { await loadMore() } }
     }
 }
 
-/// A library as a screen of its own, from a sidebar.
+/// A library as a screen of its own: its name, and its posters filling the width.
 struct LibraryView: View {
     @Environment(\.palette) private var palette
+    @Environment(\.metrics) private var metrics
     let library: Library
 
     var body: some View {
         ScrollView {
-            LibraryContent(library: library).padding(.vertical, Tokens.edge)
+            VStack(alignment: .leading, spacing: Tokens.Space.s3) {
+                Heading(library.name)
+                LibraryContent(library: library)
+            }
+            .padding(.horizontal, metrics.gutter)
+            .padding(.top, Tokens.Space.s4)
+            .padding(.bottom, Tokens.Space.s6)
         }
-        .navigationTitle(library.name)
         .pageBackground(palette)
     }
 }
 
-/// The wide picture at the top of a show or an item, fading into the page.
-private struct Backdrop: View {
-    @Environment(\.palette) private var palette
-    let url: URL?
-
-    var body: some View {
-        ArtImage(url: url, width: 1280)
-            .frame(maxWidth: .infinity)
-            .frame(height: Tokens.heroHeight * 0.6)
-            .overlay(LinearGradient(colors: [.clear, palette.background], startPoint: .center, endPoint: .bottom))
-    }
-}
+// MARK: - Shows
 
 struct ShowView: View {
     @EnvironmentObject private var model: AppModel
     @Environment(\.client) private var client
     @Environment(\.palette) private var palette
+    @Environment(\.metrics) private var metrics
     let id: Int64
     @State private var detail: ShowDetail?
     @State private var season: Int?
@@ -521,67 +684,74 @@ struct ShowView: View {
         }
     }
 
+    /// An episode: its picture, its number and title, how long it is and how far through.
     private func episodeRow(_ episode: Item) -> some View {
-        NavigationLink(value: Route.item(episode.id)) {
+        let watched = episode.progress?.watched == true
+        let facts = [runtimeText(episode.runtimeSec), watched ? "Watched" : nil].compactMap { $0 }.joined(separator: " · ")
+        let pictureWidth: CGFloat = metrics.tv ? 240 : 120
+        return NavigationLink(value: Route.item(episode.id)) {
             HStack(spacing: Tokens.Space.s3) {
+                ArtImage(url: client.posterURL(episode), width: pictureWidth, placeholder: episode.episodeLabel)
+                    .frame(width: pictureWidth, height: pictureWidth * 9 / 16)
+                    .clipShape(RoundedRectangle(cornerRadius: Tokens.Radius.sm, style: .continuous))
                 VStack(alignment: .leading, spacing: Tokens.Space.s1) {
                     Text("\(episode.episodeLabel)  \(episode.title)")
+                        .foregroundStyle(palette.text)
+                        .lineLimit(2)
+                        .multilineTextAlignment(.leading)
+                    if !facts.isEmpty { Secondary(facts, lines: 1) }
                     if let fraction = episode.progressFraction {
-                        ProgressView(value: fraction).progressViewStyle(.linear).accessibilityHidden(true)
+                        ProgressStrip(fraction: fraction, track: palette.border).padding(.top, Tokens.Space.s1)
                     }
                 }
                 Spacer(minLength: 0)
-                if episode.progress?.watched == true {
-                    Label("Watched", systemImage: "checkmark").font(.caption).foregroundStyle(.secondary)
-                }
             }
-            .frame(maxWidth: .infinity, minHeight: Tokens.minTarget, alignment: .leading)
-            .contentShape(Rectangle())
+            .padding(Tokens.Space.s2)
+            .frame(maxWidth: .infinity, alignment: .leading)
         }
-        .tileStyle()
+        .buttonStyle(SurfaceStyle(fill: palette.panel))
         .accessibilityLabel("\(episode.episodeLabel), \(episode.title)")
-        .accessibilityValue(episode.progress?.watched == true ? "Watched" : (episode.progressFraction.map { "\(Int($0 * 100)) percent watched" } ?? ""))
+        .accessibilityValue(watched ? "Watched" : (episode.progressFraction.map { "\(Int($0 * 100)) percent watched" } ?? ""))
     }
 
     var body: some View {
-        ZStack {
+        ZStack(alignment: .top) {
             if let detail {
                 let selected = season ?? detail.seasons?.first?.number
+                // The picture behind, fading into the page, as on an item.
+                PageBackdrop(url: client.backdropURL(detail.show)).ignoresSafeArea(edges: .top)
                 ScrollView {
-                    LazyVStack(alignment: .leading, spacing: Tokens.Space.s3) {
-                        Backdrop(url: client.backdropURL(detail.show))
-                        Group {
-                            Text(detail.show.title).font(.wmPage).accessibilityAddTraits(.isHeader)
-                            if let overview = detail.show.overview, !overview.isEmpty {
-                                Text(overview).foregroundStyle(palette.textSecondary).lineLimit(4)
-                            }
-                            if let next = detail.nextUpId {
-                                NavigationLink(value: Route.player(next, startOver: false)) {
-                                    Label("Play next up", systemImage: "play.fill")
-                                }
-                                .mainAction()
-                                .firstFocus(in: scope)
-                            }
-                            ScrollView(.horizontal, showsIndicators: false) {
-                                HStack(spacing: Tokens.Space.s2) {
-                                    ForEach(uniqued(detail.seasons ?? [])) { s in
-                                        Button {
-                                            season = s.number
-                                        } label: {
-                                            ChipLabel(title: s.displayTitle, selected: s.number == selected)
-                                        }
-                                        .buttonStyle(.plain)
-                                        .accessibilityAddTraits(s.number == selected ? [.isSelected] : [])
-                                    }
-                                }
-                                .padding(.vertical, Tokens.focusRoom)
-                            }
-                            .remoteSection()
-                            ForEach(uniqued(detail.episodes ?? []).filter { $0.season == selected }) { episodeRow($0) }
+                    LazyVStack(alignment: .leading, spacing: Tokens.Space.s2) {
+                        Heading(detail.show.title)
+                        if let overview = detail.show.overview, !overview.isEmpty {
+                            Secondary(overview, lines: 4)
                         }
-                        .padding(.horizontal, Tokens.gutter)
+                        if !error.isEmpty { ProblemLine(error) }
+                        if let next = detail.nextUpId {
+                            let label = (detail.episodes ?? []).first { $0.id == next }?.episodeLabel ?? ""
+                            NavigationLink(value: Route.item(next)) {
+                                Label(label.isEmpty ? "Next up" : "Next up: \(label)", systemImage: "play.fill")
+                            }
+                            .mainAction()
+                            .firstFocus(in: scope)
+                            .padding(.vertical, Tokens.Space.s1)
+                        }
+                        ScrollView(.horizontal, showsIndicators: false) {
+                            HStack(spacing: Tokens.Space.s2) {
+                                ForEach(uniqued(detail.seasons ?? [])) { s in
+                                    Button(s.displayTitle) { season = s.number }
+                                        .action(selected: s.number == selected, pill: true)
+                                        .firstFocus(in: scope, when: detail.nextUpId == nil && s.number == selected)
+                                }
+                            }
+                            .padding(.vertical, metrics.tv ? Tokens.focusRoom : Tokens.Space.s1)
+                        }
+                        .remoteSection()
+                        ForEach(uniqued(detail.episodes ?? []).filter { $0.season == selected }) { episodeRow($0) }
                     }
-                    .padding(.bottom, Tokens.edge)
+                    .padding(.horizontal, metrics.gutter)
+                    .padding(.top, Tokens.Space.s4)
+                    .padding(.bottom, Tokens.Space.s6)
                 }
                 .focusRoot(scope)
             } else if !error.isEmpty {
@@ -595,14 +765,29 @@ struct ShowView: View {
     }
 }
 
+// MARK: - Items
+
 struct ItemView: View {
     @EnvironmentObject private var model: AppModel
     @Environment(\.client) private var client
     @Environment(\.palette) private var palette
+    @Environment(\.metrics) private var metrics
+    #if os(iOS) || os(visionOS)
+    @Environment(\.horizontalSizeClass) private var sizeClass
+    #endif
     let id: Int64
     @State private var item: Item?
     @State private var error = ""
     @Namespace private var scope
+
+    /// The poster above the words on a phone held upright, beside them where there's room.
+    private var upright: Bool {
+        #if os(iOS) || os(visionOS)
+        return sizeClass == .compact
+        #else
+        return false
+        #endif
+    }
 
     private func load() async {
         do {
@@ -617,9 +802,10 @@ struct ItemView: View {
 
     @ViewBuilder private func actions(_ item: Item) -> some View {
         if item.isRigGame {
-            if let tagline = item.tagline, !tagline.isEmpty { Text(tagline).foregroundStyle(palette.textSecondary) }
+            if let tagline = item.tagline, !tagline.isEmpty { Secondary(tagline) }
             RigPlayPanel(item: item)
         } else if item.isPlayable {
+            // The server decides where Resume goes; nothing to resume means start at the beginning.
             HStack(spacing: Tokens.Space.s3) {
                 if let resume = item.resumeSeconds {
                     NavigationLink(value: Route.player(item.id, startOver: false)) {
@@ -628,7 +814,7 @@ struct ItemView: View {
                     .mainAction()
                     .firstFocus(in: scope)
                     .accessibilityLabel("Resume from \(runtimeText(resume) ?? "where you stopped")")
-                    NavigationLink("Start over", value: Route.player(item.id, startOver: true))
+                    NavigationLink("Start over", value: Route.player(item.id, startOver: true)).action(pill: true)
                 } else {
                     NavigationLink(value: Route.player(item.id, startOver: true)) {
                         Label("Play", systemImage: "play.fill")
@@ -650,30 +836,56 @@ struct ItemView: View {
         }
     }
 
+    @ViewBuilder private func words(_ item: Item) -> some View {
+        VStack(alignment: .leading, spacing: Tokens.Space.s3) {
+            if let show = item.showTitle, !show.isEmpty {
+                Secondary("\(show) · \(item.episodeLabel)")
+            }
+            Heading(item.title)
+            let facts = factLine(item)
+            if !facts.isEmpty { Secondary(facts) }
+            if let genres = item.genres, !genres.isEmpty { Secondary(genres.joined(separator: ", ")) }
+            if !error.isEmpty { ProblemLine(error) }
+            actions(item)
+            if let overview = item.overview, !overview.isEmpty {
+                Text(overview).foregroundStyle(palette.textSecondary).fixedSize(horizontal: false, vertical: true)
+            }
+        }
+    }
+
     var body: some View {
-        ZStack {
+        ZStack(alignment: .top) {
             if let item {
-                ScrollView {
-                    VStack(alignment: .leading, spacing: Tokens.Space.s3) {
-                        Backdrop(url: client.backdropURL(item))
-                        VStack(alignment: .leading, spacing: Tokens.Space.s3) {
-                            if let show = item.showTitle, !show.isEmpty {
-                                Text("\(show) · \(item.episodeLabel)").foregroundStyle(palette.textSecondary)
-                            }
-                            Text(item.title).font(.wmPage).accessibilityAddTraits(.isHeader)
-                            Text(factLine(item)).foregroundStyle(palette.textSecondary)
-                            if let genres = item.genres, !genres.isEmpty {
-                                Text(genres.joined(separator: ", ")).foregroundStyle(palette.textSecondary)
-                            }
-                            actions(item)
-                            if let overview = item.overview, !overview.isEmpty {
-                                Text(overview).fixedSize(horizontal: false, vertical: true)
+                let posterWidth = metrics.cardWidth * 1.4
+                let poster = ArtImage(url: client.posterURL(item), width: posterWidth, placeholder: item.title)
+                    .frame(width: posterWidth, height: posterWidth * 1.5)
+                    .clipShape(RoundedRectangle(cornerRadius: Tokens.Radius.lg, style: .continuous))
+                    .accessibilityHidden(true)
+                // The page runs up under the bar and the clock, as on Android, so its picture can.
+                GeometryReader { outer in
+                    let top = outer.safeAreaInsets.top
+                    ScrollView {
+                        Group {
+                            if upright {
+                                VStack(alignment: .leading, spacing: Tokens.Space.s4) {
+                                    poster.frame(maxWidth: .infinity)
+                                    words(item)
+                                }
+                            } else {
+                                HStack(alignment: .top, spacing: Tokens.Space.s6) {
+                                    poster
+                                    words(item).frame(minWidth: 280, maxWidth: 640, alignment: .leading)
+                                }
                             }
                         }
-                        .frame(maxWidth: 900, alignment: .leading)
-                        .padding(.horizontal, Tokens.gutter)
+                        .padding(.horizontal, metrics.gutter)
+                        .padding(.top, top + Tokens.Space.s6)
+                        .padding(.bottom, Tokens.Space.s6)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        // The picture behind, fading into the page, as on Home. It scrolls with the page.
+                        .background(alignment: .top) { PageBackdrop(url: client.backdropURL(item), height: 340 + top) }
                     }
-                    .padding(.bottom, Tokens.edge)
+                    .ignoresSafeArea(edges: .top)
                 }
                 .focusRoot(scope)
             } else if !error.isEmpty {

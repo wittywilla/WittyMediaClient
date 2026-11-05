@@ -9,7 +9,7 @@ apple/*.xcodeproj/
 apple/.build/
 apple/WittyKit/.build/
 apple/Generated/
-apple/DerivedData/
+apple/DerivedData*/
 android/.kotlin/
 go.work
 go.work.sum

@@ -8,13 +8,16 @@ public struct APIError: LocalizedError {
     public let message: String
     /// Where a redirect that wasn't followed pointed.
     public let location: String?
+    /// Signing in needs the code from an authenticator app, or the one given was wrong.
+    public let twoFactor: Bool
     public var errorDescription: String? { message }
     public var isExpiredSignIn: Bool { status == 401 }
 
-    public init(status: Int, message: String, location: String? = nil) {
+    public init(status: Int, message: String, location: String? = nil, twoFactor: Bool = false) {
         self.status = status
         self.message = message
         self.location = location
+        self.twoFactor = twoFactor
     }
 }
 
@@ -137,7 +140,8 @@ public final class WittyClient: @unchecked Sendable {
         answerLimit = quick ? AnswerLimit.unproved : AnswerLimit.signedIn
         let config = URLSessionConfiguration.ephemeral
         config.timeoutIntervalForRequest = quick ? 5 : 60 // the first play request probes the file
-        config.timeoutIntervalForResource = quick ? 5 : 180
+        // Starting a disc game can take minutes on a small server: see `playGame`.
+        config.timeoutIntervalForResource = quick ? 5 : 600
         // Only ever the bearer token: no cookies, no remembered passwords, nothing kept on disk.
         config.httpCookieStorage = nil
         config.httpCookieAcceptPolicy = .never
@@ -174,11 +178,13 @@ public final class WittyClient: @unchecked Sendable {
         }
     }
 
-    private func call(_ method: String, _ path: String, body: Data? = nil) async throws -> Data {
+    /// `wait` is how long to wait for the answer, for the few routes that take minutes on purpose.
+    func call(_ method: String, _ path: String, body: Data? = nil, wait: TimeInterval? = nil) async throws -> Data {
         guard let url = URL(string: base + apiPath + path) else {
             throw APIError(status: 0, message: "That server address can't be used.")
         }
         var request = URLRequest(url: url)
+        if let wait { request.timeoutInterval = wait }
         request.httpMethod = method
         request.httpBody = body
         if body != nil { request.setValue("application/json", forHTTPHeaderField: "Content-Type") }
@@ -199,11 +205,16 @@ public final class WittyClient: @unchecked Sendable {
             throw APIError(status: 0, message: "The server sent an answer that can't be read.")
         }
         guard (200..<300).contains(http.statusCode) else {
-            struct Failure: Decodable { let error: String? }
-            let said = (try? decoder.decode(Failure.self, from: data))?.error.map { PlainWords.clean($0) } ?? ""
+            struct Failure: Decodable {
+                let error: String?
+                let twoFactor: Bool?
+            }
+            let failure = try? decoder.decode(Failure.self, from: data)
+            let said = failure?.error.map { PlainWords.clean($0) } ?? ""
             let message = said.isEmpty ? "The server answered with an error (\(http.statusCode))." : said
             reportFailure(place, method: method, status: http.statusCode, message: message, request: http.value(forHTTPHeaderField: "X-Request-Id") ?? "")
-            throw APIError(status: http.statusCode, message: message, location: http.value(forHTTPHeaderField: "Location"))
+            throw APIError(status: http.statusCode, message: message, location: http.value(forHTTPHeaderField: "Location"),
+                           twoFactor: failure?.twoFactor == true)
         }
         return data
     }
@@ -261,6 +272,43 @@ public final class WittyClient: @unchecked Sendable {
         return trimmed.addingPercentEncoding(withAllowedCharacters: safe)
     }
 
+    /// A plain list, which a Go nil sends as null.
+    private func list<T: Decodable>(_ path: String) async throws -> [T] {
+        try decoder.decode([T]?.self, from: try await call("GET", path)) ?? []
+    }
+
+    /// One value in a query, as it is: nothing in a name can add a parameter or end the address.
+    public static func queryValue(_ text: String) -> String {
+        var safe = CharacterSet.alphanumerics
+        safe.insert(charactersIn: "-._~")
+        return text.addingPercentEncoding(withAllowedCharacters: safe) ?? ""
+    }
+
+    public func libraries() async throws -> [Library] { try await list("/libraries") }
+
+    /// Albums, books or podcasts: by `title`, `artist`, `added` or `year`. With an artist, only theirs.
+    public func albums(library: Int64, sort: String, artist: String? = nil) async throws -> [Album] {
+        try await list("/music/albums?library=\(library)&sort=\(Self.queryValue(sort))" + (artist.map { "&artist=\(Self.queryValue($0))" } ?? ""))
+    }
+
+    public func artists(library: Int64) async throws -> [Artist] { try await list("/music/artists?library=\(library)") }
+
+    /// The tracks of one album, in order. An empty album or artist means none or unknown: it is still asked for by name.
+    public func tracks(library: Int64, album: String, artist: String) async throws -> [Item] {
+        try await list("/music/tracks?library=\(library)&album=\(Self.queryValue(album))&artist=\(Self.queryValue(artist))")
+    }
+
+    /// Every song in a music library, a page at a time, by title.
+    public func songs(library: Int64, offset: Int, limit: Int) async throws -> [Item] {
+        try await list("/music/songs?library=\(library)&offset=\(offset)&limit=\(limit)&sort=title")
+    }
+
+    /// Music has no place to save, but what was heard counts towards the server's yearly summary.
+    public func recordListen(_ id: Int64, seconds: Double) async throws {
+        let body = try JSONEncoder().encode(["seconds": seconds])
+        _ = try await call("POST", "/items/\(id)/view", body: body)
+    }
+
     public func playback(_ id: Int64, _ request: PlaybackRequest) async throws -> Playback {
         let body = try JSONEncoder().encode(request)
         return try decoder.decode(Playback.self, from: try await call("POST", "/items/\(id)/playback", body: body))
@@ -290,8 +338,12 @@ public final class WittyClient: @unchecked Sendable {
         }
     }
 
-    public func login(name: String, password: String, device: String) async throws -> LoginResult {
-        let body = try JSONEncoder().encode(["name": name, "password": password, "device": device])
+    /// A refusal that wants the code from an authenticator app is an `APIError` with `twoFactor` set:
+    /// ask for it, then sign in again with the same name and password and the `code`.
+    public func login(name: String, password: String, device: String, code: String = "") async throws -> LoginResult {
+        var fields = ["name": name, "password": password, "device": device]
+        if !code.isEmpty { fields["code"] = code }
+        let body = try JSONEncoder().encode(fields)
         return try decoder.decode(LoginResult.self, from: try await call("POST", "/login", body: body))
     }
 
@@ -329,6 +381,117 @@ public final class WittyClient: @unchecked Sendable {
         _ = try await call("POST", "/tv/\(WittyClient.pathPart(key))/leave?viewer=\(WittyClient.pathPart(viewer))", body: Data("{}".utf8))
     }
 
+    // MARK: WittyTV: the guide, recordings and reminders
+
+    /// A page of the guide's channels with their schedule: see `GuideRules.query`.
+    public func guidePage(_ query: String) async throws -> Guide { try await get(query) }
+
+    /// Every channel's number and name, for going through them without the schedule.
+    public func lineup() async throws -> Guide { try await get("/guide?list=1&limit=20000") }
+
+    /// A day of one channel's schedule.
+    public func guideDay(_ key: String, from: Int64) async throws -> [GuideProgramme] {
+        let page: Guide = try await get("/guide?from=\(from)&hours=24&limit=1&channel=\(WittyClient.queryValue(key))")
+        return page.channels?.first?.programmes ?? []
+    }
+
+    /// What's coming up that matches some words.
+    public func searchGuide(_ words: String, days: Int = 7) async throws -> [GuideHit] {
+        guard let query = Self.searchQuery(words) else { return [] }
+        return try await list("/guide/search?q=\(query)&days=\(days)&limit=60")
+    }
+
+    public func setFavourite(_ key: String, _ on: Bool) async throws {
+        _ = try await call(on ? "PUT" : "DELETE", "/tv/favourites/\(WittyClient.pathPart(key))", body: on ? Data("{}".utf8) : nil)
+    }
+
+    public func recordings() async throws -> [Recording] { try await list("/recordings") }
+    public func recordingRules() async throws -> [RecordingRule] { try await list("/recording-rules") }
+
+    /// Records one programme of a tuner channel.
+    public func record(channel: String, title: String, sub: String?, start: Int64, stop: Int64) async throws {
+        struct Ask: Encodable { let channel: String; let title: String; let sub: String?; let start: Int64; let stop: Int64 }
+        _ = try await call("POST", "/recordings", body: try JSONEncoder().encode(Ask(channel: channel, title: title, sub: sub, start: start, stop: stop)))
+    }
+
+    /// Cancels one to come, or takes a finished one off the list. Only an administrator can delete its file too.
+    public func removeRecording(_ id: Int64, deleteFile: Bool = false) async throws {
+        _ = try await call("DELETE", "/recordings/\(id)" + (deleteFile ? "?deleteFile=1" : ""))
+    }
+
+    /// Records every airing of a title on a channel.
+    public func recordSeries(channel: String, title: String) async throws {
+        _ = try await call("POST", "/recording-rules", body: try JSONEncoder().encode(["channel": channel, "title": title]))
+    }
+
+    public func removeRecordingRule(_ id: Int64) async throws {
+        _ = try await call("DELETE", "/recording-rules/\(id)")
+    }
+
+    public func reminders() async throws -> [TvReminder] { try await list("/tv/reminders") }
+
+    public func addReminder(channel: String, title: String, sub: String?, start: Int64, end: Int64) async throws -> TvReminder {
+        struct Ask: Encodable { let channel: String; let title: String; let sub: String?; let start: Int64; let end: Int64 }
+        let body = try JSONEncoder().encode(Ask(channel: channel, title: title, sub: sub, start: start, end: end))
+        return try decoder.decode(TvReminder.self, from: try await call("POST", "/tv/reminders", body: body))
+    }
+
+    public func removeReminder(_ id: Int64) async throws {
+        _ = try await call("DELETE", "/tv/reminders/\(id)")
+    }
+
+    /// What the logo service has for some networks or studios, in one request.
+    public func lookupLogos(_ brands: [GuideBrand]) async throws -> [LogoInfo] {
+        struct Ask: Encodable { let logos: [[String: String]] }
+        struct Answer: Decodable { let logos: [LogoInfo]? }
+        let body = try JSONEncoder().encode(Ask(logos: brands.prefix(200).map { ["kind": $0.kind, "name": $0.name] }))
+        return try decoder.decode(Answer.self, from: try await call("POST", "/logos/lookup", body: body)).logos ?? []
+    }
+
+    /// A logo's picture, white for a dark background, dark for a light one, or as it is for one on a plate.
+    public func logoImageURL(_ logo: LogoInfo, variant: String) -> URL? {
+        guard let id = logo.id else { return nil }
+        return mediaURL("/api/logos/\(id)/image?variant=\(WittyClient.queryValue(variant))&v=\(logo.version ?? 0)")
+    }
+
+    /// The short legal notices by kind (`tv`, `logos`, `logosBrief` and so on): the same words everywhere.
+    public func legalNotices() async throws -> [String: String] {
+        struct Notice: Decodable { let text: String }
+        struct Notices: Decodable { let notices: [String: Notice]? }
+        let all: Notices = try await get("/legal/notices")
+        return (all.notices ?? [:]).mapValues(\.text)
+    }
+
+    /// What the server's theme suggests for WittyTV, from its tokens: the page reads the same from its CSS.
+    public func themeSuggestsTv(_ themeId: String) async throws -> String? {
+        struct Theme: Decodable { let other: [String: String]? }
+        let theme: Theme = try await get("/themes/\(WittyClient.pathPart(themeId))/tokens.json")
+        return theme.other?["tv-theme"]
+    }
+
+    /// GET /me/ui as it is: every interface choice the account has, for reading one and keeping the rest.
+    public func rawUI() async throws -> Data { try await call("GET", "/me/ui") }
+
+    /// Changes some of this account's WittyTV choices, and keeps everything else in /me/ui as it was,
+    /// as the page does: the server keeps an account's interface choices whole.
+    public func saveTvLook(_ change: [String: Any?]) async throws {
+        let data = try await call("GET", "/me/ui")
+        var ui = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any] ?? [:]
+        var look = ui["tvLook"] as? [String: Any] ?? [:]
+        for (key, value) in change {
+            if let value { look[key] = value } else { look.removeValue(forKey: key) }
+        }
+        // Beside the theme, what it comes to in the two looks an older app knows about.
+        if let theme = look["theme"] as? String, let named = TvTheme.byId(theme) {
+            let shape = theme == "custom" ? TvShape(rawValue: (look["custom"] as? [String: Any])?["shape"] as? String ?? "") ?? .modern : named.shape
+            let was = TvLook.legacyOf(theme, shape: shape)
+            look["layout"] = was.layout
+            look["colours"] = was.colours
+        }
+        ui["tvLook"] = look
+        _ = try await call("PUT", "/me/ui", body: try JSONSerialization.data(withJSONObject: ui))
+    }
+
     /// A channel's key goes in the address as it is, and only ever as one piece of it.
     public static func pathPart(_ text: String) -> String {
         text.addingPercentEncoding(withAllowedCharacters: .alphanumerics.union(CharacterSet(charactersIn: "-_"))) ?? ""
@@ -353,6 +516,87 @@ public final class WittyClient: @unchecked Sendable {
         _ = try await call("POST", "/logout", body: Data("{}".utf8))
     }
 
+    // MARK: Themes
+
+    /// Every theme the server has, with preview colours, and which is its default. Anyone may ask.
+    public func themeList() async throws -> ThemeList { try await get("/themes") }
+
+    /// One theme as data: docs/APP-DESIGN.md, Themes.
+    public func themeTokens(_ id: String) async throws -> ThemeTokens {
+        try await get("/themes/\(WittyClient.pathPart(id))/tokens.json")
+    }
+
+    /// The look this person made with the website's theme maker, if they did.
+    public func customTheme() async throws -> ThemeMakerInput? {
+        let choices: AccountChoices = try await get("/me/ui")
+        return choices.customTheme
+    }
+
+    // MARK: Your own account
+
+    /// Only what isn't nil changes. Kids and Guest profiles may change only `showUsername`.
+    public func updateProfile(userId: Int64, displayName: String?, username: String?, showUsername: Bool?) async throws -> User {
+        let body = try JSONEncoder().encode(ProfileChange(displayName: displayName, username: username, showUsername: showUsername))
+        return try decoder.decode(User.self, from: try await call("PUT", "/users/\(userId)/profile", body: body))
+    }
+
+    /// The account's other sign-ins end. A wrong current password is a 403; `code` is needed with two-step on.
+    public func changePassword(userId: Int64, password: String, current: String, code: String = "") async throws {
+        var fields = ["password": password, "current": current]
+        if !code.isEmpty { fields["code"] = code }
+        _ = try await call("PUT", "/users/\(userId)/password", body: try JSONEncoder().encode(fields))
+    }
+
+    public func twoFactorState() async throws -> TwoFactorState { try await get("/me/2fa") }
+
+    public func twoFactorSetup(password: String) async throws -> TwoFactorSetup {
+        let body = try JSONEncoder().encode(["password": password])
+        return try decoder.decode(TwoFactorSetup.self, from: try await call("POST", "/me/2fa/setup", body: body))
+    }
+
+    /// Returns the recovery codes, shown once. The account's other sign-ins end.
+    public func twoFactorConfirm(code: String) async throws -> [String] {
+        let body = try JSONEncoder().encode(["code": code])
+        return try decoder.decode(RecoveryCodes.self, from: try await call("POST", "/me/2fa/confirm", body: body)).recovery ?? []
+    }
+
+    public func twoFactorDisable(password: String, code: String) async throws {
+        let body = try JSONEncoder().encode(["password": password, "code": code])
+        _ = try await call("POST", "/me/2fa/disable", body: body)
+    }
+
+    /// Everywhere this account is signed in, this device among them.
+    public func signedInDevices() async throws -> [SignedInDevice] { try await list("/sessions") }
+
+    public func signOutDevice(_ id: String) async throws {
+        _ = try await call("DELETE", "/sessions/\(WittyClient.pathPart(id))")
+    }
+
+    /// Every sign-in of this account but this one.
+    public func signOutOtherDevices() async throws {
+        _ = try await call("DELETE", "/sessions")
+    }
+
+    /// A 404 carries the server's own words: a wrong or used code.
+    public func pairInfo(code: String) async throws -> PairInfo {
+        let body = try JSONEncoder().encode(["code": code])
+        return try decoder.decode(PairInfo.self, from: try await call("POST", "/pair/info", body: body))
+    }
+
+    public func pairApprove(code: String, userId: Int64) async throws {
+        struct Approve: Encodable { let code: String; let userId: Int64 }
+        _ = try await call("POST", "/pair/approve", body: try JSONEncoder().encode(Approve(code: code, userId: userId)))
+    }
+
+    public func pairDeny(code: String) async throws {
+        _ = try await call("POST", "/pair/deny", body: try JSONEncoder().encode(["code": code]))
+    }
+
+    public func pairInvite(userId: Int64) async throws -> PairInvite {
+        struct Invite: Encodable { let userId: Int64 }
+        return try decoder.decode(PairInvite.self, from: try await call("POST", "/pair/invite", body: try JSONEncoder().encode(Invite(userId: userId))))
+    }
+
     /// Goes with the sign-in, so only ever to this server.
     public func imageData(_ url: URL) async throws -> Data {
         guard let server = URL(string: base), Origin.same(url, server) else {
@@ -368,6 +612,8 @@ public final class WittyClient: @unchecked Sendable {
     }
 
     public func posterURL(_ item: Item) -> URL? { URL(string: "\(base)\(apiPath)/items/\(item.id)/poster?v=\(item.updatedAt ?? 0)") }
+    /// An album's or an artist's cover: the poster of the track the server chose for it.
+    public func coverURL(_ item: Int64) -> URL? { URL(string: "\(base)\(apiPath)/items/\(item)/poster") }
     public func posterURL(_ show: Show) -> URL? { URL(string: "\(base)\(apiPath)/shows/\(show.id)/art/poster?v=\(show.updatedAt ?? 0)") }
     public func backdropURL(_ item: Item) -> URL? { URL(string: "\(base)\(apiPath)/items/\(item.id)/backdrop?v=\(item.updatedAt ?? 0)") }
     public func backdropURL(_ show: Show) -> URL? { URL(string: "\(base)\(apiPath)/shows/\(show.id)/art/backdrop?v=\(show.updatedAt ?? 0)") }
@@ -375,6 +621,13 @@ public final class WittyClient: @unchecked Sendable {
     /// Addresses in answers start with /api/: the server's address goes in front, nothing else changes.
     /// One that would end up anywhere but this server comes back nil.
     public func mediaURL(_ path: String) -> URL? { Origin.join(base: base, path: path) }
+
+    /// The owner's own logo, when `/status` names one; shown before anyone signs in, as on the web.
+    public func brandLogoURL(version: String?) -> URL? {
+        guard let version, !version.isEmpty else { return nil }
+        let escaped = version.addingPercentEncoding(withAllowedCharacters: .alphanumerics) ?? ""
+        return Origin.join(base: base, path: "/api/branding/logo?v=\(escaped)")
+    }
     /// A photo as it was taken, as big as the file is.
     public func originalURL(_ item: Int64) -> URL? { URL(string: "\(base)\(apiPath)/items/\(item)/original") }
 

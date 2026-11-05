@@ -706,6 +706,8 @@ struct PlayerScreen: View {
         }
         .onChange(of: scenePhase) { playback.sceneChanged($0) }
         .task {
+            // A film stops the music, whether or not the system has said so yet.
+            model.listening.pauseForVideo()
             playback.onFinished = { next in moveOn(next) }
             await playback.start(id: id, client: client, startOver: startOver)
         }
