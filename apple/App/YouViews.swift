@@ -775,7 +775,8 @@ struct SignInTvView: View {
         problem = ""
         Task {
             do {
-                let digits = (info.code ?? code).filter(\.isNumber)
+                // The code as the TV shows it; the server ignores case, spaces and the dash.
+                let digits = info.code ?? code
                 if approve, let chosen {
                     try await client.pairApprove(code: digits, userId: chosen)
                     outcome = say("signInTvDone")
@@ -887,7 +888,7 @@ struct SignInTvView: View {
             } else if let info {
                 card(info)
             } else {
-                DigitsEntry(code: $code, checking: busy, wrongTries: wrongTries, onComplete: look)
+                LetterCodeEntry(code: $code, checking: busy, wrongTries: wrongTries, onComplete: look)
                 if !problem.isEmpty { ProblemLine(problem) }
                 Button(say("signInTvInvite")) { makeInvite() }
                     .action(.quiet)

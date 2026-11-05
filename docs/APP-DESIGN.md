@@ -576,8 +576,11 @@ then a confirmation). Under the list, Destructive `signOutOthers`, with a confir
 
 ### Sign in a TV
 
-Back; Title `rowSignInTv`; Body `signInTvHint` ("Type the code your TV shows."). The six code boxes and the numeric
-keyboard; six digits send `POST /pair/info`. Then a `panel` card: the device's name in Label, platform and address in
+Back; Title `rowSignInTv`; Body `signInTvHint` ("Type the code your TV shows."). **Eight letter boxes**, four, a dash,
+then four, as the TV shows its code (`ABCD-EFGH`, letters from `BCDFGHJKLMNPQRSTVWXZ`), over the system keyboard in
+capitals; any case typed counts, and the dash and spaces are ignored. On a phone the boxes are 34 wide and 48 high, 6
+apart, so eight fit. The eighth letter sends `POST /pair/info` with the code as typed. (The six digits are the other
+direction: the code `/pair/invite` makes, which the TV types on Enter the security code.) Then a `panel` card: the device's name in Label, platform and address in
 Secondary, and `signInTvAs` with the profiles it may sign in as (the person, and Kids and Guest profiles they look
 after) as profile tiles at 72, the person first and chosen. Primary `signInTvApprove`, Quiet `signInTvDeny`. Done:
 a check in `ok` and `signInTvDone`. Quiet `signInTvInvite` ("The TV asks for a code?") makes one instead

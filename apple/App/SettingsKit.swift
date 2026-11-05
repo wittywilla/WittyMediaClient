@@ -269,6 +269,41 @@ struct DigitsEntry: View {
     }
 }
 
+/// A TV's sign-in code: eight letters, shown ABCD-EFGH, typed in any case. The server ignores the dash and spaces.
+struct LetterCodeEntry: View {
+    @Binding var code: String
+    var checking = false
+    var wrongTries = 0
+    let onComplete: (String) -> Void
+    @FocusState private var focused: Bool
+
+    private func typed(_ text: String) {
+        let letters = String(text.uppercased().filter { $0.isASCII && $0.isLetter }.prefix(8))
+        if letters != code { code = letters }
+        if letters.count == 8 { onComplete(letters) }
+    }
+
+    var body: some View {
+        CodeBoxes(digits: code, count: 8, split: 4, checking: checking, wrongTries: wrongTries)
+            .frame(maxWidth: .infinity)
+            .contentShape(Rectangle())
+            .onTapGesture { focused = true }
+            .background {
+                TextField("", text: Binding(get: { code }, set: typed))
+                    #if os(iOS) || os(visionOS)
+                    .keyboardType(.asciiCapable)
+                    .textInputAutocapitalization(.characters)
+                    #endif
+                    .autocorrectionDisabled()
+                    .focused($focused)
+                    .frame(width: 1, height: 1)
+                    .opacity(0.02)
+                    .accessibilityLabel(say("signInTvHint"))
+            }
+            .task { focused = true }
+    }
+}
+
 /// Puts words where they can be pasted, on the devices that have a pasteboard.
 enum Clipboard {
     static var available: Bool {
