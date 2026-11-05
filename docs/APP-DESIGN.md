@@ -167,7 +167,8 @@ The same as the web's, so each person keeps their colour on every device:
 ### Profile tile
 
 The avatar, then 10 below it the profile name in Label semibold, then the username as `@name` in Secondary,
-**only when a profile name is set and differs from the username**: so a person sees both, or just the one there is.
+**whenever a profile name is set and is not exactly the username**, even when the two differ only in capitals
+("Ziggy" over "@ziggy" stays, since the username is what to type): so a person sees both, or just the one there is.
 Kids and Guest profiles carry a badge on the avatar's lower edge, centred, half over it: a pill in `background`
 with a 1-wide `border`, Caption words "Kids" or "Guest". A profile that signs in without a password (Kids or Guest
 at home) goes straight in; the others open the password screen. Pressed or focused, the avatar lifts and gains the

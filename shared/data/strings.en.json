@@ -69,5 +69,14 @@
   "guestBadge": "Guest",
   "twoFactorTitle": "Enter the code from your authenticator app",
   "twoFactorHint": "Your account asks for a second step. Open your authenticator app and type the six digits it shows for this server.",
-  "openOnPhone": "Open this on a phone or computer:"
+  "openOnPhone": "Open this on a phone or computer:",
+  "errWrongPassword": "That password isn't right. Try again.",
+  "errWrongNameOrPassword": "That name or password isn't right. Try again.",
+  "errWrongCode": "That code isn't right. Use the newest one your authenticator app shows.",
+  "useRecoveryCode": "Use a recovery code",
+  "useAuthenticatorCode": "Use the code from your app",
+  "recoveryLabel": "Recovery code",
+  "recoveryTitle": "Enter a recovery code",
+  "recoveryHint": "Lost your phone? Type one of the recovery codes you saved when you turned on the second step. Each one works once.",
+  "errWrongRecovery": "That recovery code isn't right, or it has been used already."
 }

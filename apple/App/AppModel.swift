@@ -127,6 +127,9 @@ final class AppModel: ObservableObject {
     var tvColours: TvColours?
     var tvLogos = true
     @Published var themeId: String?
+    /// The owner's own name and logo for the server, from `/status`, shown on the sign-in screens.
+    @Published var brandName = ""
+    @Published var brandLogo = ""
     @Published var user: User?
     /// Music, audiobooks and podcasts, which carry on whatever screen is showing.
     let listening = Listening()
@@ -254,7 +257,7 @@ final class AppModel: ObservableObject {
                 return reasonText(reason)
             }
             let status = try await client.status()
-            themeId = status.theme
+            learn(status)
             paths = [:]
             user = status.user
             if status.user != nil {
@@ -308,7 +311,7 @@ final class AppModel: ObservableObject {
         case .askCode, .signIn:
             openServer(checked)
             do {
-                themeId = try await client.status().theme
+                learn(try await client.status())
                 stage = .signIn(.usual)
             } catch {
                 stage = .connect(message: say("errLost"))
@@ -336,7 +339,7 @@ final class AppModel: ObservableObject {
         let pin = Keychain.pin
         let checked = proof.saved(url: url, name: status.displayName)
         let step = Identity.nextStep(proof.state, tokenFits: !pin.isEmpty && tokenFits(pin: pin, proof: proof))
-        if step != .refuse && step != .lost { themeId = status.theme }
+        if step != .refuse && step != .lost { learn(status) }
         switch step {
         case .warn:
             stage = .mismatch(checked)
@@ -418,16 +421,29 @@ final class AppModel: ObservableObject {
     }
 
     /// A name and password, or a profile with neither. The server's own words say what was wrong.
-    func passwordSignIn(name: String, password: String) async -> String? {
-        if let current, let refused = await refuseToSend(to: current) { return refused }
+    enum SignInOutcome: Equatable {
+        case signedIn
+        /// The account asks for the code from an authenticator app. The words say why when a code was wrong.
+        case needsCode(String)
+        /// The name and password didn't match. The screen words it, since it knows which was asked for.
+        case wrong
+        case failed(String)
+    }
+
+    /// A name and password, and the authenticator's code when the account has asked for one.
+    func passwordSignIn(name: String, password: String, code: String = "") async -> SignInOutcome {
+        if let current, let refused = await refuseToSend(to: current) { return .failed(refused) }
         do {
-            let result = try await client.login(name: name, password: password, device: deviceName)
+            let result = try await client.login(name: name, password: password, device: deviceName, code: code)
             signedIn(token: result.token, user: result.user)
-            return nil
+            return .signedIn
         } catch let error as APIError {
-            return error.message
+            if error.twoFactor { return .needsCode(code.isEmpty ? "" : error.message) }
+            // The server's own 429 words already say how long to wait.
+            if error.status == 401 { return .wrong }
+            return .failed(error.message)
         } catch {
-            return plainWords(Problem.of(error))
+            return .failed(plainWords(Problem.of(error)))
         }
     }
 
@@ -472,8 +488,20 @@ final class AppModel: ObservableObject {
         server = ""
         client = WittyClient(base: "")
         themeId = nil
+        brandName = ""
+        brandLogo = ""
         stage = .connect(message: "")
     }
+
+    /// What a server says about how it looks: its theme, and the owner's name and logo for it.
+    private func learn(_ status: ServerStatus) {
+        themeId = status.theme
+        brandName = PlainWords.clean(status.brandName ?? "", limit: 60)
+        brandLogo = PlainWords.clean(status.brandLogo ?? "", limit: 64)
+    }
+
+    /// The address of the server used last, which the connect screen marks.
+    var lastUsedURL: String { server }
 
     /// Words for a failure, with a sign-in the server no longer accepts meaning signing in again.
     /// Empty means there's nothing to show: the screen went away, or the stage has changed.

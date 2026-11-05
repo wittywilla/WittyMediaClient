@@ -99,16 +99,24 @@ private struct SurfaceBody<Label: View>: View {
 
 // MARK: - Buttons
 
-/// Android's ActionButton. The one main action on a screen is `primary`, in the accent colour;
-/// everything else is the card colour. `selected` marks the chosen one of a set, such as a season.
+/// What a button is for (docs/APP-DESIGN.md, Buttons): the one main action, the others, a link, or one
+/// that takes something away.
+enum ActionKind {
+    case primary, secondary, quiet, destructive
+}
+
+/// Android's ActionButton. The one main action on a screen is primary, in the accent colour; the others
+/// are the card colour; links are quiet; what removes something is destructive. `selected` marks the
+/// chosen one of a set, such as a season. Tall buttons are the sign-in screens' 52.
 struct ActionStyle: ButtonStyle {
-    var primary = false
+    var kind: ActionKind = .secondary
     var selected = false
     var pill = false
     var wide = false
+    var tall = false
 
     func makeBody(configuration: Configuration) -> some View {
-        ActionBody(label: configuration.label, pressed: configuration.isPressed, primary: primary, selected: selected, pill: pill, wide: wide)
+        ActionBody(label: configuration.label, pressed: configuration.isPressed, kind: kind, selected: selected, pill: pill, wide: wide, tall: tall)
     }
 }
 
@@ -117,22 +125,35 @@ private struct ActionBody<Label: View>: View {
     @Environment(\.metrics) private var metrics
     let label: Label
     let pressed: Bool
-    let primary: Bool
+    let kind: ActionKind
     let selected: Bool
     let pill: Bool
     let wide: Bool
+    let tall: Bool
 
     var body: some View {
-        let fill = primary ? palette.accent : (selected ? palette.border : palette.card)
+        let fill: Color? = switch kind {
+        case .primary: palette.accent
+        case .quiet: nil
+        case .secondary: selected ? palette.border : palette.card
+        case .destructive: palette.card
+        }
+        let ink: Color = switch kind {
+        case .primary: palette.onAccent
+        case .quiet: palette.accentText
+        case .secondary: palette.text
+        case .destructive: palette.danger
+        }
         SurfaceBody(
             label: label
-                .font(.wmLabel)
+                .font(kind == .quiet ? .wmLabel.weight(.semibold) : .wmLabel)
                 .labelStyle(ActionLabelStyle())
-                .foregroundStyle(primary ? palette.onAccent : palette.text)
+                .foregroundStyle(ink)
+                .tint(ink)
                 .multilineTextAlignment(.center)
-                .padding(.horizontal, pill ? Tokens.Space.s5 : Tokens.Space.s4)
+                .padding(.horizontal, kind == .quiet ? Tokens.Space.s2 : (pill ? Tokens.Space.s5 : Tokens.Space.s4))
                 .padding(.vertical, Tokens.Space.s2)
-                .frame(maxWidth: wide ? .infinity : nil, minHeight: metrics.minTarget),
+                .frame(maxWidth: wide ? .infinity : nil, minHeight: tall && !metrics.tv ? 52 : metrics.minTarget),
             pressed: pressed, fill: fill, radius: pill ? 999 : Tokens.Radius.md
         )
         .accessibilityAddTraits(selected ? [.isSelected] : [])
@@ -149,10 +170,32 @@ private struct ActionLabelStyle: LabelStyle {
     }
 }
 
+/// A button's words, or a spinner in their colour while it works, at the same size so nothing moves.
+struct BusyText: View {
+    let words: String
+    var busy = false
+    init(_ words: String, busy: Bool = false) {
+        self.words = words
+        self.busy = busy
+    }
+
+    var body: some View {
+        ZStack {
+            Text(words).opacity(busy ? 0 : 1)
+            if busy { ProgressView().accessibilityLabel(say("connecting")) }
+        }
+    }
+}
+
 extension View {
     /// A filled button, as on Android: see `ActionStyle`.
     func action(primary: Bool = false, selected: Bool = false, pill: Bool = false, wide: Bool = false) -> some View {
-        buttonStyle(ActionStyle(primary: primary, selected: selected, pill: pill, wide: wide))
+        buttonStyle(ActionStyle(kind: primary ? .primary : .secondary, selected: selected, pill: pill, wide: wide))
+    }
+
+    /// A button of a given kind; `tall` for the sign-in screens.
+    func action(_ kind: ActionKind, wide: Bool = false, tall: Bool = false, pill: Bool = false) -> some View {
+        buttonStyle(ActionStyle(kind: kind, pill: pill, wide: wide, tall: tall))
     }
 }
 
@@ -211,10 +254,15 @@ struct OutlinedField: View {
     let label: String
     @Binding var text: String
     var kind: Kind = .text
+    /// A symbol before the words: `link`, `person`, `lock`.
+    var icon: String?
     /// Set to true by the screen to put the focus here; the field sets it back once it has it.
     var request: Binding<Bool>?
+    /// What was typed was refused: the outline and label turn the danger colour until it changes.
+    var invalid = false
     var onSubmit: () -> Void = {}
     @FocusState private var focused: Bool
+    @State private var revealed = false
 
     private func takeFocusIfAsked() {
         guard request?.wrappedValue == true else { return }
@@ -226,9 +274,16 @@ struct OutlinedField: View {
     }
 
     @ViewBuilder private var field: some View {
-        if kind == .password {
+        if kind == .password && !revealed {
             SecureField("", text: $text)
                 .textContentType(.password)
+        } else if kind == .password {
+            TextField("", text: $text)
+                .textContentType(.password)
+                #if os(iOS) || os(visionOS)
+                .textInputAutocapitalization(.never)
+                #endif
+                .autocorrectionDisabled()
         } else {
             TextField("", text: $text)
                 #if os(iOS) || os(visionOS)
@@ -243,7 +298,7 @@ struct OutlinedField: View {
     var body: some View {
         #if os(tvOS)
         VStack(alignment: .leading, spacing: Tokens.Space.s2) {
-            Secondary(label)
+            Text(label).font(.wmSecondary).foregroundStyle(invalid ? palette.danger : palette.textSecondary)
             field.focused($focused).onSubmit(onSubmit).accessibilityLabel(label)
         }
         .onAppear(perform: takeFocusIfAsked)
@@ -252,25 +307,49 @@ struct OutlinedField: View {
         let raised = focused || !text.isEmpty
         let shape = RoundedRectangle(cornerRadius: Tokens.Radius.md, style: .continuous)
         ZStack(alignment: .leading) {
-            // The outline is underneath, so the raised label sits over it as on Android.
-            shape.strokeBorder(focused ? palette.accent : palette.border, lineWidth: focused ? 2 : 1)
-            field
-                .focused($focused)
-                .onSubmit(onSubmit)
-                .foregroundStyle(palette.text)
-                .padding(.horizontal, Tokens.Space.s4)
-                .padding(.top, raised ? 2 : 0)
-                .frame(minHeight: 56)
-                .accessibilityLabel(label)
+            HStack(spacing: Tokens.Space.s3) {
+                if let icon {
+                    Image(systemName: icon)
+                        .foregroundStyle(invalid ? palette.danger : (focused ? palette.accentText : palette.textSecondary))
+                        .frame(width: 20)
+                        .accessibilityHidden(true)
+                }
+                field
+                    .focused($focused)
+                    .onSubmit(onSubmit)
+                    .foregroundStyle(palette.text)
+                    .tint(palette.accent)
+                    .padding(.top, raised ? 2 : 0)
+                    .accessibilityLabel(label)
+                if kind == .password {
+                    Button {
+                        revealed.toggle()
+                        // Swapping the box for its twin would take the keyboard away.
+                        DispatchQueue.main.async { focused = true }
+                    } label: {
+                        Image(systemName: revealed ? "eye.slash" : "eye").foregroundStyle(palette.textSecondary)
+                            .frame(width: 32, height: 32)
+                            .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel(revealed ? say("hidePassword") : say("showPassword"))
+                }
+            }
+            .padding(.horizontal, Tokens.Space.s4)
+            .frame(minHeight: 56)
             Text(label)
                 .font(raised ? .caption : .body)
-                .foregroundStyle(focused ? palette.accentText : palette.textSecondary)
+                .foregroundStyle(invalid ? palette.danger : (focused ? palette.accentText : palette.textSecondary))
                 .padding(.horizontal, Tokens.Space.s1)
                 .background(raised ? palette.background : Color.clear)
-                .offset(x: Tokens.Space.s3, y: raised ? -28 : 0)
+                .offset(x: raised || icon == nil ? Tokens.Space.s3 : 48, y: raised ? -28 : 0)
                 .allowsHitTesting(false)
                 .accessibilityHidden(true)
         }
+        // The outline is underneath, so the raised label sits over it as on Android, and it's the
+        // field's size rather than all the room there is.
+        .background(shape.strokeBorder(invalid ? palette.danger : (focused ? palette.accent : palette.border),
+                                       lineWidth: focused || invalid ? 2 : 1))
         .contentShape(shape)
         .onTapGesture { focused = true }
         .animation(reduceMotion ? nil : .easeOut(duration: Tokens.Motion.focus), value: raised)
@@ -286,6 +365,10 @@ struct OutlinedField: View {
 /// Things in a row that wraps, as Android's FlowRow: profiles, for one.
 struct FlowLayout: Layout {
     var spacing: CGFloat = Tokens.Space.s3
+    /// The space between rows, when it isn't the same as between things in a row.
+    var rowSpacing: CGFloat?
+    /// Each row in the middle, as profiles are.
+    var centred = false
 
     private func rows(_ subviews: Subviews, width: CGFloat) -> [[(Int, CGSize)]] {
         var rows: [[(Int, CGSize)]] = [[]]
@@ -313,7 +396,7 @@ struct FlowLayout: Layout {
                 rowWidth += size.width + (place > 0 ? spacing : 0)
                 rowHeight = max(rowHeight, size.height)
             }
-            height += rowHeight + (number > 0 ? spacing : 0)
+            height += rowHeight + (number > 0 ? (rowSpacing ?? spacing) : 0)
             widest = max(widest, rowWidth)
         }
         return CGSize(width: proposal.width ?? widest, height: height)
@@ -322,13 +405,15 @@ struct FlowLayout: Layout {
     func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
         var y = bounds.minY
         for row in rows(subviews, width: bounds.width) {
-            var x = bounds.minX
+            var used: CGFloat = 0
+            for (place, (_, size)) in row.enumerated() { used += size.width + (place > 0 ? spacing : 0) }
+            var x = centred ? bounds.minX + max((bounds.width - used) / 2, 0) : bounds.minX
             let height = row.map(\.1.height).max() ?? 0
             for (index, size) in row {
                 subviews[index].place(at: CGPoint(x: x, y: y), proposal: ProposedViewSize(size))
                 x += size.width + spacing
             }
-            y += height + spacing
+            y += height + (rowSpacing ?? spacing)
         }
     }
 }

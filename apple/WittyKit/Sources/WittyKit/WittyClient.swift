@@ -8,13 +8,16 @@ public struct APIError: LocalizedError {
     public let message: String
     /// Where a redirect that wasn't followed pointed.
     public let location: String?
+    /// Signing in needs the code from an authenticator app, or the one given was wrong.
+    public let twoFactor: Bool
     public var errorDescription: String? { message }
     public var isExpiredSignIn: Bool { status == 401 }
 
-    public init(status: Int, message: String, location: String? = nil) {
+    public init(status: Int, message: String, location: String? = nil, twoFactor: Bool = false) {
         self.status = status
         self.message = message
         self.location = location
+        self.twoFactor = twoFactor
     }
 }
 
@@ -199,11 +202,16 @@ public final class WittyClient: @unchecked Sendable {
             throw APIError(status: 0, message: "The server sent an answer that can't be read.")
         }
         guard (200..<300).contains(http.statusCode) else {
-            struct Failure: Decodable { let error: String? }
-            let said = (try? decoder.decode(Failure.self, from: data))?.error.map { PlainWords.clean($0) } ?? ""
+            struct Failure: Decodable {
+                let error: String?
+                let twoFactor: Bool?
+            }
+            let failure = try? decoder.decode(Failure.self, from: data)
+            let said = failure?.error.map { PlainWords.clean($0) } ?? ""
             let message = said.isEmpty ? "The server answered with an error (\(http.statusCode))." : said
             reportFailure(place, method: method, status: http.statusCode, message: message, request: http.value(forHTTPHeaderField: "X-Request-Id") ?? "")
-            throw APIError(status: http.statusCode, message: message, location: http.value(forHTTPHeaderField: "Location"))
+            throw APIError(status: http.statusCode, message: message, location: http.value(forHTTPHeaderField: "Location"),
+                           twoFactor: failure?.twoFactor == true)
         }
         return data
     }
@@ -327,8 +335,12 @@ public final class WittyClient: @unchecked Sendable {
         }
     }
 
-    public func login(name: String, password: String, device: String) async throws -> LoginResult {
-        let body = try JSONEncoder().encode(["name": name, "password": password, "device": device])
+    /// A refusal that wants the code from an authenticator app is an `APIError` with `twoFactor` set:
+    /// ask for it, then sign in again with the same name and password and the `code`.
+    public func login(name: String, password: String, device: String, code: String = "") async throws -> LoginResult {
+        var fields = ["name": name, "password": password, "device": device]
+        if !code.isEmpty { fields["code"] = code }
+        let body = try JSONEncoder().encode(fields)
         return try decoder.decode(LoginResult.self, from: try await call("POST", "/login", body: body))
     }
 
@@ -414,6 +426,13 @@ public final class WittyClient: @unchecked Sendable {
     /// Addresses in answers start with /api/: the server's address goes in front, nothing else changes.
     /// One that would end up anywhere but this server comes back nil.
     public func mediaURL(_ path: String) -> URL? { Origin.join(base: base, path: path) }
+
+    /// The owner's own logo, when `/status` names one; shown before anyone signs in, as on the web.
+    public func brandLogoURL(version: String?) -> URL? {
+        guard let version, !version.isEmpty else { return nil }
+        let escaped = version.addingPercentEncoding(withAllowedCharacters: .alphanumerics) ?? ""
+        return Origin.join(base: base, path: "/api/branding/logo?v=\(escaped)")
+    }
     /// A photo as it was taken, as big as the file is.
     public func originalURL(_ item: Int64) -> URL? { URL(string: "\(base)\(apiPath)/items/\(item)/original") }
 
