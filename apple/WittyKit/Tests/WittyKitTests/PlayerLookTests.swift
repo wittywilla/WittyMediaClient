@@ -80,3 +80,44 @@ final class PlayerLookTests: XCTestCase {
         XCTAssertEqual(answer.explain?.streaming, "Standard")
     }
 }
+
+final class PlayerRemoteTests: XCTestCase {
+    func testAFileGreysOutTheDiscKeys() {
+        XCTAssertFalse(RemoteKey.menu.worksForFile(audioTracks: 2, subtitleTracks: 1))
+        XCTAssertFalse(RemoteKey.digit5.worksForFile(audioTracks: 2, subtitleTracks: 1))
+        XCTAssertTrue(RemoteKey.play.worksForFile(audioTracks: 1, subtitleTracks: 0))
+        XCTAssertFalse(RemoteKey.audio.worksForFile(audioTracks: 1, subtitleTracks: 0))
+        XCTAssertTrue(RemoteKey.audio.worksForFile(audioTracks: 2, subtitleTracks: 0))
+        XCTAssertFalse(RemoteKey.subtitle.worksForFile(audioTracks: 2, subtitleTracks: 0))
+        XCTAssertEqual([RemoteKey.rew, .prev, .ff, .next].map(\.jump), [-10, -60, 30, 60])
+    }
+
+    func testTheStreamingChoiceIsKeptAndAskedFor() {
+        let defaults = UserDefaults(suiteName: "PlayerRemoteTests")!
+        defaults.removePersistentDomain(forName: "PlayerRemoteTests")
+        XCTAssertEqual(DeviceStreaming.load(defaults), .auto)
+        DeviceStreaming.save(.robust, defaults)
+        XCTAssertEqual(DeviceStreaming.load(defaults), .robust)
+        DeviceStreaming.save(.auto, defaults)
+        XCTAssertNil(defaults.string(forKey: "wms.streaming"))
+        XCTAssertNil(DeviceStreaming.auto.asked)
+        XCTAssertEqual(DeviceStreaming.standard.asked, "standard")
+        XCTAssertTrue(DeviceStreaming.auto.measures(serverMode: "robust"))
+        XCTAssertFalse(DeviceStreaming.auto.measures(serverMode: "standard"))
+        XCTAssertFalse(DeviceStreaming.standard.measures(serverMode: "robust"))
+        XCTAssertTrue(DeviceStreaming.robust.measures(serverMode: nil))
+        XCTAssertEqual(DeviceStreaming.allCases.map(\.words), ["Server’s choice", "Standard", "Robust"])
+    }
+
+    func testTheRemoteRemembersItsPlaceAndStaysInBounds() throws {
+        let saved = try JSONDecoder().decode(RemoteGeometry.self, from: Data(#"{"x":40,"y":80,"scale":3,"alpha":0.55}"#.utf8))
+        XCTAssertEqual(saved.scale, 1.6)
+        XCTAssertEqual(saved.nextAlpha, 0.35)
+        XCTAssertEqual(RemoteGeometry(alpha: 0.35).nextAlpha, 0.92)
+        XCTAssertNil(try JSONDecoder().decode(RemoteGeometry.self, from: Data("{}".utf8)).x)
+        let prefs = try JSONDecoder().decode(ViewPrefs.self, from: Data(#"{"remote":true,"remoteStyle":"sideways"}"#.utf8))
+        XCTAssertTrue(prefs.remote)
+        XCTAssertEqual(prefs.remoteStyle, "floating")
+        XCTAssertFalse(ViewPrefs().remote)
+    }
+}

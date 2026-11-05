@@ -309,6 +309,35 @@ public final class WittyClient: @unchecked Sendable {
         _ = try await call("PUT", "/music/lyrics/\(item)/offset", body: try JSONEncoder().encode(["offsetMs": ms]))
     }
 
+    /// What this connection carries, in kilobits a second, for a robust stream: up to 4 MB of bytes that don't
+    /// compress, timed for about a second from the first bytes (docs/CLIENT-API.md, Robust streaming). 0 when it
+    /// couldn't be measured.
+    public func measureSpeed() async -> Double {
+        guard let url = URL(string: "\(base)\(apiPath)/playback/speedtest?kb=1024") else { return 0 }
+        var request = URLRequest(url: url, cachePolicy: .reloadIgnoringLocalCacheData, timeoutInterval: 3)
+        if !token.isEmpty { request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization") }
+        // A session of its own: the shared one's guard looks after the API's answers, which this isn't.
+        let config = URLSessionConfiguration.ephemeral
+        config.httpCookieStorage = nil
+        config.urlCredentialStorage = nil
+        config.urlCache = nil
+        let timing = URLSession(configuration: config)
+        defer { timing.finishTasksAndInvalidate() }
+        guard let (bytes, response) = try? await timing.bytes(for: request), (response as? HTTPURLResponse)?.statusCode == 200 else { return 0 }
+        var got = 0
+        var first: Date?
+        do {
+            for try await _ in bytes {
+                if first == nil { first = Date() }
+                got += 1
+                if got % 65_536 == 0, let first, Date().timeIntervalSince(first) > 1.5 { break }
+            }
+        } catch {}
+        guard let first, got > 65_536 else { return 0 }
+        let seconds = max(0.05, Date().timeIntervalSince(first))
+        return (Double(got) * 8 / 1000 / seconds).rounded()
+    }
+
     /// The volume correction a song is tagged with.
     public func loudness(item: Int64) async throws -> Loudness { try await get("/music/loudness/\(item)") }
 

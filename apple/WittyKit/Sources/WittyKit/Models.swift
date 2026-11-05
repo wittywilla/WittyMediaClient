@@ -385,15 +385,20 @@ public struct PlaybackRequest: Encodable {
     public var startSec: Double?
     /// This device couldn't decode what it was sent: ask for a conversion instead.
     public var forceTranscode: Bool?
+    /// This device's streaming choice ("standard", "robust"), and what its connection carries, for robust streams.
+    public var streaming: String?
+    public var measuredKbps: Double?
 
     public init(profile: String, capabilities: DeviceCapabilities? = nil, audio: Int? = nil, subtitle: Int? = nil, startSec: Double? = nil,
-                forceTranscode: Bool? = nil) {
+                forceTranscode: Bool? = nil, streaming: String? = nil, measuredKbps: Double? = nil) {
         self.profile = profile
         self.capabilities = capabilities
         self.audio = audio
         self.subtitle = subtitle
         self.startSec = startSec
         self.forceTranscode = forceTranscode
+        self.streaming = streaming
+        self.measuredKbps = measuredKbps
     }
 }
 
@@ -409,9 +414,13 @@ public struct Capabilities: Decodable, Equatable {
     /// The lowest version of each kind of client (`android`, `apple`, `desktop`) this server works
     /// with. An older server doesn't send it, and a platform not listed means fine.
     public let minClientVersions: [String: String]?
+    /// How the server sends viewers away from home their video: "standard" or "robust".
+    public let remoteStreaming: String?
+
+    private struct PlaybackFacts: Decodable { let remoteStreaming: String? }
 
     private enum CodingKeys: String, CodingKey {
-        case server, version, apiVersion, apiRevision, apiVersions, setupRequired, features, minClientVersions
+        case server, version, apiVersion, apiRevision, apiVersions, setupRequired, features, minClientVersions, playback
     }
 
     /// An optional field that can't be read counts as absent, so it can't stop anyone connecting.
@@ -425,6 +434,7 @@ public struct Capabilities: Decodable, Equatable {
         setupRequired = try? values.decodeIfPresent(Bool.self, forKey: .setupRequired)
         features = try? values.decodeIfPresent([String].self, forKey: .features)
         minClientVersions = try? values.decodeIfPresent([String: String].self, forKey: .minClientVersions)
+        remoteStreaming = (try? values.decodeIfPresent(PlaybackFacts.self, forKey: .playback))??.remoteStreaming
     }
 
     /// Optional abilities go by name, never by comparing server versions.

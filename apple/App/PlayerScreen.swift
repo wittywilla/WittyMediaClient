@@ -157,6 +157,30 @@ final class PlaybackModel: ObservableObject {
         if player.timeControlStatus != .paused { player.rate = rate }
     }
 
+    /// The gear's Streaming choice: kept on this device, and the video asked for again at the same place.
+    func setStreaming(_ choice: DeviceStreaming) {
+        DeviceStreaming.save(choice)
+        playWhenReady = player.timeControlStatus != .paused
+        let at = clock.saveable ?? clock.filmSeconds
+        Task { await open(startSec: at, replace: true) }
+    }
+
+    /// What this connection carries, kept for a few minutes as the website keeps it, for robust streams.
+    private static var measured: (kbps: Double, at: Date)?
+    private static var serverMode: (mode: String?, at: Date)?
+
+    private func streamingFacts(_ client: WittyClient) async -> (String?, Double?) {
+        let choice = DeviceStreaming.load()
+        if Self.serverMode == nil || Date().timeIntervalSince(Self.serverMode!.at) > 60 {
+            Self.serverMode = ((try? await client.capabilities())?.remoteStreaming, Date())
+        }
+        guard choice.measures(serverMode: Self.serverMode?.mode) else { return (choice.asked, nil) }
+        if let known = Self.measured, Date().timeIntervalSince(known.at) < 600 { return (choice.asked, known.kbps) }
+        let kbps = await client.measureSpeed()
+        if kbps > 50 { Self.measured = (kbps, Date()) }
+        return (choice.asked, kbps > 50 ? kbps : nil)
+    }
+
     func choose(audio: Int? = nil, subtitle: Int? = nil) {
         if let audio { self.audio = audio }
         if let subtitle { self.subtitle = subtitle }
@@ -186,7 +210,14 @@ final class PlaybackModel: ObservableObject {
         let run = generation
         clock.switching()
         let device = facts
-        let request = PlaybackRequest(profile: device.profile, capabilities: device.capabilities, audio: audio, subtitle: subtitle, startSec: startSec)
+        #if os(iOS) || os(visionOS)
+        let (streaming, kbps) = await streamingFacts(client)
+        guard run == generation else { return }
+        #else
+        let (streaming, kbps): (String?, Double?) = (nil, nil)
+        #endif
+        let request = PlaybackRequest(profile: device.profile, capabilities: device.capabilities, audio: audio, subtitle: subtitle, startSec: startSec,
+                                      streaming: streaming, measuredKbps: kbps)
         do {
             let answer = try await client.playback(id, request)
             guard run == generation else {

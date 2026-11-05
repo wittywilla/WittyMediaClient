@@ -109,6 +109,9 @@ struct VideoPlayerView: View {
     @State private var next: (item: Item, show: Show?, recommended: Bool)?
     @State private var dismissedNext = false
     @State private var landscape = false
+    @State private var shortcuts = false
+    @State private var lastTap = Date.distantPast
+    @State private var streaming = DeviceStreaming.load()
 
     private var stream: Playback? { playback.stream }
     private var item: Item? { playback.item }
@@ -153,11 +156,19 @@ struct VideoPlayerView: View {
                 VideoSurface(player: playback.player, fill: view.picture == "fill", playback: playback)
                     .ignoresSafeArea()
                     .accessibilityHidden(true)
-                // A tap shows the controls and plays or pauses, as a click on the website's player does. (Its double
-                // click for full screen is left to the button: waiting for a second tap would slow every first one.)
+                // A tap shows the controls and plays or pauses, as a click on the website's player does, at once. A
+                // second tap straight after fills the screen, as its double click does (having played and paused).
                 Color.clear
                     .contentShape(Rectangle())
-                    .onTapGesture { touched(); if panel == nil { togglePlay() } else { panel = nil } }
+                    .onTapGesture {
+                        let second = Date().timeIntervalSince(lastTap) < 0.3
+                        lastTap = second ? .distantPast : Date()
+                        touched()
+                        if panel == nil { togglePlay() } else { panel = nil }
+                        #if os(iOS)
+                        if second, panel == nil { toggleLandscape() }
+                        #endif
+                    }
                     .accessibilityHidden(true)
                 if clock.waiting && playback.error.isEmpty { PlayerSpinner() }
                 if !playback.error.isEmpty { failure }
@@ -183,9 +194,24 @@ struct VideoPlayerView: View {
                 }
                 .opacity(shown ? 1 : 0)
                 .allowsHitTesting(shown)
+                if view.remote {
+                    if view.remoteStyle == "bar" {
+                        RemoteStrip(enabled: remoteWorks, press: press, wide: geo.size.width > 700)
+                            .frame(maxWidth: geo.size.width - 24)
+                            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
+                            .padding(.bottom, 96)
+                            .opacity(shown ? 1 : 0)
+                            .allowsHitTesting(shown)
+                    } else {
+                        FloatingRemote(enabled: remoteWorks, press: press, close: { setRemote(false) }, faint: !shown)
+                    }
+                }
                 panels(geo.size)
+                if shortcuts { ShortcutsDialog { shortcuts = false } }
             }
+            .coordinateSpace(name: "player")
         }
+        .background(keyboard)
         .background(Color.black.ignoresSafeArea())
         .environment(\.colorScheme, .dark)
         .statusBarHidden(!shown)
@@ -222,6 +248,79 @@ struct VideoPlayerView: View {
     private func play(_ item: Item) {
         if case .player? = model.path.last { model.path.removeLast() }
         model.path.append(.player(item.id, startOver: false))
+    }
+
+    // MARK: The remote and the keyboard
+
+    private func setRemote(_ on: Bool) {
+        view.remote = on
+        ViewPrefsStore().save(view, item: playback.id, scope: scope)
+    }
+
+    private func remoteWorks(_ key: RemoteKey) -> Bool {
+        key.worksForFile(audioTracks: stream?.audio?.count ?? 0, subtitleTracks: stream?.subtitles?.count ?? 0)
+    }
+
+    /// What a key of the remote does to a video file, as the website's player has it.
+    private func press(_ key: RemoteKey) {
+        touched()
+        switch key {
+        case .eject: model.closeVideo()
+        case .audio: if remoteWorks(.audio) { panel = .picker(audio: true) }
+        case .subtitle: if remoteWorks(.subtitle) { panel = .picker(audio: false) }
+        case .rew, .prev, .ff: playback.seek(toFilm: max(0, clock.time + (key.jump ?? 0)))
+        case .next:
+            if stream?.nextId ?? item?.nextId != nil { playback.playNext() } else { playback.seek(toFilm: clock.time + 60) }
+        case .play: if !clock.playing { togglePlay() }
+        case .pause: if clock.playing { togglePlay() }
+        case .stop:
+            if clock.playing { togglePlay() }
+            playback.seek(toFilm: 0)
+        default: break
+        }
+    }
+
+    private func faster(_ step: Int) {
+        let now = Double(clock.rate)
+        let at = speeds.firstIndex { $0 >= now - 0.001 } ?? 0
+        let next = speeds[min(max(at + step, 0), speeds.count - 1)]
+        playback.setSpeed(Float(next))
+    }
+
+    /// The website's keys, for a keyboard on an iPad: see PlayerShortcuts. Not while a window is over the player.
+    private var keyboard: some View {
+        let free = panel == nil && !shortcuts
+        func key(_ equivalent: KeyEquivalent, _ modifiers: EventModifiers = [], _ action: @escaping () -> Void) -> some View {
+            Button("") { if free { touched(); action() } }.keyboardShortcut(equivalent, modifiers: modifiers)
+        }
+        return ZStack {
+            key(.space) { togglePlay() }
+            key("k") { togglePlay() }
+            key(.leftArrow) { playback.seek(toFilm: max(0, clock.time - 10)) }
+            key(.rightArrow) { playback.seek(toFilm: clock.time + 10) }
+            key(.pageUp) { playback.seek(toFilm: clock.time + 60) }
+            key(.pageDown) { playback.seek(toFilm: max(0, clock.time - 60)) }
+            key(.home) { playback.seek(toFilm: 0) }
+            key(.end) { playback.seek(toFilm: max(0, duration - 1)) }
+            key(.upArrow) { playback.player.volume = min(1, playback.player.volume + 0.1) }
+            key(.downArrow) { playback.player.volume = max(0, playback.player.volume - 0.1) }
+            key("m") { playback.player.isMuted.toggle() }
+            key("i") { if stream != nil { panel = .info } }
+            key(",", .shift) { faster(-1) }
+            key(".", .shift) { faster(1) }
+            #if os(iOS)
+            key("f") { toggleLandscape() }
+            #endif
+            key("r") { setRemote(!view.remote) }
+            key("/", .shift) { shortcuts = true }
+            Button("") {
+                if shortcuts { shortcuts = false } else if panel != nil { panel = nil } else { model.minimizeVideo() }
+            }
+            .keyboardShortcut(.escape, modifiers: [])
+        }
+        .frame(width: 0, height: 0)
+        .opacity(0)
+        .accessibilityHidden(true)
     }
 
     // MARK: The bars
@@ -290,7 +389,29 @@ struct VideoPlayerView: View {
                 if !(stream?.subtitles ?? []).isEmpty {
                     PlayerIconButton(symbol: "captions.bubble.fill", label: "Subtitles") { touched(); panel = .picker(audio: false) }
                 }
+                Button { touched(); setRemote(!view.remote) } label: {
+                    HStack(spacing: 6) {
+                        Image(systemName: "av.remote.fill").font(.system(size: 14, weight: .semibold))
+                        if width > 700 { Text("Remote").font(.system(size: 13, weight: .semibold)) }
+                    }
+                    .foregroundStyle(view.remote ? palette.onAccent : PlayerInk.text)
+                    .padding(.horizontal, width > 700 ? 12 : 8)
+                    .frame(minHeight: 32)
+                    .background(RoundedRectangle(cornerRadius: Tokens.Radius.md, style: .continuous).fill(view.remote ? palette.accent : Color.white.opacity(0.1)))
+                    .frame(minHeight: 44)
+                    .padding(.horizontal, 2)
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("Show or hide the on-screen remote")
+                .accessibilityAddTraits(view.remote ? [.isSelected] : [])
                 PlayerIconButton(symbol: "gearshape.fill", label: "Viewing settings", on: panel == .settings) { touched(); panel = panel == .settings ? nil : .settings }
+                if width > 700 {
+                    Button { touched(); shortcuts = true } label: {
+                        Text("?").font(.system(size: 15, weight: .bold)).foregroundStyle(PlayerInk.text).frame(width: 36, height: 36).frame(minWidth: 44, minHeight: 44)
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel("Keyboard shortcuts")
+                }
                 #if os(iOS)
                 PlayerIconButton(symbol: landscape ? "arrow.down.right.and.arrow.up.left" : "arrow.up.left.and.arrow.down.right", label: "Fullscreen") { touched(); toggleLandscape() }
                 #endif
@@ -353,7 +474,8 @@ struct VideoPlayerView: View {
             ScenePanel(chapters: chapters, current: Scenes.current(chapters.map(\.start), at: clock.time),
                        pick: { start in playback.seek(toFilm: start); panel = nil }, close: { panel = nil })
         case .settings?:
-            ViewSettingsPanel(prefs: $view, scope: $scope, item: playback.id, close: { panel = nil })
+            ViewSettingsPanel(prefs: $view, scope: $scope, item: playback.id, streaming: streaming, maxHeight: size.height - 120,
+                              setStreaming: { choice in streaming = choice; playback.setStreaming(choice) }, close: { panel = nil })
                 .frame(maxWidth: min(380, size.width - 32))
                 .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomTrailing)
                 .padding(.trailing, Tokens.Space.s4)
@@ -681,6 +803,9 @@ private struct ViewSettingsPanel: View {
     @Binding var prefs: ViewPrefs
     @Binding var scope: ViewPrefsStore.Scope
     let item: Int64
+    let streaming: DeviceStreaming
+    let maxHeight: CGFloat
+    let setStreaming: (DeviceStreaming) -> Void
     let close: () -> Void
 
     private func save() { ViewPrefsStore().save(prefs, item: item, scope: scope) }
@@ -705,16 +830,30 @@ private struct ViewSettingsPanel: View {
             row("Apply to") {
                 PlayerSegments(choices: [("This video", ViewPrefsStore.Scope.item), ("Everything", .global)], chosen: scope) { scope = $0; save() }
             }
-            row("Seek bar") { PlayerSwitch(on: prefs.seekBar, label: "Seek bar") { prefs.seekBar.toggle(); save() } }
-            row("Chapter marks") { PlayerSwitch(on: prefs.chapterMarks, label: "Chapter marks") { prefs.chapterMarks.toggle(); save() } }
-            row("Hide controls after") {
-                PlayerSegments(choices: ViewPrefs.hideChoices.map { ($0.1, $0.0) }, chosen: prefs.hideAfter) { prefs.hideAfter = $0; save() }
+            ScrollView {
+                VStack(alignment: .leading, spacing: 0) {
+                    row("Seek bar") { PlayerSwitch(on: prefs.seekBar, label: "Seek bar") { prefs.seekBar.toggle(); save() } }
+                    row("Chapter marks") { PlayerSwitch(on: prefs.chapterMarks, label: "Chapter marks") { prefs.chapterMarks.toggle(); save() } }
+                    row("Remote") { PlayerSwitch(on: prefs.remote, label: "Remote") { prefs.remote.toggle(); save() } }
+                    row("Remote style") {
+                        PlayerSegments(choices: [("Floating", "floating"), ("In control bar", "bar")], chosen: prefs.remoteStyle) { prefs.remoteStyle = $0; save() }
+                    }
+                    row("Hide controls after") {
+                        PlayerSegments(choices: ViewPrefs.hideChoices.map { ($0.1, $0.0) }, chosen: prefs.hideAfter) { prefs.hideAfter = $0; save() }
+                    }
+                    row("Picture") {
+                        PlayerSegments(choices: [("Fit", "fit"), ("Fill screen", "fill")], chosen: prefs.picture) { prefs.picture = $0; save() }
+                    }
+                    row("Streaming") {
+                        PlayerSegments(choices: DeviceStreaming.allCases.map { ($0.words, $0) }, chosen: streaming) { setStreaming($0) }
+                    }
+                    Text(scope == .item ? "Seek bar, remote and picture: saved for this video on this device."
+                                        : "Seek bar, remote and picture: saved for all videos on this device.")
+                        .font(.system(size: 12)).foregroundStyle(PlayerInk.hint).padding(.top, Tokens.Space.s3)
+                }
             }
-            row("Picture") {
-                PlayerSegments(choices: [("Fit", "fit"), ("Fill screen", "fill")], chosen: prefs.picture) { prefs.picture = $0; save() }
-            }
-            Text(scope == .item ? "Saved for this video on this device." : "Saved for all videos on this device.")
-                .font(.system(size: 12)).foregroundStyle(PlayerInk.hint).padding(.top, Tokens.Space.s3)
+            .frame(maxHeight: max(160, maxHeight - 100))
+            .fixedSize(horizontal: false, vertical: true)
         }
         .padding(.horizontal, Tokens.Space.s4)
         .padding(.vertical, Tokens.Space.s3)
