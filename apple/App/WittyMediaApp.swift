@@ -58,7 +58,8 @@ struct RootView: View {
             case .signIn(let way):
                 SignInView(way: way).id(way)
             case .browsing:
-                BrowseShell()
+                // A new shell for each server and person, so the first screen after signing in is drawn fresh.
+                BrowseShell().id("\(model.client.base)|\(model.user?.id ?? 0)")
             }
         }
         // From here, which redraws with the model, and not from the scene above it, which can draw a

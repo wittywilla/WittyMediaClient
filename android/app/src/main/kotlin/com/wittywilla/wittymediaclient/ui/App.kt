@@ -16,6 +16,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.runtime.key
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.DisposableEffect
@@ -652,7 +653,8 @@ fun AppRoot(app: WittyApp) {
                         is Route.Code -> CodeScreen(nav, strings, route.server)
                         is Route.Mismatch -> MismatchScreen(nav, strings, route.server)
                         is Route.SignIn -> SignInScreen(nav, strings, route.way)
-                        Route.Home -> Shell(nav) { HomeScreen(nav, strings) }
+                        // A new Home for each server connection, so the first screen after signing in is drawn fresh.
+                        Route.Home -> key(app.api) { Shell(nav) { HomeScreen(nav, strings) } }
                         Route.Search -> Shell(nav) { SearchScreen(nav, strings) }
                         Route.Profile -> Shell(nav) { YouScreen(nav, strings) }
                         Route.Libraries -> Shell(nav) { LibrariesScreen(nav, strings) }
