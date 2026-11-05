@@ -277,6 +277,8 @@ public struct ServerPrefs: Decodable, Equatable {
     public let maxSpeed: Double?
     /// False when the owner has taken the visualizer off the server.
     public let visualizer: Bool?
+    /// How a show's episodes are laid out when it has no layout of its own: "cards" or "list".
+    public let episodeView: String?
 }
 
 /// What to watch after something with no next episode: `/items/{id}/recommend`.

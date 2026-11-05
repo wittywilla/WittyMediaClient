@@ -719,6 +719,66 @@ public final class WittyClient: @unchecked Sendable {
     /// A photo as it was taken, as big as the file is.
     public func originalURL(_ item: Int64) -> URL? { URL(string: "\(base)\(apiPath)/items/\(item)/original") }
 
+    // MARK: A title's page, as the website's: see TitlePage.swift
+
+    /// An item, and the rest of what its page shows, from one answer.
+    public func itemPage(_ id: Int64) async throws -> (Item, ItemFacts) {
+        let data = try await call("GET", "/items/\(id)")
+        return (try decoder.decode(Item.self, from: data), try decoder.decode(ItemFacts.self, from: data))
+    }
+
+    /// A show with its seasons and episodes, and the rest of what its page shows, from one answer.
+    public func showPage(_ id: Int64) async throws -> (ShowDetail, ShowFacts) {
+        let data = try await call("GET", "/shows/\(id)")
+        return (try decoder.decode(ShowDetail.self, from: data), try decoder.decode(ShowFacts.self, from: data))
+    }
+
+    public func attached(_ target: TitleTarget, _ id: Int64) async throws -> TitleAttached { try await get("/meta/\(target.rawValue)/\(id)/attached") }
+    public func listings(_ target: TitleTarget, _ id: Int64) async throws -> TitleListings { try await get("/meta/\(target.rawValue)/\(id)/listings") }
+    /// A title's logo, drawn in place of its name where it has one.
+    public func titleLogoURL(_ target: TitleTarget, _ id: Int64, version: Int64?) -> URL? {
+        URL(string: "\(base)\(apiPath)/meta/\(target.rawValue)/\(id)/art/logo?v=\(version ?? 0)")
+    }
+    public func seasonPosterURL(_ show: Show, season: Int) -> URL? {
+        URL(string: "\(base)\(apiPath)/shows/\(show.id)/art/season?n=\(season)&v=\(show.updatedAt ?? 0)")
+    }
+
+    /// What the logo service has for some studios, networks or streaming services: up to 200 at a time.
+    public func lookUpLogos(_ names: [(kind: String, name: String)]) async throws -> [LogoAnswer] {
+        struct Asked: Encodable { let kind: String; let name: String }
+        struct Body: Encodable { let logos: [Asked] }
+        struct Answer: Decodable { let logos: [LogoAnswer]? }
+        let body = try JSONEncoder().encode(Body(logos: names.prefix(200).map { Asked(kind: $0.kind, name: $0.name) }))
+        return try decoder.decode(Answer.self, from: try await call("POST", "/logos/lookup", body: body)).logos ?? []
+    }
+
+    /// A logo as a PNG: white for a dark page, dark for a light one, or as it was drawn.
+    public func logoImageURL(_ logo: LogoAnswer, variant: String) -> URL? {
+        guard let id = logo.id else { return nil }
+        return URL(string: "\(base)\(apiPath)/logos/\(id)/image?variant=\(Self.queryValue(variant))&v=\(logo.version ?? 0)")
+    }
+
+    public func legalNotices() async throws -> LegalNotices { try await get("/legal/notices") }
+
+    /// A show's episode layout for everyone: "cards", "list", or "" for the server's. Administrators only.
+    public func setShowView(_ show: Int64, _ view: String) async throws {
+        _ = try await call("PUT", "/shows/\(show)/view", body: try JSONEncoder().encode(["view": view]))
+    }
+
+    /// Saving a whole show, as an item is saved.
+    public func collectionsHolding(show: Int64) async throws -> [Int64] { try await list("/collections/holding?item=0&show=\(show)") }
+
+    @discardableResult
+    public func saveForLater(show: Int64) async throws -> Int64 {
+        struct Answer: Decodable { let collectionId: Int64? }
+        let data = try await call("POST", "/collections/watch-later/items", body: try JSONEncoder().encode(["items": [], "shows": [show]]))
+        return (try? decoder.decode(Answer.self, from: data))?.collectionId ?? 0
+    }
+
+    public func setInCollection(_ collection: Int64, show: Int64, _ inIt: Bool) async throws {
+        _ = try await call(inIt ? "POST" : "DELETE", "/collections/\(collection)/items", body: try JSONEncoder().encode(["items": [], "shows": [show]]))
+    }
+
     public enum Probe: Equatable {
         case found(ServerStatus)
         case failed(String)
