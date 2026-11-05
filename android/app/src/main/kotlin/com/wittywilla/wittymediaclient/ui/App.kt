@@ -66,6 +66,9 @@ import com.wittywilla.wittymediaclient.net.problemWords
 import com.wittywilla.wittymediaclient.player.PlayerScreen
 import com.wittywilla.wittymediaclient.player.Start
 import com.wittywilla.wittymediaclient.player.placeOn
+import com.wittywilla.wittymediaclient.tv.TvLogos
+import com.wittywilla.wittymediaclient.tv.TvReminderAlert
+import com.wittywilla.wittymediaclient.tv.TvReminders
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.launch
 import kotlinx.serialization.SerializationException
@@ -130,10 +133,15 @@ class Nav(val app: WittyApp, private val s: Map<String, String>) {
     // Whether this server has a guide to offer.
     var hasGuide by mutableStateOf(false)
 
-    // A remote's Guide button, from anywhere that's signed in.
+    // A remote's Guide button, from anywhere that's signed in. A TV has WittyTV's own guide; elsewhere it's the page.
     fun openGuide() {
+        if (!hasGuide || app.api.token.isEmpty()) return
+        if (app.isTv) {
+            if (current != Route.LiveTv && (current as? TvRoute)?.screen != TvScreen.Guide) push(TvRoute(TvScreen.Guide))
+            return
+        }
         val onPage = current as? Route.Page
-        if (hasGuide && app.api.token.isNotEmpty() && onPage?.path != GUIDE_PATH) push(Route.Page(GUIDE_PATH))
+        if (onPage?.path != GUIDE_PATH) push(Route.Page(GUIDE_PATH))
     }
 
     // The server the sign-in screens talk to. Its key waits here for a token to be
@@ -261,6 +269,8 @@ class Nav(val app: WittyApp, private val s: Map<String, String>) {
     fun focusFor(key: String) = focusMemory.getOrPut(key) { FocusMemory() }
 
     private fun forgetScreens() {
+        TvLogos.forget()
+        TvReminders.forget()
         shown.clear()
         focusMemory.clear()
         libraryTypes.clear()
@@ -664,6 +674,7 @@ fun AppRoot(app: WittyApp) {
                         is Route.Help -> ServerPageScreen(nav, route, route.path, keptToGames = false, public = true)
                         is Route.OnPhone -> OnPhoneScreen(nav, strings, route.title, route.path)
                         is GamesRoute -> GamesRouteScreen(nav, route)
+                        is TvRoute -> TvRouteScreen(nav, route)
                     }
                 }
             }
@@ -680,6 +691,8 @@ fun AppRoot(app: WittyApp) {
         } else {
             showing()
         }
+        // A WittyTV reminder comes up on whatever's showing, once someone is signed in.
+        if (metrics.tv && route.signedIn) TvReminderAlert(nav)
     }
 }
 

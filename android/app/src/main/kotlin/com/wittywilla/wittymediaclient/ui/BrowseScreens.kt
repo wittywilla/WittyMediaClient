@@ -60,6 +60,7 @@ import com.wittywilla.wittymediaclient.net.COLLECTIONS_PATH
 import com.wittywilla.wittymediaclient.net.GAME_PCS_PATH
 import com.wittywilla.wittymediaclient.net.GUIDE_PATH
 import com.wittywilla.wittymediaclient.net.GuideChannel
+import com.wittywilla.wittymediaclient.tv.watchChannel
 import com.wittywilla.wittymediaclient.net.Home
 import com.wittywilla.wittymediaclient.net.Item
 import com.wittywilla.wittymediaclient.net.Library
@@ -266,7 +267,7 @@ private fun OnNowRow(nav: Nav, channels: List<GuideChannel>) {
                 val on = channel.programmeAt(now)
                 val words = on?.title ?: "Nothing listed"
                 FocusBox(
-                    { nav.push(Route.Page(channelPath(channel.key))) }, Modifier.width(width),
+                    { if (nav.app.isTv) nav.watchChannel(channel.key) else nav.push(Route.Page(channelPath(channel.key))) }, Modifier.width(width),
                     label = "Channel ${channel.number}, ${channel.name}: $words", focusKey = "onnow-${channel.key}",
                 ) {
                     Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(Space.S1)) {

@@ -85,7 +85,7 @@ class Api(val base: String, val token: String, private val quick: Boolean = fals
     private fun reportsFailure(method: String, status: Int) =
         !quick && token.isNotEmpty() && status != 401 && !(method == "DELETE" && status == 404)
 
-    private suspend fun call(method: String, path: String, body: String? = null): String {
+    internal suspend fun call(method: String, path: String, body: String? = null): String {
         val where = "$method ${path.substringBefore('?')}"
         val answer = try {
             raw(method, path, body)

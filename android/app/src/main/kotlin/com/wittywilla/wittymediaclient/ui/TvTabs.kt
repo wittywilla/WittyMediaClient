@@ -63,7 +63,8 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import com.wittywilla.wittymediaclient.games.GamesNav
 import com.wittywilla.wittymediaclient.games.GamesLibraryScreen
-import com.wittywilla.wittymediaclient.net.GUIDE_PATH
+import com.wittywilla.wittymediaclient.net.ApiError
+import com.wittywilla.wittymediaclient.tv.GuideScreen
 import com.wittywilla.wittymediaclient.net.Item
 import com.wittywilla.wittymediaclient.net.Library
 import com.wittywilla.wittymediaclient.net.pagePath
@@ -479,24 +480,34 @@ private fun GamesShelf(nav: Nav, s: Map<String, String>, library: Library) {
 private const val SHELF_LENGTH = 20
 private const val GAME_BOX = 3f / 4f
 
-// Live TV: the server's guide, under the bar. A server with no channels says so.
+// Live TV: WittyTV's guide, in the account's look, under the bar, with Recordings at its top, as on Apple TV. A server
+// with no channels says so.
 @Composable
 fun LiveTvScreen(nav: Nav, s: Map<String, String>) {
     var has by remember { mutableStateOf<Boolean?>(null) }
-    LaunchedEffect(Unit) {
-        has = try {
-            "live-tv" in nav.app.api.capabilities().features && nav.app.api.guide(1, 1).channels.isNotEmpty()
+    var error by remember { mutableStateOf("") }
+    var attempt by remember { mutableIntStateOf(0) }
+    LaunchedEffect(attempt) {
+        try {
+            has = "live-tv" in nav.app.api.capabilities().features && nav.app.api.guide(1, 1).channels.isNotEmpty()
+            error = ""
         } catch (e: CancellationException) {
             throw e
+        } catch (e: ApiError) {
+            // A server without live TV at all.
+            if (e.status == 404) has = false else if (!nav.handleExpired(e) && has == null) error = problemWords(e, s["errLost"].orEmpty())
         } catch (e: Exception) {
-            nav.handleExpired(e)
-            false
+            if (has == null) error = problemWords(e, s["errLost"].orEmpty())
         }
         nav.hasGuide = has == true
     }
-    when (has) {
-        null -> Loading()
-        false -> TvEmpty(s["liveTvNone"].orEmpty(), s["liveTvNoneDetail"].orEmpty())
-        true -> PageInTab(nav, Route.LiveTv, GUIDE_PATH)
+    when {
+        has == true -> GuideScreen(nav, inTab = true)
+        has == false -> TvEmpty(s["liveTvNone"].orEmpty(), s["liveTvNoneDetail"].orEmpty())
+        error.isNotEmpty() -> LoadFailed(nav, error) {
+            error = ""
+            attempt++
+        }
+        else -> Loading()
     }
 }

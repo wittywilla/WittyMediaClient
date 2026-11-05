@@ -717,7 +717,7 @@ TV, which has none, everything is native.
 | Shorts, creators, channel videos | Page | To build |
 | Radio | Page | To build |
 | Live TV guide and watching, WittyTV's looks | Page | Native, every WittyTV look and layout |
-| Recordings and series rules | Page | Native on Apple TV (with reminders); Android TV to build |
+| Recordings and series rules | Page | Native on both TVs, with reminders |
 | Games (WittyPlay) | To build: the shared Apple player (Games everywhere, above), with the account's touch layout; the page until then | Native on Apple TV: a player for the server's stream (the server runs every game: see [WITTYPLAY-STREAMING.md](WITTYPLAY-STREAMING.md)), with couch mode's library and game page. The page on Android TV |
 | Game PCs and rigs (Moonlight) | Native | Native |
 | DVD and Blu-ray menus, the disc remote, CD player | Page: the server's player, whose remote is a sheet (Discs and the remote, above). A native disc player to build | To build: the disc player, with the real remote mapped and the remote from the player's controls (Discs and the remote, above). The page on Android TV until then |
@@ -784,7 +784,8 @@ Apple TV and Android TV are the same app to look at. Sizes are given in TV units
   - **Games:** WittyPlay's couch library. With one games library it opens straight in; with several, one row per
     library, as Home's rows are: the library's name, its games' covers (each opens that game's page) and a pill that
     opens the whole library.
-  - **Live TV:** the WittyTV guide (below) in the account's WittyTV look, with Recordings reachable from it.
+  - **Live TV:** the WittyTV guide (below) in the account's WittyTV look, with Recordings reachable from it. Choosing
+    the tab keeps focus on its pill, as every tab does; coming back from a channel puts it on that channel's cell.
   - All six always show. A server with no games or no live TV shows that tab with a plain empty state saying what's
     missing and that an owner adds it on the server's website (`gamesNone` / `gamesNoneDetail`, `liveTvNone` /
     `liveTvNoneDetail`). Never a broken or blank page.
@@ -798,7 +799,8 @@ Apple TV and Android TV are the same app to look at. Sizes are given in TV units
   owner's default in `/guide`: the colours of each of its themes (`modern`, `classic`, `satellite`, `teletext`,
   `listings`, `bigpicture`, `outline`, `compact`, `custom`) are worked out as `web/src/pages/tv/tvThemes.ts` does, and
   each theme's layout (`web/src/pages/tv/tvthemes.css`: row height, cell shape, the now line, the preview's place, the
-  font) is built natively to match, on both TVs.
+  font) is built natively to match, on both TVs (Apple TV's `apple/App/Tv*.swift`, Android TV's `android/…/tv/`, one
+  port of the other). The now line stands at the current time, with the time centred over it, as the page draws it.
 - **Recording** is offered only where the server says it can be: a channel's `canRecord` (true only for tuner
   channels the profile may record; never for channels made from the library). Record and series record are hidden,
   not greyed, when it's false or missing, on every device and on the website alike; no app works it out for itself,
