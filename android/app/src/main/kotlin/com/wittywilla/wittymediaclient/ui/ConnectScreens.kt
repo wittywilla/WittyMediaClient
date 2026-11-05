@@ -157,10 +157,11 @@ private fun SideBySide(modifier: Modifier = Modifier, words: @Composable () -> U
     }
 }
 
-// A server in a list: its name, and the address it's at.
+// A server in a list: its name, and the address it's at. Coming back to the list, focus returns to
+// the server that was chosen, wherever it is in the list now.
 @Composable
 private fun ServerRow(name: String, url: String, requestFocus: Boolean, onClick: () -> Unit) {
-    FocusBox(onClick, Modifier.fillMaxWidth(), label = "$name, $url", requestFocus = requestFocus, filled = MaterialTheme.colorScheme.surfaceVariant) {
+    FocusBox(onClick, Modifier.fillMaxWidth(), label = "$name, $url", focusKey = "server-$url", requestFocus = requestFocus, filled = MaterialTheme.colorScheme.surfaceVariant) {
         Column(Modifier.padding(horizontal = 18.dp, vertical = 11.dp)) {
             Text(name, color = MaterialTheme.colorScheme.onSurface)
             Secondary(url)
