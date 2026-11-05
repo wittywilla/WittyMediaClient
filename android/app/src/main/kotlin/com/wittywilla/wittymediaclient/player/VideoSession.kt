@@ -42,6 +42,7 @@ import kotlinx.coroutines.cancel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 // The website's player session (web/src/player/PlayerPage.tsx, VideoPlayer.tsx): one video at a time, kept
 // while the viewer goes elsewhere in the app, so leaving the full player keeps it playing in the mini player
@@ -259,11 +260,13 @@ class VideoSession(private val nav: Nav, val id: Long, private val startAt: Doub
             // The website always says where to start: the place asked for, else where the viewer left off.
             val start = want.startSec ?: current.progress?.resumeSec?.takeIf { it > 0 } ?: 0.0
             val streaming = ViewPrefsStore.streaming(app)
+            // Reading the device's decoders can take seconds the first time, so never on the main thread.
+            val capabilities = withContext(Dispatchers.Default) { DeviceProfile.capabilities(app) }
             val answer = api.playback(
                 id,
                 PlaybackRequest(
                     PLAYBACK_PROFILE, want.audio, want.subtitle, start,
-                    capabilities = DeviceProfile.capabilities(app),
+                    capabilities = capabilities,
                     maxBitrateKbps = DeviceProfile.maxBitrateKbps(app),
                     forceTranscode = if (want.convert) true else null,
                     flatten3d = if (want.flatten3d) true else null,
