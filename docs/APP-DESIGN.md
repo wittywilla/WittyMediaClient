@@ -161,7 +161,7 @@ The same as the web's, so each person keeps their colour on every device:
    `#0a6fb8`, `"Émile"` → `#0e7c6f` and `"Mum 👩"` → `#99690a` (an emoji outside the first plane) against this rule.
 3. **Initial:** the first letter of the trimmed name, upper case, white, bold, at 43% of the tile's size.
 4. **Shape:** a rounded square, radius 22% of its size. Small avatars (36 and under) are circles.
-5. **Sizes:** 28 in the floating bar, 64 in You's header, 104 in the phone's profile grid, 120 on the password
+5. **Sizes:** 28 in the floating bar, 88 in You's header (120 on a tablet), 104 in the phone's profile grid, 120 on the password
    screen, 140 in a tablet's grid, 200 on a TV.
 
 ### Profile tile
@@ -254,9 +254,15 @@ Body `passwordHint` ("Enter your password or PIN."); the password field ("Passwo
 once; Problem; Primary `signIn` ("Sign in"); Quiet `forgotPassword` ("Forgot your password?"), which opens the server's
 help on it inside the app (on Apple TV: a QR card to it).
 
+A wrong password (401) clears the field, keeps the focus in it, outlines it and its label in `danger`, shakes it once
+(not with Reduce Motion) and says `errWrongPassword`; typing again takes the red away. On the sign-in form both fields
+turn red and the words are `errWrongNameOrPassword`. A 429 shows the server's own words, which say how long to wait.
+
 When the server asks for a second step (two-factor), the same screen asks for `twoFactorTitle` with the six code boxes
 and an authenticator note, without a number pad on a phone (the system keyboard, numeric, with one-time-code
-autofill), with it on a TV.
+autofill), with it on a TV. A wrong code shakes the boxes and says `errWrongCode`. Under them, Quiet `useRecoveryCode`
+swaps the boxes for one field, `recoveryLabel` (key icon), with `recoveryTitle` and `recoveryHint` above and Primary
+`signIn`; Quiet `useAuthenticatorCode` swaps back. A wrong one says `errWrongRecovery`.
 
 ### 6. Sign in
 
@@ -281,13 +287,173 @@ centred: nothing stretches to the edges.
 
 ## You and settings
 
-*To follow, from the feature inventory: the You tab's header and groups, every per-person setting natively,
-and every server-wide setting reachable.*
+The third tab, **You** (`youTab`), holds the person, their account, this device's choices and, for an administrator,
+the server. Its icon in the floating bar (and the TV's top bar) is the person's avatar at 28, a circle, ringed in
+`accent` 2 wide when the tab is chosen. One rule decides where each thing lives:
+
+- **What belongs to the person** is native: their names, password, two-step sign-in, devices, signing in a TV, and
+  this device's theme.
+- **What the server's owner manages** (libraries, profiles of others, transcoding, backups…) opens the server's own
+  page for it inside the app, signed in, titled with the row's name and with a native Back. On Apple TV, which has no
+  browser, the row opens the QR card for that page instead, and Android TV shows the same card.
+- Every row the server would refuse is hidden, not greyed: no Server group for a non-administrator, no password row
+  for a Kids or Guest profile, no game rows without a games library.
+
+### The page
+
+A single column, gutter 16, at most 640 wide and centred on a tablet; it scrolls under the floating bar.
+
+1. **Header**, centred: the avatar at 88 (120 on a tablet); 12 below it the profile name in Title; under that
+   `@username · Role` in Secondary, `textSecondary`, where Role is `roleAdmin`, `roleAdult`, `roleKids` or `roleGuest`
+   (the @username is always shown here: this is the account). Then 16 below, Secondary button `switchProfile`
+   ("Switch profile", icon `person.2` / `group`), which ends this sign-in and opens Who's watching.
+2. The **groups**, each a grouped list (see Components) with its caption, 24 apart:
+
+| Group | Row | Icon tile | Value | Opens | Shown to |
+|---|---|---|---|---|---|
+| `groupAccount` | `rowNames` Name and username | `person.text.rectangle` / `badge`, `#0a6fb8` | the profile name | Names (native) | everyone |
+| | `rowPassword` Password | `key` / `key`, `#3e5bd0` | | Password (native) | adults, admins |
+| | `rowTwoStep` Two-step sign-in | `lock.shield` / `shield_lock`, `#2e7d3c` | `on` / `off` | Two-step (native) | adults, admins, when the server offers it |
+| | `rowDevices` Your devices | `iphone.and.ipad` / `devices`, `#7f46b8` | how many | Devices (native) | everyone |
+| `groupHousehold` | `rowSignInTv` Sign in a TV | `tv` / `tv`, `#bd2f85` | | Sign in a TV (native) | adults, admins; not on a TV |
+| | `rowProfiles` Profiles and parental limits | `figure.2.and.child.holdinghands` / `family_restroom`, `#b8500d` | | `/settings/users` | adults, admins |
+| `groupYours` | `rowYourYear` Your year | `sparkles` / `auto_awesome`, `#c9302f` | | `/review` | everyone |
+| | `rowCollections` Collections and playlists | `square.stack` / `library_books`, `#0e7c6f` | | `/collections` | everyone |
+| | `rowShareLinks` Share links | `link` / `link`, `#0a6fb8` | | `/settings/sharing` | everyone |
+| | `rowActivity` Activity | `waveform.path.ecg` / `monitoring`, `#99690a` | | `/settings/activity` | everyone |
+| | `rowGameSettings` Game settings | `gamecontroller` / `sports_esports`, `#7f46b8` | | `/settings/games` | with a games library |
+| | `rowControllers` Controllers | `dpad` / `gamepad`, `#3e5bd0` | | `/controllers` | with a games library |
+| `groupDevice` | `rowTheme` Theme | `paintpalette` / `palette`, `#0e7c6f` | the theme's name | Theme (native) | everyone |
+| `groupServer` | `rowLibraries` Libraries | `books.vertical` / `video_library`, `#5d6474` | | `/settings/libraries` | admins |
+| | `rowMetadata` Metadata and artwork | `photo.on.rectangle` / `image_search` | | `/settings/metadata` | admins |
+| | `rowFixMatches` Fix matches | `wand.and.stars` / `auto_fix_high` | | `/fix-matches` | admins |
+| | `rowPlayback` Playback and discs | `play.rectangle` / `smart_display` | | `/settings/playback` | admins |
+| | `rowLiveTv` Live TV and tuners | `antenna.radiowaves.left.and.right` / `live_tv` | | `/settings/channels` | admins |
+| | `rowGaming` Consoles and cores | `gamecontroller` / `sports_esports` | | `/settings/gaming` | admins |
+| | `rowGamePcs` Game PCs | `desktopcomputer` / `computer` | | `/settings/couch` | admins |
+| | `rowTranscoding` Live transcoding | `bolt` / `bolt` | | `/settings/transcoding` | admins |
+| | `rowLibraryTranscoding` Library transcoding | `arrow.triangle.2.circlepath` / `autorenew` | | `/settings/library-transcoding` | admins |
+| | `rowRemote` Remote access | `globe` / `public` | | `/settings/remote` | admins |
+| | `rowAppearance` Appearance and branding | `paintbrush` / `brush` | | `/settings/appearance` | admins |
+| | `rowWittyRigs` WittyRigs | `server.rack` / `dns` | | `/settings/wittyrigs` | admins |
+| `groupMaintenance` | `rowLogs` WittyLog | `doc.text.magnifyingglass` / `article` | | `/settings/logs` | admins |
+| | `rowDiagnoser` WittyDiagnoser | `stethoscope` / `stethoscope` | | `/settings/diagnoser` | admins |
+| | `rowModules` Modules | `puzzlepiece.extension` / `extension` | | `/settings/modules` | admins |
+| | `rowBackup` Backup | `externaldrive` / `backup` | | `/settings/backup` | admins |
+| | `rowRepair` Repair | `wrench.and.screwdriver` / `build` | | `/settings/repair` | admins |
+| | `rowReset` Reset | `arrow.counterclockwise` / `restart_alt`, `danger` | | `/settings/reset` | admins |
+| `groupHelp` | `rowHelp` Help | `questionmark.circle` / `help`, `#99690a` | | `/help` | everyone |
+| | `rowAboutServer` About this server | `info.circle` / `info`, `#5d6474` | the server's version | `/settings/about` | everyone |
+| | `rowLegal` Legal | `doc.plaintext` / `gavel`, `#5d6474` | | `/legal` | everyone |
+| | `rowLicences` Licences | `text.book.closed` / `menu_book`, `#5d6474` | | Licences (native) | everyone |
+| | `rowAppLog` This app's log | `list.bullet.rectangle` / `receipt_long`, `#5d6474` | | Log (native) | everyone |
+
+   Server and Maintenance rows all take `#5d6474` unless the table says otherwise: a quiet group for the owner's tools.
+
+3. **This server**: a server card (not pressable) with its name, address and, under it in Caption `textHint`, the
+   fingerprint; then Secondary `changeServer` and Destructive `signOut` ("Sign out", icon sign-out), full width, 12 apart.
+4. A Caption line, centred, `textHint`: the app's name and version.
+
+### Names
+
+Back; Title `rowNames`. The profile-name field (`profileNameLabel`, at most 60) with `profileNameHint` under it; the
+username field (`usernameLabel`, at most 40) with `usernameHint`; for Kids and Guest the username is shown, not editable,
+with `usernameKidsHint`. A toggle row in a grouped list: `showUsernameLabel` with `showUsernameHint`. Primary `save`,
+busy while saving, then `saved` as an ok-coloured line for 2 seconds. The avatar at 64 above the fields follows the
+profile name as it's typed, so its colour can be seen changing. `PUT /api/v1/users/{me}/profile`.
+
+### Password
+
+Back; Title `rowPassword`; Body `passwordChangeHint` ("At least 8 characters. Your other devices will be signed out.").
+Fields: `currentPasswordLabel`, `newPasswordLabel`, `repeatPasswordLabel`, all password fields with the eye. Checked
+before sending: `errPasswordShort`, `errPasswordsDiffer`. A 403 is `errCurrentPassword` on the first field, in red as on
+sign-in. Primary `changePassword`; when it's done, a check, `passwordChanged`, and Back. `PUT /api/v1/users/{me}/password`.
+
+### Two-step sign-in
+
+Back; Title `rowTwoStep`. From `GET /api/v1/me/2fa`:
+
+- **Off:** Body `twoStepIntro`; Primary `twoStepTurnOn`. Then, one step at a time in the same screen:
+  1. `twoStepConfirmTitle`: the password field; Primary `continue` → `POST /me/2fa/setup`.
+  2. `twoStepScanTitle`: the QR card of the `uri`, 200 (on a phone also Secondary `twoStepOpenApp`, which opens the
+     `otpauth:` address so an authenticator on this phone takes it); under it `twoStepKeyLabel` and the secret in
+     monospaced Label, in groups of four, with a copy button. Then the six code boxes and the numeric keyboard (number
+     pad on a TV); six digits send `POST /me/2fa/confirm`. Wrong: shake and `errWrongCode`.
+  3. `twoStepSavedTitle`: Body `twoStepSavedHint`; the recovery codes in a `panel` card, monospaced, two columns;
+     Secondary `copyAll`; Primary `twoStepDone`, which is the only way on, so they aren't skipped by accident.
+- **On:** a `panel` card with a check in `ok`, `twoStepOnTitle` and `twoStepCodesLeft` (how many recovery codes are
+  left; under 3, in `danger`). Destructive `twoStepTurnOff` asks for the password and a code in a sheet, then
+  `POST /me/2fa/disable`.
+
+### Your devices
+
+Back; Title `rowDevices`; Body `devicesHint`. A grouped list from `GET /api/v1/sessions`, this device first: an icon
+tile by kind (`iphone` / `smartphone` for phones, `ipad` / `tablet`, `tv` / `tv`, `desktopcomputer` / `computer`,
+`globe` / `language` for a browser), the device's name in Label, and in Secondary where it is (`whereMachine`,
+`whereHome`, `whereVpn`, `whereInternet`) and when it was last seen ("Active now" within 5 minutes, then relative).
+This device has a `thisDevice` pill in `border`; any other has a trailing Quiet `signOut` (on a TV: OK on the row,
+then a confirmation). Under the list, Destructive `signOutOthers`, with a confirmation, when there are others.
+`DELETE /api/v1/sessions/{id}`, `DELETE /api/v1/sessions`.
+
+### Sign in a TV
+
+Back; Title `rowSignInTv`; Body `signInTvHint` ("Type the code your TV shows."). The six code boxes and the numeric
+keyboard; six digits send `POST /pair/info`. Then a `panel` card: the device's name in Label, platform and address in
+Secondary, and `signInTvAs` with the profiles it may sign in as (the person, and Kids and Guest profiles they look
+after) as profile tiles at 72, the person first and chosen. Primary `signInTvApprove`, Quiet `signInTvDeny`. Done:
+a check in `ok` and `signInTvDone`. Quiet `signInTvInvite` ("The TV asks for a code?") makes one instead
+(`POST /pair/invite`) and shows it in Display monospaced in a `panel` card with how long it lasts.
+
+### Theme
+
+Back; Title `rowTheme`; Body `themeHint` ("Only on this device. The server's own pages follow it too."). A grouped
+list: `themeAutomatic` (light or dark with the device), `themeServer` (the server's choice, named), then each theme in
+`shared/data/themes.json` with a 28 swatch (its background, a card stripe and an accent dot) and a check on the
+chosen one. Choosing applies at once, with a 200 ms cross-fade. Kept per server on the device.
+
+### On a tablet and a TV
+
+A tablet uses the same page at 640 wide. A TV puts the header on the left third (avatar 200, names, `switchProfile`,
+`signOut`), vertically centred, and the groups in a focusable list on the right two-thirds; a row's screen replaces
+the list. The TV's rows are 72 high with 32 icon tiles, Label at TV size, and the focus ring around the whole row.
 
 ## Feature map
 
-*To follow: every feature of the server, and where it is in each app (native screen, the server's page inside the app,
-or on Apple TV a QR card to open it on a phone).*
+Where every part of the server is in the apps. **Native** is built into the app; **Page** is the server's own page
+inside the app (signed in, with a native Back); **QR** is the card to open that page on a phone, on a TV that can't
+show it. Desktop apps are the web interface, so everything is there.
+
+| Feature | Phone and tablet | TV |
+|---|---|---|
+| Choosing a server, address, security code, pairing | Native | Native |
+| Who's watching, password, two-step, recovery code, sign-in form | Native | Native |
+| Home: hero, libraries, Jump back in, Next up, Recently added | Native | Native |
+| Search | Native | Native |
+| Movies, shows, seasons, episodes, item pages | Native | Native |
+| Video playback, resume, next episode | Native | Native |
+| Music, audiobooks, podcasts: browse and player | Native | Native |
+| Photos | Page | Native viewer |
+| Books, comics, PDF reader | Page | QR |
+| Shorts, creators, channel videos | Page | QR |
+| Radio | Page | QR |
+| Live TV guide and watching | Page | Native |
+| Recordings and series rules | Page | QR |
+| Games (WittyPlay) | Page (iPhone and iPad) | QR |
+| Game PCs and rigs (Moonlight) | Native | Native |
+| DVD and Blu-ray menus, CD player | Page | QR |
+| Collections and smart playlists | Page | QR |
+| Your year, history | Page | QR |
+| Names, password, two-step sign-in, devices | Native | Native |
+| Sign in a TV | Native | — (a TV is what gets signed in) |
+| Theme on this device | Native | Native |
+| Profiles of others, parental limits, sign-in screen style | Page | QR |
+| Share links, activity, game settings, controllers | Page | QR |
+| Every server setting (Server and Maintenance groups) | Page | QR |
+| Help, legal, about the server | Page | QR |
+| Licences and this app's log | Native | Native |
+| Server setup (first run) | Page, in the browser | QR |
+
+Anything added to the server's menus later goes in the table above before it ships: as a Page row at least.
 
 ## On a TV
 
