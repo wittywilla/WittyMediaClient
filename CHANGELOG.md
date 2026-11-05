@@ -5,6 +5,11 @@ What changed in WittyMediaClient, newest first. What changed before it had a rep
 
 ## Unreleased
 
+- **Android: games stream over WebRTC first where the server has version 2 of its game stream.** Late frames are dropped rather than
+  waited for, so a game keeps up on a poor network. The WebSocket takes over if WebRTC hasn't connected in 5 seconds or shown a
+  picture in 8.
+- **Android: an APK for each kind of processor, and a universal one.** WebRTC's library is 7 to 16 MB for each, so a device need only
+  download its own: the README's Android section says which to install. The universal APK works anywhere, at 51 MB to 64-bit ARM's 16.
 - **Android: the server's games play in the app, on phones, tablets and Android TV.** The server runs every game and streams it; the app shows the picture
   (H.264 through the device's own decoder, drawn as soon as it's decoded, or a picture a frame where the server has no encoder), plays the sound and sends the
   controls. Controllers play by the console's layout with the account's own profile over it, up to four at once, plugged in or out while playing, with rumble.
@@ -56,6 +61,12 @@ What changed in WittyMediaClient, newest first. What changed before it had a rep
 - **Desktop on a Mac:** the window has the system's red, yellow and green buttons at the left of the title bar, rather than Windows-style ones
   at the right, and the title sits in the middle. A double-click on the bar does what System Settings say. There's a Mac menu bar, so
   Command-Q, copy and paste work, with Help and Change server in it. Windows, Linux, FreeBSD and TV mode are as they were.
+- **Desktop: the connect screen follows the newer design.** It's WittyMediaClient until a server is added. A server
+  found on the network shows only its address, "Found on your network" and a plain server icon, and says nothing about
+  itself until it's added; one that's also saved is listed once, under Used before, with its own name. Once a server has
+  proved who it is, its own logo shows on its screens and in the list, kept with it so it's there before it answers. On a
+  TV the lockup is larger, every button is a pill, a focused field shows only the focus ring, and a focused number key
+  fills instead of taking a ring.
 - **Desktop: the connect screen looks like the other apps' sign-in.** The glow at the top, the WittyMediaServer mark and name,
   servers as cards with "Last used", a field whose label rises onto its outline, six code boxes over a number pad, and a
   plain warning for a server that has changed. A new server can also be signed in from a phone: the screen shows a code and

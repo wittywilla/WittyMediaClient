@@ -84,6 +84,8 @@
     next: ['M9 5l7 7-7 7'],
     link: ['M10.2 13.8a4 4 0 0 0 5.66 0l3.2-3.2a4 4 0 0 0-5.66-5.66l-1.1 1.1', 'M13.8 10.2a4 4 0 0 0-5.66 0l-3.2 3.2a4 4 0 0 0 5.66 5.66l1.1-1.1'],
     erase: ['M9 5h10.5A1.5 1.5 0 0 1 21 6.5v11a1.5 1.5 0 0 1-1.5 1.5H9l-6.5-7z', 'M12 9.5l5 5', 'M17 9.5l-5 5'],
+    rack: ['M4.5 4.5h15a1.5 1.5 0 0 1 1.5 1.5v3.5a1.5 1.5 0 0 1-1.5 1.5h-15A1.5 1.5 0 0 1 3 9.5V6a1.5 1.5 0 0 1 1.5-1.5z',
+      'M4.5 13h15a1.5 1.5 0 0 1 1.5 1.5V18a1.5 1.5 0 0 1-1.5 1.5h-15A1.5 1.5 0 0 1 3 18v-3.5A1.5 1.5 0 0 1 4.5 13z', 'M7 7.75h.01', 'M7 16.25h.01'],
     warning: ['M12 2.6c.6 0 1.1.3 1.4.8l9 15.8c.6 1.1-.2 2.4-1.4 2.4H3c-1.2 0-2-1.3-1.4-2.4l9-15.8c.3-.5.8-.8 1.4-.8zM10.9 8.5v6h2.2v-6zm0 8v2.2h2.2v-2.2z'],
   }
   const icon = (name, className) => svg('svg', { viewBox: '0 0 24 24', class: `icon ${name} ${className || ''}`, 'aria-hidden': 'true' },
@@ -101,8 +103,23 @@
       svg('path', { d: 'M27 23l14 9-14 9z', fill }))
   }
 
-  const lockup = () => el('div', { className: 'lockup' }, mark(),
-    el('span', { className: 'wordmark' }, 'Witty', el('span', { className: 'media', textContent: 'Media' }), 'Server'))
+  const wordmark = (last) => el('span', { className: 'wordmark' }, 'Witty', el('span', { className: 'media', textContent: 'Media' }), last)
+
+  // A server's picture: its own logo, which the app fetched once it proved who it is, or the mark.
+  const serverMark = (logo) => (typeof logo === 'string' && logo.indexOf('data:image/') === 0
+    ? el('img', { className: 'mark logo', src: logo, alt: '' }) : mark())
+
+  // The app is WittyMediaClient until a server has been added; then the screens of that server
+  // carry its own name (WittyMediaServer, as the wordmark, when it has none of its own) and logo.
+  function lockup(server) {
+    if (!server) return el('div', { className: 'lockup' }, mark(), wordmark('Client'))
+    return el('div', { className: 'lockup' }, serverMark(server.logo), serverName(server.name, 'wordmark'))
+  }
+
+  // A server's name: its own, or WittyMediaServer styled as the wordmark when it has none.
+  const serverName = (name, className) => (name && name !== 'WittyMediaServer'
+    ? el('span', { className: `${className} own`, textContent: name })
+    : el('span', { className }, 'Witty', el('span', { className: 'media', textContent: 'Media' }), 'Server'))
   const spinner = (className) => el('span', { className: `spinner ${className || ''}`, 'aria-hidden': 'true' })
   const legal = () => el('p', { className: 'legal', textContent: S.legalConnect })
 
@@ -144,7 +161,8 @@
 
   // One screen. What it says goes first and what can be done second: one column here, and the
   // left and right halves of a TV. back is the way back, on screen and on Escape; escape is
-  // Escape alone, where the screen's own main button already goes back.
+  // Escape alone, where the screen's own main button already goes back. lockup is the app's
+  // unless a screen gives a server's, or false for none.
   function show(parts) {
     if (onLeave) {
       const leave = onLeave
@@ -159,7 +177,8 @@
     app.textContent = ''
     app.className = `${parts.className || ''}${parts.back ? ' with-back' : ''}`
     if (parts.back) app.appendChild(button(S.back, parts.back, { kind: 'quiet', icon: 'back', className: 'back' }))
-    app.appendChild(el('div', { className: 'words' }, lockup(), ...parts.words))
+    const brand = parts.lockup === undefined ? lockup() : parts.lockup
+    app.appendChild(el('div', { className: 'words' }, ...(brand ? [brand] : []), ...parts.words))
     app.appendChild(el('div', { className: 'actions' }, ...(parts.actions || [])))
     if (parts.foot) app.appendChild(el('div', { className: 'foot' }, ...parts.foot))
     // Focus lands on a control, so a screen reader wouldn't otherwise hear which screen this is.
@@ -181,11 +200,17 @@
     actions: [button(S.cancel, () => listScreen())],
   })
 
-  function serverCard(s, lastUsed) {
+  const hostOf = (url) => { try { return new URL(url).host } catch (e) { return url } }
+
+  // A saved server: its logo and name over its address. One only found on the network says
+  // nothing about itself until it's added: the plain server icon, and its address alone.
+  function serverCard(s, opts) {
+    const o = opts || {}
+    const picture = o.found ? el('span', { className: 'glyph' }, icon('rack')) : serverMark(s.logo)
+    const words = o.found ? [hostOf(s.url), S.foundOnNetwork] : [s.name || hostOf(s.url), s.name ? hostOf(s.url) : '']
     const card = el('button', { type: 'button', className: 'server', onclick: () => { listFocus = s.url; choose(s.url, '', card) } },
-      mark(), el('span', { className: 'who' }, el('span', { className: 'name', textContent: s.name || s.url }),
-        el('span', { className: 'where', textContent: s.name ? s.url : '' })))
-    if (lastUsed) card.appendChild(el('span', { className: 'pill', textContent: S.lastUsed }))
+      picture, el('span', { className: 'who' }, el('span', { className: 'name', textContent: words[0] }), el('span', { className: 'where', textContent: words[1] })))
+    if (o.lastUsed) card.appendChild(el('span', { className: 'pill', textContent: S.lastUsed }))
     card.appendChild(icon('next', 'chevron'))
     card.appendChild(spinner())
     card.dataset.url = s.url
@@ -216,7 +241,8 @@
 
     const lastUsed = recent.length ? recent[0].url : ''
     const foundList = el('div', { className: 'list' })
-    const recentList = el('div', { className: 'list' }, ...recent.map((s) => serverCard(s, s.url === lastUsed)))
+    const recentList = el('div', { className: 'list' }, ...recent.map((s) => serverCard(s, { lastUsed: s.url === lastUsed })))
+    const saved = recent.map((s) => s.url)
     const recentHeading = el('h2', { textContent: S.recentServers })
     const status = el('p', { role: 'status', textContent: S.findSearching })
     const searching = el('div', { className: 'note' }, spinner(), status)
@@ -246,27 +272,19 @@
       const hadFocus = foundList.contains(document.activeElement)
       const focusedIndex = Array.from(foundList.children).indexOf(document.activeElement)
       foundList.textContent = ''
-      for (const s of found) foundList.appendChild(serverCard(s, s.url === lastUsed))
+      // A server that's found and also saved is listed once, under Used before, with its own name.
+      for (const s of found) if (!saved.includes(s.url)) foundList.appendChild(serverCard(s, { found: true }))
       const stillLooking = Date.now() - startedAt <= NONE_AFTER_MS
       // Shown before it speaks, or a screen reader may not hear it.
       searching.className = found.length ? 'note gone' : stillLooking ? 'note searching' : 'note'
       status.textContent = found.length ? '' : (stillLooking ? S.findSearching : S.findNone)
       enterAddress.className = `${found.length || recent.length ? 'secondary' : 'primary'} enter`
-      // A remembered server that has just been found is listed once, under what was found. This comes
-      // before focus moves, so nothing below can land on a row that's about to be hidden.
-      Array.from(recentList.children).forEach((b) => {
-        const twin = Array.from(foundList.children).find((f) => f.dataset.url === b.dataset.url)
-        const wasFocused = document.activeElement === b
-        b.hidden = !!twin
-        if (wasFocused && twin) twin.focus()
-      })
-      recentHeading.hidden = recentList.children.length > 0 && Array.from(recentList.children).every((b) => b.hidden)
       const same = Array.from(foundList.children).find((b) => b.dataset.url === focusedUrl)
       if (same && hadFocus) same.focus()
       else if (hadFocus) {
         // The focused server went away. Without this, a remote has nothing to move from: its
         // remembered row if it has one, the next server, or the first thing left.
-        const remembered = Array.from(recentList.children).find((b) => b.dataset.url === focusedUrl && !b.hidden)
+        const remembered = Array.from(recentList.children).find((b) => b.dataset.url === focusedUrl)
         const neighbour = foundList.children[Math.min(focusedIndex, foundList.children.length - 1)]
         const fallback = remembered || neighbour || app.querySelector('.actions button:not([hidden])')
         if (fallback) fallback.focus()
@@ -388,7 +406,7 @@
   }
 
   // The server, as the code and pairing screens name it: its mark and its name, in a pill.
-  const serverPill = (server) => el('div', { className: 'server-pill' }, mark(), el('span', { textContent: server.name || server.url }))
+  const serverPill = (server) => el('div', { className: 'server-pill' }, serverMark(server.logo), serverName(server.name, 'name'))
 
   const reduceMotion = () => !!(self.matchMedia && self.matchMedia('(prefers-reduced-motion: reduce)').matches)
 
@@ -452,6 +470,7 @@
     show({
       back: () => listScreen(),
       className: 'compact',
+      lockup: false,
       words: [el('h1', { textContent: S.codeTitle }), serverPill(server), el('p', { className: 'lead', textContent: S.codeHint }), display, progress, said.node],
       actions: [pad, links],
       foot: [el('p', { className: 'fingerprint caption', textContent: `${S.fingerprintLabel}: ${fingerprintOf(server)}` })],
@@ -552,6 +571,7 @@
     const turn = show({
       back: () => codeScreen(server),
       className: 'compact',
+      lockup: lockup(server),
       words: [el('h1', { textContent: S.pairTitle }), hint, where, code, said.node],
       actions: [qr, waiting, again, links],
       focus: usePassword,

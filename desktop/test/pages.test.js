@@ -36,6 +36,10 @@ for (const [name, html] of [['connect', read(shared, 'connect', 'index.html')], 
   })
 }
 
+test('the only pictures on the connect screen are the ones the app hands it', () => {
+  assert.strictEqual(policy(read(shared, 'connect', 'index.html'))['img-src'], 'data:')
+})
+
 test('the connect screen uses the default theme\'s colours, under the server\'s names', () => {
   const colours = themes.themes.find((t) => t.id === themes.defaultTheme).colours
   const names = {
