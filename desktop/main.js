@@ -2,7 +2,7 @@
 // title bar of the system's. Ours is a local page, which on a Mac has the system's buttons on
 // it. Below it, the content view shows the connect screen and then the server's web UI, which
 // has no access to Node or to the app beyond reporting its theme colours and asking for Moonlight.
-const { app, BaseWindow, Menu, WebContentsView, clipboard, ipcMain, net, protocol, session, shell, systemPreferences } = require('electron')
+const { app, BaseWindow, Menu, WebContentsView, clipboard, ipcMain, net, powerSaveBlocker, protocol, session, shell, systemPreferences } = require('electron')
 const fs = require('fs')
 const os = require('os')
 const path = require('path')
@@ -14,6 +14,7 @@ const moonlight = require('./moonlight.js')
 const { createClientLog } = require('./clientlog.js')
 const state = require('./state.js')
 const tv = require('./tv.js')
+const playback = require('./playback.js')
 const mac = require('./mac.js')
 
 const TITLE_BAR = 32
@@ -506,6 +507,33 @@ function guardContent(wc) {
     startedAfresh = false
     wc.focus()
   })
+  keepPlaying(wc)
+}
+
+// What plays keeps playing when the window is hidden, minimised or covered (see playback.js). Kept
+// awake, the page isn't throttled, so it never learns it's out of sight and pauses, and the system
+// isn't allowed to suspend the app; the screen may still turn off.
+let awakeBlocker = null
+const awake = playback.create({
+  apply(on) {
+    if (!content || content.webContents.isDestroyed()) return
+    content.webContents.setBackgroundThrottling(!on)
+    if (on && awakeBlocker === null) awakeBlocker = powerSaveBlocker.start('prevent-app-suspension')
+    if (!on && awakeBlocker !== null) {
+      powerSaveBlocker.stop(awakeBlocker)
+      awakeBlocker = null
+    }
+    log.info('app', on ? 'Something is playing: kept running in the background' : 'Nothing playing: the page may be slowed in the background')
+  },
+})
+
+function keepPlaying(wc) {
+  wc.on('media-started-playing', () => awake.playing(true))
+  wc.on('media-paused', () => awake.playing(false))
+  wc.on('audio-state-changed', (e) => awake.audible(e.audible))
+  // A new page starts from nothing; moving around inside the server's own page doesn't.
+  wc.on('did-start-navigation', (details) => { if (details.isMainFrame && !details.isSameDocument) awake.reset() })
+  wc.on('render-process-gone', () => awake.reset())
 }
 
 // The app's own pages, from inside its package. No page needs anything from file://, so it
@@ -638,6 +666,9 @@ ipcMain.on('discover-start', (e) => {
 })
 
 ipcMain.on('open-logs', (e) => { if (fromConnect(e)) openLogs() })
+
+// The website's "Keep playing when this tab is in the background": false only when it's turned off.
+ipcMain.on('background-play', (e, on) => { if (fromServerPage(e)) awake.allowed(on !== false) })
 
 // Theme colours from the server's page: checked strictly, since a page decides them.
 ipcMain.on('theme', (e, t) => {

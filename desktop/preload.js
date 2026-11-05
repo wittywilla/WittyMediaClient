@@ -67,9 +67,18 @@ if (location.protocol === 'wittymedia-app:') {
       border: css.getPropertyValue('--border').trim(),
     })
   }
+  // "Keep playing when this tab is in the background": the website marks it turned off as
+  // <html data-background-play="off">. Missing, as on older servers, it's on.
+  let backgroundPlay = null
+  const reportBackgroundPlay = () => {
+    const on = document.documentElement.dataset.backgroundPlay !== 'off'
+    if (on !== backgroundPlay) ipcRenderer.send('background-play', backgroundPlay = on)
+  }
   // The web UI swaps a stylesheet in <head> and sets data-theme when the theme changes.
   window.addEventListener('DOMContentLoaded', () => {
     report()
+    reportBackgroundPlay()
+    new MutationObserver(reportBackgroundPlay).observe(document.documentElement, { attributes: true, attributeFilter: ['data-background-play'] })
     let timer = null
     const later = () => { clearTimeout(timer); timer = setTimeout(report, 150) }
     new MutationObserver(later).observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] })
