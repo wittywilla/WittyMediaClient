@@ -284,19 +284,18 @@ struct PageFoot: View {
         let version = VersionTag.parts(model.serverVersion)
         VStack(alignment: .leading, spacing: 28) {
             ForEach(notices, id: \.self) { kind in
-                if let notice = model.legal?.notices[kind] {
-                    let link = model.legal?.linkText ?? "Legal"
-                    (Text(notice.text + " ") + Text(.init("[\(link)](wms://legal)")))
+                if let notice = model.legal?.notice(kind) {
+                    (Text(notice.words + " ") + Text(.init("[\(notice.link)](wms://legal)")))
                         .font(.system(size: 12))
                         .foregroundStyle(palette.textHint)
                         .tint(palette.accentText)
                         .lineSpacing(3)
                         .environment(\.openURL, OpenURLAction { _ in
-                            model.path.append(.page("/settings/legal" + ((notice.section ?? "").isEmpty ? "" : "#\(notice.section!)")))
+                            model.path.append(.page(notice.path))
                             return .handled
                         })
                         .accessibilityElement(children: .combine)
-                        .accessibilityLabel("Legal notice: \(notice.text)")
+                        .accessibilityLabel("Legal notice: \(notice.words)")
                 }
             }
             HStack(spacing: 6) {

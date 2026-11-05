@@ -125,16 +125,6 @@ public enum VersionTag {
     }
 }
 
-/// The short legal notices every client shows: `/legal/notices`.
-public struct LegalNotices: Decodable, Equatable {
-    public struct Notice: Decodable, Equatable {
-        public let text: String
-        public let section: String?
-    }
-    public let linkText: String?
-    public let notices: [String: Notice]
-}
-
 /// What the server is busy with, for the activity button and its panel: `/system/tasks` (activity.ts).
 public struct ActivityTasks: Decodable, Equatable {
     public struct Access: Decodable, Equatable {

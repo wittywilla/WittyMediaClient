@@ -279,6 +279,8 @@ public struct ServerPrefs: Decodable, Equatable {
     public let visualizer: Bool?
     /// The owner's arrangement of the menu, as JSON: see NavPrefs.owner.
     public let navDefault: String?
+    /// How a show's episodes are laid out when it has no layout of its own: "cards" or "list".
+    public let episodeView: String?
 }
 
 /// What to watch after something with no next episode: `/items/{id}/recommend`.

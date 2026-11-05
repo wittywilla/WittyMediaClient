@@ -213,11 +213,6 @@ public struct Item: Decodable, Identifiable, Equatable {
     }
 }
 
-/// What's known about a disc beyond its item. Only what these apps use.
-public struct DiscInfo: Decodable, Equatable {
-    public let hasMenus: Bool?
-}
-
 /// An album, a book or a podcast. The server groups them from their tracks, so they have no ID of
 /// their own: they're asked for by name. `coverItem` is a track whose poster is the cover.
 public struct Album: Decodable, Equatable, Hashable {

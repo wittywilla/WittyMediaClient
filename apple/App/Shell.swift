@@ -559,8 +559,8 @@ struct SearchView: View {
                         }
                         .padding(.top, results.shows.isEmpty ? Tokens.Space.s5 : 0)
                     }
-                    if let notice = model.legal?.notices["searchResults"] {
-                        Text(notice.text).font(.system(size: 12)).foregroundStyle(palette.textHint).lineSpacing(3).padding(.top, Tokens.Space.s4)
+                    if let notice = model.legal?.notice("searchResults") {
+                        Text(notice.words).font(.system(size: 12)).foregroundStyle(palette.textHint).lineSpacing(3).padding(.top, Tokens.Space.s4)
                     }
                 }
                 .opacity(searching ? 0.6 : 1)

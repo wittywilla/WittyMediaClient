@@ -140,8 +140,10 @@ struct LibraryPage: View {
                         .padding(.horizontal, metrics.gutter)
                         .padding(.top, Tokens.Space.s2)
                 }
+                #if !os(tvOS)
                 // The website's notices for this page: the logos' while they show, and the details'.
                 PageFoot(notices: browses ? (wantedLogos.isEmpty ? [] : ["logos"]) + ["metadata"] : ["general"])
+                #endif
             }
             .padding(.bottom, Tokens.Space.s6)
         }
