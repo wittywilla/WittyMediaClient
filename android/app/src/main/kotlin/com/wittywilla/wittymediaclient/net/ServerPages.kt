@@ -113,3 +113,13 @@ fun pageFillsScreen(path: String) = FILLS_THE_SCREEN.any { path.startsWith(it) }
 // than that gets this list, as it was when it stopped changing.
 private const val OLDER_OWN_BACK = "[role=dialog], [role=alertdialog], [role=menu], .modal, .picker-backdrop, .view-settings, .audio-bar.full, .reader, .player:not(.mini):not(.inline)"
 const val ASK_OWN_BACK = "(function(){try{return !!document.querySelector(document.documentElement.dataset.ownBack||'$OLDER_OWN_BACK')}catch(e){return false}})()"
+
+// The server's pages keep a theme for this device in localStorage, "wms.theme", with the same ids as the
+// app's. This makes them follow the theme chosen in the app: set (or cleared for the server's own), and the
+// page reloaded once when it wasn't already. Null for an id that isn't a plain theme id.
+fun themeSyncScript(choice: String): String? {
+    if (choice.isNotEmpty() && !Regex("^[a-z0-9-]{1,40}$").matches(choice)) return null
+    val wanted = if (choice.isEmpty()) "null" else "'$choice'"
+    val set = if (choice.isEmpty()) "localStorage.removeItem('wms.theme')" else "localStorage.setItem('wms.theme', '$choice')"
+    return "try{if(localStorage.getItem('wms.theme')!==$wanted){$set;location.reload()}}catch(e){}"
+}

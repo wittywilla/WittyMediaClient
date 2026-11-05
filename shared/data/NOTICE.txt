@@ -24,6 +24,8 @@ Android
   AndroidX Media3 (ExoPlayer, HLS, Session, UI)  Apache-2.0
   ZXing core                                Apache-2.0
     Draws the QR code on the TV sign-in screen.
+  Material Symbols (rounded)                Apache-2.0
+    The few icons the sign-in screens use, copied in as vector paths.
   Coil                                      Apache-2.0
   OkHttp, Okio                              Apache-2.0
   Kotlin, kotlinx.coroutines,

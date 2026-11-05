@@ -1,8 +1,8 @@
-// WittyMediaClient for Windows, Linux and FreeBSD: a frameless window with two views.
-// The title bar is our own local page. Below it, the content view shows the
-// connect screen and then the server's web UI, which has no access to Node or
-// to the app beyond reporting its theme colours and asking for Moonlight.
-const { app, BaseWindow, Menu, WebContentsView, clipboard, ipcMain, net, protocol, session, shell } = require('electron')
+// WittyMediaClient for Windows, macOS, Linux and FreeBSD: a window with two views, and no
+// title bar of the system's. Ours is a local page, which on a Mac has the system's buttons on
+// it. Below it, the content view shows the connect screen and then the server's web UI, which
+// has no access to Node or to the app beyond reporting its theme colours and asking for Moonlight.
+const { app, BaseWindow, Menu, WebContentsView, clipboard, ipcMain, net, protocol, session, shell, systemPreferences } = require('electron')
 const fs = require('fs')
 const os = require('os')
 const path = require('path')
@@ -14,6 +14,7 @@ const moonlight = require('./moonlight.js')
 const { createClientLog } = require('./clientlog.js')
 const state = require('./state.js')
 const tv = require('./tv.js')
+const mac = require('./mac.js')
 
 const TITLE_BAR = 32
 const CONNECT_PAGE = guards.CONNECT_PAGE
@@ -33,6 +34,8 @@ const TV = tv.wanted(process.argv, process.env)
 // FreeBSD's Electron is the system's own and starts this app from the outside, so it
 // never counts as packaged. Being inside its archive is what says this is an installed copy.
 const INSTALLED = app.isPackaged || __dirname.includes('.asar')
+// On a Mac, the system's window buttons and menu bar. A TV is the same everywhere.
+const MAC = process.platform === 'darwin' && !TV
 
 const stateFile = () => path.join(app.getPath('userData'), 'state.json')
 let saved = {}
@@ -41,6 +44,7 @@ let server = '' // the origin the content view may show
 let lastServer = ''
 let stopDiscovery = null
 let shown = null // what the connect screen last showed about a server, to hold it to that
+let pairing = null // a code on show for someone to approve: { url, secret }, and the secret stays here
 
 const OS_NAMES = { win32: 'Windows', linux: 'Linux', darwin: 'macOS', freebsd: 'FreeBSD' }
 const OS_NAME = OS_NAMES[process.platform] || process.platform
@@ -128,10 +132,16 @@ function openOutside(url) {
 
 const isF6 = (input) => input.type === 'keyDown' && input.key === 'F6' && !input.control && !input.alt && !input.shift && !input.meta
 
+let windowButtons = true
+
 function layout() {
   const { width, height } = win.getContentBounds()
   const full = TV || win.isFullScreen() || htmlFullScreen
   bar.setVisible(!full)
+  if (MAC) {
+    const buttons = mac.windowButtonsShown(!full, win.isFullScreen())
+    if (buttons !== windowButtons) win.setWindowButtonVisibility(windowButtons = buttons)
+  }
   bar.setBounds({ x: 0, y: 0, width, height: TITLE_BAR })
   const top = full ? 0 : TITLE_BAR
   content.setBounds({ x: 0, y: top, width, height: Math.max(0, height - top) })
@@ -181,9 +191,11 @@ let startedAfresh = false
 function showConnect(query) {
   endDiscovery()
   server = ''
+  pairing = null
   startedAfresh = true
   bar.webContents.send('server', '')
   bar.webContents.send('theme', BAR_THEME)
+  updateMenu()
   quietly(content.webContents.loadURL(query ? `${CONNECT_PAGE}?${new URLSearchParams(query)}` : CONNECT_PAGE))
 }
 
@@ -192,8 +204,10 @@ function showServer(url) {
   server = new URL(url).origin
   lastServer = server
   shown = null
+  pairing = null
   startedAfresh = true
   bar.webContents.send('server', url)
+  updateMenu()
   quietly(content.webContents.loadURL(TV ? tv.tenFootAddress(url) : url))
   log.kick()
 }
@@ -251,8 +265,10 @@ async function check(url) {
   }
 }
 
-// What the connect screen gets to know, which it then shows to the person.
+// What the connect screen gets to know, which it then shows to the person. Whatever the screen
+// does next, a code it was showing for someone to approve no longer counts.
 async function probe(url) {
+  pairing = null
   const found = await check(url)
   if (found.error) return { error: found.error }
   const { identity } = found
@@ -291,6 +307,7 @@ function rememberServer(url, name, identity) {
 
 // Goes to a server someone chose, without a code: they sign in on its own page.
 async function openServer(request) {
+  pairing = null
   const found = await admitted(String(request && request.url), request && request.trust === true)
   if (found.error) return { error: found.error }
   try {
@@ -307,6 +324,7 @@ async function openServer(request) {
 // A code typed on this device. The sign-in goes straight into the browser
 // session as the server's own HttpOnly cookie, so no page script can read it.
 async function redeem(url, code) {
+  pairing = null
   if (!guards.validCode(code)) return { error: 'invalid' }
   const found = await admitted(url, false)
   if (found.error) return { error: found.error }
@@ -325,11 +343,15 @@ async function redeem(url, code) {
     log.warn('network', `Signing in with a code was refused: ${res.status} ${guards.cleanMessage(data.reason)}`, { where: found.url })
     return { message: guards.cleanMessage(data.error), reason: guards.cleanMessage(data.reason) }
   }
-  log.addSecret(data.token)
+  return keepSignIn(found, data.token)
+}
+
+async function keepSignIn(found, token) {
+  log.addSecret(token)
   try {
     await dropUnfitSignIn(found.url, found.identity)
     await session.defaultSession.cookies.set({
-      url: found.url, name: SESSION_COOKIE, value: data.token, httpOnly: true, sameSite: 'lax',
+      url: found.url, name: SESSION_COOKIE, value: token, httpOnly: true, sameSite: 'lax',
       secure: found.url.startsWith('https:'), expirationDate: Date.now() / 1000 + SESSION_DAYS * 86400,
     })
   } catch (err) {
@@ -339,6 +361,63 @@ async function redeem(url, code) {
   rememberServer(found.url, found.name, found.identity)
   showServer(found.url)
   return { ok: true }
+}
+
+const deviceName = () => `${os.hostname()} (WittyMediaClient)`.slice(0, 60)
+
+// A code shown on this screen, which someone already signed in approves on a phone or a computer:
+// docs/CLIENT-API.md in the server's repository. The page gets the code and the address to show;
+// the secret that collects the sign-in never leaves this process.
+async function pairStart(url) {
+  pairing = null
+  const found = await admitted(url, false)
+  if (found.error) return { error: found.error }
+  let res, answer
+  try {
+    res = await postJson(found.url + API + '/pair/start', { device: deviceName(), platform: OS_NAME })
+    answer = await guards.readJson(res)
+  } catch (err) {
+    log.noteError('warn', 'network', 'Asking for a code to show failed', err, { where: found.url })
+    return { error: guards.whyFailed(err) === 'certificate' ? 'certificate' : 'unreachable' }
+  }
+  const data = answer && typeof answer === 'object' ? answer : {}
+  if (!res.ok || !guards.validPairCode(data.code) || !guards.validDeviceSecret(data.deviceSecret)) {
+    log.warn('network', `Asking for a code to show was refused: ${res.status}`, { where: found.url })
+    return { message: guards.cleanMessage(data.error) }
+  }
+  pairing = { url: found.url, secret: data.deviceSecret }
+  return {
+    ok: true, code: data.code, intervalSec: guards.pollSeconds(data.intervalSec),
+    approveAt: guards.serverPage(found.url, data.approvePath, '/pair'),
+    scan: guards.serverPage(found.url, data.approveUrl, `/pair?code=${encodeURIComponent(data.code)}`),
+  }
+}
+
+// Has someone approved the code? Approved, the sign-in is kept as a typed code's is.
+async function pairPoll() {
+  const asked = pairing
+  if (!asked) return { status: 'expired' }
+  let res, answer
+  try {
+    res = await postJson(asked.url + API + '/pair/poll', { deviceSecret: asked.secret })
+    answer = await guards.readJson(res)
+  } catch (err) {
+    log.noteError('info', 'network', 'Asking whether a code was approved failed', err, { where: asked.url })
+    return { status: 'lost' }
+  }
+  // The screen moved on while this was asked: whatever the answer, it isn't wanted now.
+  if (pairing !== asked) return { status: 'expired' }
+  const data = answer && typeof answer === 'object' ? answer : {}
+  if (data.status === 'pending' || data.status === 'slow-down') return { status: data.status, intervalSec: guards.pollSeconds(data.intervalSec, 0) }
+  pairing = null
+  if (data.status === 'denied') return { status: 'denied' }
+  if (data.status !== 'approved' || !res.ok || !guards.validToken(data.token)) {
+    if (data.status === 'approved') log.warn('network', 'A code was approved, but the sign-in that came with it was not one', { where: asked.url })
+    return { status: 'expired' }
+  }
+  const found = await admitted(asked.url, false)
+  if (found.error) return { error: found.error }
+  return keepSignIn(found, data.token)
 }
 
 // Leaving a server leaves no valid sign-in behind, on this computer or on the server.
@@ -419,11 +498,46 @@ function servePages() {
   })
 }
 
+// The Mac's menu bar, which is where the title bar's Help is on a Mac.
+function macMenu() {
+  return Menu.buildFromTemplate(mac.menu({
+    connected: Boolean(server), changeServer: () => leaveServer(), zoom: zoomPage, openLogs, copyDiagnostics,
+  }))
+}
+
+function updateMenu() {
+  const item = MAC && Menu.getApplicationMenu() && Menu.getApplicationMenu().getMenuItemById('change-server')
+  if (item) item.enabled = Boolean(server)
+}
+
+// In half steps, as Electron's own menu does. Nought is back to normal.
+function zoomPage(step) {
+  const wc = content.webContents
+  wc.setZoomLevel(step ? wc.getZoomLevel() + step / 2 : 0)
+}
+
+// A double-click on the title bar does what the Mac is set to do. The system can answer it
+// itself, so the app only does it if, a moment later, the window hasn't changed.
+function titleDoubleClicked() {
+  const action = mac.doubleClickAction(systemPreferences.getUserDefault('AppleActionOnDoubleClick', 'string'))
+  if (action === 'none') return
+  const look = () => ({ bounds: win.getBounds(), minimized: win.isMinimized() })
+  const before = look()
+  setTimeout(() => {
+    if (win.isDestroyed() || mac.windowChanged(before, look())) return
+    if (action === 'minimize') win.minimize()
+    else if (win.isMaximized()) win.unmaximize()
+    else win.maximize()
+  }, mac.SETTLE_MS)
+}
+
 function createWindow() {
   const size = saved.window || {}
+  // On a Mac the window keeps the system's buttons, over the left of the app's own title bar.
+  const frame = MAC ? { titleBarStyle: 'hidden', trafficLightPosition: mac.windowButtonsAt(TITLE_BAR) } : { frame: false }
   win = new BaseWindow({
     width: size.width || 1280, height: size.height || 800, minWidth: 480, minHeight: 360, fullscreen: TV,
-    frame: false, backgroundColor: '#0f1115', title: 'WittyMediaClient', show: true,
+    ...frame, backgroundColor: '#0f1115', title: 'WittyMediaClient', show: true,
   })
   win.setMenu(null)
 
@@ -468,6 +582,11 @@ function createWindow() {
   win.on('leave-full-screen', layout)
   win.on('maximize', () => bar.webContents.send('maximized', true))
   win.on('unmaximize', () => bar.webContents.send('maximized', false))
+  // The title fades with the system's buttons when another window is in front.
+  if (MAC) {
+    win.on('focus', () => bar.webContents.send('active', true))
+    win.on('blur', () => bar.webContents.send('active', false))
+  }
   win.on('closed', () => { endDiscovery(); saveState(); app.quit() })
 
   bar.webContents.loadURL(BAR_PAGE).then(startUp).catch((err) => {
@@ -480,6 +599,9 @@ ipcMain.handle('probe', (e, url) => (fromConnect(e) ? probe(String(url)) : { err
 ipcMain.handle('recent', (e) => (fromConnect(e) ? (saved.recent || []).map(({ url, name }) => ({ url, name })) : []))
 ipcMain.handle('redeem', (e, url, code) => (fromConnect(e) ? redeem(String(url), String(code)) : { error: 'invalid' }))
 ipcMain.handle('open-server', (e, request) => (fromConnect(e) ? openServer(request) : { error: 'invalid' }))
+ipcMain.handle('pair-start', (e, url) => (fromConnect(e) ? pairStart(String(url)) : { error: 'invalid' }))
+ipcMain.handle('pair-poll', (e) => (fromConnect(e) ? pairPoll() : { status: 'expired' }))
+ipcMain.on('pair-stop', (e) => { if (fromConnect(e)) pairing = null })
 
 ipcMain.on('discover-start', (e) => {
   if (!fromConnect(e)) return
@@ -512,6 +634,7 @@ ipcMain.on('window', (e, action, at) => {
   else if (action === 'close') win.close()
   else if (action === 'change-server') leaveServer()
   else if (action === 'help') showHelpMenu(at)
+  else if (action === 'double-click' && MAC) titleDoubleClicked()
   else if (action === 'focus-page') content.webContents.focus()
 })
 
@@ -530,7 +653,8 @@ ipcMain.on('tv-menu', (e, action) => {
   else if (action === 'quit') win.close()
 })
 
-// Every page gets the sandbox, whatever made it. The default menu's shortcuts aren't for this app.
+// Every page gets the sandbox, whatever made it. The default menu's shortcuts aren't for this app,
+// and a Mac gets its own once the app is ready.
 app.enableSandbox()
 if (TV && process.platform !== 'win32' && process.platform !== 'darwin') for (const [name, value] of tv.switches(process.env)) app.commandLine.appendSwitch(name, value)
 Menu.setApplicationMenu(null)
@@ -583,6 +707,7 @@ else {
       log.warn('network', 'A download was refused', { where: item.getURL().slice(0, 200) })
     })
     createWindow()
+    if (MAC) Menu.setApplicationMenu(macMenu())
   }).catch((err) => {
     // There's no window and never will be, and an app with none can't be closed.
     log.noteError('error', 'crash', 'The app could not start', err, { page: 'main process' })

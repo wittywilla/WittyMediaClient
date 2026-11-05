@@ -146,6 +146,8 @@ private struct TabRoot: View {
                         GuideView()
                     case .channel(let key):
                         ChannelPlayer(start: key)
+                    case .recordings:
+                        RecordingsView()
                     #else
                     // Apple TV's own screens. These devices show the server's page for all of them.
                     case .album, .photo, .guide, .channel:
@@ -153,6 +155,12 @@ private struct TabRoot: View {
                         WebPlayerView(path: ServerPages.guide, keptToGames: false)
                         #else
                         ElsewhereNote(path: ServerPages.guide)
+                        #endif
+                    case .recordings:
+                        #if os(iOS) || os(visionOS)
+                        WebPlayerView(path: ServerPages.guide + "/recordings", keptToGames: false)
+                        #else
+                        ElsewhereNote(path: ServerPages.guide + "/recordings")
                         #endif
                     #endif
                     }
@@ -176,6 +184,8 @@ private struct TopTabs: View {
                     .tag(tab)
             }
         }
+        // A WittyTV reminder comes up on whatever's showing.
+        .modifier(TvReminderAlert())
     }
 }
 #else

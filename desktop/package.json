@@ -2,7 +2,7 @@
   "name": "wittymediaclient",
   "productName": "WittyMediaClient",
   "desktopName": "wittymediaclient.desktop",
-  "version": "0.2.3",
+  "version": "0.2.4",
   "description": "Watch and listen from your WittyMediaServer",
   "author": "WittyWilla",
   "homepage": "https://github.com/wittywilla/WittyMediaClient",
@@ -12,7 +12,7 @@
   "scripts": {
     "sync": "node scripts/sync-shared.mjs",
     "start": "npm run sync && electron .",
-    "test": "npm run sync && node --test ../shared/connect/address.test.js test/state.test.js test/connect.test.js test/guards.test.js test/pages.test.js test/moonlight.test.js test/clientlog.test.js test/tv.test.js test/freebsd.test.js",
+    "test": "npm run sync && node --test ../shared/connect/address.test.js ../shared/connect/qr.test.js test/state.test.js test/connect.test.js test/guards.test.js test/pages.test.js test/moonlight.test.js test/clientlog.test.js test/tv.test.js test/mac.test.js test/freebsd.test.js",
     "test:app": "npm run sync && node test/app/all.js",
     "package:win": "npm run sync && electron-builder --win",
     "package:linux": "npm run sync && electron-builder --linux",
@@ -42,6 +42,7 @@
       "moonlight.js",
       "clientlog.js",
       "tv.js",
+      "mac.js",
       "titlebar/**",
       "connect/**"
     ],

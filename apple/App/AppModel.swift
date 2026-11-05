@@ -109,6 +109,8 @@ enum Route: Hashable {
     /// Live channels, on Apple TV.
     case guide
     case channel(key: String)
+    /// Recordings and series, on Apple TV.
+    case recordings
     /// The licences of what this app ships, and its own log, from You.
     case notices
     case logs
