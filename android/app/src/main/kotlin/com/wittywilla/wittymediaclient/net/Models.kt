@@ -23,7 +23,6 @@ data class RemoteStatus(
     val level: String = "",
     val subject: String = "",
     val summary: String = "",
-    val away: String = "",
 )
 
 @Serializable

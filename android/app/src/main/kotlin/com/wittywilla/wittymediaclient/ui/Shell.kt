@@ -310,7 +310,6 @@ private fun RemoteAccessLine(remote: RemoteStatus) {
         Column(verticalArrangement = Arrangement.spacedBy(Space.S1)) {
             Text("Remote access: ${remote.subject}", color = MaterialTheme.colorScheme.onBackground, style = MaterialTheme.typography.bodyLarge)
             if (remote.summary.isNotEmpty()) Secondary(remote.summary)
-            if (remote.away.isNotEmpty()) Secondary(remote.away)
         }
     }
 }
