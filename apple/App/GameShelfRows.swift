@@ -2,7 +2,7 @@ import SwiftUI
 import WittyKit
 
 // The rows of WittyPlay's games home and a console's collection (docs/WITTYPLAY-EXPERIENCE.md, On a
-// phone: Home: Shelves, A collection; On a TV: Shelves on a TV), as the website's Shelves.tsx: a shelf
+// phone: Home: Shelves, A collection; On a TV: Shelves on a TV), as the website's GameShelves.tsx: a shelf
 // with its heading and ledge, the game pulled out of it, Where you left off, On the go, a collection's
 // band, and on a TV the preview of the focused game and the prompt bar.
 
@@ -69,7 +69,7 @@ struct GameShelfRow: View {
         let s = metrics.shelf
         let list = uniqued(items)
         let chosen = list.first { pulled == "\(id):\($0.id)" }
-        let dividers = letters && context.view == .spines ? Shelves.dividers(list.map(\.title)) : [:]
+        let dividers = letters && context.view == .spines ? GameShelves.dividers(list.map(\.title)) : [:]
         if !list.isEmpty {
             VStack(alignment: .leading, spacing: metrics.tv ? Tokens.Space.s3 : Tokens.Space.s2) {
                 heading
@@ -101,9 +101,9 @@ struct GameShelfRow: View {
         let tv = metrics.tv
         return HStack(alignment: .firstTextBaseline, spacing: Tokens.Space.s2) {
             if let console {
-                EraName(name: title, era: Shelves.era(console), size: tv ? 28 : 20, colour: palette.text)
+                EraName(name: title, era: GameShelves.era(console), size: tv ? 28 : 20, colour: palette.text)
                     .accessibilityAddTraits(.isHeader)
-                if let era = Shelves.era(console), let name = Shelves.eraNames[era] {
+                if let era = GameShelves.era(console), let name = GameShelves.eraNames[era] {
                     Text(name).font(.system(size: tv ? 20 : 12, weight: .medium)).foregroundStyle(palette.textHint)
                 }
             } else {
@@ -410,8 +410,8 @@ struct CollectionBand: View {
 
     var body: some View {
         let tv = metrics.tv
-        let era = Shelves.era(console)
-        let grain = CGFloat(Shelves.eraGrain[era ?? ""] ?? 10)
+        let era = GameShelves.era(console)
+        let grain = CGFloat(GameShelves.eraGrain[era ?? ""] ?? 10)
         let ink: Color = palette.isLight ? palette.text : .white
         let fill: Color = palette.isLight ? (tints.glow(first, light: true) ?? palette.panel)
                                           : (first.map { tints.deep($0) } ?? palette.panel)
@@ -419,7 +419,7 @@ struct CollectionBand: View {
             fill
             EraGrain(cell: grain * (tv ? 1.7 : 1), dot: palette.isLight ? 0.35 : 0.22).opacity(palette.isLight ? 0.5 : 1)
             VStack(alignment: .leading, spacing: tv ? Tokens.Space.s2 : Tokens.Space.s1) {
-                Text([era.flatMap { Shelves.eraNames[$0] }, say("wpCollection")].compactMap { $0 }.joined(separator: " · "))
+                Text([era.flatMap { GameShelves.eraNames[$0] }, say("wpCollection")].compactMap { $0 }.joined(separator: " · "))
                     .font(tv ? .system(size: 22, weight: .semibold) : .caption.weight(.semibold))
                     .foregroundStyle(ink.opacity(0.8))
                 EraName(name: console.shortName, era: era, size: tv ? 76 : 48, colour: ink)
@@ -562,7 +562,7 @@ struct TvGamePreview: View {
         let entry = context.progress[item.id]
         HStack(alignment: .center, spacing: Tokens.Space.s12) {
             VStack(alignment: .leading, spacing: Tokens.Space.s3) {
-                Text([c?.shortName, Shelves.era(c).flatMap { Shelves.eraNames[$0] }].compactMap { $0 }.joined(separator: " · "))
+                Text([c?.shortName, GameShelves.era(c).flatMap { GameShelves.eraNames[$0] }].compactMap { $0 }.joined(separator: " · "))
                     .font(.system(size: 20, weight: .semibold)).foregroundStyle(palette.textSecondary)
                 Text(item.title).font(.system(size: 64, weight: .bold)).tracking(-1.4).foregroundStyle(palette.text)
                     .lineLimit(2).minimumScaleFactor(0.6)

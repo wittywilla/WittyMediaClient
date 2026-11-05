@@ -57,7 +57,7 @@ final class CoverTints: ObservableObject {
     /// The deep colour of a game's spine or band, the same in every theme, as the website's `deepColour`.
     func deep(_ item: GameItem) -> Color {
         let t = tints[item.id]
-        let c = Shelves.deepColour(tint: t.map { ($0.hue, $0.saturation) }, title: item.title)
+        let c = GameShelves.deepColour(tint: t.map { ($0.hue, $0.saturation) }, title: item.title)
         return Color(hue: c.hue / 360, saturation: c.saturation, lightness: c.lightness)
     }
 
@@ -80,7 +80,7 @@ final class CoverTints: ObservableObject {
         defer { asking.remove(item.id) }
         guard let url = client.gamePosterURL(item, width: 64), let data = try? await client.imageData(url) else { return }
         let rgba = await Task.detached(priority: .utility) { Self.pixels(data) }.value
-        if let rgba, let t = Shelves.tint(rgba: rgba) { tints[item.id] = Tint(hue: t.hue, saturation: t.saturation) }
+        if let rgba, let t = GameShelves.tint(rgba: rgba) { tints[item.id] = Tint(hue: t.hue, saturation: t.saturation) }
     }
 
     /// An 8×8 copy of the picture, as RGBA bytes.
@@ -326,7 +326,7 @@ struct GameCaseView: View {
     var fit: CGFloat?
 
     static func size(_ console: GameConsole?, scale: CGFloat, fit: CGFloat? = nil) -> CGSize {
-        let shape = Shelves.caseShape(console)
+        let shape = GameShelves.caseShape(console)
         var h = 176 * CGFloat(shape.height) * scale
         if let fit, h * CGFloat(shape.aspect) > fit { h = fit / CGFloat(shape.aspect) }
         return CGSize(width: (h * CGFloat(shape.aspect)).rounded(), height: h.rounded())
@@ -335,7 +335,7 @@ struct GameCaseView: View {
     var body: some View {
         let s = metrics.shelf
         let size = Self.size(console, scale: s.scale, fit: fit)
-        drawn(kind: Shelves.caseShape(console).kind, size: size)
+        drawn(kind: GameShelves.caseShape(console).kind, size: size)
             .frame(width: size.width, height: size.height)
             .overlay(alignment: .topTrailing) { if ribbon { ShelfRibbon().padding(.trailing, size.width * 0.12).offset(y: -8) } }
             .overlay(alignment: .topLeading) { if favourite { ShelfStar(scale: s.scale).padding(Tokens.Space.s2 * s.scale) } }
@@ -421,7 +421,7 @@ struct GameCartView: View {
     var pulled = false
 
     static func size(_ console: GameConsole?, scale: CGFloat) -> CGSize {
-        let shape = Shelves.cartShape(console)
+        let shape = GameShelves.cartShape(console)
         let h = 150 * CGFloat(shape.height) * scale
         return CGSize(width: (h * CGFloat(shape.aspect)).rounded(), height: h.rounded())
     }
@@ -429,7 +429,7 @@ struct GameCartView: View {
     var body: some View {
         let s = metrics.shelf
         let size = Self.size(console, scale: s.scale)
-        drawn(kind: Shelves.cartShape(console).kind, size: size)
+        drawn(kind: GameShelves.cartShape(console).kind, size: size)
             .frame(width: size.width, height: size.height)
             .overlay(alignment: .topTrailing) { if ribbon { ShelfRibbon().padding(.trailing, size.width * 0.12).offset(y: -8) } }
             .overlay(alignment: .topLeading) { if favourite { ShelfStar(scale: s.scale).padding(Tokens.Space.s2 * s.scale) } }
@@ -516,8 +516,8 @@ struct GameSpineView: View {
     var favourite = false
 
     static func size(_ item: GameItem, _ console: GameConsole?, scale: CGFloat) -> CGSize {
-        let media = Shelves.media(console)
-        let w = media == "disc" ? 24 : CGFloat(Shelves.spineWidth(title: item.title))
+        let media = GameShelves.media(console)
+        let w = media == "disc" ? 24 : CGFloat(GameShelves.spineWidth(title: item.title))
         return CGSize(width: (w * scale).rounded(), height: (media == "pocket" ? 136 : 176) * scale)
     }
 
@@ -534,10 +534,10 @@ struct GameSpineView: View {
 
     var body: some View {
         let s = metrics.shelf.scale
-        let media = Shelves.media(console)
+        let media = GameShelves.media(console)
         let base = Self.size(item, console, scale: s)
         let size = CGSize(width: (base.width * (media == "disc" ? 1 : words)).rounded(), height: base.height)
-        let grain = CGFloat(Shelves.eraGrain[Shelves.era(console) ?? ""] ?? 10)
+        let grain = CGFloat(GameShelves.eraGrain[GameShelves.era(console) ?? ""] ?? 10)
         let shape = UnevenRect(top: 4 * s, bottom: 1)
         let run = size.height - (24 + 30) * s
         ZStack(alignment: .top) {
@@ -560,7 +560,7 @@ struct GameSpineView: View {
                     .padding(.top, 24 * s)
                 VStack {
                     Spacer(minLength: 0)
-                    Text(Shelves.footName(console))
+                    Text(GameShelves.footName(console))
                         .font(.system(size: 9 * s, weight: .bold, design: .monospaced))
                         .foregroundStyle(.white)
                         .lineLimit(1)
@@ -593,7 +593,7 @@ struct GameFaceOutView: View {
     var pulled = false
 
     static func size(_ console: GameConsole?, faceScale: CGFloat) -> CGSize {
-        let pocket = Shelves.media(console) == "pocket"
+        let pocket = GameShelves.media(console) == "pocket"
         return CGSize(width: ((pocket ? 104 : 120) * faceScale).rounded(), height: ((pocket ? 136 : 160) * faceScale).rounded())
     }
 

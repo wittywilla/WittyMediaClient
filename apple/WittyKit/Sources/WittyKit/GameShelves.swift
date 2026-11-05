@@ -4,7 +4,7 @@ import Foundation
 // stand on it as cases, cartridges or spines. What a console's case and cartridge are, its era and
 // its years come from the server (`/games/consoles`: `era`, `launched`, `ended`, `media`, `shelf`);
 // for a server that doesn't send them yet, the same tables as WittyPlay's (`game_traits.go`) are here.
-// The rules for drawing them are the website's (`web/src/pages/games/Shelves.tsx`), so both draw the
+// The rules for drawing them are the website's (`web/src/pages/games/GameShelves.tsx`), so both draw the
 // same shelves. Nothing here is a console maker's: plain shapes in each console's proportions.
 
 /// One kind of thing a game stands on a shelf as: its case (`box`, `clamshell`, `jewel`, `keep`)
@@ -71,7 +71,7 @@ public struct ConsoleTraits: Equatable {
     public let media: String
 }
 
-public enum Shelves {
+public enum GameShelves {
     // MARK: Eras
 
     /// Eras oldest first, with their names (`wpEras`).

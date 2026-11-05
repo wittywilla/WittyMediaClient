@@ -66,6 +66,8 @@ struct GamesLibraryView: View {
     @FocusState private var focused: String?
     @State private var shown: GameItem?
     @State private var following: Task<Void, Never>?
+    /// How solid the strip over the home is on a phone or tablet, as over every library's page.
+    @State private var solid = 0.0
     @Namespace private var scope
 
     private var byId: [String: GameConsole] { Dictionary(consoles.map { ($0.id, $0) }, uniquingKeysWith: { a, _ in a }) }
@@ -251,7 +253,7 @@ struct GamesLibraryView: View {
         var out: [Letter] = []
         var run: [GameItem] = [], at = ""
         for g in games {
-            let l = Shelves.initial(g.title)
+            let l = GameShelves.initial(g.title)
             if l != at, !run.isEmpty { out.append(Letter(id: at, items: run)); run = [] }
             at = l
             run.append(g)
@@ -323,9 +325,14 @@ struct GamesLibraryView: View {
         }
     }
 
-    private var legalNote: some View {
+    @ViewBuilder private var legalNote: some View {
+        #if os(tvOS)
         Secondary("Games run on your server and stream to this device. Only play games you own.")
             .padding(.horizontal, metrics.gutter)
+        #else
+        // The website's notice for games, and the server's version, as at the foot of every page.
+        PageFoot(notices: ["games"])
+        #endif
     }
 
     // MARK: The page
@@ -340,12 +347,23 @@ struct GamesLibraryView: View {
         legalNote
     }
 
+    /// Room at the top: under the strip for the home on a phone or tablet; a collection's band goes under its Back.
+    private var topRoom: CGFloat {
+        if metrics.tv { return console == nil ? Tokens.Space.s4 : 0 }
+        return console == nil ? LibraryStrip.height + Tokens.Space.s2 : 0
+    }
+
     private var scroller: some View {
         ScrollView {
-            LazyVStack(alignment: .leading, spacing: metrics.tv ? Tokens.Space.s10 : 26) {
-                rows
+            VStack(spacing: 0) {
+                #if !os(tvOS)
+                ScrollTop()
+                #endif
+                LazyVStack(alignment: .leading, spacing: metrics.tv ? Tokens.Space.s10 : 26) {
+                    rows
+                }
             }
-            .padding(.top, console == nil ? Tokens.Space.s4 : 0)
+            .padding(.top, topRoom)
             .padding(.bottom, metrics.tv ? Tokens.Space.s16 : 120)
             .background(GeometryReader { g in
                 Color.clear
@@ -391,7 +409,14 @@ struct GamesLibraryView: View {
             scroller.focusScope(scope)
         }
         #else
-        scroller.refreshable { await load() }
+        if console == nil {
+            scroller
+                .refreshable { await load() }
+                .stripSolidity($solid)
+                .overlay(alignment: .top) { LibraryStrip(current: library.id, solid: solid) }
+        } else {
+            scroller.refreshable { await load() }
+        }
         #endif
     }
 }

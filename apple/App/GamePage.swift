@@ -101,7 +101,7 @@ struct GameDetailView: View {
 
     /// "{console} · {era}".
     private var kicker: String {
-        [console?.shortName, Shelves.era(console).flatMap { Shelves.eraNames[$0] }].compactMap { $0 }.joined(separator: " · ")
+        [console?.shortName, GameShelves.era(console).flatMap { GameShelves.eraNames[$0] }].compactMap { $0 }.joined(separator: " · ")
     }
 
     /// maker · genre · 1–n players.
@@ -489,6 +489,7 @@ struct GameDetailView: View {
             let top = outer.safeAreaInsets.top
             let split = metrics.gutter > Tokens.Space.s4 && outer.size.width >= 700
             ScrollView {
+                ScrollTop()
                 VStack(alignment: .leading, spacing: Tokens.Space.s8) {
                     if split {
                         HStack(alignment: .top, spacing: Tokens.Space.s8) {
