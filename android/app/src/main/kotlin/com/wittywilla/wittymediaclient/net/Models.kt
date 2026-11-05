@@ -115,6 +115,16 @@ data class Item(
     val disc: DiscFacts? = null,
     val poster: String = "",
     val backdrop: String = "",
+    // The facts table on the item page.
+    val studio: String = "",
+    val container: String = "",
+    val videoCodec: String = "",
+    val width: Int = 0,
+    val height: Int = 0,
+    val audioLangs: List<String>? = null,
+    val subLangs: List<String>? = null,
+    val sizeBytes: Long = 0,
+    val aired: String = "",
 ) {
     val isDisc: Boolean get() = kind in setOf("dvd-iso", "dvd-folder", "bluray-iso", "bluray-folder")
 }
@@ -156,12 +166,17 @@ data class Show(
     val episodeCount: Int = 0,
     val seasonCount: Int = 0,
     val unwatched: Int = 0,
+    val genres: List<String> = emptyList(),
+    val contentRating: String = "",
+    val network: String = "",
+    val status: String = "",
 )
 
 @Serializable
 data class Season(
     val number: Int = 0,
     val title: String = "",
+    val overview: String = "",
     val episodeCount: Int = 0,
     val unwatched: Int = 0,
 )
@@ -475,3 +490,16 @@ data class PairAnswer(val code: String, val userId: Long? = null)
 
 @Serializable
 data class UserIdOnly(val userId: Long)
+
+// A collection, for Save to: its owner, and whether it's a system one such as Watch later.
+@Serializable
+data class Collection(val id: Long = 0, val ownerId: Long = 0, val name: String = "", val kind: String = "manual", val system: String = "")
+
+@Serializable
+data class CollectionItems(val items: List<Long> = emptyList(), val shows: List<Long> = emptyList())
+
+@Serializable
+data class WatchLater(val collectionId: Long = 0)
+
+@Serializable
+data class NewCollection(val name: String, val kind: String = "manual")

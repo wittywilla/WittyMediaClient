@@ -219,6 +219,12 @@ class Api(val base: String, val token: String, private val quick: Boolean = fals
     suspend fun modulePages(): List<Pair<String, ModulePage>> = get<ModuleBundles>("/modules/web").bundles.flatMap { b -> b.pages.map { b.id to it } }
     suspend fun guide(hours: Int, limit: Int): Guide = get("/guide?hours=$hours&limit=$limit")
     suspend fun forYou(): ForYou = get("/me/recommended")
+    suspend fun collections(): List<Collection> = getList("/collections")
+    suspend fun holding(item: Long, show: Long): List<Long> = getList("/collections/holding?item=$item&show=$show")
+    suspend fun addToCollection(id: Long, what: CollectionItems) { call("POST", "/collections/$id/items", json.encodeToString(what)) }
+    suspend fun removeFromCollection(id: Long, what: CollectionItems) { call("DELETE", "/collections/$id/items", json.encodeToString(what)) }
+    suspend fun watchLater(what: CollectionItems): WatchLater = json.decodeFromString(call("POST", "/collections/watch-later/items", json.encodeToString(what)))
+    suspend fun newCollection(name: String): Collection = json.decodeFromString(call("POST", "/collections", json.encodeToString(NewCollection(name))))
     suspend fun randomItem(): Item? = get<ItemPage>("/items?sort=random&limit=1&noEpisodes=1&watchable=1").items.firstOrNull()
 
     // Themes: docs/APP-DESIGN.md, Themes. The list and each theme's tokens are public; the person's own look is theirs.
@@ -283,6 +289,7 @@ class Api(val base: String, val token: String, private val quick: Boolean = fals
     fun itemBackdropUrl(id: Long) = "$base$API/items/$id/backdrop"
     fun showPosterUrl(s: Show) = "$base$API/shows/${s.id}/art/poster?v=${s.updatedAt}"
     fun showBackdropUrl(s: Show) = "$base$API/shows/${s.id}/art/backdrop?v=${s.updatedAt}"
+    fun seasonPosterUrl(s: Show, n: Int) = "$base$API/shows/${s.id}/art/season?n=$n&v=${s.updatedAt}"
 
     // Addresses in answers start with /api/: the server's address goes in front, nothing else
     // changes. A server's answer can't point the player, with what it carries, somewhere else.

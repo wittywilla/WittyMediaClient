@@ -65,8 +65,17 @@ import com.wittywilla.wittymediaclient.net.Show
 // heads and the sideways rows.
 
 // The page's own sizes, by the website's breakpoints.
+// In a grid a card takes its column's width instead.
+val LocalCardFill = androidx.compose.runtime.compositionLocalOf<Dp?> { null }
+
+@Composable
+fun CardWidth(content: @Composable () -> Unit) {
+    BoxWithConstraints { androidx.compose.runtime.CompositionLocalProvider(LocalCardFill provides maxWidth) { content() } }
+}
+
 @Composable
 fun cardWidth(wide: Boolean = false): Dp {
+    LocalCardFill.current?.let { return it }
     val w = androidx.compose.ui.platform.LocalConfiguration.current.screenWidthDp
     return if (wide) (if (w <= 520) 232.dp else 260.dp) else (if (w <= 520) 104.dp else 148.dp)
 }
