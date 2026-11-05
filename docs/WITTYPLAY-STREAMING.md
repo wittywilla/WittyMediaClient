@@ -227,6 +227,19 @@ suites' controller tests.
 Still to try with real hardware: rumble, the light bar, the touchpad itself (its pointer was sent as
 the app sends it), Home and Options, and analog sticks and triggers in a game that shows them.
 
+## The second stream, against a stand-in
+
+Before a server with the second stream was running, the Apple player's transport, decoder and input ran on the Mac
+against the stand-in WittyPlay's `wittyplay-probe run` makes from the stream's own branch (on 127.0.0.1 only):
+
+| Game | What came, and what it did |
+|---|---|
+| The probe's test core | The hello was taken and the stream described itself (WebSocket, H.264, PCM, 512×448, four players), paced to the 60 Hz screen the hello said. 911 frames in 15 seconds, every one decoded by VideoToolbox with no keyframe asked for; 2.8 MB of PCM. A held: the strong motor at full for 300 ms, renewed every 200 ms, then stopped. Select: light 0 on, then off. The core asked for player 1's accelerometer and gyroscope at 60 a second, and two seconds of motion went in without a refusal |
+| An NES game (FCEUmm) | 834 frames, every one decoded; sound at 47,920 Hz, because the game's 60.0998 Hz was paced to the screen's 60 and its sound resampled to match |
+
+What the stand-in can't show: sign-in, `/api/play/{sid}`, `modes` and the server's error codes, which the server's own
+tests cover. It's also what's left to run on a device.
+
 ## Testing it without a server that plays
 
 Before the Mac fix was running, the player was first proved through a test stand-in on
