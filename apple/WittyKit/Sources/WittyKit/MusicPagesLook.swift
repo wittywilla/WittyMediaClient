@@ -1,7 +1,8 @@
 import Foundation
 
 // The website's music, audiobook and podcast library pages at phone size, as rules the phone and tablet apps
-// share: web/src/pages/AudioLibrary.tsx, music/parts.tsx, music/ArtistPage.tsx, music/CoverFlow.tsx.
+// share: web/src/pages/AudioLibrary.tsx, music/parts.tsx, music/ArtistPage.tsx, music/CoverFlow.tsx. Music videos
+// are MusicVideos.swift.
 
 /// A listening library's front page in one answer: `/music/home`.
 public struct MusicHome: Decodable, Equatable {
@@ -70,13 +71,17 @@ public struct ArtistPageInfo: Decodable, Equatable {
 
 /// A part of a listening library, as the website's tabs name them.
 public enum MusicTab: String, CaseIterable {
-    case home, albums, artists, songs, playlists
+    case home, albums, artists, songs, videos, playlists
 
-    public static func tabs(libraryType: String) -> [(MusicTab, String)] {
+    /// `musicVideos`: this person can see a music videos library (`MusicVideos.available`), which gives a music
+    /// library its Music videos, between Songs and Playlists.
+    public static func tabs(libraryType: String, musicVideos: Bool = false) -> [(MusicTab, String)] {
         switch libraryType {
         case "podcasts": return [(.home, "Home"), (.albums, "Podcasts")]
         case "audiobooks": return [(.home, "Home"), (.albums, "Books"), (.artists, "Authors")]
-        default: return [(.home, "Home"), (.albums, "Albums"), (.artists, "Artists"), (.songs, "Songs"), (.playlists, "Playlists")]
+        default:
+            let videos: [(MusicTab, String)] = musicVideos && libraryType == "music" ? [(.videos, "Music videos")] : []
+            return [(.home, "Home"), (.albums, "Albums"), (.artists, "Artists"), (.songs, "Songs")] + videos + [(.playlists, "Playlists")]
         }
     }
 }

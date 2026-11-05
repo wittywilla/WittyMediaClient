@@ -579,6 +579,26 @@ public final class WittyClient: @unchecked Sendable {
     /// A title's picture by its number, for an album or a playlist cover.
     public func posterURL(id: Int64) -> URL? { URL(string: "\(base)\(apiPath)/items/\(id)/poster") }
 
+    /// A music library's Music videos: the videos of every music video library this person can see, by artist, a
+    /// page at a time, each with the song it's tied to. See MusicVideos.swift.
+    public func musicVideos(search: String, offset: Int, limit: Int = MusicVideos.pageSize) async throws -> MusicVideoPage {
+        try await get(MusicVideos.path(search: search, offset: offset, limit: limit))
+    }
+
+    /// The newest music videos, for a music library's Home.
+    public func latestMusicVideos() async throws -> MusicVideoPage { try await get(MusicVideos.latestPath) }
+
+    /// What a song or a music video is tied to: a song's videos, a video's song.
+    public func musicLinks(item: Int64) async throws -> MusicLinks { try await get("/music/links/\(item)") }
+
+    /// A video's picture at a width, as a video tile asks for it.
+    public func videoThumbURL(id: Int64, width: Int, version: Int64) -> URL? {
+        URL(string: "\(base)\(apiPath)/items/\(id)/poster?w=\(width)\(version > 0 ? "&v=\(version)" : "")")
+    }
+
+    /// A creator's own picture, beside their videos.
+    public func creatorAvatarURL(id: Int64) -> URL? { URL(string: "\(base)\(apiPath)/creators/\(id)/art/avatar") }
+
     /// The tracks of one album, in order. An empty album or artist means none or unknown: it is still asked for by name.
     public func tracks(library: Int64, album: String, artist: String) async throws -> [Item] {
         try await list("/music/tracks?library=\(library)&album=\(Self.queryValue(album))&artist=\(Self.queryValue(artist))")
