@@ -54,7 +54,22 @@ data class Library(
     val type: String = "",
     val console: String = "",
     val itemCount: Int = 0,
-)
+    // A commercials library is only in the menus when it asks to be.
+    val showMain: Boolean = false,
+    val scanning: Boolean = false,
+) {
+    val inMainMenus: Boolean get() = type != "commercials" || showMain
+}
+
+// GET /modules/web: the server's add-ons and the pages they put in the menus.
+@Serializable
+data class ModuleBundles(val bundles: List<ModuleBundle> = emptyList())
+
+@Serializable
+data class ModuleBundle(val id: String = "", val pages: List<ModulePage> = emptyList())
+
+@Serializable
+data class ModulePage(val id: String = "", val title: String = "", val icon: String = "", val where: String = "")
 
 @Serializable
 data class Progress(
@@ -95,7 +110,21 @@ data class Item(
     val albumArtist: String = "",
     val artist: String = "",
     val track: Int? = null,
-)
+    // The website's facts: a rating out of ten, a disc's menus, whether there's artwork at all.
+    val rating: Double? = null,
+    val disc: DiscFacts? = null,
+    val poster: String = "",
+    val backdrop: String = "",
+) {
+    val isDisc: Boolean get() = kind in setOf("dvd-iso", "dvd-folder", "bluray-iso", "bluray-folder")
+}
+
+@Serializable
+data class DiscFacts(val hasMenus: Boolean? = null)
+
+// GET /me/recommended: picks for this person, and the title they're picked because of.
+@Serializable
+data class ForYou(val items: List<Item> = emptyList(), val shows: List<Show> = emptyList(), val because: String = "")
 
 // An album, a book or a podcast: the server groups them from their tracks, so these have no ID of
 // their own. `coverItem` is a track whose poster is the cover.
@@ -228,7 +257,27 @@ data class Playback(
     val explain: Explanation? = null,
     // A 3D picture stored in the frame: sbs or tab. Asking with `flatten3d` shows one eye.
     val stereo: String = "",
+    val flattened: Boolean = false,
+    // Named points in the film, for the scenes panel and the marks on the seek bar.
+    val chapters: List<Chapter> = emptyList(),
+    // A file with several pictures lists them; videoIndex is the one playing.
+    val videos: List<VideoStream> = emptyList(),
+    val videoIndex: Int = 0,
 )
+
+@Serializable
+data class Chapter(val start: Double = 0.0, val title: String = "")
+
+@Serializable
+data class VideoStream(val index: Int = 0, val title: String = "", val width: Int = 0, val height: Int = 0)
+
+// GET /items/{id}/recommend: something to watch after this, and the show it belongs to.
+@Serializable
+data class Recommendation(val item: Item? = null, val show: Show? = null)
+
+// GET /prefs: the server's limits for players.
+@Serializable
+data class PlayerPrefs(val maxSpeed: Double = 4.0)
 
 @Serializable
 data class Explanation(
@@ -238,6 +287,9 @@ data class Explanation(
     val sound: String = "",
     val subtitles: String = "",
     val reasons: List<String> = emptyList(),
+    // What it costs the server: none, light or heavy.
+    val load: String = "",
+    val streaming: String = "",
 ) {
     val lines: List<String> get() = listOf(source, picture, sound, subtitles).filter { it.isNotEmpty() } + reasons
 }
@@ -266,6 +318,10 @@ data class PlaybackRequest(
     val maxBitrateKbps: Int? = null,
     val forceTranscode: Boolean? = null,
     val flatten3d: Boolean? = null,
+    val burnSubtitle: Boolean? = null,
+    val video: Int? = null,
+    val streaming: String? = null,
+    val measuredKbps: Int? = null,
 )
 
 @Serializable

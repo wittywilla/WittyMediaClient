@@ -40,6 +40,8 @@ private const val QUICK_SECONDS = 5L
 private const val QUICK_MAX_BYTES = 256L * 1024
 private const val MAX_BYTES = 32L * 1024 * 1024
 private const val LOOKUP_MS = 3000L
+private const val SPEEDTEST_CUTOFF_NS = 1_500_000_000L
+private const val SPEEDTEST_MIN_BYTES = 32L * 1024
 private val shared = OkHttpClient() // connections and threads are reused across servers
 
 private data class Answer(val status: Int, val text: String, val requestId: String, val location: String)
@@ -137,6 +139,39 @@ class Api(val base: String, val token: String, private val quick: Boolean = fals
     suspend fun playback(id: Long, request: PlaybackRequest): Playback =
         json.decodeFromString(call("POST", "/items/$id/playback", json.encodeToString(request)))
 
+    // What to watch after this: the website's Watch next card asks the same.
+    suspend fun recommend(id: Long): Recommendation = get("/items/$id/recommend")
+    suspend fun playerPrefs(): PlayerPrefs = get("/prefs")
+
+    // The server's streaming mode for viewers away from home: standard or robust.
+    suspend fun remoteStreaming(): String =
+        runCatching { json.parseToJsonElement(call("GET", "/capabilities")).jsonObject["playback"]?.jsonObject?.get("remoteStreaming")?.jsonPrimitive?.content }
+            .getOrNull() ?: "standard"
+
+    // What this connection carries, as the website measures it: a megabyte from the server, timed from its
+    // first bytes and cut off at 1.5 s. Null when less than 32 KB came, which is too little to say.
+    suspend fun speedtestKbps(): Int? = withContext(Dispatchers.IO) {
+        runCatching {
+            val request = Request.Builder().url("$base$API/playback/speedtest?kb=1024").build()
+            http.newCall(request).execute().use { res ->
+                if (!res.isSuccessful) return@use null
+                val body = res.body.byteStream()
+                val buffer = ByteArray(16 * 1024)
+                var first = 0L
+                var total = 0L
+                while (true) {
+                    val n = body.read(buffer)
+                    if (n < 0) break
+                    val now = System.nanoTime()
+                    if (first == 0L) first = now else total += n
+                    if (now - first > SPEEDTEST_CUTOFF_NS) break
+                }
+                val seconds = (System.nanoTime() - first) / 1e9
+                if (total < SPEEDTEST_MIN_BYTES || seconds <= 0) null else (total * 8 / 1000 / seconds).toInt()
+            }
+        }.getOrNull()
+    }
+
     // Stops the conversion at once when the viewer leaves.
     suspend fun stopStream(streamId: String) {
         call("DELETE", "/hls/${query(streamId)}")
@@ -181,7 +216,10 @@ class Api(val base: String, val token: String, private val quick: Boolean = fals
         json.decodeFromString(call("POST", "/rigs/$rigId/wake", "{}"))
 
     suspend fun couchStatus(): CouchStatus = get("/couch")
+    suspend fun modulePages(): List<Pair<String, ModulePage>> = get<ModuleBundles>("/modules/web").bundles.flatMap { b -> b.pages.map { b.id to it } }
     suspend fun guide(hours: Int, limit: Int): Guide = get("/guide?hours=$hours&limit=$limit")
+    suspend fun forYou(): ForYou = get("/me/recommended")
+    suspend fun randomItem(): Item? = get<ItemPage>("/items?sort=random&limit=1&noEpisodes=1&watchable=1").items.firstOrNull()
 
     // Themes: docs/APP-DESIGN.md, Themes. The list and each theme's tokens are public; the person's own look is theirs.
     suspend fun themes(): ThemeList = get("/themes")

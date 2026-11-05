@@ -147,6 +147,73 @@ class Nav(val app: WittyApp, private val s: Map<String, String>) {
     // Who is signed in, for the avatar on the You tab.
     var me by mutableStateOf<User?>(null)
 
+    // The website's menus: the library strip and the Menu drawer. Loaded once for each sign-in.
+    var menu by mutableStateOf<List<MenuEntry>>(emptyList())
+        private set
+    var serverVersion by mutableStateOf("")
+        private set
+    private var menuFor = ""
+
+    suspend fun loadMenu() {
+        val api = app.api
+        if (api.token.isEmpty() || menuFor == api.token) return
+        menuFor = api.token
+        val libraries = runCatching { api.libraries() }.getOrDefault(emptyList())
+        val list = libraries.filter { it.inMainMenus }.map { MenuEntry("lib:" + it.id, it.name, WebIcons.forLibrary(it.type), Route.Library(it)) }.toMutableList()
+        if (libraries.isNotEmpty()) list += MenuEntry("collections", "Collections", WebIcons.Library, Route.Page("/collections", "Collections"))
+        if (runCatching { api.couchStatus().allowed }.getOrDefault(false)) list += MenuEntry("couch", "Game PCs", WebIcons.Gamepad, Route.Page("/couch", "Game PCs"))
+        runCatching { api.modulePages() }.getOrDefault(emptyList()).filter { it.second.where == "main" }.forEach { (module, page) ->
+            list += MenuEntry("m:$module:${page.id}", page.title, if (page.icon == "chart") WebIcons.Chart else WebIcons.Plug, Route.Page("/m/$module/${page.id}", page.title))
+        }
+        menu = list
+        serverVersion = runCatching { api.status().version }.getOrDefault("")
+    }
+
+    // A place in the menus opens as a page of its own, with nothing to go back to: Home is below it.
+    fun openMenu(entry: MenuEntry) {
+        reset(Route.Home)
+        if (entry.route != Route.Home) push(entry.route)
+    }
+
+    // The video playing on a phone or tablet, full screen or in the mini player dock, as the website's /play.
+    var video by mutableStateOf<com.wittywilla.wittymediaclient.player.VideoSession?>(null)
+        private set
+
+    // The full player for this video: the one already playing when it's the same, otherwise a new one.
+    fun attachVideo(id: Long, startSec: Double?): com.wittywilla.wittymediaclient.player.VideoSession {
+        video?.let { if (it.id == id && startSec == null) return it }
+        video?.close()
+        return com.wittywilla.wittymediaclient.player.VideoSession(this, id, startSec).also { video = it }
+    }
+
+    // Back and the mini player button: go back, keep playing in the dock. With nothing to go back to, the item's page.
+    fun minimizeVideo() {
+        val playing = video ?: return
+        playing.mini = true
+        if (current is Route.Player) {
+            if (stack.size > 1) pop() else replace(Route.Item(playing.id))
+        }
+    }
+
+    fun expandVideo() {
+        val playing = video ?: return
+        playing.mini = false
+        if (current !is Route.Player) push(Route.Player(playing.id, false))
+    }
+
+    // Stop: the session ends, the place saved and the conversion stopped.
+    fun closeVideo() {
+        video?.close()
+        video = null
+        if (current is Route.Player) { if (stack.size > 1) pop() else reset(Route.Home) }
+    }
+
+    fun playVideoInstead(id: Long) {
+        video?.close()
+        video = null
+        if (current is Route.Player) playInstead(id) else push(Route.Player(id, false))
+    }
+
     // This device's theme for the server: "" for the server's own, "auto", or a theme's id.
     var themeChoice by mutableStateOf("")
         private set
@@ -509,6 +576,8 @@ class Nav(val app: WittyApp, private val s: Map<String, String>) {
     // Ends the session on the server too, so no valid sign-in is left behind.
     private fun endSession() {
         val old = app.api
+        video?.close()
+        video = null
         // The last place on a track goes first, while the sign-in is still good.
         val placeSent = app.listening.forget()
         if (old.token.isNotEmpty()) app.scope.launch {
@@ -599,7 +668,11 @@ fun AppRoot(app: WittyApp) {
             scope.launch { nav.recheck() }
             app.listening.appeared()
         }
-        LifecycleEventEffect(Lifecycle.Event.ON_STOP) { app.listening.disappeared() }
+        LifecycleEventEffect(Lifecycle.Event.ON_STOP) {
+            app.listening.disappeared()
+            // A film stops when the app is left, with its place kept.
+            nav.video?.backgrounded()
+        }
         BackHandler(enabled = nav.backStaysInApp) { nav.back() }
         val route = nav.current
         // Once the app's own screens are up, whichever way it started.
@@ -624,13 +697,13 @@ fun AppRoot(app: WittyApp) {
                         Route.Profile -> Shell(nav) { YouScreen(nav, strings) }
                         Route.Notices -> NoticesScreen(nav)
                         Route.Logs -> LogsScreen(nav)
-                        is Route.Library -> if (route.library.isListening) ListeningLibraryScreen(nav, strings, route.library) else LibraryScreen(nav, strings, route.library)
-                        is Route.Show -> ShowScreen(nav, strings, route.id)
-                        is Route.Item -> ItemScreen(nav, strings, route.id)
-                        is Route.Album -> AlbumScreen(nav, strings, route)
-                        is Route.Artist -> ArtistScreen(nav, strings, route.library, route.name)
+                        is Route.Library -> PageShell(nav) { if (route.library.isListening) ListeningLibraryScreen(nav, strings, route.library) else LibraryScreen(nav, strings, route.library) }
+                        is Route.Show -> PageShell(nav) { ShowScreen(nav, strings, route.id) }
+                        is Route.Item -> PageShell(nav) { ItemScreen(nav, strings, route.id) }
+                        is Route.Album -> PageShell(nav) { AlbumScreen(nav, strings, route) }
+                        is Route.Artist -> PageShell(nav) { ArtistScreen(nav, strings, route.library, route.name) }
                         Route.NowPlaying -> NowPlayingScreen(nav)
-                        is Route.Player -> PlayerScreen(nav, route.id, route.startOver)
+                        is Route.Player -> if (LocalMetrics.current.tv) PlayerScreen(nav, route.id, route.startOver) else VideoPlayerScreen(nav, route)
                         is Route.Web -> ServerPageScreen(nav, route, route.path, keptToGames = true)
                         is Route.Page -> ServerPageScreen(nav, route, route.path, keptToGames = false, title = route.title)
                         is Route.You -> YouSettingScreen(nav, strings, route.screen)
