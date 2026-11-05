@@ -22,6 +22,7 @@ offers is reachable from every app: arranged for the device, never left out. See
 - [Components](#components)
 - [Signing in](#signing-in)
 - [You and settings](#you-and-settings)
+- [Discs and the remote](#discs-and-the-remote)
 - [Feature map](#feature-map)
 - [On a TV](#on-a-tv)
 - [Checking a build against this](#checking-a-build-against-this)
@@ -124,6 +125,11 @@ SF Symbols on Apple, Material Symbols (rounded) on Android, mapped one to one:
 | Sign out | `rectangle.portrait.and.arrow.right` | `logout` |
 | Warning | `exclamationmark.triangle.fill` | `warning` |
 | Check | `checkmark` | `check` |
+| Home | `house` | `home` |
+| Libraries | `books.vertical` | `video_library` |
+| Games | `gamecontroller` | `sports_esports` |
+| Live TV | `tv` | `live_tv` |
+| Search | `magnifyingglass` | `search` |
 
 ## Themes
 
@@ -641,6 +647,53 @@ account's controller profiles (`/game-profiles`). A game the server can't run sa
 readiness check), on every device alike; Play never appears for it. Saves are the server's, so a game started on one
 device carries on from the same place on any other.
 
+## Discs and the remote
+
+DVDs and Blu-rays play with their own menus through the server's disc sessions (`/api/v1/dvd/{sid}/…`; the server's
+`docs/DVD.md` and `docs/BLURAY.md`, "The remote"). Every DVD and Blu-ray form, and every copy of a disc's film, gets
+the disc remote, named for its module. Which keys work is the server's rule, in its `web/src/player/remoteKeys.ts`
+(with its tests), and the same on every device; a key that can't work stays in its place, greyed out.
+
+| What's playing | How the app knows | Remote | Keys that work |
+|---|---|---|---|
+| A DVD image or folder | `kind` is `dvd-iso` or `dvd-folder` | WittyDVD | All but the colour keys |
+| A Blu-ray image or folder | `kind` is `bluray-iso` or `bluray-folder` | WittyBluray | All; the colour keys while a Java menu shows (the presentation's `bdj`) |
+| A disc with no menus, such as a BDAV recording | `disc.hasMenus` is false | As its disc | All but Top menu, and Menu unless the film has a pop-up menu, with the line "This disc has no menus" |
+| A copy of a disc's film: a loose VOB or m2ts, a rip | `kind` is `video`, `discSource` is `dvd` or `bluray` | WittyDVD or WittyBluray | Play, pause, stop, seeking, previous and next chapter, a chapter by its number, sound and subtitles; the menu keys greyed out, with the line "This copy has no disc menus" |
+| Any other video | `kind` is `video`, no `discSource` | WittyMedia | The same as a copy, without chapters by number or the line |
+
+- **Menu** opens a Blu-ray's pop-up menu while the film plays (the title's menu is a pop-up, or a Java menu is on),
+  and otherwise the disc's menu. **Top menu** is always the top menu, or a DVD's title menu.
+- **A Java menu** lists no buttons, yet takes the arrows, OK, the digits, the colour keys and Menu: each goes
+  as `{"type": "key", "key": …}` while `bdj` is set. A tap or click on the picture goes as
+  `{"type": "pointer", "x", "y"}` on its 1920×1080 frame, and only when `bdj.pointer` is true.
+
+**Phones** copy the website's remote at phone size (the server's `player/Remote.tsx`, `RemoteSheet`, and `.remote-sheet`
+in `player.css`). A **Remote** button is in the player's controls and in the mini player. It opens a sheet along the
+bottom, upright and on its side, opened each time it's wanted rather than remembered. Its first page has Top menu, Menu
+and Return; the D-pad with OK; Audio, Subtitle and Angle; and previous, back 10 seconds, play, pause, forward 30
+seconds, next and stop. Its second page (**1 2 3**) has the digits and the red, green, yellow and blue keys. On its
+side, the first page is one row, so the picture keeps the top of the screen. From the mini player, it opens above the
+dock, over the page. Until the apps have their own disc player, a disc opens the server's page, which has all of this.
+
+**TVs** map the real remote's buttons, and offer the same remote from the player's controls for the keys a TV remote
+lacks: Top menu, Menu (the pop-up menu), the colour keys, the digits and Angle. Apple TV and Android TV alike.
+
+| Button | Apple TV (Siri Remote) | Android TV | Does |
+|---|---|---|---|
+| Arrows and OK | The clickpad | The D-pad | The arrows and OK in a menu or a Java menu; in the film, as the player's arrows always do |
+| Back | Back | Back | Closes an open pop-up menu or the remote; in a menu, Return; otherwise as the player's Back |
+| Play and pause | Play/Pause | Play/pause, play, pause | Play and pause |
+| Previous and next chapter | None: the remote | Previous, next, and channel down and up | Previous and next chapter |
+| Digits | None: the remote | 0 to 9 | Digits |
+| Colour keys | None: the remote | Red, green, yellow, blue | The colour keys |
+| Menu | None: the remote | Menu | Menu |
+
+On a TV the remote opens from a **Remote** pill in the player's controls, as a panel along the bottom over the picture,
+with the phone's two pages and its keys in the same order. Its keys are pills, with the focus ring of On a TV; focus
+starts on OK in a menu and on play or pause in the film, and passes over greyed keys. Back closes it. The disc's
+own menu stays visible above it, so a highlight can be followed while the D-pad moves it.
+
 ## Feature map
 
 Where every part of the server is in the apps, and what's still to build: every feature reaches every device (see
@@ -667,7 +720,7 @@ TV, which has none, everything is native.
 | Recordings and series rules | Page | Native on Apple TV (with reminders); Android TV to build |
 | Games (WittyPlay) | Native player: the shared Apple player (Games everywhere, above), with the account's touch layout. The library and game's page are the page until the new design | Native on Apple TV: a player for the server's stream (the server runs every game: see [WITTYPLAY-STREAMING.md](WITTYPLAY-STREAMING.md)), with couch mode's library and game page. The page on Android TV |
 | Game PCs and rigs (Moonlight) | Native | Native |
-| DVD and Blu-ray menus, CD player | Page | To build |
+| DVD and Blu-ray menus, the disc remote, CD player | Page: the server's player, whose remote is a sheet (Discs and the remote, above). A native disc player to build | To build: the disc player, with the real remote mapped and the remote from the player's controls (Discs and the remote, above). The page on Android TV until then |
 | Collections and smart playlists | Page | To build |
 | Your year, history | Page | To build |
 | Names, password, two-step sign-in, devices | Native | Native |
@@ -710,8 +763,36 @@ Apple TV and Android TV are the same app to look at. Sizes are given in TV units
   grows 1.06, as both systems' own keyboards do; a grid of rings would crowd the keys. Pressed, it dims as any button.
   Digits on a remote's number keys also type.
 - **Fields** open the system's keyboard; on Android TV the IME, on Apple TV the system keyboard, which a phone can type into.
-- **Top bar:** the phone's five, Home, TV guide, Search, Libraries (the Menu's list as a page) and You, as pills along
-  the top, 24 from the top edge, the chosen one with `accent` at 14% and its name; up from the first row reaches it.
+- **Top bar:** one row of pills along the top, the same on both TVs, 24 from the top edge, in two parts. **On the left**,
+  from the gutter and 16 apart: **Home, Libraries, Games, Live TV, Search**, each its icon and its name in Label.
+  **Pinned to the right edge** (the gutter in from it), on the same row and centred with them: **You**, the person's
+  avatar at 28 (a circle) with their name. Space keeps You apart from the rest, not a line. The chosen pill, You
+  included, has `accent` at 14% behind it and its words in `accentText`; the others are `textSecondary`. Focused, a
+  pill takes the ring and scale as any control. Focus moves along the whole row from left to right with You last, so
+  right from Search reaches You. Up from a tab's first row lands on that tab's own pill. Back from inside a tab goes
+  to the bar; Back from the bar goes to Home's pill; Back on Home's pill leaves the app. A screen opened from a tab
+  has the whole screen, and Back from it returns to the tab.
+  - **Libraries in the bar:** You → On this device → **Top menu** (TVs only) lists every library the profile can see,
+    each with a tick when it's in the bar. Each one ticked there joins the bar after Search, as its library icon and
+    name, in the server's order of libraries, and is a tab of its own: the library's page under the bar, opened as
+    Home's rows open it. The choice is kept on the TV, per server and per profile. When the pills on the left don't fit,
+    they scroll sideways with focus, so the focused pill is always in view; **You never moves**: it stays pinned at the
+    right edge, always visible, with at least 32 of space before it.
+  - **Libraries:** every library the profile can see, as a grid of tiles (the phone Menu's library list as a page):
+    each tile is the library's icon in `accentText` on `accent` at 14%, then its name. Each opens the library as Home's
+    rows do; a games library opens Games' view of it.
+  - **Games:** WittyPlay's couch library. With one games library it opens straight in; with several, one row per
+    library, as Home's rows are: the library's name, its games' covers (each opens that game's page) and a pill that
+    opens the whole library.
+  - **Live TV:** the WittyTV guide (below) in the account's WittyTV look, with Recordings reachable from it.
+  - All six always show. A server with no games or no live TV shows that tab with a plain empty state saying what's
+    missing and that an owner adds it on the server's website (`gamesNone` / `gamesNoneDetail`, `liveTvNone` /
+    `liveTvNoneDetail`). Never a broken or blank page.
+- **Home's hero** on a TV: its words (title, facts, overview and buttons, in one column) may take up to half the
+  screen, 900 wide. The title wraps to up to 3 lines at the Display size; only if it still doesn't fit does it shrink,
+  to three quarters at most, and an ellipsis is the very last resort, so "Harry Potter and the Philosopher's Stone"
+  shows in full. The overview keeps to 2 lines. The hero is at least 620 high and grows to fit its words, so nothing
+  overlaps the first row. Titles under the posters in Home's rows take up to 2 lines.
 - **Themes** are the same as on a phone, through the same translation (see Themes).
 - **WittyTV** (the guide and live channels) keeps its own looks, chosen per account in `/me/ui` → `tvLook` with the
   owner's default in `/guide`: the colours of each of its themes (`modern`, `classic`, `satellite`, `teletext`,

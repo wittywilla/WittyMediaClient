@@ -74,3 +74,23 @@ test('only this user can read the file', { skip: process.platform === 'win32' &&
   assert.strictEqual(fs.statSync(file).mode & 0o777, 0o600)
   fs.rmSync(dir, { recursive: true })
 })
+
+test('a server\'s logo is kept with it, and only as a picture', () => {
+  const logo = { version: 'v1', data: 'data:image/png;base64,iVBORw0KGgo=' }
+  let s = remember({}, { url: 'http://10.0.0.2:9797', name: 'Home', logo })
+  assert.deepStrictEqual(s.recent[0].logo, logo)
+  s = remember(s, { url: 'http://10.0.0.2:9797', name: 'Home' })
+  assert.deepStrictEqual(s.recent[0].logo, logo, 'left out, the kept one stays')
+  s = remember(s, { url: 'http://10.0.0.2:9797', name: 'Home', logo: null })
+  assert.strictEqual(s.recent[0].logo, undefined, 'null: the server has none now')
+  for (const bad of [
+    { version: 'v1', data: 'data:text/html;base64,PHNjcmlwdD4=' },
+    { version: 'v1', data: 'javascript:alert(1)' },
+    { version: 'v1', data: 'data:image/png;base64,' + 'A'.repeat(400 * 1024) },
+    { version: '', data: logo.data },
+    'data:image/png;base64,AAAA',
+  ]) {
+    assert.strictEqual(clean({ recent: [{ url: 'http://10.0.0.2:9797', logo: bad }] }).recent[0].logo, undefined, JSON.stringify(bad).slice(0, 60))
+  }
+  assert.deepStrictEqual(clean({ recent: [{ url: 'http://10.0.0.2:9797', logo }] }).recent[0].logo, logo)
+})

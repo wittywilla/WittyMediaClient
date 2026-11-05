@@ -84,6 +84,8 @@ const fingerprint = (keys) => {
 const SERVER_ID = 'ab'.repeat(16)
 const TOKEN = 'c0ffee'.repeat(8)
 const PAIR_CODE = 'BCDF-GHJK'
+// The server's own logo, a picture the app fetches once the server has proved who it is.
+const LOGO = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 8 8"><rect width="8" height="8" fill="#2e7d3c"/></svg>'
 const DEVICE_SECRET = '5ec7e7'.repeat(10) + 'beef'
 const SERVER_PAGE = `<!doctype html><html><head><title>Stand-in</title>
 <style>:root { --bg-2: #fafafa; --fg: #111111; --border: #cccccc; }</style></head>
@@ -102,7 +104,11 @@ function answerRequest(req, res) {
     stand.asked++
     if (req.headers.cookie) stand.cookies.push(req.headers.cookie)
     const route = req.url.split('?')[0]
-    if (route === '/api/status') return send(200, { name: 'WittyMediaServer', version: '0.0.1', brandName: 'Test\u0007 home' })
+    if (route === '/api/status') return send(200, { name: 'WittyMediaServer', version: '0.0.1', brandName: 'Test\u0007 home', brandLogo: 'v1' })
+    if (route === '/api/branding/logo') {
+      stand.logos = (stand.logos || 0) + 1
+      return send(200, LOGO, 'image/svg+xml')
+    }
     if (route === '/api/v1/identity') {
       const { nonce } = JSON.parse(body)
       const message = Buffer.from(`WittyMediaServer identity v1\n${SERVER_ID}\n${nonce}`)
@@ -314,15 +320,17 @@ async function run() {
     assert.strictEqual(await inPage('document.title'), `${S.findTitle} - ${S.appName}`)
     assert.strictEqual(await inBar("document.getElementById('change').hidden"), true)
     assert.strictEqual(await inPage("document.querySelector('main').hasAttribute('aria-live')"), false, 'the whole page is not read out on every change')
+    assert.strictEqual(await inPage("document.querySelector('.lockup').textContent"), S.appName, 'the app is WittyMediaClient until a server is added')
     await shot('list-empty')
   })
 
-  await step('a found server takes focus, as one press has to select it', async () => {
+  await step('a found server takes focus, as one press has to select it, and says nothing about itself', async () => {
     announce([{ id: SERVER_ID, name: 'Home', url: 'http://10.0.0.2:9797' }, { id: 'cd'.repeat(16), name: 'Shed', url: 'http://10.0.0.3:9797' }])
-    await until('a found server', async () => (await focused()).startsWith('Home'))
+    await until('a found server', async () => (await focused()) === `10.0.0.2:9797${S.foundOnNetwork}`)
+    assert.ok(!/Home|Shed/.test(await pageText()), 'not the name it announces, until it is added')
     await shot('list-found')
     await key('Down')
-    assert.ok((await focused()).startsWith('Shed'), 'down moves to the next')
+    assert.ok((await focused()).startsWith('10.0.0.3:9797'), 'down moves to the next')
     await key('Down')
     assert.strictEqual(await focused(), S.enterAddress)
   })
@@ -362,6 +370,9 @@ async function run() {
     assert.strictEqual(await inPage("document.querySelector('.pad').getAttribute('role')"), 'group')
     assert.strictEqual(await inPage("document.querySelector('.code').getAttribute('aria-hidden')"), 'true')
     assert.strictEqual(await inPage("document.querySelector('.code-status').textContent"), `0 ${S.codeEntered}`)
+    // Proved, it's added: its own name and logo, which the app fetched, as the page loads no pictures itself.
+    assert.strictEqual(await inPage("document.querySelector('.server-pill').textContent"), 'Test home')
+    assert.match(await inPage("document.querySelector('.server-pill img.logo').src"), /^data:image\/svg\+xml;base64,/)
     await shot('code')
   })
 
@@ -434,6 +445,8 @@ async function run() {
     const [entry] = stateFile().recent
     assert.strictEqual(entry.publicKey, rawKey(stand.keys))
     assert.strictEqual(entry.name, 'Test home', 'a control character in the name was taken out')
+    assert.strictEqual(entry.logo.version, 'v1', 'the logo is kept with it')
+    assert.strictEqual(Buffer.from(entry.logo.data.split(',')[1], 'base64').toString(), LOGO)
     assert.strictEqual(stateFile().server, url)
   })
 
@@ -576,22 +589,25 @@ async function run() {
     if (MAC) assert.strictEqual(Menu.getApplicationMenu().getMenuItemById('change-server').enabled, false)
     assert.deepStrictEqual(await inPage('Object.keys(window.wittyClient).includes("probe")'), true)
     assert.ok((await pageText()).includes(S.recentServers))
+    assert.strictEqual(await inPage("document.querySelectorAll('.server img.logo').length"), 1, 'shown before the server answers')
     await shot('list-recent')
   })
 
-  await step('a remembered server that is also found is listed once, under what was found', async () => {
-    announce([{ id: SERVER_ID, name: 'Test home', url }])
-    await until('the found card', async () => (await inPage(`document.querySelectorAll('.server').length`)) === 2)
-    const rows = await inPage(`Array.from(document.querySelectorAll('.server')).map((b) => ({ shown: !b.hidden, lastUsed: !!b.querySelector('.pill') }))`)
-    assert.deepStrictEqual(rows, [{ shown: true, lastUsed: true }, { shown: false, lastUsed: true }])
-    assert.strictEqual(await inPage(`Array.from(document.querySelectorAll('h2')).find((h) => h.textContent === ${JSON.stringify(S.recentServers)}).hidden`), true)
+  await step('a remembered server that is also found is listed once, under Used before, with its own name', async () => {
+    announce([{ id: SERVER_ID, name: 'Announced', url }, { id: 'cd'.repeat(16), name: 'Shed', url: 'http://10.0.0.3:9797' }])
+    await until('the other server', async () => (await pageText()).includes('10.0.0.3:9797'))
+    const rows = await inPage(`Array.from(document.querySelectorAll('.server')).map((b) => b.querySelector('.name').textContent)`)
+    assert.deepStrictEqual(rows, ['10.0.0.3:9797', 'Test home'], 'found first, then the saved one once')
+    assert.ok(!(await pageText()).includes('Announced'))
     announce([])
-    await until('the remembered row again', async () => (await inPage(`document.querySelectorAll('.server:not([hidden])').length`)) === 1)
+    await until('nothing found', async () => (await inPage(`document.querySelectorAll('.server').length`)) === 1)
   })
 
   await step('a remembered server opens straight away, with nothing to prove again', async () => {
+    const logos = stand.logos
     await clickText('Test home')
     await until('the server page', () => views().page.getURL().startsWith(url))
+    assert.strictEqual(stand.logos, logos, 'a kept logo is only fetched again when its version changes')
     await until('the page to load', async () => (await heading()) === 'Stand-in server')
     await inBar("document.getElementById('change').click()")
     await onHeading(S.findTitle)
@@ -708,8 +724,11 @@ async function onTv() {
     await onHeading(S.findTitle)
     assert.strictEqual(await inPage("document.documentElement.classList.contains('tv')"), true)
     announce([{ id: SERVER_ID, name: 'Home', url: 'http://10.0.0.2:9797' }, { id: 'cd'.repeat(16), name: 'Shed', url: 'http://10.0.0.3:9797' }])
-    await until('a found server', async () => (await focused()).startsWith('Home'))
+    await until('a found server', async () => (await focused()).startsWith('10.0.0.2:9797'))
     assert.strictEqual(await halves('.words', '.actions'), true)
+    // The lockup reads from across the room: a 72 mark, in TV units.
+    const mark = await inPage("({ size: document.querySelector('.lockup .mark').getBoundingClientRect().width, unit: innerWidth / 1920 })")
+    assert.ok(Math.abs(mark.size - 72 * mark.unit) < 1, JSON.stringify(mark))
     // Four TV units wide: a 1920th of the screen's width each.
     const ring = await inPage('({ width: parseFloat(getComputedStyle(document.activeElement).outlineWidth), unit: innerWidth / 1920 })')
     assert.ok(Math.abs(ring.width - 4 * ring.unit) < 0.5, JSON.stringify(ring))
@@ -718,6 +737,10 @@ async function onTv() {
   await step('on a TV, Back leaves the address screen for the list', async () => {
     await clickText(S.enterAddress)
     await onHeading(S.addressTitle)
+    // Every button on a TV is a pill, and a focused field shows the ring and not a second, accent outline.
+    const connect = await inPage(`(() => { const b = Array.from(document.querySelectorAll('button')).find((x) => x.textContent === ${JSON.stringify(S.connect)}); return { radius: parseFloat(getComputedStyle(b).borderTopLeftRadius), height: b.getBoundingClientRect().height } })()`)
+    assert.ok(connect.radius >= connect.height / 2, JSON.stringify(connect))
+    assert.strictEqual(await inPage("getComputedStyle(document.querySelector('.field fieldset')).borderTopWidth"), '1px')
     await shot('tv-address')
     await key('Escape')
     await onHeading(S.findTitle)
@@ -726,6 +749,9 @@ async function onTv() {
     await typeAddress(url)
     await onHeading(S.codeTitle)
     assert.strictEqual(await halves('.code', '.pad'), true)
+    // A focused key fills with text instead of taking a ring.
+    const key1 = () => inPage('(() => { const s = getComputedStyle(document.activeElement); return [document.activeElement.textContent, s.outlineStyle, s.backgroundColor].join() })()')
+    await until('the key to fill', async () => (await key1()) === '1,none,rgb(232, 234, 240)')
     await key('4')
     await shot('tv-code')
   })
