@@ -6,6 +6,9 @@ other**. Apple Vision Pro takes the tablet's. The desktop apps (Windows, macOS, 
 Plasma Bigscreen) are the server's own web interface in a window: only their connect screen,
 `shared/connect/`, is the apps', and it follows the same look.
 
+On a phone, the reference is the server's own website at phone size: the apps look and work like it, and what this
+page improves on it goes back to the website, so there is one mobile design (see One mobile design with the website).
+
 This is the contract both codebases are built and checked against. Where Apple and Android differ, it's
 only where each system has its own convention: the status bar, the back gesture, the keyboard. Wording
 comes from `shared/data/strings.en.json`, so every app says the same thing. Every feature the server
@@ -13,6 +16,8 @@ offers is reachable from every app: arranged for the device, never left out. See
 
 - [Principles](#principles)
 - [Foundations](#foundations)
+- [Themes](#themes)
+- [One mobile design with the website](#one-mobile-design-with-the-website)
 - [Brand](#brand)
 - [Components](#components)
 - [Signing in](#signing-in)
@@ -22,6 +27,11 @@ offers is reachable from every app: arranged for the device, never left out. See
 - [Checking a build against this](#checking-a-build-against-this)
 
 ## Principles
+
+0. **Everything everywhere.** Every feature of the server works on every device: phones, tablets, Apple TV, Android TV,
+   Vision Pro and the desktop apps. Each is built the way that's best for that device, natively where the device can't
+   show the server's pages (Apple TV has no web engine, so WittyTV's looks and WittyPlay are built natively there). No
+   feature is "on another device only".
 
 1. **The pictures are the colour.** Posters and backdrops carry the colour; everything around them is
    quiet, in the theme's neutrals. The accent marks one thing per screen: the main action, or what's chosen.
@@ -40,7 +50,7 @@ offers is reachable from every app: arranged for the device, never left out. See
 
 ### Colour roles
 
-From the server's theme (`shared/data/themes.json`, chosen by `/api/status` → `theme`):
+From the theme in use, translated from the server's theme tokens (see Themes):
 
 | Role | Use |
 |---|---|
@@ -115,16 +125,173 @@ SF Symbols on Apple, Material Symbols (rounded) on Android, mapped one to one:
 | Warning | `exclamationmark.triangle.fill` | `warning` |
 | Check | `checkmark` | `check` |
 
+## Themes
+
+Every theme the server has works in every app: the built-in ones, any the owner uploaded or made for everyone, and the
+look a person made for themselves with the theme maker. The apps read them as data and translate them; nothing is
+drawn from CSS.
+
+### Where they come from
+
+- `GET /api/v1/themes` lists them: `id`, `name`, `scheme` (`dark` or `light`), `preview` (`bg`, `surface`, `text`,
+  `accent`), `webOnly`, and which is the server's `default`.
+- `GET /api/v1/themes/{id}/tokens.json` is one theme: `colors` by CSS variable name (`--bg-2` is `bg-2`), `lengths`
+  (`radius`), `scheme`.
+- `GET /api/v1/me/ui` → `customTheme` (`name`, `scheme`, `accent`, `tint`, `corners`) is the person's own, made with the
+  theme maker.
+- `shared/data/themes.json` (the built-ins) ships in the apps, so the first screen has colours before any answer, and a
+  server that can't be reached still looks right.
+
+Each theme read is kept per server on the device, by id and the theme list's `modTime`, and read again only when that
+changes.
+
+### Translation
+
+| App role | Web token | Missing? |
+|---|---|---|
+| `background` | `bg` | `preview.bg` |
+| `panel` | `bg-2` | `background` mixed 4% towards `text` |
+| `card` | `bg-3` | `preview.surface`, else `background` mixed 9% towards `text` |
+| `raised` (a chosen chip, a pressed row) | `bg-4` | `card` mixed 6% towards `text` |
+| `border` | `border` | `text` at 10% |
+| `control` (outlines of fields and ghost buttons) | `control-line` | `text` at 20% |
+| `text` | `fg` | `preview.text` |
+| `textSecondary` | `fg-2` | `text` at 72% over `background` |
+| `textHint` | `fg-3` | `text` at 55% over `background` |
+| `accent` | `accent` | `preview.accent` |
+| `accentPressed` | `accent-2` | `accent` mixed 10% towards black |
+| `onAccent` | `accent-fg` | white or `#0e1013`, whichever reads better on `accent` |
+| `accentText` | `accent-text` | `accent` |
+| `danger`, `ok`, `warn` | `danger`, `ok`, `warn` | the default theme's |
+| `scrim` | `overlay` | black at 60% |
+| radius | `lengths.radius` | 10 |
+| light or dark | `scheme` | from `background`'s lightness |
+
+- **Colours** are read as `#RGB`, `#RRGGBB` or `#RRGGBBAA`; anything else counts as missing. Anything missing after
+  the fallbacks comes from the default theme. A colour with alpha (the web's `border` is `fg` at 10%) is kept with it.
+- **Corners follow the theme:** `radius` is the medium radius (buttons, fields, posters). Small is `radius − 4` (at
+  least 2), large is `radius + 4` (cards, grouped lists, library tiles), extra is `radius + 10` (sheets). Pills stay
+  round, and avatars stay 22% of their size.
+- **The theme maker** is ported exactly from the server's `web/src/ui/themeMaker.ts` (`makeTheme`): the same HSL
+  steps and the same contrast checks, so a person's own look is the same colour on every device. Both apps test it
+  against `shared/data/theme-maker-examples.json`, worked out by running that code.
+- **`webOnly` themes** still work; they're marked "Looks plainer in the app" in the list, as their extra CSS can't come.
+
+### Choosing
+
+You → Theme (see You and settings) lists: Automatic (light or dark with the device: `light` or `default`), the
+server's choice (named), "Made by you" when the account has a `customTheme`, then every theme from `GET /themes` with
+a swatch drawn from its `preview`. The choice is kept per server on the device, as the web keeps it per browser.
+Choosing applies at once, with a 200 ms cross-fade; the server's pages inside the app are told the same choice.
+
+TVs use the same layer and the same list. WittyTV's guide keeps its own looks on top: see On a TV.
+
 ## Brand
 
 - **Mark:** the server's icon (`web/public/icon.svg` in WittyMediaServer), drawn natively: a 64×64
   rounded square (radius 14) in `#1b1e25`, a ring of radius 20 and width 5, and a play triangle with
   points (27,23), (41,32), (27,41), both in a gradient from `#9d7bff` (top left) to `#5b3df5` (bottom right).
-- **Wordmark:** "Witty**Media**Server" in Headline weight bold, with "Media" in `accentText`. When the server
-  has a name of its own (`/api/status` → `brandName`), that name replaces the wordmark, in `text`.
-- **Custom logo:** when `/api/status` → `brandLogo` isn't empty, the mark is the server's logo,
-  `/api/branding/logo?v=<brandLogo>`, in the same rounded square.
-- **Lockup:** mark then wordmark, 10 apart. Sizes: 32 mark on the connect and profile screens, 48 on a TV.
+- **The app is WittyMediaClient.** Its name on the device, and its wordmark wherever no server has been added yet,
+  is "Witty**Media**Client" in Headline weight bold, with "Media" in `accentText`, after the mark. WittyMediaServer is
+  the server's name, never the app's.
+- **A server's identity comes only once it's added.** Until a server has been added to the app (its address entered or
+  chosen, and its identity checked), the app shows nothing the server says about itself: no name, no logo. After that,
+  wherever that server is meant (its sign-in screens, its card under "Used before", You's This server card), its
+  identity is:
+  - **Name:** `/api/status` → `brandName`, or "Witty**Media**Server" (styled as the wordmark) when it has none.
+  - **Logo:** when `/api/status` → `brandLogo` isn't empty, `/api/branding/logo?v=<brandLogo>` in the mark's rounded
+    square; otherwise the mark.
+  - Both are kept with the saved server (the logo's picture too, cached by its version), so the server list shows
+    them before the server answers, and they're refreshed each time it does.
+- **Lockup:** mark then wordmark. On a phone or tablet: a 32 mark, the wordmark in Headline (20) bold, 10 apart. **On a
+  TV it reads from across the room:** a 72 mark, the wordmark in 48 bold (the size of Display), 20 apart, and a
+  server's own logo at the same 72. Choose your server and Enter an address show the app's lockup; the screens of one
+  server show that server's. Where a TV names the server in a line (the sign-in screens' foot, You), it's Label (24)
+  with a 32 logo, not Secondary.
+
+## One mobile design with the website
+
+The server's own website, on a phone, is the reference for the phone apps: the same shell, the same pages, the same
+measurements, so moving between the website and an app is seamless. Where this page improves on the website, the
+website takes the improvement too (marked **→ web**), so there is one mobile design, not two. Sizes are from the
+website at 375 wide.
+
+### The shell
+
+- **The floating bar** sits 16 from the sides and the bottom (above the home indicator): a pill 60 high, `card` fill,
+  1-wide `control` outline, the shadow `0 10 30` black 45%, 4 inside. Five buttons share its width, 50 high, icons only
+  (24): **Home**, **TV guide**, **Search**, **Menu**, and **You** (the person's avatar, a 32 circle). The chosen one has
+  a pill of `accent` at 14% behind it and its icon in `accentText`; the others are `textSecondary`. Spoken as their
+  names ("You, Willow").
+- **The library strip** runs along the top of Home and the library pages: the libraries' names, 15, `textSecondary`,
+  20 apart, 44 high, scrolling sideways, the current one in `text` with a 2-high `accent` underline. Over a picture it
+  has no background; once the page scrolls under it, it gains `background` at 85% with a blur, and a hairline
+  (**→ web**: the website's strip stays transparent and floats over the cards).
+- **Back** (**→ web**): every page below Home, a library or a tab's first page has a 40 round Back button, top left, a
+  `background` at 70% circle with a chevron, over the picture where there is one. The library strip isn't shown there.
+- **The activity button** (an admin's task activity) sits at the top right, 40, and never over the strip's words
+  (**→ web**: it covers the last library name).
+- **Menu** opens a side drawer from the left, 280 wide (at most 80%), `panel`: the lockup, then `LIBRARIES` as a
+  Caption, then every library as a row 44 high with its icon in `textSecondary` and its name in Label. A scrim of
+  `scrim` covers everything else, the floating bar and the activity button included (**→ web**: they show through it).
+  Swiping left or tapping the scrim closes it.
+- **Loading** (**→ web**): a page shows grey shapes where its content is coming (`card` at 60%, a slow 1.2 s shimmer;
+  still with Reduce Motion), never an empty page with the version line in the middle.
+
+### Home
+
+1. **The hero** is the full width and 536 high on a phone (about two-thirds of the screen; 66% of the height at most
+   on other sizes): the backdrop, darkened from the bottom by `background` at 100% / 94% at 34% / 72% at 56% / 0 at
+   82%. Over it, 16 from the sides: the title in 30 semibold, letters −0.66, two lines at most; the facts (year · length ·
+   genres) in 15 `textSecondary`, 8 below; the synopsis in 15 `textSecondary`, two lines, 12 below; then 20 below,
+   **Play** (Primary) and **Details** (Ghost) side by side. Pager dots at the top right under the strip, with
+   pause; it moves on every 8 s, and not at all with Reduce Motion.
+2. **Your libraries**: Section title (20 semibold) with Quiet "Manage ›" for admins; a two-column grid, 8 apart, of
+   library tiles.
+3. **Rows**, each a Section title with "See all ›" (13 medium, `textSecondary`): Continue watching, Next up, Because you
+   watch…, Recently added in each library. Each row scrolls sideways with snapping, 16 from the left edge.
+
+### Components
+
+| Component | Look |
+|---|---|
+| **Button, Primary** | `accent` fill, `onAccent` words 14 semibold, 44 high, 16 inside, radius `radius`, an optional 18 icon 8 before |
+| **Button, Ghost** | No fill, 1-wide `control` outline, `text` words; otherwise as Primary |
+| **Button, Secondary** | `card` fill, `text` words |
+| **Library tile** | 64 high, 10 inside, `panel` fill, 1-wide `border`, radius large; a 38 icon square (radius medium) in `accent` at 14% with the icon in `accentText`; 10 after it, the name in 15 semibold over the count in 12 `textHint`; one line each |
+| **Poster card** | 104 wide on a phone (128 on a tablet), the poster 2:3, radius medium; under it 8 apart, the title in 14 semibold (two lines) and the facts in 12 `textHint`. 16 between cards |
+| **Placeholder poster** (**→ web**) | No artwork: a gradient from the title's colour (the avatar rule on the title) to `card`, with the title in 15 semibold white over its lower third |
+| **Category card** | Landscape 16:9, radius large, the backdrop with the hero's gradient, the name in 20 semibold and the count in 12, 12 from the lower left |
+| **Section title** | 20 semibold, letters −0.24; its action on the right in 13 medium `textSecondary` with a chevron |
+| **Chip** | 32 high, 12 inside, radius full, 13 medium; chosen: `raised` fill, `text`; others `textSecondary` |
+
+### Library pages
+
+The library strip; the library's name in Title with its count in 15 `textHint` beside it, and a Ghost **Filters**
+button on the right; the sort chips in one sideways row (`SORT` as a Caption before them); then the library's
+categories as category cards, studios, and rows. **An admin's tools** (All films, Fix matches, Categories, Scan) go
+behind one Ghost "⋯" button that opens a sheet of rows (**→ web**: they take two rows of the screen today).
+
+### An item
+
+Back; the backdrop across the top, 220 high, fading into `background` (no hard line under it: **→ web**); the poster,
+120 wide, overlapping it by 60 at the left; then the library's name as a Caption, the title in 30 semibold, the
+tagline in italic `textSecondary`, the facts. Actions in one row: **Play** (Primary, `Resume` when started), **Save**
+(Secondary), and "⋯" for everything else, admin tools included (**→ web**: five buttons in two rows and two styles
+today). Then the synopsis, cast, extras and related, as rows.
+
+### Search
+
+The field 44 high, radius medium, `card`, with a search icon; results grouped (Films, Shows, Music, Books…), each as
+poster cards three across on a phone (**→ web**: two across, which makes a poster fill half the screen).
+
+### You
+
+The avatar in the floating bar opens **You**. In the apps it is the You page (see You and settings). On the website,
+on a phone, it opens a sheet from the bottom (**→ web**: a small menu today) with the same header (avatar 64, profile
+name, `@username · Role`, Switch profile) and the same first rows (Your year, Appearance, Controllers, Settings, Help,
+Sign in a TV, Sign out). Its Settings page uses the grouped list (**→ web**: tinted icon tiles, chevrons and cards,
+keeping its one-line descriptions under each row, which the apps show too for the Server and Maintenance rows).
 
 ## Components
 
@@ -180,8 +347,9 @@ ring (see Motion); the words brighten from `textSecondary` to `text`. Spoken as 
 
 ### Server card
 
-A `card` row, radius 14, 16 inside: the server mark (the brand mark at 40, or the server's own logo once known),
-then its name in Label semibold over its address in Secondary, then a chevron in `textHint`. The one last used carries
+A `card` row, radius 14, 16 inside: for a saved server, its logo at 40 (see Brand) and its name in Label semibold over
+its address in Secondary; for one only found, the plain server icon in a 40 `raised` square and its address over
+`foundOnNetwork`; then a chevron in `textHint`. The one last used carries
 "Last used" as a Caption pill in `border`. Pressed: 0.98 scale. Connecting: the chevron becomes a spinner.
 
 ### Grouped list
@@ -219,12 +387,15 @@ back gesture or a top-left arrow on Android.
 
 ### 1. Choose your server
 
-1. Lockup.
+1. The app's lockup (WittyMediaClient).
 2. Display: `findTitle` ("Choose your server"). Under it in Body, `textSecondary`: `findSubtitle`.
 3. Section: `foundServers` ("On your network"), with a small pulsing dot in `accent` beside it while searching.
-4. Server cards for what's found. While nothing is: a Note with a spinner and `findSearching`; after six seconds
+4. Server cards for what's found, each showing **only its address** (host and port, as Label semibold) over
+   `foundOnNetwork` ("Found on your network") in Secondary, with the plain server icon: a server says nothing about
+   itself until it's added. While nothing is found: a Note with a spinner and `findSearching`; after six seconds
    `findNone`; where the device can't search, `findNotSupported`.
-5. Section `recentServers` ("Used before") and its cards, the last used first.
+5. Section `recentServers` ("Used before") and its cards, the last used first, each with that server's own logo and
+   name (see Brand) over its address. A found server that's also saved shows only under Used before.
 6. `enterAddress` ("Enter an address"): Primary when nothing has been found or used, Secondary otherwise.
 7. The legal note, `legalConnect`, in Caption, `textHint`, centred, at the bottom.
 
@@ -424,9 +595,12 @@ the list. The TV's rows are 72 high with 32 icon tiles, Label at TV size, and th
 
 ## Feature map
 
-Where every part of the server is in the apps. **Native** is built into the app; **Page** is the server's own page
-inside the app (signed in, with a native Back); **QR** is the card to open that page on a phone, on a TV that can't
-show it. Desktop apps are the web interface, so everything is there.
+Where every part of the server is in the apps, and what's still to build: every feature reaches every device (see
+Principles). **Native** is built into the app. **Page** is the server's own page inside the app (signed in, with a
+native Back), used on phones and tablets for the owner's tools. **To build** is a native screen still to come on that
+device; until it's there, that device shows a QR card for the page, which is a stopgap, not the design. Desktop apps
+are the website, so everything is there. On Android TV, which has a web engine, a page may stand in as well; on Apple
+TV, which has none, everything is native.
 
 | Feature | Phone and tablet | TV |
 |---|---|---|
@@ -438,25 +612,25 @@ show it. Desktop apps are the web interface, so everything is there.
 | Video playback, resume, next episode | Native | Native |
 | Music, audiobooks, podcasts: browse and player | Native | Native |
 | Photos | Page | Native viewer |
-| Books, comics, PDF reader | Page | QR |
-| Shorts, creators, channel videos | Page | QR |
-| Radio | Page | QR |
-| Live TV guide and watching | Page | Native |
-| Recordings and series rules | Page | QR |
-| Games (WittyPlay) | Page (iPhone and iPad) | QR |
+| Books, comics, PDF reader | Page | To build |
+| Shorts, creators, channel videos | Page | To build |
+| Radio | Page | To build |
+| Live TV guide and watching, WittyTV's looks | Page | Native, every WittyTV look and layout |
+| Recordings and series rules | Page | To build |
+| Games (WittyPlay) | Page (iPhone and iPad), the emulator in the app | To build: native emulator cores on Apple TV, the page on Android TV |
 | Game PCs and rigs (Moonlight) | Native | Native |
-| DVD and Blu-ray menus, CD player | Page | QR |
-| Collections and smart playlists | Page | QR |
-| Your year, history | Page | QR |
+| DVD and Blu-ray menus, CD player | Page | To build |
+| Collections and smart playlists | Page | To build |
+| Your year, history | Page | To build |
 | Names, password, two-step sign-in, devices | Native | Native |
 | Sign in a TV | Native | — (a TV is what gets signed in) |
 | Theme on this device | Native | Native |
-| Profiles of others, parental limits, sign-in screen style | Page | QR |
-| Share links, activity, game settings, controllers | Page | QR |
-| Every server setting (Server and Maintenance groups) | Page | QR |
-| Help, legal, about the server | Page | QR |
+| Profiles of others, parental limits, sign-in screen style | Page | To build |
+| Share links, activity, game settings, controllers | Page | To build |
+| Every server setting (Server and Maintenance groups) | Page | To build |
+| Help, legal, about the server | Page | To build |
 | Licences and this app's log | Native | Native |
-| Server setup (first run) | Page, in the browser | QR |
+| Server setup (first run) | Page, in the browser | To build |
 
 Anything added to the server's menus later goes in the table above before it ships: as a Page row at least.
 
@@ -482,8 +656,14 @@ Apple TV and Android TV are the same app to look at. Sizes are given in TV units
   grows 1.06, as both systems' own keyboards do; a grid of rings would crowd the keys. Pressed, it dims as any button.
   Digits on a remote's number keys also type.
 - **Fields** open the system's keyboard; on Android TV the IME, on Apple TV the system keyboard, which a phone can type into.
-- **Top bar:** Home, Search and You as pills along the top, 24 from the top edge, the chosen one filled `accent` with
-  its name; up from the first row reaches it.
+- **Top bar:** the phone's five, Home, TV guide, Search, Libraries (the Menu's list as a page) and You, as pills along
+  the top, 24 from the top edge, the chosen one with `accent` at 14% and its name; up from the first row reaches it.
+- **Themes** are the same as on a phone, through the same translation (see Themes).
+- **WittyTV** (the guide and live channels) keeps its own looks, chosen per account in `/me/ui` → `tvLook` with the
+  owner's default in `/guide`: the colours of each of its themes (`modern`, `classic`, `satellite`, `teletext`,
+  `listings`, `bigpicture`, `outline`, `compact`, `custom`) are worked out as `web/src/pages/tv/tvThemes.ts` does, and
+  each theme's layout (`web/src/pages/tv/tvthemes.css`: row height, cell shape, the now line, the preview's place, the
+  font) is built natively to match, on both TVs.
 - **What a TV can't show** (the server's pages on Apple TV) is a QR card to open that page on a phone, with its address
   under it. Android TV shows the same card, so the two stay the same.
 
