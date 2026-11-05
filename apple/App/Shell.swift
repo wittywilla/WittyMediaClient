@@ -1,28 +1,54 @@
 import SwiftUI
 import WittyKit
 
-/// The app's top level, as on Android (ui/Shell.kt): Home, Search and Profile. A phone, a tablet and
-/// Apple Vision Pro have them in a floating pill at the bottom, within reach of a thumb; Apple TV has
-/// the system's tabs along the top, where up from the first row gets to them. Music and the other
-/// libraries are on Home, as they are on Android.
-enum AppTab: String, CaseIterable, Identifiable, Hashable {
-    case home, search, profile
+/// The app's top level. A phone, a tablet and Apple Vision Pro have Home, Search and You in a floating
+/// pill at the bottom, within reach of a thumb. Apple TV has six pills along the top, where up from a
+/// tab's first row gets to them: Home, Libraries, Games, Live TV, Search and You (docs/APP-DESIGN.md,
+/// On a TV, and TvTabs.swift).
+enum AppTab: Identifiable, Hashable {
+    case home, libraries, games, guide, search, profile
+    /// A library this person added to Apple TV's top menu, as a tab of its own.
+    case library(Int64)
 
-    var id: String { rawValue }
+    var id: String {
+        switch self {
+        case .home: return "home"
+        case .libraries: return "libraries"
+        case .games: return "games"
+        case .guide: return "guide"
+        case .search: return "search"
+        case .profile: return "profile"
+        case .library(let id): return "library\(id)"
+        }
+    }
 
+    /// The tabs a phone, a tablet and Vision Pro keep a stack for.
+    static let phoneTabs: [AppTab] = [.home, .search, .profile]
+    /// Apple TV's bar, in its order, before any libraries added to it and You.
+    static let tvTabs: [AppTab] = [.home, .libraries, .games, .guide, .search]
+
+    /// A library's tab is named after the library, which the bar knows.
     var title: String {
         switch self {
-        case .home: return "Home"
-        case .search: return "Search"
+        case .home: return say("homeTab")
+        case .libraries: return say("librariesTab")
+        case .games: return say("gamesTab")
+        case .guide: return say("liveTvTab")
+        case .search: return say("searchTab")
         case .profile: return say("youTab")
+        case .library: return ""
         }
     }
 
     var icon: String {
         switch self {
         case .home: return "house"
+        case .libraries: return "books.vertical"
+        case .games: return "gamecontroller"
+        case .guide: return "tv"
         case .search: return "magnifyingglass"
         case .profile: return "person"
+        case .library: return "books.vertical"
         }
     }
 
@@ -30,8 +56,11 @@ enum AppTab: String, CaseIterable, Identifiable, Hashable {
     var openIcon: String {
         switch self {
         case .home: return "house.fill"
+        case .libraries: return "books.vertical.fill"
+        case .games: return "gamecontroller.fill"
+        case .guide: return "tv.fill"
         case .profile: return "person.fill"
-        case .search: return icon
+        case .search, .library: return icon
         }
     }
 }
@@ -50,12 +79,28 @@ struct BrowseShell: View {
 private struct TabRoot: View {
     @EnvironmentObject private var model: AppModel
     let tab: AppTab
+    /// Apple TV: Back on a tab's first screen goes up to the bar.
+    var toBar: (() -> Void)?
 
     @ViewBuilder private var first: some View {
         switch tab {
         case .home: HomeView()
         case .search: SearchView()
         case .profile: YouView()
+        #if os(tvOS)
+        case .libraries: LibrariesPage()
+        case .games: GamesTab()
+        case .guide: LiveTvTab()
+        case .library(let id):
+            if let library = model.libraries.first(where: { $0.id == id }) {
+                LibraryScreen(library: library)
+            } else {
+                LoadingView()
+            }
+        #else
+        // Apple TV's tabs alone: these devices never show them.
+        case .libraries, .games, .guide, .library: EmptyView()
+        #endif
         }
     }
 
@@ -63,20 +108,11 @@ private struct TabRoot: View {
         NavigationStack(path: model.pathBinding(tab)) {
             first
                 .noNavigationBar()
+                .onRemoteBack(toBar)
                 .navigationDestination(for: Route.self) { route in
                     switch route {
                     case .library(let library):
-                        if library.hasGameScreens {
-                            #if os(tvOS)
-                            GamesLibraryView(library: library, console: nil).plainNavigation()
-                            #else
-                            LibraryView(library: library).plainNavigation()
-                            #endif
-                        } else if library.hasListeningScreens {
-                            ListeningLibraryView(library: library).plainNavigation()
-                        } else {
-                            LibraryView(library: library).plainNavigation()
-                        }
+                        LibraryScreen(library: library).plainNavigation()
                     case .listeningAlbum(let library, let album, let artist):
                         AlbumScreen(library: library, album: album, artist: artist).plainNavigation()
                     case .artist(let library, let name): ArtistScreen(library: library, name: name).plainNavigation()
@@ -104,6 +140,11 @@ private struct TabRoot: View {
                     case .devices: DevicesView().plainNavigation()
                     case .signInTv: SignInTvView().plainNavigation()
                     case .theme: ThemeView().plainNavigation()
+                    #if os(tvOS)
+                    case .topMenu: TopMenuView().plainNavigation()
+                    #else
+                    case .topMenu: EmptyView()
+                    #endif
                     case .web(let path):
                         #if os(iOS) || os(visionOS)
                         WebPlayerView(path: path, keptToGames: true)
@@ -149,19 +190,61 @@ private struct TabRoot: View {
     }
 }
 
-#if os(tvOS)
-/// The Siri Remote moves along these with the focus engine. Back from a tab's content goes to the tab
-/// bar, and Back from there leaves the app, which is what the system does and people expect.
-private struct TopTabs: View {
-    @EnvironmentObject private var model: AppModel
+/// A library's own screen: games, music, audiobooks and podcasts have theirs, everything else its posters.
+struct LibraryScreen: View {
+    let library: Library
 
     var body: some View {
-        TabView(selection: $model.tab) {
-            ForEach(AppTab.allCases) { tab in
-                TabRoot(tab: tab)
-                    .safeAreaInset(edge: .bottom) { MiniPlayerSlot(tab: tab) }
-                    .tabItem { Label(tab.title, systemImage: tab.icon) }
-                    .tag(tab)
+        if library.hasGameScreens {
+            #if os(tvOS)
+            GamesLibraryView(library: library, console: nil)
+            #else
+            LibraryView(library: library)
+            #endif
+        } else if library.hasListeningScreens {
+            ListeningLibraryView(library: library)
+        } else {
+            LibraryView(library: library)
+        }
+    }
+}
+
+#if os(tvOS)
+/// The bar along the top over the chosen tab. A tab's first screen has the bar above it; a screen opened
+/// from there has the whole screen, and Back from it comes back to the tab. Only the chosen tab is drawn:
+/// the bar can only be reached from a tab's first screen, and where each stack had got to is kept in the
+/// model. (The system's tab view keeps room for its own bar above every tab, even with the bar hidden.)
+private struct TopTabs: View {
+    @EnvironmentObject private var model: AppModel
+    @Environment(\.palette) private var palette
+    @Environment(\.resetFocus) private var resetFocus
+    @FocusState private var bar: AppTab?
+    @Namespace private var root
+    /// Whether Home's first look has arrived.
+    @State private var settled = false
+
+    var body: some View {
+        VStack(spacing: 0) {
+            if model.path.isEmpty {
+                TvTopBar(focus: $bar).ignoresSafeArea(.container, edges: .horizontal)
+            }
+            TabRoot(tab: model.tab, toBar: { bar = model.tab })
+                .id(model.tab)
+                .safeAreaInset(edge: .bottom) { MiniPlayerSlot(tab: model.tab) }
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                // Focus starts on the tab's own main action, not on the bar above it.
+                .prefersDefaultFocus(in: root)
+        }
+        .focusScope(root)
+        .background(palette.background.ignoresSafeArea())
+        // Home's first look comes after the bar, which has focus meanwhile as the only thing there. Once,
+        // if nobody has moved it, it goes on to Home's main action.
+        .onChange(of: model.libraries) { _ in
+            guard !settled else { return }
+            settled = true
+            // A moment for Home's first look to be drawn, so its main action is there to take focus.
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+                if bar == .home { resetFocus(in: root) }
             }
         }
         // A WittyTV reminder comes up on whatever's showing.
@@ -176,7 +259,7 @@ private struct PillShell: View {
 
     var body: some View {
         TabView(selection: $model.tab) {
-            ForEach(AppTab.allCases) { tab in
+            ForEach(AppTab.phoneTabs) { tab in
                 TabRoot(tab: tab)
                     .safeAreaInset(edge: .bottom) {
                         // The mini player sits above the pill, as on Android.
@@ -225,7 +308,7 @@ private struct PillBar: View {
 
     var body: some View {
         HStack(spacing: Tokens.Space.s1) {
-            ForEach(AppTab.allCases) { tab in
+            ForEach(AppTab.phoneTabs) { tab in
                 let open = model.tab == tab
                 Button {
                     press(tab)

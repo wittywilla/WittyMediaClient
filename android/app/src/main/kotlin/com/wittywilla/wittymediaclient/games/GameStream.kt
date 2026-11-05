@@ -156,6 +156,9 @@ sealed interface GameEvent {
 object GameModes {
     val supported = listOf("ws-h264", "ws-jpeg")
 
+    // On version 2 the same messages also come over WebRTC, first.
+    val supportedV2 = listOf("webrtc", "ws-h264", "ws-jpeg")
+
     // `chosen` is "auto", or the one mode this device was told to use, where the server offers it.
     fun order(offered: List<String>, chosen: String = "auto"): List<String> {
         val ids = offered.filter { it in supported }.distinct().ifEmpty { supported }
@@ -163,7 +166,10 @@ object GameModes {
     }
 
     // The website's names for them.
-    val names = mapOf("auto" to "Automatic (recommended)", "ws-h264" to "WebSocket with H.264", "ws-jpeg" to "WebSocket with JPEG (most compatible)")
+    val names = mapOf(
+        "auto" to "Automatic (recommended)", "webrtc" to "WebRTC (lowest latency)",
+        "ws-h264" to "WebSocket with H.264", "ws-jpeg" to "WebSocket with JPEG (most compatible)",
+    )
 
     fun video(mode: String): String = if (mode == "ws-jpeg") "jpeg" else "h264"
 

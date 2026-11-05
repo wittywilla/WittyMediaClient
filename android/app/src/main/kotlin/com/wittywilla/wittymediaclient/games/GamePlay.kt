@@ -21,6 +21,8 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.async
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
 import java.io.IOException
@@ -50,7 +52,18 @@ enum class GameMenu { Main, Save, Load, Controllers, More, Discs, Connection }
 private const val RECONNECT_WINDOW_MS = 55_000L
 private const val TOAST_MS = 3_000L
 
-class GamePlay(private val app: WittyApp, val gameId: Long, private var start: GameStart, val isTv: Boolean, private val scope: CoroutineScope) {
+// A stream to connect to directly, without the server's game routes: only for testing against a version 2 stand-in on
+// this machine (the debug build's StandInActivity). The controls still come from the server the app is signed in to.
+data class DirectStream(val endpoint: StreamEndpoint, val console: String, val title: String)
+
+class GamePlay(
+    private val app: WittyApp,
+    val gameId: Long,
+    private var start: GameStart,
+    val isTv: Boolean,
+    private val scope: CoroutineScope,
+    private val direct: DirectStream? = null,
+) {
     val api = GamesApi(app.api)
     private val main = Handler(Looper.getMainLooper())
     val input = GameInput(app, scope, isTv)
@@ -183,6 +196,7 @@ class GamePlay(private val app: WittyApp, val gameId: Long, private var start: G
     }
 
     private suspend fun startGame() {
+        direct?.let { return startDirect(it) }
         problem = null
         stage = GameStage.Prepare
         unpacked = null
@@ -245,6 +259,28 @@ class GamePlay(private val app: WittyApp, val gameId: Long, private var start: G
         }
     }
 
+    private suspend fun startDirect(to: DirectStream) {
+        problem = null
+        stage = GameStage.Start
+        gotPicture = false
+        item = GameItem(id = 0, title = to.title, console = to.console)
+        consoleName = to.console.uppercase()
+        controls = runCatching { api.controls(to.console, deviceId) }.getOrNull()
+        val v2 = listOf("webrtc", "ws-h264", "ws-jpeg").map { JsonObject(mapOf("id" to JsonPrimitive(it), "stream" to JsonPrimitive(2))) }
+        val made = GameSession(id = "stand-in", console = to.console, modes = v2)
+        session = made
+        offered = made.modes.mapNotNull(GameModeInfo::from)
+        routes = GameRoute.plan(offered, chosenMode)
+        routeIndex = 0
+        input.start(GameInput.Setup(controls ?: GameControls(console = to.console), settings, to.console, 0))
+        input.setEnabled(menu == null && !away)
+        connect()
+    }
+
+    // The connection modes this game can use, for the menu's Connection.
+    val connectionChoices: List<String>
+        get() = if (offered.any { it.stream >= 2 }) GameModes.supportedV2.filter { id -> offered.any { it.id == id } } else GameModes.supported
+
     // Start again after a problem: from the automatic save if there's one, or as asked.
     fun retry(safeMode: Boolean = false) {
         closeTransport()
@@ -269,10 +305,27 @@ class GamePlay(private val app: WittyApp, val gameId: Long, private var start: G
         if (!gotPicture) stage = GameStage.Connect
         val serial = ++transportSerial
         val receiver = Receiver(serial)
-        transport = if (route.stream >= 2) WebSocketV2Transport(api, sid, hello(route), receiver) else WebSocketV1Transport(api, sid, route.video, receiver)
+        val endpoint = direct?.endpoint ?: api.streamEndpoint(sid)
+        val made = try {
+            when {
+                route.video == "webrtc" -> WebRtcV2Transport(app, api, endpoint, hello(route), receiver)
+                route.stream >= 2 -> WebSocketV2Transport(api, endpoint, hello(route), receiver)
+                else -> WebSocketV1Transport(api, sid, route.video, receiver)
+            }
+        } catch (e: Exception) {
+            ClientLog.warn("games", "Couldn't connect over $route: ${e.javaClass.simpleName}")
+            null
+        }
+        transport = made
+        if (made == null) {
+            main.post { if (serial == transportSerial) nextMode() }
+            return
+        }
+        if (route.video == "webrtc") made.attachSurface(webrtcSurface)
+        made.setVolume(settings.number("audio.volume", 1.0), settings.flag("audio.mute", false))
         pictureTimer?.cancel()
         pictureTimer = scope.launch {
-            delay(GameModes.FIRST_PICTURE_MS)
+            delay(if (route.video == "webrtc") WEBRTC_PICTURE_MS else GameModes.FIRST_PICTURE_MS)
             if (serial == transportSerial && !gotPicture && !stopped) nextMode()
         }
     }
@@ -303,7 +356,7 @@ class GamePlay(private val app: WittyApp, val gameId: Long, private var start: G
             app = "WittyMediaClient Android " + runCatching { app.packageManager.getPackageInfo(app.packageName, 0).versionName }.getOrNull().orEmpty(),
             device = deviceId,
             name = app.deviceName,
-            video = listOf(route.video),
+            video = listOf(if (route.video == "jpeg") "jpeg" else "h264"),
             seats = input.seatPorts(),
             hz = displayHz(),
             width = metrics.widthPixels,
@@ -340,6 +393,10 @@ class GamePlay(private val app: WittyApp, val gameId: Long, private var start: G
         override fun lost(status: Int) {
             main.post { if (current()) this@GamePlay.lost(status) }
         }
+
+        override fun shown() {
+            if (current()) pictureArrived()
+        }
     }
 
     private fun handle(event: GameEvent) {
@@ -347,7 +404,8 @@ class GamePlay(private val app: WittyApp, val gameId: Long, private var start: G
             is GameEvent.Hello -> if (event.video.isNotEmpty()) videoKind = event.video
             is GameEvent.Rumble -> input.rumble(event.port, event.effect, event.strength, event.ms)
             is GameEvent.Stream -> {
-                if (event.video.isNotEmpty()) videoKind = event.video
+                // Over a WebSocket the stream says whether pictures come as H.264 or JPEG. WebRTC draws its own, whatever the codec.
+                if (event.video.isNotEmpty() && videoKind != "webrtc") videoKind = if (event.video == "jpeg") "jpeg" else "h264"
                 event.aspect?.takeIf { it > 0 }?.let { aspect = it }
                 event.fps?.takeIf { it > 0 }?.let { fps = it }
                 turns = event.turns
@@ -408,7 +466,7 @@ class GamePlay(private val app: WittyApp, val gameId: Long, private var start: G
         scope.launch {
             delay(1_000)
             if (stopped || away || transport != null) return@launch
-            val stillThere = try {
+            val stillThere = direct != null || try {
                 api.session(session?.id ?: return@launch)
                 true
             } catch (e: ApiError) {
@@ -441,8 +499,18 @@ class GamePlay(private val app: WittyApp, val gameId: Long, private var start: G
 
     // A new picture has come since this was last asked: for the connection's own keeping track.
     fun surfaceFor(kind: String, surface: Surface?) {
-        if (kind == "jpeg") jpeg.setSurface(surface) else video.setSurface(surface)
+        when (kind) {
+            "jpeg" -> jpeg.setSurface(surface)
+            "webrtc" -> {
+                webrtcSurface = surface
+                transport?.attachSurface(surface)
+            }
+            else -> video.setSurface(surface)
+        }
     }
+
+    // WebRTC draws its own picture: onto this surface.
+    private var webrtcSurface: Surface? = null
 
     // MARK: the app coming and going
 
@@ -468,7 +536,7 @@ class GamePlay(private val app: WittyApp, val gameId: Long, private var start: G
         val sid = session?.id ?: return
         if (stopped || problem != null) return
         scope.launch {
-            val stillThere = try {
+            val stillThere = direct != null || try {
                 api.session(sid)
                 true
             } catch (e: ApiError) {
@@ -665,7 +733,7 @@ class GamePlay(private val app: WittyApp, val gameId: Long, private var start: G
         closeTransport()
         sound.hold(true)
         scope.launch {
-            if (sid != null) {
+            if (sid != null && direct == null) {
                 try {
                     api.stop(sid)
                 } catch (e: CancellationException) {
@@ -690,7 +758,7 @@ class GamePlay(private val app: WittyApp, val gameId: Long, private var start: G
         jpeg.close()
         sound.close()
         val sid = session?.id
-        if (!stopped && sid != null) {
+        if (!stopped && sid != null && direct == null) {
             stopped = true
             val api = api
             app.scope.launch { runCatching { api.stop(sid) } }

@@ -46,6 +46,8 @@ enum Tokens {
     /// The room a focused card needs to lift without being clipped.
     static let focusRoom: CGFloat = 32
     static let heroHeight: CGFloat = 620
+    /// How wide the hero's words may be: up to half the screen.
+    static let heroTextWidth: CGFloat = 900
     #elseif os(macOS)
     static let gutter: CGFloat = 24
     static let edge: CGFloat = 16
@@ -54,6 +56,7 @@ enum Tokens {
     static let minTarget: CGFloat = 24
     static let focusRoom: CGFloat = 8
     static let heroHeight: CGFloat = 420
+    static let heroTextWidth: CGFloat = 560
     #else
     static let gutter: CGFloat = 16
     static let edge: CGFloat = 8
@@ -62,6 +65,7 @@ enum Tokens {
     static let minTarget: CGFloat = 44
     static let focusRoom: CGFloat = 4
     static let heroHeight: CGFloat = 420
+    static let heroTextWidth: CGFloat = 560
     #endif
 
     /// The width of a poster on the phone-sized hero.
