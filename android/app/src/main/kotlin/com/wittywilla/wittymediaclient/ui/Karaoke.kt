@@ -125,9 +125,13 @@ internal fun KaraokeScreen(nav: Nav, words: LyricsWords, title: String, artist: 
         listening.seekTo(maxOf(0.0, (to.t + offset) / 1000))
     }
     fun setKey(key: Double) = listening.setSound { it.copy(keyShift = key.coerceIn(-6.0, 6.0)) }
+    // Coming in as Now Playing does: a fade and a 16 rise over 240 ms.
+    val rise = remember { Animatable(0f) }
+    LaunchedEffect(Unit) { rise.animateTo(1f, tween(240, easing = androidx.compose.animation.core.CubicBezierEasing(0.2f, 0.8f, 0.2f, 1f))) }
 
     Box(
-        Modifier.fillMaxSize().background(Color(0xFF06060A)).clickable(remember { MutableInteractionSource() }, null) {}
+        Modifier.fillMaxSize().graphicsLayer { alpha = rise.value; translationY = (1 - rise.value) * 16.dp.toPx() }
+            .background(Color(0xFF06060A)).clickable(remember { MutableInteractionSource() }, null) {}
             .drawBehind {
                 // radial-gradient(80% 70% at 50% 40%, art/.28, transparent 80%)
                 val rx = size.width * 0.8f

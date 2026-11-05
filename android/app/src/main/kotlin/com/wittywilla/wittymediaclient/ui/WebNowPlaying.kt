@@ -41,7 +41,6 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -60,7 +59,7 @@ import androidx.compose.ui.graphics.drawscope.scale
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.Layout
-import androidx.compose.ui.layout.boundsInRoot
+import androidx.compose.ui.layout.LayoutCoordinates
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
@@ -309,10 +308,16 @@ fun WebNowPlaying(nav: Nav) {
     LaunchedEffect(library) { if (!books && library > 0) liked = runCatching { api.likes(library).toSet() }.getOrDefault(emptySet()) }
     var panel by remember { mutableStateOf(if (listening.screenWithQueue) NpPanel.Queue else NpPanel.None) }
     var menu by remember { mutableStateOf(NpMenu.None) }
-    val anchors = remember { mutableStateMapOf<NpMenu, Rect>() }
-    var origin by remember { mutableStateOf(androidx.compose.ui.geometry.Offset.Zero) }
-    fun Modifier.anchor(key: NpMenu) = onGloballyPositioned { anchors[key] = it.boundsInRoot() }
-    fun at(key: NpMenu): Rect? = anchors[key]?.translate(-origin)
+    // Where each button that opens something is, read when it opens, in the screen's own space: the pop-ups are drawn
+    // in it, under the opening rise.
+    val anchors = remember { HashMap<NpMenu, LayoutCoordinates>() }
+    val screen = remember { arrayOfNulls<LayoutCoordinates>(1) }
+    fun Modifier.anchor(key: NpMenu) = onGloballyPositioned { anchors[key] = it }
+    fun at(key: NpMenu): Rect? {
+        val root = screen[0]?.takeIf { it.isAttached } ?: return null
+        val button = anchors[key]?.takeIf { it.isAttached } ?: return null
+        return root.localBoundingBoxOf(button)
+    }
     var toast by remember { mutableStateOf("") }
     var said by remember { mutableStateOf("") }
     var maxSpeed by remember { mutableStateOf(4.0) }
@@ -405,8 +410,9 @@ fun WebNowPlaying(nav: Nav) {
     }
 
     Box(
-        Modifier.fillMaxSize().background(Color.Black).onGloballyPositioned { origin = it.boundsInRoot().topLeft }
+        Modifier.fillMaxSize().background(Color.Black)
             .graphicsLayer { alpha = rise.value; translationY = (1 - rise.value) * 16.dp.toPx() }
+            .onGloballyPositioned { screen[0] = it }
             .drawWithContent {
                 // radial-gradient(90% 60% at 50% 0%, art/.34, art/.10 55%, transparent 80%)
                 val rx = size.width * 0.9f
