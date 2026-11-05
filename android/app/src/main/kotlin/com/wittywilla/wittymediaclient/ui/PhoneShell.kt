@@ -162,7 +162,7 @@ fun PhoneShell(nav: Nav, content: @Composable () -> Unit) {
         // Docked above the floating bar, 16 above it.
         val aboveBar = 8.dp + inset + TAB_BAR.dp + 16.dp
         if (video != null) VideoDock(nav, video, aboveBar)
-        else if (listening) MiniPlayer(nav, Modifier.align(Alignment.BottomCenter).padding(start = 8.dp, end = 8.dp, bottom = aboveBar))
+        else if (listening) PhoneMiniBar(nav, Modifier.align(Alignment.BottomCenter).padding(start = 8.dp, end = 8.dp, bottom = aboveBar))
 
         TabBar(nav, inset, Modifier.align(Alignment.BottomCenter)) { drawer = true }
         Drawer(nav, drawer, status) { drawer = false }
