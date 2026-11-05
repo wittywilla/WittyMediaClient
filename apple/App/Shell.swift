@@ -1,19 +1,27 @@
 import SwiftUI
 import WittyKit
 
-/// The app's top level, as on Android (ui/Shell.kt): Home, Search and Profile. A phone, a tablet and
-/// Apple Vision Pro have them in a floating pill at the bottom, within reach of a thumb; Apple TV has
-/// the system's tabs along the top, where up from the first row gets to them. Music and the other
-/// libraries are on Home, as they are on Android.
+/// The app's top level. A phone, a tablet and Apple Vision Pro have Home, Search and You in a floating
+/// pill at the bottom, within reach of a thumb. Apple TV has six pills along the top, where up from a
+/// tab's first row gets to them: Home, Libraries, Games, Live TV, Search and You (docs/APP-DESIGN.md,
+/// On a TV, and TvTabs.swift).
 enum AppTab: String, CaseIterable, Identifiable, Hashable {
-    case home, search, profile
+    case home, libraries, games, guide, search, profile
 
     var id: String { rawValue }
 
+    /// The tabs a phone, a tablet and Vision Pro keep a stack for.
+    static let phoneTabs: [AppTab] = [.home, .search, .profile]
+    /// Apple TV's bar, in its order.
+    static let tvTabs: [AppTab] = [.home, .libraries, .games, .guide, .search, .profile]
+
     var title: String {
         switch self {
-        case .home: return "Home"
-        case .search: return "Search"
+        case .home: return say("homeTab")
+        case .libraries: return say("librariesTab")
+        case .games: return say("gamesTab")
+        case .guide: return say("liveTvTab")
+        case .search: return say("searchTab")
         case .profile: return say("youTab")
         }
     }
@@ -21,6 +29,9 @@ enum AppTab: String, CaseIterable, Identifiable, Hashable {
     var icon: String {
         switch self {
         case .home: return "house"
+        case .libraries: return "books.vertical"
+        case .games: return "gamecontroller"
+        case .guide: return "tv"
         case .search: return "magnifyingglass"
         case .profile: return "person"
         }
@@ -30,6 +41,9 @@ enum AppTab: String, CaseIterable, Identifiable, Hashable {
     var openIcon: String {
         switch self {
         case .home: return "house.fill"
+        case .libraries: return "books.vertical.fill"
+        case .games: return "gamecontroller.fill"
+        case .guide: return "tv.fill"
         case .profile: return "person.fill"
         case .search: return icon
         }
@@ -50,12 +64,22 @@ struct BrowseShell: View {
 private struct TabRoot: View {
     @EnvironmentObject private var model: AppModel
     let tab: AppTab
+    /// Apple TV: Back on a tab's first screen goes up to the bar.
+    var toBar: (() -> Void)?
 
     @ViewBuilder private var first: some View {
         switch tab {
         case .home: HomeView()
         case .search: SearchView()
         case .profile: YouView()
+        #if os(tvOS)
+        case .libraries: LibrariesPage()
+        case .games: GamesTab()
+        case .guide: LiveTvTab()
+        #else
+        // Apple TV's tabs alone: these devices never show them.
+        case .libraries, .games, .guide: EmptyView()
+        #endif
         }
     }
 
@@ -63,6 +87,7 @@ private struct TabRoot: View {
         NavigationStack(path: model.pathBinding(tab)) {
             first
                 .noNavigationBar()
+                .onRemoteBack(toBar)
                 .navigationDestination(for: Route.self) { route in
                     switch route {
                     case .library(let library):
@@ -133,20 +158,27 @@ private struct TabRoot: View {
 }
 
 #if os(tvOS)
-/// The Siri Remote moves along these with the focus engine. Back from a tab's content goes to the tab
-/// bar, and Back from there leaves the app, which is what the system does and people expect.
+/// The bar along the top over the tabs' stacks. The system's tab view keeps each stack as it was left,
+/// with its own bar hidden. A tab's first screen has the bar above it; a screen opened from there has
+/// the whole screen, and Back from it comes back to the tab.
 private struct TopTabs: View {
     @EnvironmentObject private var model: AppModel
+    @Environment(\.palette) private var palette
+    @FocusState private var bar: AppTab?
 
     var body: some View {
-        TabView(selection: $model.tab) {
-            ForEach(AppTab.allCases) { tab in
-                TabRoot(tab: tab)
-                    .safeAreaInset(edge: .bottom) { MiniPlayerSlot(tab: tab) }
-                    .tabItem { Label(tab.title, systemImage: tab.icon) }
-                    .tag(tab)
+        VStack(spacing: 0) {
+            if model.path.isEmpty { TvTopBar(focus: $bar) }
+            TabView(selection: $model.tab) {
+                ForEach(AppTab.tvTabs) { tab in
+                    TabRoot(tab: tab, toBar: { bar = tab })
+                        .safeAreaInset(edge: .bottom) { MiniPlayerSlot(tab: tab) }
+                        .toolbar(.hidden, for: .tabBar)
+                        .tag(tab)
+                }
             }
         }
+        .background(palette.background.ignoresSafeArea())
         // A WittyTV reminder comes up on whatever's showing.
         .modifier(TvReminderAlert())
     }
@@ -159,7 +191,7 @@ private struct PillShell: View {
 
     var body: some View {
         TabView(selection: $model.tab) {
-            ForEach(AppTab.allCases) { tab in
+            ForEach(AppTab.phoneTabs) { tab in
                 TabRoot(tab: tab)
                     .safeAreaInset(edge: .bottom) {
                         // The mini player sits above the pill, as on Android.
@@ -208,7 +240,7 @@ private struct PillBar: View {
 
     var body: some View {
         HStack(spacing: Tokens.Space.s1) {
-            ForEach(AppTab.allCases) { tab in
+            ForEach(AppTab.phoneTabs) { tab in
                 let open = model.tab == tab
                 Button {
                     press(tab)
