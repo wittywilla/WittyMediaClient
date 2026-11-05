@@ -330,7 +330,7 @@ public final class WittyClient: @unchecked Sendable {
     }
 
     /// A channel's key goes in the address as it is, and only ever as one piece of it.
-    static func pathPart(_ text: String) -> String {
+    public static func pathPart(_ text: String) -> String {
         text.addingPercentEncoding(withAllowedCharacters: .alphanumerics.union(CharacterSet(charactersIn: "-_"))) ?? ""
     }
 
