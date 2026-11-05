@@ -12,6 +12,8 @@ data class ServerStatus(
     val version: String = "",
     val setupRequired: Boolean = false,
     val brandName: String = "",
+    // The version of the server's own logo, or empty for the app's mark.
+    val brandLogo: String = "",
     val theme: String = "default",
     val user: User? = null,
 )
@@ -20,6 +22,11 @@ data class ServerStatus(
 data class User(
     val id: Long = 0,
     val name: String = "",
+    // The profile name, which anyone may choose. Empty means the username.
+    val displayName: String = "",
+    // The corner of the server's pages shows the username instead of the profile name.
+    val showUsername: Boolean = false,
+    val twoFactor: Boolean = false,
     val isAdmin: Boolean = false,
     val kind: String = "adult",
 )
@@ -27,7 +34,9 @@ data class User(
 @Serializable
 data class Profile(
     val id: Long = 0,
+    // The username, which signing in needs.
     val name: String = "",
+    val displayName: String = "",
     val kind: String = "adult",
     val hasPassword: Boolean = true,
 )
@@ -300,7 +309,8 @@ data class ProgressReport(val positionSec: Double, val durationSec: Double)
 data class ViewReport(val seconds: Double)
 
 @Serializable
-data class Credentials(val name: String, val password: String, val device: String)
+// The code is the authenticator app's, for an account with two-factor sign-in.
+data class Credentials(val name: String, val password: String, val device: String, val code: String = "")
 
 @Serializable
 data class RigPlayRequest(val client: String, val os: String)
@@ -348,3 +358,64 @@ data class CouchStatus(val allowed: Boolean = false)
 
 @Serializable
 data class RigWake(val ok: Boolean = false, val note: String = "")
+
+// You and settings: docs/APP-DESIGN.md. What the server's internal/server answers for an account.
+
+// A signed-in device. `where` is machine, home, vpn or internet; times are Unix seconds.
+@Serializable
+data class DeviceSession(
+    val id: String = "",
+    val device: String = "",
+    val createdAt: Long = 0,
+    val lastSeen: Long = 0,
+    val where: String = "",
+    val current: Boolean = false,
+)
+
+@Serializable
+data class TwoFactorStatus(val on: Boolean = false, val recoveryLeft: Int = 0, val available: Boolean = false)
+
+@Serializable
+data class TwoFactorSetup(val secret: String = "", val uri: String = "")
+
+@Serializable
+data class RecoveryCodes(val recovery: List<String> = emptyList())
+
+// What a TV asking to be signed in is, and who it may be signed in as.
+@Serializable
+data class PairChoice(val id: Long = 0, val name: String = "", val kind: String = "adult")
+
+@Serializable
+data class PairInfo(
+    val code: String = "",
+    val device: String = "",
+    val platform: String = "",
+    val ip: String = "",
+    val expiresAt: Long = 0,
+    val profiles: List<PairChoice> = emptyList(),
+)
+
+@Serializable
+data class PairInvite(val code: String = "", val expiresInSec: Int = 0)
+
+// Only what changed is sent: a Kids profile may not touch its names, but may choose which shows.
+@Serializable
+data class ProfileUpdate(val displayName: String? = null, val username: String? = null, val showUsername: Boolean? = null)
+
+@Serializable
+data class PasswordChange(val password: String, val current: String)
+
+@Serializable
+data class PasswordOnly(val password: String)
+
+@Serializable
+data class CodeOnly(val code: String)
+
+@Serializable
+data class PasswordAndCode(val password: String, val code: String)
+
+@Serializable
+data class PairAnswer(val code: String, val userId: Long? = null)
+
+@Serializable
+data class UserIdOnly(val userId: Long)

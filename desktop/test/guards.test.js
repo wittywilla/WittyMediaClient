@@ -2,7 +2,7 @@ const test = require('node:test')
 const assert = require('node:assert')
 const {
   CONNECT_PAGE, BAR_PAGE, isConnectUrl, pageFile, navigation, outsideAddress, budget, downloadAllowed, readJson, whyFailed, isCertificateCode,
-  cleanName, cleanMessage, validCode, validToken, menuPoint, MAX_ANSWER_BYTES,
+  cleanName, cleanMessage, validCode, validToken, validPairCode, validDeviceSecret, serverPage, pollSeconds, menuPoint, MAX_ANSWER_BYTES,
 } = require('../guards.js')
 
 test('only the app\'s own connect page counts as the connect page', () => {
@@ -130,6 +130,28 @@ test('a code is six digits and a token can\'t break out of its cookie', () => {
   for (const bad of ['12345', '1234567', '12345a', '١٢٣٤٥٦', 123456, null]) assert.ok(!validCode(bad), String(bad))
   assert.ok(validToken('abc123._-~='))
   for (const bad of ['', 'a;b', 'a b', 'a,b', 'a"b', 'a\nb', 'x'.repeat(513), 7, {}, null, undefined]) assert.ok(!validToken(bad), String(bad))
+})
+
+test('a code to show and the secret behind it are only ever what the server sends', () => {
+  for (const good of ['BCDF-GHJK', 'BCDFGHJK', 'AB12-CD34']) assert.ok(validPairCode(good), good)
+  for (const bad of ['', 'bcdf-ghjk', 'BCDF GHJK', 'BCDF-GHJK\n', '<b>BCDF</b>', 'A'.repeat(30), 7, null]) assert.ok(!validPairCode(bad), String(bad))
+  assert.ok(validDeviceSecret('0123456789abcdef'.repeat(4)))
+  for (const bad of ['', 'short', 'a'.repeat(129), 'a b'.repeat(20), 7, null]) assert.ok(!validDeviceSecret(bad), String(bad))
+})
+
+test('the page to approve a code at is on that server, whatever the server says', () => {
+  const origin = 'http://10.0.0.2:9797'
+  assert.strictEqual(serverPage(origin, '/pair?code=BCDF-GHJK', '/pair'), 'http://10.0.0.2:9797/pair?code=BCDF-GHJK')
+  for (const away of ['//evil.example/pair', '/\\evil.example/pair', 'https://evil.example/pair', 'pair', '/a b', 7, null, `/${'x'.repeat(300)}`]) {
+    assert.strictEqual(serverPage(origin, away, '/pair'), 'http://10.0.0.2:9797/pair', String(away))
+  }
+})
+
+test('asking again waits as long as the server asks, within reason', () => {
+  assert.strictEqual(pollSeconds(3), 3)
+  assert.strictEqual(pollSeconds(600), 60)
+  for (const odd of [0, -1, 1.5, '3', null, undefined]) assert.strictEqual(pollSeconds(odd), 3, String(odd))
+  assert.strictEqual(pollSeconds(undefined, 0), 0)
 })
 
 test('a menu position is only used if it is in the window', () => {

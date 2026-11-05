@@ -43,11 +43,17 @@ public extension Library {
     var isPhotos: Bool { type == "photos" }
 
     /// What has a screen of its own on Apple TV, where nothing can fall back on the server's page.
-    var opensOnAppleTV: Bool { opensHere || isPhotos || ["music", "audiobooks", "podcasts"].contains(type) }
+    var opensOnAppleTV: Bool { opensHere || isPhotos || hasGameScreens || ["music", "audiobooks", "podcasts"].contains(type) }
+
+    /// Games the server plays and streams, which Apple TV has its own screens and player for. A
+    /// shared PC's games go through Moonlight instead: see Rigs.swift.
+    var hasGameScreens: Bool { type == "games" && !isRigGames }
 }
 
 public extension Item {
     var isAudio: Bool { kind == "audio" }
+    /// A game the server plays, as opposed to one on someone's own PC.
+    var isServerGame: Bool { kind == "game" && !isRigGame }
     var isPhoto: Bool { kind == "photo" }
 
     /// Whose album a track is on, which is how its album is asked for: the album's artist where

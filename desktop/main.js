@@ -44,6 +44,7 @@ let server = '' // the origin the content view may show
 let lastServer = ''
 let stopDiscovery = null
 let shown = null // what the connect screen last showed about a server, to hold it to that
+let pairing = null // a code on show for someone to approve: { url, secret }, and the secret stays here
 
 const OS_NAMES = { win32: 'Windows', linux: 'Linux', darwin: 'macOS', freebsd: 'FreeBSD' }
 const OS_NAME = OS_NAMES[process.platform] || process.platform
@@ -190,6 +191,7 @@ let startedAfresh = false
 function showConnect(query) {
   endDiscovery()
   server = ''
+  pairing = null
   startedAfresh = true
   bar.webContents.send('server', '')
   bar.webContents.send('theme', BAR_THEME)
@@ -202,6 +204,7 @@ function showServer(url) {
   server = new URL(url).origin
   lastServer = server
   shown = null
+  pairing = null
   startedAfresh = true
   bar.webContents.send('server', url)
   updateMenu()
@@ -262,8 +265,10 @@ async function check(url) {
   }
 }
 
-// What the connect screen gets to know, which it then shows to the person.
+// What the connect screen gets to know, which it then shows to the person. Whatever the screen
+// does next, a code it was showing for someone to approve no longer counts.
 async function probe(url) {
+  pairing = null
   const found = await check(url)
   if (found.error) return { error: found.error }
   const { identity } = found
@@ -302,6 +307,7 @@ function rememberServer(url, name, identity) {
 
 // Goes to a server someone chose, without a code: they sign in on its own page.
 async function openServer(request) {
+  pairing = null
   const found = await admitted(String(request && request.url), request && request.trust === true)
   if (found.error) return { error: found.error }
   try {
@@ -318,6 +324,7 @@ async function openServer(request) {
 // A code typed on this device. The sign-in goes straight into the browser
 // session as the server's own HttpOnly cookie, so no page script can read it.
 async function redeem(url, code) {
+  pairing = null
   if (!guards.validCode(code)) return { error: 'invalid' }
   const found = await admitted(url, false)
   if (found.error) return { error: found.error }
@@ -336,11 +343,15 @@ async function redeem(url, code) {
     log.warn('network', `Signing in with a code was refused: ${res.status} ${guards.cleanMessage(data.reason)}`, { where: found.url })
     return { message: guards.cleanMessage(data.error), reason: guards.cleanMessage(data.reason) }
   }
-  log.addSecret(data.token)
+  return keepSignIn(found, data.token)
+}
+
+async function keepSignIn(found, token) {
+  log.addSecret(token)
   try {
     await dropUnfitSignIn(found.url, found.identity)
     await session.defaultSession.cookies.set({
-      url: found.url, name: SESSION_COOKIE, value: data.token, httpOnly: true, sameSite: 'lax',
+      url: found.url, name: SESSION_COOKIE, value: token, httpOnly: true, sameSite: 'lax',
       secure: found.url.startsWith('https:'), expirationDate: Date.now() / 1000 + SESSION_DAYS * 86400,
     })
   } catch (err) {
@@ -350,6 +361,63 @@ async function redeem(url, code) {
   rememberServer(found.url, found.name, found.identity)
   showServer(found.url)
   return { ok: true }
+}
+
+const deviceName = () => `${os.hostname()} (WittyMediaClient)`.slice(0, 60)
+
+// A code shown on this screen, which someone already signed in approves on a phone or a computer:
+// docs/CLIENT-API.md in the server's repository. The page gets the code and the address to show;
+// the secret that collects the sign-in never leaves this process.
+async function pairStart(url) {
+  pairing = null
+  const found = await admitted(url, false)
+  if (found.error) return { error: found.error }
+  let res, answer
+  try {
+    res = await postJson(found.url + API + '/pair/start', { device: deviceName(), platform: OS_NAME })
+    answer = await guards.readJson(res)
+  } catch (err) {
+    log.noteError('warn', 'network', 'Asking for a code to show failed', err, { where: found.url })
+    return { error: guards.whyFailed(err) === 'certificate' ? 'certificate' : 'unreachable' }
+  }
+  const data = answer && typeof answer === 'object' ? answer : {}
+  if (!res.ok || !guards.validPairCode(data.code) || !guards.validDeviceSecret(data.deviceSecret)) {
+    log.warn('network', `Asking for a code to show was refused: ${res.status}`, { where: found.url })
+    return { message: guards.cleanMessage(data.error) }
+  }
+  pairing = { url: found.url, secret: data.deviceSecret }
+  return {
+    ok: true, code: data.code, intervalSec: guards.pollSeconds(data.intervalSec),
+    approveAt: guards.serverPage(found.url, data.approvePath, '/pair'),
+    scan: guards.serverPage(found.url, data.approveUrl, `/pair?code=${encodeURIComponent(data.code)}`),
+  }
+}
+
+// Has someone approved the code? Approved, the sign-in is kept as a typed code's is.
+async function pairPoll() {
+  const asked = pairing
+  if (!asked) return { status: 'expired' }
+  let res, answer
+  try {
+    res = await postJson(asked.url + API + '/pair/poll', { deviceSecret: asked.secret })
+    answer = await guards.readJson(res)
+  } catch (err) {
+    log.noteError('info', 'network', 'Asking whether a code was approved failed', err, { where: asked.url })
+    return { status: 'lost' }
+  }
+  // The screen moved on while this was asked: whatever the answer, it isn't wanted now.
+  if (pairing !== asked) return { status: 'expired' }
+  const data = answer && typeof answer === 'object' ? answer : {}
+  if (data.status === 'pending' || data.status === 'slow-down') return { status: data.status, intervalSec: guards.pollSeconds(data.intervalSec, 0) }
+  pairing = null
+  if (data.status === 'denied') return { status: 'denied' }
+  if (data.status !== 'approved' || !res.ok || !guards.validToken(data.token)) {
+    if (data.status === 'approved') log.warn('network', 'A code was approved, but the sign-in that came with it was not one', { where: asked.url })
+    return { status: 'expired' }
+  }
+  const found = await admitted(asked.url, false)
+  if (found.error) return { error: found.error }
+  return keepSignIn(found, data.token)
 }
 
 // Leaving a server leaves no valid sign-in behind, on this computer or on the server.
@@ -531,6 +599,9 @@ ipcMain.handle('probe', (e, url) => (fromConnect(e) ? probe(String(url)) : { err
 ipcMain.handle('recent', (e) => (fromConnect(e) ? (saved.recent || []).map(({ url, name }) => ({ url, name })) : []))
 ipcMain.handle('redeem', (e, url, code) => (fromConnect(e) ? redeem(String(url), String(code)) : { error: 'invalid' }))
 ipcMain.handle('open-server', (e, request) => (fromConnect(e) ? openServer(request) : { error: 'invalid' }))
+ipcMain.handle('pair-start', (e, url) => (fromConnect(e) ? pairStart(String(url)) : { error: 'invalid' }))
+ipcMain.handle('pair-poll', (e) => (fromConnect(e) ? pairPoll() : { status: 'expired' }))
+ipcMain.on('pair-stop', (e) => { if (fromConnect(e)) pairing = null })
 
 ipcMain.on('discover-start', (e) => {
   if (!fromConnect(e)) return

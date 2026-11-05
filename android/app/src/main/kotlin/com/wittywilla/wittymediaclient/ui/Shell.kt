@@ -19,24 +19,26 @@ import androidx.compose.foundation.layout.WindowInsetsSides
 import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.only
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.layout.safeDrawingPadding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.layout.windowInsetsTopHeight
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.DateRange
 import androidx.compose.material.icons.filled.Home
-import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -89,60 +91,84 @@ import java.io.File
 val LocalBottomRoom = compositionLocalOf { 0.dp }
 private val PILL_ROOM = 88.dp
 
-private data class Tab(val route: Route, val label: String, val icon: ImageVector)
+// The You tab has no icon: it shows the person's avatar.
+private data class Tab(val route: Route, val label: String, val icon: ImageVector?)
 
 private val TABS = listOf(
     Tab(Route.Home, "Home", Icons.Filled.Home),
     Tab(Route.Search, "Search", Icons.Filled.Search),
-    Tab(Route.Profile, "Profile", Icons.Filled.Person),
+    Tab(Route.Profile, "", null),
 )
 
 @Composable
 private fun TabButton(nav: Nav, tab: Tab, modifier: Modifier = Modifier, wide: Boolean = false) {
     val scheme = MaterialTheme.colorScheme
+    val metrics = LocalMetrics.current
     val active = nav.current == tab.route
     val ink = if (active) scheme.onPrimary else scheme.onSurface
-    FocusBox(
+    // You's name comes from the shared wording.
+    val name = tab.label.ifEmpty { LocalWords.current["youTab"].orEmpty() }
+    Pressable(
         { if (!active) nav.reset(tab.route) }, modifier,
-        label = tab.label, state = if (active) "Selected" else null, selected = active,
+        shape = Radius.FULL, fill = if (active) scheme.primary else Color.Transparent,
+        label = name, state = if (active) "Selected" else null, selected = active,
         // A remote that has just chosen a tab stays on it, one press from what's below. Home has its
         // own first focus on Play. Elsewhere nothing would have focus, and the next press would land on Home.
-        requestFocus = active && tab.route != Route.Home && LocalMetrics.current.tv,
-        focusKey = "tab-${tab.label}", filled = if (active) scheme.primary else androidx.compose.ui.graphics.Color.Transparent, shape = Radius.FULL,
+        requestFocus = active && tab.route != Route.Home && metrics.tv,
+        focusKey = "tab-$name",
     ) {
+        // Every tab the same height, the avatar's (28 and 12 above and below), so a chosen icon tab's pill
+        // sits in the middle of the bar like You's.
         Row(
-            Modifier.padding(horizontal = if (wide) Space.S5 else Space.S4, vertical = Space.S3),
+            Modifier.height(metrics.u(TAB_HEIGHT)).padding(horizontal = if (wide) metrics.u(20) else metrics.u(16)),
             verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(Space.S2),
+            horizontalArrangement = Arrangement.spacedBy(metrics.u(8)),
         ) {
-            Icon(tab.icon, contentDescription = null, tint = ink)
-            if (wide) Text(tab.label, color = ink, style = MaterialTheme.typography.labelLarge)
+            if (tab.icon != null) {
+                Icon(tab.icon, contentDescription = null, tint = ink, modifier = Modifier.size(metrics.u(24)))
+            } else {
+                // The person's avatar, ringed in the accent's words colour while You is chosen.
+                val me = nav.me
+                Avatar(
+                    if (me == null) "?" else avatarName(me.displayName, me.name), metrics.u(28),
+                    if (active) Modifier.ringOutside(CircleShape, scheme.onPrimary, 0.dp, metrics.u(2).coerceAtLeast(1.dp)) else Modifier,
+                )
+            }
+            if (wide) Text(name, color = ink, style = MaterialTheme.typography.label)
         }
     }
 }
 
-// Home, Search and Profile. A phone has them in a floating pill at the bottom, within reach of a
+private const val TAB_HEIGHT = 52
+
+// Home, Search and You. A phone has them in a floating pill at the bottom, within reach of a
 // thumb. A TV has them along the top, where up from the first row gets to them.
 @Composable
 fun Shell(nav: Nav, content: @Composable () -> Unit) {
     val metrics = LocalMetrics.current
+    // Whose avatar the You tab shows, when the app opened already signed in some other way.
+    LaunchedEffect(Unit) {
+        if (nav.me == null) nav.me = runCatching { nav.app.api.status().user }.getOrNull()
+    }
     Screen {
         if (metrics.tv) {
             Column(Modifier.fillMaxSize()) {
+                // docs/APP-DESIGN.md, "On a TV": pills along the top, 24 units down. Up from the first row reaches them.
                 Row(
-                    Modifier.fillMaxWidth().padding(start = metrics.gutter, end = metrics.gutter, top = metrics.edge, bottom = Space.S2).remoteRow(),
-                    horizontalArrangement = Arrangement.spacedBy(Space.S3),
+                    Modifier.fillMaxWidth().padding(start = metrics.gutter, end = metrics.gutter, top = metrics.u(24), bottom = metrics.u(16)).remoteRow(),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(metrics.u(16)),
                 ) {
                     TABS.forEach { TabButton(nav, it, wide = true) }
                     if (nav.hasGuide) {
-                        FocusBox({ nav.push(Route.Page(GUIDE_PATH)) }, focusKey = "tab-guide", shape = Radius.FULL) {
+                        Pressable({ nav.push(Route.Page(GUIDE_PATH)) }, focusKey = "tab-guide", shape = Radius.FULL, label = "TV guide") {
                             Row(
-                                Modifier.padding(horizontal = Space.S5, vertical = Space.S3),
+                                Modifier.height(metrics.u(TAB_HEIGHT)).padding(horizontal = metrics.u(20)),
                                 verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(Space.S2),
+                                horizontalArrangement = Arrangement.spacedBy(metrics.u(8)),
                             ) {
-                                Icon(Icons.Filled.DateRange, contentDescription = null, tint = MaterialTheme.colorScheme.onSurface)
-                                Text("TV guide", color = MaterialTheme.colorScheme.onSurface, style = MaterialTheme.typography.labelLarge)
+                                Icon(Icons.Filled.DateRange, contentDescription = null, tint = MaterialTheme.colorScheme.onSurface, modifier = Modifier.size(metrics.u(24)))
+                                Text("TV guide", color = MaterialTheme.colorScheme.onSurface, style = MaterialTheme.typography.label)
                             }
                         }
                     }
@@ -182,6 +208,7 @@ fun Shell(nav: Nav, content: @Composable () -> Unit) {
                         .border(1.dp, MaterialTheme.colorScheme.outline, Radius.FULL)
                         .padding(Space.S1)
                         .semantics { role = Role.Tab },
+                    verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(Space.S1),
                 ) {
                     TABS.forEach { TabButton(nav, it, wide = nav.current == it.route) }
@@ -250,43 +277,6 @@ fun SearchScreen(nav: Nav, s: Map<String, String>) {
                 }
             }
         }
-    }
-}
-
-// Who's signed in and to what, and the ways out of that. Everything here works with a remote.
-@Composable
-fun ProfileScreen(nav: Nav, s: Map<String, String>) {
-    val metrics = LocalMetrics.current
-    val context = LocalContext.current
-    val server = nav.server
-    var who by remember { mutableStateOf("") }
-    LaunchedEffect(Unit) { who = runCatching { nav.app.api.status().user?.name.orEmpty() }.getOrDefault("") }
-    val version = remember { runCatching { context.packageManager.getPackageInfo(context.packageName, 0).versionName }.getOrNull().orEmpty() }
-    Column(
-        Modifier
-            .fillMaxSize()
-            .verticalScroll(rememberScrollState())
-            .statusBarsPadding()
-            .padding(horizontal = metrics.gutter, vertical = Space.S4)
-            .padding(bottom = LocalBottomRoom.current),
-        verticalArrangement = Arrangement.spacedBy(Space.S3),
-    ) {
-        Heading("Profile")
-        ErrorText(nav.notice)
-        if (who.isNotEmpty()) Secondary("Signed in as $who")
-        if (server != null) {
-            SectionTitle(server.name)
-            Secondary(server.url)
-            if (server.fingerprint.isNotEmpty()) Secondary("${s["fingerprintLabel"]}: ${server.fingerprint}")
-        }
-        ActionButton("Server settings", { nav.push(Route.Page(SETTINGS_PATH)) }, Modifier.fillMaxWidth(), focusKey = "settings")
-        ActionButton("Sign out", nav::signOut, Modifier.fillMaxWidth(), focusKey = "switch")
-        ActionButton(s["changeServer"].orEmpty(), nav::changeServer, Modifier.fillMaxWidth(), focusKey = "server")
-        SectionTitle("About this app")
-        Secondary("WittyMediaClient $version")
-        ActionButton("Licences", { nav.push(Route.Notices) }, Modifier.fillMaxWidth(), focusKey = "notices")
-        ActionButton("This app's log", { nav.push(Route.Logs) }, Modifier.fillMaxWidth(), focusKey = "logs")
-        Secondary(s["legalConnect"].orEmpty())
     }
 }
 
