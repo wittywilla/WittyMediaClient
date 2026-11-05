@@ -7,13 +7,15 @@ import WittyKit
 
 // MARK: - The bar
 
-/// Pills the gutter in from the sides and 24 down: Home, Libraries, Games, Live TV and Search from the left, and
-/// You on its own at the right edge. Focus goes along the whole row, You last. Choosing one shows that tab and
-/// keeps focus on its pill, one press from what's below. Back from here goes to Home's pill, and from Home's out
-/// of the app, as the system does.
+/// Pills the gutter in from the sides and 24 down. From the left: Home, Libraries, Games, Live TV, Search and any
+/// libraries added to the top menu, which scroll sideways with focus when they don't all fit. On its own at the right
+/// edge, never moving: You. Focus goes along the whole row, You last. Choosing one shows that tab and keeps focus on
+/// its pill, one press from what's below. Back from here goes to Home's pill, and from Home's out of the app, as the
+/// system does.
 struct TvTopBar: View {
     @EnvironmentObject private var model: AppModel
     @Environment(\.metrics) private var metrics
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     var focus: FocusState<AppTab?>.Binding
     /// Which pill had focus last, nil while it's below the bar.
     @State private var inside: AppTab?
@@ -35,21 +37,53 @@ struct TvTopBar: View {
         }
     }
 
+    /// The libraries added to the top menu, in the server's order.
+    private var added: [Library] { model.libraries.filter { model.topMenu.contains($0.id) } }
+
+    private func pill(_ tab: AppTab, _ name: String, _ symbol: String) -> some View {
+        TvTabPill(name: name, symbol: symbol, user: tab == .profile ? model.user : nil, chosen: model.tab == tab) { choose(tab) }
+            .focused(focus, equals: tab)
+    }
+
     var body: some View {
-        // Each pill keeps room for its ring around it, so the pills themselves start at the gutter,
+        // Each pill keeps room for its ring and its growth around it, so the pills themselves start at the gutter,
         // sit 24 from the top and are 16 apart.
         let ring = metrics.focusRing
-        HStack(spacing: Tokens.Space.s4 - ring * 2) {
-            ForEach(AppTab.tvTabs) { tab in
-                // Space, not a line, keeps You apart from the rest.
-                if tab == .profile { Spacer(minLength: Tokens.Space.s8) }
-                TvTabPill(tab: tab, chosen: model.tab == tab, user: model.user) { choose(tab) }
-                    .focused(focus, equals: tab)
+        HStack(spacing: 0) {
+            ScrollViewReader { scroller in
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: Tokens.Space.s4 - ring * 2) {
+                        ForEach(AppTab.tvTabs) { pill($0, $0.title, $0.icon).id($0) }
+                        ForEach(added) { pill(.library($0.id), $0.name, $0.barSymbol).id(AppTab.library($0.id)) }
+                    }
+                    .padding(.leading, metrics.gutter - ring)
+                    // Room for the last pill to come clear of the fade.
+                    .padding(.trailing, TvTopBar.fade + ring)
+                    .padding(.vertical, ring)
+                }
+                // Pills that don't fit fade out towards You, rather than stop short against the edge.
+                .mask(HStack(spacing: 0) {
+                    Rectangle()
+                    LinearGradient(colors: [.black, .clear], startPoint: .leading, endPoint: .trailing).frame(width: TvTopBar.fade)
+                })
+                // The focused pill comes to the middle, so it's never in the fade.
+                .onChange(of: focus.wrappedValue) { next in
+                    guard let next, next != .profile else { return }
+                    if reduceMotion {
+                        scroller.scrollTo(next, anchor: .center)
+                    } else {
+                        withAnimation(.easeOut(duration: Tokens.Motion.focus)) { scroller.scrollTo(next, anchor: .center) }
+                    }
+                }
             }
+            // Space, not a line, keeps You apart from the rest: 32 from the edge of the pills on the left.
+            pill(.profile, AppTab.profile.title, AppTab.profile.icon)
+                .padding(.vertical, ring)
+                .padding(.leading, Tokens.Space.s8 - ring)
+                .padding(.trailing, metrics.gutter - ring)
         }
-        .padding(.horizontal, metrics.gutter - ring)
-        .padding(.top, Tokens.Space.s6 - ring)
-        .padding(.bottom, Tokens.Space.s4 - ring)
+        .padding(.top, Tokens.Space.s6 - ring * 2)
+        .padding(.bottom, Tokens.Space.s4 - ring * 2)
         .focusSection()
         .onExitCommand(perform: back)
         // Up from a tab lands on that tab's pill, whichever pill happens to be above.
@@ -62,25 +96,29 @@ struct TvTopBar: View {
             }
         }
     }
+
+    /// How far the pills that don't fit fade out, before the space before You.
+    static let fade: CGFloat = 48
 }
 
 /// A tab's icon and name, or You's avatar and the person's name. The chosen one has the accent behind it.
 private struct TvTabPill: View {
     @Environment(\.palette) private var palette
-    let tab: AppTab
-    let chosen: Bool
+    let name: String
+    let symbol: String
     let user: User?
+    let chosen: Bool
     let action: () -> Void
 
     var body: some View {
         Button(action: action) {
             HStack(spacing: Tokens.Space.s3) {
-                if tab == .profile, let user {
+                if let user {
                     AvatarTile(name: user.shownName, size: 28)
                     Text(user.shownName)
                 } else {
-                    Image(systemName: tab.icon).accessibilityHidden(true)
-                    Text(tab.title)
+                    Image(systemName: symbol).accessibilityHidden(true)
+                    Text(name)
                 }
             }
             .font(.wmLabel)
@@ -90,7 +128,7 @@ private struct TvTabPill: View {
             .frame(height: TvTabPill.height)
         }
         .buttonStyle(SurfaceStyle(fill: chosen ? palette.accent.opacity(0.14) : nil, radius: 999))
-        .accessibilityLabel(tab.title)
+        .accessibilityLabel(user == nil ? name : say("youTab"))
         .accessibilityAddTraits(chosen ? [.isSelected] : [])
     }
 
@@ -195,7 +233,10 @@ private struct LibraryTile: View {
     }
 }
 
-private extension Library {
+extension Library {
+    /// A library's icon in the top menu: its tile's icon in outline, as the bar's others are.
+    var barSymbol: String { tileSymbol.replacingOccurrences(of: ".fill", with: "") }
+
     /// The website's icon for each kind of library (web/src/icons.tsx, `libIcon`), as a symbol.
     var tileSymbol: String {
         switch type {

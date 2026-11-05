@@ -101,6 +101,9 @@ struct YouView: View {
         }
         ListGroup(title: say("groupDevice")) {
             row(.theme, "paintpalette", RowTint.teal, "rowTheme", value: ThemeView.name(of: model.themeChoice, server: model.themeId, list: model.themeList))
+            #if os(tvOS)
+            row(.topMenu, "menubar.rectangle", RowTint.tv, "rowTopMenu", value: model.topMenu.isEmpty ? "" : "\(model.topMenu.count)")
+            #endif
         }
         if isAdmin {
             ListGroup(title: say("groupServer")) {
@@ -1020,3 +1023,40 @@ struct ThemeView: View {
         .task { await model.loadThemes() }
     }
 }
+
+#if os(tvOS)
+// MARK: - Top menu
+
+/// Which libraries join Apple TV's top menu, after Search (docs/APP-DESIGN.md, On a TV). Only on this TV, per server
+/// and per profile. Choosing a library adds it, or takes it out again.
+struct TopMenuView: View {
+    @EnvironmentObject private var model: AppModel
+    @Environment(\.palette) private var palette
+    @Namespace private var scope
+
+    var body: some View {
+        SettingsScreen(title: say("rowTopMenu"), detail: say("topMenuHint")) {
+            ListGroup(title: "") {
+                ForEach(Array(model.libraries.enumerated()), id: \.element.id) { index, library in
+                    let added = model.topMenu.contains(library.id)
+                    Button { model.toggleTopMenu(library) } label: {
+                        HStack(spacing: 0) {
+                            RowLabel(icon: library.barSymbol, tint: RowTint.teal, title: library.name, chevron: false)
+                            Image(systemName: "checkmark")
+                                .font(.subheadline.weight(.semibold))
+                                .foregroundStyle(palette.accentText)
+                                .opacity(added ? 1 : 0)
+                                .padding(.trailing, Tokens.Space.s4)
+                                .accessibilityHidden(true)
+                        }
+                    }
+                    .rowStyle()
+                    .firstFocus(in: scope, when: index == 0)
+                    .accessibilityAddTraits(added ? [.isSelected] : [])
+                }
+            }
+        }
+        .focusRoot(scope)
+    }
+}
+#endif

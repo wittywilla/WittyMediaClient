@@ -116,6 +116,8 @@ enum Route: Hashable {
     case logs
     /// The person's own account and this device's choices, from You: see YouViews.swift.
     case names, password, twoStep, devices, signInTv, theme
+    /// Apple TV's choice of libraries for the top menu: see YouViews.swift.
+    case topMenu
     /// WittyPlay on Apple TV: a games library or one console's games in it, a game's page, and a
     /// game being played. See GamesViews.swift and GamePlayer.swift.
     case gameLibrary(Library, console: String?)
@@ -180,7 +182,12 @@ final class AppModel: ObservableObject {
     /// The owner's own name and logo for the server, from `/status`, shown on the sign-in screens.
     @Published var brandName = ""
     @Published var brandLogo = ""
-    @Published var user: User?
+    @Published var user: User? {
+        didSet { if oldValue?.id != user?.id || oldValue?.name != user?.name { loadTopMenu() } }
+    }
+    /// The libraries this person added to Apple TV's top menu, by id: docs/APP-DESIGN.md, On a TV. Kept on the
+    /// device, per server and per profile.
+    @Published private(set) var topMenu: [Int64] = []
     /// Music, audiobooks and podcasts, which carry on whatever screen is showing.
     let listening = Listening()
     @Published var libraries: [Library] = []
@@ -267,6 +274,24 @@ final class AppModel: ObservableObject {
     }
 
     var palette: Palette { Palette(appTheme) }
+
+    private var topMenuKey: String { "topMenu." + client.base + "." + (user?.name ?? "") }
+
+    private func loadTopMenu() {
+        let kept = (defaults.array(forKey: topMenuKey) as? [NSNumber])?.map(\.int64Value) ?? []
+        if kept != topMenu { topMenu = kept }
+    }
+
+    /// Adds a library to the top menu, or takes it out. A tab taken out while it's showing gives way to Home.
+    func toggleTopMenu(_ library: Library) {
+        if topMenu.contains(library.id) {
+            topMenu.removeAll { $0 == library.id }
+            if tab == .library(library.id) { tab = .home }
+        } else {
+            topMenu.append(library.id)
+        }
+        defaults.set(topMenu.map { NSNumber(value: $0) }, forKey: topMenuKey)
+    }
 
     func chooseTheme(_ id: String) {
         themeChoice = id

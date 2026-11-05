@@ -5,16 +5,29 @@ import WittyKit
 /// pill at the bottom, within reach of a thumb. Apple TV has six pills along the top, where up from a
 /// tab's first row gets to them: Home, Libraries, Games, Live TV, Search and You (docs/APP-DESIGN.md,
 /// On a TV, and TvTabs.swift).
-enum AppTab: String, CaseIterable, Identifiable, Hashable {
+enum AppTab: Identifiable, Hashable {
     case home, libraries, games, guide, search, profile
+    /// A library this person added to Apple TV's top menu, as a tab of its own.
+    case library(Int64)
 
-    var id: String { rawValue }
+    var id: String {
+        switch self {
+        case .home: return "home"
+        case .libraries: return "libraries"
+        case .games: return "games"
+        case .guide: return "guide"
+        case .search: return "search"
+        case .profile: return "profile"
+        case .library(let id): return "library\(id)"
+        }
+    }
 
     /// The tabs a phone, a tablet and Vision Pro keep a stack for.
     static let phoneTabs: [AppTab] = [.home, .search, .profile]
-    /// Apple TV's bar, in its order.
-    static let tvTabs: [AppTab] = [.home, .libraries, .games, .guide, .search, .profile]
+    /// Apple TV's bar, in its order, before any libraries added to it and You.
+    static let tvTabs: [AppTab] = [.home, .libraries, .games, .guide, .search]
 
+    /// A library's tab is named after the library, which the bar knows.
     var title: String {
         switch self {
         case .home: return say("homeTab")
@@ -23,6 +36,7 @@ enum AppTab: String, CaseIterable, Identifiable, Hashable {
         case .guide: return say("liveTvTab")
         case .search: return say("searchTab")
         case .profile: return say("youTab")
+        case .library: return ""
         }
     }
 
@@ -34,6 +48,7 @@ enum AppTab: String, CaseIterable, Identifiable, Hashable {
         case .guide: return "tv"
         case .search: return "magnifyingglass"
         case .profile: return "person"
+        case .library: return "books.vertical"
         }
     }
 
@@ -45,7 +60,7 @@ enum AppTab: String, CaseIterable, Identifiable, Hashable {
         case .games: return "gamecontroller.fill"
         case .guide: return "tv.fill"
         case .profile: return "person.fill"
-        case .search: return icon
+        case .search, .library: return icon
         }
     }
 }
@@ -76,9 +91,15 @@ private struct TabRoot: View {
         case .libraries: LibrariesPage()
         case .games: GamesTab()
         case .guide: LiveTvTab()
+        case .library(let id):
+            if let library = model.libraries.first(where: { $0.id == id }) {
+                LibraryScreen(library: library)
+            } else {
+                LoadingView()
+            }
         #else
         // Apple TV's tabs alone: these devices never show them.
-        case .libraries, .games, .guide: EmptyView()
+        case .libraries, .games, .guide, .library: EmptyView()
         #endif
         }
     }
@@ -91,17 +112,7 @@ private struct TabRoot: View {
                 .navigationDestination(for: Route.self) { route in
                     switch route {
                     case .library(let library):
-                        if library.hasGameScreens {
-                            #if os(tvOS)
-                            GamesLibraryView(library: library, console: nil).plainNavigation()
-                            #else
-                            LibraryView(library: library).plainNavigation()
-                            #endif
-                        } else if library.hasListeningScreens {
-                            ListeningLibraryView(library: library).plainNavigation()
-                        } else {
-                            LibraryView(library: library).plainNavigation()
-                        }
+                        LibraryScreen(library: library).plainNavigation()
                     case .listeningAlbum(let library, let album, let artist):
                         AlbumScreen(library: library, album: album, artist: artist).plainNavigation()
                     case .artist(let library, let name): ArtistScreen(library: library, name: name).plainNavigation()
@@ -129,6 +140,11 @@ private struct TabRoot: View {
                     case .devices: DevicesView().plainNavigation()
                     case .signInTv: SignInTvView().plainNavigation()
                     case .theme: ThemeView().plainNavigation()
+                    #if os(tvOS)
+                    case .topMenu: TopMenuView().plainNavigation()
+                    #else
+                    case .topMenu: EmptyView()
+                    #endif
                     case .web(let path):
                         #if os(iOS) || os(visionOS)
                         WebPlayerView(path: path, keptToGames: true)
@@ -174,6 +190,25 @@ private struct TabRoot: View {
     }
 }
 
+/// A library's own screen: games, music, audiobooks and podcasts have theirs, everything else its posters.
+struct LibraryScreen: View {
+    let library: Library
+
+    var body: some View {
+        if library.hasGameScreens {
+            #if os(tvOS)
+            GamesLibraryView(library: library, console: nil)
+            #else
+            LibraryView(library: library)
+            #endif
+        } else if library.hasListeningScreens {
+            ListeningLibraryView(library: library)
+        } else {
+            LibraryView(library: library)
+        }
+    }
+}
+
 #if os(tvOS)
 /// The bar along the top over the chosen tab. A tab's first screen has the bar above it; a screen opened
 /// from there has the whole screen, and Back from it comes back to the tab. Only the chosen tab is drawn:
@@ -207,7 +242,10 @@ private struct TopTabs: View {
         .onChange(of: model.libraries) { _ in
             guard !settled else { return }
             settled = true
-            if bar == .home { DispatchQueue.main.async { resetFocus(in: root) } }
+            // A moment for Home's first look to be drawn, so its main action is there to take focus.
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+                if bar == .home { resetFocus(in: root) }
+            }
         }
         // A WittyTV reminder comes up on whatever's showing.
         .modifier(TvReminderAlert())
