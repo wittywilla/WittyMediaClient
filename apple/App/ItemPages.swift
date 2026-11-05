@@ -688,11 +688,6 @@ private struct TitleSheetRow: Identifiable {
     let run: () -> Void
 }
 
-private struct TitleSheetHeight: PreferenceKey {
-    static var defaultValue: CGFloat = 0
-    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) { value = max(value, nextValue()) }
-}
-
 /// The website's sheet of rows from the bottom of a phone (ui/RowSheet.tsx): `panel`, its title in 20 with a Close
 /// button, and the rows together on a `card`, each 52 high with a 20 icon in `textSecondary` and its words in 15
 /// medium, a hairline between them. It's as tall as what's in it.
@@ -709,6 +704,12 @@ private struct TitleRowSheet: View {
         self.rows = rows
         self.choose = choose
         _height = State(initialValue: 20 + 44 + 16 + 52 * CGFloat(rows.count) + 20 + 34)
+    }
+
+    /// The sheet as tall as what's in it, with the home indicator's room under it.
+    private func fit(_ measured: CGFloat, bottom: CGFloat) {
+        let next = measured + bottom
+        if measured > 0, abs(next - height) > 0.5 { height = next }
     }
 
     var body: some View {
@@ -745,12 +746,13 @@ private struct TitleRowSheet: View {
             .padding(.horizontal, Tokens.Space.s4)
             .padding(.vertical, Tokens.Space.s5)
             .fixedSize(horizontal: false, vertical: true)
-            .background(GeometryReader { geo in Color.clear.preference(key: TitleSheetHeight.self, value: geo.size.height) })
+            // Measured directly: a preference sent up from here doesn't reliably arrive on iOS 18 and later.
+            .background(GeometryReader { geo in
+                Color.clear
+                    .onAppear { fit(geo.size.height, bottom: outer.safeAreaInsets.bottom) }
+                    .onChange(of: geo.size.height) { fit($0, bottom: outer.safeAreaInsets.bottom) }
+            })
             .frame(maxHeight: .infinity, alignment: .top)
-            .onPreferenceChange(TitleSheetHeight.self) { measured in
-                let next = measured + outer.safeAreaInsets.bottom
-                if measured > 0, abs(next - height) > 0.5 { height = next }
-            }
         }
         .background(palette.panel.ignoresSafeArea())
         .presentationDetents([.height(height)])
