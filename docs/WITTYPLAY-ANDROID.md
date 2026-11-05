@@ -9,9 +9,9 @@ protocol choices are the Apple player's (`docs/WITTYPLAY-STREAMING.md` on the Ap
 
 | Mode | On Android | When |
 |---|---|---|
-| `ws-h264` | H.264 Annex B from the WebSocket into `MediaCodec`, asynchronous, onto a `SurfaceView`. `KEY_LOW_LATENCY` where the decoder has it, realtime priority, and each frame released to the screen the moment it's decoded. More than three frames waiting means the stream is behind: they're dropped and the decoder waits for the next keyframe, asking for one (`0xF7`) | First, whenever the server offers it |
+| `ws-h264` | H.264 Annex B from the WebSocket into `MediaCodec`, asynchronous, onto a `SurfaceView`. `KEY_LOW_LATENCY` where the decoder has it, realtime priority, and each frame released to the screen the moment it's decoded. More than three frames waiting means the stream is behind: they're dropped and the decoder waits for the next keyframe, asking for one (`0xF7`) | First on version 1. On version 2, after WebRTC |
 | `ws-jpeg` | One JPEG a frame, decoded into a reused bitmap and drawn on the same surface, sharp unless `display.scaling` is smooth | No picture 12 seconds after connecting, or the server's `hello` says `jpeg` |
-| `webrtc` | Not used: it needs libwebrtc in the app | Later, for playing away from home |
+| `webrtc` | Version 2 only, through libwebrtc: it decodes the H.264 with `MediaCodec` and draws it onto the same surface, and plays the Opus sound through its own audio device as game audio. Input goes on an unordered `input` data channel that never resends, events on an ordered `events` one. Version 1's `webrtc` isn't used | First, wherever the session's modes say `"stream": 2`. The WebSocket if it hasn't connected in 5 seconds or shown a picture in 8 |
 
 Sound is PCM at the console's own rate into a low-latency `AudioTrack`, written without ever waiting. The track's buffer
 is `audio.latency` long (50, 90 or 160 ms, by `setBufferSizeInFrames`), so that's the most that can wait: a write that
@@ -27,7 +27,7 @@ offers Resume from the automatic save. Leaving the app lets go of every control,
 
 ## Transports
 
-The player talks to a `GameTransport` (`games/GameTransport.kt`): media and events in, input and events out. Two are built:
+The player talks to a `GameTransport` (`games/GameTransport.kt`): media and events in, input and events out. Three are built:
 
 - **Version 1:** `GET /play/{sid}/ws?video=h264|jpeg` (WittyMediaServer `docs/GAMING-API.md`), used by servers today.
 - **Version 2:** `GET /play/{sid}/stream` as a WebSocket (WittyMediaServer `docs/GAMING-STREAM.md`), used whenever a mode in the
@@ -36,15 +36,19 @@ The player talks to a `GameTransport` (`games/GameTransport.kt`): media and even
   and a `{"type":"report","delayMs":N}` goes twice a second (`ArrivalDelay`), so a slow link can't fill with seconds of video.
   The stream's description sets the shape, rate and seats; `seats` follow the controllers plugged in; refusals and
   `ended` codes show in plain words; rumble lasts its `ms` unless renewed.
+- **Version 2 over WebRTC** (`games/GameWebRtc.kt`), tried before that WebSocket: an offer with receive-only video and audio and
+  the two data channels, sent with the same hello to `POST /play/{sid}/stream`, and the server's answer. libwebrtc's native
+  library is 7 to 16 MB a processor, which is why the APK is split by processor (the README's Android section says which to install).
 
 On Android TV the picture's surface asks for the game's own frame rate (`Surface.setFrameRate`, Android 11+), and the new
 refresh rate goes to the server as a `report`, which version 2 uses to pace the game to the screen. Controllers show their
 player number on their own lights where Android 12+ has them.
 
-Not yet: WebRTC through libwebrtc (version 2's first choice), Opus over the WebSocket (PCM is asked for instead), several
-fingers (`0xFE`), motion (`0xE1`) and the game's `led` lights. Version 2 is covered by unit tests only: the test server
-doesn't serve it yet. `GameTransportTest.playsOverTheServersTransports` runs each transport a server offers against a real
-game when `WMS_LIVE_URL`, `WMS_LIVE_TOKEN` and `WMS_LIVE_GAME` are set.
+Not yet: Opus over the WebSocket (PCM is asked for instead), several fingers (`0xFE`), motion (`0xE1`) and the game's `led`
+lights. Version 2 has been played only against the stream's stand-in server on the same machine, from an emulator: over WebRTC,
+the picture and touch input, and the sound's track arriving; over the WebSocket, input and the `delayMs` reports. Not yet seen:
+JPEG over version 2, and falling back to the WebSocket after 5 seconds without a connection or 8 without a picture.
+`GameTransportTest.playsOverTheServersTransports` runs each transport a server offers against a real game when `WMS_LIVE_URL`, `WMS_LIVE_TOKEN` and `WMS_LIVE_GAME` are set.
 
 ## Controls
 
@@ -78,6 +82,6 @@ game when `WMS_LIVE_URL`, `WMS_LIVE_TOKEN` and `WMS_LIVE_GAME` are set.
 
 ## Not yet
 
-WebRTC; the `display.*` effects beyond shape, whole multiples and rotation (scanlines, masks, bezels); arranging the touch
+The `display.*` effects beyond shape, whole multiples and rotation (scanlines, masks, bezels); arranging the touch
 controls on the device (a touch layout belongs to the device that saved it, so until then this device uses the console's
 default; the save route is in `GamesApi.saveTouchLayout`); game settings, cheats and patches (the website's).

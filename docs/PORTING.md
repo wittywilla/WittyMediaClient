@@ -156,8 +156,9 @@ autologin, and `-device virtio-vga,xres=1920,yres=1080` in QEMU. Its kernel leav
 
 ## Android's processors
 
-The one APK carries `armeabi-v7a`, `arm64-v8a`, `x86` and `x86_64`, named in `android/app/build.gradle.kts`. It costs very little: only one native library is in it. A
-dependency that brings in a library missing for one of them fails `android/scripts/check-abis.sh` in CI. [PLATFORMS.md](PLATFORMS.md#androids-processors) has what was checked.
+There's an APK for each of `armeabi-v7a`, `arm64-v8a`, `x86` and `x86_64`, and a universal one with all four, split in `android/app/build.gradle.kts`.
+libwebrtc's library is 7 to 16 MB a processor, so a device need only carry its own. A dependency that brings in a library missing for one of them,
+or a processor's APK that carries another's, fails `android/scripts/check-abis.sh` in CI. [PLATFORMS.md](PLATFORMS.md#androids-processors) has what was checked.
 
 ## What a TV app doesn't have of its own
 
