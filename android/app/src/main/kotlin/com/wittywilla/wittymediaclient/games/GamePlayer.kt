@@ -80,11 +80,11 @@ import kotlin.math.roundToInt
 // until it's open (the server's docs/GAMING-API.md, "What a TV app must build itself").
 
 @Composable
-fun GamePlayerScreen(app: WittyApp, gameId: Long, start: GameStart, onClose: () -> Unit) {
+fun GamePlayerScreen(app: WittyApp, gameId: Long, start: GameStart, direct: DirectStream? = null, onClose: () -> Unit) {
     val look = gameLook()
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
-    val play = remember { GamePlay(app, gameId, start, look.tv, scope) }
+    val play = remember { GamePlay(app, gameId, start, look.tv, scope, direct) }
     val touchScreen = remember { !look.tv && context.packageManager.hasSystemFeature(PackageManager.FEATURE_TOUCHSCREEN) }
     var touchOn by remember { mutableStateOf(GamePlay.touchShown(context)) }
 
@@ -477,7 +477,7 @@ private fun GameMenuSheet(play: GamePlay, page: GameMenu, touchScreen: Boolean, 
                     }
                 }
                 GameMenu.Connection -> Column(verticalArrangement = Arrangement.spacedBy(gap)) {
-                    for ((i, mode) in (listOf("auto") + GameModes.supported).withIndex()) {
+                    for ((i, mode) in (listOf("auto") + play.connectionChoices).withIndex()) {
                         Tile(GameIcons.Connection, GameModes.names.getValue(mode), { play.useMode(mode) }, Modifier.fillMaxWidth(), on = play.chosenMode == mode, focus = if (i == 0) first else null)
                     }
                     Text("Now using: ${GameModes.names[play.modeInUse] ?: "nothing yet"}", color = Color(0xFFAAB1C0), fontSize = look.small)

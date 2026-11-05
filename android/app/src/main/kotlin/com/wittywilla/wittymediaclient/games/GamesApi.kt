@@ -134,6 +134,22 @@ class GamesApi(val api: Api) {
     fun backdropUrl(game: GameItem): String = "${api.base}$API/items/${game.id}/backdrop?v=${game.updatedAt}"
     fun saveThumbUrl(game: Long, slot: Int, version: Long): String = "${api.base}$API/games/$game/saves/$slot/thumb?v=$version"
 
+    // Version 2's stream address for a session (docs/GAMING-STREAM.md): a POST for WebRTC, a WebSocket otherwise.
+    fun streamEndpoint(sid: String) = StreamEndpoint(api.base + API + "/play/${q(sid)}/stream")
+
+    // WebRTC's offer and answer, at an address the endpoint gives.
+    suspend fun postStream(url: String, body: String): String = withContext(Dispatchers.IO) {
+        val request = Request.Builder().url(url).post(body.toRequestBody(JSON_TYPE)).build()
+        slow.newCall(request).execute().use { res ->
+            val text = res.peekBody(MAX_BYTES).string()
+            if (res.code !in 200..299) throw ApiError(res.code, problemFrom(res.code, text))
+            text
+        }
+    }
+
+    fun openWebSocketUrl(url: String, listener: WebSocketListener): WebSocket =
+        socketClient.newWebSocket(Request.Builder().url(url).build(), listener)
+
     // A game's WebSocket, at a path under /api/v1 (see GameTransport.kt). OkHttp turns ws into http for the upgrade, so
     // the app's connection adds the sign-in header to it as to any request to this server, and never to an address.
     fun openWebSocket(path: String, listener: WebSocketListener): WebSocket {

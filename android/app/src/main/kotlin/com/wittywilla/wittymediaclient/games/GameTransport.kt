@@ -3,6 +3,7 @@ package com.wittywilla.wittymediaclient.games
 import android.os.Handler
 import android.os.Looper
 import android.os.SystemClock
+import android.view.Surface
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
@@ -31,7 +32,16 @@ interface GameTransport {
 
         // Closed or failed. `status` is the HTTP status of a refused connection, or 0.
         fun lost(status: Int)
+
+        // A transport that draws its own picture (WebRTC) says when the first one is on screen.
+        fun shown() {}
     }
+
+    // Where a transport that draws its own picture draws it. The WebSockets' pictures go through the player's decoders.
+    fun attachSurface(surface: Surface?) {}
+
+    // For a transport that plays its own sound.
+    fun setVolume(level: Double, muted: Boolean) {}
 
     // A pad state, a touch, a timing request: binary, unordered, never resent.
     fun send(message: ByteArray)
@@ -158,13 +168,13 @@ private const val REPORT_MS = 500L
 
 // Version 2 over a WebSocket: GET /play/{sid}/stream. The hello goes first, as text; the server answers with the
 // stream's description, then the picture from a keyframe. Its delayMs reports go twice a second.
-class WebSocketV2Transport(api: GamesApi, sid: String, hello: StreamHello, private val receiver: GameTransport.Receiver) : GameTransport {
+class WebSocketV2Transport(api: GamesApi, endpoint: StreamEndpoint, hello: StreamHello, private val receiver: GameTransport.Receiver) : GameTransport {
     private val main = Handler(Looper.getMainLooper())
     private val delay = ArrivalDelay()
 
     @Volatile
     private var closed = false
-    private val socket: WebSocket = api.openWebSocket("/play/${api.q(sid)}/stream", Listener(hello))
+    private val socket: WebSocket = api.openWebSocketUrl(endpoint.url, Listener(hello))
 
     private val report: Runnable = object : Runnable {
         override fun run() {
@@ -233,16 +243,24 @@ class WebSocketV2Transport(api: GamesApi, sid: String, hello: StreamHello, priva
     }
 }
 
-// Which transport a mode goes by: version 2 where the server offers it, version 1 otherwise. `video` is h264 or jpeg.
+// Which transport a mode goes by: version 2 where the server offers it, version 1 otherwise. `video` is webrtc (version 2
+// only, which draws and plays for itself), h264 or jpeg (over a WebSocket).
 data class GameRoute(val stream: Int, val video: String) {
-    val modeId: String get() = if (video == "jpeg") "ws-jpeg" else "ws-h264"
+    val modeId: String get() = when (video) {
+        "webrtc" -> "webrtc"
+        "jpeg" -> "ws-jpeg"
+        else -> "ws-h264"
+    }
 
     companion object {
-        // The ways to try, best first. A chosen mode (the menu's Connection) is the only one tried where it's offered.
+        // The ways to try, best first: the server's order, of what this app can use. On version 2 that starts with
+        // WebRTC; version 1's WebRTC isn't used. A chosen mode (the menu's Connection) is the only one tried where offered.
         fun plan(offered: List<GameModeInfo>, chosen: String = "auto"): List<GameRoute> {
             val v2 = offered.any { it.stream >= 2 }
-            val modes = GameModes.order(offered.map { it.id }, chosen)
-            return modes.map { GameRoute(if (v2) 2 else 1, GameModes.video(it)) }
+            if (!v2) return GameModes.order(offered.map { it.id }, chosen).map { GameRoute(1, GameModes.video(it)) }
+            val usable = offered.map { it.id }.filter { it in GameModes.supportedV2 }.distinct().ifEmpty { GameModes.supportedV2 }
+            val tried = if (chosen in usable) listOf(chosen) else usable
+            return tried.map { GameRoute(2, if (it == "webrtc") "webrtc" else GameModes.video(it)) }
         }
     }
 }

@@ -98,9 +98,21 @@ class GameTransportTest {
         val v1: GameSession = json.decodeFromString("""{"id":"a","modes":[{"id":"webrtc"},{"id":"ws-h264"},{"id":"ws-jpeg"}]}""")
         val v2: GameSession = json.decodeFromString("""{"id":"a","modes":[{"id":"webrtc","stream":2},{"id":"ws-h264","stream":2},{"id":"ws-jpeg","stream":2}]}""")
         assertEquals(listOf(GameRoute(1, "h264"), GameRoute(1, "jpeg")), GameRoute.plan(v1.modes.mapNotNull(GameModeInfo::from)))
-        assertEquals(listOf(GameRoute(2, "h264"), GameRoute(2, "jpeg")), GameRoute.plan(v2.modes.mapNotNull(GameModeInfo::from)))
+        // Version 2 tries WebRTC first, then the WebSocket.
+        assertEquals(listOf(GameRoute(2, "webrtc"), GameRoute(2, "h264"), GameRoute(2, "jpeg")), GameRoute.plan(v2.modes.mapNotNull(GameModeInfo::from)))
+        assertEquals(listOf(GameRoute(2, "webrtc")), GameRoute.plan(v2.modes.mapNotNull(GameModeInfo::from), "webrtc"))
+        assertEquals("webrtc", GameRoute(2, "webrtc").modeId)
         assertEquals(listOf(GameRoute(2, "jpeg")), GameRoute.plan(v2.modes.mapNotNull(GameModeInfo::from), "ws-jpeg"))
         assertEquals(GameModeInfo("ws-jpeg"), GameModeInfo.from(json.parseToJsonElement("\"ws-jpeg\"")))
+    }
+
+    @Test
+    fun aStandInsLoopbackCandidatesAreReachedFromAnEmulator() {
+        val answer = "v=0\r\nc=IN IP4 127.0.0.1\r\na=candidate:1 1 udp 2130706431 127.0.0.1 9822 typ host\r\na=mid:0\r\n"
+        val shown = com.wittywilla.wittymediaclient.games.rewriteLoopback(answer, "10.0.2.2")
+        assertTrue(shown.contains("a=candidate:1 1 udp 2130706431 10.0.2.2 9822 typ host"))
+        assertTrue(shown.contains("c=IN IP4 10.0.2.2"))
+        assertTrue(shown.endsWith("a=mid:0\r\n"))
     }
 
     // A real game over each transport the server offers: the picture from a keyframe, sound, and input taken.
@@ -133,7 +145,7 @@ class GameTransportTest {
                     override fun lost(status: Int) {}
                 }
                 val hello = StreamHello("WittyMediaClient Android test", "android-live-test", "Live test")
-                val transport = if (route.stream >= 2) WebSocketV2Transport(api, session.id, hello, receiver) else WebSocketV1Transport(api, session.id, "h264", receiver)
+                val transport = if (route.stream >= 2) WebSocketV2Transport(api, api.streamEndpoint(session.id), hello, receiver) else WebSocketV1Transport(api, session.id, "h264", receiver)
                 try {
                     assertTrue("$route opened", opened.await(10, TimeUnit.SECONDS))
                     assertTrue("$route keyframe", keyframe.await(10, TimeUnit.SECONDS))

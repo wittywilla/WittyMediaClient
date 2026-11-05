@@ -78,6 +78,8 @@ dependencies {
     implementation("org.bouncycastle:bcprov-jdk18on:1.86")
     // The QR code on the TV sign-in screen.
     implementation("com.google.zxing:core:3.5.4")
+    // WittyPlay's stream, version 2: WebRTC first (the server's docs/GAMING-STREAM.md). libwebrtc decodes with MediaCodec.
+    implementation("io.github.webrtc-sdk:android:144.7559.15")
 
     testImplementation("junit:junit:4.13.2")
 }
