@@ -10,6 +10,8 @@ import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.serialization.SerializationException
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
@@ -40,6 +42,8 @@ private const val QUICK_SECONDS = 5L
 private const val QUICK_MAX_BYTES = 256L * 1024
 private const val MAX_BYTES = 32L * 1024 * 1024
 private const val LOOKUP_MS = 3000L
+private const val SPEEDTEST_CUTOFF_NS = 1_500_000_000L
+private const val SPEEDTEST_MIN_BYTES = 32L * 1024
 private val shared = OkHttpClient() // connections and threads are reused across servers
 
 private data class Answer(val status: Int, val text: String, val requestId: String, val location: String)
@@ -129,17 +133,62 @@ class Api(val base: String, val token: String, private val quick: Boolean = fals
     suspend fun searchShows(text: String, limit: Int): ShowPage = get("/shows?search=${query(text)}&limit=$limit")
 
     suspend fun libraries(): List<Library> = getList("/libraries")
-    suspend fun albums(library: Long, sort: String, artist: String? = null): List<Album> =
-        getList("/music/albums?library=$library&sort=$sort" + if (artist != null) "&artist=${query(artist)}" else "")
+    suspend fun albums(library: Long, sort: String, artist: String? = null, genre: String = ""): List<Album> =
+        getList("/music/albums?library=$library&sort=$sort" + (if (genre.isNotEmpty()) "&genre=${query(genre)}" else "") + if (artist != null) "&artist=${query(artist)}" else "")
     suspend fun artists(library: Long): List<Artist> = getList("/music/artists?library=$library")
     // An empty album or artist means none or unknown: it is still asked for by name.
     suspend fun tracks(library: Long, album: String, artist: String): List<Item> =
         getList("/music/tracks?library=$library&album=${query(album)}&artist=${query(artist)}")
     suspend fun songs(library: Long, offset: Int, limit: Int): List<Item> =
         getList("/music/songs?library=$library&offset=$offset&limit=$limit&sort=title")
+    // The music pages (web/src/pages/AudioLibrary.tsx, music/ArtistPage.tsx): a library's front page, an artist's
+    // page, the genres to narrow a list by, and songs as the Songs tab asks for them (MusicLook.songsQuery).
+    suspend fun musicHome(library: Long): MusicHome = get("/music/home?library=$library")
+    suspend fun artistInfo(library: Long, name: String): ArtistInfo = get("/music/artist?library=$library&name=${query(name)}")
+    suspend fun genres(library: Long): List<String> = getList("/genres?library=$library")
+    suspend fun musicSongs(library: Long, rest: String): List<Item> = getList("/music/songs?library=$library&$rest")
+    // A CD image that has gone, which an album's page doesn't offer to insert.
+    suspend fun discGone(id: Long): Boolean = try {
+        raw("GET", "/cd/$id", null).status.let { it == 404 || it == 422 }
+    } catch (e: IOException) {
+        false
+    }
 
     suspend fun playback(id: Long, request: PlaybackRequest): Playback =
         json.decodeFromString(call("POST", "/items/$id/playback", json.encodeToString(request)))
+
+    // What to watch after this: the website's Watch next card asks the same.
+    suspend fun recommend(id: Long): Recommendation = get("/items/$id/recommend")
+    suspend fun playerPrefs(): PlayerPrefs = get("/prefs")
+
+    // The server's streaming mode for viewers away from home: standard or robust.
+    suspend fun remoteStreaming(): String =
+        runCatching { json.parseToJsonElement(call("GET", "/capabilities")).jsonObject["playback"]?.jsonObject?.get("remoteStreaming")?.jsonPrimitive?.content }
+            .getOrNull() ?: "standard"
+
+    // What this connection carries, as the website measures it: a megabyte from the server, timed from its
+    // first bytes and cut off at 1.5 s. Null when less than 32 KB came, which is too little to say.
+    suspend fun speedtestKbps(): Int? = withContext(Dispatchers.IO) {
+        runCatching {
+            val request = Request.Builder().url("$base$API/playback/speedtest?kb=1024").build()
+            http.newCall(request).execute().use { res ->
+                if (!res.isSuccessful) return@use null
+                val body = res.body.byteStream()
+                val buffer = ByteArray(16 * 1024)
+                var first = 0L
+                var total = 0L
+                while (true) {
+                    val n = body.read(buffer)
+                    if (n < 0) break
+                    val now = System.nanoTime()
+                    if (first == 0L) first = now else total += n
+                    if (now - first > SPEEDTEST_CUTOFF_NS) break
+                }
+                val seconds = (System.nanoTime() - first) / 1e9
+                if (total < SPEEDTEST_MIN_BYTES || seconds <= 0) null else (total * 8 / 1000 / seconds).toInt()
+            }
+        }.getOrNull()
+    }
 
     // Stops the conversion at once when the viewer leaves.
     suspend fun stopStream(streamId: String) {
@@ -185,7 +234,99 @@ class Api(val base: String, val token: String, private val quick: Boolean = fals
         json.decodeFromString(call("POST", "/rigs/$rigId/wake", "{}"))
 
     suspend fun couchStatus(): CouchStatus = get("/couch")
+    suspend fun modulePages(): List<Pair<String, ModulePage>> = get<ModuleBundles>("/modules/web").bundles.flatMap { b -> b.pages.map { b.id to it } }
     suspend fun guide(hours: Int, limit: Int): Guide = get("/guide?hours=$hours&limit=$limit")
+    suspend fun forYou(): ForYou = get("/me/recommended")
+    suspend fun legalNoticesAndLink(): LegalNotices = get("/legal/notices")
+    // Music: a station from a song, this person's liked songs in a library, and liking one.
+    suspend fun songRadio(id: Long): List<Item> = getList("/music/radio/$id")
+    suspend fun likes(library: Long): List<Long> = getList("/music/likes?library=$library")
+    suspend fun react(id: Long, value: Int) { call("PUT", "/items/$id/reaction", "{\"value\":$value}") }
+    // A song's words, looked for online when the server has none yet and may; the listener's own timing; and, for an
+    // owner, other versions online and corrections kept on the server (web/src/audio/LyricsPanel.tsx).
+    suspend fun lyrics(id: Long): Lyrics = get("/music/lyrics/$id?fetch=1")
+    suspend fun setLyricsOffset(id: Long, ms: Double) { call("PUT", "/music/lyrics/$id/offset", body(mapOf("offsetMs" to JsonPrimitive(Math.round(ms))))) }
+    suspend fun searchLyrics(id: Long, q: String): List<FoundLyrics> =
+        json.decodeFromString<List<FoundLyrics>?>(call("POST", "/music/lyrics/$id/search", body(mapOf("q" to JsonPrimitive(q))))).orEmpty()
+    suspend fun chooseLyrics(id: Long, provider: String, found: String) { call("PUT", "/music/lyrics/$id", body(mapOf("provider" to JsonPrimitive(provider), "id" to JsonPrimitive(found)))) }
+    suspend fun saveLyrics(id: Long, text: String) { call("PUT", "/music/lyrics/$id", body(mapOf("text" to JsonPrimitive(text)))) }
+    suspend fun markInstrumental(id: Long) { call("PUT", "/music/lyrics/$id", body(mapOf("instrumental" to JsonPrimitive(true)))) }
+    suspend fun forgetLyrics(id: Long) { call("DELETE", "/music/lyrics/$id") }
+    // A music library's Music videos, the newest of them, and what a song or a video is tied to (MusicVideosLook.kt).
+    suspend fun musicVideos(path: String): MusicVideoPage = get(path)
+    suspend fun musicLinks(id: Long): MusicLinks = get("/music/links/$id")
+    fun videoThumbUrl(id: Long, width: Int, version: Long) = "$base$API/items/$id/poster?w=$width" + if (version > 0) "&v=$version" else ""
+    fun creatorAvatarUrl(id: Long) = "$base$API/creators/$id/art/avatar"
+
+    // The volume correction a song is tagged with, for ReplayGain.
+    suspend fun loudness(id: Long): Loudness = get("/music/loudness/$id")
+
+    // Booklets and text beside a song's album (web/src/audio/ReadPanel.tsx): the list, a text one, and a booklet as it is.
+    suspend fun extras(id: Long): List<Extra> = getList("/music/extras/$id")
+    suspend fun extraText(id: Long, name: String): String = get<ExtraText>("/music/extras/$id/file?name=${query(name)}").text
+    fun extraFileUrl(id: Long, name: String) = "$base$API/music/extras/$id/file?name=${query(name)}"
+
+    // A file from this server, with the sign-in, written where it's asked to be.
+    suspend fun download(url: String, to: java.io.File) = withContext(Dispatchers.IO) {
+        http.newCall(Request.Builder().url(url).build()).execute().use { res ->
+            if (!res.isSuccessful) throw ApiError(res.code, errorText(res.code, res.peekBody(MAX_BYTES).string()))
+            to.outputStream().use { out -> res.body.byteStream().use { it.copyTo(out) } }
+        }
+    }
+    private fun body(fields: Map<String, JsonElement>) = kotlinx.serialization.json.JsonObject(fields).toString()
+    suspend fun shelves(library: Long): Shelves = get("/browse/shelves?library=$library")
+    // The query is the website's: sort, desc, seed and the filters, already encoded.
+    suspend fun browse(library: Long, query: String, offset: Int, limit: Int): BrowsePage = get("/browse?library=$library&$query&offset=$offset&limit=$limit")
+    suspend fun facets(library: Long): Map<String, List<Facet>> = get("/browse/facets?library=$library")
+    suspend fun scan(library: Long) { call("POST", "/libraries/$library/scan", "{}") }
+    fun encode(text: String): String = query(text)
+    suspend fun collections(): List<Collection> = getList("/collections")
+    suspend fun holding(item: Long, show: Long): List<Long> = getList("/collections/holding?item=$item&show=$show")
+    suspend fun addToCollection(id: Long, what: CollectionItems) { call("POST", "/collections/$id/items", json.encodeToString(what)) }
+    suspend fun removeFromCollection(id: Long, what: CollectionItems) { call("DELETE", "/collections/$id/items", json.encodeToString(what)) }
+    suspend fun watchLater(what: CollectionItems): WatchLater = json.decodeFromString(call("POST", "/collections/watch-later/items", json.encodeToString(what)))
+    suspend fun newCollection(name: String): Collection = json.decodeFromString(call("POST", "/collections", json.encodeToString(NewCollection(name))))
+    suspend fun randomItem(): Item? = get<ItemPage>("/items?sort=random&limit=1&noEpisodes=1&watchable=1").items.firstOrNull()
+
+    // Home's choices in /me/ui: how it's arranged, and the newer version an administrator put off. Saving reads the
+    // rest first and keeps it, as the website does.
+    suspend fun homeChoices(): HomeChoices = readHomeChoices(call("GET", "/me/ui"))
+    suspend fun saveHomeLayout(layout: HomeLayout) = setChoice("home", layout.toJson())
+    suspend fun putOffUpdate(version: String) = setChoice("updateLater", JsonPrimitive(version))
+
+    // The music player's visualizer, kept with the rest as the website keeps it (`musicPlayer`).
+    suspend fun musicPlayerChoice(): JsonElement? = (json.parseToJsonElement(call("GET", "/me/ui")) as? kotlinx.serialization.json.JsonObject)?.get("musicPlayer")
+    suspend fun saveMusicPlayerChoice(value: JsonElement) = setChoice("musicPlayer", value)
+    private suspend fun setChoice(key: String, value: JsonElement) {
+        call("PUT", "/me/ui", withChoice(call("GET", "/me/ui"), key, value))
+    }
+
+    // A title's page, as the website's (see TitlePage.kt): an item or a show, and the rest of what its page shows,
+    // from one answer.
+    suspend fun itemPage(id: Long): Pair<Item, ItemFacts> {
+        val text = call("GET", "/items/$id")
+        return json.decodeFromString<Item>(text) to ItemFacts.read(text)
+    }
+
+    suspend fun showPage(id: Long): Pair<ShowDetail, ShowFacts> {
+        val text = call("GET", "/shows/$id")
+        return json.decodeFromString<ShowDetail>(text) to ShowFacts.read(text)
+    }
+
+    suspend fun attached(target: TitleTarget, id: Long): TitleAttached = get("/meta/${target.word}/$id/attached")
+    suspend fun listings(target: TitleTarget, id: Long): TitleListings = get("/meta/${target.word}/$id/listings")
+
+    // What the logo service has for some studios, networks or streaming services: up to 200 at a time.
+    suspend fun lookUpLogos(names: List<Pair<String, String>>): List<BrandLogoAnswer> =
+        json.decodeFromString<LogoAnswers>(call("POST", "/logos/lookup", json.encodeToString(LogoLookup(names.take(200).map { LogoAsk(it.first, it.second) })))).logos
+
+    // A show's episode layout for everyone: "cards", "list", or "" for the server's. Administrators only.
+    suspend fun setShowView(id: Long, view: String) {
+        call("PUT", "/shows/$id/view", json.encodeToString(ShowView(view)))
+    }
+
+    // What the server knows about a newer version of itself, for administrators.
+    suspend fun updateStatus(): UpdateStatus = get("/update")
 
     // Themes: docs/APP-DESIGN.md, Themes. The list and each theme's tokens are public; the person's own look is theirs.
     suspend fun themes(): ThemeList = get("/themes")
@@ -245,10 +386,16 @@ class Api(val base: String, val token: String, private val quick: Boolean = fals
 
     fun posterUrl(it: Item) = "$base$API/items/${it.id}/poster?v=${it.updatedAt}"
     fun coverUrl(item: Long) = "$base$API/items/$item/poster"
+    fun artistPhotoUrl(library: Long, name: String) = "$base$API/music/artist-photo?library=$library&name=${query(name)}"
     fun backdropUrl(it: Item) = "$base$API/items/${it.id}/backdrop?v=${it.updatedAt}"
     fun itemBackdropUrl(id: Long) = "$base$API/items/$id/backdrop"
     fun showPosterUrl(s: Show) = "$base$API/shows/${s.id}/art/poster?v=${s.updatedAt}"
     fun showBackdropUrl(s: Show) = "$base$API/shows/${s.id}/art/backdrop?v=${s.updatedAt}"
+    fun seasonPosterUrl(s: Show, n: Int) = "$base$API/shows/${s.id}/art/season?n=$n&v=${s.updatedAt}"
+    // A title's logo, drawn in place of its name where it has one.
+    fun titleLogoUrl(target: TitleTarget, id: Long, version: Long) = "$base$API/meta/${target.word}/$id/art/logo?v=$version"
+    // A studio's, network's or service's logo: white for a dark page, dark for a light one, or as it was drawn.
+    fun logoImageUrl(logo: BrandLogoAnswer, variant: String): String? = logo.id?.let { "$base$API/logos/$it/image?variant=${queryValue(variant)}&v=${logo.version}" }
 
     // Addresses in answers start with /api/: the server's address goes in front, nothing else
     // changes. A server's answer can't point the player, with what it carries, somewhere else.

@@ -1,5 +1,6 @@
 package com.wittywilla.wittymediaclient.ui
 
+import com.wittywilla.wittymediaclient.net.pageFillsScreen
 import android.graphics.Color
 import android.provider.Settings
 import androidx.activity.ComponentActivity
@@ -95,8 +96,12 @@ sealed interface Route {
     data class Pinned(val library: com.wittywilla.wittymediaclient.net.Library) : Route { override val key = "pinned-${library.id}" }
     data object Notices : Route { override val key = "notices" }
     data object Logs : Route { override val key = "logs" }
-    data class Library(val library: com.wittywilla.wittymediaclient.net.Library) : Route { override val key = "library-${library.id}" }
-    data class Show(val id: Long) : Route { override val key = "show-$id" }
+    // With something chosen, as the website's /library/3?genre=Drama: from a title's genre, tag or service.
+    data class Library(val library: com.wittywilla.wittymediaclient.net.Library, val chosen: Map<String, String> = emptyMap()) : Route {
+        override val key = "library-${library.id}" + chosen.entries.joinToString("") { "&${it.key}=${it.value}" }
+    }
+    // A season to open at, as the website's ?season=: -1 is Other videos. None opens at the next episode's.
+    data class Show(val id: Long, val season: Int? = null) : Route { override val key = "show-$id" + (season?.let { "-$it" } ?: "") }
     data class Item(val id: Long) : Route { override val key = "item-$id" }
     data class Player(val id: Long, val startOver: Boolean) : Route { override val key = "player-$id" }
     data class Web(val path: String) : Route { override val key = "web-$path" }
@@ -161,6 +166,81 @@ class Nav(val app: WittyApp, private val s: Map<String, String>) {
 
     // Who is signed in, for the avatar on the You tab.
     var me by mutableStateOf<User?>(null)
+
+    // The website's menus: the library strip and the Menu drawer. Loaded once for each sign-in.
+    var menu by mutableStateOf<List<MenuEntry>>(emptyList())
+        private set
+
+    // Every library this person can see, as the menus were made from: what a music library's Music videos needs.
+    var libraries by mutableStateOf<List<com.wittywilla.wittymediaclient.net.Library>>(emptyList())
+        private set
+    var serverVersion by mutableStateOf("")
+        private set
+    var legal by mutableStateOf<com.wittywilla.wittymediaclient.net.LegalNotices?>(null)
+        private set
+    private var menuFor = ""
+
+    suspend fun loadMenu() {
+        val api = app.api
+        if (api.token.isEmpty() || menuFor == api.token) return
+        menuFor = api.token
+        val libraries = runCatching { api.libraries() }.getOrDefault(emptyList())
+        this.libraries = libraries
+        val list = libraries.filter { it.inMainMenus }.map { MenuEntry("lib:" + it.id, it.name, WebIcons.forLibrary(it.type), libraryRoute(it)) }.toMutableList()
+        if (libraries.isNotEmpty()) list += MenuEntry("collections", "Collections", WebIcons.Library, Route.Page("/collections", "Collections"))
+        if (runCatching { api.couchStatus().allowed }.getOrDefault(false)) list += MenuEntry("couch", "Game PCs", WebIcons.Gamepad, Route.Page("/couch", "Game PCs"))
+        runCatching { api.modulePages() }.getOrDefault(emptyList()).filter { it.second.where == "main" }.forEach { (module, page) ->
+            list += MenuEntry("m:$module:${page.id}", page.title, if (page.icon == "chart") WebIcons.Chart else WebIcons.Plug, Route.Page("/m/$module/${page.id}", page.title))
+        }
+        menu = list
+        serverVersion = runCatching { api.status().version }.getOrDefault("")
+        legal = runCatching { api.legalNoticesAndLink() }.getOrNull()
+    }
+
+    // A place in the menus opens as a page of its own, with nothing to go back to: Home is below it.
+    fun openMenu(entry: MenuEntry) {
+        reset(Route.Home)
+        if (entry.route != Route.Home) push(entry.route)
+    }
+
+    // The video playing on a phone or tablet, full screen or in the mini player dock, as the website's /play.
+    var video by mutableStateOf<com.wittywilla.wittymediaclient.player.VideoSession?>(null)
+        private set
+
+    // The full player for this video: the one already playing when it's the same, otherwise a new one.
+    fun attachVideo(id: Long, startSec: Double?): com.wittywilla.wittymediaclient.player.VideoSession {
+        video?.let { if (it.id == id && startSec == null) return it }
+        video?.close()
+        return com.wittywilla.wittymediaclient.player.VideoSession(this, id, startSec).also { video = it }
+    }
+
+    // Back and the mini player button: go back, keep playing in the dock. With nothing to go back to, the item's page.
+    fun minimizeVideo() {
+        val playing = video ?: return
+        playing.mini = true
+        if (current is Route.Player) {
+            if (stack.size > 1) pop() else replace(Route.Item(playing.id))
+        }
+    }
+
+    fun expandVideo() {
+        val playing = video ?: return
+        playing.mini = false
+        if (current !is Route.Player) push(Route.Player(playing.id, false))
+    }
+
+    // Stop: the session ends, the place saved and the conversion stopped.
+    fun closeVideo() {
+        video?.close()
+        video = null
+        if (current is Route.Player) { if (stack.size > 1) pop() else reset(Route.Home) }
+    }
+
+    fun playVideoInstead(id: Long) {
+        video?.close()
+        video = null
+        if (current is Route.Player) playInstead(id) else push(Route.Player(id, false))
+    }
 
     // The libraries added to a TV's top menu (docs/APP-DESIGN.md, On a TV), for whoever is signed in here.
     var topMenu by mutableStateOf<List<Long>>(emptyList())
@@ -282,12 +362,18 @@ class Nav(val app: WittyApp, private val s: Map<String, String>) {
     fun push(r: Route) { stack.add(r) }
 
     // This app's own screens for what it has them for, and the server's page for all the rest.
-    fun open(library: com.wittywilla.wittymediaclient.net.Library) = push(gamesRouteFor(library) ?: if (library.hasOwnScreen) Route.Library(library) else Route.Page(library.pagePath()))
+    fun open(library: com.wittywilla.wittymediaclient.net.Library) = push(libraryRoute(library))
+
+    // A library's own page: WittyPlay's for a games library, the app's for films, shows, discs and listening, and the
+    // website's for every other kind. The strip, the drawer, Home's tiles and See all all come through here.
+    fun libraryRoute(library: com.wittywilla.wittymediaclient.net.Library): Route =
+        gamesRouteFor(library) ?: if (library.hasOwnScreen) Route.Library(library) else Route.Page(library.pagePath(), library.name)
     fun open(item: com.wittywilla.wittymediaclient.net.Item) = push(
         when {
             gamesRouteFor(item) != null -> gamesRouteFor(item)!!
             item.isTrack -> Route.Album(item.libraryId, item.album, item.albumArtist.ifEmpty { item.artist })
-            item.hasOwnScreen -> Route.Item(item.id)
+            // A disc has the app's own page on a phone or tablet, with Insert; its player is the website's.
+            item.hasOwnScreen || (item.isDisc && !app.isTv) -> Route.Item(item.id)
             else -> Route.Page(item.pagePath())
         },
     )
@@ -543,6 +629,8 @@ class Nav(val app: WittyApp, private val s: Map<String, String>) {
     // Ends the session on the server too, so no valid sign-in is left behind.
     private fun endSession() {
         val old = app.api
+        video?.close()
+        video = null
         // The last place on a track goes first, while the sign-in is still good.
         val placeSent = app.listening.forget()
         if (old.token.isNotEmpty()) app.scope.launch {
@@ -633,7 +721,11 @@ fun AppRoot(app: WittyApp) {
             scope.launch { nav.recheck() }
             app.listening.appeared()
         }
-        LifecycleEventEffect(Lifecycle.Event.ON_STOP) { app.listening.disappeared() }
+        LifecycleEventEffect(Lifecycle.Event.ON_STOP) {
+            app.listening.disappeared()
+            // A film stops when the app is left, with its place kept.
+            nav.video?.backgrounded()
+        }
         BackHandler(enabled = nav.backStaysInApp) { nav.back() }
         val route = nav.current
         // Once the app's own screens are up, whichever way it started.
@@ -655,7 +747,7 @@ fun AppRoot(app: WittyApp) {
                         is Route.SignIn -> SignInScreen(nav, strings, route.way)
                         // A new Home for each server connection, so the first screen after signing in is drawn fresh.
                         Route.Home -> key(app.api) { Shell(nav) { HomeScreen(nav, strings) } }
-                        Route.Search -> Shell(nav) { SearchScreen(nav, strings) }
+                        Route.Search -> Shell(nav) { if (LocalMetrics.current.tv) SearchScreen(nav, strings) else PhoneSearch(nav, strings) }
                         Route.Profile -> Shell(nav) { YouScreen(nav, strings) }
                         Route.Libraries -> Shell(nav) { LibrariesScreen(nav, strings) }
                         Route.Games -> Shell(nav) { GamesTabScreen(nav, strings) }
@@ -663,15 +755,24 @@ fun AppRoot(app: WittyApp) {
                         is Route.Pinned -> Shell(nav) { PinnedLibraryScreen(nav, strings, route.library) }
                         Route.Notices -> NoticesScreen(nav)
                         Route.Logs -> LogsScreen(nav)
-                        is Route.Library -> if (route.library.isListening) ListeningLibraryScreen(nav, strings, route.library) else LibraryScreen(nav, strings, route.library)
-                        is Route.Show -> ShowScreen(nav, strings, route.id)
-                        is Route.Item -> ItemScreen(nav, strings, route.id)
-                        is Route.Album -> AlbumScreen(nav, strings, route)
-                        is Route.Artist -> ArtistScreen(nav, strings, route.library, route.name)
-                        Route.NowPlaying -> NowPlayingScreen(nav)
-                        is Route.Player -> PlayerScreen(nav, route.id, route.startOver)
+                        is Route.Library -> PageShell(nav) {
+                            val tv = LocalMetrics.current.tv
+                            when {
+                                route.library.isListening && tv -> ListeningLibraryScreen(nav, strings, route.library)
+                                route.library.isListening -> PhoneMusicLibrary(nav, route.library, route.chosen)
+                                tv -> LibraryScreen(nav, strings, route.library)
+                                else -> PhoneLibrary(nav, route.library, route.chosen)
+                            }
+                        }
+                        is Route.Show -> PageShell(nav) { if (LocalMetrics.current.tv) ShowScreen(nav, strings, route.id) else PhoneShow(nav, strings, route.id, route.season) }
+                        is Route.Item -> PageShell(nav) { if (LocalMetrics.current.tv) ItemScreen(nav, strings, route.id) else PhoneItem(nav, strings, route.id) }
+                        is Route.Album -> PageShell(nav) { if (LocalMetrics.current.tv) AlbumScreen(nav, strings, route) else PhoneAlbum(nav, route) }
+                        is Route.Artist -> PageShell(nav) { if (LocalMetrics.current.tv) ArtistScreen(nav, strings, route.library, route.name) else PhoneArtist(nav, route.library, route.name) }
+                        Route.NowPlaying -> if (LocalMetrics.current.tv) NowPlayingScreen(nav) else WebNowPlaying(nav)
+                        is Route.Player -> if (LocalMetrics.current.tv) PlayerScreen(nav, route.id, route.startOver) else VideoPlayerScreen(nav, route)
                         is Route.Web -> ServerPageScreen(nav, route, route.path, keptToGames = true)
-                        is Route.Page -> ServerPageScreen(nav, route, route.path, keptToGames = false, title = route.title)
+                        is Route.Page -> if (!LocalMetrics.current.tv && !pageFillsScreen(route.path)) PageShell(nav) { ServerPageScreen(nav, route, route.path, keptToGames = false, title = route.title, inShell = true) }
+                            else ServerPageScreen(nav, route, route.path, keptToGames = false, title = route.title)
                         is Route.You -> YouSettingScreen(nav, strings, route.screen)
                         is Route.Help -> ServerPageScreen(nav, route, route.path, keptToGames = false, public = true)
                         is Route.OnPhone -> OnPhoneScreen(nav, strings, route.title, route.path)
@@ -683,7 +784,9 @@ fun AppRoot(app: WittyApp) {
         }
         // A phone's tabs float at the bottom, and the shell puts the mini player above them. Elsewhere it has its
         // own strip along the bottom, which also takes care of the system's bar.
-        val tabs = !metrics.tv && (route == Route.Home || route == Route.Search || route == Route.Profile)
+        // On a phone or tablet every page in the website's shell has the shell's own mini bar.
+        val tabs = !metrics.tv && (route == Route.Home || route == Route.Search || route == Route.Profile || route is Route.Library ||
+            route is Route.Show || route is Route.Item || route is Route.Album || route is Route.Artist)
         if (hasQueue && route.hasMiniPlayer && !tabs) {
             Column(Modifier.fillMaxSize()) {
                 Box(Modifier.weight(1f).consumeWindowInsets(WindowInsets.navigationBars)) { showing() }

@@ -139,11 +139,21 @@ private fun TabButton(nav: Nav, tab: Tab, modifier: Modifier = Modifier, wide: B
 
 private const val TAB_HEIGHT = 52
 
+// Pages below the tabs: the website's shell on a phone or tablet; on a TV, as before.
+@Composable
+fun PageShell(nav: Nav, content: @Composable () -> Unit) {
+    if (LocalMetrics.current.tv) content() else PhoneShell(nav, content)
+}
+
 // Home, Search and You in a floating pill at the bottom of a phone, within reach of a thumb. A TV has six
 // along the top instead, where up from a tab's first row gets to them: see TvTabs.kt.
 @Composable
 fun Shell(nav: Nav, content: @Composable () -> Unit) {
     val metrics = LocalMetrics.current
+    if (!metrics.tv) {
+        PhoneShell(nav, content)
+        return
+    }
     // Whose avatar the You tab shows, when the app opened already signed in some other way.
     LaunchedEffect(Unit) {
         if (nav.me == null) nav.me = runCatching { nav.app.api.status().user }.getOrNull()

@@ -7,6 +7,7 @@ import androidx.annotation.OptIn
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.core.content.edit
@@ -50,6 +51,8 @@ class Listening(private val app: WittyApp) {
         private set
     var speed by mutableFloatStateOf(1f)
         private set
+    var pitch by mutableFloatStateOf(1f)
+        private set
     var canGoNext by mutableStateOf(false)
         private set
 
@@ -63,6 +66,60 @@ class Listening(private val app: WittyApp) {
     // Asked for by a tap on the notification, or a TV starting a queue, for when the screens are ready.
     var wantsScreen by mutableStateOf(false)
 
+    // The bar folded into a round button in the corner, as the website keeps it (`wms.audio.collapsed`).
+    var barCollapsed by mutableStateOf(false)
+        private set
+
+    fun collapseBar(collapsed: Boolean) {
+        barCollapsed = collapsed
+        prefs.edit { putBoolean(KEY_COLLAPSED, collapsed) }
+    }
+
+    // Whether the server has the music player's visualizer, for the wide bar's button: asked once for each sign-in.
+    var visualizerHere by mutableStateOf(true)
+        private set
+    private var visualizerAsked = false
+
+    fun askAboutVisualizer() {
+        if (visualizerAsked) return
+        visualizerAsked = true
+        val api = app.api
+        app.scope.launch { runCatching { api.playerPrefs() }.onSuccess { visualizerHere = it.visualizer != false }.onFailure { visualizerAsked = false } }
+    }
+
+    // How Now Playing opens from the wide bar: with the queue, or with the visualizer turned on.
+    var screenWithQueue = false
+    var screenWithVisualizer = false
+
+    // Liked songs, for the hearts on the music pages, as the website's player keeps them: one set for the app, each
+    // library's asked for once.
+    val liked = mutableStateMapOf<Long, Boolean>()
+    private val likesAsked = HashSet<Long>()
+
+    // Songs' words, kept for the sitting once found, as the website's player keeps them (lyrics.ts).
+    val heldLyrics = HashMap<Long, com.wittywilla.wittymediaclient.net.Lyrics>()
+
+    fun loadLikes(library: Long) {
+        if (library <= 0 || !likesAsked.add(library)) return
+        val api = app.api
+        app.scope.launch {
+            runCatching { api.likes(library) }.onSuccess { ids -> ids.forEach { liked[it] = true } }.onFailure { likesAsked.remove(library) }
+        }
+    }
+
+    // Shown at once, and put back if the server says no, with its words.
+    fun toggleLike(id: Long, said: (String) -> Unit) {
+        val on = liked[id] != true
+        if (on) liked[id] = true else liked.remove(id)
+        val api = app.api
+        app.scope.launch {
+            runCatching { api.react(id, if (on) 1 else 0) }.onFailure {
+                if (on) liked.remove(id) else liked[id] = true
+                said(it.message.orEmpty())
+            }
+        }
+    }
+
     var serviceRunning = false
     var keeper: ListeningKeeper? = null
 
@@ -70,6 +127,33 @@ class Listening(private val app: WittyApp) {
     private var connecting: ListenableFuture<MediaController>? = null
     private val waiting = ArrayList<(MediaController) -> Unit>()
     private val prefs by lazy { app.getSharedPreferences("listening", Context.MODE_PRIVATE) }
+
+    // How it sounds on this device, kept on it as the website keeps it per browser (`wms.sound`): speakers differ.
+    var sound by mutableStateOf(SoundSettings())
+        private set
+
+    init {
+        sound = SoundSettings.read(prefs.getString(KEY_SOUND, null))
+        barCollapsed = prefs.getBoolean(KEY_COLLAPSED, false)
+        shapeSound()
+    }
+
+    // A change from the Sound panel, the volume or karaoke. The voice and the key aren't kept for another day.
+    fun setSound(change: (SoundSettings) -> SoundSettings) {
+        val before = sound
+        val next = change(before)
+        if (next == before) return
+        sound = next
+        prefs.edit { putString(KEY_SOUND, next.toJson()) }
+        shapeSound()
+        if (next.keyShift != before.keyShift) controller?.let { it.playbackParameters = PlaybackParameters(it.playbackParameters.speed, pitchFor(next.keyShift)) }
+        keeper?.soundChanged(levelingChanged = next.replayGain != before.replayGain)
+    }
+
+    private fun shapeSound() {
+        val now = sound
+        SoundShaping.set { it.copy(eqOn = now.eqOn, gains = now.eqGains, preampDb = now.preamp, vocalCut = now.vocalCut) }
+    }
 
     val keepsPlace: Boolean get() = now?.mediaMetadata?.extras?.getBoolean(EXTRA_KEEPS_PLACE) == true
 
@@ -90,6 +174,7 @@ class Listening(private val app: WittyApp) {
         shuffle = player.shuffleModeEnabled
         repeat = player.repeatMode
         speed = player.playbackParameters.speed
+        pitch = player.playbackParameters.pitch
         canGoNext = player.hasNextMediaItem()
         queue = readQueue(player)
     }
@@ -169,7 +254,7 @@ class Listening(private val app: WittyApp) {
         problem = ""
         val items = tracks.map { trackItem(it, books) }
         connect { c ->
-            c.playbackParameters = PlaybackParameters(savedSpeed(books))
+            c.playbackParameters = PlaybackParameters(savedSpeed(books), pitchFor(sound.keyShift))
             c.shuffleModeEnabled = false
             c.setMediaItems(items, start.index.coerceIn(0, items.lastIndex), (start.atSec * 1000).toLong())
             c.prepare()
@@ -205,7 +290,7 @@ class Listening(private val app: WittyApp) {
             .setIsPlayable(true)
             .setIsBrowsable(false)
             .setMediaType(if (books) MediaMetadata.MEDIA_TYPE_AUDIO_BOOK_CHAPTER else MediaMetadata.MEDIA_TYPE_MUSIC)
-            .setExtras(Bundle().apply { putBoolean(EXTRA_KEEPS_PLACE, books) })
+            .setExtras(Bundle().apply { putBoolean(EXTRA_KEEPS_PLACE, books); putLong(EXTRA_LIBRARY, track.libraryId) })
             .build()
         return MediaItem.Builder().setMediaId(track.id.toString()).setMediaMetadata(metadata).build()
     }
@@ -281,9 +366,43 @@ class Listening(private val app: WittyApp) {
         }
     }
 
+    // The website's speed menu: a chosen speed, kept for books.
+    fun chooseSpeed(chosen: Float) {
+        controller?.playbackParameters = PlaybackParameters(chosen, pitch)
+        if (keepsPlace) prefs.edit { putFloat(KEY_BOOK_SPEED, chosen) }
+    }
+
+    // The sleep timer, as the website's: a clock time to pause at, or the end of what's playing. Not kept.
+    var sleepAt by mutableStateOf<Long?>(null)
+        private set
+    var sleepAfterThis by mutableStateOf(false)
+        private set
+    private var sleeper: Job? = null
+
+    fun sleep(atMillis: Long?, afterThis: Boolean) {
+        sleeper?.cancel()
+        sleepAt = atMillis
+        sleepAfterThis = afterThis
+        if (atMillis == null && !afterThis) return
+        val track = now?.mediaId
+        sleeper = app.scope.launch {
+            while (true) {
+                kotlinx.coroutines.delay(250)
+                val left = durationSec() - positionSec()
+                val due = (atMillis != null && System.currentTimeMillis() >= atMillis) || (afterThis && (now?.mediaId != track || (durationSec() > 0 && left < 0.35)))
+                if (due) {
+                    pause()
+                    sleepAt = null
+                    sleepAfterThis = false
+                    break
+                }
+            }
+        }
+    }
+
     fun cycleSpeed() {
         val chosen = nextSpeed(speed)
-        controller?.playbackParameters = PlaybackParameters(chosen)
+        controller?.playbackParameters = PlaybackParameters(chosen, pitch)
         if (keepsPlace) prefs.edit { putFloat(KEY_BOOK_SPEED, chosen) }
     }
 
@@ -308,10 +427,17 @@ class Listening(private val app: WittyApp) {
         }
         clear()
         problem = ""
+        liked.clear()
+        likesAsked.clear()
+        heldLyrics.clear()
+        visualizerAsked = false
+        visualizerHere = true
         return app.scope.launch { sent?.join() }
     }
 
     private companion object {
         const val KEY_BOOK_SPEED = "bookSpeed"
+        const val KEY_SOUND = "wms.sound"
+        const val KEY_COLLAPSED = "wms.audio.collapsed"
     }
 }

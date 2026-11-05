@@ -70,6 +70,9 @@ class TrackResolver(private val app: WittyApp) : ResolvingDataSource.Resolver {
 
     fun isConverting(id: Long) = id in convert
 
+    // Is this track, as last answered, sent as it is? Only those can cross into each other.
+    fun isDirect(id: Long) = known.containsKey(id) && id !in restarting && id !in convert
+
     // Is this track, as last answered, a conversion that starts where it's asked to?
     fun isRestarting(id: Long) = id in restarting
 

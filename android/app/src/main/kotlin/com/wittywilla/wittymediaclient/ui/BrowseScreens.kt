@@ -123,8 +123,11 @@ fun LoadFailed(nav: Nav, message: String, retry: () -> Unit) {
     }
 }
 
-private fun Nav.play(item: Item) = when {
+fun Nav.play(item: Item) = when {
     item.isTrack -> playTrack(item)
+    // The website's disc and CD players, as Play does there.
+    item.isDisc && !app.isTv -> push(Route.Page("/play/${item.id}"))
+    item.kind == "cd-image" && !app.isTv -> push(Route.Page("/cd/${item.id}?play=1"))
     item.isRigGame -> push(Route.Item(item.id))
     item.hasOwnScreen -> push(Route.Player(item.id, false))
     else -> push(gamesRouteFor(item) ?: Route.Page(item.pagePath()))
@@ -292,6 +295,11 @@ private fun OnNowRow(nav: Nav, channels: List<GuideChannel>) {
 @Composable
 fun HomeScreen(nav: Nav, s: Map<String, String>) {
     val metrics = LocalMetrics.current
+    // A phone or tablet has the website's Home.
+    if (!metrics.tv) {
+        PhoneHome(nav, s)
+        return
+    }
     // A debug build's pinned hero (see MainActivity); nothing otherwise.
     var pinnedHero by remember { mutableStateOf<Item?>(null) }
     LaunchedEffect(nav.app.pinnedHero) {

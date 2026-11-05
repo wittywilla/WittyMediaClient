@@ -1,5 +1,7 @@
 package com.wittywilla.wittymediaclient.ui
 
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.statusBars
 import android.annotation.SuppressLint
 import android.app.Activity
 import android.app.DownloadManager
@@ -101,6 +103,9 @@ private class PageClient(
     override fun onPageCommitVisible(view: WebView, url: String) {
         // A TV counts its pixels in twos, which would give the page half the room a big screen has.
         if (isTv) view.evaluateJavascript(TV_VIEWPORT, null)
+        // On a phone or tablet the app draws the strip, Back and the floating bar round the page, so the website's
+        // own step aside (web/src/shell.css, data-app). A server from before that rule gets it from here.
+        else view.evaluateJavascript(MARKS_THE_APP, null)
         view.evaluateJavascript(OFFER_APP_BACK, null)
         if (onAppUp != null) view.evaluateJavascript(OFFER_APP_UP, null)
         onShowing()
@@ -252,6 +257,8 @@ fun ServerPageScreen(
     backEnabled: Boolean = true,
     // A page inside a TV's tab: where Up goes from the top of the page.
     upOut: (() -> Unit)? = null,
+    // A phone's or tablet's page inside the website's shell (PhoneShell): under its bar, with its Back.
+    inShell: Boolean = false,
 ) {
     val context = LocalContext.current
     val api = nav.app.api
@@ -286,6 +293,10 @@ fun ServerPageScreen(
             onPath = { now ->
                 if (keptToGames) {
                     if (!staysInWebPlayer(now) && nav.current == route) nav.pop()
+                } else if (!inShell && !nav.app.isTv && pageFillsScreen(path) && !pageFillsScreen(now) && nav.current == route) {
+                    // The website's disc or CD player, asked to step aside, goes on to the website's own item page. In
+                    // the app that page is already below this one, so this one closes instead.
+                    nav.pop()
                 } else {
                     fills = pageFillsScreen(now)
                 }
@@ -385,6 +396,16 @@ fun ServerPageScreen(
                 ErrorText(failed)
                 ActionButton("Back", nav::pop, requestFocus = true)
             }
+        } else if (inShell && !fills) {
+            // Inside the app's shell: under its 52-high bar, and down to the foot, where the page keeps room for the floating bar.
+            val top = with(androidx.compose.ui.platform.LocalDensity.current) { WindowInsets.statusBars.getTop(this).toDp() }
+            Box(Modifier.fillMaxSize().padding(top = top + 52.dp)) {
+                AndroidView(factory = { web }, modifier = Modifier.fillMaxSize())
+                if (!showing) Loading()
+            }
+            fullScreen?.let { view ->
+                AndroidView(factory = { view.also { it.requestFocus() } }, modifier = Modifier.fillMaxSize())
+            }
         } else if (title.isNotEmpty() && !fills) {
             Column(Modifier.fillMaxSize().safeDrawingPadding()) {
                 Row(
@@ -412,3 +433,6 @@ fun ServerPageScreen(
         }
     }
 }
+
+// Marks the page as inside the app, and adds the website's rules for it when the server is older than them.
+private const val MARKS_THE_APP = "(function(){var d=document.documentElement;if(!d)return;d.dataset.app='wittymediaclient';if(!document.adoptedStyleSheets||window.__wmcApp)return;window.__wmcApp=1;var a='html[data-app=\"wittymediaclient\"]';var s=new CSSStyleSheet();s.replaceSync('@media (max-width:700px){'+a+' :is(.tabbar,.section-row,.section-row-brand,.top-back){display:none}'+a+' .topbar .act-btn{margin-left:auto}'+a+' .app .topbar::before,'+a+' .app .topbar::after{display:none}'+a+' .app .topbar:not(:has(.act-btn)){display:none}}');document.adoptedStyleSheets=document.adoptedStyleSheets.concat([s]);})();"

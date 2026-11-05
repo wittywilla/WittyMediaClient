@@ -133,6 +133,7 @@ fun Pressable(
     enabled: Boolean = true,
     pressScale: Float = PRESS_SCALE,
     pressAlpha: Float = PRESS_ALPHA,
+    disabledAlpha: Float = DISABLED_ALPHA,
     ring: Boolean = true,
     // Off for something whose own part reacts instead, as a profile tile's avatar does.
     grows: Boolean = true,
@@ -169,7 +170,7 @@ fun Pressable(
         pressed -> pressScale
         else -> 1f
     }
-    val dim = (if (pressed) pressAlpha else 1f) * (if (enabled) 1f else DISABLED_ALPHA)
+    val dim = (if (pressed) pressAlpha else 1f) * (if (enabled) 1f else disabledAlpha)
     val ringColour = MaterialTheme.colorScheme.onBackground
     // On a TV the ring has room kept for it round the thing, and sits right against it, as Apple TV draws
     // it: so a focused button and its neighbours never move, and both TVs measure the same.
