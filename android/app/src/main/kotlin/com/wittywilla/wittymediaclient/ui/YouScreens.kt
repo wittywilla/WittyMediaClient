@@ -1009,7 +1009,7 @@ private fun SignInTvScreen(nav: Nav, s: Map<String, String>) {
                 )
             }
             else -> {
-                TvCodeEntry(code, busy, wrong) { typed ->
+                TvCodeEntry(code, busy, wrong, if (metrics.tv) Modifier else Modifier.align(Alignment.CenterHorizontally)) { typed ->
                     code = tvCodeTyped(typed)
                     problem = ""
                     if (code.length == TV_CODE_LENGTH) look(code)
@@ -1026,13 +1026,17 @@ private fun SignInTvScreen(nav: Nav, s: Map<String, String>) {
 
 // A TV's code: eight boxes, four, a dash, four, over a capitals keyboard. The server's own letters only.
 @Composable
-private fun TvCodeEntry(code: String, checking: Boolean, wrong: Int, onCode: (String) -> Unit) {
+private fun TvCodeEntry(code: String, checking: Boolean, wrong: Int, modifier: Modifier = Modifier, onCode: (String) -> Unit) {
     val metrics = LocalMetrics.current
     val scheme = MaterialTheme.colorScheme
     val field = remember { FocusRequester() }
     val shake = rememberShake(wrong)
+    // What the keyboard typed, as it typed it: filtering it in place upsets a keyboard that's still
+    // composing a word, and letters go missing. The code is made from it.
+    var typed by remember { mutableStateOf(code) }
+    LaunchedEffect(code) { if (code.isEmpty()) typed = "" }
     LaunchedEffect(Unit) { runCatching { field.requestFocus() } }
-    Box(Modifier.graphicsLayer { translationX = shake.value * density }) {
+    Box(modifier.graphicsLayer { translationX = shake.value * density }) {
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(metrics.u(6))) {
             for (place in 0 until TV_CODE_LENGTH) {
                 if (place == TV_CODE_LENGTH / 2) Text("–", color = scheme.onSurfaceVariant, style = MaterialTheme.typography.title)
@@ -1053,13 +1057,21 @@ private fun TvCodeEntry(code: String, checking: Boolean, wrong: Int, onCode: (St
             }
         }
         BasicTextField(
-            code, { if (!checking) onCode(it) },
+            typed,
+            {
+                if (!checking) {
+                    typed = it.take(TYPED_MOST)
+                    onCode(typed)
+                }
+            },
             singleLine = true,
             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Ascii, capitalization = androidx.compose.ui.text.input.KeyboardCapitalization.Characters, autoCorrectEnabled = false, imeAction = ImeAction.Done),
             modifier = Modifier.matchParentSize().graphicsLayer { alpha = 0f }.focusRequester(field),
         )
     }
 }
+
+private const val TYPED_MOST = 16
 
 // Theme on this device: Automatic, the server's own, or one of the themes, applied at once.
 @Composable

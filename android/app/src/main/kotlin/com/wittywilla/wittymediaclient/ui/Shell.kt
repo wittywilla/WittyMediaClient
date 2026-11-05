@@ -19,6 +19,7 @@ import androidx.compose.foundation.layout.WindowInsetsSides
 import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.only
@@ -116,8 +117,10 @@ private fun TabButton(nav: Nav, tab: Tab, modifier: Modifier = Modifier, wide: B
         requestFocus = active && tab.route != Route.Home && metrics.tv,
         focusKey = "tab-$name",
     ) {
+        // Every tab the same height, the avatar's (28 and 12 above and below), so a chosen icon tab's pill
+        // sits in the middle of the bar like You's.
         Row(
-            Modifier.padding(horizontal = if (wide) metrics.u(20) else metrics.u(16), vertical = metrics.u(12)),
+            Modifier.height(metrics.u(TAB_HEIGHT)).padding(horizontal = if (wide) metrics.u(20) else metrics.u(16)),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(metrics.u(8)),
         ) {
@@ -136,6 +139,8 @@ private fun TabButton(nav: Nav, tab: Tab, modifier: Modifier = Modifier, wide: B
     }
 }
 
+private const val TAB_HEIGHT = 52
+
 // Home, Search and You. A phone has them in a floating pill at the bottom, within reach of a
 // thumb. A TV has them along the top, where up from the first row gets to them.
 @Composable
@@ -151,13 +156,14 @@ fun Shell(nav: Nav, content: @Composable () -> Unit) {
                 // docs/APP-DESIGN.md, "On a TV": pills along the top, 24 units down. Up from the first row reaches them.
                 Row(
                     Modifier.fillMaxWidth().padding(start = metrics.gutter, end = metrics.gutter, top = metrics.u(24), bottom = metrics.u(16)).remoteRow(),
+                    verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(metrics.u(16)),
                 ) {
                     TABS.forEach { TabButton(nav, it, wide = true) }
                     if (nav.hasGuide) {
                         Pressable({ nav.push(Route.Page(GUIDE_PATH)) }, focusKey = "tab-guide", shape = Radius.FULL, label = "TV guide") {
                             Row(
-                                Modifier.padding(horizontal = metrics.u(20), vertical = metrics.u(12)),
+                                Modifier.height(metrics.u(TAB_HEIGHT)).padding(horizontal = metrics.u(20)),
                                 verticalAlignment = Alignment.CenterVertically,
                                 horizontalArrangement = Arrangement.spacedBy(metrics.u(8)),
                             ) {
@@ -202,6 +208,7 @@ fun Shell(nav: Nav, content: @Composable () -> Unit) {
                         .border(1.dp, MaterialTheme.colorScheme.outline, Radius.FULL)
                         .padding(Space.S1)
                         .semantics { role = Role.Tab },
+                    verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(Space.S1),
                 ) {
                     TABS.forEach { TabButton(nav, it, wide = nav.current == it.route) }
