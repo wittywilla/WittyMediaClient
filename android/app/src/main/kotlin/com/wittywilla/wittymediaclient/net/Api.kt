@@ -1,7 +1,9 @@
 package com.wittywilla.wittymediaclient.net
 
+import android.os.SystemClock
 import com.wittywilla.wittymediaclient.data.SavedServer
 import com.wittywilla.wittymediaclient.diag.ClientLog
+import com.wittywilla.wittymediaclient.player.Streaming
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.runInterruptible
@@ -109,6 +111,31 @@ class Api(val base: String, val token: String, private val quick: Boolean = fals
     private suspend inline fun <reified T> getList(path: String): List<T> = json.decodeFromString<List<T>?>(call("GET", path)).orEmpty()
 
     suspend fun capabilities(): Capabilities = get("/capabilities")
+
+    // Times GET /playback/speedtest for about a second from its first bytes: what this connection
+    // carries, for a robust stream to start at a rate that fits. Null when it can't tell, such as
+    // from a server without the route.
+    suspend fun measureKbps(): Int? = withContext(Dispatchers.IO) {
+        runCatching {
+            val request = Request.Builder().url("$base$API/playback/speedtest?kb=4096").build()
+            http.newCall(request).execute().use { res ->
+                if (!res.isSuccessful) return@use null
+                val input = res.body.byteStream()
+                val buffer = ByteArray(16 * 1024)
+                var first = 0L
+                var bytes = 0L
+                var now = 0L
+                while (true) {
+                    val n = input.read(buffer)
+                    if (n < 0) break
+                    now = SystemClock.elapsedRealtime()
+                    if (first == 0L) first = now else bytes += n
+                    if (now - first >= Streaming.MEASURE_MS) break
+                }
+                Streaming.kbps(bytes, now - first)
+            }
+        }.getOrNull()
+    }
     suspend fun status(): ServerStatus = get("/status")
     suspend fun profiles(): Profiles = get("/profiles")
     suspend fun home(): Home = get("/home")

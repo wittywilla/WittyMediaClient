@@ -5,6 +5,7 @@ import android.app.UiModeManager
 import android.content.pm.ApplicationInfo
 import android.content.res.Configuration
 import android.os.Build
+import android.os.SystemClock
 import android.webkit.WebView
 import coil3.ImageLoader
 import coil3.PlatformContext
@@ -18,6 +19,7 @@ import com.wittywilla.wittymediaclient.diag.ClientLog
 import com.wittywilla.wittymediaclient.diag.ReportTarget
 import com.wittywilla.wittymediaclient.net.Api
 import com.wittywilla.wittymediaclient.player.Listening
+import com.wittywilla.wittymediaclient.player.Streaming
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -46,6 +48,21 @@ class WittyApp : Application(), SingletonImageLoader.Factory {
     // The current connection. Images use its client, so they carry the sign-in.
     @Volatile
     var api: Api = Api("", "")
+
+    // The last speed test, for this server only, kept for Streaming.KEEP_MS.
+    private var measured = Triple("", 0, 0L)
+
+    // What to tell the server about this connection before a video, or null when robust doesn't apply.
+    suspend fun measuredKbps(choice: String): Int? {
+        val using = api
+        val (base, kbps, at) = measured
+        if (base == using.base && kbps > 0 && SystemClock.elapsedRealtime() - at < Streaming.KEEP_MS) return kbps
+        val serverRemote = if (choice == Streaming.AUTO) runCatching { using.capabilities().playback.remoteStreaming }.getOrDefault("") else ""
+        if (!Streaming.measures(choice, serverRemote)) return null
+        val now = using.measureKbps() ?: return null
+        measured = Triple(using.base, now, SystemClock.elapsedRealtime())
+        return now
+    }
 
     val isTv: Boolean by lazy {
         (getSystemService(UI_MODE_SERVICE) as UiModeManager).currentModeType == Configuration.UI_MODE_TYPE_TELEVISION
