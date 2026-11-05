@@ -320,6 +320,9 @@ fun WebNowPlaying(nav: Nav) {
     }
     var toast by remember { mutableStateOf("") }
     var said by remember { mutableStateOf("") }
+    val activity = androidx.activity.compose.LocalActivity.current
+    var filled by remember { mutableStateOf(false) }
+    androidx.compose.runtime.DisposableEffect(Unit) { onDispose { if (filled) activity?.let { showBars(it, true) } } }
     var maxSpeed by remember { mutableStateOf(4.0) }
     // The visualizer: whether the server has it, and this person's choices.
     var vizHere by remember { mutableStateOf(true) }
@@ -456,6 +459,12 @@ fun WebNowPlaying(nav: Nav) {
                                 liked = if (on) liked - trackId else liked + trackId
                                 scope.launch { runCatching { api.react(trackId, if (on) 0 else 1) }.onFailure { liked = if (on) liked + trackId else liked - trackId } }
                             }
+                        }
+                        // Fill the screen, as the website's: the system's bars go until it's pressed again or the player closes.
+                        // A phone leaves it off, as it does the volume.
+                        if (!phone) NpRound(WebIcons.Full, if (filled) "Show the system's bars" else "Fill the screen", 44.dp, 20.dp) {
+                            filled = !filled
+                            activity?.let { showBars(it, !filled) }
                         }
                         NpRound(WebIcons.More, "More", 44.dp, 20.dp, modifier = Modifier.anchor(NpMenu.More)) { toggle(NpMenu.More) }
                     }

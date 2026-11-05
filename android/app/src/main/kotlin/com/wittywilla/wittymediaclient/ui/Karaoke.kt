@@ -97,7 +97,7 @@ internal fun KaraokeScreen(nav: Nav, words: LyricsWords, title: String, artist: 
     DisposableEffect(Unit) {
         onDispose {
             listening.setSound { it.copy(vocalCut = 0.0, keyShift = 0.0) }
-            activity?.let { showBars(it, true) }
+            if (filled) activity?.let { showBars(it, true) }
         }
     }
     // Where the song is, a frame at a time, for the fill and the count-in.
@@ -292,8 +292,8 @@ private fun Stepper(words: String, compact: Boolean, group: String, lower: Strin
     }
 }
 
-// The system's bars, hidden while karaoke fills the screen and back afterwards.
-private fun showBars(activity: Activity, show: Boolean) {
+// The system's bars, hidden while karaoke or Now Playing fills the screen, and back afterwards.
+internal fun showBars(activity: Activity, show: Boolean) {
     val controller = WindowCompat.getInsetsController(activity.window, activity.window.decorView)
     if (show) controller.show(WindowInsetsCompat.Type.systemBars())
     else {

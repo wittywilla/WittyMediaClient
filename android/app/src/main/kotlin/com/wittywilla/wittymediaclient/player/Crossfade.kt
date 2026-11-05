@@ -101,13 +101,14 @@ class Crossfade(
         if (leftSec > crossing + 20) return
         // Made ready, paused, where the crossing will start.
         val startMs = (duration - crossing * 1000 * speed).toLong()
-        if (readyFor != item.mediaId || readyAtMs != startMs) {
+        // A length that's still being worked out moves a little: not enough to make it ready again.
+        if (readyFor != item.mediaId || kotlin.math.abs(readyAtMs - startMs) > 500) {
             prepare(item, startMs)
             return
         }
         val ready = tail ?: return
         if (handoff == null && leftSec <= crossing + 1.5 && ready.playbackState == Player.STATE_READY) {
-            val waitMs = ((startMs - player.currentPosition) / speed).toLong() - 25
+            val waitMs = ((readyAtMs - player.currentPosition) / speed).toLong() - 25
             handoff = app.scope.launch {
                 delay(waitMs.coerceAtLeast(0))
                 handoff = null
@@ -136,6 +137,11 @@ class Crossfade(
     // The song going out carries on from here on the other player, and the main one moves on, silent at first.
     private fun handOff() {
         val deck = tail ?: return
+        val next = player.nextMediaItemIndex
+        if (next == C.INDEX_UNSET) {
+            interrupted()
+            return
+        }
         val seconds = crossing
         readyFor = null
         mainShare = 0.0
@@ -143,7 +149,7 @@ class Crossfade(
         level()
         deck.playbackParameters = PlaybackParameters(player.playbackParameters.speed, player.playbackParameters.pitch)
         deck.play()
-        movingTo = player.getMediaItemAt(player.nextMediaItemIndex).mediaId
+        movingTo = player.getMediaItemAt(next).mediaId
         player.seekToNextMediaItem()
         val began = System.nanoTime()
         fading = app.scope.launch {
