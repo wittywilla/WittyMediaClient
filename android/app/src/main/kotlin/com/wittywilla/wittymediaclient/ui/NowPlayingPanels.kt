@@ -408,7 +408,11 @@ private fun LyricLines(lines: List<LyricLine>, index: Int, offset: Double, modif
         if (index < 0 || System.currentTimeMillis() < heldUntil) return@LaunchedEffect
         val info = state.layoutInfo
         val seen = info.visibleItemsInfo.firstOrNull { it.index == index }
-        if (seen == null) state.scrollToItem(index)
+        if (seen == null) {
+            // Out of sight: brought into view first, then centred once it's been laid out.
+            state.scrollToItem(index)
+            androidx.compose.runtime.withFrameNanos { }
+        }
         val shown = state.layoutInfo.visibleItemsInfo.firstOrNull { it.index == index } ?: return@LaunchedEffect
         val centre = (state.layoutInfo.viewportStartOffset + state.layoutInfo.viewportEndOffset) / 2f
         val by = shown.offset + shown.size / 2f - centre
