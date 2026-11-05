@@ -15,8 +15,9 @@ enum SharedData {
         let background, panel, card, border, text, textSecondary, accent, onAccent, danger: String
         let textHint, accentText, ok: String?
     }
-    struct Theme: Decodable {
+    struct Theme: Decodable, Identifiable {
         let id: String
+        let name: String?
         let scheme: String
         let colours: ThemeColours
     }
@@ -25,6 +26,15 @@ enum SharedData {
         let themes: [Theme]
     }
     private static let themeFile = load("themes").flatMap { try? JSONDecoder().decode(ThemeFile.self, from: $0) }
+
+    /// Every theme the server is built with, in the order its Appearance page lists them.
+    static var themes: [Theme] {
+        let order = ["default", "light", "midnight", "cinema", "evergreen", "paper", "oled", "contrast"]
+        return (themeFile?.themes ?? []).sorted { (order.firstIndex(of: $0.id) ?? 99, $0.id) < (order.firstIndex(of: $1.id) ?? 99, $1.id) }
+    }
+
+    /// Only that theme, with no stand-in.
+    static func exactTheme(_ id: String?) -> Theme? { themeFile?.themes.first { $0.id == id } }
 
     /// A theme uploaded to the server has no entry here, and gets the default look.
     static func theme(_ id: String?) -> Theme? {
@@ -85,9 +95,11 @@ enum Route: Hashable {
     /// Live channels, on Apple TV.
     case guide
     case channel(key: String)
-    /// The licences of what this app ships, and its own log, from Profile.
+    /// The licences of what this app ships, and its own log, from You.
     case notices
     case logs
+    /// The person's own account and this device's choices, from You: see YouViews.swift.
+    case names, password, twoStep, devices, signInTv, theme
 }
 
 /// A list of tracks being played, in order, on Apple TV.
@@ -126,7 +138,13 @@ final class AppModel: ObservableObject {
     /// The account's WittyTV colours and whether it wants logos, once the guide has asked.
     var tvColours: TvColours?
     var tvLogos = true
+    /// The server's theme, from `/status`.
     @Published var themeId: String?
+    /// This device's own theme for this server: "" follows the server, "auto" follows the device's
+    /// light or dark, anything else is a theme's id. Kept on the device, as the web keeps it per browser.
+    @Published private(set) var themeChoice = ""
+    /// The device's own light or dark, which the automatic theme follows.
+    @Published var systemScheme: ColorScheme = .dark
     /// The owner's own name and logo for the server, from `/status`, shown on the sign-in screens.
     @Published var brandName = ""
     @Published var brandLogo = ""
@@ -206,7 +224,26 @@ final class AppModel: ObservableObject {
         set { defaults.set(newValue, forKey: "server") }
     }
 
-    var palette: Palette { Palette(SharedData.theme(themeId)?.colours) }
+    /// The theme in use: this device's choice, or the server's.
+    var effectiveThemeId: String? {
+        switch themeChoice {
+        case "": return themeId
+        case "auto": return systemScheme == .light ? "light" : "default"
+        default: return SharedData.exactTheme(themeChoice) == nil ? themeId : themeChoice
+        }
+    }
+
+    var palette: Palette { Palette(SharedData.theme(effectiveThemeId)?.colours) }
+
+    func chooseTheme(_ id: String) {
+        themeChoice = id
+        defaults.set(id, forKey: "theme." + client.base)
+    }
+
+    /// The account as the server has it now, after a change from You.
+    func refreshUser() async {
+        if let fresh = try? await client.status().user { user = fresh }
+    }
     /// What the owner set, in the guide, and what this account chose, for Apple TV's guide and channels.
     func learnTvLook(from guide: Guide, client: WittyClient) async {
         let saved = try? await client.tvSaved()
@@ -216,11 +253,15 @@ final class AppModel: ObservableObject {
 
     /// The app's theme, for the WittyTV themes that follow it.
     var tvAppColours: TvAppColours {
-        guard let c = SharedData.theme(themeId)?.colours else { return .fallback }
+        guard let c = SharedData.theme(effectiveThemeId)?.colours else { return .fallback }
         return TvAppColours(bg: c.background, bg2: c.panel, bg3: c.card, bg4: c.border, fg: c.text, fg2: c.textSecondary,
                             accent: c.accent, accentText: c.accentText ?? c.accent, accentFg: c.onAccent, border: c.border)
     }
-    var scheme: ColorScheme { SharedData.theme(themeId)?.scheme == "light" ? .light : .dark }
+    /// Nothing for the automatic theme, so the device's own light or dark comes through to be followed.
+    var scheme: ColorScheme? {
+        if themeChoice == "auto" { return nil }
+        return SharedData.theme(effectiveThemeId)?.scheme == "light" ? .light : .dark
+    }
 
     /// Only for a server whose identity has just been checked.
     private func openServer(_ opening: SavedServer, token: String = "") {
@@ -488,6 +529,7 @@ final class AppModel: ObservableObject {
         server = ""
         client = WittyClient(base: "")
         themeId = nil
+        themeChoice = ""
         brandName = ""
         brandLogo = ""
         stage = .connect(message: "")
@@ -496,6 +538,7 @@ final class AppModel: ObservableObject {
     /// What a server says about how it looks: its theme, and the owner's name and logo for it.
     private func learn(_ status: ServerStatus) {
         themeId = status.theme
+        themeChoice = defaults.string(forKey: "theme." + client.base) ?? ""
         brandName = PlainWords.clean(status.brandName ?? "", limit: 60)
         brandLogo = PlainWords.clean(status.brandLogo ?? "", limit: 64)
     }

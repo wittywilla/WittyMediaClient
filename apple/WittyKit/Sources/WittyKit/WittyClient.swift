@@ -402,6 +402,71 @@ public final class WittyClient: @unchecked Sendable {
         _ = try await call("POST", "/logout", body: Data("{}".utf8))
     }
 
+    // MARK: Your own account
+
+    /// Only what isn't nil changes. Kids and Guest profiles may change only `showUsername`.
+    public func updateProfile(userId: Int64, displayName: String?, username: String?, showUsername: Bool?) async throws -> User {
+        let body = try JSONEncoder().encode(ProfileChange(displayName: displayName, username: username, showUsername: showUsername))
+        return try decoder.decode(User.self, from: try await call("PUT", "/users/\(userId)/profile", body: body))
+    }
+
+    /// The account's other sign-ins end. A wrong current password is a 403; `code` is needed with two-step on.
+    public func changePassword(userId: Int64, password: String, current: String, code: String = "") async throws {
+        var fields = ["password": password, "current": current]
+        if !code.isEmpty { fields["code"] = code }
+        _ = try await call("PUT", "/users/\(userId)/password", body: try JSONEncoder().encode(fields))
+    }
+
+    public func twoFactorState() async throws -> TwoFactorState { try await get("/me/2fa") }
+
+    public func twoFactorSetup(password: String) async throws -> TwoFactorSetup {
+        let body = try JSONEncoder().encode(["password": password])
+        return try decoder.decode(TwoFactorSetup.self, from: try await call("POST", "/me/2fa/setup", body: body))
+    }
+
+    /// Returns the recovery codes, shown once. The account's other sign-ins end.
+    public func twoFactorConfirm(code: String) async throws -> [String] {
+        let body = try JSONEncoder().encode(["code": code])
+        return try decoder.decode(RecoveryCodes.self, from: try await call("POST", "/me/2fa/confirm", body: body)).recovery ?? []
+    }
+
+    public func twoFactorDisable(password: String, code: String) async throws {
+        let body = try JSONEncoder().encode(["password": password, "code": code])
+        _ = try await call("POST", "/me/2fa/disable", body: body)
+    }
+
+    /// Everywhere this account is signed in, this device among them.
+    public func signedInDevices() async throws -> [SignedInDevice] { try await list("/sessions") }
+
+    public func signOutDevice(_ id: String) async throws {
+        _ = try await call("DELETE", "/sessions/\(WittyClient.pathPart(id))")
+    }
+
+    /// Every sign-in of this account but this one.
+    public func signOutOtherDevices() async throws {
+        _ = try await call("DELETE", "/sessions")
+    }
+
+    /// A 404 carries the server's own words: a wrong or used code.
+    public func pairInfo(code: String) async throws -> PairInfo {
+        let body = try JSONEncoder().encode(["code": code])
+        return try decoder.decode(PairInfo.self, from: try await call("POST", "/pair/info", body: body))
+    }
+
+    public func pairApprove(code: String, userId: Int64) async throws {
+        struct Approve: Encodable { let code: String; let userId: Int64 }
+        _ = try await call("POST", "/pair/approve", body: try JSONEncoder().encode(Approve(code: code, userId: userId)))
+    }
+
+    public func pairDeny(code: String) async throws {
+        _ = try await call("POST", "/pair/deny", body: try JSONEncoder().encode(["code": code]))
+    }
+
+    public func pairInvite(userId: Int64) async throws -> PairInvite {
+        struct Invite: Encodable { let userId: Int64 }
+        return try decoder.decode(PairInvite.self, from: try await call("POST", "/pair/invite", body: try JSONEncoder().encode(Invite(userId: userId))))
+    }
+
     /// Goes with the sign-in, so only ever to this server.
     public func imageData(_ url: URL) async throws -> Data {
         guard let server = URL(string: base), Origin.same(url, server) else {

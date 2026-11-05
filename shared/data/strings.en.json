@@ -42,7 +42,7 @@
   "cancel": "Cancel",
   "foundServers": "On your network",
   "codeTitle": "Enter the security code",
-  "codeHint": "On a phone or computer signed in to this server, open your name, choose Sign in a TV, then press Get a code.",
+  "codeHint": "On a phone or computer signed in to this server, open Sign in a TV (under You, or under your name in the corner on the web) and get a code there.",
   "codeLabel": "Security code",
   "codeEntered": "digits entered",
   "codeDelete": "Delete",
@@ -193,5 +193,6 @@
   "themeServer": "The server's choice",
   "twoStepCodeLabel": "Code from your authenticator app",
   "signInTvAnother": "Sign in another TV",
-  "profileNameEmptyHint": "Shown as your username."
+  "profileNameEmptyHint": "Shown as your username.",
+  "pairBusy": "This server has given this device a lot of codes lately. Wait a few minutes for a new one, or sign in with a password now."
 }

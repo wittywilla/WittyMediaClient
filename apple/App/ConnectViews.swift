@@ -217,6 +217,7 @@ private struct ServerPill: View {
 struct CodeView: View {
     @EnvironmentObject private var model: AppModel
     @Environment(\.palette) private var palette
+    @Environment(\.metrics) private var metrics
     let server: SavedServer
     let fromSignIn: Bool
     @State private var entry = CodeEntry()
@@ -246,6 +247,11 @@ struct CodeView: View {
         model.stage = fromSignIn ? .signIn(.usual) : .connect(message: "")
     }
 
+    @ViewBuilder private var codeLinks: some View {
+        Button(say("usePassword")) { model.signIn(to: server, way: .password) }.action(.quiet).fixedSize()
+        Button(say("showCodeInstead")) { model.signIn(to: server, way: .shownCode) }.action(.quiet).fixedSize()
+    }
+
     var body: some View {
         SignInLayout(back: back) {
             SignInHeading(title: say("codeTitle"), detail: say("codeHint"))
@@ -262,13 +268,16 @@ struct CodeView: View {
             .frame(minHeight: 24)
         } actions: {
             NumberPad(onDigit: press, onDelete: { entry.erase() }, scope: scope)
-            HStack(spacing: Tokens.Space.s2) {
-                Button(say("usePassword")) { model.signIn(to: server, way: .password) }.action(.quiet)
-                Button(say("showCodeInstead")) { model.signIn(to: server, way: .shownCode) }.action(.quiet)
+            // Side by side where they fit on one line each, one above the other where they don't:
+            // a link is never broken over two lines.
+            ViewThatFits(in: .horizontal) {
+                HStack(spacing: Tokens.Space.s6) { codeLinks }
+                VStack(alignment: metrics.tv ? .leading : .center, spacing: 0) { codeLinks }
             }
+            .frame(maxWidth: .infinity, alignment: metrics.tv ? .leading : .center)
             .remoteSection()
-            Text("\(say("fingerprintLabel")): \(server.fingerprint)")
-                .font(.caption.monospaced())
+            (Text("\(say("fingerprintLabel")): ") + Text(server.fingerprint).font(.caption.monospaced()))
+                .font(.caption)
                 .foregroundStyle(palette.textHint)
         }
         .focusRoot(scope)
@@ -345,17 +354,26 @@ private struct PairPanel: View {
     @State private var qr: CGImage?
     @State private var problem = ""
     @State private var starting = true
+    /// The server has handed this device all the codes it will for now: a password is the way in.
+    @State private var limited = false
     @Namespace private var scope
+    /// The screen's main action, which takes the focus when an answer from the server changes it.
+    @FocusState private var mainAction: Bool
 
     private func run() async {
         code = ""
         problem = ""
+        limited = false
         qr = nil
         starting = true
         defer { starting = false }
         let start: PairStart
         do {
             start = try await model.client.pairStart(device: model.deviceName, platform: model.platformName)
+        } catch let error as APIError where error.status == 429 {
+            limited = true
+            problem = say("pairBusy")
+            return
         } catch {
             problem = plainWords(Problem.of(error))
             return
@@ -399,6 +417,7 @@ private struct PairPanel: View {
 
     var body: some View {
         SignInLayout(back: onBack) {
+            BrandLockup()
             SignInHeading(title: say("pairTitle"), detail: code.isEmpty ? "" : say("pairHint"))
             if !code.isEmpty {
                 Text(approveAt)
@@ -428,17 +447,28 @@ private struct PairPanel: View {
                     .frame(maxWidth: .infinity, alignment: metrics.tv ? .leading : .center)
             }
             if code.isEmpty && !problem.isEmpty {
-                Button(say("pairNew")) { round += 1 }.action(.primary, wide: true, tall: true).firstFocus(in: scope)
+                if limited {
+                    Button(say("usePassword"), action: onUsePassword).action(.primary, wide: true, tall: true).focused($mainAction)
+                } else {
+                    Button(say("pairNew")) { round += 1 }.action(.primary, wide: true, tall: true).focused($mainAction)
+                }
             }
             FlowLayout(spacing: Tokens.Space.s2, centred: !metrics.tv) {
                 if model.canTypeCode { Button(say("codeTitle")) { model.askForCode() }.action(.quiet) }
-                Button(say("usePassword"), action: onUsePassword).action(.quiet).firstFocus(in: scope, when: !code.isEmpty)
+                if !limited {
+                    Button(say("usePassword"), action: onUsePassword).action(.quiet).firstFocus(in: scope, when: !code.isEmpty)
+                }
                 Button(say("changeServer")) { model.changeServer() }.action(.quiet)
             }
             .remoteSection()
         }
         .focusRoot(scope)
         .task(id: round) { await run() }
+        // When the server says no, the remote's focus goes to what to do about it, once it's on screen.
+        .onChange(of: problem.isEmpty) { empty in
+            guard !empty, code.isEmpty else { return }
+            DispatchQueue.main.async { mainAction = true }
+        }
     }
 }
 
@@ -572,23 +602,32 @@ struct SignInView: View {
 
     private var serverName: String { model.current?.name ?? "WittyMediaServer" }
 
-    /// The other ways in, and which server this is, under whatever the screen is mainly for.
-    @ViewBuilder private var otherWays: some View {
-        VStack(alignment: metrics.tv ? .leading : .center, spacing: 0) {
+    /// The other ways in, and which server this is, under whatever the screen is mainly for. On a TV's
+    /// Who's watching, which is centred, they're one centred row, as on Android TV.
+    @ViewBuilder private func otherWays(centred: Bool = false) -> some View {
+        let middle = centred || !metrics.tv
+        let ways = Group {
             if step == .people {
                 Button(say("otherAccount")) { step = .form; wantName = true }.action(.quiet)
             }
             Button(say("useCode")) { useCode = true }.action(.quiet)
             if model.canTypeCode { Button(say("codeTitle")) { model.askForCode() }.action(.quiet) }
         }
-        .frame(maxWidth: .infinity, alignment: metrics.tv ? .leading : .center)
+        Group {
+            if metrics.tv && centred {
+                HStack(spacing: Tokens.Space.s6) { ways }
+            } else {
+                VStack(alignment: middle ? .center : .leading, spacing: 0) { ways }
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: middle ? .center : .leading)
         .remoteSection()
         HStack(spacing: Tokens.Space.s1) {
             Image(systemName: "server.rack").font(.caption).foregroundStyle(palette.textHint)
             Text(serverName).font(.wmSecondary).foregroundStyle(palette.textSecondary).lineLimit(1)
             Button(say("changeServer")) { model.changeServer() }.action(.quiet)
         }
-        .frame(maxWidth: .infinity, alignment: metrics.tv ? .leading : .center)
+        .frame(maxWidth: .infinity, alignment: middle ? .center : .leading)
     }
 
     /// 4: everyone on this server, as faces.
@@ -596,7 +635,7 @@ struct SignInView: View {
         let size: CGFloat = metrics.tv ? 200 : (metrics.cardWidth > 124 ? 140 : 104)
         let page = VStack(spacing: metrics.tv ? Tokens.Space.s10 : Tokens.Space.s6) {
             BrandLockup()
-            SignInHeading(title: say("whoTitle"), display: true)
+            SignInHeading(title: say("whoTitle"), display: true, centred: true)
             if !error.isEmpty { ProblemLine(error) }
             FlowLayout(spacing: metrics.tv ? 48 : 24, rowSpacing: 28, centred: true) {
                 ForEach(Array(people.enumerated()), id: \.element.id) { index, profile in
@@ -606,7 +645,7 @@ struct SignInView: View {
                 }
             }
             .remoteSection()
-            otherWays
+            otherWays(centred: true)
         }
         if metrics.tv {
             ZStack {
@@ -669,7 +708,7 @@ struct SignInView: View {
                 if !error.isEmpty { ProblemLine(error) }
                 Button { login(name, password) } label: { BusyText(say("signIn"), busy: busy) }
                     .action(.primary, wide: true, tall: true)
-                otherWays
+                otherWays()
             }
         }
     }

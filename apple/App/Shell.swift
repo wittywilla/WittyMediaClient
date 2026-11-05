@@ -14,7 +14,7 @@ enum AppTab: String, CaseIterable, Identifiable, Hashable {
         switch self {
         case .home: return "Home"
         case .search: return "Search"
-        case .profile: return "Profile"
+        case .profile: return say("youTab")
         }
     }
 
@@ -55,7 +55,7 @@ private struct TabRoot: View {
         switch tab {
         case .home: HomeView()
         case .search: SearchView()
-        case .profile: ProfileView()
+        case .profile: YouView()
         }
     }
 
@@ -81,6 +81,12 @@ private struct TabRoot: View {
                     case .player(let id, let startOver): PlayerScreen(id: id, startOver: startOver).id(id)
                     case .notices: NoticesView().plainNavigation()
                     case .logs: LogsView().plainNavigation()
+                    case .names: NamesView().plainNavigation()
+                    case .password: PasswordView().plainNavigation()
+                    case .twoStep: TwoStepView().plainNavigation()
+                    case .devices: DevicesView().plainNavigation()
+                    case .signInTv: SignInTvView().plainNavigation()
+                    case .theme: ThemeView().plainNavigation()
                     case .web(let path):
                         #if os(iOS) || os(visionOS)
                         WebPlayerView(path: path, keptToGames: true)
@@ -198,7 +204,13 @@ private struct PillBar: View {
                     press(tab)
                 } label: {
                     HStack(spacing: Tokens.Space.s2) {
-                        Image(systemName: open ? tab.openIcon : tab.icon).font(.body.weight(.semibold))
+                        if tab == .profile, let user = model.user {
+                            // The person's own face: who's signed in, at a glance.
+                            AvatarTile(name: user.shownName, size: 24)
+                                .overlay(Circle().strokeBorder(open ? palette.onAccent.opacity(0.9) : palette.border, lineWidth: 1.5))
+                        } else {
+                            Image(systemName: open ? tab.openIcon : tab.icon).font(.body.weight(.semibold))
+                        }
                         if open { Text(tab.title).font(.wmLabel) }
                     }
                     .foregroundStyle(open ? palette.onAccent : palette.text)
@@ -228,17 +240,22 @@ struct ElsewhereNote: View {
     let path: String
 
     var body: some View {
+        #if os(tvOS)
+        // The same card Android TV shows: the page's code for a phone's camera, and its address.
+        if let url = model.client.mediaURL(path) {
+            OpenOnPhone(url: url)
+        } else {
+            Secondary("Open \(model.client.base) on a phone, tablet or computer.").padding(Tokens.gutter)
+        }
+        #else
         VStack(alignment: .leading, spacing: Tokens.Space.s3) {
-            #if os(tvOS)
-            Secondary("Apple TV can't show this, as it has no way to open your server's own pages. Open \(model.client.base) on a phone, tablet or computer.")
-            #else
             if let url = model.client.mediaURL(path), WebPlayer.isWebLink(url) {
                 Link("Open in your browser", destination: url).action(primary: true)
             }
-            #endif
         }
         .padding(Tokens.gutter)
         .pageBackground(palette)
+        #endif
     }
 }
 #endif
@@ -266,45 +283,6 @@ struct BrowserOnlyNote: View {
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(RoundedRectangle(cornerRadius: Tokens.Radius.lg).fill(palette.panel))
         .accessibilityElement(children: .contain)
-    }
-}
-
-/// Who's signed in and to what, and the ways out of that, as on Android's Profile.
-struct ProfileView: View {
-    @EnvironmentObject private var model: AppModel
-    @Environment(\.palette) private var palette
-    @Environment(\.metrics) private var metrics
-    @Namespace private var scope
-
-    var body: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: Tokens.Space.s3) {
-                Heading("Profile")
-                if !model.notice.isEmpty { ProblemLine(model.notice) }
-                if let name = model.user?.name, !name.isEmpty { Secondary("Signed in as \(name)") }
-                if let server = model.current {
-                    SectionTitle(server.name)
-                    Secondary(server.url)
-                    if !server.fingerprint.isEmpty { Secondary("\(say("fingerprintLabel")): \(server.fingerprint)") }
-                }
-                #if os(iOS) || os(visionOS)
-                NavigationLink("Server settings", value: Route.page(ServerPages.settings)).action(wide: true)
-                #endif
-                Button("Sign out") { model.signOut() }.action(wide: true).firstFocus(in: scope)
-                Button(say("changeServer")) { model.changeServer() }.action(wide: true)
-                SectionTitle("About this app").padding(.top, Tokens.Space.s3)
-                Secondary("\(say("appName")) \(WittyClient.appVersion)")
-                NavigationLink("Licences", value: Route.notices).action(wide: true)
-                NavigationLink("This app's log", value: Route.logs).action(wide: true)
-                Secondary(say("legalConnect"))
-            }
-            .frame(maxWidth: 640, alignment: .leading)
-            .padding(.horizontal, metrics.gutter)
-            .padding(.vertical, Tokens.Space.s4)
-            .frame(maxWidth: .infinity, alignment: .leading)
-        }
-        .focusRoot(scope)
-        .pageBackground(palette)
     }
 }
 

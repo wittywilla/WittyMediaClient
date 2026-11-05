@@ -196,14 +196,17 @@ struct SignInHeading: View {
     let title: String
     var detail = ""
     var display = false
+    /// Centred even on a TV, as Who's watching is: its whole screen is centred there.
+    var centred = false
 
     var body: some View {
-        VStack(alignment: metrics.tv ? .leading : .center, spacing: Tokens.Space.s2) {
+        let middle = centred || !metrics.tv
+        VStack(alignment: middle ? .center : .leading, spacing: Tokens.Space.s2) {
             if !title.isEmpty {
                 Text(title)
                     .font(display ? .wmDisplay : .wmPage)
                     .foregroundStyle(palette.text)
-                    .multilineTextAlignment(metrics.tv ? .leading : .center)
+                    .multilineTextAlignment(middle ? .center : .leading)
                     .fixedSize(horizontal: false, vertical: true)
                     .accessibilityAddTraits(.isHeader)
             }
@@ -211,11 +214,11 @@ struct SignInHeading: View {
                 Text(detail)
                     .font(.body)
                     .foregroundStyle(palette.textSecondary)
-                    .multilineTextAlignment(metrics.tv ? .leading : .center)
+                    .multilineTextAlignment(middle ? .center : .leading)
                     .fixedSize(horizontal: false, vertical: true)
             }
         }
-        .frame(maxWidth: .infinity, alignment: metrics.tv ? .leading : .center)
+        .frame(maxWidth: .infinity, alignment: middle ? .center : .leading)
     }
 }
 
@@ -256,10 +259,8 @@ private struct ProfileTileBody<Label: View>: View {
     let radius: CGFloat
 
     var body: some View {
-        label
-            .environment(\.profileTileActive, pressed || focused)
-            .scaleEffect(focused && !reduceMotion ? 1.06 : 1)
-            .animation(reduceMotion ? nil : .easeOut(duration: Tokens.Motion.focus), value: focused)
+        // Only the avatar grows and lifts (see ProfileTileContent); the names keep their size.
+        label.environment(\.profileTileActive, pressed || focused)
     }
 }
 
@@ -298,6 +299,7 @@ struct ProfileTile: View {
 
 private struct ProfileTileContent: View {
     @Environment(\.palette) private var palette
+    @Environment(\.metrics) private var metrics
     @Environment(\.profileTileActive) private var active
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     let profile: Profile
@@ -305,12 +307,15 @@ private struct ProfileTileContent: View {
 
     var body: some View {
         let shape = RoundedRectangle(cornerRadius: avatarSize * 0.22, style: .continuous)
+        // A `background` band, then the `text` ring, each `ring` wide. Insetting a rounded rectangle
+        // outwards grows its corners by as much, so both stay concentric with the avatar's.
+        let ring: CGFloat = metrics.tv ? 4 : 3
         VStack(spacing: Tokens.Space.s2) {
             AvatarTile(name: profile.shownName, size: avatarSize)
                 .overlay {
                     if active {
-                        shape.inset(by: -4.5).stroke(palette.background, lineWidth: 3)
-                        shape.inset(by: -7.5).stroke(palette.text, lineWidth: 3)
+                        shape.inset(by: -ring / 2).stroke(palette.background, lineWidth: ring)
+                        shape.inset(by: -ring * 1.5).stroke(palette.text, lineWidth: ring)
                     }
                 }
                 .overlay(alignment: .bottom) {
@@ -325,22 +330,26 @@ private struct ProfileTileContent: View {
                             .offset(y: 10)
                     }
                 }
-                .offset(y: active && !reduceMotion ? -3 : 0)
+                .scaleEffect(active && metrics.tv && !reduceMotion ? 1.06 : 1, anchor: .bottom)
+                .offset(y: active && !reduceMotion ? (metrics.tv ? -6 : -3) : 0)
                 // Every tile keeps the badge's room, so names in a row line up with or without one.
                 .padding(.bottom, 6)
-            VStack(spacing: 2) {
+            // Centred under the avatar on every device, TVs included.
+            VStack(alignment: .center, spacing: 2) {
                 Text(profile.shownName)
                     .font(.wmLabel.weight(.semibold))
                     .foregroundStyle(active ? palette.text : palette.textSecondary)
                     .lineLimit(1)
+                    .multilineTextAlignment(.center)
                 if profile.showsUsername {
                     Text("@\(profile.name)")
                         .font(.wmSecondary)
                         .foregroundStyle(palette.textHint)
                         .lineLimit(1)
+                        .multilineTextAlignment(.center)
                 }
             }
-            .frame(maxWidth: avatarSize + 32)
+            .frame(maxWidth: avatarSize + 32, alignment: .center)
         }
         .padding(Tokens.Space.s2)
         .contentShape(Rectangle())
@@ -509,6 +518,36 @@ struct CodeBoxes: View {
     }
 }
 
+/// A key of the number pad. With a remote's focus it fills with `text`, its digit turns `background`
+/// and it grows 1.06, as both TVs' own keyboards show it: a grid of rings would crowd the keys.
+private struct PadKeyStyle: ButtonStyle {
+    var quiet = false
+    func makeBody(configuration: Configuration) -> some View {
+        PadKeyBody(label: configuration.label, pressed: configuration.isPressed, quiet: quiet)
+    }
+}
+
+private struct PadKeyBody<Label: View>: View {
+    @Environment(\.palette) private var palette
+    @Environment(\.metrics) private var metrics
+    @Environment(\.isFocused) private var focused
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    let label: Label
+    let pressed: Bool
+    let quiet: Bool
+
+    var body: some View {
+        let lit = metrics.tv && focused
+        label
+            .foregroundStyle(lit ? palette.background : (quiet ? palette.textSecondary : palette.text))
+            .background(RoundedRectangle(cornerRadius: Tokens.Radius.lg, style: .continuous).fill(lit ? palette.text : palette.card))
+            .contentShape(RoundedRectangle(cornerRadius: Tokens.Radius.lg, style: .continuous))
+            .scaleEffect(lit && !reduceMotion ? 1.06 : 1)
+            .opacity(pressed ? 0.8 : 1)
+            .animation(reduceMotion ? nil : .easeOut(duration: Tokens.Motion.focus), value: lit)
+    }
+}
+
 /// The number pad: arrows and OK on a TV, a finger on a phone, and number keys on a keyboard.
 /// The zero is twice as wide, so the focus engine finds something below every digit.
 struct NumberPad: View {
@@ -522,15 +561,16 @@ struct NumberPad: View {
         Button { onDigit(digit) } label: {
             Text(String(digit))
                 .font(.wmHero)
-                .foregroundStyle(palette.text)
                 .frame(maxWidth: .infinity, minHeight: metrics.tv ? 96 : 60)
         }
-        .buttonStyle(SurfaceStyle(fill: palette.card, radius: Tokens.Radius.lg))
+        .buttonStyle(PadKeyStyle())
         .digitShortcut(digit)
     }
 
     var body: some View {
-        Grid(horizontalSpacing: Tokens.Space.s2, verticalSpacing: Tokens.Space.s2) {
+        // On a TV the keys sit 16 apart, so a focused key never crowds its neighbours.
+        let gap = metrics.tv ? Tokens.Space.s4 : Tokens.Space.s2
+        Grid(horizontalSpacing: gap, verticalSpacing: gap) {
             GridRow {
                 if let scope { key("1").firstFocus(in: scope) } else { key("1") }
                 key("2"); key("3")
@@ -541,10 +581,9 @@ struct NumberPad: View {
                 Button(action: onDelete) {
                     Image(systemName: "delete.left")
                         .font(.wmHero)
-                        .foregroundStyle(palette.textSecondary)
                         .frame(maxWidth: .infinity, minHeight: metrics.tv ? 96 : 60)
                 }
-                .buttonStyle(SurfaceStyle(fill: palette.card, radius: Tokens.Radius.lg))
+                .buttonStyle(PadKeyStyle(quiet: true))
                 .accessibilityLabel(say("codeDelete"))
                 key("0").gridCellColumns(2)
             }

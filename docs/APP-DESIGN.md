@@ -281,7 +281,7 @@ number pad; Quiet `usePassword` and `showCodeInstead`; the fingerprint in Captio
 
 ### 8. Sign in with a code
 
-Back. Title `pairTitle`; Body `pairHint`; the address in Label, `accentText`, selectable; the code in Display monospaced,
+Back. Lockup; Title `pairTitle`; Body `pairHint`; the address in Label, `accentText`, selectable; the code in Display monospaced,
 letters 8 apart, in a `panel` card radius 14; the QR card with `pairScan`; a spinner and `pairWaiting`; when it ends,
 Problem and Primary `pairNew`. Quiet: `codeTitle`, `usePassword`, `changeServer`.
 

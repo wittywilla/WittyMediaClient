@@ -16,6 +16,8 @@ private struct WebPlayerPage: UIViewRepresentable {
     let url: URL
     /// A game player closes when the page goes anywhere else. A page of the server's stays open.
     let keptToGames: Bool
+    /// This device's theme, which the page reads where the web keeps a browser's own choice.
+    let theme: String
     let onLeave: () -> Void
     let onFail: () -> Void
     let onSaved: (URL) -> Void
@@ -100,6 +102,11 @@ private struct WebPlayerPage: UIViewRepresentable {
         // Kept in memory only, so the sign-in goes when this screen does.
         config.websiteDataStore = .nonPersistent()
         config.preferences.javaScriptCanOpenWindowsAutomatically = false
+        // Only a theme's id, made of letters, digits and dashes, goes into the script: nothing else of
+        // this app's reaches the page, and nothing comes back.
+        let id = theme.filter { $0.isASCII && ($0.isLetter || $0.isNumber || $0 == "-") }
+        let choice = id.isEmpty ? "localStorage.removeItem('wms.theme')" : "localStorage.setItem('wms.theme','\(id)')"
+        config.userContentController.addUserScript(WKUserScript(source: "try{\(choice)}catch(e){}", injectionTime: .atDocumentStart, forMainFrameOnly: true))
         let web = WKWebView(frame: .zero, configuration: config)
         web.isOpaque = false
         web.backgroundColor = .black
@@ -155,7 +162,7 @@ struct WebPlayerView: View {
             if failed || client.token.isEmpty {
                 ProblemView(words: "This page couldn't open. Check the server is on, then try again.", retry: { failed = false }, back: leave)
             } else if let url = client.mediaURL(path) {
-                WebPlayerPage(base: client.base, token: client.token, url: url, keptToGames: keptToGames, onLeave: leave, onFail: { failed = true }, onSaved: { saved = $0.lastPathComponent })
+                WebPlayerPage(base: client.base, token: client.token, url: url, keptToGames: keptToGames, theme: model.themeChoice, onLeave: leave, onFail: { failed = true }, onSaved: { saved = $0.lastPathComponent })
                     .ignoresSafeArea(.container, edges: .bottom)
             } else {
                 ProblemView(words: "The server sent an address that can't be used.", back: leave)
