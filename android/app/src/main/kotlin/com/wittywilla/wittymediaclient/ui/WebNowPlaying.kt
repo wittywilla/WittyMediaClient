@@ -751,7 +751,8 @@ private fun NpRange(fraction: Float, seek: (Float) -> Unit) {
 @Composable
 private fun Transport(nav: Nav, books: Boolean, play: Dp, taller: Dp, tall: Dp, gap: Dp, modifier: Modifier = Modifier) {
     val listening = nav.app.listening
-    val glyph = if (taller >= 56.dp) 28.dp else 24.dp
+    // `.mp-ibtn.taller svg`: 28 at every size.
+    val glyph = 28.dp
     Row(modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(gap, Alignment.CenterHorizontally), verticalAlignment = Alignment.CenterVertically) {
         if (books) JumpRound(true, 15, "Back 15 seconds", tall, 24.dp) { listening.seekBy(-15.0) }
         else NpRound(NpIcons.Shuffle, "Shuffle", tall, 20.dp, on = listening.shuffle) { listening.toggleShuffle() }

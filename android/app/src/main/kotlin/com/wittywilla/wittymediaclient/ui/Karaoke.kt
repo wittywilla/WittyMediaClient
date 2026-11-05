@@ -224,11 +224,11 @@ internal fun KaraokeScreen(nav: Nav, words: LyricsWords, title: String, artist: 
                 horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.CenterHorizontally), verticalArrangement = Arrangement.spacedBy(8.dp),
                 itemVerticalAlignment = Alignment.CenterVertically,
             ) {
-                NpRound(WebIcons.Prev, "Previous line", 52.dp, 24.dp) { goLine(-1) }
+                NpRound(WebIcons.Prev, "Previous line", 52.dp, 20.dp) { goLine(-1) }
                 Pressable(listening::toggle, Modifier.size(64.dp), shape = CircleShape, fill = Color.White, label = if (listening.isPlaying) "Pause" else "Play", pressScale = 0.96f, ring = false) {
                     Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { Icon(if (listening.isPlaying) WebIcons.Pause else WebIcons.Play, null, tint = Color.Black, modifier = Modifier.size(30.dp)) }
                 }
-                NpRound(WebIcons.Next, "Next line", 52.dp, 24.dp) { goLine(1) }
+                NpRound(WebIcons.Next, "Next line", 52.dp, 20.dp) { goLine(1) }
                 if (!compact) Box(Modifier.padding(horizontal = 4.dp).size(1.dp, 34.dp).background(Np.line))
                 // The singer's voice: on, lower, lowest.
                 Row(Modifier.clip(RoundedCornerShape(50)).background(Np.chip).padding(3.dp).semantics { contentDescription = "Singer's voice" }, horizontalArrangement = Arrangement.spacedBy(2.dp)) {
