@@ -1,0 +1,185 @@
+{
+  "about": "Worked out with WittyMediaServer web/src/ui/themeMaker.ts makeTheme. Both apps test their ports against these.",
+  "cases": [
+    {
+      "input": {
+        "name": "Fresh",
+        "scheme": "dark",
+        "accent": "#2f6fed",
+        "tint": "#2f6fed",
+        "corners": "soft"
+      },
+      "output": {
+        "radius": 10,
+        "adjusted": false,
+        "vars": {
+          "bg": "#0c1018",
+          "bg-2": "#111722",
+          "bg-3": "#18202f",
+          "bg-4": "#212b40",
+          "fg": "#ebecef",
+          "fg-2": "#afb5c0",
+          "fg-3": "#8d95a5",
+          "accent": "#2f6fed",
+          "accent-2": "#145ce9",
+          "accent-fg": "#ffffff",
+          "accent-text": "#4e84f0",
+          "control-line": "#526a9e",
+          "danger": "#ff5c6c",
+          "ok": "#3ad29f",
+          "warn": "#e0a030"
+        }
+      }
+    },
+    {
+      "input": {
+        "name": "Light rose",
+        "scheme": "light",
+        "accent": "#e0457b",
+        "tint": "#e0457b",
+        "corners": "round"
+      },
+      "output": {
+        "radius": 18,
+        "adjusted": false,
+        "vars": {
+          "bg": "#f8f2f4",
+          "bg-2": "#fefdfe",
+          "bg-3": "#f0e5e9",
+          "bg-4": "#e5d1d8",
+          "fg": "#1d1619",
+          "fg-2": "#56434a",
+          "fg-3": "#6d555d",
+          "accent": "#e0457b",
+          "accent-2": "#e45f8e",
+          "accent-fg": "#0e1013",
+          "accent-text": "#c7215b",
+          "control-line": "#b07388",
+          "danger": "#c92435",
+          "ok": "#10774d",
+          "warn": "#965a00"
+        }
+      }
+    },
+    {
+      "input": {
+        "name": "Pale accent",
+        "scheme": "dark",
+        "accent": "#ffe14d",
+        "tint": "#3ad29f",
+        "corners": "square"
+      },
+      "output": {
+        "radius": 2,
+        "adjusted": false,
+        "vars": {
+          "bg": "#0c1814",
+          "bg-2": "#11221c",
+          "bg-3": "#182f27",
+          "bg-4": "#214036",
+          "fg": "#ebefee",
+          "fg-2": "#afc0ba",
+          "fg-3": "#8da59d",
+          "accent": "#ffe14d",
+          "accent-2": "#ffe66c",
+          "accent-fg": "#0e1013",
+          "accent-text": "#ffe14d",
+          "control-line": "#42806c",
+          "danger": "#ff5c6c",
+          "ok": "#3ad29f",
+          "warn": "#e0a030"
+        }
+      }
+    },
+    {
+      "input": {
+        "name": "Dark accent on light",
+        "scheme": "light",
+        "accent": "#1b1e25",
+        "tint": "#a14b1b",
+        "corners": "soft"
+      },
+      "output": {
+        "radius": 10,
+        "adjusted": false,
+        "vars": {
+          "bg": "#f8f4f2",
+          "bg-2": "#fefefd",
+          "bg-3": "#f0e9e5",
+          "bg-4": "#e5d8d1",
+          "fg": "#1d1916",
+          "fg-2": "#564a43",
+          "fg-3": "#6d5e55",
+          "accent": "#1b1e25",
+          "accent-2": "#0e1013",
+          "accent-fg": "#ffffff",
+          "accent-text": "#1b1e25",
+          "control-line": "#a87d65",
+          "danger": "#cb2436",
+          "ok": "#11794f",
+          "warn": "#985b00"
+        }
+      }
+    },
+    {
+      "input": {
+        "name": "Bad input",
+        "scheme": "dark",
+        "accent": "red",
+        "tint": "nope",
+        "corners": "soft"
+      },
+      "output": {
+        "radius": 10,
+        "adjusted": false,
+        "vars": {
+          "bg": "#0f0c18",
+          "bg-2": "#151122",
+          "bg-3": "#1d182f",
+          "bg-4": "#282140",
+          "fg": "#ecebef",
+          "fg-2": "#b3afc0",
+          "fg-3": "#928da5",
+          "accent": "#7955ff",
+          "accent-2": "#6136ff",
+          "accent-fg": "#ffffff",
+          "accent-text": "#8969ff",
+          "control-line": "#6c5aaa",
+          "danger": "#ff5c6c",
+          "ok": "#3ad29f",
+          "warn": "#e0a030"
+        }
+      }
+    },
+    {
+      "input": {
+        "name": "Grey tint",
+        "scheme": "light",
+        "accent": "#7955ff",
+        "tint": "#808080",
+        "corners": "round"
+      },
+      "output": {
+        "radius": 18,
+        "adjusted": false,
+        "vars": {
+          "bg": "#f5f5f5",
+          "bg-2": "#fefefe",
+          "bg-3": "#ebebeb",
+          "bg-4": "#dbdbdb",
+          "fg": "#1a1a1a",
+          "fg-2": "#4d4d4d",
+          "fg-3": "#616161",
+          "accent": "#7955ff",
+          "accent-2": "#6136ff",
+          "accent-fg": "#ffffff",
+          "accent-text": "#6b43ff",
+          "control-line": "#878787",
+          "danger": "#cd2536",
+          "ok": "#11794f",
+          "warn": "#985b00"
+        }
+      }
+    }
+  ]
+}

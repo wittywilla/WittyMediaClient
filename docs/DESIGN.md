@@ -23,9 +23,9 @@ There are three kinds of client, chosen by what each platform does well.
 
 | Kind | Platforms | UI | Player | Why |
 |---|---|---|---|---|
-| **Native** | tvOS, iOS, iPadOS, macOS | SwiftUI | AVPlayer | The system player gives HDR, Atmos passthrough, Siri remote scrubbing, AirPlay and VoiceOver. A web view on tvOS doesn't exist at all. |
+| **Native** | tvOS, iOS, iPadOS, visionOS | SwiftUI, laid out as the Android app | AVPlayer | The system player gives HDR, Atmos passthrough, Siri remote scrubbing, AirPlay and VoiceOver. A web view on tvOS doesn't exist at all. |
 | **Native** | Android TV, Google TV, Fire TV, Android phones and tablets | Jetpack Compose | Media3 (ExoPlayer) | Hardware decoding and passthrough, and it doesn't depend on the age of the device's WebView, which is often very old on TV boxes. |
-| **Shell** | Windows, Linux, webOS, Tizen | The server's own web UI, behind a small connect screen | The browser engine, via the web UI | The web UI already has every feature, including TV navigation (`web/src/tv.ts`). A shell gets parity on day one and stays current with the server, with no second UI to maintain. |
+| **Shell** | Windows, macOS, Linux, webOS, Tizen | The server's own web UI, behind a small connect screen | The browser engine, via the web UI | The web UI already has every feature, including TV navigation (`web/src/tv.ts`). A shell gets parity on day one and stays current with the server, with no second UI to maintain. |
 
 **Apple TV is native all the way through.** tvOS doesn't offer apps a web view, so everything there is
 SwiftUI and AVPlayer, sharing WittyKit with the others for API models, addresses, identity and discovery. The
@@ -96,9 +96,9 @@ with raw sockets.
 
 | Platform | Mechanism | Limit |
 |---|---|---|
-| tvOS, iOS, iPadOS, macOS | `NWBrowser` (Bonjour) | iOS and tvOS show a local-network permission prompt. Raw UDP broadcast would need an entitlement Apple must grant. |
+| tvOS, iOS, iPadOS, visionOS | `NWBrowser` (Bonjour) | iOS and tvOS show a local-network permission prompt. Raw UDP broadcast would need an entitlement Apple must grant. |
 | Android family | `NsdManager` | Newer Android versions are adding a local-network permission; check this against the target SDK at each upgrade. |
-| Windows, Linux | Node `dgram` in Electron's main process | The firewall may prompt. |
+| Windows, macOS, Linux | Node `dgram` in Electron's main process | The firewall may prompt. |
 | webOS, Tizen, browsers | None available to web apps | **Manual address only**, stated plainly in the UI rather than showing an empty list. |
 
 ### Addresses and transport security
