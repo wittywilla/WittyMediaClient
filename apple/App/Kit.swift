@@ -17,7 +17,8 @@ struct Metrics: Equatable {
     var focusScale: CGFloat = 1
 
     static let phone = Metrics(tv: false, gutter: Tokens.Space.s4, edge: Tokens.Space.s2, cardWidth: 104, minTarget: 44)
-    static let tablet = Metrics(tv: false, gutter: Tokens.Space.s8, edge: Tokens.Space.s2, cardWidth: 128, minTarget: 44)
+    /// The website's `--card-w` from 521 to 1099 across.
+    static let tablet = Metrics(tv: false, gutter: Tokens.Space.s8, edge: Tokens.Space.s2, cardWidth: 148, minTarget: 44)
     static let television = Metrics(tv: true, gutter: Tokens.gutter, edge: Tokens.edge, cardWidth: Tokens.cardWidth,
                                     minTarget: Tokens.minTarget, focusRing: 4, focusScale: 1.05)
 }

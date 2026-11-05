@@ -194,7 +194,7 @@ private struct PageButtonBody<Label: View>: View {
             .padding(.horizontal, square ? 0 : Tokens.Space.s4)
             .frame(minWidth: 44, maxWidth: wide ? .infinity : nil, minHeight: 44)
             .background(shape.fill(fill))
-            .overlay { if kind == .ghost { shape.strokeBorder(palette.control, lineWidth: 1) } }
+            .overlay { if kind == .ghost { shape.strokeBorder(palette.text.opacity(0.2), lineWidth: 1) } }
             .contentShape(shape)
             .scaleEffect(pressed && !reduceMotion ? 0.97 : 1)
             .opacity(enabled ? (pressed ? 0.85 : 1) : 0.55)
@@ -292,21 +292,24 @@ struct PlaceholderArt: View {
     var lines = 3
 
     var body: some View {
+        // The website's phone placeholder: the title's colour rising from the card's, solid by 64%, with the title
+        // in white over the lower third. Too small to read (72 or less), the colour alone.
         let colour = Color(hex: AvatarLook.colour(for: title))
-        LinearGradient(colors: [colour, colour.opacity(0.75), palette.card], startPoint: .bottomLeading, endPoint: .topTrailing)
-            .overlay(alignment: .bottomLeading) {
-                if lines > 0 {
-                Text(title)
-                    .pageFont(.strong)
-                    .foregroundStyle(.white)
-                    .lineLimit(lines)
-                    .multilineTextAlignment(.leading)
-                    .minimumScaleFactor(0.8)
-                    .padding(Tokens.Space.s3)
-                    .frame(maxWidth: .infinity, alignment: .leading)
+        GeometryReader { geo in
+            LinearGradient(stops: [.init(color: palette.card, location: 0), .init(color: colour, location: 0.64)], startPoint: .top, endPoint: .bottom)
+                .overlay(alignment: .bottomLeading) {
+                    if lines > 0, geo.size.width > 72 {
+                        Text(title)
+                            .font(.system(size: 15, weight: .semibold))
+                            .foregroundStyle(.white)
+                            .lineLimit(min(lines, 3))
+                            .multilineTextAlignment(.leading)
+                            .padding(Tokens.Space.s3)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                    }
                 }
-            }
-            .accessibilityHidden(true)
+        }
+        .accessibilityHidden(true)
     }
 }
 
@@ -544,15 +547,17 @@ private struct ChipBody<Label: View>: View {
     let chosen: Bool
 
     var body: some View {
+        // The website's `.chip`: 44 high on a touch screen, outlined in the text colour at 20%, and the chosen one
+        // inverted, in every theme.
         label
-            .pageFont(.action)
+            .font(.system(size: 13, weight: .medium))
             .lineLimit(1)
-            .foregroundStyle(chosen ? palette.text : palette.textSecondary)
+            .foregroundStyle(chosen ? palette.background : pressed ? palette.text : palette.textSecondary)
             .padding(.horizontal, Tokens.Space.s3)
-            .frame(height: 32)
-            .background(Capsule().fill(chosen ? palette.raised : (pressed ? palette.card : Color.clear)))
             .frame(minHeight: 44)
-            .contentShape(Rectangle())
+            .background(Capsule().fill(chosen ? palette.text : (pressed ? palette.text.opacity(0.07) : Color.clear)))
+            .overlay(Capsule().strokeBorder(chosen ? palette.text : palette.text.opacity(0.2), lineWidth: 1))
+            .contentShape(Capsule())
             .accessibilityAddTraits(chosen ? [.isSelected] : [])
     }
 }
@@ -639,12 +644,24 @@ struct SkeletonGrid: View {
     }
 }
 
-/// Three posters across a phone, 16 apart, so each is the poster card's 104; as many 128s as fit on a tablet.
+/// The website's `.grid`: as many columns of at least the card's width as fit, 16 apart. On a phone, 104 wide in
+/// a page with 16 at each side: floor((width − 16) / 120) of them, three on most phones and two on the smallest.
 func posterColumns(_ metrics: Metrics) -> [GridItem] {
     if metrics.cardWidth <= 104 {
-        return Array(repeating: GridItem(.flexible(), spacing: Tokens.Space.s4, alignment: .top), count: 3)
+        let width = screenSize.width
+        let count = max(2, Int((width - 16) / 120))
+        return Array(repeating: GridItem(.flexible(), spacing: Tokens.Space.s4, alignment: .top), count: count)
     }
     return [GridItem(.adaptive(minimum: metrics.cardWidth, maximum: metrics.cardWidth * 1.3), spacing: Tokens.Space.s4, alignment: .top)]
+}
+
+/// The screen's size, for the website's sizes in vw and vh. Vision Pro has no screen: a window's usual size.
+var screenSize: CGSize {
+    #if os(visionOS)
+    return CGSize(width: 1280, height: 720)
+    #else
+    return UIScreen.main.bounds.size
+    #endif
 }
 
 // MARK: - Empty
@@ -658,19 +675,23 @@ struct EmptyState: View {
 
     var body: some View {
         VStack(spacing: Tokens.Space.s2) {
+            // The website's `.empty`: a 26 icon in `textHint` on a 56 circle of `card`, the title 17, the words 14.
             Image(systemName: icon)
-                .font(.system(size: 20, weight: .semibold))
-                .foregroundStyle(palette.textSecondary)
+                .font(.system(size: 22, weight: .semibold))
+                .foregroundStyle(palette.textHint)
                 .frame(width: 56, height: 56)
                 .background(Circle().fill(palette.card))
-                .padding(.bottom, Tokens.Space.s2)
+                .padding(.bottom, Tokens.Space.s4 - Tokens.Space.s1)
                 .accessibilityHidden(true)
-            Text(title).pageFont(.section).foregroundStyle(palette.text).multilineTextAlignment(.center).accessibilityAddTraits(.isHeader)
-            Text(detail).pageFont(.body).foregroundStyle(palette.textSecondary).multilineTextAlignment(.center)
-                .fixedSize(horizontal: false, vertical: true)
+            Text(title).font(.system(size: 17, weight: .bold)).foregroundStyle(palette.text).multilineTextAlignment(.center).accessibilityAddTraits(.isHeader)
+            if !detail.isEmpty {
+                Text(detail).font(.system(size: 14)).foregroundStyle(palette.textSecondary).multilineTextAlignment(.center)
+                    .frame(maxWidth: 46 * 7.5)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
         }
-        .padding(.horizontal, Tokens.Space.s6)
-        .padding(.vertical, Tokens.Space.s12)
+        .padding(.horizontal, 20)
+        .padding(.vertical, 64)
         .frame(maxWidth: .infinity)
     }
 }

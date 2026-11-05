@@ -36,7 +36,7 @@ struct SegmentRow<Value: Hashable>: View {
                 }
             }
             .padding(3)
-            .background(RoundedRectangle(cornerRadius: Tokens.Radius.md, style: .continuous).fill(palette.raised))
+            .background(RoundedRectangle(cornerRadius: Tokens.Radius.md, style: .continuous).fill(palette.card))
         }
         .fixedSize(horizontal: false, vertical: true)
         .accessibilityElement(children: .contain)
@@ -161,7 +161,7 @@ private struct ArtistPhoto: View {
     var body: some View {
         GeometryReader { geo in
             ZStack {
-                palette.raised
+                palette.card
                 Text(String((name.isEmpty ? "?" : name).prefix(1)))
                     .font(.system(size: big ? min(80, geo.size.width * 0.4) : min(48, geo.size.width * 0.36), weight: .bold))
                     .foregroundStyle(palette.textHint)
@@ -215,7 +215,7 @@ private struct SeeAllCard: View {
             Text("See all").font(.system(size: 15, weight: .semibold)).foregroundStyle(palette.text)
                 .frame(maxWidth: .infinity)
                 .aspectRatio(1, contentMode: .fit)
-                .background(round ? AnyShape(Circle()).fill(palette.raised) : AnyShape(RoundedRectangle(cornerRadius: Tokens.Radius.md, style: .continuous)).fill(palette.raised))
+                .background(round ? AnyShape(Circle()).fill(palette.card) : AnyShape(RoundedRectangle(cornerRadius: Tokens.Radius.md, style: .continuous)).fill(palette.card))
         }
         .buttonStyle(PressStyle())
     }
@@ -235,7 +235,7 @@ private struct SongCard: View {
             Button(action: play) {
                 HStack(spacing: Tokens.Space.s3) {
                     ZStack {
-                        palette.raised
+                        palette.card
                         ArtImage(url: client.posterURL(song), width: 48, blank: true)
                         if on && listening.isPlaying {
                             Image(systemName: "waveform").font(.system(size: 12, weight: .bold)).foregroundStyle(.white)
@@ -261,7 +261,7 @@ private struct SongCard: View {
             .accessibilityLabel("Play \(song.title)")
             TrackMenu(track: song)
         }
-        .background(RoundedRectangle(cornerRadius: Tokens.Radius.md, style: .continuous).fill(on ? palette.accent.opacity(0.16) : palette.text.opacity(0.06)))
+        .background(RoundedRectangle(cornerRadius: Tokens.Radius.md, style: .continuous).fill(on ? palette.accent.opacity(0.16) : palette.text.opacity(0.07)))
     }
 }
 
@@ -747,7 +747,7 @@ private struct MusicHomeTab: View {
         let fraction = track.progress.flatMap { p in track.runtimeSec.map { min(1, (p.positionSec ?? 0) / max($0, 1)) } } ?? 0
         return HStack(alignment: .top, spacing: Tokens.Space.s3) {
             ZStack {
-                palette.raised
+                palette.card
                 ArtImage(url: client.posterURL(track), width: 110, blank: true)
             }
             .frame(width: 110, height: 110 * 4 / 3)
@@ -771,8 +771,8 @@ private struct MusicHomeTab: View {
             }
         }
         .padding(Tokens.Space.s2)
-        .frame(width: min(340, UIScreen.main.bounds.width * 0.84), alignment: .leading)
-        .background(RoundedRectangle(cornerRadius: Tokens.Radius.lg, style: .continuous).fill(palette.text.opacity(0.06)))
+        .frame(width: min(340, screenSize.width * 0.84), alignment: .leading)
+        .background(RoundedRectangle(cornerRadius: Tokens.Radius.lg, style: .continuous).fill(palette.text.opacity(0.07)))
     }
 }
 
@@ -787,7 +787,7 @@ private struct PillButtonStyle: ButtonStyle {
             .foregroundStyle(strong ? palette.background : palette.text)
             .padding(.horizontal, Tokens.Space.s4)
             .frame(minHeight: 44)
-            .background(Capsule().fill(strong ? palette.text : palette.raised))
+            .background(Capsule().fill(strong ? palette.text : palette.card))
             .opacity(configuration.isPressed ? 0.9 : 1)
             .scaleEffect(configuration.isPressed ? 0.975 : 1)
     }
@@ -807,7 +807,7 @@ private struct CoverFlow: View {
 
     var body: some View {
         GeometryReader { geo in
-            let size = min(geo.size.width * 0.58, UIScreen.main.bounds.height * 0.42)
+            let size = min(geo.size.width * 0.58, screenSize.height * 0.42)
             ZStack {
                 ForEach(Array(covers.enumerated()), id: \.offset) { i, album in
                     let d = i - at
@@ -841,7 +841,7 @@ private struct CoverFlow: View {
                 move(to: at + (direction == .increment ? 1 : -1))
             }
         }
-        .frame(height: min(UIScreen.main.bounds.width * 0.58, UIScreen.main.bounds.height * 0.42) * 1.2)
+        .frame(height: min(screenSize.width * 0.58, screenSize.height * 0.42) * 1.2)
     }
 
     private func move(to index: Int) {
@@ -1110,7 +1110,7 @@ private struct PlaylistsTab: View {
         HStack(spacing: Tokens.Space.s2) { content() }
             .padding(Tokens.Space.s2)
             .frame(minHeight: 68)
-            .background(RoundedRectangle(cornerRadius: Tokens.Radius.md, style: .continuous).fill(palette.text.opacity(0.06)))
+            .background(RoundedRectangle(cornerRadius: Tokens.Radius.md, style: .continuous).fill(palette.text.opacity(0.07)))
     }
 
     var body: some View {
@@ -1155,7 +1155,7 @@ private struct PlaylistsTab: View {
                         NavigationLink(value: Route.page("/collections/\(list.id)")) {
                             card {
                                 ZStack {
-                                    palette.raised
+                                    palette.card
                                     if let cover = list.coverId, cover > 0 { ArtImage(url: client.posterURL(id: cover), width: 52, blank: true) }
                                 }
                                 .frame(width: 52, height: 52)
@@ -1257,7 +1257,7 @@ struct MusicAlbumPage: View {
                     }
                 }
                 .aspectRatio(books && !pods ? 2.0 / 3.0 : 1, contentMode: .fit)
-                .frame(width: min(UIScreen.main.bounds.width * 0.6, 240))
+                .frame(width: min(screenSize.width * 0.6, 240))
                 .clipShape(RoundedRectangle(cornerRadius: Tokens.Radius.lg, style: .continuous))
                 .shadow(color: .black.opacity(0.35), radius: 16, y: 8)
                 .padding(.bottom, Tokens.Space.s5)
@@ -1400,7 +1400,7 @@ struct MusicArtistPage: View {
         return VStack(alignment: .leading, spacing: 0) {
             VStack(spacing: Tokens.Space.s1) {
                 ArtistPhoto(library: library, name: name, big: true)
-                    .frame(width: min(UIScreen.main.bounds.width * 0.52, 200))
+                    .frame(width: min(screenSize.width * 0.52, 200))
                     .padding(.bottom, Tokens.Space.s5)
                 Text(books ? "AUTHOR" : "ARTIST").font(.system(size: 11, weight: .semibold)).tracking(0.77).foregroundStyle(palette.textSecondary)
                 Text(name.isEmpty ? "Unknown" : name).pageFont(.display).foregroundStyle(palette.text).multilineTextAlignment(.center)
