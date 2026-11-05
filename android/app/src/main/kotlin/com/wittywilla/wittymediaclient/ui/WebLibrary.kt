@@ -197,6 +197,10 @@ fun PhoneLibrary(nav: Nav, library: Library, chosen: Map<String, String> = empty
                     }
                 }
             }
+            // While the shelves or the grid are on their way: the website's twelve loading posters (ui/Surface.tsx).
+            if ((!grid && s == null) || (grid && gridTotal == null && results.isEmpty())) {
+                items(12) { Skel(Modifier.fillMaxWidth().aspectRatio(2f / 3f), 10.dp) }
+            }
             if (!grid && s != null) {
                 item(span = { GridItemSpan(maxLineSpan) }) { ShelvesView(nav, library, s) { genre -> filters.value = mapOf("genre" to genre) } }
             } else if (grid) {

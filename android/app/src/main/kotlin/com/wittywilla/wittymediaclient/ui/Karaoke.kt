@@ -161,11 +161,11 @@ internal fun KaraokeScreen(nav: Nav, words: LyricsWords, title: String, artist: 
             val message = (screenH * 0.028f).coerceIn(17.6f, 32f)
             Box(Modifier.weight(1f).fillMaxWidth().padding(horizontal = (screenW * 0.05f).coerceIn(16f, 80f).dp), contentAlignment = Alignment.Center) {
                 when {
-                    lyrics == null || loading -> Text("Looking for the words…", color = Np.fg2, fontSize = message.sp, fontWeight = FontWeight.SemiBold, textAlign = TextAlign.Center)
+                    lyrics == null || loading -> Text("Looking for the words…", color = Np.fg2, fontSize = message.sp, fontWeight = FontWeight.SemiBold, lineHeight = 1.4.em, textAlign = TextAlign.Center)
                     lines.isEmpty() -> Column(Modifier.verticalScroll(rememberScrollState()).padding(vertical = 24.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(12.dp)) {
                         Text(
                             if (lyrics.plain.isNotEmpty()) "These words have no times, so they can't follow the music yet." else "No words for this song.",
-                            color = Np.fg2, fontSize = message.sp, fontWeight = FontWeight.SemiBold, textAlign = TextAlign.Center,
+                            color = Np.fg2, fontSize = message.sp, fontWeight = FontWeight.SemiBold, lineHeight = 1.4.em, textAlign = TextAlign.Center,
                         )
                         if (lyrics.plain.isNotEmpty()) Text(
                             lyrics.plain, color = Color.White, fontSize = 17.sp, lineHeight = 1.55.em, textAlign = TextAlign.Center,
@@ -187,7 +187,7 @@ internal fun KaraokeScreen(nav: Nav, words: LyricsWords, title: String, artist: 
                         val count = com.wittywilla.wittymediaclient.ui.Karaoke.countIn(lines, ms)
                         Column(Modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy((screenH * 0.03f).coerceIn(10f, 34f).dp, Alignment.CenterVertically)) {
                             if (index < 0 && (lines.firstOrNull()?.t ?: 0.0) > 5000) {
-                                Text("Get ready…", color = Np.fg2, fontSize = message.sp, fontWeight = FontWeight.SemiBold)
+                                Text("Get ready…", color = Np.fg2, fontSize = message.sp, fontWeight = FontWeight.SemiBold, lineHeight = 1.4.em)
                             }
                             // The line being sung, each word filling white as it's sung, over white at 34%.
                             Box(Modifier.fillMaxWidth().heightIn(min = (big * 1.14f * 2.3f).dp), contentAlignment = Alignment.Center) {
@@ -210,7 +210,7 @@ internal fun KaraokeScreen(nav: Nav, words: LyricsWords, title: String, artist: 
                                 }
                             }
                             val nextSize = (screenH * 0.034f).coerceIn(19.2f, 40f)
-                            Text(next?.text ?: " ", color = Np.fg3, fontSize = nextSize.sp, fontWeight = FontWeight.SemiBold, textAlign = TextAlign.Center, modifier = Modifier.heightIn(min = (nextSize * 1.3f).dp))
+                            Text(next?.text ?: " ", color = Np.fg3, fontSize = nextSize.sp, fontWeight = FontWeight.SemiBold, lineHeight = 1.3.em, textAlign = TextAlign.Center, modifier = Modifier.heightIn(min = (nextSize * 1.3f).dp))
                             Box(Modifier.size(1.dp).semantics { liveRegion = LiveRegionMode.Polite; contentDescription = now?.text.orEmpty() })
                         }
                         // The count-in: a ring at the top, each number popping in.

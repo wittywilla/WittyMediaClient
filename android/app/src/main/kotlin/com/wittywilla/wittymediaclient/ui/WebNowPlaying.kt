@@ -92,7 +92,6 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
-import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 
@@ -308,6 +307,8 @@ fun WebNowPlaying(nav: Nav) {
     LaunchedEffect(library) { if (!books && library > 0) liked = runCatching { api.likes(library).toSet() }.getOrDefault(emptySet()) }
     var panel by remember { mutableStateOf(if (listening.screenWithQueue) NpPanel.Queue else NpPanel.None) }
     var menu by remember { mutableStateOf(NpMenu.None) }
+    // Back closes an open menu first, as the website's does (it doesn't also close the player).
+    BackHandler(enabled = menu != NpMenu.None) { menu = NpMenu.None }
     // Where each button that opens something is, read when it opens, in the screen's own space: the pop-ups are drawn
     // in it, under the opening rise.
     val anchors = remember { HashMap<NpMenu, LayoutCoordinates>() }
@@ -451,7 +452,7 @@ fun WebNowPlaying(nav: Nav) {
                         }
                         if (trackId > 0) NpRound(NpIcons.AddList, "Add to a playlist", 44.dp, 20.dp, modifier = Modifier.anchor(NpMenu.Playlist)) { toggle(NpMenu.Playlist) }
                         val sleepSet = listening.sleepAt != null || listening.sleepAfterThis
-                        NpRound(NpIcons.Moon, if (sleepSet) "Sleep timer: stops ${listening.sleepAt?.let { "at " + SimpleDateFormat("HH:mm", locale).format(Date(it)) } ?: "after this one"}" else "Sleep timer", 44.dp, 20.dp, on = sleepSet, modifier = Modifier.anchor(NpMenu.Sleep)) { toggle(NpMenu.Sleep) }
+                        NpRound(NpIcons.Moon, if (sleepSet) "Sleep timer: stops ${listening.sleepAt?.let { "at " + android.text.format.DateFormat.getTimeFormat(context).format(Date(it)) } ?: "after this one"}" else "Sleep timer", 44.dp, 20.dp, on = sleepSet, modifier = Modifier.anchor(NpMenu.Sleep)) { toggle(NpMenu.Sleep) }
                         NpRound(if (books) WebIcons.Chapters else NpIcons.List, if (books) "Chapters" else "Queue", 44.dp, 20.dp, on = panel == NpPanel.Queue) { togglePanel(NpPanel.Queue) }
                         if (!books && library > 0) {
                             val on = trackId in liked
@@ -579,7 +580,7 @@ fun WebNowPlaying(nav: Nav) {
         when (menu) {
             NpMenu.Sleep -> {
                 val set = listening.sleepAt != null || listening.sleepAfterThis
-                val stopsAt = listening.sleepAt?.let { SimpleDateFormat("HH:mm", locale).format(Date(it)) }
+                val stopsAt = listening.sleepAt?.let { android.text.format.DateFormat.getTimeFormat(context).format(Date(it)) }
                 fun inMinutes(m: Int) = { listening.sleep(System.currentTimeMillis() + m * 60_000L, false) }
                 PopMenu(
                     listOfNotNull(

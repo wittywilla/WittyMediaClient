@@ -270,6 +270,10 @@ fun ServerPageScreen(nav: Nav, route: Route, path: String, keptToGames: Boolean,
             onPath = { now ->
                 if (keptToGames) {
                     if (!staysInWebPlayer(now) && nav.current == route) nav.pop()
+                } else if (!inShell && !nav.app.isTv && pageFillsScreen(path) && !pageFillsScreen(now) && nav.current == route) {
+                    // The website's disc or CD player, asked to step aside, goes on to the website's own item page. In
+                    // the app that page is already below this one, so this one closes instead.
+                    nav.pop()
                 } else {
                     fills = pageFillsScreen(now)
                 }

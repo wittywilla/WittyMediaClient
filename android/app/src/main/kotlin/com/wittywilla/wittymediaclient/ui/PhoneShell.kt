@@ -356,8 +356,10 @@ private fun Drawer(nav: Nav, open: Boolean, status: Dp, close: () -> Unit) {
             Column(
                 Modifier.width(240.dp).fillMaxHeight().cssShadow(10.dp, 30.dp, Color(0x73000000), 0.dp).background(scheme.surface)
                     .drawWithContent { drawContent(); drawRect(scheme.outline, Offset(size.width - 1.dp.toPx(), 0f), Size(1.dp.toPx(), size.height)) }
+                    // The clock's room stays outside the list, so rows never scroll up under it.
+                    .padding(top = status)
                     .verticalScroll(rememberScrollState())
-                    .padding(start = 12.dp, end = 12.dp, top = 12.dp + status, bottom = 12.dp + inset),
+                    .padding(start = 12.dp, end = 12.dp, top = 12.dp, bottom = 12.dp + inset),
                 verticalArrangement = Arrangement.spacedBy(2.dp),
             ) {
                 Row(
