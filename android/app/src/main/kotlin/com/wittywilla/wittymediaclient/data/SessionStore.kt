@@ -69,6 +69,16 @@ class SessionStore(context: Context) {
         prefs.edit().putString(KEY_THEME + server, choice).apply()
     }
 
+    // A server's themes as last read, kept by id and the list's modTime, so they're read again only when they change.
+    fun themeTokens(server: String, id: String, modTime: Long): String? =
+        prefs.getString("$KEY_TOKENS$server|$id|$modTime", null)
+
+    fun keepThemeTokens(server: String, id: String, modTime: Long, tokens: String) {
+        val edit = prefs.edit()
+        prefs.all.keys.filter { it.startsWith("$KEY_TOKENS$server|$id|") }.forEach { edit.remove(it) }
+        edit.putString("$KEY_TOKENS$server|$id|$modTime", tokens).apply()
+    }
+
     var recent: List<SavedServer>
         get() = runCatching { json.decodeFromString<List<SavedServer>>(prefs.getString(KEY_RECENT, "[]") ?: "[]") }.getOrDefault(emptyList())
         set(v) = prefs.edit().putString(KEY_RECENT, json.encodeToString(v)).apply()
@@ -134,6 +144,7 @@ class SessionStore(context: Context) {
         const val KEY_TOKEN = "signin"
         const val KEY_RECENT = "recent"
         const val KEY_THEME = "theme:"
+        const val KEY_TOKENS = "tokens:"
         const val KEYSTORE = "AndroidKeyStore"
         const val ALIAS = "wittymediaclient-session"
         const val TRANSFORM = "AES/GCM/NoPadding"

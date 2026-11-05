@@ -75,6 +75,11 @@ import com.wittywilla.wittymediaclient.net.ProfileUpdate
 import com.wittywilla.wittymediaclient.net.TwoFactorSetup
 import com.wittywilla.wittymediaclient.net.TwoFactorStatus
 import com.wittywilla.wittymediaclient.net.User
+import androidx.compose.foundation.shape.RoundedCornerShape
+import com.wittywilla.wittymediaclient.net.cleanName
+import com.wittywilla.wittymediaclient.net.ThemeTranslator
+import com.wittywilla.wittymediaclient.net.ThemeList
+import com.wittywilla.wittymediaclient.net.ThemeColour
 import com.wittywilla.wittymediaclient.net.problemWords
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.delay
@@ -108,10 +113,14 @@ private fun tint(hex: String?): Color = when (hex) {
 }
 
 // The name of what's chosen on Theme: the server's own theme, Automatic, or a theme's name.
-private fun themeName(themes: ThemeFile, choice: String, serverTheme: String, s: Map<String, String>): String = when (choice) {
-    "" -> themes.themes.firstOrNull { it.id == serverTheme }?.name ?: s["themeServer"].orEmpty()
-    AUTO_THEME -> s["themeAutomatic"].orEmpty()
-    else -> themes.themes.firstOrNull { it.id == choice }?.name ?: choice
+private fun themeName(nav: Nav, themes: ThemeFile, choice: String, s: Map<String, String>): String {
+    fun named(id: String) = nav.themeList?.themes?.firstOrNull { it.id == id }?.shownName ?: themes.themes.firstOrNull { it.id == id }?.name
+    return when (choice) {
+        "" -> named(nav.themeId) ?: s["themeServer"].orEmpty()
+        AUTO_THEME -> s["themeAutomatic"].orEmpty()
+        ThemeTranslator.CUSTOM_THEME -> s["themeMadeByYou"].orEmpty()
+        else -> named(choice) ?: choice
+    }
 }
 
 // The You tab.
@@ -171,7 +180,7 @@ fun YouScreen(nav: Nav, s: Map<String, String>) {
                     "rowNames" -> me?.let { avatarName(it.displayName, it.name) }.orEmpty()
                     "rowTwoStep" -> twoStep?.let { s[if (it.on) "on" else "off"] }.orEmpty()
                     "rowDevices" -> deviceCount?.toString().orEmpty()
-                    "rowTheme" -> themeName(themes, nav.themeChoice, nav.themeId, s)
+                    "rowTheme" -> themeName(nav, themes, nav.themeChoice, s)
                     "rowAboutServer" -> version
                     else -> ""
                 },
@@ -1073,12 +1082,17 @@ private fun TvCodeEntry(code: String, checking: Boolean, wrong: Int, modifier: M
 
 private const val TYPED_MOST = 16
 
-// Theme on this device: Automatic, the server's own, or one of the themes, applied at once.
+// Theme on this device (docs/APP-DESIGN.md, Themes, Choosing): Automatic, the server's choice, Made by you when the
+// account has its own look, then every theme the server has, each with a swatch from its preview. Applied at once.
 @Composable
 private fun ThemeScreen(nav: Nav, s: Map<String, String>) {
     val context = LocalContext.current
-    val themes = remember { Assets.themes(context) }
+    val bundled = remember { Assets.themes(context) }
     val choice = nav.themeChoice
+    // The server's list, or the built-ins until it comes.
+    val offered: List<ThemeList.ThemeSummary> = nav.themeList?.themes ?: bundled.themes.map {
+        ThemeList.ThemeSummary(it.id, it.name, it.scheme, preview = ThemeList.Preview(it.colours.background, it.colours.card, it.colours.text, it.colours.accent))
+    }
     val check: @Composable (String) -> Unit = { id ->
         Icon(
             Symbols.Check, contentDescription = null, tint = LocalExtraColours.current.accentText,
@@ -1086,49 +1100,70 @@ private fun ThemeScreen(nav: Nav, s: Map<String, String>) {
         )
     }
     SettingsPage(nav, s["rowTheme"].orEmpty(), s["themeHint"].orEmpty()) {
-        GroupedList(
-            "",
-            listOf(
+        val firsts = buildList {
+            add(
                 GroupRow(
                     s["themeAutomatic"].orEmpty(), onClick = { nav.chooseTheme(AUTO_THEME) }, icon = Symbols.Contrast, tint = Color(0xFF0E7C6F),
                     detail = s["themeAutomaticHint"].orEmpty(), chevron = false, selected = choice == AUTO_THEME, focusKey = "theme-auto",
-                    requestFocus = choice == AUTO_THEME,
-                    trailing = { check(AUTO_THEME) },
+                    requestFocus = choice == AUTO_THEME, trailing = { check(AUTO_THEME) },
                 ),
+            )
+            add(
                 GroupRow(
                     s["themeServer"].orEmpty(), onClick = { nav.chooseTheme("") }, icon = Symbols.Server, tint = Color(0xFF5D6474),
-                    detail = themes.themes.firstOrNull { it.id == nav.themeId }?.name.orEmpty(), chevron = false, selected = choice.isEmpty(),
+                    detail = themeName(nav, bundled, "", s), chevron = false, selected = choice.isEmpty(),
                     focusKey = "theme-server", trailing = { check("") }, requestFocus = choice.isEmpty(),
                 ),
-            ),
-        )
+            )
+            val mine = nav.customTheme
+            if (mine != null) {
+                val made = remember(mine) { ThemeTranslator.translateMade(mine) }
+                add(
+                    GroupRow(
+                        s["themeMadeByYou"].orEmpty(), onClick = { nav.chooseTheme(ThemeTranslator.CUSTOM_THEME) }, chevron = false,
+                        detail = cleanName(mine.name), selected = choice == ThemeTranslator.CUSTOM_THEME, focusKey = "theme-custom",
+                        requestFocus = choice == ThemeTranslator.CUSTOM_THEME,
+                        leading = { Swatch(made.background, made.card, made.accent) }, trailing = { check(ThemeTranslator.CUSTOM_THEME) },
+                    ),
+                )
+            }
+        }
+        GroupedList("", firsts)
         GroupedList(
             "",
-            themes.themes.map { theme ->
+            offered.map { theme ->
+                val p = theme.preview
                 GroupRow(
-                    theme.name, onClick = { nav.chooseTheme(theme.id) }, chevron = false, selected = choice == theme.id, focusKey = "theme-${theme.id}",
+                    theme.shownName, onClick = { nav.chooseTheme(theme.id) }, chevron = false, selected = choice == theme.id,
+                    detail = if (theme.webOnly) s["themeLooksPlainer"].orEmpty() else "", focusKey = "theme-${theme.id}",
                     requestFocus = choice == theme.id,
-                    leading = { Swatch(theme) }, trailing = { check(theme.id) },
+                    leading = {
+                        Swatch(
+                            ThemeColour.parse(p?.bg) ?: ThemeColour.BLACK, ThemeColour.parse(p?.surface) ?: ThemeColour.BLACK,
+                            ThemeColour.parse(p?.accent) ?: ThemeColour.WHITE,
+                        )
+                    },
+                    trailing = { check(theme.id) },
                 )
             },
         )
+        if (offered.any { it.webOnly }) Hint(s["themeWebOnly"].orEmpty())
     }
 }
 
 // A theme at a glance: its page, a card stripe and an accent dot.
 @Composable
-private fun Swatch(theme: ThemeData) {
+private fun Swatch(page: ThemeColour, card: ThemeColour, accent: ThemeColour) {
     val metrics = LocalMetrics.current
     val size = metrics.u(if (metrics.tv) 32 else 28)
-    val c = theme.colours
     Box(
         Modifier
             .size(size)
-            .clip(metrics.corner(7))
-            .background(Color(c.background.toColorInt()))
-            .border(1.dp, MaterialTheme.colorScheme.outline, metrics.corner(7)),
+            .clip(RoundedCornerShape(metrics.u(7)))
+            .background(Color(page.argb))
+            .border(1.dp, MaterialTheme.colorScheme.outline, RoundedCornerShape(metrics.u(7))),
     ) {
-        Box(Modifier.align(Alignment.BottomCenter).fillMaxWidth().height(size * 0.36f).background(Color(c.card.toColorInt())))
-        Box(Modifier.align(Alignment.TopEnd).padding(size * 0.18f).size(size * 0.32f).clip(CircleShape).background(Color(c.accent.toColorInt())))
+        Box(Modifier.align(Alignment.BottomCenter).fillMaxWidth().height(size * 0.36f).background(Color(card.argb)))
+        Box(Modifier.align(Alignment.TopEnd).padding(size * 0.18f).size(size * 0.32f).clip(CircleShape).background(Color(accent.argb)))
     }
 }

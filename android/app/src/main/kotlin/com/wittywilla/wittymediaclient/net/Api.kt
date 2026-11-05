@@ -183,6 +183,17 @@ class Api(val base: String, val token: String, private val quick: Boolean = fals
     suspend fun couchStatus(): CouchStatus = get("/couch")
     suspend fun guide(hours: Int, limit: Int): Guide = get("/guide?hours=$hours&limit=$limit")
 
+    // Themes: docs/APP-DESIGN.md, Themes. The list and each theme's tokens are public; the person's own look is theirs.
+    suspend fun themes(): ThemeList = get("/themes")
+    suspend fun themeTokens(id: String): ThemeTokens = get("/themes/${query(id)}/tokens.json")
+
+    // /me/ui is the web's own settings, any JSON: only customTheme is read, and one that doesn't parse is none.
+    suspend fun customTheme(): ThemeMakerInput? {
+        val ui = json.parseToJsonElement(call("GET", "/me/ui")).jsonObject
+        val made = ui["customTheme"] ?: return null
+        return runCatching { json.decodeFromJsonElement(ThemeMakerInput.serializer(), made) }.getOrNull()
+    }
+
     // You and settings.
     suspend fun updateProfile(id: Long, change: ProfileUpdate): User =
         json.decodeFromString(call("PUT", "/users/$id/profile", json.encodeToString(change)))

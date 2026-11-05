@@ -31,7 +31,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.core.graphics.ColorUtils
-import androidx.core.graphics.toColorInt
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LifecycleEventEffect
 import com.wittywilla.wittymediaclient.WittyApp
@@ -47,6 +46,13 @@ import com.wittywilla.wittymediaclient.net.SendStep
 import com.wittywilla.wittymediaclient.net.ServerProof
 import com.wittywilla.wittymediaclient.net.ServerStatus
 import com.wittywilla.wittymediaclient.net.User
+import androidx.compose.runtime.mutableStateMapOf
+import com.wittywilla.wittymediaclient.net.json
+import com.wittywilla.wittymediaclient.net.ThemeTranslator
+import com.wittywilla.wittymediaclient.net.ThemeTokens
+import com.wittywilla.wittymediaclient.net.ThemeMakerInput
+import com.wittywilla.wittymediaclient.net.ThemeList
+import com.wittywilla.wittymediaclient.net.AppTheme
 import com.wittywilla.wittymediaclient.net.brandLogoUrl
 import com.wittywilla.wittymediaclient.net.GUIDE_PATH
 import com.wittywilla.wittymediaclient.net.findServerById
@@ -148,6 +154,54 @@ class Nav(val app: WittyApp, private val s: Map<String, String>) {
     fun chooseTheme(choice: String) {
         themeChoice = choice
         server?.let { app.store.chooseTheme(it.url, choice) }
+        wantTheme(choice.ifEmpty { themeId })
+    }
+
+    // The server's themes (docs/APP-DESIGN.md, Themes): its list, each one read and translated as it's wanted,
+    // and the person's own look. The built-in ones in shared/data stand in until then.
+    var themeList by mutableStateOf<ThemeList?>(null)
+        private set
+    val themes = mutableStateMapOf<String, AppTheme>()
+    var customTheme by mutableStateOf<ThemeMakerInput?>(null)
+        private set
+
+    // Reads the list, then the themes in use. Quiet on failure: the built-ins and what was kept stand in.
+    fun loadThemes(signedIn: Boolean) {
+        val base = server?.url ?: return
+        val api = app.api
+        app.scope.launch {
+            runCatching { api.themes() }.getOrNull()?.let { if (server?.url == base) themeList = it }
+            wantTheme(themeId)
+            if (themeChoice.isNotEmpty() && themeChoice != AUTO_THEME) wantTheme(themeChoice)
+            if (signedIn) customTheme = runCatching { api.customTheme() }.getOrNull()
+        }
+    }
+
+    // One theme's tokens, from what was kept when its modTime hasn't changed, else from the server.
+    fun wantTheme(id: String) {
+        if (id.isEmpty() || id == AUTO_THEME || id == ThemeTranslator.CUSTOM_THEME) return
+        val base = server?.url ?: return
+        val summary = themeList?.themes?.firstOrNull { it.id == id }
+        val modTime = summary?.modTime ?: 0
+        app.store.themeTokens(base, id, modTime)?.let { kept ->
+            runCatching { json.decodeFromString<ThemeTokens>(kept) }.getOrNull()?.let {
+                themes[id] = ThemeTranslator.translate(it, summary?.preview)
+                return
+            }
+        }
+        val api = app.api
+        app.scope.launch {
+            val tokens = runCatching { api.themeTokens(id) }.getOrNull() ?: return@launch
+            if (server?.url != base) return@launch
+            app.store.keepThemeTokens(base, id, modTime, json.encodeToString(ThemeTokens.serializer(), tokens))
+            themes[id] = ThemeTranslator.translate(tokens, summary?.preview)
+        }
+    }
+
+    private fun forgetThemes() {
+        themeList = null
+        themes.clear()
+        customTheme = null
     }
 
     private fun showBrand(base: String, status: ServerStatus) {
@@ -292,6 +346,7 @@ class Nav(val app: WittyApp, private val s: Map<String, String>) {
             server = it
             app.store.remember(it)
         }
+        loadThemes(status.user != null)
         me = status.user
         reset(if (status.user != null) Route.Home else Route.SignIn())
         null
@@ -336,6 +391,7 @@ class Nav(val app: WittyApp, private val s: Map<String, String>) {
                     themeId = status.theme
                     showBrand(checked.url, status)
                     server = keepBrand(checked, status)
+                    loadThemes(false)
                     reset(Route.SignIn())
                 } catch (_: Exception) {
                     reset(Route.Connect(s["errLost"].orEmpty()))
@@ -374,7 +430,7 @@ class Nav(val app: WittyApp, private val s: Map<String, String>) {
             NextStep.Refuse -> s["identityBad"].orEmpty()
             NextStep.Lost -> s["errUnreachable"].orEmpty()
             NextStep.AskCode -> { push(Route.Code(keepBrand(checked, status))); null }
-            NextStep.SignIn -> { signInTo(keepBrand(checked, status)); null }
+            NextStep.SignIn -> { signInTo(keepBrand(checked, status)); loadThemes(false); null }
             NextStep.Open -> openWithToken(checked)
         }
     }
@@ -436,6 +492,7 @@ class Nav(val app: WittyApp, private val s: Map<String, String>) {
         me = user
         if (!app.store.signedIn(kept, token)) notice = s["notKept"].orEmpty()
         app.api = Api(kept.url, token)
+        loadThemes(true)
         ClientLog.kick()
         forgetScreens()
         reset(Route.Home)
@@ -470,6 +527,8 @@ class Nav(val app: WittyApp, private val s: Map<String, String>) {
         server = null
         me = null
         themeChoice = ""
+        themeId = "default"
+        forgetThemes()
         forgetBrand()
         app.store.server = ""
         app.store.forgetToken()
@@ -507,17 +566,26 @@ fun AppRoot(app: WittyApp) {
     val metrics = if (app.isTv) TvMetrics else if (width >= TABLET_WIDTH_DP) TabletMetrics else PhoneMetrics
     val reduceMotion = remember { runCatching { Settings.Global.getFloat(context.contentResolver, Settings.Global.ANIMATOR_DURATION_SCALE, 1f) == 0f }.getOrDefault(false) }
 
-    // The person's choice on this device, else the server's. Automatic follows the device's light or dark.
+    // The person's choice on this device, else the server's. Automatic follows the device's light or dark; Made by you
+    // is the account's own look, made as the website makes it. A theme not read yet stands in as the built-in one.
     val dark = isSystemInDarkTheme()
-    val shownTheme = when (nav.themeChoice) {
+    val wanted = when (nav.themeChoice) {
         "" -> nav.themeId
         AUTO_THEME -> if (dark) themes.defaultTheme else LIGHT_THEME
         else -> nav.themeChoice
     }
-    val theme = pickTheme(themes, shownTheme)
+    val custom = nav.customTheme
+    val theme = remember(wanted, nav.themes[wanted], custom) {
+        when {
+            wanted == ThemeTranslator.CUSTOM_THEME && custom != null -> ThemeTranslator.translateMade(custom)
+            nav.themes[wanted] != null -> nav.themes.getValue(wanted)
+            else -> bundledTheme(themes, if (wanted == ThemeTranslator.CUSTOM_THEME) nav.themeId else wanted)
+        }
+    }
+    LaunchedEffect(wanted) { nav.wantTheme(wanted) }
     // The system bars follow this app's theme, not the device's: dark icons on a dark page can't be read.
-    DisposableEffect(theme.scheme, theme.colours.background) {
-        (context as? ComponentActivity)?.let { showSystemBars(it, theme.scheme == "light", theme.colours.background.toColorInt()) }
+    DisposableEffect(theme.isLight, theme.background) {
+        (context as? ComponentActivity)?.let { showSystemBars(it, theme.isLight, theme.background.argb or (0xFF shl 24)) }
         onDispose { }
     }
 

@@ -19,7 +19,10 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.core.graphics.toColorInt
+import com.wittywilla.wittymediaclient.net.AppTheme
+import com.wittywilla.wittymediaclient.net.ThemeColour
+import com.wittywilla.wittymediaclient.net.ThemeTokens
+import com.wittywilla.wittymediaclient.net.ThemeTranslator
 import com.wittywilla.wittymediaclient.net.json
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.JsonObject
@@ -62,11 +65,20 @@ object Assets {
     fun notice(context: Context): String = read(context, "NOTICE.txt")
 }
 
-private fun c(hex: String) = Color(hex.toColorInt())
+// A built-in theme as the server's tokens would give it, for the translation layer: so the first screen has
+// colours before any answer, and a server that can't be reached still looks right.
+fun ThemeData.asTokens() = ThemeTokens(
+    id = id, name = name, scheme = scheme,
+    colors = mapOf(
+        "bg" to colours.background, "bg-2" to colours.panel, "bg-3" to colours.card, "border" to colours.border,
+        "fg" to colours.text, "fg-2" to colours.textSecondary, "fg-3" to colours.textHint, "accent" to colours.accent,
+        "accent-fg" to colours.onAccent, "accent-text" to colours.accentText, "danger" to colours.danger, "ok" to colours.ok,
+    ),
+)
 
-// A theme uploaded to the server has no entry here, and gets the default look.
-fun pickTheme(file: ThemeFile, id: String): ThemeData =
-    file.themes.firstOrNull { it.id == id } ?: file.themes.first { it.id == file.defaultTheme }
+// A built-in theme, translated; one this app doesn't know gets the default look.
+fun bundledTheme(file: ThemeFile, id: String): AppTheme =
+    ThemeTranslator.translate((file.themes.firstOrNull { it.id == id } ?: file.themes.first { it.id == file.defaultTheme }).asTokens())
 
 // The 4dp grid.
 object Space {
@@ -104,13 +116,26 @@ data class Metrics(
     // dp in one of the page's units: 1 on a phone or tablet, 0.5 on a TV.
     val unit: Float = 1f,
     val tablet: Boolean = false,
+    // The theme's medium radius (docs/APP-DESIGN.md, Themes): corners follow the theme in use.
+    val themeRadius: Float = 10f,
 )
 
 // A size from the page: points on a phone or tablet, TV units on a TV.
 fun Metrics.u(size: Number): Dp = (size.toFloat() * unit).dp
 
-// The page's radii in the same units: 6 small, 10 medium, 14 large, 20 extra.
-fun Metrics.corner(radius: Int) = RoundedCornerShape(u(radius))
+// The page's radii in the same units, following the theme's: asked for as the default theme's 6 small, 10 medium,
+// 14 large or 20 extra, they're the theme's radius − 4 (at least 2), its radius, + 4 and + 10. Others stay as they are.
+fun Metrics.corner(radius: Int): RoundedCornerShape {
+    val r = themeRadius
+    val shaped = when (radius) {
+        6 -> maxOf(2f, r - 4)
+        10 -> r
+        14 -> r + 4
+        20 -> r + 10
+        else -> radius.toFloat()
+    }
+    return RoundedCornerShape(u(shaped))
+}
 
 val PhoneMetrics = Metrics(tv = false, gutter = Space.S4, edge = Space.S2, cardWidth = 124.dp, minTarget = 44.dp)
 val TabletMetrics = PhoneMetrics.copy(gutter = Space.S8, cardWidth = 148.dp, tablet = true)
@@ -130,7 +155,16 @@ val Metrics.tvSafeEnds get() = u(60)
 val LocalMetrics = compositionLocalOf { PhoneMetrics }
 
 // The colours Material's scheme has no place for.
-data class ExtraColours(val hint: Color, val accentText: Color, val ok: Color)
+data class ExtraColours(
+    val hint: Color,
+    val accentText: Color,
+    val ok: Color,
+    val raised: Color = Color.DarkGray,
+    val control: Color = Color.Gray,
+    val warn: Color = Color.Yellow,
+    val accentPressed: Color = Color.Gray,
+    val scrim: Color = Color.Black,
+)
 
 val LocalExtraColours = compositionLocalOf { ExtraColours(Color.Gray, Color.White, Color.Green) }
 
@@ -186,38 +220,42 @@ val Typography.secondary get() = bodyMedium
 val Typography.caption get() = labelSmall
 
 @Composable
-fun WittyTheme(theme: ThemeData, metrics: Metrics, reduceMotion: Boolean, words: Map<String, String>, content: @Composable () -> Unit) {
-    val t = theme.colours
+fun WittyTheme(theme: AppTheme, metrics: Metrics, reduceMotion: Boolean, words: Map<String, String>, content: @Composable () -> Unit) {
     // A new theme cross-fades in 200 ms, or at once with Reduce Motion.
     @Composable
-    fun shown(hex: String): Color =
-        animateColorAsState(c(hex), if (reduceMotion) snap() else tween(THEME_FADE_MS), label = "theme").value
-    val accent = shown(t.accent)
-    val onAccent = shown(t.onAccent)
-    val background = shown(t.background)
-    val text = shown(t.text)
-    val panel = shown(t.panel)
-    val card = shown(t.card)
-    val secondary = shown(t.textSecondary)
-    val border = shown(t.border)
-    val danger = shown(t.danger)
-    val scheme = if (theme.scheme == "light") {
+    fun shown(c: ThemeColour): Color =
+        animateColorAsState(Color(c.argb), if (reduceMotion) snap() else tween(THEME_FADE_MS), label = "theme").value
+    val accent = shown(theme.accent)
+    val onAccent = shown(theme.onAccent)
+    val background = shown(theme.background)
+    val text = shown(theme.text)
+    val panel = shown(theme.panel)
+    val card = shown(theme.card)
+    val secondary = shown(theme.textSecondary)
+    val border = shown(theme.border)
+    val danger = shown(theme.danger)
+    val control = shown(theme.control)
+    val scheme = if (theme.isLight) {
         lightColorScheme(
             primary = accent, onPrimary = onAccent, background = background, onBackground = text,
             surface = panel, onSurface = text, surfaceVariant = card, onSurfaceVariant = secondary,
-            outline = border, error = danger,
+            outline = border, outlineVariant = control, error = danger,
         )
     } else {
         darkColorScheme(
             primary = accent, onPrimary = onAccent, background = background, onBackground = text,
             surface = panel, onSurface = text, surfaceVariant = card, onSurfaceVariant = secondary,
-            outline = border, error = danger,
+            outline = border, outlineVariant = control, error = danger,
         )
     }
-    val extra = ExtraColours(shown(t.textHint), shown(t.accentText), shown(t.ok))
+    val extra = ExtraColours(
+        shown(theme.textHint), shown(theme.accentText), shown(theme.ok), shown(theme.raised), control,
+        shown(theme.warn), shown(theme.accentPressed), shown(theme.scrim),
+    )
     val type = remember(metrics.tv) { typeScale(if (metrics.tv) TvType else PhoneType) }
     CompositionLocalProvider(
-        LocalMetrics provides metrics, LocalExtraColours provides extra, LocalReduceMotion provides reduceMotion, LocalWords provides words,
+        LocalMetrics provides metrics.copy(themeRadius = theme.radius.toFloat()), LocalExtraColours provides extra,
+        LocalReduceMotion provides reduceMotion, LocalWords provides words,
     ) {
         MaterialTheme(colorScheme = scheme, typography = type, content = content)
     }
