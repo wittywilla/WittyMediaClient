@@ -229,7 +229,7 @@ books and comics in the test media. **Ran** on the desktop is the real app under
 | Tuners, recordings | Page opens. No tuner here | The same | The same | Tuner channels listed, written. Recordings **not available** | Page, written |
 | Home videos | Page opens | Page opens | Page opens | Written | Written |
 | Collections | Page opens, none made | Page opens | Page opens | **Not available**: their titles still appear in libraries | Page, written |
-| Games in the page | Page opens. **No game played**: no core installed in the test server | The same | The same | **Not available** | Page, written |
+| Games in the page | Page opens. **No game played**: no core installed in the test server | The same | The same | **Own screens and player**: the library as couch mode, a game's page, and the server's stream in a native player with controllers, profiles, the game menu and the server's saves. Simulator, through a stand-in, as the local server's runner can't start a game on this Mac: see [WITTYPLAY-STREAMING.md](WITTYPLAY-STREAMING.md) | Page, written |
 | Games on someone's own PC | See [below](#games-on-someones-own-pc) | See below | See below | See below | See below |
 | Settings: libraries, profiles, modules, backup, logs and the rest | Ran: every page opened with no errors | Page opens | Page opens | **Not available**: use a phone or computer | Page, written |
 | Uploading from the device | Written: it opens the system's picker, not run here so as not to open a window | Written | Emulator: the picker opens, and Back returns to the page. No file sent | No | Written, the system's own |
@@ -498,6 +498,10 @@ checked package, no `file://` privileges):
   key, and trusting that key rather than a later one.
 - Starting with a remembered server, another key at it, a server that has gone, a damaged state file and a bad
   certificate, which also proves that listening to `certificate-error` doesn't accept one.
+- A code shown on the screen for a phone to approve: refused, then a new code, then approved and signed in, with the
+  secret that collects it never reaching the page, and nothing asked once the screen is left.
+- TV mode in a window: the words on the left and the actions on the right, the four-unit focus ring, Back, and with Reduce
+  Motion and forced colours emulated, nothing spinning and the QR code still black on white.
 
 On macOS 27 on Apple silicon, `npm run test:app` passes from source too. There it also checks the menu bar (Help, Change server
 only with a server open, zooming the page and not the title bar) and that the title bar leaves the window's buttons and Help to

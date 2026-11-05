@@ -88,8 +88,13 @@ final class ServerPagesTests: XCTestCase {
         func library(_ type: String) throws -> Library {
             try JSONDecoder().decode(Library.self, from: Data(#"{"id":1,"name":"x","type":"\#(type)"}"#.utf8))
         }
-        for type in ["movies", "shows", "music", "audiobooks", "podcasts", "photos"] { XCTAssertTrue(try library(type).opensOnAppleTV, type) }
-        for type in ["books", "radio", "games"] { XCTAssertFalse(try library(type).opensOnAppleTV, type) }
+        for type in ["movies", "shows", "music", "audiobooks", "podcasts", "photos", "games"] { XCTAssertTrue(try library(type).opensOnAppleTV, type) }
+        for type in ["books", "radio"] { XCTAssertFalse(try library(type).opensOnAppleTV, type) }
+        // The server's games have Apple TV's own screens; a PC's games go through Moonlight, as before.
+        XCTAssertTrue(try library("games").hasGameScreens)
+        let rigs = try JSONDecoder().decode(Library.self, from: Data(#"{"id":2,"name":"PC","type":"games","console":"rig"}"#.utf8))
+        XCTAssertFalse(rigs.hasGameScreens)
+        XCTAssertTrue(rigs.isRigGames)
         XCTAssertFalse(try library("music").opensHere, "on iPhone and iPad, music is the server's own page")
     }
 }
