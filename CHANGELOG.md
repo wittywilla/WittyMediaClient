@@ -56,6 +56,12 @@ What changed in WittyMediaClient, newest first. What changed before it had a rep
 - **Desktop on a Mac:** the window has the system's red, yellow and green buttons at the left of the title bar, rather than Windows-style ones
   at the right, and the title sits in the middle. A double-click on the bar does what System Settings say. There's a Mac menu bar, so
   Command-Q, copy and paste work, with Help and Change server in it. Windows, Linux, FreeBSD and TV mode are as they were.
+- **Desktop: the connect screen follows the newer design.** It's WittyMediaClient until a server is added. A server
+  found on the network shows only its address, "Found on your network" and a plain server icon, and says nothing about
+  itself until it's added; one that's also saved is listed once, under Used before, with its own name. Once a server has
+  proved who it is, its own logo shows on its screens and in the list, kept with it so it's there before it answers. On a
+  TV the lockup is larger, every button is a pill, a focused field shows only the focus ring, and a focused number key
+  fills instead of taking a ring.
 - **Desktop: the connect screen looks like the other apps' sign-in.** The glow at the top, the WittyMediaServer mark and name,
   servers as cards with "Last used", a field whose label rises onto its outline, six code boxes over a number pad, and a
   plain warning for a server that has changed. A new server can also be signed in from a phone: the screen shows a code and

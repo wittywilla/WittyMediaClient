@@ -8,6 +8,9 @@ const MAX_RECENT = 8
 const MIN_WINDOW = 100
 const MAX_WINDOW = 32768
 const LIMITS = { name: 80, serverId: 128, publicKey: 64, fingerprint: 32 }
+// A server's own logo, as the picture itself, so the list can show it before the server answers.
+const LOGO = /^data:image\/(png|jpeg|webp|gif|svg\+xml);base64,[A-Za-z0-9+/]+={0,2}$/
+const MAX_LOGO = 360 * 1024
 
 const isServerUrl = (url) => typeof url === 'string' && normalizeAddress(url).url === url
 
@@ -17,7 +20,17 @@ function cleanEntry(entry) {
   for (const [key, max] of Object.entries(LIMITS)) {
     if (typeof entry[key] === 'string' && entry[key] && entry[key].length <= max) out[key] = entry[key]
   }
+  const logo = cleanLogo(entry.logo)
+  if (logo) out.logo = logo
   return out
+}
+
+function cleanLogo(logo) {
+  if (!logo || typeof logo !== 'object') return null
+  const { version, data } = logo
+  if (typeof version !== 'string' || !version || version.length > 64) return null
+  if (typeof data !== 'string' || data.length > MAX_LOGO || !LOGO.test(data)) return null
+  return { version, data }
 }
 
 const windowSide = (n) => Number.isInteger(n) && n >= MIN_WINDOW && n <= MAX_WINDOW
@@ -65,10 +78,14 @@ function save(file, state) {
   }
 }
 
-// The most recent first, once per address and once per server.
+// The most recent first, once per address and once per server. A logo left out keeps the one
+// already kept for that address; null says the server has none now.
 function remember(state, server) {
   const entry = { url: server.url, name: server.name }
   for (const key of ['serverId', 'publicKey', 'fingerprint']) if (server[key]) entry[key] = server[key]
+  const before = (state.recent || []).find((s) => s.url === server.url)
+  const logo = cleanLogo(server.logo === undefined ? before && before.logo : server.logo)
+  if (logo) entry.logo = logo
   const others = (state.recent || []).filter((s) => s.url !== server.url && (!server.serverId || s.serverId !== server.serverId))
   return { ...state, server: server.url, recent: [entry, ...others].slice(0, MAX_RECENT) }
 }
