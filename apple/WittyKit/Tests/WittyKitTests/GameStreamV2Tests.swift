@@ -186,4 +186,40 @@ final class GameStreamV2Tests: XCTestCase {
         XCTAssertFalse(GameDeviceType(id: 259, name: "Power Pad A").isController, "a floor mat")
         XCTAssertTrue(GameDeviceType(id: 1, name: "MD Joypad 6 Button").isController)
     }
+
+    // MARK: WebRTC
+
+    func testWebRTCComesFirstWhereTheAppHasIt() throws {
+        let modes = [GameMode(id: "webrtc", video: ["h264"], stream: 2), GameMode(id: "ws-h264"), GameMode(id: "ws-jpeg")]
+        XCTAssertEqual(GameModes.order(modes, webRTC: true), [GameModes.streamWebRTC, GameModes.streamWebSocket, "ws-h264", "ws-jpeg"])
+        XCTAssertEqual(GameModes.order(modes, webRTC: false), [GameModes.streamWebSocket, "ws-h264", "ws-jpeg"])
+        XCTAssertEqual(GameModes.order([GameMode(id: "ws-h264")], webRTC: true), ["ws-h264"], "no second stream, no WebRTC")
+        XCTAssertEqual(GameModes.firstPictureWait(GameModes.streamWebRTC), 8)
+        XCTAssertEqual(GameModes.firstPictureWait(GameModes.streamWebSocket), 12)
+    }
+
+    func testTheOfferAndItsAnswer() throws {
+        let client = WittyClient(base: "https://media.example", token: "secret")
+        let request = try XCTUnwrap(client.gameStreamOfferRequest("g 1"))
+        XCTAssertEqual(request.httpMethod, "POST")
+        XCTAssertEqual(request.url?.absoluteString, "https://media.example/api/v1/play/g%201/stream")
+        XCTAssertEqual(request.value(forHTTPHeaderField: "Authorization"), "Bearer secret")
+        XCTAssertEqual(request.value(forHTTPHeaderField: "Content-Type"), "application/json")
+
+        let hello = GameHello(app: "a", device: "d", name: "n", seats: [0], display: .init(hz: 60, width: 1, height: 1))
+        let body = try XCTUnwrap(JSONSerialization.jsonObject(with: GameStreamOffer.body(hello: hello, sdp: "v=0 offer")) as? [String: Any])
+        XCTAssertEqual(body["sdp"] as? String, "v=0 offer")
+        let sent = try XCTUnwrap(body["hello"] as? [String: Any])
+        XCTAssertEqual(sent["v"] as? Int, 2)
+        XCTAssertNil(sent["type"], "the hello as itself in the offer, not as a WebSocket message")
+
+        let answer = try XCTUnwrap(GameStreamOffer.answer(Data(#"{"sdp":"v=0 answer","stream":{"v":2,"conn":"k9","transport":"webrtc","video":"h264","audio":"opus","width":512,"height":448,"ports":4}}"#.utf8)))
+        XCTAssertEqual(answer.sdp, "v=0 answer")
+        XCTAssertEqual(answer.stream?.conn, "k9")
+        XCTAssertEqual(answer.stream?.transport, "webrtc")
+        XCTAssertNil(GameStreamOffer.answer(Data(#"{"error":"no such game","code":"no-session"}"#.utf8)))
+        XCTAssertEqual(GameStreamOffer.end(status: 404), .gone)
+        XCTAssertEqual(GameStreamOffer.end(status: 415), .unreachable, "no codec in common: try the WebSocket")
+        XCTAssertEqual(GameStreamOffer.end(status: 500), .unreachable)
+    }
 }

@@ -90,7 +90,7 @@ The FreeBSD package holds only the app, under a megabyte, and uses the system's 
 - A WittyMediaServer to connect to. The native apps talk to its client API, which is in **Help** inside the server.
 - **Desktop:** Windows 10 or later, macOS, Linux on x64, FreeBSD on amd64, or Plasma Bigscreen. It brings its own Electron, except on FreeBSD, where the package brings in the system's.
 - **Android:** Android 6 or later, on ARM or x86, 32-bit or 64-bit, in one APK. Fire TV needs Fire OS 6 or later.
-- **Apple:** iOS 16, tvOS 16, or visionOS 2, or later. A Mac has the desktop app.
+- **Apple:** iOS 16, tvOS 17, or visionOS 2, or later. A Mac has the desktop app.
 - **Games on a PC:** the Moonlight app, installed separately, only where it's the fallback.
 
 ## Platforms

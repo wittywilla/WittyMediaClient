@@ -32,6 +32,9 @@ public enum GameTransportEnd: Equatable {
     case gone
     /// The connection dropped. The game waits a minute, paused, for a new one.
     case dropped
+    /// This way of connecting didn't get through (no ICE in 5 seconds, or the server refused it):
+    /// the next way should be tried.
+    case unreachable
 
     /// From the HTTP status the WebSocket's upgrade answered, or 0 when there was none.
     public init(upgradeStatus: Int) {
@@ -40,10 +43,17 @@ public enum GameTransportEnd: Equatable {
 }
 
 public enum GameTransports {
+    /// The app's WebRTC transport, where it has one: given the `POST /play/{sid}/stream` request and
+    /// the device's hello. WittyKit has no WebRTC stack of its own.
+    nonisolated(unsafe) public static var webRTC: ((_ offer: URLRequest, _ hello: GameHello) -> GameTransport?)?
+
     /// A transport for one of `GameModes.supported`, for a session; nil for a mode this app
     /// can't use or an address that can't be made. The second stream needs the device's hello.
     public static func make(mode: String, session: String, client: WittyClient, hello: GameHello? = nil) -> GameTransport? {
         switch mode {
+        case GameModes.streamWebRTC:
+            guard let hello, let request = client.gameStreamOfferRequest(session) else { return nil }
+            return webRTC?(request, hello)
         case GameModes.streamWebSocket:
             guard let hello, let request = client.gameStreamRequest(session) else { return nil }
             return GameWebSocketTransport(request: request, hello: hello)

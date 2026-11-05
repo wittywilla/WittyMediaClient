@@ -112,6 +112,17 @@ extension WittyClient {
 
     /// The WebSocket for a game: `video` is `h264` or `jpeg`. The sign-in goes in its header, as
     /// for every other request, and never in the address.
+    /// The second stream's WebRTC offer, `POST /play/{sid}/stream`, signed in by header.
+    public func gameStreamOfferRequest(_ sid: String) -> URLRequest? {
+        guard let url = mediaURL("/api/v1/play/\(Self.pathPart(sid))/stream") else { return nil }
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.timeoutInterval = 15
+        for (name, value) in authHeaders { request.setValue(value, forHTTPHeaderField: name) }
+        return request
+    }
+
     /// The second stream's WebSocket: the hello goes first, as text.
     public func gameStreamRequest(_ sid: String) -> URLRequest? {
         socketRequest("/api/v1/play/\(Self.pathPart(sid))/stream")

@@ -187,6 +187,10 @@ private final class GamePipeline: @unchecked Sendable {
                 sound.play(samples, rate: rate)
             case .opus(_, let packet):
                 if let samples = opus?.decode(packet) { sound.play(samples, rate: GameOpusDecoder.rate) }
+            case .picture(let pixels):
+                // Decoded by the transport itself, as WebRTC does.
+                renderer?.show(pixels)
+                draw()
             case .timing, .unknown:
                 break
             }
@@ -491,6 +495,13 @@ final class GamePlayerModel: ObservableObject {
 
     private func connectionLost(_ end: GameTransportEnd) {
         guard !stopped else { return }
+        // This way didn't get through before any picture: the next way, at once.
+        if end == .unreachable, !hadPicture, modeAt + 1 < modes.count {
+            modeAt += 1
+            say("Trying another way of sending the picture")
+            connect()
+            return
+        }
         // Gone from the server: stopped from elsewhere, another game started, or left too long.
         if end == .gone {
             finish(saying: "This game has stopped. It may have been started on another device, or left for more than a minute.")
@@ -522,7 +533,7 @@ final class GamePlayerModel: ObservableObject {
         if Date().timeIntervalSince(framesAt) > 60 {
             // The server keeps a game for a minute with nobody connected: past that, it's gone.
             finish(saying: "The game's picture stopped coming. Check the network, then start the game again: it saved where you were.")
-        } else if phase == .connecting, Date().timeIntervalSince(connectedAt) > 12 {
+        } else if phase == .connecting, Date().timeIntervalSince(connectedAt) > GameModes.firstPictureWait(modes[min(modeAt, modes.count - 1)]) {
             // No first picture: the next way of sending. A picture that stopped: the same way again.
             if !hadPicture, modeAt + 1 < modes.count {
                 modeAt += 1
@@ -640,7 +651,7 @@ final class GamePlayerModel: ObservableObject {
     /// shown twice. Once it has, the server is told, and paces the game to it.
     private func matchRefresh(fps: Double?, width: Int, height: Int) {
         #if os(tvOS)
-        guard #available(tvOS 17.0, *), let fps, fps > 0, !matchedDisplay,
+        guard let fps, fps > 0, !matchedDisplay,
               let manager = host.view.window?.avDisplayManager, manager.isDisplayCriteriaMatchingEnabled else { return }
         var format: CMVideoFormatDescription?
         CMVideoFormatDescriptionCreate(allocator: nil, codecType: kCMVideoCodecType_H264, width: Int32(max(1, width)),

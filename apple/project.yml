@@ -4,9 +4,9 @@ name: WittyMedia
 options:
   bundleIdPrefix: com.wittywilla
   deploymentTarget:
-    # tvOS 16 is what every Apple TV HD and 4K can run, and what NavigationStack needs.
+    # tvOS 17 runs on every Apple TV HD and 4K, and is what WebRTC (LiveKit's libwebrtc) needs for games.
     iOS: "16.0"
-    tvOS: "16.0"
+    tvOS: "17.0"
     # Every Apple Vision Pro can run visionOS 2.
     visionOS: "2.0"
   createIntermediateGroups: true

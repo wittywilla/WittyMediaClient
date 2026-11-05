@@ -159,3 +159,35 @@ public enum GameMotion {
         return out
     }
 }
+
+/// WebRTC's signalling on the second stream: one `POST /play/{sid}/stream` with the hello and the
+/// offer, answered with the stream's description and the answer, which holds the server's candidates.
+public enum GameStreamOffer {
+    public static func body(hello: GameHello, sdp: String) -> Data {
+        let encoder = JSONEncoder()
+        encoder.outputFormatting = .sortedKeys
+        let helloObject = (try? encoder.encode(hello)).flatMap { try? JSONSerialization.jsonObject(with: $0) } ?? [:]
+        let object: [String: Any] = ["hello": helloObject, "sdp": sdp]
+        return (try? JSONSerialization.data(withJSONObject: object, options: .sortedKeys)) ?? Data()
+    }
+
+    /// The answer's SDP, and the stream's description as the first event would say it.
+    public static func answer(_ data: Data) -> (sdp: String, stream: GameStreamDescription?)? {
+        guard let object = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+              let sdp = object["sdp"] as? String, !sdp.isEmpty else { return nil }
+        var stream: GameStreamDescription?
+        if var description = object["stream"] as? [String: Any] {
+            description["type"] = "stream"
+            if let text = (try? JSONSerialization.data(withJSONObject: description)).map({ String(decoding: $0, as: UTF8.self) }),
+               case .stream(let s)? = GameEvent.parse(text) {
+                stream = s
+            }
+        }
+        return (sdp, stream)
+    }
+
+    /// What a refused offer means: gone when the game or the sign-in is, else try the next way.
+    public static func end(status: Int) -> GameTransportEnd {
+        [401, 403, 404, 410].contains(status) ? .gone : .unreachable
+    }
+}
