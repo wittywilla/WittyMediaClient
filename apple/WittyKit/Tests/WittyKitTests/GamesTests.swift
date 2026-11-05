@@ -117,6 +117,23 @@ final class GamesTests: XCTestCase {
         XCTAssertEqual(secure.gameSocketRequest("a", video: "jpeg")?.url?.scheme, "wss")
     }
 
+    func testTransportsByMode() {
+        let client = WittyClient(base: "http://127.0.0.1:9797", token: "t")
+        XCTAssertTrue(GameTransports.make(mode: "ws-h264", session: "s", client: client) is GameWebSocketTransport)
+        XCTAssertTrue(GameTransports.make(mode: "ws-jpeg", session: "s", client: client) is GameWebSocketTransport)
+        XCTAssertNil(GameTransports.make(mode: "webrtc", session: "s", client: client), "not one this app has yet")
+        let hello = GameHello(app: "a", device: "d", name: "n", seats: [0], display: .init(hz: 60, width: 1, height: 1))
+        for mode in GameModes.supported where mode != GameModes.streamWebRTC {
+            XCTAssertNotNil(GameTransports.make(mode: mode, session: "s", client: client, hello: hello), "every mode the app asks for has a transport")
+        }
+        XCTAssertNil(GameTransports.make(mode: GameModes.streamWebRTC, session: "s", client: client, hello: hello), "WebRTC is the app's to give")
+    }
+
+    func testAGameGoneFromTheServerIsNotConnectedAgain() {
+        for status in [401, 403, 404, 410] { XCTAssertEqual(GameTransportEnd(upgradeStatus: status), .gone) }
+        for status in [0, 101, 429, 500, 502, 503] { XCTAssertEqual(GameTransportEnd(upgradeStatus: status), .dropped) }
+    }
+
     // MARK: Words
 
     func testWords() {
@@ -402,7 +419,7 @@ final class GamesTests: XCTestCase {
 
     func testEvents() {
         XCTAssertEqual(GameEvent.parse(#"{"type":"hello","video":"h264"}"#), .hello(video: "h264"))
-        XCTAssertEqual(GameEvent.parse(#"{"type":"rumble","port":1,"effect":0,"strength":65535}"#), .rumble(port: 1, strength: 1))
+        XCTAssertEqual(GameEvent.parse(#"{"type":"rumble","port":1,"effect":0,"strength":65535}"#), .rumble(port: 1, strength: 1, motor: .strong))
         XCTAssertEqual(GameEvent.parse(#"{"type":"geometry","width":320,"height":240,"aspect":1.333}"#), .geometry(width: 320, height: 240, aspect: 1.333))
         XCTAssertEqual(GameEvent.parse(#"{"type":"ended","text":"The game stopped responding."}"#), .ended("The game stopped responding."))
         XCTAssertEqual(GameEvent.parse(#"{"type":"disc","index":1,"count":3}"#), .disc(index: 1, count: 3))
@@ -471,5 +488,18 @@ final class GamesTests: XCTestCase {
         {"port":1,"current":1,"types":[{"id":0,"name":"None"},{"id":257,"name":"SNES Controller"},{"id":513,"name":"Multitap"}]}
         """.utf8))
         XCTAssertNil(snes.padForNewPlayer(plugged: nil), "not on Auto: left as the server plugged it")
+    }
+
+    func testTheWebsitesPlayAddressStartsTheSameWay() {
+        XCTAssertEqual(WebPlayer.serverGame("/game/12")?.id, 12)
+        XCTAssertEqual(WebPlayer.serverGame("/game/12")?.start, .fresh, "Play and Start over")
+        XCTAssertEqual(WebPlayer.serverGame("/game/12?resume=1")?.start, .resume)
+        XCTAssertEqual(WebPlayer.serverGame("/game/12?slot=3")?.start, .slot(3))
+        XCTAssertEqual(WebPlayer.serverGame("/game/12?slot=0")?.start, .fresh)
+        XCTAssertEqual(WebPlayer.serverGame("/game/12?safe=1&resume=1")?.start, .safe(resume: true))
+        XCTAssertEqual(WebPlayer.serverGame("/game/12?safe=1")?.start, .safe(resume: false))
+        XCTAssertNil(WebPlayer.serverGame("/games/game/12"))
+        XCTAssertNil(WebPlayer.serverGame("/game/x"))
+        XCTAssertNil(WebPlayer.serverGame("/item/12"))
     }
 }

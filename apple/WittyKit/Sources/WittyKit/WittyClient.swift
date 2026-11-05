@@ -286,12 +286,318 @@ public final class WittyClient: @unchecked Sendable {
 
     public func libraries() async throws -> [Library] { try await list("/libraries") }
 
+    // MARK: A library's page and saving, as the website has them: see Browse.swift
+
+    /// A film or TV library's categories, studios, networks, collections and services, which its page starts with.
+    public func shelves(library: Int64) async throws -> Shelves { try await get("/browse/shelves?library=\(library)") }
+
+    /// Films and shows in a library, sorted and filtered: a row, or a page of a grid.
+    public func browse(_ query: BrowseQuery, offset: Int = 0, limit: Int = 20) async throws -> BrowseResult {
+        try await get(query.path(offset: offset, limit: limit))
+    }
+
+    /// The player's settings from the server: the speed limit.
+    public func prefs() async throws -> ServerPrefs { try await get("/prefs") }
+
+    /// Something to watch next when there's no next episode, for the player's Watch next.
+    public func recommend(after item: Int64) async throws -> Recommendation { try await get("/items/\(item)/recommend") }
+
+    // MARK: Music, as the website's player has it: see MusicLook.swift
+
+    /// A song's lyrics, looked for online when the server has none yet and may.
+    public func lyrics(item: Int64) async throws -> Lyrics { try await get("/music/lyrics/\(item)?fetch=1") }
+
+    /// The listener's own timing for a song's words.
+    public func setLyricsOffset(item: Int64, ms: Double) async throws {
+        _ = try await call("PUT", "/music/lyrics/\(item)/offset", body: try JSONEncoder().encode(["offsetMs": ms]))
+    }
+
+    /// What this connection carries, in kilobits a second, for a robust stream: up to 4 MB of bytes that don't
+    /// compress, timed for about a second from the first bytes (docs/CLIENT-API.md, Robust streaming). 0 when it
+    /// couldn't be measured.
+    public func measureSpeed() async -> Double {
+        guard let url = URL(string: "\(base)\(apiPath)/playback/speedtest?kb=1024") else { return 0 }
+        var request = URLRequest(url: url, cachePolicy: .reloadIgnoringLocalCacheData, timeoutInterval: 3)
+        if !token.isEmpty { request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization") }
+        // A session of its own: the shared one's guard looks after the API's answers, which this isn't.
+        let config = URLSessionConfiguration.ephemeral
+        config.httpCookieStorage = nil
+        config.urlCredentialStorage = nil
+        config.urlCache = nil
+        let timing = URLSession(configuration: config)
+        defer { timing.finishTasksAndInvalidate() }
+        guard let (bytes, response) = try? await timing.bytes(for: request), (response as? HTTPURLResponse)?.statusCode == 200 else { return 0 }
+        var got = 0
+        var first: Date?
+        do {
+            for try await _ in bytes {
+                if first == nil { first = Date() }
+                got += 1
+                if got % 65_536 == 0, let first, Date().timeIntervalSince(first) > 1.5 { break }
+            }
+        } catch {}
+        guard let first, got > 65_536 else { return 0 }
+        let seconds = max(0.05, Date().timeIntervalSince(first))
+        return (Double(got) * 8 / 1000 / seconds).rounded()
+    }
+
+    /// The volume correction a song is tagged with.
+    public func loudness(item: Int64) async throws -> Loudness { try await get("/music/loudness/\(item)") }
+
+    /// Booklets and text beside a song's album.
+    public func extras(item: Int64) async throws -> [Extra] { try await list("/music/extras/\(item)") }
+
+    /// One of those, as text.
+    public func extraText(item: Int64, name: String) async throws -> String {
+        struct Text: Decodable { let text: String }
+        let text: Text = try await get("/music/extras/\(item)/file?name=\(name.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? name)")
+        return text.text
+    }
+
+    /// One of those as it is: a booklet's PDF.
+    public func extraFile(item: Int64, name: String) -> URL? {
+        URL(string: "\(base)\(apiPath)/music/extras/\(item)/file?name=\(name.addingPercentEncoding(withAllowedCharacters: .alphanumerics) ?? name)")
+    }
+
+    /// Other versions of a song's words online (an owner's).
+    public func searchLyrics(item: Int64, query: String) async throws -> [FoundLyrics] {
+        try decoder.decode([FoundLyrics].self, from: try await call("POST", "/music/lyrics/\(item)/search", body: try JSONEncoder().encode(["q": query])))
+    }
+
+    /// Corrects a song's words on this server: one found online, the listener's own text, or none at all.
+    public func chooseLyrics(item: Int64, provider: String, id: String) async throws {
+        _ = try await call("PUT", "/music/lyrics/\(item)", body: try JSONEncoder().encode(["provider": provider, "id": id]))
+    }
+
+    public func saveLyrics(item: Int64, text: String) async throws {
+        _ = try await call("PUT", "/music/lyrics/\(item)", body: try JSONEncoder().encode(["text": text]))
+    }
+
+    public func markInstrumental(item: Int64) async throws {
+        _ = try await call("PUT", "/music/lyrics/\(item)", body: try JSONEncoder().encode(["instrumental": true]))
+    }
+
+    /// Back to what was found.
+    public func forgetLyrics(item: Int64) async throws { _ = try await call("DELETE", "/music/lyrics/\(item)") }
+
+    /// The person's interface choices, kept whole on the server: one part is changed and the rest kept.
+    public func interfaceChoice<T: Decodable>(_ key: String, as type: T.Type) async throws -> T? {
+        let data = try await call("GET", "/me/ui")
+        guard let whole = try JSONSerialization.jsonObject(with: data) as? [String: Any], let part = whole[key] else { return nil }
+        return try decoder.decode(T.self, from: try JSONSerialization.data(withJSONObject: part, options: [.fragmentsAllowed]))
+    }
+
+    public func setInterfaceChoice<T: Encodable>(_ key: String, _ value: T) async throws {
+        let data = try await call("GET", "/me/ui")
+        var whole = (try? JSONSerialization.jsonObject(with: data) as? [String: Any]) ?? [:]
+        whole[key] = try JSONSerialization.jsonObject(with: try JSONEncoder().encode(value), options: [.fragmentsAllowed])
+        _ = try await call("PUT", "/me/ui", body: try JSONSerialization.data(withJSONObject: whole))
+    }
+
+    /// The songs this person likes in a library.
+    public func likes(library: Int64) async throws -> [Int64] { try await list("/music/likes?library=\(library)") }
+
+    public func setLike(item: Int64, _ on: Bool) async throws {
+        _ = try await call("PUT", "/items/\(item)/reaction", body: try JSONEncoder().encode(["value": on ? 1 : 0]))
+    }
+
+    /// A station made from one song: songs like it, that one first.
+    public func radio(from item: Int64) async throws -> [Item] { try await list("/music/radio/\(item)") }
+
+    /// A new playlist of the person's own.
+    public func makePlaylist(named name: String) async throws -> TitleCollection {
+        try decoder.decode(TitleCollection.self, from: try await call("POST", "/collections", body: try JSONEncoder().encode(["name": name, "kind": "manual"])))
+    }
+
+    public func addToCollection(_ collection: Int64, items: [Int64]) async throws {
+        _ = try await call("POST", "/collections/\(collection)/items", body: try JSONEncoder().encode(["items": items]))
+    }
+
+    /// Home's "Because you watch…" row.
+    public func recommended() async throws -> Recommended { try await get("/me/recommended") }
+
+    /// How this person arranged Home, and the newer version they put off, in one asking.
+    public func homeChoices() async throws -> HomeChoices { try await get("/me/ui") }
+
+    public func saveHomeLayout(_ layout: HomeLayout) async throws { try await setInterfaceChoice("home", layout) }
+
+    /// Later, on the notice of a newer server: hidden until the version after this one.
+    public func putOffUpdate(_ version: String) async throws { try await setInterfaceChoice("updateLater", version) }
+
+    /// What's on the first channels now, for Home's On TV now.
+    public func onNow() async throws -> Guide { try await get("/guide?hours=1&limit=\(OnNowLook.limit)") }
+
+    /// One film or disc at random, for Can't decide?. Nil when there's nothing to choose from.
+    public func shuffle() async throws -> Item? {
+        let page: ItemPage = try await get("/items?sort=random&limit=1&noEpisodes=1&watchable=1")
+        return page.items?.first
+    }
+
+    /// What's installed and what's available, for administrators. A build that can't update itself answers 404.
+    public func updateStatus() async throws -> UpdateStatus { try await get("/update") }
+
+    /// What a library's titles can be filtered by, for the Filters sheet.
+    public func facets(library: Int64) async throws -> Facets { try await get("/browse/facets?library=\(library)") }
+
+    /// Looks through a library's folders again. Administrators only.
+    public func scan(library: Int64) async throws {
+        _ = try await call("POST", "/libraries/\(library)/scan", body: Data("{}".utf8))
+    }
+
+    /// Whether a library is being scanned, and how far it has got.
+    public func scanState(library: Int64) async throws -> ScanState { try await get("/libraries/\(library)/scan") }
+
+    /// The account's saved views, of every library.
+    public func savedViews() async throws -> [SavedView] {
+        struct Answer: Decodable { let views: [SavedView]? }
+        let answer: Answer = try await get("/views")
+        return answer.views ?? []
+    }
+
+    /// Saves a view of a library: its filters and sort, as `LibraryState.savedQuery` writes them.
+    @discardableResult
+    public func saveView(library: Int64, name: String, query: String, pinned: Bool) async throws -> SavedView {
+        try decoder.decode(SavedView.self, from: try await call("POST", "/views", body: Self.savedViewBody(library: library, name: name, query: query, pinned: pinned)))
+    }
+
+    static func savedViewBody(library: Int64, name: String, query: String, pinned: Bool) throws -> Data {
+        struct Body: Encodable { let libraryId: Int64; let name: String; let query: String; let pinned: Bool }
+        return try JSONEncoder().encode(Body(libraryId: library, name: name, query: query, pinned: pinned))
+    }
+
+    /// How many of a library's titles wait for an administrator to check their match.
+    public func matchesWaiting(library: Int64) async throws -> Int {
+        struct Answer: Decodable { let counts: [String: Int]? }
+        let answer: Answer = try await get("/match/queue?library=\(library)&limit=1")
+        return answer.counts?["review"] ?? 0
+    }
+
+    public func listingStatus() async throws -> ListingStatus { try await get("/listings/status") }
+
+    /// What to show for studios, networks and services: a logo, or the name. 200 names at most, as the server takes.
+    public func logos(_ names: [LogoRef]) async throws -> [LogoInfo] {
+        guard !names.isEmpty else { return [] }
+        struct Answer: Decodable { let logos: [LogoInfo]? }
+        let body = try JSONEncoder().encode(["logos": Array(names.prefix(200))])
+        return try decoder.decode(Answer.self, from: try await call("POST", "/logos/lookup", body: body)).logos ?? []
+    }
+
+    /// A logo's picture: `white`, `dark` or `original` (see `LogoLook.variant`).
+    public func logoURL(_ logo: LogoInfo, variant: String) -> URL? {
+        guard let id = logo.id else { return nil }
+        return URL(string: "\(base)\(apiPath)/logos/\(id)/image?variant=\(Self.queryValue(variant))&v=\(logo.version ?? 0)")
+    }
+
+    public func collections() async throws -> [TitleCollection] { try await list("/collections") }
+
+    /// The collections that already hold this item.
+    public func collectionsHolding(item: Int64) async throws -> [Int64] { try await list("/collections/holding?item=\(item)&show=0") }
+
+    /// Adds to the person's own Watch later, making it the first time. Says which collection that is.
+    @discardableResult
+    public func saveForLater(item: Int64) async throws -> Int64 {
+        struct Answer: Decodable { let collectionId: Int64? }
+        let data = try await call("POST", "/collections/watch-later/items", body: try JSONEncoder().encode(["items": [item]]))
+        return (try? decoder.decode(Answer.self, from: data))?.collectionId ?? 0
+    }
+
+    public func setInCollection(_ collection: Int64, item: Int64, _ inIt: Bool) async throws {
+        _ = try await call(inIt ? "POST" : "DELETE", "/collections/\(collection)/items", body: try JSONEncoder().encode(["items": [item]]))
+    }
+
     /// Albums, books or podcasts: by `title`, `artist`, `added` or `year`. With an artist, only theirs.
     public func albums(library: Int64, sort: String, artist: String? = nil) async throws -> [Album] {
         try await list("/music/albums?library=\(library)&sort=\(Self.queryValue(sort))" + (artist.map { "&artist=\(Self.queryValue($0))" } ?? ""))
     }
 
     public func artists(library: Int64) async throws -> [Artist] { try await list("/music/artists?library=\(library)") }
+
+    /// Modules' pages for the menus.
+    public func moduleBundles() async throws -> [ModuleBundle] {
+        struct Answer: Decodable { let bundles: [ModuleBundle]? }
+        let answer: Answer = try await get("/modules/web")
+        return answer.bundles ?? []
+    }
+
+    /// What the server is busy with, for those the owner lets see it.
+    public func activity() async throws -> ActivityTasks { try await get("/system/tasks") }
+
+    /// Pause, resume, cancel or retry a task.
+    public func taskAction(_ id: String, _ action: String) async throws {
+        _ = try await call("POST", "/system/tasks/\(Self.queryValue(id))/\(action)", body: Data("{}".utf8))
+    }
+
+    /// What's finished lately, newest first; only the failed ones if asked.
+    public func taskHistory(failed: Bool, before: Double? = nil, limit: Int = 30) async throws -> [ActivityTasks.Task] {
+        struct Answer: Decodable { let tasks: [ActivityTasks.Task]? }
+        var path = "/system/tasks/history?limit=\(limit)"
+        if failed { path += "&state=failed" }
+        if let before { path += "&before=\(Int(before))" }
+        let answer: Answer = try await get(path)
+        return answer.tasks ?? []
+    }
+
+    /// A listening library's front page.
+    public func musicHome(library: Int64) async throws -> MusicHome { try await get("/music/home?library=\(library)") }
+
+    /// Albums of one genre, or of one artist, in an order.
+    public func albums(library: Int64, sort: String, genre: String) async throws -> [Album] {
+        try await list("/music/albums?library=\(library)&sort=\(Self.queryValue(sort))&genre=\(Self.queryValue(genre))")
+    }
+
+    /// The songs the Songs tab shows: a view (liked, played, recent, added), sorted, of a genre, matching words.
+    public func songs(library: Int64, view: String, sort: String, desc: Bool, genre: String, search: String, limit: Int) async throws -> [Item] {
+        var path = "/music/songs?library=\(library)&limit=\(limit)"
+        if !view.isEmpty { path += "&view=\(Self.queryValue(view))" }
+        if view.isEmpty || view == "liked" {
+            path += "&sort=\(Self.queryValue(sort))"
+            if desc { path += "&desc=1" }
+        }
+        if !genre.isEmpty { path += "&genre=\(Self.queryValue(genre))" }
+        if !search.isEmpty { path += "&search=\(Self.queryValue(search))" }
+        return try await list(path)
+    }
+
+    /// Every song, in a random order: Play my music.
+    public func shuffledSongs(library: Int64, limit: Int = 500) async throws -> [Item] {
+        try await list("/music/songs?library=\(library)&sort=random&limit=\(limit)")
+    }
+
+    /// The genres in a library.
+    public func genres(library: Int64) async throws -> [String] { try await list("/genres?library=\(library)") }
+
+    /// An artist's or author's page.
+    public func artistPage(library: Int64, name: String) async throws -> ArtistPageInfo {
+        try await get("/music/artist?library=\(library)&name=\(Self.queryValue(name))")
+    }
+
+    /// An artist's picture, or a cover of theirs.
+    public func artistPhotoURL(library: Int64, name: String) -> URL? {
+        URL(string: "\(base)\(apiPath)/music/artist-photo?library=\(library)&name=\(Self.queryValue(name))")
+    }
+
+    /// A title's picture by its number, for an album or a playlist cover.
+    public func posterURL(id: Int64) -> URL? { URL(string: "\(base)\(apiPath)/items/\(id)/poster") }
+
+    /// A music library's Music videos: the videos of every music video library this person can see, by artist, a
+    /// page at a time, each with the song it's tied to. See MusicVideos.swift.
+    public func musicVideos(search: String, offset: Int, limit: Int = MusicVideos.pageSize) async throws -> MusicVideoPage {
+        try await get(MusicVideos.path(search: search, offset: offset, limit: limit))
+    }
+
+    /// The newest music videos, for a music library's Home.
+    public func latestMusicVideos() async throws -> MusicVideoPage { try await get(MusicVideos.latestPath) }
+
+    /// What a song or a music video is tied to: a song's videos, a video's song.
+    public func musicLinks(item: Int64) async throws -> MusicLinks { try await get("/music/links/\(item)") }
+
+    /// A video's picture at a width, as a video tile asks for it.
+    public func videoThumbURL(id: Int64, width: Int, version: Int64) -> URL? {
+        URL(string: "\(base)\(apiPath)/items/\(id)/poster?w=\(width)\(version > 0 ? "&v=\(version)" : "")")
+    }
+
+    /// A creator's own picture, beside their videos.
+    public func creatorAvatarURL(id: Int64) -> URL? { URL(string: "\(base)\(apiPath)/creators/\(id)/art/avatar") }
 
     /// The tracks of one album, in order. An empty album or artist means none or unknown: it is still asked for by name.
     public func tracks(library: Int64, album: String, artist: String) async throws -> [Item] {
@@ -454,8 +760,9 @@ public final class WittyClient: @unchecked Sendable {
         return mediaURL("/api/logos/\(id)/image?variant=\(WittyClient.queryValue(variant))&v=\(logo.version ?? 0)")
     }
 
-    /// The short legal notices by kind (`tv`, `logos`, `logosBrief` and so on): the same words everywhere.
-    public func legalNotices() async throws -> [String: String] {
+    /// The short legal notices' words by kind (`tv`, `logos`, `logosBrief` and so on): the same words everywhere.
+    /// `legalNotices()` has them with their links to the Legal page.
+    public func legalNoticeWords() async throws -> [String: String] {
         struct Notice: Decodable { let text: String }
         struct Notices: Decodable { let notices: [String: Notice]? }
         let all: Notices = try await get("/legal/notices")
@@ -617,6 +924,11 @@ public final class WittyClient: @unchecked Sendable {
     public func posterURL(_ show: Show) -> URL? { URL(string: "\(base)\(apiPath)/shows/\(show.id)/art/poster?v=\(show.updatedAt ?? 0)") }
     public func backdropURL(_ item: Item) -> URL? { URL(string: "\(base)\(apiPath)/items/\(item.id)/backdrop?v=\(item.updatedAt ?? 0)") }
     public func backdropURL(_ show: Show) -> URL? { URL(string: "\(base)\(apiPath)/shows/\(show.id)/art/backdrop?v=\(show.updatedAt ?? 0)") }
+    /// The picture a category or collection shows: the backdrop of a title in it.
+    public func backdropURL(_ art: CategoryArt) -> URL? {
+        let path = art.isShow ? "/shows/\(art.id)/art/backdrop" : "/items/\(art.id)/backdrop"
+        return URL(string: "\(base)\(apiPath)\(path)?v=\(art.v ?? 0)")
+    }
 
     /// Addresses in answers start with /api/: the server's address goes in front, nothing else changes.
     /// One that would end up anywhere but this server comes back nil.
@@ -630,6 +942,80 @@ public final class WittyClient: @unchecked Sendable {
     }
     /// A photo as it was taken, as big as the file is.
     public func originalURL(_ item: Int64) -> URL? { URL(string: "\(base)\(apiPath)/items/\(item)/original") }
+
+    // MARK: A title's page, as the website's: see TitlePage.swift
+
+    /// An item, and the rest of what its page shows, from one answer.
+    public func itemPage(_ id: Int64) async throws -> (Item, ItemFacts) {
+        let data = try await call("GET", "/items/\(id)")
+        return (try decoder.decode(Item.self, from: data), try decoder.decode(ItemFacts.self, from: data))
+    }
+
+    /// A show with its seasons and episodes, and the rest of what its page shows, from one answer.
+    public func showPage(_ id: Int64) async throws -> (ShowDetail, ShowFacts) {
+        let data = try await call("GET", "/shows/\(id)")
+        return (try decoder.decode(ShowDetail.self, from: data), try decoder.decode(ShowFacts.self, from: data))
+    }
+
+    public func attached(_ target: TitleTarget, _ id: Int64) async throws -> TitleAttached { try await get("/meta/\(target.rawValue)/\(id)/attached") }
+    public func listings(_ target: TitleTarget, _ id: Int64) async throws -> TitleListings { try await get("/meta/\(target.rawValue)/\(id)/listings") }
+    /// A title's logo, drawn in place of its name where it has one.
+    public func titleLogoURL(_ target: TitleTarget, _ id: Int64, version: Int64?) -> URL? {
+        URL(string: "\(base)\(apiPath)/meta/\(target.rawValue)/\(id)/art/logo?v=\(version ?? 0)")
+    }
+    /// A DVD's or a Blu-ray's sections: its feature and scenes, bonus titles and menus, with the names given them.
+    public func discView(_ item: Int64) async throws -> DiscView { try await get("/items/\(item)/disc") }
+
+    /// An administrator's names for a disc's titles and scenes, all at once; the server answers with what it kept.
+    public func setDiscLabels(_ item: Int64, _ labels: DiscLabels) async throws -> DiscLabels {
+        try decoder.decode(DiscLabels.self, from: try await call("PUT", "/items/\(item)/disc/labels", body: try JSONEncoder().encode(labels)))
+    }
+
+    /// A picture of a disc's title (scene 0) or one of its scenes, made by the server the first time it's asked for.
+    /// `retry` asks again for one that didn't come.
+    public func discThumbURL(_ item: Int64, ttn: Int, scene: Int, retry: Int = 0) -> URL? {
+        URL(string: "\(base)\(apiPath)\(DiscPage.thumbPath(item, ttn: ttn, scene: scene))" + (retry > 0 ? "?retry=\(retry)" : ""))
+    }
+
+    public func seasonPosterURL(_ show: Show, season: Int) -> URL? {
+        URL(string: "\(base)\(apiPath)/shows/\(show.id)/art/season?n=\(season)&v=\(show.updatedAt ?? 0)")
+    }
+
+    /// What the logo service has for some studios, networks or streaming services: up to 200 at a time.
+    public func lookUpLogos(_ names: [(kind: String, name: String)]) async throws -> [LogoAnswer] {
+        struct Asked: Encodable { let kind: String; let name: String }
+        struct Body: Encodable { let logos: [Asked] }
+        struct Answer: Decodable { let logos: [LogoAnswer]? }
+        let body = try JSONEncoder().encode(Body(logos: names.prefix(200).map { Asked(kind: $0.kind, name: $0.name) }))
+        return try decoder.decode(Answer.self, from: try await call("POST", "/logos/lookup", body: body)).logos ?? []
+    }
+
+    /// A logo as a PNG: white for a dark page, dark for a light one, or as it was drawn.
+    public func logoImageURL(_ logo: LogoAnswer, variant: String) -> URL? {
+        guard let id = logo.id else { return nil }
+        return URL(string: "\(base)\(apiPath)/logos/\(id)/image?variant=\(Self.queryValue(variant))&v=\(logo.version ?? 0)")
+    }
+
+    public func legalNotices() async throws -> LegalNotices { try await get("/legal/notices") }
+
+    /// A show's episode layout for everyone: "cards", "list", or "" for the server's. Administrators only.
+    public func setShowView(_ show: Int64, _ view: String) async throws {
+        _ = try await call("PUT", "/shows/\(show)/view", body: try JSONEncoder().encode(["view": view]))
+    }
+
+    /// Saving a whole show, as an item is saved.
+    public func collectionsHolding(show: Int64) async throws -> [Int64] { try await list("/collections/holding?item=0&show=\(show)") }
+
+    @discardableResult
+    public func saveForLater(show: Int64) async throws -> Int64 {
+        struct Answer: Decodable { let collectionId: Int64? }
+        let data = try await call("POST", "/collections/watch-later/items", body: try JSONEncoder().encode(["items": [], "shows": [show]]))
+        return (try? decoder.decode(Answer.self, from: data))?.collectionId ?? 0
+    }
+
+    public func setInCollection(_ collection: Int64, show: Int64, _ inIt: Bool) async throws {
+        _ = try await call(inIt ? "POST" : "DELETE", "/collections/\(collection)/items", body: try JSONEncoder().encode(["items": [], "shows": [show]]))
+    }
 
     public enum Probe: Equatable {
         case found(ServerStatus)

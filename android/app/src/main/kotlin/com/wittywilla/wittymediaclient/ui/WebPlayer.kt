@@ -61,9 +61,11 @@ import androidx.core.view.WindowInsetsControllerCompat
 import com.wittywilla.wittymediaclient.WittyApp
 import com.wittywilla.wittymediaclient.diag.ClientLog
 import com.wittywilla.wittymediaclient.net.APP_BACK_PATH
+import com.wittywilla.wittymediaclient.net.APP_UP_PATH
 import com.wittywilla.wittymediaclient.net.ASK_OWN_BACK
 import com.wittywilla.wittymediaclient.net.ASK_SEES_PAD
 import com.wittywilla.wittymediaclient.net.OFFER_APP_BACK
+import com.wittywilla.wittymediaclient.net.OFFER_APP_UP
 import com.wittywilla.wittymediaclient.net.Api
 import com.wittywilla.wittymediaclient.net.TV_VIEWPORT
 import com.wittywilla.wittymediaclient.net.isWebLink
@@ -93,11 +95,14 @@ private class PageClient(
     private val onLoaded: () -> Unit,
     private val onAppBack: () -> Unit,
     private val isTv: Boolean,
+    // A page inside a TV's tab: Up from its top goes to the bar.
+    private val onAppUp: (() -> Unit)? = null,
 ) : WebViewClient() {
     override fun onPageCommitVisible(view: WebView, url: String) {
         // A TV counts its pixels in twos, which would give the page half the room a big screen has.
         if (isTv) view.evaluateJavascript(TV_VIEWPORT, null)
         view.evaluateJavascript(OFFER_APP_BACK, null)
+        if (onAppUp != null) view.evaluateJavascript(OFFER_APP_UP, null)
         onShowing()
     }
 
@@ -106,8 +111,11 @@ private class PageClient(
     override fun shouldOverrideUrlLoading(view: WebView, request: WebResourceRequest): Boolean {
         val url = request.url.toString()
         if (sameServer(url, base)) {
-            if (request.url.path != APP_BACK_PATH) return false
-            onAppBack()
+            when (request.url.path) {
+                APP_BACK_PATH -> onAppBack()
+                APP_UP_PATH -> onAppUp?.invoke()
+                else -> return false
+            }
             return true
         }
         if (request.isForMainFrame && isWebLink(url)) {
@@ -242,6 +250,8 @@ fun ServerPageScreen(
     title: String = "",
     out: (() -> Unit)? = null,
     backEnabled: Boolean = true,
+    // A page inside a TV's tab: where Up goes from the top of the page.
+    upOut: (() -> Unit)? = null,
 ) {
     val context = LocalContext.current
     val api = nav.app.api
@@ -289,6 +299,7 @@ fun ServerPageScreen(
             },
             onAppBack = { if (nav.current == route) out?.invoke() ?: nav.pop() },
             isTv = nav.app.isTv && !keptToGames,
+            onAppUp = upOut?.let { up -> { if (nav.current == route) up() } },
         )
         web.webChromeClient = PageChrome(
             onFullScreen = { view, callback -> fullScreen = view; endFullScreen = callback },

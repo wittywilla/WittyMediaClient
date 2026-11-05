@@ -4,15 +4,19 @@ name: WittyMedia
 options:
   bundleIdPrefix: com.wittywilla
   deploymentTarget:
-    # tvOS 16 is what every Apple TV HD and 4K can run, and what NavigationStack needs.
+    # tvOS 17 runs on every Apple TV HD and 4K, and is what WebRTC (LiveKit's libwebrtc) needs for games.
     iOS: "16.0"
-    tvOS: "16.0"
+    tvOS: "17.0"
     # Every Apple Vision Pro can run visionOS 2.
     visionOS: "2.0"
   createIntermediateGroups: true
 packages:
   WittyKit:
     path: WittyKit
+  # libwebrtc, built by LiveKit for every Apple platform (its classes start LKRTC): games over WebRTC.
+  LiveKitWebRTC:
+    url: https://github.com/livekit/webrtc-xcframework
+    exactVersion: 144.7559.15
 settings:
   base:
     SWIFT_VERSION: "5.0"
@@ -23,6 +27,9 @@ settings:
     INFOPLIST_KEY_CFBundleDisplayName: WittyMediaClient
     # Filled in by the owner in Xcode: see docs/OWNER-STEPS.md.
     DEVELOPMENT_TEAM: ""
+    # LiveKit's WebRTC has no Intel build for the tvOS or visionOS simulators: Apple silicon only there.
+    "EXCLUDED_ARCHS[sdk=appletvsimulator*]": x86_64
+    "EXCLUDED_ARCHS[sdk=xrsimulator*]": x86_64
 
 targetTemplates:
   App:
@@ -39,6 +46,7 @@ targetTemplates:
         buildPhase: resources
     dependencies:
       - package: WittyKit
+      - package: LiveKitWebRTC
     info:
       path: Generated/Info-${target_name}.plist
       properties:
@@ -109,9 +117,14 @@ targets:
     templates: [App]
     platform: iOS
     supportedDestinations: [iOS, visionOS]
+    sources:
+      # The launch screen's colour: the default theme's background, so opening the app doesn't flash white.
+      - path: Launch
     info:
       path: Generated/Info-WittyMedia-iOS.plist
       properties:
+        UILaunchScreen:
+          UIColorName: LaunchBackground
         # Picture in picture needs this. Plain video still pauses when the app goes to the background.
         UIBackgroundModes:
           - audio
@@ -123,5 +136,6 @@ targets:
         TARGETED_DEVICE_FAMILY: "1,2,7"
         # Its own visionOS build, so not the iPad one in a window as well.
         SUPPORTS_XR_DESIGNED_FOR_IPHONE_IPAD: "NO"
-        INFOPLIST_KEY_UILaunchScreen_Generation: "YES"
+        # No app icon has been made yet; without this the asset catalog above would ask for one.
+        ASSETCATALOG_COMPILER_APPICON_NAME: ""
         INFOPLIST_KEY_UISupportedInterfaceOrientations: "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight"

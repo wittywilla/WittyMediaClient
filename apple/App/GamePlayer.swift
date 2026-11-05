@@ -1,4 +1,6 @@
-#if os(tvOS)
+#if os(tvOS) || os(iOS) || os(visionOS)
+import AVKit
+import CoreMedia
 import GameController
 import MetalKit
 import SwiftUI
@@ -126,10 +128,12 @@ private struct GameScreen: UIViewControllerRepresentable {
 
 // MARK: - The stream
 
-/// From the socket to the screen and the speakers, on the socket's own thread.
+/// From the transport to the screen and the speakers, on the transport's own thread.
 private final class GamePipeline: @unchecked Sendable {
     let renderer: GamePictureRenderer?
     let sound = GameSound()
+    /// For the second stream's Opus, where this device can decode it.
+    let opus = GameOpusDecoder()
     private var decoder: GameVideoDecoder!
     private weak var view: MTKView?
     private let lock = NSLock()
@@ -159,6 +163,7 @@ private final class GamePipeline: @unchecked Sendable {
         lock.unlock()
         queue.async { [self] in
             decoder.reset()
+            opus?.reset()
             sound.flush()
         }
         return id
@@ -180,6 +185,12 @@ private final class GamePipeline: @unchecked Sendable {
                 }
             case .pcm(let rate, let samples):
                 sound.play(samples, rate: rate)
+            case .opus(_, let packet):
+                if let samples = opus?.decode(packet) { sound.play(samples, rate: GameOpusDecoder.rate) }
+            case .picture(let pixels):
+                // Decoded by the transport itself, as WebRTC does.
+                renderer?.show(pixels)
+                draw()
             case .timing, .unknown:
                 break
             }
@@ -237,11 +248,18 @@ final class GamePlayerModel: ObservableObject {
     @Published private(set) var devices: [GamePortDevices] = []
     @Published private(set) var plugged: [Int: Int] = [:]
     @Published var leave = false
+    /// The console's controls, for drawing them on a touch screen.
+    @Published private(set) var controlsData: GameControls?
+    @Published private(set) var padsConnected = false
+    /// Whether this person wants touch controls on this device; they show only with no controller.
+    @Published var touchWanted: Bool = GamePlayerModel.touchByDefault {
+        didSet { UserDefaults.standard.set(touchWanted, forKey: "wittyplay.touch") }
+    }
 
     let host = GameHostController()
     private let input = GameInput()
     private var pipeline: GamePipeline?
-    private var socket: GameSocket?
+    private var transport: GameTransport?
     private var client = WittyClient(base: "")
     private var gameId: Int64 = 0
     private var start: GameStart = .fresh
@@ -267,16 +285,26 @@ final class GamePlayerModel: ObservableObject {
     var quickSlot: Int { max(1, min(99, Int(settings.number("states.quickSlot", 1)))) }
     var confirms: Bool { settings.flag("states.confirm", true) }
 
+    /// Touch layouts are saved per device, as the website saves them: an id of this device's own.
     static var deviceId: String {
         let key = "wittyplay.device"
         if let saved = UserDefaults.standard.string(forKey: key) { return saved }
-        let made = "appletv-" + UUID().uuidString.prefix(12).lowercased()
+        #if os(tvOS)
+        let kind = "appletv"
+        #elseif os(visionOS)
+        let kind = "vision"
+        #else
+        let kind = UIDevice.current.userInterfaceIdiom == .pad ? "ipad" : "iphone"
+        #endif
+        let made = kind + "-" + UUID().uuidString.prefix(12).lowercased()
         UserDefaults.standard.set(made, forKey: key)
         return made
     }
 
     func begin(id: Int64, start: GameStart, client: WittyClient) async {
         guard pipeline == nil else { return }
+        // The second stream over WebRTC, first where the server has it.
+        GameTransports.webRTC = { offer, hello in GameWebRTCTransport(offer: offer, hello: hello) }
         self.client = client
         gameId = id
         self.start = start
@@ -286,17 +314,25 @@ final class GamePlayerModel: ObservableObject {
             phase = .failed("This Apple TV couldn't set up its graphics for the game.")
             return
         }
-        input.send = { [weak self] data in self?.socket?.send(data) }
+        input.send = { [weak self] data in self?.transport?.sendInput(data) }
         input.onMenu = { [weak self] in self?.openMenu() }
         input.onShortcut = { [weak self] shortcut, down in self?.shortcut(shortcut, down) }
         input.onNotice = { [weak self] words in self?.say(words) }
         input.onJoin = { [weak self] port in self?.joined(port: port) }
+        input.onPadsChanged = { [weak self] in
+            guard let self else { return }
+            self.padsConnected = self.input.hasPads
+            self.players = self.input.players
+            // On the second stream, the server is told which players this device now holds.
+            self.transport?.sendEvent(GameHello.seatsText(self.input.ports))
+        }
+        input.onTouchRumble = { strength in Self.touchRumble(strength) }
         host.screen.onPress = { [weak self] name, down in self?.input.press(name, down: down) }
         host.screen.onKey = { [weak self] code, down in self?.input.typed(code, down: down) }
         host.screen.onMenu = { [weak self] in self?.openMenu() }
         pipeline?.askKeyframe = { @Sendable [weak self] in
             // The stack has no way of its own to ask: the server's 0xF7.
-            Task { @MainActor in self?.socket?.send(Data([0xF7])) }
+            Task { @MainActor in self?.transport?.askKeyframe() }
         }
         settings = (try? await client.gameSettings(item: id)) ?? GameSettings(values: [:])
         guard live else { return }
@@ -335,6 +371,7 @@ final class GamePlayerModel: ObservableObject {
         discs = max(1, session.discs ?? 1)
         modes = GameModes.order(session.modes)
         devices = (session.devices ?? []).filter { ($0.types ?? []).count > 1 }
+        input.playerPorts = GamePorts.players(count: nil, devices: session.devices)
         plugged = Dictionary(devices.compactMap { d in d.current.map { (d.port, $0) } }, uniquingKeysWith: { a, _ in a })
         for words in session.notices ?? [] where !words.isEmpty { say(words) }
         updateLayout()
@@ -344,10 +381,12 @@ final class GamePlayerModel: ObservableObject {
             Task.detached { [client] in try? await client.stopGame(session.id) }
             return
         }
+        controlsData = controls
         consoleButtons = Set((controls?.pad?.buttons ?? []).map(\.id)).union([RetroPad.up, RetroPad.down, RetroPad.left, RetroPad.right])
         input.start(client: client, setup: GameInput.Setup(controls: controls, settings: settings, console: console, game: id, consoleButtons: consoleButtons,
                                                            pointer: controls?.pad?.pointer == true))
         players = input.players
+        padsConnected = input.hasPads
         connect()
         watchdog = Timer.scheduledTimer(withTimeInterval: 1, repeats: true) { [weak self] _ in
             Task { @MainActor in self?.watch() }
@@ -368,6 +407,7 @@ final class GamePlayerModel: ObservableObject {
         renderer.look = PictureLook(settings)
         pipeline?.sound.latency = GameSoundLatency.seconds(settings.text("audio.latency", "lowest"))
         pipeline?.sound.setVolume(settings.number("audio.volume", 1), muted: settings.flag("audio.mute", false))
+        transport?.setVolume(settings.number("audio.volume", 1), muted: settings.flag("audio.mute", false))
     }
 
     private func updateLayout() {
@@ -376,38 +416,119 @@ final class GamePlayerModel: ObservableObject {
         pipeline?.draw()
     }
 
+    // MARK: Touch controls
+
+    /// On by default where the screen is touched; a Vision Pro is played with a controller.
+    static var touchByDefault: Bool {
+        #if os(iOS)
+        return UserDefaults.standard.object(forKey: "wittyplay.touch") as? Bool ?? true
+        #else
+        return UserDefaults.standard.object(forKey: "wittyplay.touch") as? Bool ?? false
+        #endif
+    }
+
+    var touchShown: Bool {
+        #if os(tvOS)
+        return false
+        #else
+        return touchWanted && !padsConnected && !(controlsData?.controls ?? []).isEmpty
+        #endif
+    }
+
+    /// A DS or 3DS: a finger on the picture is the stylus.
+    var touchScreenConsole: Bool { controlsData?.pad?.pointer == true }
+
+    #if DEBUG
+    /// What the fingers last held, and each press since, for the touch preview.
+    @Published private(set) var lastTouch = TouchOutput()
+    @Published private(set) var touchLog: [String] = []
+
+    /// The touch controls with no game: a console's controls, as if playing.
+    func previewTouch(_ controls: GameControls) {
+        controlsData = controls
+        touchWanted = true
+        phase = .playing
+    }
+    #endif
+
+    /// What the fingers hold, from the touch controls over a screen of `size` points.
+    func touched(_ out: TouchOutput, size: CGSize) {
+        #if DEBUG
+        let pressed = out.buttons & ~lastTouch.buttons
+        let names = RetroPad.names.filter { pressed & RetroPad.bit($0.value) != 0 }.sorted { $0.value < $1.value }.map(\.key)
+        if !names.isEmpty { touchLog = Array((touchLog + [names.joined(separator: "+")]).suffix(12)) }
+        if out.leftX != 0 || out.leftY != 0 { touchLog = Array((touchLog + [String(format: "stick %.2f,%.2f", out.leftX, out.leftY)]).suffix(12)) }
+        if let at = out.stylus, lastTouch.stylus == nil { touchLog = Array((touchLog + [String(format: "stylus %.0f,%.0f", at.x, at.y)]).suffix(12)) }
+        lastTouch = out
+        #endif
+        input.touch(out.padState(port: 0))
+        guard touchScreenConsole else { return }
+        if let at = out.stylus, let drawn = pipeline?.renderer?.drawnPicture {
+            let picture = (x: drawn.x * size.width, y: drawn.y * size.height, width: drawn.width * size.width, height: drawn.height * size.height)
+            let pointer = touchPointer(x: at.x, y: at.y, picture: picture, turns: drawn.turns, pressed: true)
+            lastStylus = pointer
+            input.touchStylus(pointer)
+        } else if lastStylus.pressed {
+            // Lifted where it last was.
+            lastStylus.pressed = false
+            input.touchStylus(lastStylus)
+        }
+    }
+    private var lastStylus = PointerState()
+
+    /// In portrait the picture moves up above the controls; otherwise it has the whole screen.
+    func placePicture(aboveControls: Bool) {
+        let area: (x: Double, y: Double, width: Double, height: Double) = aboveControls ? (0, 0, 1, 0.52) : (0, 0, 1, 1)
+        guard let renderer = pipeline?.renderer, renderer.area != area else { return }
+        renderer.area = area
+        pipeline?.draw()
+    }
+
+    private static func touchRumble(_ strength: Double) {
+        #if os(iOS)
+        UIImpactFeedbackGenerator(style: strength > 0.5 ? .heavy : .medium).impactOccurred()
+        #endif
+    }
+
     // MARK: The connection
 
     private func connect() {
         guard let session, !stopped else { return }
-        socket?.close()
+        transport?.close()
         let id = pipeline?.restart() ?? 0
         let mode = modes[min(modeAt, modes.count - 1)]
-        guard let request = client.gameSocketRequest(session.id, video: GameModes.video(for: mode)) else {
+        guard let transport = GameTransports.make(mode: mode, session: session.id, client: client, hello: hello()) else {
             phase = .failed("This server's address can't be used for a game.")
             return
         }
         phase = .connecting
-        let socket = GameSocket()
         let pipeline = self.pipeline
-        socket.onMessage = { @Sendable message in pipeline?.take(message, from: id) }
-        socket.onEvent = { @Sendable [weak self] event in
+        transport.onMessage = { @Sendable message in pipeline?.take(message, from: id) }
+        transport.onEvent = { @Sendable [weak self] event in
             Task { @MainActor in self?.handle(event) }
         }
-        socket.onClose = { @Sendable [weak self] status in
-            Task { @MainActor in self?.connectionLost(status: status) }
+        transport.onEnd = { @Sendable [weak self] end in
+            Task { @MainActor in self?.connectionLost(end) }
         }
-        self.socket = socket
+        self.transport = transport
+        transport.setVolume(settings.number("audio.volume", 1), muted: settings.flag("audio.mute", false))
         connectedAt = Date()
         framesAt = Date()
         framesSeen = pipeline?.frames ?? 0
-        socket.open(request)
+        transport.open()
     }
 
-    private func connectionLost(status: Int) {
+    private func connectionLost(_ end: GameTransportEnd) {
         guard !stopped else { return }
+        // This way didn't get through before any picture: the next way, at once.
+        if end == .unreachable, !hadPicture, modeAt + 1 < modes.count {
+            modeAt += 1
+            say("Trying another way of sending the picture")
+            connect()
+            return
+        }
         // Gone from the server: stopped from elsewhere, another game started, or left too long.
-        if [401, 403, 404, 410].contains(status) {
+        if end == .gone {
             finish(saying: "This game has stopped. It may have been started on another device, or left for more than a minute.")
             return
         }
@@ -437,7 +558,7 @@ final class GamePlayerModel: ObservableObject {
         if Date().timeIntervalSince(framesAt) > 60 {
             // The server keeps a game for a minute with nobody connected: past that, it's gone.
             finish(saying: "The game's picture stopped coming. Check the network, then start the game again: it saved where you were.")
-        } else if phase == .connecting, Date().timeIntervalSince(connectedAt) > 12 {
+        } else if phase == .connecting, Date().timeIntervalSince(connectedAt) > GameModes.firstPictureWait(modes[min(modeAt, modes.count - 1)]) {
             // No first picture: the next way of sending. A picture that stopped: the same way again.
             if !hadPicture, modeAt + 1 < modes.count {
                 modeAt += 1
@@ -483,7 +604,8 @@ final class GamePlayerModel: ObservableObject {
 
     private func handle(_ event: GameEvent) {
         switch event {
-        case .rumble(let port, let strength): input.rumble(port: port, strength: strength)
+        case .rumble(let port, let strength, let motor, let ms): input.rumble(port: port, strength: strength, motor: motor, ms: ms)
+        case .motion(let want): input.setMotion(want)
         case .message(let text): say(text)
         case .geometry(let width, let height, let shape):
             if let shape, shape > 0 { aspect = shape }
@@ -505,14 +627,95 @@ final class GamePlayerModel: ObservableObject {
             finish(saying: "")
         case .ended(let text):
             finish(saying: text.isEmpty ? "The game stopped." : text)
-        case .hello, .unknown:
+        case .stream(let s):
+            // The second stream says the shape and turns as the session does, how many players the
+            // game takes, and whose motion it reads.
+            matchRefresh(fps: s.fps, width: s.width, height: s.height)
+            if let shape = s.aspect, shape > 0 { aspect = shape }
+            turns = s.turns
+            if s.ports > 0 { input.playerPorts = GamePorts.players(count: s.ports, devices: session?.devices) }
+            for want in s.motionOn { input.setMotion(want) }
+            updateLayout()
+        case .refused(let code, let text, _):
+            say(text.isEmpty ? "The game refused that (\(code))." : text)
+        // A core's lights: libretro has no light bar, so each pad keeps its player's colour.
+        case .hello, .seats, .led, .unknown:
             break
         }
     }
 
+    /// What this device says about itself on the second stream.
+    private func hello() -> GameHello {
+        #if os(tvOS)
+        let platform = "tvOS"
+        #elseif os(visionOS)
+        let platform = "visionOS"
+        #else
+        let platform = "iOS"
+        #endif
+        let version = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? ""
+        #if os(visionOS)
+        let display = GameHello.Display(hz: 90, width: 0, height: 0)
+        #else
+        let screen = UIScreen.main
+        let display = GameHello.Display(hz: Double(screen.maximumFramesPerSecond), width: Int(screen.nativeBounds.width), height: Int(screen.nativeBounds.height))
+        #endif
+        return GameHello(app: "WittyMedia \(platform) \(version)", device: Self.deviceId, name: UIDevice.current.name,
+                         audio: GameOpusDecoder.available ? ["opus", "pcm"] : ["pcm"], seats: input.ports,
+                         display: display, latency: settings.text("emulation.latency", "auto"))
+    }
+
+    // MARK: The TV's refresh rate
+
+    #if os(tvOS)
+    private var matchedDisplay = false
+    #endif
+
+    /// Where the person lets apps switch the TV to what they show (Settings, Video and Audio, Match
+    /// Content), the TV switches to the game's rate: 50 Hz for a PAL game, so no frame is dropped or
+    /// shown twice. Once it has, the server is told, and paces the game to it.
+    private func matchRefresh(fps: Double?, width: Int, height: Int) {
+        #if os(tvOS)
+        guard let fps, fps > 0, !matchedDisplay,
+              let manager = host.view.window?.avDisplayManager, manager.isDisplayCriteriaMatchingEnabled else { return }
+        var format: CMVideoFormatDescription?
+        CMVideoFormatDescriptionCreate(allocator: nil, codecType: kCMVideoCodecType_H264, width: Int32(max(1, width)),
+                                       height: Int32(max(1, height)), extensions: nil, formatDescriptionOut: &format)
+        guard let format else { return }
+        manager.preferredDisplayCriteria = AVDisplayCriteria(refreshRate: Float(fps), formatDescription: format)
+        matchedDisplay = true
+        reportRefresh(after: 1, tries: 8)
+        #endif
+    }
+
+    #if os(tvOS)
+    /// Once the switch is done, the screen's rate as it is now.
+    private func reportRefresh(after seconds: Double, tries: Int) {
+        DispatchQueue.main.asyncAfter(deadline: .now() + seconds) { [weak self] in
+            guard let self, !self.stopped else { return }
+            if host.view.window?.avDisplayManager.isDisplayModeSwitchInProgress == true, tries > 0 {
+                self.reportRefresh(after: 0.5, tries: tries - 1)
+                return
+            }
+            let hz = Double(host.view.window?.screen.maximumFramesPerSecond ?? 0)
+            if hz > 0 { self.transport?.sendEvent(GameHello.reportText(hz: hz)) }
+        }
+    }
+    #endif
+
+    /// The TV goes back to what the rest of the app shows.
+    private func unmatchRefresh() {
+        #if os(tvOS)
+        guard matchedDisplay else { return }
+        matchedDisplay = false
+        host.view.window?.avDisplayManager.preferredDisplayCriteria = nil
+        #endif
+    }
+
     private func finish(saying words: String) {
+        unmatchRefresh()
         stopped = true
-        socket?.close()
+        transport?.close()
         input.stop()
         pipeline?.sound.stop()
         watchdog?.invalidate()
@@ -665,7 +868,7 @@ final class GamePlayerModel: ObservableObject {
         busy = true
         stopped = true
         input.stop()
-        socket?.close()
+        transport?.close()
         pipeline?.sound.stop()
         watchdog?.invalidate()
         if let session { try? await client.stopGame(session.id) }
@@ -675,10 +878,11 @@ final class GamePlayerModel: ObservableObject {
 
     /// Leaving any other way still saves and stops it, without waiting.
     func abandon() {
+        unmatchRefresh()
         guard !stopped else { return }
         stopped = true
         input.stop()
-        socket?.close()
+        transport?.close()
         pipeline?.sound.stop()
         watchdog?.invalidate()
         if let session { Task.detached { [client] in try? await client.stopGame(session.id) } }
@@ -689,12 +893,12 @@ final class GamePlayerModel: ObservableObject {
         guard !stopped, session != nil else { return }
         switch phase {
         case .active:
-            if socket == nil || self.phase == .connecting { connect() }
+            if transport == nil || self.phase == .connecting { connect() }
             input.setEnabled(!menuOpen)
         case .background:
             input.setEnabled(false)
-            socket?.close()
-            socket = nil
+            transport?.close()
+            transport = nil
         default:
             input.setEnabled(false)
         }
@@ -716,6 +920,23 @@ final class GamePlayerModel: ObservableObject {
 
 // MARK: - The screen
 
+/// The game player on any Apple device: the screen to show for a server game, given its item id.
+/// Present it full screen (a navigation destination, or a full-screen cover on iPhone and iPad);
+/// it leaves by `leave`, or by stepping back from the navigation path when there's none.
+struct GamePlayerView: View {
+    let gameId: Int64
+    var start: GameStart = .resume
+    var leave: (() -> Void)?
+
+    init(gameId: Int64, start: GameStart = .resume, leave: (() -> Void)? = nil) {
+        self.gameId = gameId
+        self.start = start
+        self.leave = leave
+    }
+
+    var body: some View { GamePlayerScreen(id: gameId, start: start, leave: leave) }
+}
+
 struct GamePlayerScreen: View {
     @EnvironmentObject private var app: AppModel
     @Environment(\.client) private var client
@@ -724,8 +945,10 @@ struct GamePlayerScreen: View {
     @StateObject private var game = GamePlayerModel()
     let id: Int64
     let start: GameStart
+    var leave: (() -> Void)?
 
     private func goBack() {
+        if let leave { leave(); return }
         if case .playGame? = app.path.last { app.path.removeLast() }
     }
 
@@ -739,6 +962,12 @@ struct GamePlayerScreen: View {
             GameScreen(host: game.host, playing: !game.menuOpen && (game.phase == .playing || game.phase == .connecting))
                 .ignoresSafeArea()
                 .accessibilityLabel(game.session?.title ?? "Game")
+            #if !os(tvOS)
+            // The touch controls, or on a DS or 3DS with a controller, just the stylus.
+            if !game.menuOpen, game.phase == .playing || game.phase == .connecting, game.touchShown || game.touchScreenConsole {
+                TouchControlsOverlay(game: game, drawn: game.touchShown)
+            }
+            #endif
             status
             if !game.notice.isEmpty, !game.menuOpen {
                 VStack {
@@ -755,12 +984,35 @@ struct GamePlayerScreen: View {
                 .allowsHitTesting(false)
                 .transition(.opacity)
             }
+            #if !os(tvOS)
+            // No remote here: the menu has a button of its own, top right as on the website, and
+            // the touch controls one to hide them beside it.
+            if !game.menuOpen, game.phase == .playing || game.phase == .connecting {
+                VStack {
+                    HStack(spacing: 16) {
+                        Spacer()
+                        if game.touchShown {
+                            cornerButton("eye.slash", label: "Hide touch controls") { game.touchWanted = false }
+                                .opacity(0.75)
+                        }
+                        cornerButton("line.3.horizontal", label: "Game menu") { game.openMenu() }
+                            .opacity(game.padsConnected ? 0.45 : 1)
+                    }
+                    Spacer()
+                }
+                .padding(8)
+            }
+            #endif
             if game.menuOpen {
                 GameMenu(game: game, gameId: id)
             }
         }
         .toolbar(.hidden, for: .navigationBar)
         .toolbar(.hidden, for: .tabBar)
+        #if os(iOS)
+        .statusBarHidden()
+        .persistentSystemOverlays(.hidden)
+        #endif
         .onChange(of: game.leave) { leave in if leave { goBack() } }
         .onChange(of: scenePhase) { game.scene($0) }
         .task {
@@ -769,7 +1021,34 @@ struct GamePlayerScreen: View {
             await game.begin(id: id, start: start, client: client)
         }
         .onDisappear { game.abandon() }
+        #if !os(tvOS)
+        .background(GeometryReader { geo in
+            Color.clear
+                .onAppear { placePicture(geo.size) }
+                .onChange(of: geo.size) { placePicture($0) }
+                .onChange(of: game.touchShown) { _ in placePicture(geo.size) }
+        })
+        #endif
     }
+
+    #if !os(tvOS)
+    /// Held upright with the controls showing, the picture goes above them.
+    private func placePicture(_ size: CGSize) {
+        game.placePicture(aboveControls: game.touchShown && TouchOrientation(width: size.width, height: size.height) == .portrait)
+    }
+
+    private func cornerButton(_ icon: String, label: String, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Image(systemName: icon)
+                .font(.system(size: 18, weight: .semibold))
+                .foregroundStyle(.white)
+                .frame(width: 40, height: 40)
+                .background(RoundedRectangle(cornerRadius: 10, style: .continuous).fill(Color(red: 20 / 255, green: 22 / 255, blue: 30 / 255).opacity(0.55)))
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(label)
+    }
+    #endif
 
     @ViewBuilder private var status: some View {
         switch game.phase {
@@ -795,7 +1074,7 @@ private struct Waiting: View {
     var body: some View {
         VStack(spacing: Tokens.Space.s4) {
             if let fraction {
-                ProgressView(value: fraction).frame(width: 480)
+                ProgressView(value: fraction).frame(maxWidth: 480)
             } else {
                 ProgressView()
             }
@@ -821,8 +1100,59 @@ private struct GameProblem: View {
         .padding(Tokens.Space.s10)
         .frame(maxWidth: 900, alignment: .leading)
         .background(RoundedRectangle(cornerRadius: Tokens.Radius.xl).fill(palette.panel))
-        .onExitCommand(perform: back)
+        .onTVBack(back)
     }
+}
+
+private extension View {
+    /// The remote's Back on Apple TV. Elsewhere the screen has buttons for it.
+    @ViewBuilder func onTVBack(_ action: @escaping () -> Void) -> some View {
+        #if os(tvOS)
+        onExitCommand(perform: action)
+        #else
+        self
+        #endif
+    }
+
+    @ViewBuilder func tvFocusSection() -> some View {
+        #if os(tvOS)
+        focusSection()
+        #else
+        self
+        #endif
+    }
+
+    /// Text the remote can stop on, so it can be read.
+    @ViewBuilder func tvFocusable() -> some View {
+        #if os(tvOS)
+        focusable(true)
+        #else
+        self
+        #endif
+    }
+
+    @ViewBuilder func slotButtonStyle() -> some View {
+        #if os(tvOS)
+        buttonStyle(.card)
+        #else
+        buttonStyle(.plain)
+        #endif
+    }
+}
+
+/// Words that differ by what the device is held with.
+private enum MenuWords {
+    #if os(tvOS)
+    static let opens = "Start and Select together, or the remote's Back button, open this menu."
+    static let noPads = "The Siri Remote"
+    static let alone = "The Siri Remote is player 1: its clickpad is the D-pad, a click in the middle is A, and Play/Pause is B. Connect a game controller in Settings, Remotes and Devices for games that need more buttons."
+    static let alongside = "The Siri Remote plays as player 1 too."
+    #else
+    static let opens = "Start and Select together, or the pause button, open this menu."
+    static let noPads = "Touch controls"
+    static let alone = "The touch controls are player 1. Connect a game controller in Settings, Bluetooth for games that need more buttons."
+    static let alongside = "The touch controls hide while a controller is connected."
+    #endif
 }
 
 // MARK: - The game menu
@@ -850,6 +1180,11 @@ private struct GameMenu: View {
             ScrollView {
                 VStack(alignment: .leading, spacing: Tokens.Space.s3) {
                     Text(title).font(.wmPage).foregroundStyle(palette.text).lineLimit(2).accessibilityAddTraits(.isHeader)
+                    #if !os(tvOS)
+                    if game.page != .main {
+                        Button { game.back() } label: { Label("Back", systemImage: "chevron.left") }.action(pill: true)
+                    }
+                    #endif
                     switch game.page {
                     case .main: main
                     case .save: slots(saving: true)
@@ -863,13 +1198,13 @@ private struct GameMenu: View {
                 }
                 .padding(Tokens.Space.s10)
             }
-            .frame(width: game.page == .main || game.page == .reset || game.page == .quit ? 640 : 1100)
+            .frame(maxWidth: game.page == .main || game.page == .reset || game.page == .quit ? 640 : 1100)
             .background(palette.background.opacity(0.96))
             Spacer(minLength: 0)
         }
         .ignoresSafeArea()
         .background(Color.black.opacity(0.35).ignoresSafeArea())
-        .onExitCommand { game.back() }
+        .onTVBack { game.back() }
         .onAppear { DispatchQueue.main.async { focused = "resume" } }
         .onChange(of: game.page) { _ in DispatchQueue.main.async { focused = game.page == .main ? "resume" : "first" } }
     }
@@ -906,10 +1241,17 @@ private struct GameMenu: View {
                 if n != game.disc { row("Change to disc \(n + 1)", "opticaldisc", key: "disc\(n)", sub: "Disc \(game.disc + 1) is in") { game.changeDisc(n) } }
             }
         }
-        row("Controllers", "gamecontroller", key: "pads", sub: game.players.isEmpty ? "The Siri Remote" : "\(game.players.count) connected") { game.page = .controllers }
+        #if !os(tvOS)
+        row(game.touchWanted ? "Hide touch controls" : "Show touch controls", "hand.tap", key: "touch",
+            sub: game.padsConnected ? "They show while no controller is connected" : "") {
+            game.touchWanted.toggle()
+            game.closeMenu()
+        }
+        #endif
+        row("Controllers", "gamecontroller", key: "pads", sub: game.players.isEmpty ? MenuWords.noPads : "\(game.players.count) connected") { game.page = .controllers }
         row("Reset", "arrow.counterclockwise", key: "reset") { if game.confirms { game.page = .reset } else { game.reset() } }
         row("Save and quit", "xmark", key: "quit") { if game.confirms { game.page = .quit } else { Task { await game.quit() } } }
-        Secondary("Start and Select together, or the remote's Back button, open this menu.")
+        Secondary(MenuWords.opens)
             .padding(.top, Tokens.Space.s4)
     }
 
@@ -917,7 +1259,7 @@ private struct GameMenu: View {
     @ViewBuilder private var controllers: some View {
         VStack(alignment: .leading, spacing: Tokens.Space.s2) {
             if game.players.isEmpty {
-                Secondary("The Siri Remote is player 1: its clickpad is the D-pad, a click in the middle is A, and Play/Pause is B. Connect a game controller in Settings, Remotes and Devices for games that need more buttons.")
+                Secondary(MenuWords.alone)
             } else {
                 ForEach(game.players, id: \.port) { p in
                     VStack(alignment: .leading, spacing: 2) {
@@ -925,11 +1267,11 @@ private struct GameMenu: View {
                         Secondary(p.profile.isEmpty ? "The console's own layout" : "Your profile \u{201C}\(p.profile)\u{201D}")
                     }
                 }
-                Secondary("The Siri Remote plays as player 1 too.")
+                Secondary(MenuWords.alongside)
             }
             Secondary("Profiles are made on the website, under Controllers, and follow you here.")
         }
-        .focusable(true)
+        .tvFocusable()
         .accessibilityElement(children: .combine)
         ForEach(Array(game.devices.enumerated()), id: \.element.port) { n, port in
             VStack(alignment: .leading, spacing: Tokens.Space.s2) {
@@ -947,7 +1289,7 @@ private struct GameMenu: View {
                 }
             }
             .padding(.top, Tokens.Space.s2)
-            .focusSection()
+            .tvFocusSection()
         }
     }
 
@@ -983,7 +1325,7 @@ private struct GameMenu: View {
                     }
                     .padding(Tokens.Space.s2)
                 }
-                .buttonStyle(.card)
+                .slotButtonStyle()
                 .focused($focused, equals: n == 0 ? "first" : "slot\(slot)")
                 .disabled(game.busy)
                 .accessibilityLabel(saving ? "Save to \(GameWords.slotName(slot))\(save == nil ? "" : ", replacing a save")" : "Load \(GameWords.slotName(slot))")

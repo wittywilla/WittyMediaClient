@@ -125,6 +125,12 @@ enum Route: Hashable {
     case playGame(Int64, GameStart)
 }
 
+/// A page a module adds to the menus, with the module it belongs to.
+struct ModulePlace: Equatable {
+    let module: String
+    let page: ModulePage
+}
+
 /// A list of tracks being played, in order, on Apple TV.
 extension AppModel {
     func play(_ tracks: [Item], from track: Item) {
@@ -191,6 +197,23 @@ final class AppModel: ObservableObject {
     /// Music, audiobooks and podcasts, which carry on whatever screen is showing.
     let listening = Listening()
     @Published var libraries: [Library] = []
+    /// The phone's Menu: the drawer of libraries from the left.
+    @Published var menuOpen = false
+    /// The server's page on top is in one of its own players (a disc, the CD player): see WebPlayer.isPlayer.
+    @Published var pagePlaying = false
+    /// Whether this server lets this person play its game PCs, which the Menu then offers.
+    @Published var gamePCs = false
+    /// The website's menus: how this person (or the owner) arranged them, and the pages modules add.
+    @Published var navPrefs = NavPrefs()
+    @Published var modulePages: [ModulePlace] = []
+    /// The server's version, for the line at the foot of every page, and its short legal notices.
+    @Published var serverVersion = ""
+    /// A newer version of the server, for an admin's dot on You.
+    @Published var serverUpdate = ""
+    @Published var legal: LegalNotices?
+    /// The video playing on a phone or tablet, on its screen or in the dock above the bar once that's left, as the
+    /// website's player keeps playing in its mini player.
+    @Published var video: PlaybackModel?
     /// Something worth saying that isn't a failure of the screen in front of the person.
     @Published var notice = ""
 
@@ -220,6 +243,7 @@ final class AppModel: ObservableObject {
     var hidesBars: Bool {
         switch path.last {
         case .player?, .web?, .playGame?: return true
+        case .page?: return pagePlaying
         default: return false
         }
     }
@@ -386,6 +410,13 @@ final class AppModel: ObservableObject {
         ArtCache.shared.removeAllObjects()
         user = nil
         libraries = []
+        navPrefs = NavPrefs()
+        modulePages = []
+        legal = nil
+        menuOpen = false
+        gamePCs = false
+        video?.stop()
+        video = nil
         paths = [:]
         tab = .home
     }
@@ -643,6 +674,8 @@ final class AppModel: ObservableObject {
 
     /// What a server says about how it looks: its theme, and the owner's name and logo for it.
     private func learn(_ status: ServerStatus) {
+        serverVersion = status.version ?? ""
+        serverUpdate = status.update ?? ""
         themeId = status.theme
         themeChoice = defaults.string(forKey: "theme." + client.base) ?? ""
         refreshTheme()
@@ -685,6 +718,108 @@ final class AppModel: ObservableObject {
         return plainWords(problem)
     }
 
+    /// A library from the strip along the top or the Menu: its page on Home's stack. From another library's
+    /// page it takes that one's place, as the website's strip does, rather than piling up.
+    /// Every place in the menu, in this person's order: Home, TV guide, libraries, Collections, Game PCs, modules' pages.
+    var navPlaces: [NavPlace] {
+        NavPlaces.arrange(NavPlaces.all(libraries: libraries, gamePCs: gamePCs, modulePages: modulePages.map { ($0.module, $0.page) }), navPrefs)
+    }
+
+    /// The strip's places: the menu's but Home and TV guide, which are on the bar.
+    var stripPlaces: [NavPlace] { NavPlaces.strip(navPlaces) }
+
+    /// A server page that's a top of its own (Collections, Game PCs, a module's page): it gets the strip, not Back.
+    func isTopPage(_ path: String) -> Bool { stripPlaces.contains { $0.path == path } }
+
+    /// A film or TV library's page with something chosen (`/library/3?genre=Drama`), which this app shows itself.
+    /// Nil for anything else, and for a library the app hands to the server's page.
+    func libraryPage(_ path: String) -> (library: Library, state: LibraryState)? {
+        guard let (id, state) = LibraryState.page(path), state != LibraryState(),
+              let library = libraries.first(where: { $0.id == id }),
+              library.opensHere, !library.isRigGames else { return nil }
+        return (library, state)
+    }
+
+    /// The menus' arrangement, modules' pages and the legal notices, asked for once a person is in.
+    func loadNavigation() async {
+        async let bundles = try? client.moduleBundles()
+        async let prefs = try? client.prefs()
+        async let mine = try? client.interfaceChoice("nav", as: NavPrefs.self)
+        async let notices = try? client.legalNotices()
+        async let couch = try? client.couchStatus()
+        let (found, owner, own, words, pcs) = await (bundles, prefs, mine, notices, couch)
+        modulePages = (found ?? []).flatMap { bundle in (bundle.pages ?? []).map { ModulePlace(module: bundle.id, page: $0) } }
+        navPrefs = own ?? NavPrefs.owner(owner?.navDefault) ?? NavPrefs()
+        if let words { legal = words }
+        if let pcs { gamePCs = pcs.allowed == true }
+    }
+
+    /// A place in the strip or the menu, as the website goes there: a library's page, or the server's page.
+    func open(_ place: NavPlace) {
+        if let id = place.libraryId, let library = libraries.first(where: { $0.id == id }) {
+            openLibrary(library)
+            return
+        }
+        let route: Route = place.id == "couch" ? .web(WebPlayer.gamePCsPath) : .page(place.path)
+        var transaction = Transaction()
+        transaction.disablesAnimations = tab == .home && (paths[.home]?.count ?? 0) == 1
+        withTransaction(transaction) {
+            tab = .home
+            paths[.home] = [route]
+        }
+    }
+
+    func openLibrary(_ library: Library) {
+        let route = libraryRoute(library)
+        var transaction = Transaction()
+        // From a section to a section: no slide, as the website's strip changes the page in place.
+        transaction.disablesAnimations = tab == .home && (paths[.home]?.count ?? 0) == 1
+        withTransaction(transaction) {
+            tab = .home
+            paths[.home] = [route]
+        }
+    }
+
+    /// The player's screen, if it's the one showing.
+    var showsPlayer: Bool { if case .player? = path.last { return true } else { return false } }
+
+    /// Back to the full player from the dock.
+    func expandVideo() {
+        guard let video, !showsPlayer else { return }
+        path.append(.player(video.id, startOver: false))
+    }
+
+    /// Back to the app, playing on in the dock.
+    func minimizeVideo() {
+        if showsPlayer { path.removeLast() }
+    }
+
+    /// Stops it, wherever it is.
+    func closeVideo() {
+        video?.stop()
+        video = nil
+        if showsPlayer { path.removeLast() }
+    }
+
+    /// The end of one: the next episode or the next in a list, on the screen it was on, or in the dock.
+    func videoFinished(next: Int64?, from id: Int64) {
+        let showing: Bool = { if case .player(let shown, _)? = path.last { return shown == id } else { return false } }()
+        guard let then = next ?? ServerPages.next(after: id, in: playingList) else {
+            closeVideo()
+            return
+        }
+        if showing {
+            path.removeLast()
+            path.append(.player(then, startOver: false))
+        } else {
+            video?.stop()
+            let following = PlaybackModel()
+            following.onFinished = { [weak self] after in self?.videoFinished(next: after, from: then) }
+            video = following
+            Task { await following.start(id: then, client: client, startOver: false) }
+        }
+    }
+
     func homeLoaded(_ home: Home) {
         let fresh = uniqued(home.libraries ?? [])
         if fresh != libraries { libraries = fresh }
@@ -702,8 +837,16 @@ final class AppModel: ObservableObject {
     }
 
     private func openWaitingLink() {
+        #if DEBUG
+        // For checking a game on the simulator: `-WittyPlayOpenGame <id>` at launch opens its page
+        // on Apple TV; `-WittyPlayPlayGame <id>` plays it, on any device.
+        let play = UserDefaults.standard.integer(forKey: "WittyPlayPlayGame")
+        if play > 0, paths[.home]?.isEmpty ?? true {
+            paths[.home] = [.playGame(Int64(play), .resume)]
+            return
+        }
+        #endif
         #if DEBUG && os(tvOS)
-        // For checking a game on the simulator: `-WittyPlayOpenGame <id>` at launch opens its page.
         let game = UserDefaults.standard.integer(forKey: "WittyPlayOpenGame")
         if game > 0, paths[.home]?.isEmpty ?? true {
             paths[.home] = [.game(Int64(game))]

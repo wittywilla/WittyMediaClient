@@ -135,12 +135,15 @@ fun TvShell(nav: Nav, content: @Composable () -> Unit) {
     }
 }
 
-// The server's page as a tab's own: its Back closes what's open on it and goes back through it, then up to the bar;
-// from the bar it's the bar's. The page has the remote's arrows to itself.
+// The server's page as a tab's own: its Back closes what's open on it and goes back through it, then up to the bar,
+// and Up from its topmost control goes to the bar too, when the page says so (data-app-up); from the bar, Back is the bar's.
 @Composable
 private fun PageInTab(nav: Nav, route: Route, path: String) {
     val bar = LocalTvBar.current
-    ServerPageScreen(nav, route, path, keptToGames = false, out = { bar?.focusPill() }, backEnabled = bar?.inBar != true)
+    ServerPageScreen(
+        nav, route, path, keptToGames = false,
+        out = { bar?.focusPill() }, backEnabled = bar?.inBar != true, upOut = { bar?.focusPill() },
+    )
 }
 
 // A library added to the top menu, as its tab: its own screen where the app has one, as Home opens it, else its page.
