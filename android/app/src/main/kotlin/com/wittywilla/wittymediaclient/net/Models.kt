@@ -607,3 +607,72 @@ fun versionParts(version: String): Pair<String, String> {
         ?: return (version.ifEmpty { "dev" }) to (if (version == "dev") "DEV" else "")
     return match.groupValues[1] to match.groupValues[2].uppercase()
 }
+
+// A song's words (GET /music/lyrics/{id}, web/src/audio/lyrics.ts). Times are in milliseconds from the start.
+@Serializable
+data class LyricWord(val t: Double = 0.0, val text: String = "")
+
+@Serializable
+data class LyricLine(val t: Double = 0.0, val end: Double? = null, val text: String = "", val words: List<LyricWord>? = null)
+
+// `offsetMs` is the listener's own correction: later words are a positive number. `online` says whether the server may
+// look for words online, `tried` whether it has for this song, and `canEdit` whether this person may fix them. `retry`
+// means another song's look-up is under way: ask again in a few seconds.
+@Serializable
+data class Lyrics(
+    val itemId: Long = 0,
+    val source: String = "",
+    val sourceName: String = "",
+    val creditUrl: String = "",
+    val synced: Boolean = false,
+    val lines: List<LyricLine> = emptyList(),
+    val plain: String = "",
+    val instrumental: Boolean = false,
+    val offsetMs: Double = 0.0,
+    val failed: String = "",
+    val online: Boolean = false,
+    val tried: Boolean = false,
+    val canEdit: Boolean = false,
+    val retry: Boolean = false,
+) {
+    // Only timed lines follow the music.
+    val timed: List<LyricLine> get() = if (synced) lines else emptyList()
+
+    // The line sung at this moment, or -1 before the first: the website's lineAt, with a timing being tried out.
+    fun lineAt(seconds: Double, offset: Double = offsetMs): Int = lineIndex(timed, seconds * 1000 - offset)
+}
+
+// The last line that has started by this many milliseconds, or -1.
+fun lineIndex(lines: List<LyricLine>, ms: Double): Int {
+    var lo = 0
+    var hi = lines.size - 1
+    var at = -1
+    while (lo <= hi) {
+        val mid = (lo + hi) ushr 1
+        if (lines[mid].t <= ms) { at = mid; lo = mid + 1 } else hi = mid - 1
+    }
+    return at
+}
+
+// Another version of a song's words, from POST /music/lyrics/{id}/search.
+@Serializable
+data class FoundLyrics(
+    val provider: String = "",
+    val id: String = "",
+    val title: String = "",
+    val artist: String = "",
+    val album: String = "",
+    val durationSec: Double? = null,
+    val hasSynced: Boolean = false,
+    val instrumental: Boolean = false,
+) {
+    // "Timed · same length", "Words only · 12 s different", as the website's list says.
+    fun facts(songSeconds: Double?): String {
+        val kind = if (instrumental) "No words" else if (hasSynced) "Timed" else "Words only"
+        val found = durationSec ?: 0.0
+        val song = songSeconds ?: 0.0
+        if (found == 0.0 || song == 0.0) return kind
+        val off = kotlin.math.abs(found - song)
+        return "$kind · ${if (off < 3) "same length" else "${Math.round(off)} s different"}"
+    }
+}

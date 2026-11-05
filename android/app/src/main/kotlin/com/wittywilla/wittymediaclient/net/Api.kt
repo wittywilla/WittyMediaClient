@@ -238,6 +238,17 @@ class Api(val base: String, val token: String, private val quick: Boolean = fals
     suspend fun songRadio(id: Long): List<Item> = getList("/music/radio/$id")
     suspend fun likes(library: Long): List<Long> = getList("/music/likes?library=$library")
     suspend fun react(id: Long, value: Int) { call("PUT", "/items/$id/reaction", "{\"value\":$value}") }
+    // A song's words, looked for online when the server has none yet and may; the listener's own timing; and, for an
+    // owner, other versions online and corrections kept on the server (web/src/audio/LyricsPanel.tsx).
+    suspend fun lyrics(id: Long): Lyrics = get("/music/lyrics/$id?fetch=1")
+    suspend fun setLyricsOffset(id: Long, ms: Double) { call("PUT", "/music/lyrics/$id/offset", body(mapOf("offsetMs" to JsonPrimitive(Math.round(ms))))) }
+    suspend fun searchLyrics(id: Long, q: String): List<FoundLyrics> =
+        json.decodeFromString<List<FoundLyrics>?>(call("POST", "/music/lyrics/$id/search", body(mapOf("q" to JsonPrimitive(q))))).orEmpty()
+    suspend fun chooseLyrics(id: Long, provider: String, found: String) { call("PUT", "/music/lyrics/$id", body(mapOf("provider" to JsonPrimitive(provider), "id" to JsonPrimitive(found)))) }
+    suspend fun saveLyrics(id: Long, text: String) { call("PUT", "/music/lyrics/$id", body(mapOf("text" to JsonPrimitive(text)))) }
+    suspend fun markInstrumental(id: Long) { call("PUT", "/music/lyrics/$id", body(mapOf("instrumental" to JsonPrimitive(true)))) }
+    suspend fun forgetLyrics(id: Long) { call("DELETE", "/music/lyrics/$id") }
+    private fun body(fields: Map<String, JsonElement>) = kotlinx.serialization.json.JsonObject(fields).toString()
     suspend fun shelves(library: Long): Shelves = get("/browse/shelves?library=$library")
     // The query is the website's: sort, desc, seed and the filters, already encoded.
     suspend fun browse(library: Long, query: String, offset: Int, limit: Int): BrowsePage = get("/browse?library=$library&$query&offset=$offset&limit=$limit")

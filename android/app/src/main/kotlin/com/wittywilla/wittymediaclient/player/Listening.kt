@@ -73,6 +73,9 @@ class Listening(private val app: WittyApp) {
     val liked = mutableStateMapOf<Long, Boolean>()
     private val likesAsked = HashSet<Long>()
 
+    // Songs' words, kept for the sitting once found, as the website's player keeps them (lyrics.ts).
+    val heldLyrics = HashMap<Long, com.wittywilla.wittymediaclient.net.Lyrics>()
+
     fun loadLikes(library: Long) {
         if (library <= 0 || !likesAsked.add(library)) return
         val api = app.api
@@ -375,6 +378,7 @@ class Listening(private val app: WittyApp) {
         problem = ""
         liked.clear()
         likesAsked.clear()
+        heldLyrics.clear()
         return app.scope.launch { sent?.join() }
     }
 

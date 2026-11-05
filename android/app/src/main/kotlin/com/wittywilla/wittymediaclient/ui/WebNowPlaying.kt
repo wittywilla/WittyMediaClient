@@ -365,6 +365,14 @@ fun WebNowPlaying(nav: Nav) {
     val tint = Color(glow.first, glow.second, glow.third)
     fun toggle(chosen: NpMenu) { menu = if (menu == chosen) NpMenu.None else chosen }
     fun togglePanel(chosen: NpPanel) { panel = if (panel == chosen) NpPanel.None else chosen }
+    // The words, shared by Lyrics, Read and karaoke, and only asked for while one of them is open. Music only.
+    val words = remember { LyricsWords(listening, { nav.app.api }, scope, nav.app.scope) }
+    val lyricsWanted = music && (panel == NpPanel.Lyrics || panel == NpPanel.Read)
+    LaunchedEffect(trackId, lyricsWanted) { words.want(trackId, lyricsWanted) }
+    LaunchedEffect(music) { if (!music && (panel == NpPanel.Lyrics || panel == NpPanel.Read)) panel = NpPanel.None }
+    val title = about.title?.toString().orEmpty()
+    val artistName = about.artist?.toString().orEmpty().ifEmpty { about.albumArtist?.toString().orEmpty() }
+    val runtime = (about.durationMs ?: 0L) / 1000.0
 
     Box(
         Modifier.fillMaxSize().background(Color.Black).onGloballyPositioned { origin = it.boundsInRoot().topLeft }
@@ -402,8 +410,15 @@ fun WebNowPlaying(nav: Nav) {
             }
             val playSize = (screenH * 0.10f).coerceIn(66f, 96f).dp
             Column(Modifier.weight(1f).fillMaxWidth().padding(horizontal = 16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                if (panel == NpPanel.Queue) {
-                    QueuePanel(nav, glow, Modifier.weight(1f)) { panel = NpPanel.None }
+                if (panel != NpPanel.None) {
+                    // A panel takes the artwork's place (`.np-panel`): radius 20, on its own near-black, a hairline round it.
+                    Box(Modifier.weight(1f).fillMaxWidth().clip(RoundedCornerShape(20.dp)).background(Np.panel).border(1.dp, Np.line, RoundedCornerShape(20.dp))) {
+                        when (panel) {
+                            NpPanel.Queue -> QueuePanel(nav, glow, Modifier.fillMaxSize()) { panel = NpPanel.None }
+                            NpPanel.Lyrics -> LyricsPanel(nav, words, trackId, title, artistName, runtime, { panel = NpPanel.None }) { toast = it }
+                            else -> {}
+                        }
+                    }
                 } else {
                     Column(
                         Modifier.weight(1f).fillMaxWidth().verticalScroll(rememberScrollState()).padding(vertical = 4.dp),
@@ -439,7 +454,12 @@ fun WebNowPlaying(nav: Nav) {
                             setViz = ::setViz, pickStyle = ::pickStyle,
                             shuffleAnchor = Modifier.anchor(NpMenu.Shuffle), speedAnchor = Modifier.anchor(NpMenu.Speed),
                             shuffleOpen = menu == NpMenu.Shuffle, openShuffle = { toggle(NpMenu.Shuffle) }, openSpeed = { toggle(NpMenu.Speed) },
-                        )
+                        ) {
+                            // The words' chips, for music.
+                            if (music) {
+                                NpChip("Lyrics", on = panel == NpPanel.Lyrics, icon = WebIcons.Mic) { togglePanel(NpPanel.Lyrics) }
+                            }
+                        }
                     }
                 }
                 if (panel != NpPanel.None) Transport(nav, books, 56.dp, small = true, Modifier.padding(top = 8.dp, bottom = maxOf(10.dp, inset)))
@@ -643,7 +663,7 @@ private fun QueuePanel(nav: Nav, glow: Triple<Int, Int, Int>, modifier: Modifier
     val current = queue.indexOfFirst { it.index == listening.nowIndex }
     val after = if (current >= 0) queue.drop(current + 1) else emptyList()
     val tint = Color(glow.first, glow.second, glow.third)
-    Column(modifier.fillMaxWidth().clip(RoundedCornerShape(20.dp)).background(Np.panel).border(1.dp, Np.line, RoundedCornerShape(20.dp))) {
+    Column(modifier.fillMaxWidth()) {
         Row(Modifier.fillMaxWidth().padding(start = 16.dp, end = 8.dp, top = 12.dp, bottom = 8.dp), verticalAlignment = Alignment.CenterVertically) {
             Column(Modifier.weight(1f)) {
                 Text(if (books) "Chapters" else "Queue", color = Np.fg, fontSize = 17.sp, fontWeight = FontWeight.Bold)
