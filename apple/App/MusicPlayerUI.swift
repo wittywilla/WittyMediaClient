@@ -86,20 +86,22 @@ private struct BarButton: View {
     let label: String
     var big = false
     var on = false
+    /// A liked song's heart: the accent's words colour, with no fill.
+    var liked = false
     let action: () -> Void
 
     var body: some View {
         Button(action: action) {
             Image(systemName: symbol)
                 .font(.system(size: 20, weight: .semibold))
-                .foregroundStyle(big ? palette.onAccent : on ? palette.accentText : palette.text)
+                .foregroundStyle(big ? palette.onAccent : on || liked ? palette.accentText : palette.text)
                 .frame(width: 44, height: 44)
                 .background(Circle().fill(big ? palette.accent : on ? palette.accent.opacity(0.16) : .clear))
                 .contentShape(Circle())
         }
         .buttonStyle(BarPressStyle())
         .accessibilityLabel(label)
-        .accessibilityAddTraits(on ? [.isSelected] : [])
+        .accessibilityAddTraits(on || liked ? [.isSelected] : [])
     }
 }
 
@@ -109,16 +111,26 @@ private struct BarPressStyle: ButtonStyle {
     }
 }
 
-/// Above the floating bar: art, words, Play, Next and a way up. On a wide tablet, the website's wider bar
-/// with the rest of the transport, the time, the queue and Stop.
+/// Above the floating bar: art, words, Play, Next and a way up. From 900 across (an iPad on its side), the website's
+/// wider bar: the rest of the transport, Like and Add to a playlist, the time, the volume, the queue, the visualizer,
+/// full screen, Collapse and Stop. Collapsed, a round button in the corner that keeps Play to hand.
 struct AudioBar: View {
+    @EnvironmentObject private var model: AppModel
     @EnvironmentObject private var listening: Listening
     @Environment(\.client) private var client
     @Environment(\.palette) private var palette
-    let wide: Bool
+    let width: CGFloat
+    @State private var adding = false
+    @State private var volume = false
+    @State private var said = ""
 
-    private func open(queue: Bool = false) {
+    private var wide: Bool { width >= 900 }
+    /// Between 900 and 1240 across, the time and the visualizer's word are left off, as on the website.
+    private var roomy: Bool { width > 1240 }
+
+    private func open(queue: Bool = false, visualizer: Bool = false) {
         listening.screenWithQueue = queue
+        listening.screenWithVisualizer = visualizer
         listening.screenShown = true
     }
 
@@ -132,85 +144,199 @@ struct AudioBar: View {
 
     var body: some View {
         if let now = listening.now {
-            let books = now.keepsPlace
-            let sub = listening.problem.isEmpty ? [now.artist, now.album].filter { !$0.isEmpty }.joined(separator: " · ") : listening.problem
-            HStack(spacing: wide ? 4 : Tokens.Space.s2) {
-                Button { open() } label: {
-                    PosterArt(url: client.posterURL(now.item), title: now.title, width: wide ? 64 : 48)
-                        .frame(width: wide ? 64 : 48, height: wide ? 64 : 48)
-                        .clipShape(RoundedRectangle(cornerRadius: Tokens.Radius.md, style: .continuous))
-                        .shadow(color: .black.opacity(0.3), radius: 2, y: 1)
+            if listening.barCollapsed {
+                collapsed(now)
+            } else {
+                bar(now)
+            }
+        }
+    }
+
+    private func collapsed(_ now: QueuedTrack) -> some View {
+        HStack(spacing: 6) {
+            Button { listening.barCollapsed = false } label: {
+                PosterArt(url: client.posterURL(now.item), title: now.title, width: 48)
+                    .frame(width: 48, height: 48)
+                    .clipShape(Circle())
+            }
+            .buttonStyle(BarPressStyle())
+            .overlay {
+                // How far through, as a ring around the artwork.
+                TimelineView(.periodic(from: .now, by: 1)) { _ in
+                    let _ = listening.jumps
+                    let duration = listening.durationSec()
+                    Circle()
+                        .trim(from: 0, to: duration > 0 ? min(1, listening.positionSec() / duration) : 0)
+                        .stroke(palette.accentText, lineWidth: 2.5)
+                        .rotationEffect(.degrees(-90))
+                        .frame(width: 54, height: 54)
+                }
+                .allowsHitTesting(false)
+            }
+            .accessibilityLabel("Show the player: \(now.title)")
+            BarButton(symbol: listening.isPlaying ? "pause.fill" : "play.fill", label: listening.isPlaying ? "Pause" : "Play", big: true) {
+                listening.toggle()
+            }
+        }
+        .padding(.leading, 5).padding(.trailing, 8).padding(.vertical, 5)
+        .background(Capsule().fill(palette.panel))
+        .overlay(Capsule().strokeBorder(palette.control, lineWidth: 1))
+        .shadow(color: .black.opacity(0.45), radius: 15, y: 10)
+        .frame(maxWidth: .infinity, alignment: .trailing)
+        .padding(.trailing, wide ? 16 : Tokens.Space.s2)
+    }
+
+    private func bar(_ now: QueuedTrack) -> some View {
+        let books = now.keepsPlace
+        let sub = listening.problem.isEmpty ? [now.artist, now.album].filter { !$0.isEmpty }.joined(separator: " · ") : listening.problem
+        return HStack(spacing: wide ? 4 : Tokens.Space.s2) {
+            Button { open() } label: {
+                PosterArt(url: client.posterURL(now.item), title: now.title, width: wide ? 64 : 48)
+                    .frame(width: wide ? 64 : 48, height: wide ? 64 : 48)
+                    .clipShape(RoundedRectangle(cornerRadius: Tokens.Radius.md, style: .continuous))
+                    .shadow(color: .black.opacity(0.3), radius: 2, y: 1)
+            }
+            .buttonStyle(BarPressStyle())
+            .padding(.top, wide ? -22 : 0)
+            .accessibilityLabel("Show the full player")
+            Button { open() } label: {
+                VStack(alignment: .leading, spacing: 1) {
+                    Text(now.title).font(.system(size: 14, weight: .semibold)).foregroundStyle(palette.text)
+                    Text(sub).font(.system(size: 12)).foregroundStyle(palette.textSecondary)
+                }
+                .lineLimit(1)
+                .padding(.horizontal, 8).padding(.vertical, 4)
+                .frame(minWidth: wide ? 120 : 0, maxWidth: .infinity, alignment: .leading)
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel("\(now.title), \(sub)")
+            .accessibilityHint("Shows the full player")
+            if wide { likeAndAdd(now) }
+            HStack(spacing: 2) {
+                if wide {
+                    if books {
+                        BarButton(symbol: "gobackward.15", label: "Back 15 seconds") { listening.seek(by: -Listening.backSeconds) }
+                    } else {
+                        BarButton(symbol: "shuffle", label: "Shuffle", on: listening.shuffle) { listening.toggleShuffle() }
+                    }
+                    BarButton(symbol: "backward.end.fill", label: "Previous") { listening.previous() }
+                }
+                BarButton(symbol: listening.isPlaying ? "pause.fill" : "play.fill", label: listening.isPlaying ? "Pause" : "Play", big: true) {
+                    listening.toggle()
+                }
+                BarButton(symbol: "forward.end.fill", label: "Next") { listening.next() }
+                    .disabled(!listening.canGoNext)
+                if wide {
+                    if books {
+                        BarButton(symbol: "goforward.30", label: "Forward 30 seconds") { listening.seek(by: Listening.forwardSeconds) }
+                    } else {
+                        BarButton(symbol: listening.repeatMode == .one ? "repeat.1" : "repeat",
+                                  label: listening.repeatMode == .one ? "Repeat this song" : listening.repeatMode == .all ? "Repeat all" : "Repeat off",
+                                  on: listening.repeatMode != .off) { listening.cycleRepeat() }
+                    }
+                }
+            }
+            if wide {
+                rightSide(books: books)
+            } else {
+                BarButton(symbol: "chevron.up", label: "Full screen") { open() }
+            }
+        }
+        .padding(.top, wide ? 12 : 8)
+        .padding([.horizontal, .bottom], wide ? 12 : 8)
+        .background(RoundedRectangle(cornerRadius: Tokens.Radius.xl, style: .continuous).fill(palette.panel))
+        .overlay(RoundedRectangle(cornerRadius: Tokens.Radius.xl, style: .continuous).strokeBorder(palette.control, lineWidth: 1))
+        .overlay(alignment: .top) {
+            progress
+                .padding(.leading, wide ? 88 : 16)
+                .padding(.trailing, wide ? 20 : 16)
+                .offset(y: wide ? 2 : -7)
+        }
+        .overlay(alignment: .top) {
+            if !said.isEmpty {
+                Text(said).font(.system(size: 14, weight: .semibold)).foregroundStyle(palette.text)
+                    .padding(.horizontal, 16).frame(minHeight: 40)
+                    .background(Capsule().fill(palette.raised))
+                    .offset(y: -56)
+                    .transition(.opacity)
+            }
+        }
+        .shadow(color: .black.opacity(0.45), radius: 15, y: 10)
+        .frame(maxWidth: wide ? 1320 : .infinity)
+        .padding(.horizontal, wide ? 24 : Tokens.Space.s2)
+    }
+
+    private func say(_ words: String) {
+        withAnimation { said = words }
+        UIAccessibility.post(notification: .announcement, argument: words)
+        Task {
+            try? await Task.sleep(nanoseconds: 3_000_000_000)
+            withAnimation { if said == words { said = "" } }
+        }
+    }
+
+    @ViewBuilder
+    private func likeAndAdd(_ now: QueuedTrack) -> some View {
+        HStack(spacing: 2) {
+            if !now.keepsPlace {
+                let liked = listening.likes.contains(now.item.id)
+                BarButton(symbol: liked ? "heart.fill" : "heart", label: liked ? "Remove from liked songs" : "Add to liked songs", liked: liked) {
+                    Task { if let error = await listening.toggleLike(now.item.id) { say(model.handle(error)) } }
+                }
+                .task(id: now.item.libraryId) { await listening.loadLikes() }
+            }
+            BarButton(symbol: "text.badge.plus", label: "Add to a playlist", on: adding) { adding.toggle() }
+                .popover(isPresented: $adding, arrowEdge: .bottom) {
+                    PlaylistPicker(items: [now.item], done: { adding = false }, said: say)
+                        .padding(6)
+                        .frame(width: 280)
+                        .environment(\.onBlack, false)
+                        .background(palette.panel.ignoresSafeArea())
+                }
+        }
+    }
+
+    private func rightSide(books: Bool) -> some View {
+        HStack(spacing: 2) {
+            if roomy {
+                TimelineView(.periodic(from: .now, by: 1)) { _ in
+                    let _ = listening.jumps
+                    Text("\(PlayerTime.format(listening.positionSec())) / \(PlayerTime.format(listening.durationSec()))")
+                        .font(.system(size: 12).monospacedDigit())
+                        .foregroundStyle(palette.textSecondary)
+                        .padding(.horizontal, 8)
+                }
+            }
+            let silent = listening.sound.muted || listening.sound.volume == 0
+            BarButton(symbol: silent ? "speaker.slash.fill" : "speaker.wave.2.fill", label: "Volume", on: volume) { volume.toggle() }
+                .popover(isPresented: $volume, arrowEdge: .bottom) {
+                    VolumeCard()
+                        .padding(6)
+                        .environment(\.onBlack, false)
+                        .background(palette.panel.ignoresSafeArea())
+                }
+            BarButton(symbol: "list.bullet", label: books ? "Chapters" : "Queue") { open(queue: true) }
+            if !books {
+                Button { open(visualizer: true) } label: {
+                    HStack(spacing: 6) {
+                        Image(systemName: "waveform").font(.system(size: 17)).foregroundStyle(palette.accentText)
+                        if roomy { Text("Visualizer").font(.system(size: 13, weight: .semibold)).foregroundStyle(palette.text) }
+                    }
+                    .padding(.horizontal, roomy ? 12 : 10)
+                    .frame(minHeight: 40)
+                    .background(Capsule().fill(palette.accent.opacity(0.16)))
+                    .overlay(Capsule().strokeBorder(palette.accent.opacity(0.4), lineWidth: 1.5))
+                    .padding(.horizontal, 2)
+                    .frame(minHeight: 44)
+                    .contentShape(Capsule())
                 }
                 .buttonStyle(BarPressStyle())
-                .padding(.top, wide ? -22 : 0)
-                .accessibilityLabel("Show the full player")
-                Button { open() } label: {
-                    VStack(alignment: .leading, spacing: 1) {
-                        Text(now.title).font(.system(size: 14, weight: .semibold)).foregroundStyle(palette.text)
-                        Text(sub).font(.system(size: 12)).foregroundStyle(palette.textSecondary)
-                    }
-                    .lineLimit(1)
-                    .padding(.horizontal, 8).padding(.vertical, 4)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .contentShape(Rectangle())
-                }
-                .buttonStyle(.plain)
-                .accessibilityLabel("\(now.title), \(sub)")
-                .accessibilityHint("Shows the full player")
-                HStack(spacing: 2) {
-                    if wide {
-                        if books {
-                            BarButton(symbol: "gobackward.15", label: "Back 15 seconds") { listening.seek(by: -Listening.backSeconds) }
-                        } else {
-                            BarButton(symbol: "shuffle", label: "Shuffle", on: listening.shuffle) { listening.toggleShuffle() }
-                        }
-                        BarButton(symbol: "backward.end.fill", label: "Previous") { listening.previous() }
-                    }
-                    BarButton(symbol: listening.isPlaying ? "pause.fill" : "play.fill", label: listening.isPlaying ? "Pause" : "Play", big: true) {
-                        listening.toggle()
-                    }
-                    BarButton(symbol: "forward.end.fill", label: "Next") { listening.next() }
-                        .disabled(!listening.canGoNext)
-                    if wide {
-                        if books {
-                            BarButton(symbol: "goforward.30", label: "Forward 30 seconds") { listening.seek(by: Listening.forwardSeconds) }
-                        } else {
-                            BarButton(symbol: listening.repeatMode == .one ? "repeat.1" : "repeat",
-                                      label: listening.repeatMode == .one ? "Repeat this song" : listening.repeatMode == .all ? "Repeat all" : "Repeat off",
-                                      on: listening.repeatMode != .off) { listening.cycleRepeat() }
-                        }
-                    }
-                }
-                if wide {
-                    HStack(spacing: 2) {
-                        TimelineView(.periodic(from: .now, by: 1)) { _ in
-                            let _ = listening.jumps
-                            Text("\(PlayerTime.format(listening.positionSec())) / \(PlayerTime.format(listening.durationSec()))")
-                                .font(.system(size: 12).monospacedDigit())
-                                .foregroundStyle(palette.textSecondary)
-                                .padding(.horizontal, 6)
-                        }
-                        BarButton(symbol: "list.bullet", label: books ? "Chapters" : "Queue") { open(queue: true) }
-                        BarButton(symbol: "arrow.up.left.and.arrow.down.right", label: "Full screen") { open() }
-                        BarButton(symbol: "xmark", label: "Stop playing and close") { listening.stop() }
-                    }
-                } else {
-                    BarButton(symbol: "chevron.up", label: "Full screen") { open() }
-                }
+                .accessibilityLabel("Visualizer")
             }
-            .padding(.top, wide ? 12 : 8)
-            .padding([.horizontal, .bottom], wide ? 12 : 8)
-            .background(RoundedRectangle(cornerRadius: Tokens.Radius.xl, style: .continuous).fill(palette.panel))
-            .overlay(RoundedRectangle(cornerRadius: Tokens.Radius.xl, style: .continuous).strokeBorder(palette.control, lineWidth: 1))
-            .overlay(alignment: .top) {
-                progress
-                    .padding(.leading, wide ? 88 : 16)
-                    .padding(.trailing, wide ? 20 : 16)
-                    .offset(y: wide ? 2 : -7)
-            }
-            .shadow(color: .black.opacity(0.45), radius: 15, y: 10)
-            .frame(maxWidth: wide ? 1320 : .infinity)
-            .padding(.horizontal, wide ? 24 : Tokens.Space.s2)
+            BarButton(symbol: "arrow.up.left.and.arrow.down.right", label: "Full screen") { open() }
+            BarButton(symbol: "chevron.down", label: "Collapse the player") { listening.barCollapsed = true }
+            BarButton(symbol: "xmark", label: "Stop playing and close") { listening.stop() }
         }
     }
 }
@@ -272,7 +398,18 @@ private struct NPChipStyle: ButtonStyle {
 }
 
 /// A row of a pop-up menu: 44 high, an optional icon, the words.
+/// Whether a part sits on Now Playing's black, or on the theme's own surfaces: the tablet bar's pop-ups.
+private struct OnBlackKey: EnvironmentKey { static let defaultValue = true }
+extension EnvironmentValues {
+    var onBlack: Bool {
+        get { self[OnBlackKey.self] }
+        set { self[OnBlackKey.self] = newValue }
+    }
+}
+
 private struct NPMenuRow: View {
+    @Environment(\.onBlack) private var onBlack
+    @Environment(\.palette) private var palette
     let words: String
     var symbol: String?
     var chosen = false
@@ -287,7 +424,7 @@ private struct NPMenuRow: View {
                 Spacer(minLength: 0)
             }
             .font(.system(size: 14, weight: chosen ? .bold : .regular))
-            .foregroundStyle(NPInk.fg)
+            .foregroundStyle(onBlack ? NPInk.fg : palette.text)
             .padding(.horizontal, 12)
             .frame(minHeight: 44)
             .contentShape(Rectangle())
@@ -297,9 +434,13 @@ private struct NPMenuRow: View {
 }
 
 private struct NPRowStyle: ButtonStyle {
+    @Environment(\.onBlack) private var onBlack
+    @Environment(\.palette) private var palette
+
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
-            .background(RoundedRectangle(cornerRadius: Tokens.Radius.md, style: .continuous).fill(configuration.isPressed ? NPInk.chip : .clear))
+            .background(RoundedRectangle(cornerRadius: Tokens.Radius.md, style: .continuous)
+                .fill(configuration.isPressed ? (onBlack ? NPInk.chip : palette.text.opacity(0.1)) : .clear))
     }
 }
 
@@ -334,8 +475,6 @@ struct PhoneNowPlaying: View {
     @State private var art: CGImage?
     @State private var artMissing = false
     @State private var glow = neutralGlow
-    @State private var likes = Set<Int64>()
-    @State private var likesFor: Int64?
     @State private var maxSpeed: Double?
     @State private var said = ""
     @State private var saidTask: Task<Void, Never>?
@@ -392,7 +531,7 @@ struct PhoneNowPlaying: View {
                     VisualizerBackground(style: style, slow: viz.slow, colour: glow, playing: listening.isPlaying)
                 }
                 VStack(spacing: 0) {
-                    header(phone: phone, compact: compact)
+                    header(phone: phone, compact: compact, width: geo.size.width)
                         .padding(.top, safe.top + max(14 - safe.top, 0))
                     stage(full: full, compact: compact, phone: phone, bottom: safe.bottom)
                 }
@@ -430,6 +569,11 @@ struct PhoneNowPlaying: View {
         .onAppear {
             if listening.screenWithQueue { panel = .queue }
             listening.screenWithQueue = false
+        }
+        .onChange(of: vizLoaded) { loaded in
+            guard loaded, listening.screenWithVisualizer else { return }
+            listening.screenWithVisualizer = false
+            if !viz.viz { setViz { $0.viz = true } }
         }
         .task(id: now.map { client.posterURL($0.item) } ?? nil) { await loadArt() }
         .task(id: now?.item.libraryId) { await loadLikes() }
@@ -493,21 +637,10 @@ struct PhoneNowPlaying: View {
         }
     }
 
-    private func loadLikes() async {
-        guard music, let library = now?.item.libraryId, likesFor != library else { return }
-        likesFor = library
-        if let ids = try? await client.likes(library: library) { likes.formUnion(ids) }
-    }
+    private func loadLikes() async { await listening.loadLikes() }
 
     private func toggleLike(_ id: Int64) {
-        let on = !likes.contains(id)
-        if on { likes.insert(id) } else { likes.remove(id) }
-        Task {
-            do { try await client.setLike(item: id, on) } catch {
-                if on { likes.remove(id) } else { likes.insert(id) }
-                say(model.handle(error))
-            }
-        }
+        Task { if let error = await listening.toggleLike(id) { say(model.handle(error)) } }
     }
 
     // MARK: The glow
@@ -526,24 +659,25 @@ struct PhoneNowPlaying: View {
 
     // MARK: The top
 
-    private func header(phone: Bool, compact: Bool) -> some View {
+    private func header(phone: Bool, compact: Bool, width: CGFloat) -> some View {
         let books = !music
         let kind = books ? (listening.libraryTypes[now?.item.libraryId ?? 0] == "podcasts" ? "Podcast" : "Audiobook") : "Now playing"
         let sub = now.map { $0.album.isEmpty ? $0.artist : $0.album } ?? ""
+        // What's playing and from where: between the two sides up to 860 across, and in the middle of the bar on a
+        // wider screen, as the website's grid has it. A phone leaves it off.
+        let place = VStack(spacing: 0) {
+            Text(kind).font(.system(size: 13, weight: .semibold)).foregroundStyle(NPInk.fg2)
+            Text(sub).font(.system(size: 14, weight: .semibold)).foregroundStyle(NPInk.fg).lineLimit(1)
+        }
+        .accessibilityElement(children: .combine)
         return HStack(spacing: Tokens.Space.s2) {
             NPButton(symbol: "chevron.down", label: "Close the full player") { close() }
-            if phone {
-                Spacer(minLength: 0)
+            if compact, !phone {
+                place.frame(maxWidth: .infinity)
             } else {
-                VStack(spacing: 0) {
-                    Text(kind).font(.system(size: 13, weight: .semibold)).foregroundStyle(NPInk.fg2)
-                    Text(sub).font(.system(size: 14, weight: .semibold)).foregroundStyle(NPInk.fg).lineLimit(1)
-                }
-                .frame(maxWidth: compact ? .infinity : 360)
-                .frame(maxWidth: .infinity)
-                .accessibilityElement(children: .combine)
+                Spacer(minLength: 0)
             }
-            HStack(spacing: phone ? 2 : 4) {
+            HStack(spacing: phone ? 2 : compact ? 4 : 6) {
                 // Phones have their own volume, as on the website.
                 if !phone {
                     let silent = listening.sound.muted || listening.sound.volume == 0
@@ -557,7 +691,7 @@ struct PhoneNowPlaying: View {
                     panel = panel == .queue ? nil : .queue
                 }
                 if music, let id = now?.item.id {
-                    let liked = likes.contains(id)
+                    let liked = listening.likes.contains(id)
                     NPButton(symbol: liked ? "heart.fill" : "heart", label: liked ? "Remove from liked songs" : "Add to liked songs", loved: liked) {
                         toggleLike(id)
                     }
@@ -567,7 +701,8 @@ struct PhoneNowPlaying: View {
                     .anchorPreference(key: MenuAnchors.self, value: .bounds) { [.more: $0] }
             }
         }
-        .padding(.horizontal, 12)
+        .overlay { if !compact { place.frame(maxWidth: width * 0.46) } }
+        .padding(.horizontal, compact ? 12 : clamp(12, width * 0.02, 24))
         .padding(.bottom, 4)
         .contentShape(Rectangle())
         // A swipe down puts it away, as the player's own Close does.
@@ -608,7 +743,7 @@ struct PhoneNowPlaying: View {
             HStack(alignment: .top, spacing: clamp(16, full.width * 0.03, 40)) {
                 main(full: full, compact: compact, phone: phone)
                 if let panel {
-                    panelView(panel, height: full.height)
+                    panelView(panel, height: full.height, wide: true)
                         .frame(width: max(320, min(480, full.width * 0.42)))
                         .frame(maxHeight: .infinity)
                         .background(RoundedRectangle(cornerRadius: Tokens.Radius.xl, style: .continuous).fill(NPInk.panel))
@@ -901,10 +1036,10 @@ struct PhoneNowPlaying: View {
     // MARK: The panels
 
     @ViewBuilder
-    private func panelView(_ shown: NPPanel, height: CGFloat) -> some View {
+    private func panelView(_ shown: NPPanel, height: CGFloat, wide: Bool = false) -> some View {
         switch shown {
         case .queue:
-            QueuePanelView(glow: glow, close: { panel = nil }, save: { toggle(.addQueue) }, saving: menu == .addQueue)
+            QueuePanelView(glow: glow, close: { panel = nil }, save: { toggle(.addQueue) }, saving: menu == .addQueue, wide: wide)
         case .lyrics:
             if let item = now?.item {
                 LyricsPanelView(words: words, item: item, screenHeight: height, close: { panel = nil }, go: go, said: say).id(item.id)
@@ -1048,6 +1183,7 @@ private struct PlaylistPicker: View {
     @EnvironmentObject private var model: AppModel
     @Environment(\.client) private var client
     @Environment(\.palette) private var palette
+    @Environment(\.onBlack) private var onBlack
     let items: [Item]
     let done: () -> Void
     let said: (String) -> Void
@@ -1091,19 +1227,19 @@ private struct PlaylistPicker: View {
                         .submitLabel(.done)
                         .onSubmit { Task { await make() } }
                         .font(.system(size: 14))
-                        .foregroundStyle(NPInk.fg)
+                        .foregroundStyle(onBlack ? NPInk.fg : palette.text)
                         .padding(.horizontal, 10)
-                        .frame(minHeight: 36)
-                        .background(RoundedRectangle(cornerRadius: Tokens.Radius.md, style: .continuous).fill(NPInk.well))
-                        .overlay(RoundedRectangle(cornerRadius: Tokens.Radius.md, style: .continuous).strokeBorder(Color.white.opacity(0.4), lineWidth: 1))
+                        .frame(minHeight: 44)
+                        .background(RoundedRectangle(cornerRadius: Tokens.Radius.md, style: .continuous).fill(onBlack ? NPInk.well : palette.card))
+                        .overlay(RoundedRectangle(cornerRadius: Tokens.Radius.md, style: .continuous).strokeBorder(onBlack ? Color.white.opacity(0.4) : palette.control, lineWidth: 1))
                         .accessibilityLabel("Name of the new playlist")
                         .onAppear { typing = true }
                     Button("Make it") { Task { await make() } }
                         .font(.system(size: 13, weight: .semibold))
-                        .foregroundStyle(Color.black)
+                        .foregroundStyle(onBlack ? Color.black : palette.onAccent)
                         .padding(.horizontal, 12)
-                        .frame(minHeight: 36)
-                        .background(RoundedRectangle(cornerRadius: Tokens.Radius.md, style: .continuous).fill(Color.white))
+                        .frame(minHeight: 44)
+                        .background(RoundedRectangle(cornerRadius: Tokens.Radius.md, style: .continuous).fill(onBlack ? Color.white : palette.accent))
                         .disabled(busy || name.trimmingCharacters(in: .whitespaces).isEmpty)
                 }
                 .padding(4)
@@ -1117,7 +1253,7 @@ private struct PlaylistPicker: View {
                                     .disabled(busy)
                             }
                         } else {
-                            Text("Loading…").font(.system(size: 13)).foregroundStyle(NPInk.fg2)
+                            Text("Loading…").font(.system(size: 13)).foregroundStyle(onBlack ? NPInk.fg2 : palette.textSecondary)
                                 .frame(maxWidth: .infinity, minHeight: 36, alignment: .leading).padding(.horizontal, 12)
                         }
                     }
@@ -1138,6 +1274,8 @@ private struct QueuePanelView: View {
     let close: () -> Void
     let save: () -> Void
     let saving: Bool
+    /// Over 860 across, the website keeps Up beside each song too.
+    var wide = false
 
     var body: some View {
         let rows = listening.rows
@@ -1217,6 +1355,13 @@ private struct QueuePanelView: View {
             .accessibilityLabel([track.title, track.artist].filter { !$0.isEmpty }.joined(separator: ", "))
             .accessibilityValue(isNow ? "Playing" : "")
             // Up is left off on a narrow screen, as the website's; Down and Remove stay.
+            if !listening.shuffle, wide {
+                NPButton(symbol: "chevron.up", label: "Move \(track.title) up", size: 36, glyph: 15, plain: true) {
+                    listening.move(from: row.index, to: row.index - 1)
+                }
+                .disabled(position == 0)
+                .opacity(position == 0 ? 0.4 : 1)
+            }
             if !listening.shuffle {
                 NPButton(symbol: "chevron.down", label: "Move \(track.title) down", size: 36, glyph: 15, plain: true) {
                     listening.move(from: row.index, to: row.index + 1)

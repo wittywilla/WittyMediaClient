@@ -121,6 +121,8 @@ struct NPSelect<Value: Hashable>: View {
 
 /// The website's range for a value between two ends: a 4 high track, white to the value, and a 14 thumb.
 struct NPSlider: View {
+    @Environment(\.onBlack) private var onBlack
+    @Environment(\.palette) private var palette
     let value: Double
     let range: ClosedRange<Double>
     var step = 1.0
@@ -138,8 +140,8 @@ struct NPSlider: View {
             let width = geo.size.width
             let part = CGFloat((value - range.lowerBound) / (range.upperBound - range.lowerBound))
             ZStack(alignment: .leading) {
-                Capsule().fill(Color.white.opacity(0.28)).frame(height: 4)
-                Capsule().fill(Color.white).frame(width: width * part, height: 4)
+                Capsule().fill(onBlack ? Color.white.opacity(0.28) : palette.text.opacity(0.28)).frame(height: 4)
+                Capsule().fill(onBlack ? Color.white : palette.accent).frame(width: width * part, height: 4)
                 Circle().fill(.white).frame(width: 14, height: 14)
                     .shadow(color: .black.opacity(0.45), radius: 1.5, y: 1)
                     .offset(x: part * max(width - 14, 0))
@@ -446,13 +448,15 @@ struct SoundPanelView: View {
 /// A tablet's volume, as the website's pop-up: mute, and how loud.
 struct VolumeCard: View {
     @EnvironmentObject private var listening: Listening
+    @Environment(\.onBlack) private var onBlack
+    @Environment(\.palette) private var palette
 
     var body: some View {
         let shown = listening.sound.muted ? 0 : listening.sound.volume
         HStack(spacing: 8) {
             Button { listening.setSound { $0.muted.toggle() } } label: {
                 Image(systemName: shown == 0 ? "speaker.slash.fill" : "speaker.wave.2.fill")
-                    .font(.system(size: 18, weight: .semibold)).foregroundStyle(NPInk.fg)
+                    .font(.system(size: 18, weight: .semibold)).foregroundStyle(onBlack ? NPInk.fg : palette.text)
                     .frame(width: 44, height: 44).contentShape(Circle())
             }
             .buttonStyle(.plain)

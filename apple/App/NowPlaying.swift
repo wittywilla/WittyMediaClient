@@ -111,9 +111,9 @@ struct MiniPlayerSlot: View {
         if shows {
             #if os(iOS) || os(visionOS)
             // The website's bar: its phone layout, and its wider one from 900 across.
-            AudioBar(wide: width >= 900)
+            AudioBar(width: width)
                 // Room above for the place, which straddles the bar's top, and on a wide one for the artwork.
-                .padding(.top, width >= 900 ? 22 : 7)
+                .padding(.top, listening.barCollapsed ? 0 : width >= 900 ? 22 : 7)
                 .background(GeometryReader { geo in Color.clear.preference(key: BarWidth.self, value: geo.size.width) })
                 .onPreferenceChange(BarWidth.self) { width = $0 }
             #else

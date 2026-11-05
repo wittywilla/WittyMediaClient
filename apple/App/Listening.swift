@@ -61,6 +61,15 @@ final class Listening: ObservableObject {
     @Published var screenShown = false
     /// Opens it with the queue showing: the tablet bar's Queue button, as the website's.
     var screenWithQueue = false
+    /// Opens it with the visualizer on: the tablet bar's Visualizer button.
+    var screenWithVisualizer = false
+    /// The bar folded to a round button in the corner, as the website keeps it (`wms.audio.collapsed`).
+    @Published var barCollapsed = UserDefaults.standard.bool(forKey: "wms.audio.collapsed") {
+        didSet { UserDefaults.standard.set(barCollapsed, forKey: "wms.audio.collapsed") }
+    }
+    /// The songs this person likes, read a library at a time as the website does.
+    @Published private(set) var likes = Set<Int64>()
+    private var likesFor: Set<Int64> = []
 
     /// The website's sleep timer: stop at a time, or at the end of what's playing.
     enum Sleep: Equatable {
@@ -376,6 +385,28 @@ final class Listening: ObservableObject {
         updateNowPlaying()
     }
 
+    // MARK: Likes
+
+    func loadLikes() async {
+        guard let track = queue.now, !track.keepsPlace, let library = track.item.libraryId, !likesFor.contains(library), let client else { return }
+        likesFor.insert(library)
+        if let ids = try? await client.likes(library: library) { likes.formUnion(ids) }
+    }
+
+    /// Liked or not, at once; put back if the server says no, with its words.
+    func toggleLike(_ id: Int64) async -> Error? {
+        guard let client else { return nil }
+        let on = !likes.contains(id)
+        if on { likes.insert(id) } else { likes.remove(id) }
+        do {
+            try await client.setLike(item: id, on)
+            return nil
+        } catch {
+            if on { likes.remove(id) } else { likes.insert(id) }
+            return error
+        }
+    }
+
     // MARK: The sound
 
     /// A change from the Sound panel or karaoke. The voice and the key aren't kept for another day.
@@ -583,6 +614,8 @@ final class Listening: ObservableObject {
         clearAll()
         problem = ""
         sleep = nil
+        likes = []
+        likesFor = []
         client = nil
         libraryTypes = [:]
         return sent
