@@ -136,24 +136,16 @@ Unchanged. A game in a `console: rig` library plays on a real PC through Sunshin
 (`apple/WittyKit/Sources/WittyKit/Rigs.swift`). The server answers 409 with `rig: true` if one is
 started with `POST /games/{id}/play`.
 
-## The Apple client
-
-One player for Apple TV, iPhone, iPad and Apple Vision Pro: the same engine, input and model on all
-of them, with `#if os(...)` only where a device differs (the Siri Remote, focus, touch).
-`GamePlayerView(gameId:)` is the screen to show for a server game on any of them. The library, the
-game's page and the menu's look wait for the new WittyPlay design; on iPhone and iPad the library
-and game's page are the server's page until then.
+## The Apple TV client
 
 | Part | How | Files |
 |---|---|---|
-| The library (Apple TV) | Couch mode's look at TV size: covers at the top, one at the front and the rest turned away on a shiny floor, the page tinted by the front cover's colour; Continue playing with each save's picture; Consoles; Recently added, Favourites, Most played, series and genre shelves; every game with the website's sorts; a console's own page | `apple/App/GamesViews.swift` |
-| A game's page (Apple TV) | Its box, Play or Resume (by `states.resume`), Start over, favourite, start with default settings, "Pick up where you left off", about and facts, save states (play from one, hold to delete), how it plays, its controls | `GamesViews.swift` |
-| The connection | A `GameTransport` (WittyKit), chosen by the session's mode: today the WebSocket (`ws-h264`, `ws-jpeg`). The server's second stream, WebRTC with the same messages over a WebSocket behind it, is another transport: the player doesn't change | `apple/WittyKit/Sources/WittyKit/GameTransport.swift` |
+| The library | Couch mode's look at TV size: covers at the top, one at the front and the rest turned away on a shiny floor, the page tinted by the front cover's colour; Continue playing with each save's picture; Consoles; Recently added, Favourites, Most played, series and genre shelves; every game with the website's sorts; a console's own page | `apple/App/GamesViews.swift` |
+| A game's page | Its box, Play or Resume (by `states.resume`), Start over, favourite, start with default settings, "Pick up where you left off", about and facts, save states (play from one, hold to delete), how it plays, its controls | `GamesViews.swift` |
 | The picture | `ws-h264` into VideoToolbox, drawn with Metal the moment a frame is decoded; `ws-jpeg` if no picture comes in 12 seconds; a new connection after 4 seconds with none | `apple/App/GameMachinery.swift` |
 | The person's picture settings | `display.*`, applied on the device as the server asks: sharp, pixel or smooth scaling, whole multiples, shape, crop, rotation, scanlines, a curved screen, a phosphor mask, a vignette, an LCD grid, brightness, contrast, saturation and gamma in one Metal shader; a bezel colour or image with its inset. Not yet: glow, blend, flicker | `GameMachinery.swift` |
 | Sound | PCM at the console's own rate into AVAudioEngine, kept within `audio.latency`; volume and mute | `GameMachinery.swift` |
 | Controllers, remote, keyboard | As above | `apple/App/GameInput.swift`, `apple/WittyKit/Sources/WittyKit/GamePad.swift` |
-| Touch controls (iPhone, iPad) | Below | `apple/App/GameTouch.swift`, `apple/WittyKit/Sources/WittyKit/TouchControls.swift` |
 | The pause menu | Resume, Save state (slots, with pictures), Load state, Quick save and load (`states.quickSlot`), Press Start, Press Select, Change disc, Controllers (who's on which player, their profile, and what the console's emulator lets each player plug in), Reset, Save and quit, asking first where `states.confirm` says. Opened by the remote's Back, Home, Options held, or Start and Select together | `apple/App/GamePlayer.swift` |
 | Models and API | | `apple/WittyKit/Sources/WittyKit/Games.swift`, `GamesAPI.swift`, `GameStream.swift` |
 
@@ -163,31 +155,6 @@ device, so they follow every theme and WittyTV look as the rest of the app does.
 **Consoles:** every console the server plays, since the TV only shows its stream. The Nintendo DS and
 3DS need a DualSense or DualShock 4 for their touch screen, whose touchpad becomes it; without one,
 games that need the stylus are for a browser or a phone, and the game's page says so.
-
-### Touch controls
-
-With no controller connected, iPhone and iPad draw the account's touch layout over the game, as the
-website's WittyPlay player does, so a layout arranged on the website looks and plays the same here.
-
-- **The layout** is the server's: `GET /consoles/{console}/controls?device=<this device>` has the
-  console's `controls`, `defaults.touch` for portrait and landscape, and `saved.touch`, what was saved
-  for this device id, which replaces those controls' placements. A placement is a centre as fractions
-  of the screen and a size as a fraction of its shorter side. There are no touch profiles.
-- **Drawn** as the website draws them: tinted glass by the console's controller, a rounded plus for the
-  D-pad with arrows that light, round face buttons (PlayStation marks, Nintendo 64 C arrows), shoulder
-  buttons rounder at the bottom, pills for Start and Select, a stick with a cap that follows the finger.
-- **Played** as the website plays them: any number of fingers; sliding off one button onto another;
-  hit circles a little larger than the buttons; an eight-way D-pad with a small dead middle; a stick
-  that a finger takes only by landing on it, with a 0.12 radial dead zone; C buttons push the right
-  stick. A short tap for each new press. Start and Select together open the menu, as on a pad.
-- **Upright,** the picture moves into the top 52% and the controls sit below it; sideways the picture
-  has the whole screen and the controls sit over it.
-- **DS and 3DS:** a finger that lands on no control is the stylus until it lifts, and with a controller
-  connected any finger on the picture is. Its position is taken from where the picture was really
-  drawn, with any turn undone, so it lands where the finger is.
-- **Hiding them:** a button beside the menu's, and Show or Hide touch controls in the menu. The choice
-  stays on this device. They hide on their own while a controller is connected, and come back when it goes.
-- **Vision Pro** plays with a controller by default; the touch controls can be turned on from the menu.
 
 ## Which consoles play from this Mac's server
 
