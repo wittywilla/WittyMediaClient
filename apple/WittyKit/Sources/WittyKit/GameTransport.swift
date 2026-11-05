@@ -19,11 +19,14 @@ public protocol GameTransport: AnyObject {
     func sendEvent(_ text: String)
     /// The decoder lost its place: the next frame should be a keyframe.
     func askKeyframe()
+    /// For a transport that plays the sound itself, as WebRTC does: the person's volume, 0 to 1.
+    func setVolume(_ level: Double, muted: Bool)
     func close()
 }
 
 public extension GameTransport {
     func sendEvent(_ text: String) {}
+    func setVolume(_ level: Double, muted: Bool) {}
 }
 
 public enum GameTransportEnd: Equatable {

@@ -303,6 +303,8 @@ final class GamePlayerModel: ObservableObject {
 
     func begin(id: Int64, start: GameStart, client: WittyClient) async {
         guard pipeline == nil else { return }
+        // The second stream over WebRTC, first where the server has it.
+        GameTransports.webRTC = { offer, hello in GameWebRTCTransport(offer: offer, hello: hello) }
         self.client = client
         gameId = id
         self.start = start
@@ -405,6 +407,7 @@ final class GamePlayerModel: ObservableObject {
         renderer.look = PictureLook(settings)
         pipeline?.sound.latency = GameSoundLatency.seconds(settings.text("audio.latency", "lowest"))
         pipeline?.sound.setVolume(settings.number("audio.volume", 1), muted: settings.flag("audio.mute", false))
+        transport?.setVolume(settings.number("audio.volume", 1), muted: settings.flag("audio.mute", false))
     }
 
     private func updateLayout() {
@@ -487,6 +490,7 @@ final class GamePlayerModel: ObservableObject {
             Task { @MainActor in self?.connectionLost(end) }
         }
         self.transport = transport
+        transport.setVolume(settings.number("audio.volume", 1), muted: settings.flag("audio.mute", false))
         connectedAt = Date()
         framesAt = Date()
         framesSeen = pipeline?.frames ?? 0

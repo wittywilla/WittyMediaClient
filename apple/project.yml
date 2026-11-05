@@ -13,6 +13,10 @@ options:
 packages:
   WittyKit:
     path: WittyKit
+  # libwebrtc, built by LiveKit for every Apple platform (its classes start LKRTC): games over WebRTC.
+  LiveKitWebRTC:
+    url: https://github.com/livekit/webrtc-xcframework
+    exactVersion: 144.7559.15
 settings:
   base:
     SWIFT_VERSION: "5.0"
@@ -23,6 +27,9 @@ settings:
     INFOPLIST_KEY_CFBundleDisplayName: WittyMediaClient
     # Filled in by the owner in Xcode: see docs/OWNER-STEPS.md.
     DEVELOPMENT_TEAM: ""
+    # LiveKit's WebRTC has no Intel build for the tvOS or visionOS simulators: Apple silicon only there.
+    "EXCLUDED_ARCHS[sdk=appletvsimulator*]": x86_64
+    "EXCLUDED_ARCHS[sdk=xrsimulator*]": x86_64
 
 targetTemplates:
   App:
@@ -39,6 +46,7 @@ targetTemplates:
         buildPhase: resources
     dependencies:
       - package: WittyKit
+      - package: LiveKitWebRTC
     info:
       path: Generated/Info-${target_name}.plist
       properties:
