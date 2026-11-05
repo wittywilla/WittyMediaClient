@@ -37,7 +37,7 @@ enum AppTab: String, CaseIterable, Identifiable, Hashable {
 }
 
 struct BrowseShell: View {
-    #if os(iOS)
+    #if os(iOS) || os(visionOS)
     @Environment(\.horizontalSizeClass) private var sizeClass
     #endif
 
@@ -82,14 +82,14 @@ private struct TabRoot: View {
                     // and not the last one's state.
                     case .player(let id, let startOver): PlayerScreen(id: id, startOver: startOver).id(id)
                     case .web(let path):
-                        #if os(iOS)
+                        #if os(iOS) || os(visionOS)
                         WebPlayerView(path: path, keptToGames: true)
                         #else
                         // Nothing on these devices opens this: see WittyKit's Rigs.swift.
                         ProblemView(words: "That can only be played on an iPhone or iPad.")
                         #endif
                     case .page(let path):
-                        #if os(iOS)
+                        #if os(iOS) || os(visionOS)
                         WebPlayerView(path: path, keptToGames: false)
                         #else
                         ElsewhereNote(path: path)
@@ -106,7 +106,7 @@ private struct TabRoot: View {
                     #else
                     // Apple TV's own screens. These devices show the server's page for all of them.
                     case .album, .photo, .guide, .channel:
-                        #if os(iOS)
+                        #if os(iOS) || os(visionOS)
                         WebPlayerView(path: ServerPages.guide, keptToGames: false)
                         #else
                         ElsewhereNote(path: ServerPages.guide)
@@ -136,7 +136,7 @@ private struct TopTabs: View {
 }
 #endif
 
-#if os(iOS)
+#if os(iOS) || os(visionOS)
 /// The system's tab view holds the four stacks, with its own bar hidden and the pill in its place.
 private struct PillShell: View {
     @EnvironmentObject private var model: AppModel
@@ -281,7 +281,7 @@ struct MusicView: View {
     }
 }
 
-#if !os(iOS)
+#if !os(iOS) && !os(visionOS)
 /// One of the server's pages, on a device that can't show it inside this app.
 struct ElsewhereNote: View {
     @EnvironmentObject private var model: AppModel
@@ -356,7 +356,7 @@ struct ProfileView: View {
                 }
                 fact("This app", "\(say("appName")) \(WittyClient.appVersion)")
                 Text(say("legalConnect")).font(.footnote).foregroundStyle(palette.textSecondary)
-                #if os(iOS)
+                #if os(iOS) || os(visionOS)
                 NavigationLink("Server settings", value: Route.page(ServerPages.settings))
                 #endif
                 Button("Sign out") { model.signOut() }.firstFocus(in: scope)

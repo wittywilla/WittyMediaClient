@@ -25,6 +25,8 @@ if (shots) app.commandLine.appendSwitch('disable-features', 'CalculateNativeWinO
 
 // Which run this is: the whole first-time journey, or starting with something already remembered.
 const scenario = process.argv[2] || 'journey'
+// A Mac's title bar leaves the window's buttons and Help to the system.
+const MAC = process.platform === 'darwin'
 const PORT = 20000 + (process.pid % 30000)
 const SEEDS = {
   same: (url, key) => ({ server: url, recent: [{ url, name: 'Remembered', publicKey: key, serverId: SERVER_ID }] }),
@@ -408,8 +410,10 @@ async function run() {
   })
 
   await step('F6 reaches the title bar, the keys move along it, and Escape comes back', async () => {
+    const shown = await inBar("Array.from(document.querySelectorAll('button')).filter((b) => b.offsetParent).map((b) => b.id)")
+    assert.deepStrictEqual(shown, MAC ? ['change'] : ['help', 'change', 'minimize', 'maximize', 'close'])
     await key('F6')
-    await until('focus in the bar', () => inBar("document.hasFocus() && document.activeElement.id === 'help'"))
+    await until('focus in the bar', () => inBar(`document.hasFocus() && document.activeElement.id === '${shown[0]}'`))
     const bar = views().bar
     const press = async (keyCode) => {
       bar.sendInputEvent({ type: 'keyDown', keyCode })
@@ -417,22 +421,39 @@ async function run() {
       await wait(40)
     }
     await press('Right')
-    assert.strictEqual(await inBar('document.activeElement.id'), 'change')
+    assert.strictEqual(await inBar('document.activeElement.id'), shown[1 % shown.length])
     await press('Left')
     await press('Left')
-    assert.strictEqual(await inBar('document.activeElement.id'), 'close', 'it wraps round')
+    assert.strictEqual(await inBar('document.activeElement.id'), shown[shown.length - 1], 'it wraps round')
     await press('Home')
-    assert.strictEqual(await inBar('document.activeElement.id'), 'help')
+    assert.strictEqual(await inBar('document.activeElement.id'), shown[0])
     await press('Escape')
     await until('focus back on the page', () => inPage('document.hasFocus()'))
   })
 
-  await step('Help opens under its button', async () => {
-    await inBar("document.getElementById('help').click()")
-    await until('the menu', () => menus.length === 1)
-    assert.strictEqual(menus[0].labels[0], 'Open logs folder')
-    assert.ok(Number.isInteger(menus[0].options.x) && menus[0].options.y > 0)
-  })
+  if (!MAC) {
+    await step('Help opens under its button', async () => {
+      await inBar("document.getElementById('help').click()")
+      await until('the menu', () => menus.length === 1)
+      assert.strictEqual(menus[0].labels[0], 'Open logs folder')
+      assert.ok(Number.isInteger(menus[0].options.x) && menus[0].options.y > 0)
+    })
+  } else {
+    await step('on a Mac, Help and Change server are in the menu bar, and zooming is for the page', async () => {
+      const menu = Menu.getApplicationMenu()
+      const help = menu.items.find((m) => m.role === 'help')
+      assert.deepStrictEqual(help.submenu.items.map((i) => i.label), ['Open logs folder', 'Copy diagnostic info'])
+      assert.strictEqual(menu.getMenuItemById('change-server').enabled, true, 'with a server open')
+      assert.ok(menu.items.some((m) => m.role === 'editmenu' || m.role === 'editMenu'), 'or copy and paste do nothing')
+      assert.deepStrictEqual(BaseWindow.getAllWindows()[0].getWindowButtonPosition(), { x: 9, y: 9 })
+      const zoomIn = menu.items.find((m) => m.label === 'View').submenu.items.find((i) => i.label === 'Zoom In')
+      zoomIn.click()
+      assert.strictEqual(views().page.getZoomLevel(), 0.5)
+      assert.strictEqual(views().bar.getZoomLevel(), 0, 'the title bar stays as it is')
+      menu.items.find((m) => m.label === 'View').submenu.items.find((i) => i.label === 'Actual Size').click()
+      assert.strictEqual(views().page.getZoomLevel(), 0)
+    })
+  }
 
   await step('a link goes to the browser, and the page stays', async () => {
     opened.length = 0
@@ -506,6 +527,7 @@ async function run() {
     assert.strictEqual(stateFile().server, '')
     await until('the bar\'s own colours', async () => (await inBar("document.documentElement.style.getPropertyValue('--bg')")) === '#0f1115')
     assert.strictEqual(await inBar("document.getElementById('change').hidden"), true)
+    if (MAC) assert.strictEqual(Menu.getApplicationMenu().getMenuItemById('change-server').enabled, false)
     assert.deepStrictEqual(await inPage('Object.keys(window.wittyClient).includes("probe")'), true)
     assert.ok((await pageText()).includes(S.recentServers))
     await shot('list-recent')

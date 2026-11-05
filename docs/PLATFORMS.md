@@ -21,7 +21,7 @@ should be expected to have some too.
 | Platform | Status | Notes |
 |---|---|---|
 | Windows 10 and later | **Ran** | From source and as a packaged app. The setup and uninstaller ran under Wine, not yet on a real Windows. |
-| macOS | **Written** | The desktop app builds for it in CI, and has never been launched. Its uninstaller only ran on Linux with a stand-in home folder. |
+| macOS | **Ran** | The desktop app, from source and packaged, on macOS 27 on Apple silicon, where `npm run test:app` passes. Not on an Intel Mac or an older macOS. Its uninstaller only ran on Linux with a stand-in home folder. |
 | Linux | **Ran** | `.deb` and `.rpm` installed, opened on a virtual screen, upgraded and removed in containers. `.pacman` the same. The `.rpm` also ran on Fedora 44 in a virtual machine, and from source on Ubuntu 26.04. See [below](#freebsd-plasma-bigscreen-and-linux). |
 | FreeBSD 15.1, amd64 | **Ran** | In a virtual machine, as an installed package: picture and sound seen. Needs the system's Electron from the ports tree. See [below](#freebsd-plasma-bigscreen-and-linux). |
 | FreeBSD 14.4, amd64 | **Ran** | The same package, in a virtual machine: installed on a bare system, opened as far as the connect screen, upgraded and removed. No video played on it. |
@@ -36,9 +36,11 @@ should be expected to have some too.
 | Fire TV | **Compiled** | Not run: no image for it here. Needs Fire OS 6 or later: the first Fire TV Sticks are too old for Compose. |
 | Android phones | **Ran on an emulator** | Android 16 in full, and Android 6 (API 23, the oldest it supports) for connecting, playing and a network drop. No real phone yet. |
 | Android tablets | **Ran on an emulator** | Android 16, 2560×1600, sideways: signing in, Home, a library, an item, and the server's pages. They use the phone's screens with wider margins. |
-| Apple TV | **Written** | Never compiled. Needs a Mac: [the first check](OWNER-STEPS.md#step-3-try-apple-needs-a-mac) is one script. |
-| iPhone, iPad | **Written** | Never compiled. Needs a Mac, as above. |
-| Mac | **Written** | Never compiled. |
+| Apple TV | **Compiled** | By Xcode 27 on macOS 27, unsigned, for the device and the simulator. Never run. [The first check](OWNER-STEPS.md#step-3-try-apple-needs-a-mac) is one script. |
+| iPhone, iPad | **Compiled** | The same. Never run. |
+| Mac | **Compiled** | The same, for Apple silicon and Intel in one app. Never run. |
+| Apple Vision Pro | **Compiled** | The iPhone and iPad app, built for visionOS 2 and later as an app of its own, with the iPad's layout: the sidebar, the server's pages in a web view, and picture in picture. Never run, not even in the simulator. |
+| Apple Watch | **Not started** | watchOS has no web view and no player like the others', so it would be a different app, such as a remote. |
 | Windows 7 | **Not started** | Needs the owner's decision: see [the design](DESIGN.md#windows-7). |
 | LG webOS, Samsung Tizen | **Not started** | The connect screen they would use works without the desktop app, in the same browser engine as the desktop app. Older TV browsers are untested, and no package exists. |
 | Roku | **Not started** | Needs its own app in BrightScript. |
@@ -470,12 +472,20 @@ checked package, no `file://` privileges):
 - Starting with a remembered server, another key at it, a server that has gone, a damaged state file and a bad
   certificate, which also proves that listening to `certificate-error` doesn't accept one.
 
+On macOS 27 on Apple silicon, `npm run test:app` passes from source too. There it also checks the menu bar (Help, Change server
+only with a server open, zooming the page and not the title bar) and that the title bar leaves the window's buttons and Help to
+the system. A scripted run saw Select All from the Edit menu reach the page, the title centred, and the title bar and the window's
+buttons step aside for a video in full screen and come back.
+
 ## Not checked on the desktop client
 
 - **Sound.** Nothing here listens to it.
 - **Game controllers** and real TV remotes. Key presses were simulated.
 - **Linux** on a real computer. It ran in containers and virtual machines.
-- **macOS** at all.
+- **macOS** on an Intel Mac or before macOS 27.
+- On a Mac, the window's buttons and a double-click on the title bar, seen on screen: nothing here could capture the screen or click.
+  Where the buttons sit matches the system's own (14 points, 9 in, in a 32-point title bar), measured with a window of its own.
+  A double-click on the bar is answered by the system itself, as Chromium's source for this version of Electron shows, and the page never sees it.
 - **The network search with real sockets** on this version: it would ask the Windows firewall.
 - The package check failing as it should when the package is changed.
 - A server asking for a client certificate, which needs one in the system's store.

@@ -74,7 +74,7 @@ struct RigPlayPanel: View {
     }
 
     @ViewBuilder private func playing(_ play: RigPlay) -> some View {
-        #if os(iOS)
+        #if os(iOS) || os(visionOS)
         if play.playsInPage {
             if let note = play.inPageNote, !note.isEmpty { Text(note).foregroundStyle(palette.textSecondary) }
             NavigationLink("Play here", value: Route.web(WebPlayer.rigPath(item.id)))

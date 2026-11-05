@@ -108,6 +108,8 @@
     if (!listAvailable) return addressScreen(message)
 
     const foundList = el('div', { className: 'list' })
+    const recentList = el('div', { className: 'list' }, ...recent.map(serverButton))
+    const recentHeading = el('h2', { textContent: S.recentServers })
     const status = el('p', { role: 'status', textContent: S.findSearching })
     const children = [el('h1', { textContent: S.findTitle })]
     if (message) children.push(el('p', { className: 'error', role: 'alert', textContent: message }))
@@ -117,7 +119,7 @@
       children.push(el('p', { textContent: S.findNotSupported }))
     }
     if (recent.length) {
-      children.push(el('h2', { textContent: S.recentServers }), el('div', { className: 'list' }, ...recent.map(serverButton)))
+      children.push(recentHeading, recentList)
     }
     const enterAddress = button(S.enterAddress, () => { listFocus = ENTER_ADDRESS; addressScreen() })
     children.push(el('div', { className: 'row' }, enterAddress))
@@ -134,19 +136,30 @@
       foundList.textContent = ''
       for (const s of found) foundList.appendChild(serverButton(s))
       status.textContent = found.length ? '' : (Date.now() - startedAt > NONE_AFTER_MS ? S.findNone : S.findSearching)
+      // A remembered server that has just been found is listed once, under what was found. This comes
+      // before focus moves, so nothing below can land on a row that's about to be hidden.
+      Array.from(recentList.children).forEach((b) => {
+        const twin = Array.from(foundList.children).find((f) => f.dataset.url === b.dataset.url)
+        const wasFocused = document.activeElement === b
+        b.hidden = !!twin
+        if (wasFocused && twin) twin.focus()
+      })
+      recentHeading.hidden = recentList.children.length > 0 && Array.from(recentList.children).every((b) => b.hidden)
       const same = Array.from(foundList.children).find((b) => b.dataset.url === focusedUrl)
       if (same && hadFocus) same.focus()
       else if (hadFocus) {
-        // The focused server went away. Without this, a remote has nothing to move from.
+        // The focused server went away. Without this, a remote has nothing to move from: its
+        // remembered row if it has one, the next server, or the first thing left.
+        const remembered = Array.from(recentList.children).find((b) => b.dataset.url === focusedUrl && !b.hidden)
         const neighbour = foundList.children[Math.min(focusedIndex, foundList.children.length - 1)]
-        const fallback = neighbour || app.querySelector('button')
+        const fallback = remembered || neighbour || app.querySelector('button:not([hidden])')
         if (fallback) fallback.focus()
       } else if (!userMoved && foundList.firstChild) foundList.firstChild.focus()
     }
     const startedAt = Date.now()
     renderFound()
     // Coming back: to the thing that was chosen, and discovery leaves it there.
-    const cameFrom = listFocus === ENTER_ADDRESS ? enterAddress : Array.from(app.querySelectorAll('button')).find((b) => b.dataset.url === listFocus)
+    const cameFrom = listFocus === ENTER_ADDRESS ? enterAddress : Array.from(app.querySelectorAll('button:not([hidden])')).find((b) => b.dataset.url === listFocus)
     if (cameFrom) {
       cameFrom.focus()
       userMoved = true
@@ -302,7 +315,7 @@
   // left and right belong to the text, so only up and down leave it.
   function moveFocus(dir) {
     const cur = document.activeElement
-    const all = Array.from(app.querySelectorAll('button:not(:disabled), input'))
+    const all = Array.from(app.querySelectorAll('button:not(:disabled):not([hidden]), input'))
     if (!all.length) return false
     if (!all.includes(cur)) { all[0].focus(); return true }
     const a = cur.getBoundingClientRect()
