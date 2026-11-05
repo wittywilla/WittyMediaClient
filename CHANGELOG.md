@@ -5,6 +5,8 @@ What changed in WittyMediaClient, newest first. What changed before it had a rep
 
 ## Unreleased
 
+- **Apple Vision Pro:** the iPhone and iPad app also builds for visionOS 2 and later, as an app of its own rather than the iPad one in a window. It takes the iPad's layout,
+  opens the server's pages inside the app, and reports its errors as visionOS. Compiled, never run. CI builds it where the Mac runner's Xcode has the visionOS SDK.
 - **Android 0.3.0: music, audiobooks and podcasts have a player of their own.** Sound carries on with the screen off, after leaving the app and after swiping it away, with the
   player on the lock screen, in the system's controls and on a TV's home screen, and headphone and media keys work. Albums, artists or authors, songs and podcast episodes have the app's own screens,
   with a queue you can add to, rearrange and shuffle, and a mini player over the rest of the app. Books and podcasts save their place and resume it, go back 15 and forward 30 seconds, and keep a
@@ -18,11 +20,13 @@ What changed in WittyMediaClient, newest first. What changed before it had a rep
   its side, rows run to the edge rather than stop short of the camera. Profile says who's signed in.
 - **Apple: the same, not yet compiled.** On iPhone and iPad everything else opens in the server's page. Apple TV has no web view, so it gets screens for music, photos and
   live channels, and says plainly what it can't show. The apps are now called WittyMediaClient. `apple/scripts/check-on-mac.sh` is the first check on a Mac.
+- **Android TV:** Back from the code screen puts focus on the server that was chosen, not the first in the list, so OK can't open a different server by mistake ([#7](https://github.com/wittywilla/WittyMediaClient/issues/7)).
 - **WittyTV on Android:** TV guide is on the TV's top bar, and Home has a row of what's on now, on phones too. Channel buttons, arrows and a controller change channel. A remote's Guide button opens the guide, though no emulator has passed that button on yet.
 - **WittyTV on Apple TV, not yet compiled:** the guide and the channel banner take the colours of the WittyTV theme chosen on the account, from any device, and show the owner's channel logos.
 - **WittyTV on Apple, not yet compiled:** Apple TV has a guide with what's on now and next, and a player where up and down change channel, with what's on shown over the picture. Home has the row too. iPhone and iPad have the server's guide.
 - **Controllers on Android:** the first press on a page opened with a controller now counts. It used to do nothing, so opening the TV guide took A twice to watch.
 - **Controllers on Android:** Xbox, DualSense, DualShock 4 and Switch Pro layouts all move and choose, on the app's own screens and in the server's page. A Nintendo pad's A is confirm, as printed. B now leaves a server page when there's nothing left to go back through.
+- **Desktop 0.2.4:** a server that was used before and is also found on the network is listed once, under On your network, instead of twice ([#9](https://github.com/wittywilla/WittyMediaClient/issues/9)).
 - **Desktop:** what has its own Back on a TV is read from the server's page, with the old list for older servers, so the two can't drift apart.
 - **Desktop on a Mac:** the window has the system's red, yellow and green buttons at the left of the title bar, rather than Windows-style ones
   at the right, and the title sits in the middle. A double-click on the bar does what System Settings say. There's a Mac menu bar, so

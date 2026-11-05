@@ -36,9 +36,11 @@ should be expected to have some too.
 | Fire TV | **Compiled** | Not run: no image for it here. Needs Fire OS 6 or later: the first Fire TV Sticks are too old for Compose. |
 | Android phones | **Ran on an emulator** | Android 16 in full, and Android 6 (API 23, the oldest it supports) for connecting, playing and a network drop. No real phone yet. |
 | Android tablets | **Ran on an emulator** | Android 16, 2560×1600, sideways: signing in, Home, a library, an item, and the server's pages. They use the phone's screens with wider margins. |
-| Apple TV | **Written** | Never compiled. Needs a Mac: [the first check](OWNER-STEPS.md#step-3-try-apple-needs-a-mac) is one script. |
-| iPhone, iPad | **Written** | Never compiled. Needs a Mac, as above. |
-| Mac | **Written** | Never compiled. |
+| Apple TV | **Compiled** | By Xcode 27 on macOS 27, unsigned, for the device and the simulator. Never run. [The first check](OWNER-STEPS.md#step-3-try-apple-needs-a-mac) is one script. |
+| iPhone, iPad | **Compiled** | The same. Never run. |
+| Mac | **Compiled** | The same, for Apple silicon and Intel in one app. Never run. |
+| Apple Vision Pro | **Compiled** | The iPhone and iPad app, built for visionOS 2 and later as an app of its own, with the iPad's layout: the sidebar, the server's pages in a web view, and picture in picture. Never run, not even in the simulator. |
+| Apple Watch | **Not started** | watchOS has no web view and no player like the others', so it would be a different app, such as a remote. |
 | Windows 7 | **Not started** | Needs the owner's decision: see [the design](DESIGN.md#windows-7). |
 | LG webOS, Samsung Tizen | **Not started** | The connect screen they would use works without the desktop app, in the same browser engine as the desktop app. Older TV browsers are untested, and no package exists. |
 | Roku | **Not started** | Needs its own app in BrightScript. |

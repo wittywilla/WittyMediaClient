@@ -216,6 +216,8 @@
 
     const lastUsed = recent.length ? recent[0].url : ''
     const foundList = el('div', { className: 'list' })
+    const recentList = el('div', { className: 'list' }, ...recent.map((s) => serverCard(s, s.url === lastUsed)))
+    const recentHeading = el('h2', { textContent: S.recentServers })
     const status = el('p', { role: 'status', textContent: S.findSearching })
     const searching = el('div', { className: 'note' }, spinner(), status)
     const words = [el('h1', { className: 'display', textContent: S.findTitle }), el('p', { className: 'lead', textContent: S.findSubtitle })]
@@ -227,7 +229,7 @@
       actions.push(el('div', { className: 'note' }, el('p', { textContent: S.findNotSupported })))
     }
     if (recent.length) {
-      actions.push(el('h2', { textContent: S.recentServers }), el('div', { className: 'list' }, ...recent.map((s) => serverCard(s, s.url === lastUsed))))
+      actions.push(recentHeading, recentList)
     }
     // The main action until there's a server to choose.
     const enterAddress = button(S.enterAddress, () => { listFocus = ENTER_ADDRESS; addressScreen() }, { icon: 'link', kind: recent.length ? 'secondary' : 'primary', className: 'enter' })
@@ -250,19 +252,30 @@
       searching.className = found.length ? 'note gone' : stillLooking ? 'note searching' : 'note'
       status.textContent = found.length ? '' : (stillLooking ? S.findSearching : S.findNone)
       enterAddress.className = `${found.length || recent.length ? 'secondary' : 'primary'} enter`
+      // A remembered server that has just been found is listed once, under what was found. This comes
+      // before focus moves, so nothing below can land on a row that's about to be hidden.
+      Array.from(recentList.children).forEach((b) => {
+        const twin = Array.from(foundList.children).find((f) => f.dataset.url === b.dataset.url)
+        const wasFocused = document.activeElement === b
+        b.hidden = !!twin
+        if (wasFocused && twin) twin.focus()
+      })
+      recentHeading.hidden = recentList.children.length > 0 && Array.from(recentList.children).every((b) => b.hidden)
       const same = Array.from(foundList.children).find((b) => b.dataset.url === focusedUrl)
       if (same && hadFocus) same.focus()
       else if (hadFocus) {
-        // The focused server went away. Without this, a remote has nothing to move from.
+        // The focused server went away. Without this, a remote has nothing to move from: its
+        // remembered row if it has one, the next server, or the first thing left.
+        const remembered = Array.from(recentList.children).find((b) => b.dataset.url === focusedUrl && !b.hidden)
         const neighbour = foundList.children[Math.min(focusedIndex, foundList.children.length - 1)]
-        const fallback = neighbour || app.querySelector('.actions button')
+        const fallback = remembered || neighbour || app.querySelector('.actions button:not([hidden])')
         if (fallback) fallback.focus()
       } else if (!userMoved && foundList.firstChild) foundList.firstChild.focus()
     }
     const startedAt = Date.now()
     renderFound()
     // Coming back: to the thing that was chosen, and discovery leaves it there.
-    const cameFrom = listFocus === ENTER_ADDRESS ? enterAddress : Array.from(app.querySelectorAll('button')).find((b) => b.dataset.url === listFocus)
+    const cameFrom = listFocus === ENTER_ADDRESS ? enterAddress : Array.from(app.querySelectorAll('button:not([hidden])')).find((b) => b.dataset.url === listFocus)
     if (cameFrom) {
       cameFrom.focus()
       userMoved = true
@@ -554,7 +567,7 @@
   // left and right belong to the text, so only up and down leave it.
   function moveFocus(dir) {
     const cur = document.activeElement
-    const all = Array.from(app.querySelectorAll('button:not(:disabled), input')).filter((n) => n.offsetWidth > 0 || n.offsetHeight > 0)
+    const all = Array.from(app.querySelectorAll('button:not(:disabled):not([hidden]), input')).filter((n) => n.offsetWidth > 0 || n.offsetHeight > 0)
     if (!all.length) return false
     if (!all.includes(cur)) { all[0].focus(); return true }
     const a = cur.getBoundingClientRect()

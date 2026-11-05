@@ -363,6 +363,8 @@ public final class ClientLog: @unchecked Sendable {
     private static var systemName: String {
         #if os(tvOS)
         return "tvOS"
+        #elseif os(visionOS)
+        return "visionOS"
         #elseif os(iOS)
         return "iOS"
         #elseif os(macOS)

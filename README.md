@@ -31,7 +31,7 @@ Native apps say plainly that an item can't play yet, rather than failing, for an
 |---|---|
 | [`desktop/`](desktop) | Windows, macOS, Linux, FreeBSD and KDE's Plasma Bigscreen: a frameless window around the server's web interface, in Electron |
 | [`android/`](android) | Android TV, Google TV, Fire TV, phones and tablets, one APK for ARM and x86, 32-bit and 64-bit: Kotlin, Compose, Media3 |
-| [`apple/`](apple) | Apple TV, iPhone, iPad and Mac: SwiftUI, AVPlayer |
+| [`apple/`](apple) | Apple TV, iPhone, iPad, Mac and Apple Vision Pro: SwiftUI, AVPlayer |
 | [`shared/`](shared) | What every app shares, as plain data: themes, wording, button meanings and test cases |
 | [`docs/`](docs) | [Installing and removing](docs/INSTALLING.md), [design](docs/DESIGN.md), [status](docs/PLATFORMS.md), [porting to TVs](docs/PORTING.md), [what the owner needs to do](docs/OWNER-STEPS.md) |
 
@@ -83,14 +83,14 @@ The FreeBSD package holds only the app, under a megabyte, and uses the system's 
 
 **Android.** Each release has a sideload `.apk`, the same one for phones and TVs. It's signed with a throwaway key and is for testing, so it can't update to a store version without uninstalling first. There's no store listing yet.
 
-**iPhone, iPad, Apple TV.** There's nothing to download yet. They need a Mac to build.
+**iPhone, iPad, Apple TV, Apple Vision Pro.** There's nothing to download yet. They need a Mac to build.
 
 ## What it needs
 
 - A WittyMediaServer to connect to. The native apps talk to its client API, which is in **Help** inside the server.
 - **Desktop:** Windows 10 or later, macOS, Linux on x64, FreeBSD on amd64, or Plasma Bigscreen. It brings its own Electron, except on FreeBSD, where the package brings in the system's.
 - **Android:** Android 6 or later, on ARM or x86, 32-bit or 64-bit, in one APK. Fire TV needs Fire OS 6 or later.
-- **Apple:** iOS 16, tvOS 16, or macOS 13, or later.
+- **Apple:** iOS 16, tvOS 16, macOS 13, or visionOS 2, or later.
 - **Games on a PC:** the Moonlight app, installed separately, only where it's the fallback.
 
 ## Platforms
@@ -106,7 +106,7 @@ The FreeBSD package holds only the app, under a megabyte, and uses the system's 
 | Android phones | Run on emulators, Android 16 and Android 6. Android 7 to 15 not run |
 | Android on x86 and ARM | One APK carries all four. The emulators were 64-bit x86, and the other three are compiled, never run |
 | Google TV, Fire TV, tablets | Compiled, never run |
-| Apple TV, iPhone, iPad, Mac | Written. Never compiled by Apple's tools, as that needs a Mac. Expect compile errors |
+| Apple TV, iPhone, iPad, Mac, Apple Vision Pro | Compiled by Xcode 27 on a Mac, unsigned, for the devices and their simulators. Never run |
 
 **No real device or remote has touched any of the Android builds,** and finding servers hasn't been tried on a real network anywhere. [Platform status](docs/PLATFORMS.md) says exactly what was seen and what wasn't.
 

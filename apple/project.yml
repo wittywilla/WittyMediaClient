@@ -8,6 +8,8 @@ options:
     iOS: "16.0"
     tvOS: "16.0"
     macOS: "13.0"
+    # Every Apple Vision Pro can run visionOS 2.
+    visionOS: "2.0"
   createIntermediateGroups: true
 packages:
   WittyKit:
@@ -99,9 +101,12 @@ targets:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.wittywilla.wittymediaclient.topshelf
         TARGETED_DEVICE_FAMILY: "3"
+  # iPhone, iPad and Apple Vision Pro. The headset takes the iPad's way of doing everything: the
+  # sidebar, the server's pages in a web view, and picture in picture.
   WittyMedia-iOS:
     templates: [App]
     platform: iOS
+    supportedDestinations: [iOS, visionOS]
     info:
       path: Generated/Info-WittyMedia-iOS.plist
       properties:
@@ -113,7 +118,9 @@ targets:
         LSSupportsOpeningDocumentsInPlace: true
     settings:
       base:
-        TARGETED_DEVICE_FAMILY: "1,2"
+        TARGETED_DEVICE_FAMILY: "1,2,7"
+        # Its own visionOS build, so not the iPad one in a window as well.
+        SUPPORTS_XR_DESIGNED_FOR_IPHONE_IPAD: "NO"
         INFOPLIST_KEY_UILaunchScreen_Generation: "YES"
         INFOPLIST_KEY_UISupportedInterfaceOrientations: "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight"
   WittyMedia-macOS:
