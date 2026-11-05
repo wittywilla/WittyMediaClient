@@ -246,7 +246,10 @@ final class GamePictureRenderer: NSObject, MTKViewDelegate {
     func encode(_ buffer: MTLCommandBuffer, pass: MTLRenderPassDescriptor, size: CGSize) {
         lock.lock()
         let tex = texture
+        let keep = holder
         lock.unlock()
+        // VideoToolbox can reuse a frame's memory once nothing holds it: not while it's being drawn.
+        buffer.addCompletedHandler { _ in _ = keep }
         guard let encoder = buffer.makeRenderCommandEncoder(descriptor: pass) else { return }
         defer { encoder.endEncoding() }
         guard let tex, size.width > 0, size.height > 0 else { return }
@@ -482,7 +485,8 @@ final class GameSocket: NSObject, URLSessionWebSocketDelegate {
     var onMessage: (@Sendable (GameStreamMessage) -> Void)?
     var onEvent: (@Sendable (GameEvent) -> Void)?
     /// Called once, when it closes or fails, unless it was closed here.
-    var onClose: (@Sendable (String) -> Void)?
+    /// With the HTTP status of the upgrade, or 0: 404 means the game has gone from the server.
+    var onClose: (@Sendable (Int) -> Void)?
 
     func open(_ request: URLRequest) {
         let config = URLSessionConfiguration.ephemeral
@@ -511,8 +515,8 @@ final class GameSocket: NSObject, URLSessionWebSocketDelegate {
                 self.receive()
             case .success:
                 self.receive()
-            case .failure(let error):
-                self.finish("The connection to the game was lost (\((error as NSError).code)).")
+            case .failure:
+                self.finish()
             }
         }
     }
@@ -522,10 +526,10 @@ final class GameSocket: NSObject, URLSessionWebSocketDelegate {
         task?.send(.data(data)) { _ in }
     }
 
-    private func finish(_ why: String) {
+    private func finish() {
         guard !closed else { return }
         closed = true
-        onClose?(why)
+        onClose?((task?.response as? HTTPURLResponse)?.statusCode ?? 0)
         session?.invalidateAndCancel()
     }
 
@@ -537,7 +541,7 @@ final class GameSocket: NSObject, URLSessionWebSocketDelegate {
     }
 
     func urlSession(_ session: URLSession, webSocketTask: URLSessionWebSocketTask, didCloseWith closeCode: URLSessionWebSocketTask.CloseCode, reason: Data?) {
-        finish("The game's connection closed.")
+        finish()
     }
 }
 #endif

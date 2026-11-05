@@ -60,6 +60,9 @@ final class GameInput {
     private var keysHeld: Set<String> = []
     private var remoteShortcuts = PadShortcuts(settings: nil, consoleButtons: [])
     private var sent: [UInt8: PadState] = [:]
+    /// Buttons held when input came back, from the press that closed the menu: not the game's
+    /// until they're let go.
+    private var masked: [UInt8: UInt16] = [:]
     private var heartbeat: Timer?
     private var turbo: Timer?
     private var observers: [NSObjectProtocol] = []
@@ -135,7 +138,12 @@ final class GameInput {
     /// While the menu is open nothing reaches the game; everything held is let go.
     func setEnabled(_ on: Bool) {
         enabled = on
-        if !on { releaseAll() } else { refreshAll() }
+        if !on {
+            releaseAll()
+        } else {
+            for port in activePorts { masked[port] = 0xFFFF }
+            refreshAll()
+        }
     }
 
     // MARK: Controllers
@@ -183,6 +191,9 @@ final class GameInput {
         let id = ObjectIdentifier(controller)
         guard let pad = pads.removeValue(forKey: id) else { return }
         pad.haptics?.stop()
+        // Fast-forward or rewind held on it stops with it.
+        for s in pad.shortcuts.endAll() { onShortcut?(s, false) }
+        updateTurboTimer()
         // Disconnecting lets go of everything it held at once.
         let released = PadState(port: pad.port)
         send?(released.encoded())
@@ -300,7 +311,8 @@ final class GameInput {
 
     private func key(_ code: GCKeyCode, _ pressed: Bool) {
         guard let name = Self.codeName(code) else { return }
-        if name == "Escape" {
+        // Escape opens the menu, as on the website; on a TV, Backspace too, unless the layout uses it.
+        if name == "Escape" || (name == "Backspace" && !keyboard.knows("Backspace")) {
             if pressed { onMenu?() }
             return
         }
@@ -348,6 +360,9 @@ final class GameInput {
             state = state.merged(keys)
         }
         state.port = port
+        let held = (masked[port] ?? 0) & state.buttons
+        masked[port] = held
+        state.buttons &= ~held
         return state
     }
 
@@ -379,6 +394,8 @@ final class GameInput {
     func releaseAll() {
         remoteHeld = []
         remotePad = []
+        for pad in pads.values { for s in pad.shortcuts.endAll() { onShortcut?(s, false) } }
+        for s in remoteShortcuts.endAll() { onShortcut?(s, false) }
         keysHeld = []
         for port in activePorts {
             let released = PadState(port: port)

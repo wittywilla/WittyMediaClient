@@ -48,6 +48,10 @@ final class GameScreenView: MTKView {
         guard playing else { return presses }
         var rest = Set<UIPress>()
         for press in presses {
+            if press.key != nil, GCKeyboard.coalesced != nil {
+                // A keyboard GameController reads already: once is enough. Kept from the app's screens.
+                continue
+            }
             if isMenu(press) {
                 if down { onMenu?() }
             } else if let name = name(press) {
@@ -134,25 +138,43 @@ private final class GamePipeline: @unchecked Sendable {
 
     var frames: Int { renderer?.frames ?? 0 }
 
-    func take(_ message: GameStreamMessage) {
-        switch message {
-        case .video(let keyframe, let data):
-            decoder.decode(data, keyframe: keyframe)
-        case .jpeg(let data):
-            if let image = decodeGameJPEG(data) {
-                renderer?.show(image)
-                draw()
-            }
-        case .pcm(let rate, let samples):
-            sound.play(samples, rate: rate)
-        case .timing, .unknown:
-            break
+    /// Decoding happens here and nowhere else, whichever connection a message came on.
+    private let queue = DispatchQueue(label: "wittyplay.stream", qos: .userInteractive)
+    private var connection = 0
+
+    /// A new connection: what's left of the last one is dropped, and the decoder starts afresh.
+    func restart() -> Int {
+        lock.lock()
+        connection += 1
+        let id = connection
+        lock.unlock()
+        queue.async { [self] in
+            decoder.reset()
+            sound.flush()
         }
+        return id
     }
 
-    func restart() {
-        decoder.reset()
-        sound.flush()
+    func take(_ message: GameStreamMessage, from id: Int) {
+        queue.async { [self] in
+            lock.lock()
+            let current = connection
+            lock.unlock()
+            guard id == current else { return }
+            switch message {
+            case .video(let keyframe, let data):
+                decoder.decode(data, keyframe: keyframe)
+            case .jpeg(let data):
+                if let image = decodeGameJPEG(data) {
+                    renderer?.show(image)
+                    draw()
+                }
+            case .pcm(let rate, let samples):
+                sound.play(samples, rate: rate)
+            case .timing, .unknown:
+                break
+            }
+        }
     }
 
     /// One draw at a time: frames that come while one waits are drawn by it.
@@ -228,6 +250,10 @@ final class GamePlayerModel: ObservableObject {
     private var loadAfterStart: Int?
     private var consoleButtons: Set<Int> = []
     private var menuClosedAt = Date.distantPast
+    private var menuOpenedAt = Date.distantPast
+    private var hadPicture = false
+    /// Actions reach the server in the order they're made: each waits for the one before.
+    private var lastAction: Task<Void, Never>?
 
     var quickSlot: Int { max(1, min(99, Int(settings.number("states.quickSlot", 1)))) }
     var confirms: Bool { settings.flag("states.confirm", true) }
@@ -262,6 +288,7 @@ final class GamePlayerModel: ObservableObject {
             Task { @MainActor in self?.socket?.send(Data([0xF7])) }
         }
         settings = (try? await client.gameSettings(item: id)) ?? GameSettings(values: [:])
+        guard live else { return }
         applySettings()
         // A game in an archive is unpacked first, which can take a while on a small server.
         do {
@@ -275,7 +302,7 @@ final class GamePlayerModel: ObservableObject {
             fail(error)
             return
         }
-        guard !Task.isCancelled else { return }
+        guard live else { return }
         phase = .starting
         let session: GameSession
         do {
@@ -284,8 +311,9 @@ final class GamePlayerModel: ObservableObject {
             fail(error)
             return
         }
-        guard !Task.isCancelled, !stopped else {
-            try? await client.stopGame(session.id)
+        guard live else {
+            // Left while it started: it still has to be stopped, from a task that isn't cancelled.
+            Task.detached { [client] in try? await client.stopGame(session.id) }
             return
         }
         self.session = session
@@ -301,6 +329,10 @@ final class GamePlayerModel: ObservableObject {
         updateLayout()
         let console = session.console ?? ""
         let controls = try? await client.gameControls(console: console, device: Self.deviceId, game: id)
+        guard live else {
+            Task.detached { [client] in try? await client.stopGame(session.id) }
+            return
+        }
         consoleButtons = Set((controls?.pad?.buttons ?? []).map(\.id)).union([RetroPad.up, RetroPad.down, RetroPad.left, RetroPad.right])
         input.start(client: client, setup: GameInput.Setup(controls: controls, settings: settings, console: console, game: id, consoleButtons: consoleButtons))
         players = input.players
@@ -309,6 +341,9 @@ final class GamePlayerModel: ObservableObject {
             Task { @MainActor in self?.watch() }
         }
     }
+
+    /// Still on screen, and not stopped.
+    private var live: Bool { !stopped && !Task.isCancelled }
 
     private func fail(_ error: Error) {
         if error is CancellationError { return }
@@ -334,21 +369,21 @@ final class GamePlayerModel: ObservableObject {
     private func connect() {
         guard let session, !stopped else { return }
         socket?.close()
-        pipeline?.restart()
+        let id = pipeline?.restart() ?? 0
         let mode = modes[min(modeAt, modes.count - 1)]
         guard let request = client.gameSocketRequest(session.id, video: GameModes.video(for: mode)) else {
             phase = .failed("This server's address can't be used for a game.")
             return
         }
-        if phase != .playing { phase = .connecting }
+        phase = .connecting
         let socket = GameSocket()
         let pipeline = self.pipeline
-        socket.onMessage = { @Sendable message in pipeline?.take(message) }
+        socket.onMessage = { @Sendable message in pipeline?.take(message, from: id) }
         socket.onEvent = { @Sendable [weak self] event in
             Task { @MainActor in self?.handle(event) }
         }
-        socket.onClose = { @Sendable [weak self] _ in
-            Task { @MainActor in self?.connectionLost() }
+        socket.onClose = { @Sendable [weak self] status in
+            Task { @MainActor in self?.connectionLost(status: status) }
         }
         self.socket = socket
         connectedAt = Date()
@@ -357,8 +392,13 @@ final class GamePlayerModel: ObservableObject {
         socket.open(request)
     }
 
-    private func connectionLost() {
+    private func connectionLost(status: Int) {
         guard !stopped else { return }
+        // Gone from the server: stopped from elsewhere, another game started, or left too long.
+        if [401, 403, 404, 410].contains(status) {
+            finish(saying: "This game has stopped. It may have been started on another device, or left for more than a minute.")
+            return
+        }
         // The game waits, paused, for a minute: a new connection picks it up.
         DispatchQueue.main.asyncAfter(deadline: .now() + 1) { [weak self] in
             guard let self, !self.stopped else { return }
@@ -382,8 +422,12 @@ final class GamePlayerModel: ObservableObject {
             framesAt = Date()
             return
         }
-        if phase == .connecting, Date().timeIntervalSince(connectedAt) > 12 {
-            if modeAt + 1 < modes.count {
+        if Date().timeIntervalSince(framesAt) > 60 {
+            // The server keeps a game for a minute with nobody connected: past that, it's gone.
+            finish(saying: "The game's picture stopped coming. Check the network, then start the game again: it saved where you were.")
+        } else if phase == .connecting, Date().timeIntervalSince(connectedAt) > 12 {
+            // No first picture: the next way of sending. A picture that stopped: the same way again.
+            if !hadPicture, modeAt + 1 < modes.count {
                 modeAt += 1
                 say("Trying another way of sending the picture")
             }
@@ -395,6 +439,7 @@ final class GamePlayerModel: ObservableObject {
 
     private func firstPicture() {
         phase = .playing
+        hadPicture = true
         players = input.players
         if let slot = loadAfterStart {
             loadAfterStart = nil
@@ -447,11 +492,12 @@ final class GamePlayerModel: ObservableObject {
         guard phase == .playing || phase == .connecting, !menuOpen, Date().timeIntervalSince(menuClosedAt) > 0.6 else { return }
         page = .main
         menuOpen = true
+        menuOpenedAt = Date()
         input.setEnabled(false)
         pipeline?.sound.flush()
         players = input.players
         Task {
-            if let session { try? await client.gameAction(session.id, .pause(true)) }
+            try? await ordered(.pause(true))
             await refreshSaves()
         }
     }
@@ -463,10 +509,12 @@ final class GamePlayerModel: ObservableObject {
         page = .main
         input.setEnabled(true)
         framesAt = Date()
-        if let session { Task { try? await client.gameAction(session.id, .pause(false)) } }
+        Task { try? await ordered(.pause(false)) }
     }
 
     func back() {
+        // The press that opened the menu can come back as Back as it's let go.
+        guard Date().timeIntervalSince(menuOpenedAt) > 0.4 else { return }
         if page == .main { closeMenu() } else { page = .main }
     }
 
@@ -474,12 +522,30 @@ final class GamePlayerModel: ObservableObject {
         saves = ((try? await client.gameSaves(gameId)) ?? []).sorted { $0.slot < $1.slot }
     }
 
+    /// Sends an action after every one before it has been answered.
+    private func ordered(_ action: GameAction) async throws {
+        guard let session else { return }
+        let previous = lastAction
+        let client = self.client
+        let mine = Task { () -> Error? in
+            await previous?.value
+            do {
+                try await client.gameAction(session.id, action)
+                return nil
+            } catch {
+                return error
+            }
+        }
+        lastAction = Task { _ = await mine.value }
+        if let error = await mine.value { throw error }
+    }
+
     private func act(_ action: GameAction, done: String) async -> Bool {
-        guard let session else { return false }
+        guard session != nil else { return false }
         busy = true
         defer { busy = false }
         do {
-            try await client.gameAction(session.id, action)
+            try await ordered(action)
             if !done.isEmpty { say(done) }
             return true
         } catch {
@@ -526,22 +592,21 @@ final class GamePlayerModel: ObservableObject {
 
     private func shortcut(_ shortcut: PadShortcut, _ down: Bool) {
         guard let session else { return }
-        let id = session.id
         Task {
             switch shortcut {
             case .menu: openMenu()
             case .quickSave: _ = await act(.save(quickSlot), done: "Saved to slot \(quickSlot)")
             case .quickLoad: _ = await act(.load(quickSlot), done: "Loaded slot \(quickSlot)")
             case .fastForward:
-                try? await client.gameAction(id, .speed(down ? min(session.maxSpeed ?? 4, settings.number("emulation.ffSpeed", 4)) : 1))
+                try? await ordered(.speed(down ? min(session.maxSpeed ?? 4, settings.number("emulation.ffSpeed", 4)) : 1))
             case .slow:
-                try? await client.gameAction(id, .speed(down ? settings.number("emulation.slowSpeed", 0.5) : 1))
+                try? await ordered(.speed(down ? settings.number("emulation.slowSpeed", 0.5) : 1))
             case .rewind:
-                try? await client.gameAction(id, .rewind(down))
+                try? await ordered(.rewind(down))
             case .pause:
                 openMenu()
             case .advance:
-                try? await client.gameAction(id, .advance(1))
+                try? await ordered(.advance(1))
             case .screenshot:
                 break
             }

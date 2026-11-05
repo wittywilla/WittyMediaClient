@@ -269,6 +269,17 @@ final class GamesTests: XCTestCase {
         XCTAssertEqual(shortcuts.filter(r).buttons, r, "without Select, R is the game's again")
     }
 
+    func testEndingShortcutsStopsHeldOnes() {
+        let settings = GameSettings(values: ["hotkeys.pad.fastForward": .text("r"), "hotkeys.pad.quickSave": .text("r2")])
+        var shortcuts = PadShortcuts(settings: settings, consoleButtons: [])
+        let select = RetroPad.bit(RetroPad.select), r = RetroPad.bit(RetroPad.r), r2 = RetroPad.bit(RetroPad.r2)
+        _ = shortcuts.filter(select)
+        _ = shortcuts.filter(select | r | r2)
+        XCTAssertEqual(shortcuts.endAll(), [.fastForward], "a pad that goes away mid fast-forward stops it; quick save was done once")
+        XCTAssertEqual(shortcuts.endAll(), [])
+        XCTAssertEqual(shortcuts.filter(r).buttons, r, "after that, nothing is held back")
+    }
+
     func testShortcutsOff() {
         let settings = GameSettings(values: ["hotkeys.padCombos": .flag(false)])
         var shortcuts = PadShortcuts(settings: settings, consoleButtons: [])

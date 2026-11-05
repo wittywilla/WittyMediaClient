@@ -260,6 +260,16 @@ public struct PadShortcuts: Equatable {
         public var ended: [PadShortcut]
     }
 
+    /// Ends every shortcut in progress, for a controller that went away or a menu that opened.
+    /// Returns the held ones, which have to be told to stop.
+    public mutating func endAll() -> [PadShortcut] {
+        let held = running.values.filter(\.isHeld).sorted { $0.rawValue < $1.rawValue }
+        running = [:]
+        hidden = 0
+        last = 0
+        return held
+    }
+
     /// What the game should see of these buttons, and which shortcuts began or ended.
     public mutating func filter(_ buttons: UInt16) -> Result {
         let down = buttons & ~last
