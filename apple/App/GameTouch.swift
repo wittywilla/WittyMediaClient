@@ -88,6 +88,7 @@ struct TouchControlsOverlay: View {
             .frame(width: geo.size.width, height: geo.size.height)
             .onAppear { configure(geo.size) }
             .onChange(of: geo.size) { configure($0) }
+            .onChange(of: game.controlsData) { _ in configure(geo.size) }
         }
         .ignoresSafeArea()
         .accessibilityHidden(true)
@@ -378,4 +379,54 @@ private struct AnyInsettableShape: InsettableShape {
     func path(in rect: CGRect) -> Path { make(rect) }
     func inset(by amount: CGFloat) -> AnyInsettableShape { insetBy(amount) }
 }
+
+#if DEBUG && os(iOS)
+/// The touch controls with no game, for checking them on a simulator: the local server's own SNES
+/// layout (and the DS's, the same with its touch screen), over where the picture would be.
+struct TouchPreviewScreen: View {
+    let console: String
+    @StateObject private var game = GamePlayerModel()
+
+    var body: some View {
+        GeometryReader { geo in
+            let portrait = geo.size.height >= geo.size.width
+            ZStack(alignment: .topLeading) {
+                Color.black
+                Rectangle().fill(Color(white: 0.22))
+                    .frame(width: geo.size.width, height: portrait ? geo.size.height * 0.52 : geo.size.height)
+                Text(readout)
+                    .font(.system(size: 13, weight: .semibold, design: .monospaced))
+                    .frame(maxWidth: geo.size.width - 32, alignment: .leading)
+                    .foregroundStyle(.white)
+                    .padding(.top, portrait ? 70 : 24)
+                    .padding(.leading, portrait ? 16 : 70)
+                    .accessibilityIdentifier("touch-readout")
+                TouchControlsOverlay(game: game, drawn: true)
+            }
+        }
+        .ignoresSafeArea()
+        .statusBarHidden()
+        .onAppear {
+            if let controls = try? JSONDecoder().decode(GameControls.self, from: Data(Self.layout(console).utf8)) { game.previewTouch(controls) }
+        }
+    }
+
+    private var readout: String {
+        let out = game.lastTouch
+        let names = RetroPad.names.filter { out.buttons & RetroPad.bit($0.value) != 0 }.sorted { $0.value < $1.value }.map(\.key)
+        var lines = ["\(console.uppercased()) touch preview", "held: " + (names.isEmpty ? "-" : names.joined(separator: " "))]
+        if out.leftX != 0 || out.leftY != 0 { lines.append(String(format: "stick: %.2f %.2f", out.leftX, out.leftY)) }
+        if let at = out.stylus { lines.append(String(format: "stylus: %.0f, %.0f", at.x, at.y)) }
+        lines.append("pressed, in order: " + (game.touchLog.isEmpty ? "-" : game.touchLog.joined(separator: ", ")))
+        return lines.joined(separator: "\n")
+    }
+
+    private static func layout(_ console: String) -> String {
+        let pointer = console == "nds" || console == "ds" ? "true" : "false"
+        return """
+        {"console":"snes","pad":{"face":[{"id":1,"label":"Y"},{"id":9,"label":"X"},{"id":0,"label":"B"},{"id":8,"label":"A"}],"shoulder":[{"id":10,"label":"L"},{"id":11,"label":"R"}],"meta":[{"id":2,"label":"Select"},{"id":3,"label":"Start"}],"art":"four","pointer":\(pointer)},"controls":[{"key":"dpad","id":-1,"label":"D-pad","kind":"dpad"},{"key":"b1","id":1,"label":"Y","kind":"face"},{"key":"b9","id":9,"label":"X","kind":"face"},{"key":"b0","id":0,"label":"B","kind":"face"},{"key":"b8","id":8,"label":"A","kind":"face"},{"key":"b10","id":10,"label":"L","kind":"shoulder"},{"key":"b11","id":11,"label":"R","kind":"shoulder"},{"key":"b2","id":2,"label":"Select","kind":"meta"},{"key":"b3","id":3,"label":"Start","kind":"meta"}],"defaults":{"touch":{"landscape":{"b0":{"x":0.87,"y":0.79,"size":0.15,"opacity":0.55},"b1":{"x":0.785,"y":0.62,"size":0.15,"opacity":0.55},"b10":{"x":0.1,"y":0.14,"size":0.12,"opacity":0.55},"b11":{"x":0.9,"y":0.14,"size":0.12,"opacity":0.55},"b2":{"x":0.435,"y":0.91,"size":0.108,"opacity":0.55},"b3":{"x":0.565,"y":0.91,"size":0.108,"opacity":0.55},"b8":{"x":0.955,"y":0.62,"size":0.15,"opacity":0.55},"b9":{"x":0.87,"y":0.45,"size":0.15,"opacity":0.55},"dpad":{"x":0.13,"y":0.62,"size":0.36,"opacity":0.55}},"portrait":{"b0":{"x":0.76,"y":0.805,"size":0.125,"opacity":0.55},"b1":{"x":0.61,"y":0.72,"size":0.125,"opacity":0.55},"b10":{"x":0.1,"y":0.56,"size":0.1,"opacity":0.55},"b11":{"x":0.9,"y":0.56,"size":0.1,"opacity":0.55},"b2":{"x":0.39,"y":0.93,"size":0.09,"opacity":0.55},"b3":{"x":0.61,"y":0.93,"size":0.09,"opacity":0.55},"b8":{"x":0.91,"y":0.72,"size":0.125,"opacity":0.55},"b9":{"x":0.76,"y":0.635,"size":0.125,"opacity":0.55},"dpad":{"x":0.24,"y":0.72,"size":0.3,"opacity":0.55}}}},"saved":{"touch":{}}}
+        """
+    }
+}
+#endif
 #endif

@@ -438,8 +438,29 @@ final class GamePlayerModel: ObservableObject {
     /// A DS or 3DS: a finger on the picture is the stylus.
     var touchScreenConsole: Bool { controlsData?.pad?.pointer == true }
 
+    #if DEBUG
+    /// What the fingers last held, and each press since, for the touch preview.
+    @Published private(set) var lastTouch = TouchOutput()
+    @Published private(set) var touchLog: [String] = []
+
+    /// The touch controls with no game: a console's controls, as if playing.
+    func previewTouch(_ controls: GameControls) {
+        controlsData = controls
+        touchWanted = true
+        phase = .playing
+    }
+    #endif
+
     /// What the fingers hold, from the touch controls over a screen of `size` points.
     func touched(_ out: TouchOutput, size: CGSize) {
+        #if DEBUG
+        let pressed = out.buttons & ~lastTouch.buttons
+        let names = RetroPad.names.filter { pressed & RetroPad.bit($0.value) != 0 }.sorted { $0.value < $1.value }.map(\.key)
+        if !names.isEmpty { touchLog = Array((touchLog + [names.joined(separator: "+")]).suffix(12)) }
+        if out.leftX != 0 || out.leftY != 0 { touchLog = Array((touchLog + [String(format: "stick %.2f,%.2f", out.leftX, out.leftY)]).suffix(12)) }
+        if let at = out.stylus, lastTouch.stylus == nil { touchLog = Array((touchLog + [String(format: "stylus %.0f,%.0f", at.x, at.y)]).suffix(12)) }
+        lastTouch = out
+        #endif
         input.touch(out.padState(port: 0))
         guard touchScreenConsole else { return }
         if let at = out.stylus, let drawn = pipeline?.renderer?.drawnPicture {
