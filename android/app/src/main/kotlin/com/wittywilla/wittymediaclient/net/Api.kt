@@ -248,6 +248,18 @@ class Api(val base: String, val token: String, private val quick: Boolean = fals
     suspend fun saveLyrics(id: Long, text: String) { call("PUT", "/music/lyrics/$id", body(mapOf("text" to JsonPrimitive(text)))) }
     suspend fun markInstrumental(id: Long) { call("PUT", "/music/lyrics/$id", body(mapOf("instrumental" to JsonPrimitive(true)))) }
     suspend fun forgetLyrics(id: Long) { call("DELETE", "/music/lyrics/$id") }
+    // Booklets and text beside a song's album (web/src/audio/ReadPanel.tsx): the list, a text one, and a booklet as it is.
+    suspend fun extras(id: Long): List<Extra> = getList("/music/extras/$id")
+    suspend fun extraText(id: Long, name: String): String = get<ExtraText>("/music/extras/$id/file?name=${query(name)}").text
+    fun extraFileUrl(id: Long, name: String) = "$base$API/music/extras/$id/file?name=${query(name)}"
+
+    // A file from this server, with the sign-in, written where it's asked to be.
+    suspend fun download(url: String, to: java.io.File) = withContext(Dispatchers.IO) {
+        http.newCall(Request.Builder().url(url).build()).execute().use { res ->
+            if (!res.isSuccessful) throw ApiError(res.code, errorText(res.code, res.peekBody(MAX_BYTES).string()))
+            to.outputStream().use { out -> res.body.byteStream().use { it.copyTo(out) } }
+        }
+    }
     private fun body(fields: Map<String, JsonElement>) = kotlinx.serialization.json.JsonObject(fields).toString()
     suspend fun shelves(library: Long): Shelves = get("/browse/shelves?library=$library")
     // The query is the website's: sort, desc, seed and the filters, already encoded.

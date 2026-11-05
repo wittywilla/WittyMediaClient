@@ -373,6 +373,12 @@ fun WebNowPlaying(nav: Nav) {
     val title = about.title?.toString().orEmpty()
     val artistName = about.artist?.toString().orEmpty().ifEmpty { about.albumArtist?.toString().orEmpty() }
     val runtime = (about.durationMs ?: 0L) / 1000.0
+    // What came with the album, for Read.
+    var extras by remember { mutableStateOf(emptyList<com.wittywilla.wittymediaclient.net.Extra>()) }
+    LaunchedEffect(trackId, music) {
+        extras = emptyList()
+        if (music && trackId > 0) extras = runCatching { api.extras(trackId) }.getOrDefault(emptyList())
+    }
 
     Box(
         Modifier.fillMaxSize().background(Color.Black).onGloballyPositioned { origin = it.boundsInRoot().topLeft }
@@ -416,6 +422,7 @@ fun WebNowPlaying(nav: Nav) {
                         when (panel) {
                             NpPanel.Queue -> QueuePanel(nav, glow, Modifier.fillMaxSize()) { panel = NpPanel.None }
                             NpPanel.Lyrics -> LyricsPanel(nav, words, trackId, title, artistName, runtime, { panel = NpPanel.None }) { toast = it }
+                            NpPanel.Read -> ReadPanel(nav, trackId, extras, words) { panel = NpPanel.None }
                             else -> {}
                         }
                     }
@@ -458,6 +465,17 @@ fun WebNowPlaying(nav: Nav) {
                             // The words' chips, for music.
                             if (music) {
                                 NpChip("Lyrics", on = panel == NpPanel.Lyrics, icon = WebIcons.Mic) { togglePanel(NpPanel.Lyrics) }
+                                // How many things there are to read beside the album, in a white circle.
+                                NpChip(
+                                    "Read", on = panel == NpPanel.Read, icon = NpIcons.ReadOpen, label = "Read the words, or the album's booklet" + if (extras.isNotEmpty()) ", ${extras.size}" else "",
+                                    after = if (extras.isEmpty()) null else {
+                                        {
+                                            Box(Modifier.heightIn(min = 20.dp).widthIn(min = 20.dp).clip(RoundedCornerShape(50)).background(Np.fg).padding(horizontal = 5.dp), contentAlignment = Alignment.Center) {
+                                                Text("${extras.size}", color = Color.Black, fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
+                                            }
+                                        }
+                                    },
+                                ) { togglePanel(NpPanel.Read) }
                             }
                         }
                     }

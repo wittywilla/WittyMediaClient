@@ -676,3 +676,12 @@ data class FoundLyrics(
         return "$kind · ${if (off < 3) "same length" else "${Math.round(off)} s different"}"
     }
 }
+
+// Something beside an album to read (GET /music/extras/{id}): a booklet, which is a PDF, or text.
+@Serializable
+data class Extra(val name: String = "", val kind: String = "", val size: Long = 0) {
+    val isBooklet: Boolean get() = kind == "booklet"
+}
+
+@Serializable
+data class ExtraText(val text: String = "")

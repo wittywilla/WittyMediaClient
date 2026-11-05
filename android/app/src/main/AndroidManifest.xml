@@ -53,6 +53,17 @@
             </intent-filter>
         </activity>
 
+        <!-- An album's booklet, lent to the device's PDF reader while it's open: nothing else is shared. -->
+        <provider
+            android:name="androidx.core.content.FileProvider"
+            android:authorities="${applicationId}.files"
+            android:exported="false"
+            android:grantUriPermissions="true">
+            <meta-data
+                android:name="android.support.FILE_PROVIDER_PATHS"
+                android:resource="@xml/shared_files" />
+        </provider>
+
         <!-- Exported so that the system's media controls, headphones and a TV's card can reach it. Other apps
              can only press its buttons: ListeningService.Callback.onConnect. -->
         <service

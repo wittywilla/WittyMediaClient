@@ -67,6 +67,7 @@ import androidx.compose.ui.input.key.type
 import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
@@ -87,6 +88,7 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.em
 import androidx.compose.ui.unit.sp
+import com.wittywilla.wittymediaclient.net.Extra
 import com.wittywilla.wittymediaclient.net.FoundLyrics
 import com.wittywilla.wittymediaclient.net.LyricLine
 import com.wittywilla.wittymediaclient.net.Lyrics
@@ -549,4 +551,87 @@ private fun TapAlong(nav: Nav, text: String, busy: Boolean, modifier: Modifier, 
             }
         }
     }
+}
+
+// MARK: Read
+
+// Something to read while it plays (`ReadPanel`): the words at your own pace, and whatever came with the album. Text
+// opens here, with Back; a booklet is a PDF, which opens in the device's own reader.
+@Composable
+internal fun ReadPanel(nav: Nav, trackId: Long, extras: List<Extra>, words: LyricsWords, close: () -> Unit) {
+    val api = nav.app.api
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
+    var shown by remember(trackId) { mutableStateOf<Pair<String, String>?>(null) }
+    var busy by remember { mutableStateOf(false) }
+    var error by remember(trackId) { mutableStateOf("") }
+    fun open(extra: Extra) {
+        busy = true
+        error = ""
+        scope.launch {
+            try {
+                if (extra.isBooklet) openBooklet(context, api, trackId, extra.name)
+                else shown = extra.name to api.extraText(trackId, extra.name)
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: android.content.ActivityNotFoundException) {
+                error = "There's no app on this device that opens a PDF."
+            } catch (e: Exception) {
+                error = e.message.orEmpty()
+            }
+            busy = false
+        }
+    }
+    val lyrics = words.lyrics
+    val plain = lyrics?.plain.orEmpty()
+    Column(Modifier.fillMaxSize()) {
+        NpSideHead(shown?.first ?: "Read", "Close", close) {
+            if (shown != null) NpChip("Back", small = true) { shown = null }
+        }
+        Column(Modifier.weight(1f).fillMaxWidth().verticalScroll(rememberScrollState()).padding(top = 4.dp, bottom = 14.dp)) {
+            if (error.isNotEmpty()) NpNote(error)
+            val opened = shown
+            if (opened != null) ReadText(opened.second)
+            else {
+                if (extras.isNotEmpty()) FlowRow(Modifier.padding(start = 18.dp, end = 18.dp, bottom = 10.dp), horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    extras.forEach { extra -> NpChip(extra.name, icon = NpIcons.File, iconSize = 18.dp, enabled = !busy) { open(extra) } }
+                }
+                if (words.loading) NpHint("Looking for the words…")
+                if (plain.isNotEmpty()) {
+                    ReadText(plain)
+                    if (lyrics != null && lyrics.sourceName.isNotEmpty()) {
+                        val credit = buildAnnotatedString {
+                            append("Words from ")
+                            if (lyrics.creditUrl.isNotEmpty()) withLink(LinkAnnotation.Url(lyrics.creditUrl, TextLinkStyles(SpanStyle(textDecoration = TextDecoration.Underline)))) { append(lyrics.sourceName) }
+                            else append(lyrics.sourceName)
+                            append(".")
+                        }
+                        Text(credit, color = Np.fg2, fontSize = 12.sp, modifier = Modifier.padding(start = 18.dp, end = 18.dp, top = 12.dp))
+                    }
+                } else if (!words.loading && extras.isEmpty()) {
+                    NpHint("Nothing to read for this one yet: no words were found, and no booklet is beside the album. A PDF or a text file in the album's folder appears here.")
+                }
+            }
+        }
+    }
+}
+
+// Words to read (`.np-read-text`): 17, 1.55 apart, 18 in from the sides, kept as they're written.
+@Composable
+private fun ReadText(text: String) {
+    androidx.compose.foundation.text.selection.SelectionContainer {
+        Text(text, color = Np.fg, fontSize = 17.sp, lineHeight = 1.55.em, modifier = Modifier.fillMaxWidth().padding(horizontal = 18.dp, vertical = 4.dp))
+    }
+}
+
+// A booklet: fetched with the sign-in into the app's own cache, then handed to whichever app reads PDFs on this device.
+private suspend fun openBooklet(context: android.content.Context, api: com.wittywilla.wittymediaclient.net.Api, trackId: Long, name: String) {
+    val folder = java.io.File(context.cacheDir, "booklets").apply { mkdirs() }
+    val safe = name.replace(Regex("[^A-Za-z0-9._ -]"), "_").take(80).let { if (it.lowercase(java.util.Locale.ROOT).endsWith(".pdf")) it else "$it.pdf" }
+    val file = java.io.File(folder, "$trackId-$safe")
+    api.download(api.extraFileUrl(trackId, name), file)
+    val uri = androidx.core.content.FileProvider.getUriForFile(context, context.packageName + ".files", file)
+    val view = android.content.Intent(android.content.Intent.ACTION_VIEW).setDataAndType(uri, "application/pdf")
+        .addFlags(android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION or android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
+    context.startActivity(view)
 }
