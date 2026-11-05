@@ -194,6 +194,8 @@ final class AppModel: ObservableObject {
     @Published var modulePages: [ModulePlace] = []
     /// The server's version, for the line at the foot of every page, and its short legal notices.
     @Published var serverVersion = ""
+    /// A newer version of the server, for an admin's dot on You.
+    @Published var serverUpdate = ""
     @Published var legal: LegalNotices?
     /// The video playing on a phone or tablet, on its screen or in the dock above the bar once that's left, as the
     /// website's player keeps playing in its mini player.
@@ -641,6 +643,7 @@ final class AppModel: ObservableObject {
     /// What a server says about how it looks: its theme, and the owner's name and logo for it.
     private func learn(_ status: ServerStatus) {
         serverVersion = status.version ?? ""
+        serverUpdate = status.update ?? ""
         themeId = status.theme
         themeChoice = defaults.string(forKey: "theme." + client.base) ?? ""
         refreshTheme()

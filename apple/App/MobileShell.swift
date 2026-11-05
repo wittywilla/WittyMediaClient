@@ -329,7 +329,8 @@ struct FloatingBar: View {
 
     var body: some View {
         HStack(spacing: 0) {
-            ForEach([AppTab.home, .guide, .search], id: \.self) { tab in
+            // Home and TV guide go when the person hid them from their menu, as the website's bar.
+            ForEach([AppTab.home, .guide, .search].filter { !(model.navPrefs.hidden ?? []).contains($0 == .home ? "home" : $0 == .guide ? "tv" : "") }, id: \.self) { tab in
                 slot(tab.title, chosen: marked(tab), action: { press(tab) }) {
                     Image(systemName: tab.barIcon).font(.system(size: 20, weight: .medium)).frame(width: 24, height: 24)
                 }
@@ -341,6 +342,15 @@ struct FloatingBar: View {
             slot(name.isEmpty ? AppTab.profile.title : "\(AppTab.profile.title), \(name)", chosen: marked(.profile), action: { press(.profile) }) {
                 if model.user != nil {
                     AvatarTile(name: name, size: 32)
+                        .overlay(alignment: .topTrailing) {
+                            // An update to install, for whoever can: the website's dot.
+                            if model.user?.isAdmin == true, !model.serverUpdate.isEmpty {
+                                Circle().fill(palette.accent).frame(width: 8, height: 8)
+                                    .background(Circle().fill(palette.accent.opacity(0.25)).frame(width: 14, height: 14))
+                                    .offset(x: 2, y: -6)
+                                    .accessibilityLabel("Version \(model.serverUpdate) is available")
+                            }
+                        }
                 } else {
                     Image(systemName: "person.crop.circle").font(.system(size: 22, weight: .medium))
                 }

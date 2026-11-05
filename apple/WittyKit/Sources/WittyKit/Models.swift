@@ -13,6 +13,8 @@ public struct ServerStatus: Decodable, Equatable {
     public let brandLogo: String?
     public let theme: String?
     public let user: User?
+    /// A newer version the server's update check found, for admins; empty for none.
+    public let update: String?
 
     /// Comes from a server that may not have proved anything yet, so it is cleaned before showing.
     public var displayName: String {
