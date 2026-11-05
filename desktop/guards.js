@@ -82,8 +82,22 @@ function downloadAllowed(url, server) {
   } catch { return false }
 }
 
+// A server's logo: a picture of one of these kinds, and no bigger than this.
+const LOGO_TYPES = ['image/png', 'image/jpeg', 'image/webp', 'image/gif', 'image/svg+xml']
+const MAX_LOGO_BYTES = 256 * 1024
+const logoType = (contentType) => {
+  const type = String(contentType || '').split(';')[0].trim().toLowerCase()
+  return LOGO_TYPES.includes(type) ? type : ''
+}
+// /api/status → brandLogo: the version of the logo, which also names it in the address.
+const logoVersion = (value) => (typeof value === 'string' && /^[\x21-\x7e]{1,64}$/.test(value) ? value : '')
+
 // Reads an answer from an address nobody has proved yet, up to a limit.
 async function readJson(res, limit = MAX_ANSWER_BYTES) {
+  return JSON.parse((await readBytes(res, limit)).toString('utf8'))
+}
+
+async function readBytes(res, limit) {
   const tooBig = () => Object.assign(new Error('The answer was too long'), { tooBig: true })
   if (Number(res.headers.get('content-length')) > limit) throw tooBig()
   const parts = []
@@ -101,7 +115,7 @@ async function readJson(res, limit = MAX_ANSWER_BYTES) {
       parts.push(value)
     }
   }
-  return JSON.parse(Buffer.concat(parts).toString('utf8'))
+  return Buffer.concat(parts)
 }
 
 // Which error the connect screen shows for a failed request.
@@ -153,5 +167,5 @@ function menuPoint(at, width, height) {
 module.exports = {
   PAGE_SCHEME, CONNECT_PAGE, BAR_PAGE, TV_MENU_PAGE, isConnectUrl, pageFile, navigation, outsideAddress, budget, downloadAllowed, readJson, whyFailed, isCertificateCode,
   cleanText, cleanName, cleanMessage, validCode, validToken, validPairCode, validDeviceSecret, serverPage, pollSeconds, menuPoint,
-  MAX_ANSWER_BYTES, MAX_NAME,
+  readBytes, logoType, logoVersion, MAX_ANSWER_BYTES, MAX_NAME, MAX_LOGO_BYTES,
 }
