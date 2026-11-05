@@ -726,7 +726,8 @@ Apple TV and Android TV are the same app to look at. Sizes are given in TV units
     each tile is the library's icon in `accentText` on `accent` at 14%, then its name. Each opens the library as Home's
     rows do; a games library opens Games' view of it.
   - **Games:** WittyPlay's couch library. With one games library it opens straight in; with several, one row per
-    library, and each row opens that library.
+    library, as Home's rows are: the library's name, its games' covers (each opens that game's page) and a pill that
+    opens the whole library.
   - **Live TV:** the WittyTV guide (below) in the account's WittyTV look, with Recordings reachable from it.
   - All six always show. A server with no games or no live TV shows that tab with a plain empty state saying what's
     missing and that an owner adds it on the server's website (`gamesNone` / `gamesNoneDetail`, `liveTvNone` /
