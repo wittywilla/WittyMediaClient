@@ -1,6 +1,7 @@
 package com.wittywilla.wittymediaclient
 
 import android.content.Intent
+import android.content.pm.ApplicationInfo
 import android.annotation.SuppressLint
 import android.os.Bundle
 import android.view.InputDevice
@@ -20,6 +21,11 @@ class MainActivity : ComponentActivity() {
         showSystemBars(this, light = false, background = getColor(R.color.background))
         super.onCreate(savedInstanceState)
         noticeTap(intent)
+        // For checking Home's hero with a title of one's choosing, in a debug build only:
+        // `adb shell am start -n com.wittywilla.wittymediaclient/.MainActivity --el WittyHomeHero <item id>`.
+        if (applicationInfo.flags and ApplicationInfo.FLAG_DEBUGGABLE != 0) {
+            (application as WittyApp).pinnedHero = intent.getLongExtra("WittyHomeHero", 0)
+        }
         setContent { AppRoot(application as WittyApp) }
     }
 

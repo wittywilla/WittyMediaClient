@@ -231,7 +231,18 @@ private fun saveDownload(context: Context, api: Api, url: String, userAgent: Str
 @Composable
 // public: a page anyone may read, opened before signing in. It goes without a sign-in cookie.
 // title: a native bar with Back and the page's name above it, as You's rows open pages.
-fun ServerPageScreen(nav: Nav, route: Route, path: String, keptToGames: Boolean, public: Boolean = false, title: String = "") {
+// `out` is where Back goes once the page has nothing of its own to close or go back to: by default the screen
+// before, and up to the bar for a TV's tab.
+fun ServerPageScreen(
+    nav: Nav,
+    route: Route,
+    path: String,
+    keptToGames: Boolean,
+    public: Boolean = false,
+    title: String = "",
+    out: (() -> Unit)? = null,
+    backEnabled: Boolean = true,
+) {
     val context = LocalContext.current
     val api = nav.app.api
     val background = MaterialTheme.colorScheme.background.toArgb()
@@ -276,7 +287,7 @@ fun ServerPageScreen(nav: Nav, route: Route, path: String, keptToGames: Boolean,
                 // The page follows the theme chosen on this device, as the app does.
                 if (!keptToGames) themeSyncScript(nav.themeChoice)?.let { web.evaluateJavascript(it, null) }
             },
-            onAppBack = { if (nav.current == route) nav.pop() },
+            onAppBack = { if (nav.current == route) out?.invoke() ?: nav.pop() },
             isTv = nav.app.isTv && !keptToGames,
         )
         web.webChromeClient = PageChrome(
@@ -339,7 +350,7 @@ fun ServerPageScreen(nav: Nav, route: Route, path: String, keptToGames: Boolean,
         onDispose { if (whole) bars?.show(WindowInsetsCompat.Type.systemBars()) }
     }
 
-    BackHandler {
+    BackHandler(enabled = backEnabled) {
         when {
             fullScreen != null -> endFullScreen?.onCustomViewHidden()
             failed.isNotEmpty() || web == null -> nav.pop()
@@ -351,7 +362,7 @@ fun ServerPageScreen(nav: Nav, route: Route, path: String, keptToGames: Boolean,
                         web.dispatchKeyEvent(KeyEvent(KeyEvent.ACTION_UP, KeyEvent.KEYCODE_ESCAPE))
                     }
                     web.canGoBack() -> web.goBack()
-                    else -> nav.pop()
+                    else -> out?.invoke() ?: nav.pop()
                 }
             }
         }
