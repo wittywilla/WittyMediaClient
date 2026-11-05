@@ -24,6 +24,9 @@ data class SavedServer(
     val serverId: String = "",
     val publicKey: String = "",
     val fingerprint: String = "",
+    // The version of the server's own logo when it was last opened, or empty for the app's mark. The picture is
+    // kept on the device by LogoCache, so the list of servers shows it without asking any of them.
+    val brandLogo: String = "",
 )
 
 // The sign-in, and the key of the server it belongs to. They're sealed together, so changing the
@@ -56,6 +59,24 @@ class SessionStore(context: Context) {
 
     fun forgetToken() {
         prefs.edit().remove(KEY_TOKEN).apply()
+    }
+
+    // This device's theme for a server: "" for the server's own, "auto" for light or dark with the
+    // device, or a theme's id. Kept per server, on this device only.
+    fun themeChoice(server: String): String = prefs.getString(KEY_THEME + server, "") ?: ""
+
+    fun chooseTheme(server: String, choice: String) {
+        prefs.edit().putString(KEY_THEME + server, choice).apply()
+    }
+
+    // A server's themes as last read, kept by id and the list's modTime, so they're read again only when they change.
+    fun themeTokens(server: String, id: String, modTime: Long): String? =
+        prefs.getString("$KEY_TOKENS$server|$id|$modTime", null)
+
+    fun keepThemeTokens(server: String, id: String, modTime: Long, tokens: String) {
+        val edit = prefs.edit()
+        prefs.all.keys.filter { it.startsWith("$KEY_TOKENS$server|$id|") }.forEach { edit.remove(it) }
+        edit.putString("$KEY_TOKENS$server|$id|$modTime", tokens).apply()
     }
 
     var recent: List<SavedServer>
@@ -122,6 +143,8 @@ class SessionStore(context: Context) {
         const val KEY_SERVER = "server"
         const val KEY_TOKEN = "signin"
         const val KEY_RECENT = "recent"
+        const val KEY_THEME = "theme:"
+        const val KEY_TOKENS = "tokens:"
         const val KEYSTORE = "AndroidKeyStore"
         const val ALIAS = "wittymediaclient-session"
         const val TRANSFORM = "AES/GCM/NoPadding"

@@ -25,7 +25,8 @@ import java.net.UnknownHostException
 import java.util.concurrent.TimeUnit
 import javax.net.ssl.SSLException
 
-class ApiError(val status: Int, message: String, val location: String = "") : Exception(message)
+// twoFactor: the password was right, or a code was wrong, and the server wants its authenticator code.
+class ApiError(val status: Int, message: String, val location: String = "", val twoFactor: Boolean = false) : Exception(message)
 
 val json = Json {
     ignoreUnknownKeys = true
@@ -67,6 +68,7 @@ class Api(val base: String, val token: String, private val quick: Boolean = fals
         runCatching { json.parseToJsonElement(text).jsonObject["error"]?.jsonPrimitive?.content }.getOrNull()
             ?: "The server answered with an error ($status)."
 
+
     private suspend fun raw(method: String, path: String, body: String?): Answer = withContext(Dispatchers.IO) {
         val request = Request.Builder()
             .url("$base$API$path")
@@ -98,7 +100,7 @@ class Api(val base: String, val token: String, private val quick: Boolean = fals
                 if (answer.status >= 500) ClientLog.error("request", words, request = answer.requestId)
                 else ClientLog.warn("request", words, request = answer.requestId)
             }
-            throw ApiError(answer.status, message, answer.location)
+            throw ApiError(answer.status, message, answer.location, twoFactor = asksForCode(answer.status, answer.text))
         }
         return answer.text
     }
@@ -140,8 +142,10 @@ class Api(val base: String, val token: String, private val quick: Boolean = fals
         call("DELETE", "/hls/${query(streamId)}")
     }
 
-    suspend fun login(name: String, password: String, device: String): LoginResult =
-        json.decodeFromString(call("POST", "/login", json.encodeToString(Credentials(name, password, device))))
+    // An account with two-factor sign-in answers 401 with twoFactor first; the same again with the code signs in.
+    suspend fun login(name: String, password: String, device: String, code: String = ""): LoginResult =
+        json.decodeFromString(call("POST", "/login", json.encodeToString(Credentials(name, password, device, code))))
+
 
     suspend fun pairStart(device: String, platform: String): PairStart =
         json.decodeFromString(call("POST", "/pair/start", json.encodeToString(PairStartRequest(device, platform))))
@@ -179,6 +183,54 @@ class Api(val base: String, val token: String, private val quick: Boolean = fals
     suspend fun couchStatus(): CouchStatus = get("/couch")
     suspend fun guide(hours: Int, limit: Int): Guide = get("/guide?hours=$hours&limit=$limit")
 
+    // Themes: docs/APP-DESIGN.md, Themes. The list and each theme's tokens are public; the person's own look is theirs.
+    suspend fun themes(): ThemeList = get("/themes")
+    suspend fun themeTokens(id: String): ThemeTokens = get("/themes/${query(id)}/tokens.json")
+
+    // /me/ui is the web's own settings, any JSON: only customTheme is read, and one that doesn't parse is none.
+    suspend fun customTheme(): ThemeMakerInput? {
+        val ui = json.parseToJsonElement(call("GET", "/me/ui")).jsonObject
+        val made = ui["customTheme"] ?: return null
+        return runCatching { json.decodeFromJsonElement(ThemeMakerInput.serializer(), made) }.getOrNull()
+    }
+
+    // You and settings.
+    suspend fun updateProfile(id: Long, change: ProfileUpdate): User =
+        json.decodeFromString(call("PUT", "/users/$id/profile", json.encodeToString(change)))
+
+    suspend fun changePassword(id: Long, current: String, password: String) {
+        call("PUT", "/users/$id/password", json.encodeToString(PasswordChange(password, current)))
+    }
+
+    suspend fun twoFactor(): TwoFactorStatus = get("/me/2fa")
+    suspend fun twoFactorSetup(password: String): TwoFactorSetup =
+        json.decodeFromString(call("POST", "/me/2fa/setup", json.encodeToString(PasswordOnly(password))))
+    suspend fun twoFactorConfirm(code: String): RecoveryCodes =
+        json.decodeFromString(call("POST", "/me/2fa/confirm", json.encodeToString(CodeOnly(code))))
+    suspend fun twoFactorDisable(password: String, code: String) {
+        call("POST", "/me/2fa/disable", json.encodeToString(PasswordAndCode(password, code)))
+    }
+
+    suspend fun sessions(): List<DeviceSession> = getList("/sessions")
+    suspend fun endSession(id: String) {
+        call("DELETE", "/sessions/${query(id)}")
+    }
+    suspend fun endOtherSessions() {
+        call("DELETE", "/sessions")
+    }
+
+    // Signing in a TV from here: what's asking, then yes (as someone) or no. Or a code for the TV to type.
+    suspend fun pairInfo(code: String): PairInfo =
+        json.decodeFromString(call("POST", "/pair/info", json.encodeToString(CodeOnly(code))))
+    suspend fun pairApprove(code: String, userId: Long) {
+        call("POST", "/pair/approve", json.encodeToString(PairAnswer(code, userId)))
+    }
+    suspend fun pairDeny(code: String) {
+        call("POST", "/pair/deny", json.encodeToString(PairAnswer(code)))
+    }
+    suspend fun pairInvite(userId: Long): PairInvite =
+        json.decodeFromString(call("POST", "/pair/invite", json.encodeToString(UserIdOnly(userId))))
+
     suspend fun logout() {
         call("POST", "/logout", "{}")
     }
@@ -204,6 +256,15 @@ class Api(val base: String, val token: String, private val quick: Boolean = fals
         return base + path
     }
 }
+
+// A refused sign-in that asks for the authenticator's code: {"error": "...", "twoFactor": true}.
+fun asksForCode(status: Int, text: String): Boolean =
+    status == 401 && runCatching { json.parseToJsonElement(text).jsonObject["twoFactor"]?.jsonPrimitive?.content == "true" }.getOrDefault(false)
+
+// The server's own logo, at the version /status gave, or empty for the app's mark. It's public: the
+// sign-in screens show it.
+fun brandLogoUrl(base: String, version: String): String =
+    if (version.isEmpty() || base.isEmpty()) "" else "$base$API/branding/logo?v=" + URLEncoder.encode(version, "UTF-8")
 
 // Asks an address whether it is a WittyMediaServer this app can use. With appVersion left
 // empty, no version of this app is compared.
