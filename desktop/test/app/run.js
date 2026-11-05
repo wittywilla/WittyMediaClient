@@ -5,10 +5,11 @@
 //
 // It can't start anything outside itself or open a native window: searching the network is
 // replaced (a socket would ask the Windows firewall), so is opening a browser, the Help
-// menu never opens, and a download that's let through goes to a test folder without asking.
+// menu never opens, a download that's let through goes to a test folder without asking, and keeping
+// the system from suspending the app is only noted down.
 // Set WMC_SHOTS to a folder to get a picture of each screen.
 const electron = require('electron')
-const { app, session, shell, BaseWindow, Menu, webContents } = electron
+const { app, session, shell, BaseWindow, Menu, powerSaveBlocker, webContents } = electron
 const assert = require('node:assert')
 const crypto = require('node:crypto')
 const fs = require('node:fs')
@@ -61,9 +62,15 @@ shell.openExternal = toBrowser
 const menus = []
 const toMenu = function popup(options) { menus.push({ labels: this.items.map((i) => i.label), options }) }
 Menu.prototype.popup = toMenu
+const blocks = { started: [], running: new Set() }
+let nextBlock = 1
+const toBlock = (type) => { blocks.started.push(type); blocks.running.add(nextBlock); return nextBlock++ }
+powerSaveBlocker.start = toBlock
+powerSaveBlocker.stop = (id) => blocks.running.delete(id)
 // If these didn't take, the test would really open things. It stops here instead.
 assert.strictEqual(shell.openExternal, toBrowser)
 assert.strictEqual(Menu.prototype.popup, toMenu)
+assert.strictEqual(powerSaveBlocker.start, toBlock)
 
 const discover = require('../../discover.js')
 let announce = () => {}
@@ -90,6 +97,33 @@ const DEVICE_SECRET = '5ec7e7'.repeat(10) + 'beef'
 const SERVER_PAGE = `<!doctype html><html><head><title>Stand-in</title>
 <style>:root { --bg-2: #fafafa; --fg: #111111; --border: #cccccc; }</style></head>
 <body><a id="out" href="https://example.invalid/linked">a link</a><h1>Stand-in server</h1></body></html>`
+
+// Three seconds of silence, so a test that plays makes no sound.
+function silence(seconds = 3, rate = 8000) {
+  const data = Buffer.alloc(seconds * rate * 2)
+  const head = Buffer.alloc(44)
+  head.write('RIFF', 0)
+  head.writeUInt32LE(36 + data.length, 4)
+  head.write('WAVEfmt ', 8)
+  head.writeUInt32LE(16, 16)
+  head.writeUInt16LE(1, 20) // PCM
+  head.writeUInt16LE(1, 22) // one channel
+  head.writeUInt32LE(rate, 24)
+  head.writeUInt32LE(rate * 2, 28)
+  head.writeUInt16LE(2, 32)
+  head.writeUInt16LE(16, 34)
+  head.write('data', 36)
+  head.writeUInt32LE(data.length, 40)
+  return Buffer.concat([head, data])
+}
+// A page that plays, counts its timer, and pauses when it's told it's hidden, as a browser tab's would.
+const PLAYING_PAGE = `<!doctype html><html><head><title>Playing</title></head><body><h1>Playing</h1>
+<audio id="a" src="/silence.wav" loop autoplay></audio>
+<script>
+window.ticks = 0
+setInterval(() => { window.ticks++ }, 100)
+document.addEventListener('visibilitychange', () => { if (document.hidden) document.getElementById('a').pause() })
+</script></body></html>`
 
 const stand = { keys: newKeys(), redeemed: [], loggedOut: [], cookies: [], asked: 0, polled: [], pairAnswers: [] }
 
@@ -136,6 +170,8 @@ function answerRequest(req, res) {
       stand.loggedOut.push(req.headers.authorization)
       return send(200, { ok: true })
     }
+    if (route === '/silence.wav') return send(200, silence(), 'audio/wav')
+    if (route === '/playing') return send(200, PLAYING_PAGE, 'text/html')
     if (route === '/redirect-out') return send(302, '', 'text/plain', { Location: 'https://example.invalid/redirected' })
     if (route === '/framed') return send(200, '<!doctype html><iframe src="/redirect-out"></iframe>', 'text/html')
     return send(200, SERVER_PAGE, 'text/html')
@@ -234,6 +270,33 @@ async function seeded(url) {
       assert.deepStrictEqual(stand.redeemed, [])
       await until('the button to change server', async () => (await inBar("document.getElementById('change').hidden")) === false)
       assert.strictEqual(stateFile().recent[0].name, 'Remembered', 'its name is kept')
+    })
+    const win = BaseWindow.getAllWindows()[0]
+    const audio = (what) => inPage(`(() => { const a = document.getElementById('a'); return ${what} })()`)
+    await step('what plays keeps playing with the window out of sight, and the system lets the app run', async () => {
+      await views().page.loadURL(`${url}/playing`)
+      await until('it to play', () => audio('a.currentTime > 0.3'))
+      await until('the app kept running', () => blocks.running.size === 1)
+      assert.deepStrictEqual(blocks.started, ['prevent-app-suspension'])
+      win.hide()
+      await wait(500)
+      const before = await audio('({ t: a.currentTime, ticks: window.ticks })')
+      await wait(1500)
+      const after = await audio('({ t: a.currentTime, ticks: window.ticks, seen: document.visibilityState, paused: a.paused })')
+      assert.strictEqual(after.seen, 'visible', 'never told it is hidden, so nothing pauses')
+      assert.strictEqual(after.paused, false)
+      // Looped three seconds: it moved on, whichever way round it went.
+      assert.ok(after.t !== before.t, `still playing: ${before.t} then ${after.t}`)
+      assert.ok(after.ticks - before.ticks >= 10, `timers not slowed: ${after.ticks - before.ticks} ticks in 1.5 s`)
+    })
+    await step('with the website\'s setting off, the page is told it is hidden, like a browser tab, and pauses', async () => {
+      await inPage("document.documentElement.dataset.backgroundPlay = 'off'; 0")
+      await until('the page to learn it is hidden', async () => (await inPage('document.visibilityState')) === 'hidden')
+      await until('it to pause', () => audio('a.paused'))
+      await until('the system to be let go', () => blocks.running.size === 0)
+      win.show()
+      await inPage("delete document.documentElement.dataset.backgroundPlay; 0")
+      await until('visible again', async () => (await inPage('document.visibilityState')) === 'visible')
     })
   }
   if (scenario === 'other') {

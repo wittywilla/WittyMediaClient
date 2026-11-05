@@ -71,6 +71,21 @@ jobs:
       - name: Test
         working-directory: desktop
         run: npm test
+      # The app itself against a stand-in server: the screens, the sign-in, what a page can't do, and
+      # playing on with the window out of sight. Linux has no screen here, so it gets a virtual one, and
+      # Ubuntu only lets Chromium's sandbox start from its setuid helper.
+      - name: Test the running app
+        working-directory: desktop
+        shell: bash
+        run: |
+          node node_modules/electron/install.js
+          if [ "$RUNNER_OS" = Linux ]; then
+            sudo chown root:root node_modules/electron/dist/chrome-sandbox
+            sudo chmod 4755 node_modules/electron/dist/chrome-sandbox
+            xvfb-run -a npm run test:app
+          else
+            npm run test:app
+          fi
       - name: Package (unpacked, unsigned)
         working-directory: desktop
         env:

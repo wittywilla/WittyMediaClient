@@ -5,6 +5,11 @@ What changed in WittyMediaClient, newest first. What changed before it had a rep
 
 ## Unreleased
 
+- **Desktop: what plays keeps playing behind other windows.** WittyTV, films and music no longer slow or stop when the
+  window is minimised, hidden or covered: while something plays, the server's page isn't throttled and the system isn't
+  allowed to suspend the app (the screen may still turn off), and for half a minute after, so the next episode starts.
+  With the website's "Keep playing when this tab is in the background" turned off, the app does neither, and the page
+  pauses as a browser tab would.
 - **WittyPlay's Shelves on every Apple device.** A games library opens on Shelves, as the website's: Where you left off, the other games in
   progress, then a shelf for each console and the shelves the server picks, with every game A to Z at the foot. Games stand in their console's
   kind of case, as their cartridge, card or disc, or as spines in their covers' colours with letter dividers, as each device remembers; a game

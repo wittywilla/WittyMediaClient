@@ -501,6 +501,8 @@ checked package, no `file://` privileges):
   certificate, which also proves that listening to `certificate-error` doesn't accept one.
 - The app's name until a server is added, found servers showing only their address, a saved server listed once with
   its own name, and the server's logo fetched once it has proved itself, kept with it and not fetched again.
+- Playing with the window hidden: the page goes on playing, its timers aren't slowed and it isn't told it's hidden, and
+  the app asks the system not to suspend it; with the website's setting off, the page is told it's hidden and pauses.
 - A code shown on the screen for a phone to approve: refused, then a new code, then approved and signed in, with the
   secret that collects it never reaching the page, and nothing asked once the screen is left.
 - TV mode in a window: the words on the left and the actions on the right, the four-unit focus ring, Back, and with Reduce
