@@ -38,6 +38,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.staticCompositionLocalOf
+import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.autofill.ContentType
@@ -88,6 +89,7 @@ val LocalWords = staticCompositionLocalOf { emptyMap<String, String>() }
 private const val PRESS_SCALE = 0.97f
 private const val PRESS_ALPHA = 0.85f
 private const val DISABLED_ALPHA = 0.55f
+private const val FOCUS_TRIES = 4
 
 // A ring around something, `gap` out from its edge, drawn outside it so nothing moves when it shows.
 fun Modifier.ringOutside(shape: Shape, colour: Color, gap: Dp, width: Dp): Modifier = drawWithContent {
@@ -111,6 +113,8 @@ fun Pressable(
     selected: Boolean = false,
     focusKey: String? = null,
     requestFocus: Boolean = false,
+    // For something that has just appeared as the screen's main action, whatever had focus before.
+    takeFocus: Boolean = false,
     focusRequester: FocusRequester? = null,
     enabled: Boolean = true,
     pressScale: Float = PRESS_SCALE,
@@ -122,14 +126,26 @@ fun Pressable(
 ) {
     val interaction = remember { MutableInteractionSource() }
     val pressed by interaction.collectIsPressedAsState()
-    val focused by interaction.collectIsFocusedAsState()
+    // From the focus system itself: focus given on a screen's first frame can come before an
+    // interaction stream is listened to, and would never show.
+    var focused by remember { mutableStateOf(false) }
     val requester = focusRequester ?: remember { FocusRequester() }
     val memory = LocalFocusMemory.current
     val metrics = LocalMetrics.current
     val reduce = LocalReduceMotion.current
     val keyboard = LocalInputModeManager.current.inputMode == InputMode.Keyboard
-    val comingBack = focusKey != null && memory.last == focusKey
-    if (comingBack || (requestFocus && memory.last == null)) LaunchedEffect(focusKey, requestFocus) { runCatching { requester.requestFocus() } }
+    // Coming back counts on the first look only, so a change later doesn't pull focus back here.
+    val comingBack = remember { focusKey != null && memory.last == focusKey }
+    val wanted = comingBack || takeFocus || (requestFocus && memory.last == null)
+    // A screen that has just replaced another may not take it on the first frame, so it tries a few.
+    LaunchedEffect(wanted) {
+        if (!wanted) return@LaunchedEffect
+        repeat(FOCUS_TRIES) {
+            runCatching { requester.requestFocus() }
+            withFrameNanos { }
+            if (focused) return@LaunchedEffect
+        }
+    }
     val showsFocus = focused && keyboard
     val grow = when {
         reduce -> 1f
@@ -146,7 +162,10 @@ fun Pressable(
             .graphicsLayer { scaleX = grow; scaleY = grow; alpha = dim }
             .then(if (ring && showsFocus) Modifier.ringOutside(shape, ringColour, metrics.focusRing, metrics.focusRing) else Modifier)
             .focusRequester(requester)
-            .onFocusChanged { if (it.isFocused && focusKey != null) memory.last = focusKey }
+            .onFocusChanged {
+                focused = it.isFocused
+                if (it.isFocused && focusKey != null) memory.last = focusKey
+            }
             .semantics {
                 if (label != null) contentDescription = label
                 if (state != null) stateDescription = state
@@ -176,6 +195,7 @@ fun WittyButton(
     tall: Boolean = false,
     pill: Boolean = false,
     requestFocus: Boolean = false,
+    takeFocus: Boolean = false,
     focusKey: String? = null,
     focusRequester: FocusRequester? = null,
 ) {
@@ -203,7 +223,7 @@ fun WittyButton(
         { if (!busy) onClick() }, modifier,
         shape = if (pill) Radius.FULL else LocalMetrics.current.corner(10), fill = fill,
         label = if (busy) text else null, state = if (busy) LocalWords.current["connecting"] else null,
-        focusKey = focusKey, requestFocus = requestFocus, focusRequester = focusRequester, enabled = enabled,
+        focusKey = focusKey, requestFocus = requestFocus, takeFocus = takeFocus, focusRequester = focusRequester, enabled = enabled,
     ) {
         Box(
             Modifier
@@ -332,7 +352,7 @@ private fun TvTextField(
     keyboardOptions: KeyboardOptions,
     keyboardActions: KeyboardActions,
     trailing: (@Composable () -> Unit)?,
-    fieldModifier: Modifier,
+    modifier: Modifier = Modifier,
 ) {
     val scheme = MaterialTheme.colorScheme
     val extra = LocalExtraColours.current
@@ -358,7 +378,7 @@ private fun TvTextField(
             if (icon != null) Icon(icon, contentDescription = null, tint = quiet, modifier = Modifier.size(metrics.u(20)))
             BasicTextField(
                 value, onChange,
-                modifier = Modifier.weight(1f).then(fieldModifier).semantics { contentDescription = label },
+                modifier = Modifier.weight(1f).then(modifier).semantics { contentDescription = label },
                 textStyle = body.copy(color = scheme.onBackground),
                 singleLine = true,
                 cursorBrush = SolidColor(scheme.primary),

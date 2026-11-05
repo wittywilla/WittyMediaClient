@@ -145,7 +145,7 @@ fun SignInLayout(onBack: (() -> Unit)? = null, words: @Composable ColumnScope.()
 
 // A screen's heading and what it's about: centred in a column, to the left on a TV.
 @Composable
-fun SignInHeading(title: String, detail: String = "", display: Boolean = false, modifier: Modifier = Modifier) {
+fun SignInHeading(title: String, modifier: Modifier = Modifier, detail: String = "", display: Boolean = false) {
     val metrics = LocalMetrics.current
     val scheme = MaterialTheme.colorScheme
     val align = if (metrics.tv) TextAlign.Start else TextAlign.Center

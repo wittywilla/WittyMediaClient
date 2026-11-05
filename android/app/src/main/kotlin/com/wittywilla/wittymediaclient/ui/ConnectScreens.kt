@@ -182,7 +182,7 @@ fun ConnectScreen(nav: Nav, s: Map<String, String>, message: String) {
     SignInLayout(
         words = {
             Lockup(nav.brandName, nav.brandLogo)
-            SignInHeading(s["findTitle"].orEmpty(), s["findSubtitle"].orEmpty(), display = true)
+            SignInHeading(s["findTitle"].orEmpty(), detail = s["findSubtitle"].orEmpty(), display = true)
             if (tv) LegalNote(s["legalConnect"].orEmpty())
         },
         actions = {
@@ -248,7 +248,7 @@ private fun AddressScreen(
         onBack,
         words = {
             Lockup(nav.brandName, nav.brandLogo)
-            SignInHeading(s["addressTitle"].orEmpty(), s["addressHint"].orEmpty())
+            SignInHeading(s["addressTitle"].orEmpty(), detail = s["addressHint"].orEmpty())
             if (tv) LegalNote(s["legalConnect"].orEmpty())
         },
         actions = {
@@ -275,7 +275,7 @@ fun MismatchScreen(nav: Nav, s: Map<String, String>, server: SavedServer) {
         nav::pop,
         words = {
             WarningBadge(metrics.u(64), if (metrics.tv) Modifier else Modifier.align(Alignment.CenterHorizontally))
-            SignInHeading(s["identityTitle"].orEmpty(), s["identityHint"].orEmpty())
+            SignInHeading(s["identityTitle"].orEmpty(), detail = s["identityHint"].orEmpty())
             PanelCard {
                 Text(server.url, color = MaterialTheme.colorScheme.onSurface, style = MaterialTheme.typography.label)
                 Text(s["fingerprintLabel"].orEmpty(), color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.caption)
@@ -383,7 +383,7 @@ private fun ServerFooter(nav: Nav, s: Map<String, String>) {
     val name = nav.server?.name ?: nav.brandName
     Row(
         Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.spacedBy(LocalMetrics.current.u(8), if (tv) Alignment.Start else Alignment.CenterHorizontally),
+        horizontalArrangement = Arrangement.spacedBy(LocalMetrics.current.u(if (tv) 16 else 8), if (tv) Alignment.Start else Alignment.CenterHorizontally),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         if (!name.isNullOrEmpty()) Text(name, color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.secondary, maxLines = 1)
@@ -451,7 +451,7 @@ private fun PairScreen(nav: Nav, s: Map<String, String>, onBack: () -> Unit, onU
         onBack,
         words = {
             Lockup(nav.brandName, nav.brandLogo)
-            SignInHeading(s["pairTitle"].orEmpty(), if (code.isNotEmpty()) s["pairHint"].orEmpty() else "")
+            SignInHeading(s["pairTitle"].orEmpty(), detail = if (code.isNotEmpty()) s["pairHint"].orEmpty() else "")
             if (code.isNotEmpty()) {
                 SelectionContainer(if (metrics.tv) Modifier else Modifier.align(Alignment.CenterHorizontally)) {
                     Text(approveAt, color = LocalExtraColours.current.accentText, style = MaterialTheme.typography.label)
@@ -474,7 +474,7 @@ private fun PairScreen(nav: Nav, s: Map<String, String>, onBack: () -> Unit, onU
         },
         actions = {
             if (code.isNotEmpty() && scan.isNotEmpty()) QrCard(scan, s["pairScan"].orEmpty(), if (metrics.tv) Modifier else Modifier.align(Alignment.CenterHorizontally))
-            if (ended) WittyButton(s["pairNew"].orEmpty(), { round++ }, Modifier.fillMaxWidth(), kind = ButtonKind.Primary, tall = true, requestFocus = true)
+            if (ended) WittyButton(s["pairNew"].orEmpty(), { round++ }, Modifier.fillMaxWidth(), kind = ButtonKind.Primary, tall = true, takeFocus = true, focusKey = "pair-new")
             QuietLinks {
                 val server = nav.server
                 if (server != null && server.publicKey.isNotEmpty()) {
@@ -566,9 +566,8 @@ fun SignInScreen(nav: Nav, s: Map<String, String>, way: SignInWay) {
     val showsProfiles = list != null && list.style == "profiles" && list.profiles.isNotEmpty()
     val chosen = list?.profiles?.firstOrNull { it.id == chosenId }
     // Each step remembers its own focus, so a step's first focus isn't lost to another's, and coming
-    // back to one puts focus where it was.
-    val memories = remember { HashMap<String, FocusMemory>() }
-    val memory = memories.getOrPut(if (secondStep) "two-factor" else step.name) { FocusMemory() }
+    // back to one, as from the help, puts focus where it was. Kept with the app's screens.
+    val memory = nav.focusFor("signin-step-" + if (secondStep) "two-factor" else step.name)
     CompositionLocalProvider(LocalFocusMemory provides memory) {
         when {
             step == Step.Pair -> PairScreen(nav, s, onBack = { back(pairFrom ?: Step.Usual) }) { back(pairFrom ?: Step.Usual) }
@@ -677,7 +676,7 @@ private fun WhoStep(
                         WittyButton(s["codeTitle"].orEmpty(), { nav.push(Route.Code(server)) }, kind = ButtonKind.Quiet, focusKey = "typed-code")
                     }
                 }
-                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(metrics.u(4))) {
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(metrics.u(16))) {
                     val name = nav.server?.name ?: nav.brandName
                     if (name.isNotEmpty()) Text(name, color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.secondary, maxLines = 1)
                     WittyButton(s["changeServer"].orEmpty(), nav::changeServer, kind = ButtonKind.Quiet, focusKey = "change-server")
@@ -719,7 +718,9 @@ private fun PasswordStep(
     val metrics = LocalMetrics.current
     val field = remember { FocusRequester() }
     val shown = avatarName(who.displayName, who.name)
-    LaunchedEffect(who.id) { runCatching { field.requestFocus() } }
+    // On the first look; coming back, as from the help, focus goes back where it was.
+    val firstLook = LocalFocusMemory.current.last == null
+    LaunchedEffect(who.id) { if (firstLook) runCatching { field.requestFocus() } }
     SignInLayout(
         onBack,
         words = {
@@ -857,11 +858,11 @@ fun OnPhoneScreen(nav: Nav, s: Map<String, String>, title: String, path: String)
     SignInLayout(
         nav::pop,
         words = {
-            SignInHeading(title, s["openOnPhone"].orEmpty())
+            SignInHeading(title, detail = s["openOnPhone"].orEmpty())
         },
         actions = {
             if (address.isNotEmpty()) QrCard(address, address, if (metrics.tv) Modifier else Modifier.align(Alignment.CenterHorizontally))
-            WittyButton(s["back"].orEmpty(), nav::pop, Modifier.fillMaxWidth(), kind = ButtonKind.Primary, tall = true, requestFocus = true)
+            WittyButton(s["back"].orEmpty(), nav::pop, Modifier.fillMaxWidth(), kind = ButtonKind.Primary, tall = true, takeFocus = true)
         },
     )
 }
