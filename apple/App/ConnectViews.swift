@@ -525,6 +525,8 @@ struct SignInView: View {
     /// The last password was refused, and nothing new has been typed since.
     @State private var refused = false
     @State private var wrongPasswords = 0
+    /// The first face takes the remote's focus once the profiles have arrived, whatever screen came before.
+    @FocusState private var firstTile: Bool?
     @State private var help: URL?
     @Namespace private var scope
 
@@ -657,6 +659,7 @@ struct SignInView: View {
                 ForEach(Array(people.enumerated()), id: \.element.id) { index, profile in
                     ProfileTile(profile: profile, avatarSize: size) { choose(profile) }
                         .firstFocus(in: scope, when: index == 0)
+                        .focused($firstTile, equals: index == 0 ? true : nil)
                         .disabled(busy)
                 }
             }
@@ -807,6 +810,9 @@ struct SignInView: View {
         .task {
             profiles = (try? await model.client.profiles()) ?? Profiles(style: "classic", profiles: nil)
             if !showsPeople { wantName = true }
+            #if os(tvOS)
+            if showsPeople { DispatchQueue.main.async { firstTile = true } }
+            #endif
         }
     }
 }
