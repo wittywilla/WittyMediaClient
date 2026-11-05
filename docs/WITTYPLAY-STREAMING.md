@@ -67,6 +67,32 @@ As documented in `docs/GAMING-API.md`, "Controller states", and nothing new:
   by the game while it's held.
 - **Rumble** comes down as an event and plays through Core Haptics on that player's pad.
 
+## Controllers on Apple TV: what passes through
+
+| What | Apple TV | Carried by the protocol |
+|---|---|---|
+| MFi, Xbox, DualShock 4, DualSense, Switch Pro, Joy-Cons (a pair, or one on its side), and anything else GameController knows | Read through GameController. A Joy-Con on its own is a small pad: its stick is the D-pad | Yes |
+| Every button, the D-pad, both sticks at full range, analog triggers | Read in the W3C standard layout the profiles are written in; triggers go out as 0 to 255 as well as their button bits | Yes: 16 buttons, two i16 sticks, two u8 triggers |
+| Four players | Each controller gets the next free player, keeps it while connected, and a pad that goes lets go of everything at once. The Siri Remote plays as player 1 alongside a pad | Yes, ports 0 to 3. No more than four |
+| The account's profiles | `/game-profiles/resolve` per controller, console and game; dead zone, press point, stick-as-D-pad, turbo and no rumble applied on the device | Yes |
+| Rumble | Core Haptics on the player's pad, by the strength the event gives | Yes: `rumble` with `strength`. The two motors' `effect` isn't told apart yet |
+| DualSense and DualShock 4 touchpad, for a console with a touch screen (DS, 3DS) | The touchpad is the touch screen: where the finger is, and a click to press. A press is sent again every 250 ms, and a release three times | Yes: the 6-byte pointer message. One point only |
+| Light bar | Set to the player's colour (blue, red, green, pink) | **No.** Nothing from a core reaches it |
+| Motion (gyro and accelerometer) | Not read | **No** |
+| Adaptive triggers, the DualSense's speaker and microphone | Not used | **No** |
+| Home | Opens the game menu where tvOS lets an app have it, and tvOS is asked not to act on a controller's buttons while a game plays | Not needed |
+| Options (Start) | Start for the game; held for a second it opens the game menu. Start and Select together open it at once, as on the website | Not needed |
+| Siri Remote | Its D-pad, select and Play/Pause by the console's `defaults.remote`; Back opens the game menu; it steers the menu | Yes |
+| A keyboard | By the console's `defaults.keyboard`; Escape opens the menu | Yes |
+
+**What the server's protocol would need** to pass the rest through:
+
+- **Motion.** A message for each player's motion, say `[254, port, ax, ay, az, gx, gy, gz]` as i16 in g and degrees a second, which the runner gives to the core through libretro's sensor interface (`RETRO_ENVIRONMENT_GET_SENSOR_INTERFACE`). 3DS games that steer by tilting need it.
+- **Lights.** An event when a core sets an LED (`RETRO_ENVIRONMENT_GET_LED_INTERFACE`), `{"type": "led", "led": n, "state": 0 or 1}`, which a pad's light could show. Few cores use it.
+- **Rumble's two motors.** The event has `effect`; the client could play the strong and weak motors on a pad's two handles once it's documented which is which.
+- **More touch.** One point only, with no hover. Enough for DS and 3DS styluses.
+- **Players past four,** for the consoles that had multitaps.
+
 ## Saves and states
 
 They stay on the server, where the website keeps them. The TV never holds one.
@@ -116,7 +142,7 @@ started with `POST /games/{id}/play`.
 | The person's picture settings | `display.*`, applied on the device as the server asks: sharp, pixel or smooth scaling, whole multiples, shape, crop, rotation, scanlines, a curved screen, a phosphor mask, a vignette, an LCD grid, brightness, contrast, saturation and gamma in one Metal shader; a bezel colour or image with its inset. Not yet: glow, blend, flicker | `GameMachinery.swift` |
 | Sound | PCM at the console's own rate into AVAudioEngine, kept within `audio.latency`; volume and mute | `GameMachinery.swift` |
 | Controllers, remote, keyboard | As above | `apple/App/GameInput.swift`, `apple/WittyKit/Sources/WittyKit/GamePad.swift` |
-| The pause menu | Resume, Save state (slots, with pictures), Load state, Quick save and load (`states.quickSlot`), Press Start, Press Select, Change disc, Controllers (who's on which player, their profile, and what the console's emulator lets each player plug in), Reset, Save and quit, asking first where `states.confirm` says | `apple/App/GamePlayer.swift` |
+| The pause menu | Resume, Save state (slots, with pictures), Load state, Quick save and load (`states.quickSlot`), Press Start, Press Select, Change disc, Controllers (who's on which player, their profile, and what the console's emulator lets each player plug in), Reset, Save and quit, asking first where `states.confirm` says. Opened by the remote's Back, Home, Options held, or Start and Select together | `apple/App/GamePlayer.swift` |
 | Models and API | | `apple/WittyKit/Sources/WittyKit/Games.swift`, `GamesAPI.swift`, `GameStream.swift` |
 
 **Themes:** every colour on these screens is the theme's, the server's or the one chosen on the
@@ -126,10 +152,24 @@ device, so they follow every theme and WittyTV look as the rest of the app does.
 3DS only partly: their touch screen can't be reached from an Apple TV, so games that need the
 stylus are for a browser or a phone, and the game's page says so.
 
+## Which consoles play from this Mac's server
+
+Tried from Apple TV's own decoding code against the local server, with one game from each console that has games there. Retail games were used for testing only.
+
+| Console | Core | Result |
+|---|---|---|
+| NES | FCEUmm | Plays: 512×448 H.264, sound, input, a save to a slot and the automatic save on quitting |
+| Super Nintendo | Mesen-S | Plays |
+| Game Boy | Gambatte | Plays |
+| Nintendo DS | melonDS | Plays: both screens as one 512×768 picture. Its touch screen takes a DualSense or DualShock 4 touchpad |
+| PlayStation | PCSX ReARMed | **Doesn't start**: a multi-disc game unpacks (660 MB), then the server reports "the game took too long to load". No BIOS file was given; the core can run without one, but this game didn't |
+| Nintendo 64, PSP, PlayStation 2 | Mupen64Plus-Next, PPSSPP, Play! | **Can't play on a Mac server**: these cores draw with a graphics card, and the server says hardware-rendered games run on Windows and Linux. PlayStation 2 also needs a BIOS file that wasn't given |
+| Nintendo 3DS | Azahar | **Can't play**: the only game is an encrypted file, which the server refuses and never decrypts |
+
+Two things on the server side came out of this. `GET /games/{id}/check` says ready for the graphics-card consoles on a Mac, which can't run them. And three of those failing in a row took WittyPlay out of use for every game until it was put back.
+
 ## Testing it without a server that plays
 
-Until a server with the Mac fix is running, the Apple TV player was proved through a test stand-in
-on 127.0.0.1:9798 (not in this repository): it passes every request to the real server except
-starting, streaming, actions and stopping, which it does by running WittyPlay's own runner and core,
-encoding with the server's own FFmpeg and speaking the protocol above. Saves made through it stay in
-the stand-in. See the pull request for what ran.
+Before the Mac fix was running, the player was first proved through a test stand-in on
+127.0.0.1:9798 (not in this repository) that ran WittyPlay's own runner and core and spoke the
+protocol above. With the fix, everything was run against the real server: see the pull request.

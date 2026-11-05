@@ -179,6 +179,38 @@ public struct PadMapper: Equatable {
     }
 }
 
+/// A touch screen's state, for a console whose pad has `pointer`: 6 bytes, starting with 255, which
+/// a controller state never does. Positions are across the whole picture, whatever the screens' layout.
+public struct PointerState: Equatable {
+    public var pressed: Bool
+    /// -1 at the picture's left edge to 1 at its right.
+    public var x: Double
+    /// -1 at the top to 1 at the bottom.
+    public var y: Double
+
+    public init(pressed: Bool = false, x: Double = 0, y: Double = 0) {
+        self.pressed = pressed
+        self.x = x
+        self.y = y
+    }
+
+    /// From a touchpad, whose y is up positive, as GameController reports a DualSense's or a DualShock 4's.
+    public static func touchpad(x: Double, y: Double, pressed: Bool) -> PointerState {
+        PointerState(pressed: pressed, x: x, y: -y)
+    }
+
+    public func encoded() -> Data {
+        func i16(_ v: Double) -> Int16 { Int16((max(-1, min(1, v)) * 32767).rounded()) }
+        var out = Data([255, pressed ? 1 : 0])
+        for v in [i16(x), i16(y)] {
+            let u = UInt16(bitPattern: v)
+            out.append(UInt8(u & 0xff))
+            out.append(UInt8(u >> 8))
+        }
+        return out
+    }
+}
+
 /// Keys into states: a TV remote by `KeyboardEvent.key` names, or a keyboard by `KeyboardEvent.code`
 /// names, from the console's `defaults.remote` or `defaults.keyboard`.
 public struct KeyMapper: Equatable {
@@ -314,7 +346,14 @@ public enum PadIdentity {
         "Switch Pro Controller": "057e:2009",
         "Nintendo Switch Pro Controller": "057e:2009",
         "Joy-Con (L/R)": "057e:200e",
+        "Joy-Con (L)": "057e:2006",
+        "Joy-Con (R)": "057e:2007",
     ]
+
+    /// The Siri Remote and other TV remotes, which steer menus and play as a remote, not as a pad.
+    public static func isRemote(productCategory: String) -> Bool {
+        productCategory.localizedCaseInsensitiveContains("remote")
+    }
 
     /// The key a profile names this controller by.
     public static func key(productCategory: String, vendorName: String?) -> String {

@@ -20,6 +20,7 @@ final class GameScreenView: MTKView {
         didSet { if playing != oldValue { setNeedsFocusUpdate() } }
     }
     var onPress: ((String, Bool) -> Void)?
+    var onKey: ((String, Bool) -> Void)?
     var onMenu: (() -> Void)?
 
     override var canBecomeFocused: Bool { playing }
@@ -34,8 +35,13 @@ final class GameScreenView: MTKView {
         case .playPause: return "MediaPlayPause"
         default: break
         }
+        // A keyboard's arrows and Return, as the simulator sends its remote, are the remote's.
         switch press.key?.keyCode {
         case .keyboardReturnOrEnter?: return "Enter"
+        case .keyboardUpArrow?: return "ArrowUp"
+        case .keyboardDownArrow?: return "ArrowDown"
+        case .keyboardLeftArrow?: return "ArrowLeft"
+        case .keyboardRightArrow?: return "ArrowRight"
         default: return nil
         }
     }
@@ -56,6 +62,9 @@ final class GameScreenView: MTKView {
                 if down { onMenu?() }
             } else if let name = name(press) {
                 onPress?(name, down)
+            } else if let code = press.key.flatMap({ GameInput.codeName(hid: $0.keyCode) }) {
+                // Any other key, by the console's keyboard layout.
+                onKey?(code, down)
             } else {
                 rest.insert(press)
             }
@@ -282,6 +291,7 @@ final class GamePlayerModel: ObservableObject {
         input.onShortcut = { [weak self] shortcut, down in self?.shortcut(shortcut, down) }
         input.onNotice = { [weak self] words in self?.say(words) }
         host.screen.onPress = { [weak self] name, down in self?.input.press(name, down: down) }
+        host.screen.onKey = { [weak self] code, down in self?.input.typed(code, down: down) }
         host.screen.onMenu = { [weak self] in self?.openMenu() }
         pipeline?.askKeyframe = { @Sendable [weak self] in
             // The stack has no way of its own to ask: the server's 0xF7.
@@ -334,7 +344,8 @@ final class GamePlayerModel: ObservableObject {
             return
         }
         consoleButtons = Set((controls?.pad?.buttons ?? []).map(\.id)).union([RetroPad.up, RetroPad.down, RetroPad.left, RetroPad.right])
-        input.start(client: client, setup: GameInput.Setup(controls: controls, settings: settings, console: console, game: id, consoleButtons: consoleButtons))
+        input.start(client: client, setup: GameInput.Setup(controls: controls, settings: settings, console: console, game: id, consoleButtons: consoleButtons,
+                                                           pointer: controls?.pad?.pointer == true))
         players = input.players
         connect()
         watchdog = Timer.scheduledTimer(withTimeInterval: 1, repeats: true) { [weak self] _ in

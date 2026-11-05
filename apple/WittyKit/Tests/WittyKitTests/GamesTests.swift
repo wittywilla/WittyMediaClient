@@ -294,11 +294,23 @@ final class GamesTests: XCTestCase {
         XCTAssertEqual(shortcuts.filter(RetroPad.bit(RetroPad.select)).buttons, 0)
     }
 
+    func testTouchScreenState() {
+        XCTAssertEqual([UInt8](PointerState(pressed: true, x: -1, y: 1).encoded()), [255, 1, 0x01, 0x80, 0xff, 0x7f])
+        XCTAssertEqual([UInt8](PointerState().encoded()), [255, 0, 0, 0, 0, 0])
+        // A touchpad's up is the picture's top.
+        let top = PointerState.touchpad(x: 0, y: 1, pressed: true)
+        XCTAssertEqual(top.y, -1)
+        XCTAssertEqual([UInt8](PointerState(pressed: false, x: 2, y: -3).encoded()).suffix(4), [0xff, 0x7f, 0x01, 0x80], "held to the picture")
+    }
+
     func testPadIdentity() {
         XCTAssertEqual(PadIdentity.key(productCategory: "DualSense", vendorName: "DualSense Wireless Controller"), "054c:0ce6")
         XCTAssertEqual(PadIdentity.key(productCategory: "Xbox One", vendorName: "Xbox Wireless Controller"), "045e:0b13")
         XCTAssertEqual(PadIdentity.key(productCategory: "MFi", vendorName: "Some Pad"), "id:Some Pad")
         XCTAssertEqual(PadIdentity.key(productCategory: "MFi", vendorName: nil), "id:MFi")
+        XCTAssertEqual(PadIdentity.key(productCategory: "Joy-Con (L)", vendorName: "Joy-Con (L)"), "057e:2006")
+        XCTAssertTrue(PadIdentity.isRemote(productCategory: "Siri Remote"))
+        XCTAssertFalse(PadIdentity.isRemote(productCategory: "Joy-Con (R)"))
     }
 
     // MARK: The stream

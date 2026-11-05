@@ -580,6 +580,14 @@ final class AppModel: ObservableObject {
     }
 
     private func openWaitingLink() {
+        #if DEBUG && os(tvOS)
+        // For checking a game on the simulator: `-WittyPlayOpenGame <id>` at launch opens its page.
+        let game = UserDefaults.standard.integer(forKey: "WittyPlayOpenGame")
+        if game > 0, paths[.home]?.isEmpty ?? true {
+            paths[.home] = [.game(Int64(game))]
+            return
+        }
+        #endif
         guard let link = waitingLink else { return }
         waitingLink = nil
         tab = .home

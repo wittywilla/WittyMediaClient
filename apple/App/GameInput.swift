@@ -20,6 +20,10 @@ private final class Pad {
     var last = PadState()
     /// The account's profile in use for it here, if any.
     var profile = ""
+    /// When Options (Start) went down, for holding it to open the menu.
+    var startDownAt: Date?
+    /// The touchpad as a touch screen, for a DualSense or a DualShock 4.
+    var pointer = PointerState()
 
     init(controller: GCController, port: UInt8, mapper: PadMapper, shortcuts: PadShortcuts) {
         self.controller = controller
@@ -45,6 +49,8 @@ final class GameInput {
         var console: String
         var game: Int64
         var consoleButtons: Set<Int>
+        /// The console has a touch screen: a touchpad stands in for it.
+        var pointer = false
     }
 
     private var setup: Setup?
@@ -122,7 +128,9 @@ final class GameInput {
         GCController.stopWirelessControllerDiscovery()
         for pad in pads.values {
             pad.controller.extendedGamepad?.valueChangedHandler = nil
+            pad.controller.microGamepad?.valueChangedHandler = nil
             pad.haptics?.stop()
+            Self.keepButtons(pad.controller, forGame: false)
         }
         pads = [:]
         // The rest of the app has the remote back as it was.
@@ -156,7 +164,7 @@ final class GameInput {
     private func attach(_ controller: GCController, announce: Bool) {
         let id = ObjectIdentifier(controller)
         guard pads[id] == nil else { return }
-        if controller.extendedGamepad == nil, let micro = controller.microGamepad {
+        if controller.extendedGamepad == nil, let micro = controller.microGamepad, PadIdentity.isRemote(productCategory: controller.productCategory) {
             guard !remotes.contains(where: { $0 === controller }) else { return }
             remotes.append(controller)
             // The Siri Remote: absolute positions, so a click at the edge of the clickpad is a direction.
@@ -171,17 +179,28 @@ final class GameInput {
             }
             return
         }
-        guard let extended = controller.extendedGamepad, let setup else { return }
+        guard let setup, controller.extendedGamepad != nil || controller.microGamepad != nil else { return }
         let port = freePort()
         controller.playerIndex = GCControllerPlayerIndex(rawValue: Int(port)) ?? .indexUnset
+        Self.keepButtons(controller, forGame: true)
+        // A PlayStation pad's light in its player's colour, as a console does: blue, red, green, pink.
+        let colours: [(Float, Float, Float)] = [(0, 0.25, 1), (1, 0, 0.1), (0, 0.9, 0.2), (1, 0.2, 0.7)]
+        let c = colours[Int(port) % colours.count]
+        controller.light?.color = GCColor(red: c.0, green: c.1, blue: c.2)
         let shortcuts = PadShortcuts(settings: setup.settings, consoleButtons: setup.consoleButtons)
         let mapper = PadMapper(defaults: setup.controls?.defaults?.gamepad, options: nil, defaultOptions: setup.controls?.defaults?.options)
         let pad = Pad(controller: controller, port: port, mapper: mapper, shortcuts: shortcuts)
         pads[id] = pad
-        extended.valueChangedHandler = { [weak self] _, _ in
-            Task { @MainActor in self?.padChanged(id) }
+        let changed: () -> Void = { [weak self] in Task { @MainActor in self?.padChanged(id) } }
+        if let extended = controller.extendedGamepad {
+            extended.valueChangedHandler = { _, _ in changed() }
+        } else if let micro = controller.microGamepad {
+            // One Joy-Con on its side, or another small pad: its stick is the D-pad.
+            micro.reportsAbsoluteDpadValues = true
+            micro.allowsRotation = true
+            micro.valueChangedHandler = { _, _ in changed() }
         }
-        // The Home button is the system's; Start and Select together open the menu.
+        // Home, where the system lets it through, opens the menu, and so do Start and Select together.
         if announce { onNotice?("\(controller.vendorName ?? "A controller") is player \(port + 1)") }
         Task { await loadProfile(for: id) }
         updateTurboTimer()
@@ -191,6 +210,8 @@ final class GameInput {
         let id = ObjectIdentifier(controller)
         guard let pad = pads.removeValue(forKey: id) else { return }
         pad.haptics?.stop()
+        Self.keepButtons(controller, forGame: false)
+        if pad.pointer.pressed { sendPointer(PointerState(pressed: false, x: pad.pointer.x, y: pad.pointer.y), times: 3) }
         // Fast-forward or rewind held on it stops with it.
         for s in pad.shortcuts.endAll() { onShortcut?(s, false) }
         updateTurboTimer()
@@ -254,9 +275,64 @@ final class GameInput {
         return r
     }
 
+    /// While a game plays, tvOS doesn't act on a controller's buttons itself: Home, Options and
+    /// Share are the game's, or the menu's. Given back when the game ends.
+    static func keepButtons(_ controller: GCController, forGame: Bool) {
+        for element in controller.physicalInputProfile.allElements {
+            element.preferredSystemGestureState = forGame ? .disabled : .enabled
+        }
+    }
+
+    /// A pad with only a D-pad and a few buttons, in the standard layout.
+    private static func reading(_ m: GCMicroGamepad) -> StandardPadReading {
+        var r = StandardPadReading()
+        r[button: StandardPadReading.south] = Double(m.buttonA.value)
+        r[button: StandardPadReading.west] = Double(m.buttonX.value)
+        r[button: StandardPadReading.start] = Double(m.buttonMenu.value)
+        r[button: StandardPadReading.up] = m.dpad.yAxis.value > 0.5 ? 1 : 0
+        r[button: StandardPadReading.down] = m.dpad.yAxis.value < -0.5 ? 1 : 0
+        r[button: StandardPadReading.left] = m.dpad.xAxis.value < -0.5 ? 1 : 0
+        r[button: StandardPadReading.right] = m.dpad.xAxis.value > 0.5 ? 1 : 0
+        r.axes = [Double(m.dpad.xAxis.value), Double(-m.dpad.yAxis.value), 0, 0]
+        return r
+    }
+
     private func padChanged(_ id: ObjectIdentifier) {
-        guard let pad = pads[id], let g = pad.controller.extendedGamepad else { return }
-        var state = pad.mapper.state(Self.reading(g), port: pad.port, applyTurbo: false)
+        guard let pad = pads[id] else { return }
+        guard let g = pad.controller.extendedGamepad else {
+            if let m = pad.controller.microGamepad { apply(pad, Self.reading(m), home: false) }
+            return
+        }
+        touchpad(pad)
+        apply(pad, Self.reading(g), home: g.buttonHome?.isPressed == true)
+    }
+
+    /// A DualSense's or a DualShock 4's touchpad, as the console's touch screen: a click is a press.
+    private func touchpad(_ pad: Pad) {
+        guard setup?.pointer == true else { return }
+        let profile = pad.controller.physicalInputProfile
+        guard let surface = profile.dpads[GCInputDualShockTouchpadOne], let click = profile.buttons[GCInputDualShockTouchpadButton] else { return }
+        let state = PointerState.touchpad(x: Double(surface.xAxis.value), y: Double(surface.yAxis.value), pressed: click.isPressed)
+        guard state != pad.pointer else { return }
+        let released = pad.pointer.pressed && !state.pressed
+        pad.pointer = state
+        // A lost release would hold the stylus down: it goes more than once.
+        sendPointer(state, times: released ? 3 : 1)
+    }
+
+    private func sendPointer(_ state: PointerState, times: Int) {
+        guard enabled else { return }
+        for _ in 0..<times { send?(state.encoded()) }
+    }
+
+    private func apply(_ pad: Pad, _ reading: StandardPadReading, home: Bool) {
+        // Holding Options (Start) for a second opens the menu; a press is still Start for the game.
+        if reading[button: StandardPadReading.start] > 0.5 {
+            if pad.startDownAt == nil { pad.startDownAt = Date() }
+        } else {
+            pad.startDownAt = nil
+        }
+        var state = pad.mapper.state(reading, port: pad.port, applyTurbo: false)
         let filtered = pad.shortcuts.filter(state.buttons)
         state.buttons = filtered.buttons
         for s in filtered.started {
@@ -264,7 +340,7 @@ final class GameInput {
         }
         for s in filtered.ended { onShortcut?(s, false) }
         // The guide button, where the system lets an app have it, opens the menu too.
-        if g.buttonHome?.isPressed == true { onMenu?() }
+        if home { onMenu?() }
         pad.last = state
         flush(port: pad.port)
     }
@@ -320,6 +396,17 @@ final class GameInput {
         flush(port: 0)
     }
 
+    /// A key that came through UIKit rather than GameController, by its code name.
+    func typed(_ code: String, down: Bool) {
+        if down { keysHeld.insert(code) } else { keysHeld.remove(code) }
+        flush(port: 0)
+    }
+
+    /// The same names from UIKit's key codes.
+    static func codeName(hid: UIKeyboardHIDUsage) -> String? {
+        codeName(GCKeyCode(rawValue: CFIndex(hid.rawValue)))
+    }
+
     /// `KeyboardEvent.code` names, as the server's keyboard layouts use them.
     static func codeName(_ code: GCKeyCode) -> String? {
         let letters: [GCKeyCode] = [.keyA, .keyB, .keyC, .keyD, .keyE, .keyF, .keyG, .keyH, .keyI, .keyJ, .keyK, .keyL, .keyM,
@@ -370,11 +457,42 @@ final class GameInput {
 
     private func flush(port: UInt8, force: Bool = false) {
         guard enabled else { return }
-        let state = merged(port: port)
+        var state = merged(port: port)
+        state.buttons |= heldLongEnough(port: port, state.buttons)
         if force || sent[port] != state {
             send?(state.encoded())
             sent[port] = state
         }
+    }
+
+    /// A press as short as a click is still seen: a game reads its buttons once a frame, so a
+    /// button let go within three frames of being pressed is held until then. Turbo is left alone.
+    private static let shortestPress: TimeInterval = 0.05
+    private var pressedAt: [UInt8: [Int: Date]] = [:]
+
+    private func heldLongEnough(port: UInt8, _ buttons: UInt16) -> UInt16 {
+        let now = Date()
+        let before = sent[port]?.buttons ?? 0
+        var turbo: UInt16 = 0
+        for pad in pads.values where pad.port == port { for id in pad.mapper.options.turbo ?? [] { turbo |= RetroPad.bit(id) } }
+        var keep: UInt16 = 0
+        var wait: TimeInterval = 0
+        for id in 0...15 {
+            let bit = RetroPad.bit(id)
+            if buttons & bit != 0 {
+                if before & bit == 0 { pressedAt[port, default: [:]][id] = now }
+            } else if before & bit != 0, turbo & bit == 0, let at = pressedAt[port]?[id] {
+                let held = now.timeIntervalSince(at)
+                if held < Self.shortestPress {
+                    keep |= bit
+                    wait = max(wait, Self.shortestPress - held)
+                }
+            }
+        }
+        if keep != 0 {
+            DispatchQueue.main.asyncAfter(deadline: .now() + wait + 0.005) { [weak self] in self?.flush(port: port) }
+        }
+        return keep
     }
 
     /// Turbo buttons beat by the clock, so their states are sent again as it ticks.
@@ -387,6 +505,13 @@ final class GameInput {
         for port in activePorts {
             let state = sent[port] ?? PadState(port: port)
             send?(state.encoded())
+        }
+        for pad in pads.values {
+            if pad.pointer.pressed { send?(pad.pointer.encoded()) }
+            if let at = pad.startDownAt, Date().timeIntervalSince(at) >= 1 {
+                pad.startDownAt = nil
+                onMenu?()
+            }
         }
     }
 

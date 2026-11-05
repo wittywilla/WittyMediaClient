@@ -917,7 +917,6 @@ struct GameDetailView: View {
             }
         }
         .pageBackground(palette)
-        .ignoresSafeArea(edges: .top)
         // Again on every return: a game just played has a new save and time played.
         .task { await load() }
         .alert("Delete this save?", isPresented: Binding(get: { deleting != nil }, set: { if !$0 { deleting = nil } })) {
