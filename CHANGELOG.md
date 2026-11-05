@@ -42,6 +42,11 @@ What changed in WittyMediaClient, newest first. What changed before it had a rep
 - **Desktop on a Mac:** the window has the system's red, yellow and green buttons at the left of the title bar, rather than Windows-style ones
   at the right, and the title sits in the middle. A double-click on the bar does what System Settings say. There's a Mac menu bar, so
   Command-Q, copy and paste work, with Help and Change server in it. Windows, Linux, FreeBSD and TV mode are as they were.
+- **Desktop: the connect screen looks like the other apps' sign-in.** The glow at the top, the WittyMediaServer mark and name,
+  servers as cards with "Last used", a field whose label rises onto its outline, six code boxes over a number pad, and a
+  plain warning for a server that has changed. A new server can also be signed in from a phone: the screen shows a code and
+  a QR code, and someone already signed in approves it. On a TV the words sit on the left and the choices on the right, sized
+  for the room. Keyboard first throughout; Reduce Motion stops the spinners, and forced colours keep the QR code readable.
 - `docs/PLATFORMS.md` now has what every server feature does on every client, and how far each was seen.
 
 - The desktop app is now called WittyMediaClient everywhere: `WittyMediaClient.exe` on Windows, `WittyMediaClient.app` on macOS
