@@ -12,6 +12,8 @@ data class ServerStatus(
     val version: String = "",
     val setupRequired: Boolean = false,
     val brandName: String = "",
+    // The version of the server's own logo, or empty for the app's mark.
+    val brandLogo: String = "",
     val theme: String = "default",
     val user: User? = null,
 )
@@ -20,6 +22,8 @@ data class ServerStatus(
 data class User(
     val id: Long = 0,
     val name: String = "",
+    // The profile name, which anyone may choose. Empty means the username.
+    val displayName: String = "",
     val isAdmin: Boolean = false,
     val kind: String = "adult",
 )
@@ -27,7 +31,9 @@ data class User(
 @Serializable
 data class Profile(
     val id: Long = 0,
+    // The username, which signing in needs.
     val name: String = "",
+    val displayName: String = "",
     val kind: String = "adult",
     val hasPassword: Boolean = true,
 )
@@ -300,7 +306,8 @@ data class ProgressReport(val positionSec: Double, val durationSec: Double)
 data class ViewReport(val seconds: Double)
 
 @Serializable
-data class Credentials(val name: String, val password: String, val device: String)
+// The code is the authenticator app's, for an account with two-factor sign-in.
+data class Credentials(val name: String, val password: String, val device: String, val code: String = "")
 
 @Serializable
 data class RigPlayRequest(val client: String, val os: String)

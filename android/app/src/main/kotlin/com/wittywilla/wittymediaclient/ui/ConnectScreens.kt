@@ -1,7 +1,8 @@
 package com.wittywilla.wittymediaclient.ui
 
 import android.view.KeyEvent
-import androidx.activity.compose.BackHandler
+import androidx.compose.foundation.background
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -10,24 +11,21 @@ import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.heightIn
-import androidx.compose.foundation.layout.imePadding
-import androidx.compose.foundation.layout.safeDrawingPadding
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardOptions
-import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -35,23 +33,27 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.autofill.ContentType
 import androidx.compose.ui.focus.FocusDirection
 import androidx.compose.ui.focus.FocusRequester
-import androidx.compose.ui.focus.focusProperties
 import androidx.compose.ui.focus.focusRequester
-import androidx.compose.ui.input.key.onPreviewKeyEvent
-import androidx.compose.ui.input.key.nativeKeyCode
-import androidx.compose.ui.input.key.key
-import androidx.compose.ui.input.key.type
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.ui.input.key.key
+import androidx.compose.ui.input.key.nativeKeyCode
+import androidx.compose.ui.input.key.onPreviewKeyEvent
+import androidx.compose.ui.input.key.type
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.contentType
+import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
-import androidx.compose.ui.text.input.PasswordVisualTransformation
-import androidx.compose.ui.unit.dp
+import androidx.compose.ui.text.style.TextAlign
 import com.wittywilla.wittymediaclient.data.SavedServer
 import com.wittywilla.wittymediaclient.net.Address
 import com.wittywilla.wittymediaclient.net.ApiError
@@ -63,9 +65,12 @@ import com.wittywilla.wittymediaclient.net.ServerFinder
 import com.wittywilla.wittymediaclient.net.probeServer
 import com.wittywilla.wittymediaclient.net.problemWords
 import kotlinx.coroutines.CancellationException
-import java.io.IOException
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import java.io.IOException
+
+// The screens in docs/APP-DESIGN.md, "Signing in", numbered as there. The words are the shared ones in
+// shared/data/strings.en.json.
 
 private fun reasonText(s: Map<String, String>, reason: String) = when (reason) {
     "empty" -> s["errEmpty"]
@@ -81,28 +86,8 @@ private fun reasonText(s: Map<String, String>, reason: String) = when (reason) {
     else -> s["errInvalid"]
 }.orEmpty()
 
-// A text box a remote can leave: down moves on instead of being swallowed.
-@Composable
-private fun Field(
-    value: String,
-    onChange: (String) -> Unit,
-    label: String,
-    modifier: Modifier = Modifier,
-    password: Boolean = false,
-    keyboard: KeyboardType = KeyboardType.Text,
-    onDone: () -> Unit,
-) {
-    OutlinedTextField(
-        value = value,
-        onValueChange = onChange,
-        label = { Text(label) },
-        singleLine = true,
-        visualTransformation = if (password) PasswordVisualTransformation() else androidx.compose.ui.text.input.VisualTransformation.None,
-        keyboardOptions = KeyboardOptions(keyboardType = if (password) KeyboardType.Password else keyboard, imeAction = ImeAction.Go, autoCorrectEnabled = false),
-        keyboardActions = KeyboardActions(onGo = { onDone() }),
-        modifier = modifier.fillMaxWidth().tvLeavable(),
-    )
-}
+// The server's help on a forgotten password: inside the app, or on a TV a QR card to it.
+const val FORGOT_PASSWORD_PATH = "/help/accounts#if-you-forget-your-password"
 
 // A text box otherwise keeps up and down for itself, and a remote can't get out of it.
 @Composable
@@ -119,58 +104,14 @@ fun Modifier.tvLeavable(): Modifier {
     }
 }
 
-@Composable
-private fun Centred(content: @Composable () -> Unit) {
-    Screen {
-        Column(
-            Modifier.fillMaxWidth().safeDrawingPadding().imePadding().verticalScroll(rememberScrollState()).padding(Space.S8),
-            horizontalAlignment = Alignment.CenterHorizontally,
-        ) {
-            Column(Modifier.widthIn(max = 560.dp).fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(12.dp)) { content() }
-        }
-    }
-}
-
-// What to read and what to press. Side by side on a TV, where a tall screen would scroll its
-// beginning out of sight. One above the other everywhere else.
-@Composable
-private fun SideBySide(modifier: Modifier = Modifier, words: @Composable () -> Unit, actions: @Composable () -> Unit) {
-    val metrics = LocalMetrics.current
-    if (metrics.tv) {
-        Screen {
-            Row(
-                modifier.fillMaxSize().padding(horizontal = metrics.gutter, vertical = metrics.edge),
-                horizontalArrangement = Arrangement.spacedBy(Space.S12),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(12.dp)) { words() }
-                Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(12.dp)) { actions() }
-            }
-        }
-    } else {
-        Centred {
-            Column(modifier, verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                words()
-                actions()
-            }
-        }
-    }
-}
-
-// A server in a list: its name, and the address it's at.
-@Composable
-private fun ServerRow(name: String, url: String, requestFocus: Boolean, onClick: () -> Unit) {
-    FocusBox(onClick, Modifier.fillMaxWidth(), label = "$name, $url", requestFocus = requestFocus, filled = MaterialTheme.colorScheme.surfaceVariant) {
-        Column(Modifier.padding(horizontal = 18.dp, vertical = 11.dp)) {
-            Text(name, color = MaterialTheme.colorScheme.onSurface)
-            Secondary(url)
-        }
-    }
-}
-
 private val ARROWS = setOf(KeyEvent.KEYCODE_DPAD_UP, KeyEvent.KEYCODE_DPAD_DOWN, KeyEvent.KEYCODE_DPAD_LEFT, KeyEvent.KEYCODE_DPAD_RIGHT)
 private const val NONE_AFTER_MS = 6000L
 
+// A little more room in a column than its usual spacing.
+@Composable
+private fun Gap(size: Int) = Spacer(Modifier.height(LocalMetrics.current.u(size)))
+
+// 1 and 2. Choose your server, or enter its address.
 @Composable
 fun ConnectScreen(nav: Nav, s: Map<String, String>, message: String) {
     val scope = rememberCoroutineScope()
@@ -178,17 +119,17 @@ fun ConnectScreen(nav: Nav, s: Map<String, String>, message: String) {
     val recent = remember { nav.app.store.recent }
     val appVersion = remember { runCatching { context.packageManager.getPackageInfo(context.packageName, 0).versionName }.getOrNull().orEmpty() }
     var address by rememberSaveable { mutableStateOf("") }
-    var error by rememberSaveable(message) { mutableStateOf(message) }
-    var busy by remember { mutableStateOf(false) }
+    var problem by rememberSaveable(message) { mutableStateOf(message) }
+    var connecting by remember { mutableStateOf<String?>(null) }
     var showForm by rememberSaveable { mutableStateOf(false) }
     var found by remember { mutableStateOf(emptyList<FoundServer>()) }
     var searchedLong by remember { mutableStateOf(false) }
+    var cantSearch by remember { mutableStateOf(false) }
     var moved by remember { mutableStateOf(false) }
-    val fieldFocus = remember { FocusRequester() }
 
     // Only looks while this screen is open.
     DisposableEffect(Unit) {
-        val finder = ServerFinder(context) { found = it }
+        val finder = ServerFinder(context, onCantSearch = { cantSearch = true }) { found = it }
         finder.start()
         onDispose { finder.stop() }
     }
@@ -196,130 +137,178 @@ fun ConnectScreen(nav: Nav, s: Map<String, String>, message: String) {
         delay(NONE_AFTER_MS)
         searchedLong = true
     }
-    BackHandler(enabled = showForm) { showForm = false; error = "" }
 
     fun connect(url: String) {
-        if (busy) return
-        busy = true
-        error = ""
+        if (connecting != null) return
+        connecting = url
+        problem = ""
         scope.launch {
-            val problem = when (val r = probeServer(url, appVersion)) {
+            val failed = when (val r = probeServer(url, appVersion)) {
                 is Probe.Found -> nav.arrive(r.url, r.status)
                 is Probe.Failed -> reasonText(s, r.reason)
             }
-            if (problem != null) {
-                error = problem
+            if (failed != null) {
+                problem = failed
                 address = url
                 showForm = true
             }
-            busy = false
+            connecting = null
         }
     }
 
     fun submit() {
         when (val r = Address.normalize(address)) {
             is Address.Result.Ok -> connect(r.url)
-            is Address.Result.Bad -> error = reasonText(s, r.reason)
+            is Address.Result.Bad -> problem = reasonText(s, r.reason)
         }
     }
 
-    val words: @Composable () -> Unit = {
-        Heading(s["findTitle"].orEmpty())
-        Secondary(s["legalConnect"].orEmpty())
-        ErrorText(error)
-        if (busy) Secondary(s["connecting"].orEmpty())
+    if (showForm) {
+        AddressScreen(nav, s, address, { address = it; problem = "" }, problem, connecting != null, ::submit) { showForm = false; problem = "" }
+        return
     }
+
+    val tv = LocalMetrics.current.tv
+    val last = recent.firstOrNull()
+    fun isLast(server: FoundServer) = last != null && (last.url == server.url || (last.serverId.isNotEmpty() && last.serverId == server.id))
+    val others = recent.filter { r -> found.none { it.url == r.url || it.id == r.serverId } }
+    val nothing = found.isEmpty() && others.isEmpty()
     // The first server found takes focus, until the person has moved themselves.
-    val servers: @Composable () -> Unit = {
-        Secondary(s["foundServers"].orEmpty())
-        if (found.isEmpty()) Secondary(if (searchedLong) s["findNone"].orEmpty() else s["findSearching"].orEmpty())
-        found.forEachIndexed { i, server ->
-            key(server.id) { ServerRow(server.name, server.url, i == 0 && !moved) { connect(server.url) } }
-        }
-        val others = recent.filter { r -> found.none { it.url == r.url || it.id == r.serverId } }
-        if (others.isNotEmpty()) Secondary(s["recentServers"].orEmpty())
-        others.forEachIndexed { i, server ->
-            key(server.url) { ServerRow(server.name, server.url, found.isEmpty() && i == 0 && !moved) { connect(server.url) } }
-        }
-        ActionButton(s["enterAddress"].orEmpty(), { showForm = true; error = "" }, Modifier.fillMaxWidth(), requestFocus = found.isEmpty() && others.isEmpty())
-    }
-    val notesMoved = Modifier.onPreviewKeyEvent {
+    val noticeMoves = Modifier.onPreviewKeyEvent {
         if (it.type == KeyEventType.KeyDown && it.key.nativeKeyCode in ARROWS) moved = true
         false
     }
-
-    when {
-        showForm -> Centred {
-            LaunchedEffect(Unit) { runCatching { fieldFocus.requestFocus() } }
-            Heading(s["addressTitle"].orEmpty())
-            Secondary(s["addressHint"].orEmpty())
-            Field(address, { address = it; error = "" }, s["addressLabel"].orEmpty(), Modifier.focusRequester(fieldFocus), keyboard = KeyboardType.Uri, onDone = ::submit)
-            ErrorText(error)
-            ActionButton(if (busy) s["connecting"].orEmpty() else s["connect"].orEmpty(), ::submit, Modifier.fillMaxWidth(), primary = true, enabled = !busy)
-            ActionButton(s["back"].orEmpty(), { showForm = false; error = "" }, Modifier.fillMaxWidth())
-            Secondary(s["legalConnect"].orEmpty())
-        }
-        // Side by side, so that a long list of servers doesn't scroll the words out of sight.
-        LocalMetrics.current.tv -> SideBySide(words = words, actions = {
-            Column(notesMoved.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(12.dp)) { servers() }
-        })
-        else -> Centred {
-            Column(notesMoved, verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                words()
-                servers()
-            }
-        }
-    }
-}
-
-@Composable
-private fun PadKey(key: Int, keys: List<FocusRequester>, label: String, small: Boolean, onClick: () -> Unit, modifier: Modifier) {
-    FocusBox(
-        onClick,
-        modifier
-            .focusRequester(keys[key])
-            .focusProperties {
-                padMove(key, PadMove.Up)?.let { up = keys[it] }
-                padMove(key, PadMove.Down)?.let { down = keys[it] }
-                padMove(key, PadMove.Left)?.let { left = keys[it] }
-                padMove(key, PadMove.Right)?.let { right = keys[it] }
-            },
-        requestFocus = key == 0,
-        filled = MaterialTheme.colorScheme.surfaceVariant,
-    ) {
-        Box(Modifier.fillMaxWidth().height(LocalMetrics.current.minTarget + Space.S2), contentAlignment = Alignment.Center) {
-            Text(label, color = MaterialTheme.colorScheme.onSurface, style = if (small) MaterialTheme.typography.labelLarge else MaterialTheme.typography.headlineSmall)
-        }
-    }
-}
-
-// Works with only a remote: arrows and OK. Touch and number keys work as well.
-@Composable
-private fun NumberPad(deleteLabel: String, onDigit: (Char) -> Unit, onDelete: () -> Unit) {
-    val keys = remember { List(PAD_KEYS.size) { FocusRequester() } }
-    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        for (row in 0..2) {
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                for (column in 0..2) {
-                    val key = row * 3 + column
-                    PadKey(key, keys, PAD_KEYS[key], false, { onDigit(PAD_KEYS[key][0]) }, Modifier.weight(1f))
+    SignInLayout(
+        words = {
+            Lockup(nav.brandName, nav.brandLogo)
+            SignInHeading(s["findTitle"].orEmpty(), s["findSubtitle"].orEmpty(), display = true)
+            if (tv) LegalNote(s["legalConnect"].orEmpty())
+        },
+        actions = {
+            Column(noticeMoves.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(LocalMetrics.current.u(24))) {
+                Problem(problem)
+                Column(verticalArrangement = Arrangement.spacedBy(LocalMetrics.current.u(8))) {
+                    SectionLabel(s["foundServers"].orEmpty(), searching = !cantSearch)
+                    found.forEachIndexed { i, server ->
+                        key(server.id) {
+                            ServerCard(
+                                server.name, server.url, { connect(server.url) }, lastUsed = isLast(server), connecting = connecting == server.url,
+                                requestFocus = i == 0 && !moved, focusKey = "found-${server.id}",
+                            )
+                        }
+                    }
+                    if (found.isEmpty()) {
+                        when {
+                            cantSearch -> Note(s["findNotSupported"].orEmpty())
+                            searchedLong -> Note(s["findNone"].orEmpty())
+                            else -> Note(s["findSearching"].orEmpty(), busy = true)
+                        }
+                    }
                 }
+                if (others.isNotEmpty()) {
+                    Column(verticalArrangement = Arrangement.spacedBy(LocalMetrics.current.u(8))) {
+                        SectionLabel(s["recentServers"].orEmpty())
+                        others.forEachIndexed { i, server ->
+                            key(server.url) {
+                                ServerCard(
+                                    server.name, server.url, { connect(server.url) }, lastUsed = server.url == last?.url, connecting = connecting == server.url,
+                                    requestFocus = found.isEmpty() && i == 0 && !moved, focusKey = "recent-${server.url}",
+                                )
+                            }
+                        }
+                    }
+                }
+                WittyButton(
+                    s["enterAddress"].orEmpty(), { showForm = true; problem = "" }, Modifier.fillMaxWidth(),
+                    kind = if (nothing) ButtonKind.Primary else ButtonKind.Secondary, tall = true, requestFocus = nothing, focusKey = "enter-address",
+                )
+                if (!tv) LegalNote(s["legalConnect"].orEmpty())
             }
-        }
-        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            PadKey(PAD_DELETE, keys, deleteLabel, true, onDelete, Modifier.weight(1f))
-            PadKey(PAD_ZERO, keys, PAD_KEYS[PAD_ZERO], false, { onDigit('0') }, Modifier.weight(2f))
-        }
-    }
+        },
+    )
 }
 
-// A new server is opened with a six-digit code from someone already signed in. See
-// docs/CLIENT-API.md, "The code is typed on the device".
+// 2. Enter your server's address.
+@Composable
+private fun AddressScreen(
+    nav: Nav,
+    s: Map<String, String>,
+    address: String,
+    onChange: (String) -> Unit,
+    problem: String,
+    busy: Boolean,
+    onSubmit: () -> Unit,
+    onBack: () -> Unit,
+) {
+    val field = remember { FocusRequester() }
+    val tv = LocalMetrics.current.tv
+    LaunchedEffect(Unit) { runCatching { field.requestFocus() } }
+    SignInLayout(
+        onBack,
+        words = {
+            Lockup(nav.brandName, nav.brandLogo)
+            SignInHeading(s["addressTitle"].orEmpty(), s["addressHint"].orEmpty())
+            if (tv) LegalNote(s["legalConnect"].orEmpty())
+        },
+        actions = {
+            WittyField(
+                address, onChange, s["addressLabel"].orEmpty(), kind = FieldKind.Address, icon = Symbols.Address,
+                imeAction = ImeAction.Go, onAction = onSubmit, focusRequester = field,
+            )
+            Problem(problem, Modifier.fillMaxWidth())
+            WittyButton(s["connect"].orEmpty(), onSubmit, Modifier.fillMaxWidth(), kind = ButtonKind.Primary, busy = busy, tall = true)
+            if (!tv) LegalNote(s["legalConnect"].orEmpty())
+        },
+    )
+}
+
+// 3. Another machine is answering for a server we know. Only the person can decide, so the safe choice
+// has focus, and nothing has been sent to it. No lockup: the name and logo would be that machine's.
+@Composable
+fun MismatchScreen(nav: Nav, s: Map<String, String>, server: SavedServer) {
+    val scope = rememberCoroutineScope()
+    val metrics = LocalMetrics.current
+    var problem by remember { mutableStateOf("") }
+    var busy by remember { mutableStateOf(false) }
+    SignInLayout(
+        nav::pop,
+        words = {
+            WarningBadge(metrics.u(64), if (metrics.tv) Modifier else Modifier.align(Alignment.CenterHorizontally))
+            SignInHeading(s["identityTitle"].orEmpty(), s["identityHint"].orEmpty())
+            PanelCard {
+                Text(server.url, color = MaterialTheme.colorScheme.onSurface, style = MaterialTheme.typography.label)
+                Text(s["fingerprintLabel"].orEmpty(), color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.caption)
+                Text(server.fingerprint, color = MaterialTheme.colorScheme.onSurface, style = MaterialTheme.typography.secondary.copy(fontFamily = FontFamily.Monospace))
+            }
+        },
+        actions = {
+            Problem(problem, Modifier.fillMaxWidth())
+            WittyButton(s["back"].orEmpty(), nav::pop, Modifier.fillMaxWidth(), kind = ButtonKind.Primary, tall = true, requestFocus = true)
+            WittyButton(
+                s["identityTrust"].orEmpty(),
+                {
+                    busy = true
+                    scope.launch {
+                        problem = nav.trust(server).orEmpty()
+                        busy = false
+                    }
+                },
+                Modifier.fillMaxWidth(), kind = ButtonKind.Destructive, busy = busy, tall = true,
+            )
+        },
+    )
+}
+
+// 7. A new server is opened with a six-digit code from someone already signed in. See
+// docs/CLIENT-API.md, "The code is typed on the device". The pad is on screen, as a remote has no
+// keyboard; number keys type too.
 @Composable
 fun CodeScreen(nav: Nav, s: Map<String, String>, server: SavedServer) {
     val scope = rememberCoroutineScope()
+    val metrics = LocalMetrics.current
     var entry by remember { mutableStateOf(CodeEntry()) }
     var problem by remember { mutableStateOf("") }
+    var wrong by remember { mutableIntStateOf(0) }
 
     fun press(digit: Char) {
         val next = entry.typed(digit)
@@ -333,89 +322,78 @@ fun CodeScreen(nav: Nav, s: Map<String, String>, server: SavedServer) {
             if (failed != null) {
                 entry = CodeEntry()
                 problem = failed
+                wrong++
             }
         }
     }
+    fun erase() { entry = entry.erased() }
 
-    SideBySide(
-        Modifier.onPreviewKeyEvent {
-            if (it.type != KeyEventType.KeyDown) return@onPreviewKeyEvent false
-            when (val code = it.key.nativeKeyCode) {
-                in KeyEvent.KEYCODE_0..KeyEvent.KEYCODE_9 -> { press('0' + (code - KeyEvent.KEYCODE_0)); true }
-                in KeyEvent.KEYCODE_NUMPAD_0..KeyEvent.KEYCODE_NUMPAD_9 -> { press('0' + (code - KeyEvent.KEYCODE_NUMPAD_0)); true }
-                KeyEvent.KEYCODE_DEL -> { entry = entry.erased(); true }
-                else -> false
-            }
-        },
-        words = {
-            Heading(s["codeTitle"].orEmpty())
-            // Several servers can look alike in the list: this says which one the code goes to.
-            Secondary("${server.name} · ${server.url}")
-            Secondary(s["codeHint"].orEmpty())
-            Text(
-                entry.shown,
-                color = MaterialTheme.colorScheme.onBackground,
-                style = MaterialTheme.typography.displaySmall,
-                modifier = Modifier.semantics {
-                    contentDescription = "${s["codeLabel"]}: ${entry.digits.length} ${s["codeEntered"]}"
-                },
-            )
-            // Room is kept for the message, or the keys would move under a finger as it comes and goes.
-            Box(Modifier.heightIn(min = MaterialTheme.typography.bodyLarge.lineHeight.value.dp * 2)) {
-                if (entry.busy) Secondary(s["connecting"].orEmpty()) else ErrorText(problem)
-            }
-            Secondary("${s["fingerprintLabel"]}: ${server.fingerprint}")
-        },
-        actions = {
-            NumberPad(s["codeDelete"].orEmpty(), ::press) { entry = entry.erased() }
-            ActionButton(s["usePassword"].orEmpty(), { nav.signInTo(server, SignInWay.Password) }, Modifier.fillMaxWidth())
-            ActionButton(s["showCodeInstead"].orEmpty(), { nav.signInTo(server, SignInWay.ShownCode) }, Modifier.fillMaxWidth())
-        },
-    )
-}
-
-// Another machine is answering for a server we know. Only the person can decide,
-// so the safe choice has focus, and nothing has been sent to it.
-@Composable
-fun MismatchScreen(nav: Nav, s: Map<String, String>, server: SavedServer) {
-    val scope = rememberCoroutineScope()
-    var problem by remember { mutableStateOf("") }
-    var busy by remember { mutableStateOf(false) }
-    Centred {
-        Heading(s["identityTitle"].orEmpty())
-        Secondary(s["identityHint"].orEmpty())
-        Secondary("${server.url} · ${s["fingerprintLabel"]}: ${server.fingerprint}")
-        ErrorText(problem)
-        ActionButton(s["back"].orEmpty(), nav::pop, Modifier.fillMaxWidth(), primary = true, requestFocus = true)
-        ActionButton(
-            s["identityTrust"].orEmpty(),
-            {
-                busy = true
-                scope.launch {
-                    problem = nav.trust(server).orEmpty()
-                    busy = false
-                }
+    Box(Modifier.digitKeys(::press, ::erase)) {
+        SignInLayout(
+            nav::pop,
+            words = {
+                Lockup(nav.brandName, nav.brandLogo)
+                SignInHeading(s["codeTitle"].orEmpty())
+                // Several servers can look alike in the list: this says which one the code goes to.
+                ServerPill(server.name, nav.brandLogo, if (metrics.tv) Modifier else Modifier.align(Alignment.CenterHorizontally))
+                Text(s["codeHint"].orEmpty(), color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.body, textAlign = if (metrics.tv) TextAlign.Start else TextAlign.Center)
+                CodeBoxes(entry.digits, entry.busy, wrong, if (metrics.tv) Modifier else Modifier.align(Alignment.CenterHorizontally))
+                Problem(problem, Modifier.fillMaxWidth())
+                if (metrics.tv) Fingerprint(s, server.fingerprint)
             },
-            Modifier.fillMaxWidth(),
-            enabled = !busy,
+            actions = {
+                NumberPad(::press, ::erase, Modifier.fillMaxWidth(), firstFocus = true)
+                QuietLinks {
+                    WittyButton(s["usePassword"].orEmpty(), { nav.signInTo(server, SignInWay.Password) }, kind = ButtonKind.Quiet)
+                    WittyButton(s["showCodeInstead"].orEmpty(), { nav.signInTo(server, SignInWay.ShownCode) }, kind = ButtonKind.Quiet)
+                }
+                if (!metrics.tv) Fingerprint(s, server.fingerprint)
+            },
         )
     }
 }
 
-// Only a server that has proved its identity can be sent a code.
 @Composable
-private fun TypedCodeButton(nav: Nav, s: Map<String, String>) {
-    val server = nav.server
-    if (server != null && server.publicKey.isNotEmpty()) {
-        ActionButton(s["codeTitle"].orEmpty(), { nav.push(Route.Code(server)) }, Modifier.fillMaxWidth())
+private fun Fingerprint(s: Map<String, String>, fingerprint: String) {
+    if (fingerprint.isEmpty()) return
+    Text(
+        "${s["fingerprintLabel"]}: $fingerprint", color = LocalExtraColours.current.hint, style = MaterialTheme.typography.caption,
+        textAlign = if (LocalMetrics.current.tv) TextAlign.Start else TextAlign.Center, modifier = Modifier.fillMaxWidth(),
+    )
+}
+
+// Quiet buttons on one line where they fit, centred in a column, to the left on a TV.
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun QuietLinks(content: @Composable () -> Unit) {
+    val tv = LocalMetrics.current.tv
+    FlowRow(
+        Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(LocalMetrics.current.u(4), if (tv) Alignment.Start else Alignment.CenterHorizontally),
+    ) { content() }
+}
+
+// The server's name with Change server beside it, at the bottom of the screens that start signing in.
+@Composable
+private fun ServerFooter(nav: Nav, s: Map<String, String>) {
+    val tv = LocalMetrics.current.tv
+    val name = nav.server?.name ?: nav.brandName
+    Row(
+        Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(LocalMetrics.current.u(4), if (tv) Alignment.Start else Alignment.CenterHorizontally),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        if (!name.isNullOrEmpty()) Text(name, color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.secondary, maxLines = 1)
+        WittyButton(s["changeServer"].orEmpty(), nav::changeServer, kind = ButtonKind.Quiet, focusKey = "change-server")
     }
 }
 
-// The TV shows a code; someone already signed in on a phone or computer approves
-// it, so nobody has to type a password with a remote. See docs/CLIENT-API.md.
+// 8. The TV shows a code; someone already signed in on a phone or computer approves it, so nobody
+// has to type a password with a remote. See docs/CLIENT-API.md.
 @Composable
-private fun PairPanel(nav: Nav, s: Map<String, String>, onUsePassword: () -> Unit) {
-    var round by remember { mutableStateOf(0) }
+private fun PairScreen(nav: Nav, s: Map<String, String>, onBack: () -> Unit, onUsePassword: () -> Unit) {
+    val metrics = LocalMetrics.current
+    var round by remember { mutableIntStateOf(0) }
     var code by remember { mutableStateOf("") }
     var approveAt by remember { mutableStateOf("") }
     var scan by remember { mutableStateOf("") }
@@ -464,113 +442,420 @@ private fun PairPanel(nav: Nav, s: Map<String, String>, onUsePassword: () -> Uni
         }
     }
 
-    SideBySide(
+    val ended = code.isEmpty() && problem.isNotEmpty()
+    val spacing = with(LocalDensity.current) { metrics.u(8).toSp() }
+    SignInLayout(
+        onBack,
         words = {
-            Heading(s["pairTitle"].orEmpty())
+            Lockup(nav.brandName, nav.brandLogo)
+            SignInHeading(s["pairTitle"].orEmpty(), if (code.isNotEmpty()) s["pairHint"].orEmpty() else "")
             if (code.isNotEmpty()) {
-                Secondary(s["pairHint"].orEmpty())
-                Text(approveAt, color = MaterialTheme.colorScheme.onBackground)
-                Text(code, color = MaterialTheme.colorScheme.onBackground, style = MaterialTheme.typography.displayMedium, modifier = Modifier.semantics { contentDescription = code.toList().joinToString(" ") })
-                Secondary(if (waiting) s["errLost"].orEmpty() else s["pairWaiting"].orEmpty())
+                SelectionContainer(if (metrics.tv) Modifier else Modifier.align(Alignment.CenterHorizontally)) {
+                    Text(approveAt, color = LocalExtraColours.current.accentText, style = MaterialTheme.typography.label)
+                }
+                PanelCard {
+                    Text(
+                        code, color = MaterialTheme.colorScheme.onSurface, textAlign = TextAlign.Center,
+                        style = MaterialTheme.typography.display.copy(fontFamily = FontFamily.Monospace, letterSpacing = spacing),
+                        modifier = Modifier.fillMaxWidth().semantics { contentDescription = code.toList().joinToString(" ") },
+                    )
+                }
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(metrics.u(10)), modifier = if (metrics.tv) Modifier else Modifier.align(Alignment.CenterHorizontally)) {
+                    Spinner(MaterialTheme.colorScheme.onSurfaceVariant, metrics.u(16))
+                    Text(if (waiting) s["errLost"].orEmpty() else s["pairWaiting"].orEmpty(), color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.secondary)
+                }
+            } else if (!ended) {
+                Spinner(MaterialTheme.colorScheme.onSurfaceVariant, metrics.u(24), if (metrics.tv) Modifier else Modifier.align(Alignment.CenterHorizontally))
             }
-            ErrorText(problem)
+            Problem(problem, Modifier.fillMaxWidth())
         },
         actions = {
-            if (code.isNotEmpty() && scan.isNotEmpty()) {
-                Secondary(s["pairScan"].orEmpty())
-                QrCode(scan, Modifier.semantics { contentDescription = s["pairScan"].orEmpty() })
+            if (code.isNotEmpty() && scan.isNotEmpty()) QrCard(scan, s["pairScan"].orEmpty(), if (metrics.tv) Modifier else Modifier.align(Alignment.CenterHorizontally))
+            if (ended) WittyButton(s["pairNew"].orEmpty(), { round++ }, Modifier.fillMaxWidth(), kind = ButtonKind.Primary, tall = true, requestFocus = true)
+            QuietLinks {
+                val server = nav.server
+                if (server != null && server.publicKey.isNotEmpty()) {
+                    WittyButton(s["codeTitle"].orEmpty(), { nav.push(Route.Code(server)) }, kind = ButtonKind.Quiet, requestFocus = !ended, focusKey = "typed-code")
+                }
+                WittyButton(s["usePassword"].orEmpty(), onUsePassword, kind = ButtonKind.Quiet, requestFocus = !ended && server?.publicKey.isNullOrEmpty(), focusKey = "use-password")
+                WittyButton(s["changeServer"].orEmpty(), nav::changeServer, kind = ButtonKind.Quiet, focusKey = "change-server")
             }
-            if (code.isEmpty() && problem.isNotEmpty()) ActionButton(s["pairNew"].orEmpty(), { round++ }, Modifier.fillMaxWidth(), primary = true, requestFocus = true)
-            TypedCodeButton(nav, s)
-            ActionButton(s["usePassword"].orEmpty(), onUsePassword, Modifier.fillMaxWidth(), requestFocus = code.isNotEmpty())
-            ActionButton(s["changeServer"].orEmpty(), nav::changeServer, Modifier.fillMaxWidth())
         },
     )
 }
 
-@OptIn(ExperimentalLayoutApi::class)
+private enum class Step { Usual, Form, Password, Pair }
+
+// 4, 5 and 6: who's watching, a profile's password, and the sign-in form, with the two-factor step
+// when an account asks for it. 8 too, as a way of signing in from here.
 @Composable
 fun SignInScreen(nav: Nav, s: Map<String, String>, way: SignInWay) {
     val scope = rememberCoroutineScope()
     // On a TV the code comes first. Everywhere else a keyboard is at hand.
-    var useCode by rememberSaveable { mutableStateOf(way == SignInWay.ShownCode || (way == SignInWay.Usual && nav.app.isTv)) }
+    val codeFirst = way == SignInWay.ShownCode || (way == SignInWay.Usual && nav.app.isTv)
+    var step by rememberSaveable { mutableStateOf(if (codeFirst) Step.Pair else Step.Usual) }
+    var pairFrom by rememberSaveable { mutableStateOf<Step?>(null) }
     var profiles by remember { mutableStateOf<Profiles?>(null) }
-    var chosen by remember { mutableStateOf<Profile?>(null) }
-    var useForm by rememberSaveable { mutableStateOf(false) }
+    var chosenId by rememberSaveable { mutableStateOf<Long?>(null) }
     var name by rememberSaveable { mutableStateOf("") }
     var password by remember { mutableStateOf("") }
-    var error by remember { mutableStateOf("") }
+    // The second step: the password was right, and the account wants its authenticator's code too.
+    var secondStep by remember { mutableStateOf(false) }
+    var code by remember { mutableStateOf("") }
+    var wrong by remember { mutableIntStateOf(0) }
+    var problem by remember { mutableStateOf("") }
     var busy by remember { mutableStateOf(false) }
-    val passwordFocus = remember { FocusRequester() }
 
     LaunchedEffect(Unit) {
         profiles = runCatching { nav.app.api.profiles() }.getOrDefault(Profiles())
     }
 
-    fun login(who: String, secret: String) {
+    fun login(who: String, secret: String, typed: String = "") {
         if (busy) return
         busy = true
-        error = ""
+        problem = ""
         scope.launch {
             try {
                 val refused = nav.server?.let { nav.clearToSend(it) }
                 if (refused != null) {
-                    error = refused
+                    problem = refused
                 } else {
-                    val result = nav.app.api.login(who, secret, nav.app.deviceName)
-                    if (result.token.isEmpty()) error = s["errInvalid"].orEmpty() else nav.signedIn(result.token)
+                    val result = nav.app.api.login(who, secret, nav.app.deviceName, typed)
+                    if (result.token.isEmpty()) problem = s["errInvalid"].orEmpty() else nav.signedIn(result.token, result.user)
                 }
             } catch (e: CancellationException) {
                 throw e
+            } catch (e: ApiError) {
+                if (e.twoFactor) {
+                    // The first answer only asks; after a code it says that one was wrong.
+                    if (typed.isNotEmpty()) {
+                        problem = e.message.orEmpty()
+                        wrong++
+                    }
+                    secondStep = true
+                    code = ""
+                } else {
+                    problem = problemWords(e, s["errLost"].orEmpty())
+                }
             } catch (e: Exception) {
-                error = problemWords(e, s["errLost"].orEmpty())
+                problem = problemWords(e, s["errLost"].orEmpty())
+                code = ""
             } finally {
                 busy = false
             }
         }
     }
 
-    if (useCode) {
-        PairPanel(nav, s) { useCode = false }
-        return
+    fun back(to: Step) {
+        step = to
+        problem = ""
+        password = ""
+        secondStep = false
+        code = ""
     }
+
+    fun openPair() {
+        pairFrom = step
+        back(Step.Pair)
+    }
+
     val list = profiles
-    Centred {
-        when {
-            list == null -> Loading()
-            chosen != null -> {
-                val who = chosen!!
-                LaunchedEffect(who.id) { runCatching { passwordFocus.requestFocus() } }
-                Heading(who.name)
-                Field(password, { password = it }, "Password", Modifier.focusRequester(passwordFocus), password = true, onDone = { login(who.name, password) })
-                ErrorText(error)
-                ActionButton("Sign in", { login(who.name, password) }, Modifier.fillMaxWidth(), primary = true, enabled = !busy)
-                ActionButton(s["back"].orEmpty(), { chosen = null; password = ""; error = "" }, Modifier.fillMaxWidth())
-            }
-            list.style == "profiles" && !useForm && list.profiles.isNotEmpty() -> {
-                Heading("Who's watching?")
-                ErrorText(error)
-                FlowRow(horizontalArrangement = Arrangement.spacedBy(12.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                    list.profiles.forEachIndexed { i, p ->
-                        ActionButton(p.name, { if (p.hasPassword) chosen = p else login(p.name, "") }, requestFocus = i == 0)
-                    }
+    val showsProfiles = list != null && list.style == "profiles" && list.profiles.isNotEmpty()
+    val chosen = list?.profiles?.firstOrNull { it.id == chosenId }
+    when {
+        step == Step.Pair -> PairScreen(nav, s, onBack = { back(pairFrom ?: Step.Usual) }) { back(pairFrom ?: Step.Usual) }
+        list == null -> Screen { Loading() }
+        secondStep -> TwoFactorStep(
+            nav, s, chosen, code,
+            onCode = { typed ->
+                code = typed.filter { it.isDigit() }.take(CODE_LENGTH)
+                problem = ""
+                if (code.length == CODE_LENGTH) login(chosen?.name ?: name, password, code)
+            },
+            checking = busy, wrong = wrong, problem = problem,
+            onBack = { secondStep = false; code = ""; problem = "" },
+        )
+        step == Step.Password && chosen != null -> PasswordStep(
+            nav, s, chosen, password, { password = it; problem = "" }, problem, busy,
+            onSubmit = { login(chosen.name, password) },
+            onBack = { back(Step.Usual) },
+        )
+        showsProfiles && step == Step.Usual -> WhoStep(
+            nav, s, list.profiles, problem, busy,
+            onPick = { p ->
+                problem = ""
+                if (p.hasPassword) {
+                    chosenId = p.id
+                    step = Step.Password
+                } else {
+                    login(p.name, "")
                 }
-                ActionButton("Sign in with another account", { useForm = true }, Modifier.fillMaxWidth())
-                TypedCodeButton(nav, s)
-                ActionButton(s["useCode"].orEmpty(), { useCode = true }, Modifier.fillMaxWidth())
-                ActionButton(s["changeServer"].orEmpty(), nav::changeServer, Modifier.fillMaxWidth())
-            }
-            else -> {
-                Heading("Sign in")
-                Field(name, { name = it }, "Name", onDone = { runCatching { passwordFocus.requestFocus() } })
-                Field(password, { password = it }, "Password", Modifier.focusRequester(passwordFocus), password = true, onDone = { login(name, password) })
-                ErrorText(error)
-                ActionButton("Sign in", { login(name, password) }, Modifier.fillMaxWidth(), primary = true, enabled = !busy)
-                if (list.profiles.isNotEmpty()) ActionButton(s["back"].orEmpty(), { useForm = false; error = "" }, Modifier.fillMaxWidth())
-                TypedCodeButton(nav, s)
-                ActionButton(s["useCode"].orEmpty(), { useCode = true }, Modifier.fillMaxWidth())
-                ActionButton(s["changeServer"].orEmpty(), nav::changeServer, Modifier.fillMaxWidth())
-            }
+            },
+            onOtherAccount = { back(Step.Form) },
+            onUseCode = ::openPair,
+        )
+        else -> FormStep(
+            nav, s, name, { name = it; problem = "" }, password, { password = it; problem = "" }, problem, busy,
+            onSubmit = { login(name, password) },
+            onBack = if (showsProfiles) { { back(Step.Usual) } } else null,
+            onUseCode = ::openPair,
+        )
+    }
+}
+
+// The quiet ways to sign in without a password here.
+@Composable
+private fun CodeLinks(nav: Nav, s: Map<String, String>, onUseCode: () -> Unit, otherAccount: (() -> Unit)? = null) {
+    QuietLinks {
+        if (otherAccount != null) WittyButton(s["otherAccount"].orEmpty(), otherAccount, kind = ButtonKind.Quiet, focusKey = "other-account")
+        WittyButton(s["useCode"].orEmpty(), onUseCode, kind = ButtonKind.Quiet, focusKey = "use-code")
+        // Only a server that has proved its identity can be sent a code.
+        val server = nav.server
+        if (server != null && server.publicKey.isNotEmpty()) {
+            WittyButton(s["codeTitle"].orEmpty(), { nav.push(Route.Code(server)) }, kind = ButtonKind.Quiet, focusKey = "typed-code")
         }
     }
+}
+
+// 4. Who's watching? Profiles as faces, two across on a phone and as many as fit on a tablet. A TV has
+// them in one centred row.
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun WhoStep(
+    nav: Nav,
+    s: Map<String, String>,
+    profiles: List<Profile>,
+    problem: String,
+    busy: Boolean,
+    onPick: (Profile) -> Unit,
+    onOtherAccount: () -> Unit,
+    onUseCode: () -> Unit,
+) {
+    val metrics = LocalMetrics.current
+    val size = metrics.u(
+        when {
+            metrics.tv -> 200
+            metrics.tablet -> 140
+            else -> 104
+        },
+    )
+    val badges = profiles.any(::hasBadge)
+    val tiles: @Composable () -> Unit = {
+        profiles.forEachIndexed { i, p ->
+            key(p.id) { ProfileTile(p, size, { if (!busy) onPick(p) }, requestFocus = i == 0, focusKey = "profile-${p.id}", badgeRoom = badges) }
+        }
+    }
+    if (metrics.tv) {
+        val accent = MaterialTheme.colorScheme.primary
+        Box(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background).signInGlow(accent), contentAlignment = Alignment.Center) {
+            Column(
+                Modifier.padding(horizontal = metrics.gutter, vertical = metrics.edge),
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.spacedBy(metrics.u(32)),
+            ) {
+                Lockup(nav.brandName, nav.brandLogo)
+                Text(s["whoTitle"].orEmpty(), color = MaterialTheme.colorScheme.onBackground, style = MaterialTheme.typography.display, modifier = Modifier.semantics { heading() })
+                Row(
+                    Modifier.horizontalScroll(rememberScrollState()).padding(metrics.u(16)).remoteRow(),
+                    horizontalArrangement = Arrangement.spacedBy(metrics.u(48)),
+                ) { tiles() }
+                Problem(problem)
+                Row(horizontalArrangement = Arrangement.spacedBy(metrics.u(8))) {
+                    WittyButton(s["otherAccount"].orEmpty(), onOtherAccount, kind = ButtonKind.Quiet, focusKey = "other-account")
+                    WittyButton(s["useCode"].orEmpty(), onUseCode, kind = ButtonKind.Quiet, focusKey = "use-code")
+                    val server = nav.server
+                    if (server != null && server.publicKey.isNotEmpty()) {
+                        WittyButton(s["codeTitle"].orEmpty(), { nav.push(Route.Code(server)) }, kind = ButtonKind.Quiet, focusKey = "typed-code")
+                    }
+                }
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(metrics.u(4))) {
+                    val name = nav.server?.name ?: nav.brandName
+                    if (name.isNotEmpty()) Text(name, color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.secondary, maxLines = 1)
+                    WittyButton(s["changeServer"].orEmpty(), nav::changeServer, kind = ButtonKind.Quiet, focusKey = "change-server")
+                }
+            }
+        }
+        return
+    }
+    SignInPage {
+        Lockup(nav.brandName, nav.brandLogo)
+        SignInHeading(s["whoTitle"].orEmpty(), display = true)
+        Gap(8)
+        FlowRow(
+            Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(metrics.u(24), Alignment.CenterHorizontally),
+            verticalArrangement = Arrangement.spacedBy(metrics.u(28)),
+            maxItemsInEachRow = if (metrics.tablet) Int.MAX_VALUE else 2,
+        ) { tiles() }
+        Gap(8)
+        Problem(problem, Modifier.fillMaxWidth())
+        CodeLinks(nav, s, onUseCode, onOtherAccount)
+        ServerFooter(nav, s)
+    }
+}
+
+// 5. A profile's password, under its face.
+@Composable
+private fun PasswordStep(
+    nav: Nav,
+    s: Map<String, String>,
+    who: Profile,
+    password: String,
+    onChange: (String) -> Unit,
+    problem: String,
+    busy: Boolean,
+    onSubmit: () -> Unit,
+    onBack: () -> Unit,
+) {
+    val metrics = LocalMetrics.current
+    val field = remember { FocusRequester() }
+    val shown = avatarName(who.displayName, who.name)
+    LaunchedEffect(who.id) { runCatching { field.requestFocus() } }
+    SignInLayout(
+        onBack,
+        words = {
+            val centre = if (metrics.tv) Modifier else Modifier.align(Alignment.CenterHorizontally)
+            Avatar(shown, metrics.u(if (metrics.tv) 200 else 120), centre)
+            Column(centre, horizontalAlignment = if (metrics.tv) Alignment.Start else Alignment.CenterHorizontally) {
+                Text(shown, color = MaterialTheme.colorScheme.onBackground, style = MaterialTheme.typography.headline)
+                if (showsUsername(who.displayName, who.name)) Text("@${who.name}", color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.secondary)
+            }
+            Text(s["passwordHint"].orEmpty(), color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.body, modifier = centre)
+        },
+        actions = {
+            WittyField(
+                password, onChange, s["passwordLabel"].orEmpty(), kind = FieldKind.Password, icon = Symbols.Password,
+                imeAction = ImeAction.Go, onAction = onSubmit, focusRequester = field,
+            )
+            Problem(problem, Modifier.fillMaxWidth())
+            WittyButton(s["signIn"].orEmpty(), onSubmit, Modifier.fillMaxWidth(), kind = ButtonKind.Primary, busy = busy, tall = true)
+            ForgotPassword(nav, s, if (metrics.tv) Modifier else Modifier.align(Alignment.CenterHorizontally))
+        },
+    )
+}
+
+@Composable
+private fun ForgotPassword(nav: Nav, s: Map<String, String>, modifier: Modifier = Modifier) {
+    val words = s["forgotPassword"].orEmpty()
+    WittyButton(
+        words,
+        { nav.push(if (nav.app.isTv) Route.OnPhone(words, FORGOT_PASSWORD_PATH) else Route.Help(FORGOT_PASSWORD_PATH)) },
+        modifier, kind = ButtonKind.Quiet, focusKey = "forgot-password",
+    )
+}
+
+// 6. Sign in with a username and password.
+@Composable
+private fun FormStep(
+    nav: Nav,
+    s: Map<String, String>,
+    name: String,
+    onName: (String) -> Unit,
+    password: String,
+    onPassword: (String) -> Unit,
+    problem: String,
+    busy: Boolean,
+    onSubmit: () -> Unit,
+    onBack: (() -> Unit)?,
+    onUseCode: () -> Unit,
+) {
+    val metrics = LocalMetrics.current
+    val first = remember { FocusRequester() }
+    val second = remember { FocusRequester() }
+    LaunchedEffect(Unit) { if (!metrics.tv) runCatching { first.requestFocus() } }
+    SignInLayout(
+        onBack,
+        words = {
+            Lockup(nav.brandName, nav.brandLogo)
+            SignInHeading(s["signInTitle"].orEmpty())
+        },
+        actions = {
+            WittyField(
+                name, onName, s["usernameLabel"].orEmpty(), kind = FieldKind.Username, icon = Symbols.Person,
+                imeAction = ImeAction.Next, onAction = { runCatching { second.requestFocus() } }, focusRequester = first,
+            )
+            WittyField(
+                password, onPassword, s["passwordLabel"].orEmpty(), kind = FieldKind.Password, icon = Symbols.Password,
+                imeAction = ImeAction.Go, onAction = onSubmit, focusRequester = second,
+            )
+            Problem(problem, Modifier.fillMaxWidth())
+            WittyButton(s["signIn"].orEmpty(), onSubmit, Modifier.fillMaxWidth(), kind = ButtonKind.Primary, busy = busy, tall = true, requestFocus = metrics.tv, focusKey = "sign-in")
+            CodeLinks(nav, s, onUseCode)
+            ServerFooter(nav, s)
+        },
+    )
+}
+
+// 5, second step: the six digits from an authenticator app. A phone types them with its own number
+// keyboard, which can fill in a code it was sent; a TV has the pad.
+@Composable
+private fun TwoFactorStep(
+    nav: Nav,
+    s: Map<String, String>,
+    who: Profile?,
+    code: String,
+    onCode: (String) -> Unit,
+    checking: Boolean,
+    wrong: Int,
+    problem: String,
+    onBack: () -> Unit,
+) {
+    val metrics = LocalMetrics.current
+    val field = remember { FocusRequester() }
+    LaunchedEffect(Unit) { if (!metrics.tv) runCatching { field.requestFocus() } }
+    val press = { digit: Char -> if (!checking) onCode(code + digit) }
+    val erase = { if (!checking) onCode(code.dropLast(1)) }
+    Box(Modifier.digitKeys(press, erase)) {
+        SignInLayout(
+            onBack,
+            words = {
+                val centre = if (metrics.tv) Modifier else Modifier.align(Alignment.CenterHorizontally)
+                if (who != null) Avatar(avatarName(who.displayName, who.name), metrics.u(if (metrics.tv) 200 else 120), centre)
+                else Lockup(nav.brandName, nav.brandLogo, centre)
+                SignInHeading(s["twoFactorTitle"].orEmpty())
+                Note(s["twoFactorHint"].orEmpty())
+                Box(centre) {
+                    CodeBoxes(code, checking, wrong)
+                    if (!metrics.tv) {
+                        // What the keyboard types into, under the boxes: they show it.
+                        BasicTextField(
+                            code, { if (!checking) onCode(it) },
+                            singleLine = true,
+                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.NumberPassword, imeAction = ImeAction.Done),
+                            modifier = Modifier
+                                .matchParentSize()
+                                .graphicsLayer { alpha = 0f }
+                                .focusRequester(field)
+                                .semantics { contentType = ContentType.SmsOtpCode },
+                        )
+                    }
+                }
+                Problem(problem, Modifier.fillMaxWidth())
+            },
+            actions = {
+                if (metrics.tv) NumberPad(press, erase, Modifier.fillMaxWidth(), firstFocus = true)
+            },
+        )
+    }
+}
+
+// What a TV doesn't open itself, such as the help on a forgotten password: a QR card for a phone, with
+// the address under it, as Apple TV has.
+@Composable
+fun OnPhoneScreen(nav: Nav, s: Map<String, String>, title: String, path: String) {
+    val metrics = LocalMetrics.current
+    val address = remember(path) { runCatching { nav.app.api.mediaUrl(path) }.getOrDefault("") }
+    SignInLayout(
+        nav::pop,
+        words = {
+            SignInHeading(title, s["openOnPhone"].orEmpty())
+            SelectionContainer(if (metrics.tv) Modifier else Modifier.align(Alignment.CenterHorizontally)) {
+                Text(address, color = LocalExtraColours.current.accentText, style = MaterialTheme.typography.label)
+            }
+        },
+        actions = {
+            if (address.isNotEmpty()) QrCard(address, address, if (metrics.tv) Modifier else Modifier.align(Alignment.CenterHorizontally))
+            WittyButton(s["back"].orEmpty(), nav::pop, Modifier.fillMaxWidth(), kind = ButtonKind.Primary, tall = true, requestFocus = true)
+        },
+    )
 }

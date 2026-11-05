@@ -44,6 +44,8 @@ import com.wittywilla.wittymediaclient.net.NextStep
 import com.wittywilla.wittymediaclient.net.SendStep
 import com.wittywilla.wittymediaclient.net.ServerProof
 import com.wittywilla.wittymediaclient.net.ServerStatus
+import com.wittywilla.wittymediaclient.net.User
+import com.wittywilla.wittymediaclient.net.brandLogoUrl
 import com.wittywilla.wittymediaclient.net.GUIDE_PATH
 import com.wittywilla.wittymediaclient.net.findServerById
 import com.wittywilla.wittymediaclient.net.hasOwnScreen
@@ -81,6 +83,10 @@ sealed interface Route {
     data class Player(val id: Long, val startOver: Boolean) : Route { override val key = "player-$id" }
     data class Web(val path: String) : Route { override val key = "web-$path" }
     data class Page(val path: String) : Route { override val key = "page-$path" }
+    // A page anyone may read, such as the help on a forgotten password, which opens before signing in.
+    data class Help(val path: String) : Route { override val key = "help-$path" }
+    // What a TV doesn't open itself: a QR card for a phone, as on Apple TV.
+    data class OnPhone(val title: String, val path: String) : Route { override val key = "on-phone-$path" }
     data class Album(val library: Long, val album: String, val artist: String) : Route { override val key = "album-$library-$artist-$album" }
     data class Artist(val library: Long, val name: String) : Route { override val key = "artist-$library-$name" }
     data object NowPlaying : Route { override val key = "now-playing" }
@@ -120,6 +126,25 @@ class Nav(val app: WittyApp, private val s: Map<String, String>) {
 
     // A notice for after signing in, such as the sign-in not being kept on this device.
     var notice by mutableStateOf("")
+
+    // The server's own name and logo for the sign-in screens, once it has been chosen. Empty for the app's own.
+    var brandName by mutableStateOf("")
+        private set
+    var brandLogo by mutableStateOf("")
+        private set
+
+    // Who is signed in, for the avatar on the You tab.
+    var me by mutableStateOf<User?>(null)
+
+    private fun showBrand(base: String, status: ServerStatus) {
+        brandName = status.brandName
+        brandLogo = brandLogoUrl(base, status.brandLogo)
+    }
+
+    private fun forgetBrand() {
+        brandName = ""
+        brandLogo = ""
+    }
 
     // What each screen last showed, in memory only. Coming back draws it straight away and asks
     // the server again underneath, so a dropped network shows what was there, not a blank screen.
@@ -240,6 +265,8 @@ class Nav(val app: WittyApp, private val s: Map<String, String>) {
         openServer(opening, app.store.token)
         val status = app.api.status()
         themeId = status.theme
+        showBrand(opening.url, status)
+        me = status.user
         reset(if (status.user != null) Route.Home else Route.SignIn())
         null
     } catch (_: IOException) {
@@ -279,7 +306,9 @@ class Nav(val app: WittyApp, private val s: Map<String, String>) {
             else -> {
                 openServer(checked)
                 try {
-                    themeId = app.api.status().theme
+                    val status = app.api.status()
+                    themeId = status.theme
+                    showBrand(checked.url, status)
                     reset(Route.SignIn())
                 } catch (_: Exception) {
                     reset(Route.Connect(s["errLost"].orEmpty()))
@@ -309,7 +338,10 @@ class Nav(val app: WittyApp, private val s: Map<String, String>) {
         val checked = proof.savedAs(url, status.brandName.ifEmpty { status.name })
         val sameServerAsToken = app.store.server == url || app.store.find(app.store.server)?.publicKey == proof.publicKey
         val step = Identity.nextStep(proof.state, sameServerAsToken && tokenFits(proof))
-        if (step != NextStep.Refuse && step != NextStep.Lost) themeId = status.theme
+        if (step != NextStep.Refuse && step != NextStep.Lost) {
+            themeId = status.theme
+            showBrand(url, status)
+        }
         return when (step) {
             NextStep.Warn -> { push(Route.Mismatch(checked)); null }
             NextStep.Refuse -> s["identityBad"].orEmpty()
@@ -372,8 +404,9 @@ class Nav(val app: WittyApp, private val s: Map<String, String>) {
         }
     }
 
-    fun signedIn(token: String) {
+    fun signedIn(token: String, user: User? = null) {
         val kept = server ?: SavedServer(app.api.base, "WittyMediaServer")
+        me = user
         if (!app.store.signedIn(kept, token)) notice = s["notKept"].orEmpty()
         app.api = Api(kept.url, token)
         ClientLog.kick()
@@ -382,6 +415,7 @@ class Nav(val app: WittyApp, private val s: Map<String, String>) {
     }
 
     private fun forgetSignIn() {
+        me = null
         app.store.forgetToken()
         app.api = Api(app.api.base, "")
         forgetScreens()
@@ -407,6 +441,8 @@ class Nav(val app: WittyApp, private val s: Map<String, String>) {
     fun changeServer() {
         endSession()
         server = null
+        me = null
+        forgetBrand()
         app.store.server = ""
         app.store.forgetToken()
         app.api = Api("", "")
@@ -450,7 +486,7 @@ fun AppRoot(app: WittyApp) {
         onDispose { }
     }
 
-    WittyTheme(theme, metrics, reduceMotion) {
+    WittyTheme(theme, metrics, reduceMotion, strings) {
         LaunchedEffect(Unit) { nav.startUp() }
         DisposableEffect(Unit) {
             app.onGuideKey = nav::openGuide
@@ -494,6 +530,8 @@ fun AppRoot(app: WittyApp) {
                         is Route.Player -> PlayerScreen(nav, route.id, route.startOver)
                         is Route.Web -> ServerPageScreen(nav, route, route.path, keptToGames = true)
                         is Route.Page -> ServerPageScreen(nav, route, route.path, keptToGames = false)
+                        is Route.Help -> ServerPageScreen(nav, route, route.path, keptToGames = false, public = true)
+                        is Route.OnPhone -> OnPhoneScreen(nav, strings, route.title, route.path)
                     }
                 }
             }

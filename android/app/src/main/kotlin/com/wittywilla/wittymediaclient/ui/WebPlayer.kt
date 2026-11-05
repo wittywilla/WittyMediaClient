@@ -224,7 +224,8 @@ private fun saveDownload(context: Context, api: Api, url: String, userAgent: Str
 // A game player (keptToGames) closes when the page goes anywhere else. A page of the server's stays
 // open wherever it's taken, until Back has nothing left to go back through.
 @Composable
-fun ServerPageScreen(nav: Nav, route: Route, path: String, keptToGames: Boolean) {
+// public: a page anyone may read, opened before signing in. It goes without a sign-in cookie.
+fun ServerPageScreen(nav: Nav, route: Route, path: String, keptToGames: Boolean, public: Boolean = false) {
     val context = LocalContext.current
     val api = nav.app.api
     val background = MaterialTheme.colorScheme.background.toArgb()
@@ -287,7 +288,9 @@ fun ServerPageScreen(nav: Nav, route: Route, path: String, keptToGames: Boolean)
 
         val cookies = CookieManager.getInstance()
         val cookie = sessionCookie(api.token, api.base.startsWith("https:", ignoreCase = true))
-        if (cookie == null) {
+        if (public && api.token.isEmpty()) {
+            cookies.removeAllCookies { if (!gone) web.loadUrl(api.mediaUrl(pageAddress(path, nav.app.isTv))) }
+        } else if (cookie == null) {
             failed = CANT_OPEN
         } else {
             // One left by a run that crashed could be for another server, so that goes first.

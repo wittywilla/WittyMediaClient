@@ -25,6 +25,7 @@ import androidx.compose.foundation.layout.only
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.layout.safeDrawingPadding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.layout.windowInsetsTopHeight
@@ -36,7 +37,6 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.DateRange
 import androidx.compose.material.icons.filled.Home
-import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -89,60 +89,73 @@ import java.io.File
 val LocalBottomRoom = compositionLocalOf { 0.dp }
 private val PILL_ROOM = 88.dp
 
-private data class Tab(val route: Route, val label: String, val icon: ImageVector)
+// The You tab has no icon: it shows the person's avatar.
+private data class Tab(val route: Route, val label: String, val icon: ImageVector?)
 
 private val TABS = listOf(
     Tab(Route.Home, "Home", Icons.Filled.Home),
     Tab(Route.Search, "Search", Icons.Filled.Search),
-    Tab(Route.Profile, "Profile", Icons.Filled.Person),
+    Tab(Route.Profile, "You", null),
 )
 
 @Composable
 private fun TabButton(nav: Nav, tab: Tab, modifier: Modifier = Modifier, wide: Boolean = false) {
     val scheme = MaterialTheme.colorScheme
+    val metrics = LocalMetrics.current
     val active = nav.current == tab.route
     val ink = if (active) scheme.onPrimary else scheme.onSurface
-    FocusBox(
+    Pressable(
         { if (!active) nav.reset(tab.route) }, modifier,
+        shape = Radius.FULL, fill = if (active) scheme.primary else Color.Transparent,
         label = tab.label, state = if (active) "Selected" else null, selected = active,
         // A remote that has just chosen a tab stays on it, one press from what's below. Home has its
         // own first focus on Play. Elsewhere nothing would have focus, and the next press would land on Home.
-        requestFocus = active && tab.route != Route.Home && LocalMetrics.current.tv,
-        focusKey = "tab-${tab.label}", filled = if (active) scheme.primary else androidx.compose.ui.graphics.Color.Transparent, shape = Radius.FULL,
+        requestFocus = active && tab.route != Route.Home && metrics.tv,
+        focusKey = "tab-${tab.label}",
     ) {
         Row(
-            Modifier.padding(horizontal = if (wide) Space.S5 else Space.S4, vertical = Space.S3),
+            Modifier.padding(horizontal = if (wide) metrics.u(20) else metrics.u(16), vertical = metrics.u(12)),
             verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(Space.S2),
+            horizontalArrangement = Arrangement.spacedBy(metrics.u(8)),
         ) {
-            Icon(tab.icon, contentDescription = null, tint = ink)
-            if (wide) Text(tab.label, color = ink, style = MaterialTheme.typography.labelLarge)
+            if (tab.icon != null) {
+                Icon(tab.icon, contentDescription = null, tint = ink, modifier = Modifier.size(metrics.u(24)))
+            } else {
+                val me = nav.me
+                Avatar(if (me == null) "?" else avatarName(me.displayName, me.name), metrics.u(28))
+            }
+            if (wide) Text(tab.label, color = ink, style = MaterialTheme.typography.label)
         }
     }
 }
 
-// Home, Search and Profile. A phone has them in a floating pill at the bottom, within reach of a
+// Home, Search and You. A phone has them in a floating pill at the bottom, within reach of a
 // thumb. A TV has them along the top, where up from the first row gets to them.
 @Composable
 fun Shell(nav: Nav, content: @Composable () -> Unit) {
     val metrics = LocalMetrics.current
+    // Whose avatar the You tab shows, when the app opened already signed in some other way.
+    LaunchedEffect(Unit) {
+        if (nav.me == null) nav.me = runCatching { nav.app.api.status().user }.getOrNull()
+    }
     Screen {
         if (metrics.tv) {
             Column(Modifier.fillMaxSize()) {
+                // docs/APP-DESIGN.md, "On a TV": pills along the top, 24 units down. Up from the first row reaches them.
                 Row(
-                    Modifier.fillMaxWidth().padding(start = metrics.gutter, end = metrics.gutter, top = metrics.edge, bottom = Space.S2).remoteRow(),
-                    horizontalArrangement = Arrangement.spacedBy(Space.S3),
+                    Modifier.fillMaxWidth().padding(start = metrics.gutter, end = metrics.gutter, top = metrics.u(24), bottom = metrics.u(16)).remoteRow(),
+                    horizontalArrangement = Arrangement.spacedBy(metrics.u(12)),
                 ) {
                     TABS.forEach { TabButton(nav, it, wide = true) }
                     if (nav.hasGuide) {
-                        FocusBox({ nav.push(Route.Page(GUIDE_PATH)) }, focusKey = "tab-guide", shape = Radius.FULL) {
+                        Pressable({ nav.push(Route.Page(GUIDE_PATH)) }, focusKey = "tab-guide", shape = Radius.FULL, label = "TV guide") {
                             Row(
-                                Modifier.padding(horizontal = Space.S5, vertical = Space.S3),
+                                Modifier.padding(horizontal = metrics.u(20), vertical = metrics.u(12)),
                                 verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(Space.S2),
+                                horizontalArrangement = Arrangement.spacedBy(metrics.u(8)),
                             ) {
-                                Icon(Icons.Filled.DateRange, contentDescription = null, tint = MaterialTheme.colorScheme.onSurface)
-                                Text("TV guide", color = MaterialTheme.colorScheme.onSurface, style = MaterialTheme.typography.labelLarge)
+                                Icon(Icons.Filled.DateRange, contentDescription = null, tint = MaterialTheme.colorScheme.onSurface, modifier = Modifier.size(metrics.u(24)))
+                                Text("TV guide", color = MaterialTheme.colorScheme.onSurface, style = MaterialTheme.typography.label)
                             }
                         }
                     }
@@ -271,7 +284,7 @@ fun ProfileScreen(nav: Nav, s: Map<String, String>) {
             .padding(bottom = LocalBottomRoom.current),
         verticalArrangement = Arrangement.spacedBy(Space.S3),
     ) {
-        Heading("Profile")
+        Heading("You")
         ErrorText(nav.notice)
         if (who.isNotEmpty()) Secondary("Signed in as $who")
         if (server != null) {

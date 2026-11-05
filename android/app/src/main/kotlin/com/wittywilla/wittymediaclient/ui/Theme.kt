@@ -14,7 +14,6 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.Dp
-import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.graphics.toColorInt
@@ -89,23 +88,33 @@ object Radius {
     val FULL = RoundedCornerShape(percent = 50) // pills
 }
 
-// What differs between a phone in the hand and a TV across the room: the ten-foot rules.
+// What differs between a phone in the hand and a TV across the room: the ten-foot rules. A TV's sizes
+// in docs/APP-DESIGN.md are TV units, half a dp each here (960x540 dp), so one layout fits both TVs.
 data class Metrics(
     val tv: Boolean,
     val gutter: Dp,
     val edge: Dp,
     val cardWidth: Dp,
     val minTarget: Dp,
-    val textScale: Float,
     val focusRing: Dp = 3.dp,
     val focusScale: Float = 1f,
+    // dp in one of the page's units: 1 on a phone or tablet, 0.5 on a TV.
+    val unit: Float = 1f,
+    val tablet: Boolean = false,
 )
 
-val PhoneMetrics = Metrics(tv = false, gutter = Space.S4, edge = Space.S2, cardWidth = 124.dp, minTarget = 44.dp, textScale = 1f)
-val TabletMetrics = PhoneMetrics.copy(gutter = Space.S8, cardWidth = 148.dp)
+// A size from the page: points on a phone or tablet, TV units on a TV.
+fun Metrics.u(size: Number): Dp = (size.toFloat() * unit).dp
 
-// A TV may crop its picture's edge, so the margins are wide; the base text grows by a quarter.
-val TvMetrics = Metrics(tv = true, gutter = 58.dp, edge = 27.dp, cardWidth = 168.dp, minTarget = 48.dp, textScale = 1.25f, focusScale = 1.05f)
+val PhoneMetrics = Metrics(tv = false, gutter = Space.S4, edge = Space.S2, cardWidth = 124.dp, minTarget = 44.dp)
+val TabletMetrics = PhoneMetrics.copy(gutter = Space.S8, cardWidth = 148.dp, tablet = true)
+
+// A TV may crop its picture's edge, so the margins are wide: Apple TV's safe area, 90 units.
+// Focus is a 4-unit ring 4 units out, and 1.06 larger.
+val TvMetrics = Metrics(
+    tv = true, gutter = 45.dp, edge = 27.dp, cardWidth = 168.dp, minTarget = 24.dp,
+    focusRing = 2.dp, focusScale = 1.06f, unit = 0.5f,
+)
 
 val LocalMetrics = compositionLocalOf { PhoneMetrics }
 
@@ -117,28 +126,52 @@ val LocalExtraColours = compositionLocalOf { ExtraColours(Color.Gray, Color.Whit
 // When the system says to keep animation down, nothing moves unless the viewer moves it.
 val LocalReduceMotion = compositionLocalOf { false }
 
-private fun scaled(size: Int, scale: Float): TextUnit = (size * scale).sp
-
-private fun typeScale(s: Float, sans: TextStyle = TextStyle.Default) = Typography(
-    displayLarge = sans.copy(fontSize = scaled(48, s), fontWeight = FontWeight.Bold),
-    displayMedium = sans.copy(fontSize = scaled(38, s), fontWeight = FontWeight.Bold),
-    displaySmall = sans.copy(fontSize = scaled(30, s), fontWeight = FontWeight.Bold),
-    headlineLarge = sans.copy(fontSize = scaled(30, s), fontWeight = FontWeight.SemiBold),
-    headlineMedium = sans.copy(fontSize = scaled(24, s), fontWeight = FontWeight.SemiBold),
-    headlineSmall = sans.copy(fontSize = scaled(20, s), fontWeight = FontWeight.SemiBold),
-    titleLarge = sans.copy(fontSize = scaled(20, s), fontWeight = FontWeight.SemiBold),
-    titleMedium = sans.copy(fontSize = scaled(17, s), fontWeight = FontWeight.SemiBold),
-    titleSmall = sans.copy(fontSize = scaled(14, s), fontWeight = FontWeight.Medium),
-    bodyLarge = sans.copy(fontSize = scaled(15, s), lineHeight = scaled(22, s)),
-    bodyMedium = sans.copy(fontSize = scaled(13, s), lineHeight = scaled(19, s)),
-    bodySmall = sans.copy(fontSize = scaled(12, s), lineHeight = scaled(17, s)),
-    labelLarge = sans.copy(fontSize = scaled(14, s), fontWeight = FontWeight.Medium),
-    labelMedium = sans.copy(fontSize = scaled(13, s), fontWeight = FontWeight.Medium),
-    labelSmall = sans.copy(fontSize = scaled(11, s), fontWeight = FontWeight.Medium),
+// docs/APP-DESIGN.md, "Type": the phone's sizes in sp, and a TV's in TV units. Sizes it doesn't name,
+// such as a poster's title, follow the nearest one that it does.
+private class TypeSizes(
+    val display: Float, val title: Float, val headline: Float, val section: Float,
+    val body: Float, val label: Float, val secondary: Float, val caption: Float, val scale: Float,
 )
 
+private val PhoneType = TypeSizes(30f, 24f, 20f, 17f, 15f, 15f, 13f, 12f, scale = 1f)
+private val TvType = TypeSizes(48f, 38f, 30f, 26f, 24f, 24f, 20f, 18f, scale = 0.5f)
+
+private fun typeScale(t: TypeSizes, sans: TextStyle = TextStyle.Default): Typography {
+    fun sp(size: Float) = (size * t.scale).sp
+    fun lines(size: Float) = (size * t.scale * LINE_HEIGHT).sp
+    return Typography(
+        displayLarge = sans.copy(fontSize = sp(t.display * 1.6f), fontWeight = FontWeight.Bold),
+        displayMedium = sans.copy(fontSize = sp(t.display * 1.27f), fontWeight = FontWeight.Bold),
+        displaySmall = sans.copy(fontSize = sp(t.display), lineHeight = lines(t.display), fontWeight = FontWeight.Bold),
+        headlineLarge = sans.copy(fontSize = sp(t.display), fontWeight = FontWeight.SemiBold),
+        headlineMedium = sans.copy(fontSize = sp(t.title), lineHeight = lines(t.title), fontWeight = FontWeight.SemiBold),
+        headlineSmall = sans.copy(fontSize = sp(t.headline), lineHeight = lines(t.headline), fontWeight = FontWeight.SemiBold),
+        titleLarge = sans.copy(fontSize = sp(t.headline), fontWeight = FontWeight.SemiBold),
+        titleMedium = sans.copy(fontSize = sp(t.section), fontWeight = FontWeight.SemiBold),
+        titleSmall = sans.copy(fontSize = sp(t.label - 1), fontWeight = FontWeight.Medium),
+        bodyLarge = sans.copy(fontSize = sp(t.body), lineHeight = lines(t.body)),
+        bodyMedium = sans.copy(fontSize = sp(t.secondary), lineHeight = lines(t.secondary)),
+        bodySmall = sans.copy(fontSize = sp(t.caption), lineHeight = lines(t.caption)),
+        labelLarge = sans.copy(fontSize = sp(t.label), fontWeight = FontWeight.Medium),
+        labelMedium = sans.copy(fontSize = sp(t.secondary), fontWeight = FontWeight.Medium),
+        labelSmall = sans.copy(fontSize = sp(t.caption), lineHeight = lines(t.caption), fontWeight = FontWeight.Medium),
+    )
+}
+
+private const val LINE_HEIGHT = 1.45f
+
+// The page's names for the type, so screens say which one they mean.
+val Typography.display get() = displaySmall
+val Typography.title get() = headlineMedium
+val Typography.headline get() = headlineSmall
+val Typography.section get() = titleMedium
+val Typography.body get() = bodyLarge
+val Typography.label get() = labelLarge
+val Typography.secondary get() = bodyMedium
+val Typography.caption get() = labelSmall
+
 @Composable
-fun WittyTheme(theme: ThemeData, metrics: Metrics, reduceMotion: Boolean, content: @Composable () -> Unit) {
+fun WittyTheme(theme: ThemeData, metrics: Metrics, reduceMotion: Boolean, words: Map<String, String>, content: @Composable () -> Unit) {
     val t = theme.colours
     val scheme = remember(theme) {
         if (theme.scheme == "light") {
@@ -156,8 +189,10 @@ fun WittyTheme(theme: ThemeData, metrics: Metrics, reduceMotion: Boolean, conten
         }
     }
     val extra = remember(theme) { ExtraColours(c(t.textHint), c(t.accentText), c(t.ok)) }
-    val type = remember(metrics.textScale) { typeScale(metrics.textScale) }
-    CompositionLocalProvider(LocalMetrics provides metrics, LocalExtraColours provides extra, LocalReduceMotion provides reduceMotion) {
+    val type = remember(metrics.tv) { typeScale(if (metrics.tv) TvType else PhoneType) }
+    CompositionLocalProvider(
+        LocalMetrics provides metrics, LocalExtraColours provides extra, LocalReduceMotion provides reduceMotion, LocalWords provides words,
+    ) {
         MaterialTheme(colorScheme = scheme, typography = type, content = content)
     }
 }
