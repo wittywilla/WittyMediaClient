@@ -5,6 +5,10 @@ What changed in WittyMediaClient, newest first. What changed before it had a rep
 
 ## Unreleased
 
+## 0.4.1
+
+- Android phones and tablets look like the website, and the first screen after signing in is drawn in the current design on every app.
+
 ## 0.4.0 (2026-11-05)
 
 - **Desktop: what plays keeps playing behind other windows.** WittyTV, films and music no longer slow or stop when the
