@@ -22,6 +22,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.imePadding
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawingPadding
 import androidx.compose.foundation.layout.size
@@ -278,7 +279,10 @@ fun ServerCard(
                 Text(detail, color = scheme.onSurfaceVariant, style = MaterialTheme.typography.secondary, maxLines = 1, overflow = TextOverflow.Ellipsis)
             }
             if (connecting) Spinner(hint, metrics.u(if (metrics.tv) 30 else 20))
-            else Icon(Symbols.Next, contentDescription = null, tint = hint, modifier = Modifier.size(metrics.u(if (metrics.tv) 44 else 24)))
+            // On a TV, Apple's footnote chevron: 25 tall, its tip 4 inside the padding. Ours has more room
+            // round it in its box, so the box is nudged out by that much.
+            else if (metrics.tv) Icon(Symbols.Next, contentDescription = null, tint = hint, modifier = Modifier.offset(x = metrics.u(14)).size(metrics.u(52)))
+            else Icon(Symbols.Next, contentDescription = null, tint = hint, modifier = Modifier.size(metrics.u(24)))
         }
     }
 }
@@ -422,7 +426,7 @@ private fun PadKey(key: Int, keys: List<FocusRequester>, requestFocus: Boolean, 
             Modifier.fillMaxWidth().height(metrics.u(if (metrics.tv) 96 else 64)).background(if (lit) scheme.onBackground else scheme.surfaceVariant),
             contentAlignment = Alignment.Center,
         ) {
-            if (delete) Icon(Symbols.DeleteDigit, contentDescription = null, tint = if (lit) ink else scheme.onSurfaceVariant, modifier = Modifier.size(metrics.u(if (metrics.tv) 52 else 26)))
+            if (delete) Icon(Symbols.DeleteDigit, contentDescription = null, tint = if (lit) ink else scheme.onSurfaceVariant, modifier = Modifier.size(metrics.u(if (metrics.tv) 64 else 26)))
             else Text(PAD_KEYS[key], color = ink, style = MaterialTheme.typography.headline)
         }
     }

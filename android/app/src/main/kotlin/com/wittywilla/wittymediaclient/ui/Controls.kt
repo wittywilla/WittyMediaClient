@@ -409,7 +409,6 @@ private fun TvTextField(
     Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(metrics.u(8))) {
         Text(
             label, color = if (isError) scheme.error else scheme.onSurfaceVariant, style = MaterialTheme.typography.secondary, maxLines = 1,
-            modifier = Modifier.padding(start = metrics.u(4)),
         )
         Box(
             Modifier

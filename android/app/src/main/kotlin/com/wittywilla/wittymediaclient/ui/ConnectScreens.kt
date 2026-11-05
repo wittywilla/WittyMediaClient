@@ -354,16 +354,14 @@ fun CodeScreen(nav: Nav, s: Map<String, String>, server: SavedServer) {
                 // Several servers can look alike in the list: this says which one the code goes to.
                 ServerPill(server.name.ifEmpty { "WittyMediaServer" }, nav.brandLogo, if (metrics.tv) Modifier else Modifier.align(Alignment.CenterHorizontally))
                 CodeBoxes(entry.digits, entry.busy, wrong, if (metrics.tv) Modifier else Modifier.align(Alignment.CenterHorizontally))
-                // Room is kept for the message, or the keys would move under a finger as it comes and goes.
-                Box(Modifier.heightIn(min = metrics.u(24))) {
-                    if (entry.busy) {
-                        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(metrics.u(8))) {
-                            Spinner(MaterialTheme.colorScheme.onSurfaceVariant, metrics.u(if (metrics.tv) 30 else 16))
-                            Text(s["connecting"].orEmpty(), color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.secondary)
-                        }
-                    } else {
-                        Problem(problem, Modifier.fillMaxWidth())
+                // Only there while there's something to say, as on Apple TV, so the words stay centred against the pad.
+                if (entry.busy) {
+                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(metrics.u(8))) {
+                        Spinner(MaterialTheme.colorScheme.onSurfaceVariant, metrics.u(if (metrics.tv) 30 else 16))
+                        Text(s["connecting"].orEmpty(), color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.secondary)
                     }
+                } else {
+                    Problem(problem, Modifier.fillMaxWidth())
                 }
             },
             actions = {
