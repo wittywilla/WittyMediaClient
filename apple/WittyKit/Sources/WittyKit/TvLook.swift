@@ -229,7 +229,17 @@ public enum TvLook {
     }
 }
 
-/// GET /me/ui. It holds other choices too, which this leaves alone.
+/// GET /me/ui. It holds other choices too, which this leaves alone. Each part is read on its own, so one
+/// written by an older or newer website can't spoil the rest.
 struct AccountChoices: Decodable {
     let tvLook: TvSaved?
+    let customTheme: ThemeMakerInput?
+
+    enum CodingKeys: String, CodingKey { case tvLook, customTheme }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        tvLook = try? c.decodeIfPresent(TvSaved.self, forKey: .tvLook)
+        customTheme = try? c.decodeIfPresent(ThemeMakerInput.self, forKey: .customTheme)
+    }
 }

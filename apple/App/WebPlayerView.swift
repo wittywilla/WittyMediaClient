@@ -162,7 +162,7 @@ struct WebPlayerView: View {
             if failed || client.token.isEmpty {
                 ProblemView(words: "This page couldn't open. Check the server is on, then try again.", retry: { failed = false }, back: leave)
             } else if let url = client.mediaURL(path) {
-                WebPlayerPage(base: client.base, token: client.token, url: url, keptToGames: keptToGames, theme: model.themeChoice, onLeave: leave, onFail: { failed = true }, onSaved: { saved = $0.lastPathComponent })
+                WebPlayerPage(base: client.base, token: client.token, url: url, keptToGames: keptToGames, theme: model.themeChoice == "custom" ? "" : model.themeChoice, onLeave: leave, onFail: { failed = true }, onSaved: { saved = $0.lastPathComponent })
                     .ignoresSafeArea(.container, edges: .bottom)
             } else {
                 ProblemView(words: "The server sent an address that can't be used.", back: leave)

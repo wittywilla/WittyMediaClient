@@ -18,12 +18,15 @@ enum Tokens {
         static let s16: CGFloat = 64
     }
 
+    /// Corners follow the theme in use (its `radius`): docs/APP-DESIGN.md, Themes. Set by the model as the
+    /// theme changes; everything that draws with them also reads the palette, so it's drawn again.
     enum Radius {
-        static let xs: CGFloat = 4
-        static let sm: CGFloat = 6
-        static let md: CGFloat = 10
-        static let lg: CGFloat = 14
-        static let xl: CGFloat = 20
+        static var theme: CGFloat = 10
+        static var xs: CGFloat { max(2, theme - 6) }
+        static var sm: CGFloat { max(2, theme - 4) }
+        static var md: CGFloat { theme }
+        static var lg: CGFloat { theme + 4 }
+        static var xl: CGFloat { theme + 10 }
     }
 
     enum Motion {
@@ -85,29 +88,37 @@ extension Font {
     static let wmLabel = Font.subheadline.weight(.medium)
 }
 
-/// The theme's colours, ready to use. Plain data until now, in shared/data/themes.json.
+/// The theme in use, translated from the server's tokens (WittyKit's `ThemeTranslator`), as colours to draw with.
 struct Palette {
-    var background, panel, card, border, text, textSecondary, textHint, accent, onAccent, accentText, danger, ok: Color
+    var background, panel, card, raised, border, control, text, textSecondary, textHint: Color
+    var accent, accentPressed, onAccent, accentText, danger, ok, warn, scrim: Color
+    var isLight: Bool
 
-    init(_ colours: SharedData.ThemeColours?) {
-        func colour(_ text: String?, _ fallback: String) -> Color { Color(hex: text ?? fallback) }
-        background = colour(colours?.background, "#101114")
-        panel = colour(colours?.panel, "#17191e")
-        card = colour(colours?.card, "#20232a")
-        border = colour(colours?.border, "#2b2f38")
-        self.text = colour(colours?.text, "#ececf1")
-        textSecondary = colour(colours?.textSecondary, "#a8adb9")
-        textHint = colour(colours?.textHint, "#858a99")
-        accent = colour(colours?.accent, "#e4e6eb")
-        onAccent = colour(colours?.onAccent, "#111214")
-        accentText = colour(colours?.accentText, "#e4e6eb")
-        danger = colour(colours?.danger, "#ff5c6c")
-        ok = colour(colours?.ok, "#3ad29f")
+    init(_ theme: AppTheme) {
+        func colour(_ c: ThemeColour) -> Color { Color(.sRGB, red: c.red, green: c.green, blue: c.blue, opacity: c.alpha) }
+        background = colour(theme.background)
+        panel = colour(theme.panel)
+        card = colour(theme.card)
+        raised = colour(theme.raised)
+        border = colour(theme.border)
+        control = colour(theme.control)
+        self.text = colour(theme.text)
+        textSecondary = colour(theme.textSecondary)
+        textHint = colour(theme.textHint)
+        accent = colour(theme.accent)
+        accentPressed = colour(theme.accentPressed)
+        onAccent = colour(theme.onAccent)
+        accentText = colour(theme.accentText)
+        danger = colour(theme.danger)
+        ok = colour(theme.ok)
+        warn = colour(theme.warn)
+        scrim = colour(theme.scrim)
+        isLight = theme.isLight
     }
 }
 
 private struct PaletteKey: EnvironmentKey {
-    static let defaultValue = Palette(nil)
+    static let defaultValue = Palette(SharedData.appTheme("default"))
 }
 
 private struct ClientKey: EnvironmentKey {

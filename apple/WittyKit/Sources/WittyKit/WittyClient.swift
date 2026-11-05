@@ -402,6 +402,22 @@ public final class WittyClient: @unchecked Sendable {
         _ = try await call("POST", "/logout", body: Data("{}".utf8))
     }
 
+    // MARK: Themes
+
+    /// Every theme the server has, with preview colours, and which is its default. Anyone may ask.
+    public func themeList() async throws -> ThemeList { try await get("/themes") }
+
+    /// One theme as data: docs/APP-DESIGN.md, Themes.
+    public func themeTokens(_ id: String) async throws -> ThemeTokens {
+        try await get("/themes/\(WittyClient.pathPart(id))/tokens.json")
+    }
+
+    /// The look this person made with the website's theme maker, if they did.
+    public func customTheme() async throws -> ThemeMakerInput? {
+        let choices: AccountChoices = try await get("/me/ui")
+        return choices.customTheme
+    }
+
     // MARK: Your own account
 
     /// Only what isn't nil changes. Kids and Guest profiles may change only `showUsername`.

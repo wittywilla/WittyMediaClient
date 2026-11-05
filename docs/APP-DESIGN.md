@@ -305,6 +305,9 @@ keeping its one-line descriptions under each row, which the apps show too for th
 | Destructive | `card` fill, `danger` words | Sign out, forget, remove |
 
 Full width in a column on the sign-in screens, 52 high, words centred, an optional leading icon 8 before the words.
+**On a TV every button is a pill** (fully round), 66 high, the height of the systems' own text fields, with 32
+inside, so a field and its buttons look like one family; a Quiet one is 56 high and takes the pill only as its focus
+ring. Number pad keys stay rounded squares, as the systems' keyboards have them. No square-cornered button on a TV.
 While busy, the words are replaced by a spinner in the words' colour and the button keeps its size; it stays
 focusable on a TV. Disabled only where pressing would do harm, at 55% opacity.
 

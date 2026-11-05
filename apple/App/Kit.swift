@@ -151,10 +151,13 @@ private struct ActionBody<Label: View>: View {
                 .foregroundStyle(ink)
                 .tint(ink)
                 .multilineTextAlignment(.center)
-                .padding(.horizontal, kind == .quiet ? Tokens.Space.s2 : (pill ? Tokens.Space.s5 : Tokens.Space.s4))
+                .padding(.horizontal, kind == .quiet ? (metrics.tv ? Tokens.Space.s4 : Tokens.Space.s2)
+                                                     : (metrics.tv ? Tokens.Space.s8 : (pill ? Tokens.Space.s5 : Tokens.Space.s4)))
                 .padding(.vertical, Tokens.Space.s2)
-                .frame(maxWidth: wide ? .infinity : nil, minHeight: tall && !metrics.tv ? 52 : metrics.minTarget),
-            pressed: pressed, fill: fill, radius: pill ? 999 : Tokens.Radius.md
+                // On a TV every button is a pill as tall as the system's text field, so a field and its buttons
+                // are one family: docs/APP-DESIGN.md, Buttons.
+                .frame(maxWidth: wide ? .infinity : nil, minHeight: metrics.tv ? (kind == .quiet ? 56 : 66) : (tall ? 52 : metrics.minTarget)),
+            pressed: pressed, fill: fill, radius: pill || metrics.tv ? 999 : Tokens.Radius.md
         )
         .accessibilityAddTraits(selected ? [.isSelected] : [])
     }

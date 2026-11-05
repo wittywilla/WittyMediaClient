@@ -36,6 +36,20 @@ enum SharedData {
     /// Only that theme, with no stand-in.
     static func exactTheme(_ id: String?) -> Theme? { themeFile?.themes.first { $0.id == id } }
 
+    /// A built-in theme, through the same translation as the server's tokens, so the first screen and a server
+    /// that can't be reached look the same as once the server answers.
+    static func appTheme(_ id: String?) -> AppTheme {
+        guard let theme = exactTheme(id) ?? theme(id) else { return ThemeTranslator.translate(ThemeTokens(id: "default", colors: ThemeTranslator.witty)) }
+        let c = theme.colours
+        var colors = ["bg": c.background, "bg-2": c.panel, "bg-3": c.card, "bg-4": c.border, "fg": c.text,
+                      "fg-2": c.textSecondary, "accent": c.accent, "accent-fg": c.onAccent, "danger": c.danger]
+        colors["fg-3"] = c.textHint
+        colors["accent-text"] = c.accentText
+        colors["ok"] = c.ok
+        return ThemeTranslator.translate(ThemeTokens(id: theme.id, name: theme.name, scheme: theme.scheme, colors: colors,
+                                                     lengths: ["radius": 10]))
+    }
+
     /// A theme uploaded to the server has no entry here, and gets the default look.
     static func theme(_ id: String?) -> Theme? {
         guard let file = themeFile else { return nil }
@@ -144,7 +158,18 @@ final class AppModel: ObservableObject {
     /// light or dark, anything else is a theme's id. Kept on the device, as the web keeps it per browser.
     @Published private(set) var themeChoice = ""
     /// The device's own light or dark, which the automatic theme follows.
-    @Published var systemScheme: ColorScheme = .dark
+    @Published var systemScheme: ColorScheme = .dark {
+        didSet { if themeChoice == "auto" && oldValue != systemScheme { refreshTheme() } }
+    }
+    /// The theme in use, translated from the server's tokens: docs/APP-DESIGN.md, Themes.
+    @Published private(set) var appTheme: AppTheme = SharedData.appTheme("default") {
+        didSet { Tokens.Radius.theme = CGFloat(appTheme.radius) }
+    }
+    /// Every theme the server has, once asked.
+    @Published private(set) var themeList: ThemeList?
+    /// The look this person made with the website's theme maker.
+    @Published private(set) var customTheme: ThemeMakerInput?
+    private var themeFetch: Task<Void, Never>?
     /// The owner's own name and logo for the server, from `/status`, shown on the sign-in screens.
     @Published var brandName = ""
     @Published var brandLogo = ""
@@ -229,15 +254,58 @@ final class AppModel: ObservableObject {
         switch themeChoice {
         case "": return themeId
         case "auto": return systemScheme == .light ? "light" : "default"
-        default: return SharedData.exactTheme(themeChoice) == nil ? themeId : themeChoice
+        case "custom": return customTheme == nil ? themeId : "custom"
+        default: return themeChoice
         }
     }
 
-    var palette: Palette { Palette(SharedData.theme(effectiveThemeId)?.colours) }
+    var palette: Palette { Palette(appTheme) }
 
     func chooseTheme(_ id: String) {
         themeChoice = id
         defaults.set(id, forKey: "theme." + client.base)
+        refreshTheme()
+    }
+
+    private func preview(_ id: String) -> ThemeList.ThemeSummary.Preview? {
+        themeList?.themes.first { $0.id == id }?.preview
+    }
+
+    private func tokensKey(_ id: String) -> String { "themeTokens|\(client.base)|\(id)" }
+
+    /// The theme in use, at once from what this device kept (or the built-in copy), then from the server.
+    func refreshTheme() {
+        let id = effectiveThemeId ?? "default"
+        if id == "custom", let made = customTheme {
+            appTheme = ThemeTranslator.translate(made: made)
+            return
+        }
+        if let data = defaults.data(forKey: tokensKey(id)), let kept = try? JSONDecoder().decode(ThemeTokens.self, from: data) {
+            appTheme = ThemeTranslator.translate(kept, preview: preview(id))
+        } else if SharedData.exactTheme(id) != nil {
+            appTheme = SharedData.appTheme(id)
+        }
+        let asking = client
+        guard !asking.base.isEmpty else { return }
+        themeFetch?.cancel()
+        themeFetch = Task { [weak self] in
+            guard let tokens = try? await asking.themeTokens(id), !Task.isCancelled, let self,
+                  self.client.base == asking.base, (self.effectiveThemeId ?? "default") == id else { return }
+            if let data = try? JSONEncoder().encode(tokens) { self.defaults.set(data, forKey: self.tokensKey(id)) }
+            self.appTheme = ThemeTranslator.translate(tokens, preview: self.preview(id))
+        }
+    }
+
+    /// What themes the server has, and the person's own, once signed in.
+    func loadThemes() async {
+        let asking = client
+        async let list = try? asking.themeList()
+        async let made = try? asking.customTheme()
+        let (l, m) = await (list, made)
+        guard client.base == asking.base else { return }
+        if let l { themeList = l }
+        customTheme = m ?? nil
+        refreshTheme()
     }
 
     /// The account as the server has it now, after a change from You.
@@ -253,14 +321,16 @@ final class AppModel: ObservableObject {
 
     /// The app's theme, for the WittyTV themes that follow it.
     var tvAppColours: TvAppColours {
-        guard let c = SharedData.theme(effectiveThemeId)?.colours else { return .fallback }
-        return TvAppColours(bg: c.background, bg2: c.panel, bg3: c.card, bg4: c.border, fg: c.text, fg2: c.textSecondary,
-                            accent: c.accent, accentText: c.accentText ?? c.accent, accentFg: c.onAccent, border: c.border)
+        let t = appTheme
+        func hex(_ c: ThemeColour) -> String { String(c.over(t.background).hex.prefix(7)) }
+        return TvAppColours(bg: hex(t.background), bg2: hex(t.panel), bg3: hex(t.card), bg4: hex(t.raised), fg: hex(t.text),
+                            fg2: hex(t.textSecondary), accent: hex(t.accent), accentText: hex(t.accentText),
+                            accentFg: hex(t.onAccent), border: hex(t.raised))
     }
     /// Nothing for the automatic theme, so the device's own light or dark comes through to be followed.
     var scheme: ColorScheme? {
         if themeChoice == "auto" { return nil }
-        return SharedData.theme(effectiveThemeId)?.scheme == "light" ? .light : .dark
+        return appTheme.isLight ? .light : .dark
     }
 
     /// Only for a server whose identity has just been checked.
@@ -499,6 +569,7 @@ final class AppModel: ObservableObject {
         paths = [:]
         tab = .home
         stage = .browsing
+        Task { await loadThemes() }
         if user == nil {
             Task { self.user = try? await client.status().user }
         }
@@ -530,6 +601,9 @@ final class AppModel: ObservableObject {
         client = WittyClient(base: "")
         themeId = nil
         themeChoice = ""
+        themeList = nil
+        customTheme = nil
+        appTheme = SharedData.appTheme("default")
         brandName = ""
         brandLogo = ""
         stage = .connect(message: "")
@@ -539,6 +613,7 @@ final class AppModel: ObservableObject {
     private func learn(_ status: ServerStatus) {
         themeId = status.theme
         themeChoice = defaults.string(forKey: "theme." + client.base) ?? ""
+        refreshTheme()
         brandName = PlainWords.clean(status.brandName ?? "", limit: 60)
         brandLogo = PlainWords.clean(status.brandLogo ?? "", limit: 64)
         rememberLook(of: status)
