@@ -35,6 +35,22 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
+import com.wittywilla.wittymediaclient.net.isListening
+import com.wittywilla.wittymediaclient.net.hasOwnScreen
+import kotlinx.coroutines.launch
+import androidx.compose.ui.draw.drawWithContent
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.graphics.CompositingStrategy
+import androidx.compose.ui.graphics.BlendMode
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.IntOffset
+import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.layout.positionInParent
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusProperties
@@ -56,17 +72,11 @@ import kotlinx.coroutines.CancellationException
 // (docs/APP-DESIGN.md, On a TV). Apple TV has the same (apple/App/TvTabs.swift), at the same sizes in TV units,
 // with the same focus and the same Back.
 
-private class TvTab(val route: Route, val word: String, val icon: ImageVector?)
+// A pill in the bar: the tab it opens, its name and its icon. You has no icon: it shows the person's avatar and name.
+private class TvTab(val route: Route, val title: String, val icon: ImageVector?)
 
-// In the bar's order. You has no icon: it shows the person's avatar and name.
-private val TV_TABS = listOf(
-    TvTab(Route.Home, "homeTab", Symbols.Home),
-    TvTab(Route.Libraries, "librariesTab", Symbols.Libraries),
-    TvTab(Route.Games, "gamesTab", Symbols.Games),
-    TvTab(Route.LiveTv, "liveTvTab", Symbols.LiveTv),
-    TvTab(Route.Search, "searchTab", Symbols.Search),
-    TvTab(Route.Profile, "youTab", null),
-)
+// The bar's own tabs, in its order. Any libraries added to the top menu follow Search; You is on its own.
+private val FIXED_TABS = listOf(Route.Home, Route.Libraries, Route.Games, Route.LiveTv, Route.Search)
 
 // The tabs Back leaves for Home, rather than leaving the app.
 val TABS_BESIDE_HOME = setOf(Route.Libraries, Route.Games, Route.LiveTv, Route.Search, Route.Profile)
@@ -74,13 +84,19 @@ val TABS_BESIDE_HOME = setOf(Route.Libraries, Route.Games, Route.LiveTv, Route.S
 // You's avatar with 12 above and below it, the same for every pill.
 private const val PILL_HEIGHT = 52
 
+// How far the pills that don't fit fade out, before the space in front of You.
+private const val FADE = 48
+
 // Where focus is between the bar and the tab below it, for a page in a tab that has its own idea of Back.
-class TvBar(private val nav: Nav, private val requesters: Map<Route, FocusRequester>) {
+class TvBar(private val nav: Nav) {
     var inBar by mutableStateOf(false)
+    private val requesters = HashMap<String, FocusRequester>()
+
+    fun requester(route: Route): FocusRequester = requesters.getOrPut(route.key) { FocusRequester() }
 
     // Up to the chosen tab's pill.
     fun focusPill() {
-        runCatching { requesters.getValue(nav.current).requestFocus() }
+        runCatching { requester(nav.current).requestFocus() }
     }
 }
 
@@ -90,10 +106,18 @@ val LocalTvBar = compositionLocalOf<TvBar?> { null }
 // pill; Back on Home's pill leaves the app, as the system does.
 @Composable
 fun TvShell(nav: Nav, content: @Composable () -> Unit) {
-    val requesters = remember { TV_TABS.associate { it.route to FocusRequester() } }
-    val bar = remember { TvBar(nav, requesters) }
-    val onTab = nav.stack.size == 1 && requesters.containsKey(nav.current)
-    BackHandler(enabled = onTab && !(bar.inBar && nav.current == Route.Home)) {
+    val bar = remember { TvBar(nav) }
+    var libraries by remember { mutableStateOf(nav.remembered<List<Library>>("libraries").orEmpty()) }
+    LaunchedEffect(nav.me?.name) {
+        nav.loadTopMenu()
+        runCatching { nav.app.api.libraries().distinctBy { it.id } }.getOrNull()?.let {
+            libraries = it
+            nav.remember("libraries", it)
+        }
+    }
+    val current = nav.current
+    val onTab = nav.stack.size == 1 && (current in FIXED_TABS || current == Route.Profile || current is Route.Pinned)
+    BackHandler(enabled = onTab && !(bar.inBar && current == Route.Home)) {
         if (!bar.inBar) {
             bar.focusPill()
         } else {
@@ -103,7 +127,7 @@ fun TvShell(nav: Nav, content: @Composable () -> Unit) {
         }
     }
     Column(Modifier.fillMaxSize()) {
-        TvTopBar(nav, requesters) { bar.inBar = it }
+        TvTopBar(nav, bar, libraries)
         Box(Modifier.weight(1f)) { CompositionLocalProvider(LocalTvBar provides bar) { content() } }
     }
 }
@@ -116,44 +140,98 @@ private fun PageInTab(nav: Nav, route: Route, path: String) {
     ServerPageScreen(nav, route, path, keptToGames = false, out = { bar?.focusPill() }, backEnabled = bar?.inBar != true)
 }
 
+// A library added to the top menu, as its tab: its own screen where the app has one, as Home opens it, else its page.
+@Composable
+fun PinnedLibraryScreen(nav: Nav, s: Map<String, String>, library: Library) {
+    when {
+        library.isListening -> ListeningLibraryScreen(nav, s, library)
+        library.hasOwnScreen -> LibraryScreen(nav, s, library)
+        else -> PageInTab(nav, Route.Pinned(library), library.pagePath())
+    }
+}
+
 private fun pillKey(route: Route) = "tab-${route.key}"
 
-// Pills the gutter in from the sides and 24 below the top of the picture's safe area, as on Apple TV: Home, Libraries,
-// Games, Live TV and Search from the left, You on its own at the right edge. Each keeps room for its ring round it, so
-// the pills themselves start at the gutter and sit 16 apart. Focus goes along the whole row, You last. Up from a tab
-// lands on that tab's pill, whichever pill happens to be above.
+// Pills the gutter in from the sides and 24 below the top of the picture's safe area, as on Apple TV. From the left:
+// Home, Libraries, Games, Live TV, Search and any libraries added to the top menu, which scroll sideways with focus when
+// they don't all fit, the focused one coming to the middle, and fade out before the space in front of You. On its own at
+// the right edge, never moving: You. Each pill keeps room for its ring round it, so the pills themselves start at the
+// gutter and sit 16 apart. Focus goes along the whole row, You last. Up from a tab lands on that tab's pill.
 @Composable
-private fun TvTopBar(nav: Nav, requesters: Map<Route, FocusRequester>, onFocus: (Boolean) -> Unit) {
+private fun TvTopBar(nav: Nav, bar: TvBar, libraries: List<Library>) {
     val metrics = LocalMetrics.current
+    val words = LocalWords.current
+    val reduce = LocalReduceMotion.current
     val ring = metrics.focusRing
+    val scroll = rememberScrollState()
+    val scope = rememberCoroutineScope()
+    var viewport by remember { mutableIntStateOf(0) }
+    val icons = listOf(Symbols.Home, Symbols.Libraries, Symbols.Games, Symbols.LiveTv, Symbols.Search)
+    val names = listOf("homeTab", "librariesTab", "gamesTab", "liveTvTab", "searchTab")
+    val left = FIXED_TABS.mapIndexed { i, route -> TvTab(route, words[names[i]].orEmpty(), icons[i]) } +
+        libraries.filter { it.id in nav.topMenu }.map { TvTab(Route.Pinned(it), it.name, it.barSymbol) }
     Row(
         Modifier
             .fillMaxWidth()
-            .padding(start = metrics.gutter - ring, end = metrics.gutter - ring, top = metrics.tvSafeEnds + metrics.u(24) - ring, bottom = metrics.u(16) - ring)
-            .focusProperties { onEnter = { requesters[nav.current]?.requestFocus() } }
-            .onFocusChanged { onFocus(it.hasFocus) }
+            .padding(top = metrics.tvSafeEnds + metrics.u(24) - ring * 2, bottom = metrics.u(16) - ring * 2)
+            .focusProperties { onEnter = { bar.requester(nav.current).requestFocus() } }
+            .onFocusChanged { bar.inBar = it.hasFocus }
             .focusGroup(),
         verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(metrics.u(16) - ring * 2),
     ) {
-        TV_TABS.forEach {
-            // Space, not a line, keeps You apart from the rest, at the right edge.
-            if (it.route == Route.Profile) Spacer(Modifier.weight(1f).widthIn(min = metrics.u(32)))
-            TvTabPill(nav, it, requesters.getValue(it.route))
+        Box(Modifier.weight(1f).onSizeChanged { viewport = it.width }.fadeEnd(metrics.u(FADE))) {
+            Row(
+                Modifier
+                    .horizontalScroll(scroll)
+                    .padding(start = metrics.gutter - ring, end = metrics.u(FADE) + ring)
+                    .padding(vertical = ring),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(metrics.u(16) - ring * 2),
+            ) {
+                left.forEach { tab ->
+                    var spot by remember(tab.route.key) { mutableStateOf(IntOffset.Zero) }
+                    TvTabPill(
+                        nav, tab, bar.requester(tab.route),
+                        Modifier
+                            .onGloballyPositioned { spot = IntOffset(it.positionInParent().x.toInt(), it.size.width) }
+                            .onFocusChanged {
+                                if (!it.isFocused) return@onFocusChanged
+                                // The focused pill comes to the middle, so it's never in the fade.
+                                val target = (spot.x + spot.y / 2 - viewport / 2).coerceIn(0, scroll.maxValue)
+                                scope.launch { if (reduce) scroll.scrollTo(target) else scroll.animateScrollTo(target) }
+                            },
+                    )
+                }
+            }
         }
+        // Space, not a line, keeps You apart from the rest: 32 from the edge of the pills on the left.
+        val you = TvTab(Route.Profile, words["youTab"].orEmpty(), null)
+        TvTabPill(
+            nav, you, bar.requester(you.route),
+            Modifier.padding(vertical = ring).padding(start = metrics.u(32) - ring, end = metrics.gutter - ring),
+        )
     }
 }
+
+// Fades what's drawn out over its last `width`, towards its end.
+private fun Modifier.fadeEnd(width: Dp): Modifier = graphicsLayer(compositingStrategy = CompositingStrategy.Offscreen)
+    .drawWithContent {
+        drawContent()
+        val fade = width.toPx()
+        drawRect(
+            Brush.horizontalGradient(listOf(Color.Black, Color.Transparent), startX = size.width - fade, endX = size.width),
+            blendMode = BlendMode.DstIn,
+        )
+    }
 
 // A tab's icon and name, or You's avatar and the person's name. The chosen one has the accent behind it and its words
 // in `accentText`; the others are `textSecondary`. Choosing one keeps focus on it, one press from what's below.
 @Composable
-private fun TvTabPill(nav: Nav, tab: TvTab, requester: FocusRequester) {
+private fun TvTabPill(nav: Nav, tab: TvTab, requester: FocusRequester, modifier: Modifier = Modifier) {
     val metrics = LocalMetrics.current
     val scheme = MaterialTheme.colorScheme
-    val words = LocalWords.current
     val chosen = nav.current == tab.route
     val ink = if (chosen) LocalExtraColours.current.accentText else scheme.onSurfaceVariant
-    val title = words[tab.word].orEmpty()
     val me = nav.me
     val person = if (me == null) "" else avatarName(me.displayName, me.name)
     Pressable(
@@ -164,9 +242,10 @@ private fun TvTabPill(nav: Nav, tab: TvTab, requester: FocusRequester) {
                 nav.reset(tab.route)
             }
         },
+        modifier,
         shape = Radius.FULL,
         fill = if (chosen) scheme.primary.copy(alpha = ACCENT_TINT) else Color.Transparent,
-        label = title,
+        label = tab.title,
         state = if (chosen) "Selected" else null,
         selected = chosen,
         focusKey = pillKey(tab.route),
@@ -181,10 +260,10 @@ private fun TvTabPill(nav: Nav, tab: TvTab, requester: FocusRequester) {
                 // Material Symbols leave more room round their shapes than SF Symbols, so the box is larger for the
                 // same size of icon as Apple TV's.
                 Icon(tab.icon, contentDescription = null, tint = ink, modifier = Modifier.size(metrics.u(BAR_ICON)))
-                Text(title, color = ink, style = MaterialTheme.typography.label, maxLines = 1)
+                Text(tab.title, color = ink, style = MaterialTheme.typography.label, maxLines = 1)
             } else {
                 Avatar(person.ifEmpty { "?" }, metrics.u(28))
-                Text(person.ifEmpty { title }, color = ink, style = MaterialTheme.typography.label, maxLines = 1)
+                Text(person.ifEmpty { tab.title }, color = ink, style = MaterialTheme.typography.label, maxLines = 1)
             }
         }
     }
@@ -292,6 +371,25 @@ private val Library.tileSymbol: ImageVector
         "books" -> Symbols.BookFilled
         "videos" -> Symbols.VideocamFilled
         else -> Symbols.AlbumFilled
+    }
+
+// A library's icon in the top menu and on You's Top menu: its tile's icon in outline, as the bar's others are.
+val Library.barSymbol: ImageVector
+    get() = when (type) {
+        "games" -> Symbols.Games
+        "photos" -> Symbols.Photo
+        "shorts" -> Symbols.Shorts
+        "channels", "musicvideos" -> Symbols.Playback
+        "radio" -> Symbols.Radio
+        "movies" -> Symbols.Movie
+        "shows" -> Symbols.Tv
+        "anime" -> Symbols.Star
+        "music" -> Symbols.Music
+        "podcasts" -> Symbols.Mic
+        "audiobooks" -> Symbols.Headphones
+        "books" -> Symbols.Book
+        "videos" -> Symbols.Videocam
+        else -> Symbols.Album
     }
 
 // Games the server plays: a shared PC's games go through Moonlight instead.
