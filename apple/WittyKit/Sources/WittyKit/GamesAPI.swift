@@ -30,12 +30,18 @@ extension WittyClient {
         try await decodeAs([GameConsole]?.self, "GET", "/games/consoles" + (library.map { "?library=\($0)" } ?? "")) ?? []
     }
 
-    /// `sort` is `popular`, `title`, `newest`, `oldest`, `rating` or `added`, as the website's.
-    public func games(library: Int64, console: String? = nil, sort: String = "popular", offset: Int = 0, limit: Int = 60) async throws -> GameItemPage {
+    /// `sort` is `popular`, `title`, `newest`, `oldest`, `rating` or `added`, as the website's. `players`
+    /// keeps games for at least that many, as the website's Made for two shelf (`players=2`).
+    public func games(library: Int64, console: String? = nil, players: Int? = nil, sort: String = "popular", offset: Int = 0, limit: Int = 60) async throws -> GameItemPage {
+        try await decode("GET", Self.gamesPath(library: library, console: console, players: players, sort: sort, offset: offset, limit: limit))
+    }
+
+    static func gamesPath(library: Int64, console: String? = nil, players: Int? = nil, sort: String = "popular", offset: Int = 0, limit: Int = 60) -> String {
         let descending = sort == "rating" || sort == "added"
-        var path = "/items?library=\(library)&kind=game&sort=\(Self.queryValue(sort))&desc=\(descending ? 1 : 0)&offset=\(offset)&limit=\(limit)"
-        if let console, !console.isEmpty { path += "&console=\(Self.queryValue(console))" }
-        return try await decode("GET", path)
+        var path = "/items?library=\(library)&kind=game&sort=\(queryValue(sort))&desc=\(descending ? 1 : 0)&offset=\(offset)&limit=\(limit)"
+        if let console, !console.isEmpty { path += "&console=\(queryValue(console))" }
+        if let players, players > 1 { path += "&players=\(players)" }
+        return path
     }
 
     public func gameItem(_ id: Int64) async throws -> GameItem { try await decode("GET", "/items/\(id)") }

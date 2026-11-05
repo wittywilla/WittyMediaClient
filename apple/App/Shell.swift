@@ -153,16 +153,17 @@ private struct TabRoot: View {
                     #endif
                     case .show(let id): ShowView(id: id).plainNavigation(overPicture: true)
                     case .item(let id): ItemView(id: id).plainNavigation(overPicture: true)
+                    // WittyPlay's own screens on every device: the Shelves home, which is a library's page with the
+                    // strip and no Back, or a console's collection under its band, and a game's page over its picture.
+                    case .gameLibrary(let library, nil): GamesLibraryView(library: library, console: nil).noNavigationBar().id(library.id)
+                    case .gameLibrary(let library, let console): GamesLibraryView(library: library, console: console).plainNavigation(overPicture: true)
+                    case .game(let id): GameDetailView(id: id).plainNavigation(overPicture: true)
                     #if os(tvOS)
-                    case .gameLibrary(let library, let console): GamesLibraryView(library: library, console: console).plainNavigation()
-                    case .game(let id): GameDetailView(id: id).plainNavigation()
                     // A new identity for each game, so a second one gets a new player.
                     case .playGame(let id, let start): GamePlayerScreen(id: id, start: start).id("\(id)\(start)")
                     #else
-                    // The website's game page is a server page here; its Play opens the same player as Apple TV's,
-                    // with the account's touch controls (WebPlayerView hands over the website's /game/ address).
-                    case .gameLibrary(let library, _): LibraryView(library: library).noNavigationBar()
-                    case .game(let id): ItemView(id: id).plainNavigation(overPicture: true)
+                    // The same player as Apple TV's, with the account's touch controls. A website's game page opened
+                    // in the app hands its Play over to it too (WebPlayerView hands over the website's /game/ address).
                     case .playGame(let id, let start): GamePlayerView(gameId: id, start: start).id("\(id)\(start)")
                     #endif
                     // A new identity for each thing played, so the next episode gets a new player
@@ -242,11 +243,7 @@ struct LibraryScreen: View {
 
     var body: some View {
         if library.hasGameScreens {
-            #if os(tvOS)
             GamesLibraryView(library: library, console: nil)
-            #else
-            LibraryView(library: library)
-            #endif
         } else if library.hasListeningScreens {
             #if os(iOS) || os(visionOS)
             MusicLibraryPage(library: library)

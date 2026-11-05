@@ -720,7 +720,7 @@ TV, which has none, everything is native.
 | Radio | Page | To build |
 | Live TV guide and watching, WittyTV's looks | Page | Native, every WittyTV look and layout |
 | Recordings and series rules | Page | Native on both TVs, with reminders |
-| Games (WittyPlay) | Native player: the shared Apple player (Games everywhere, above), with the account's touch layout. The library and a game's page are the page until the screens in [WITTYPLAY-EXPERIENCE.md](WITTYPLAY-EXPERIENCE.md) are built | Native on Apple TV: a player for the server's stream (the server runs every game: see [WITTYPLAY-STREAMING.md](WITTYPLAY-STREAMING.md)), with couch mode's library and game page, to be restyled to [WITTYPLAY-EXPERIENCE.md](WITTYPLAY-EXPERIENCE.md). Native on Android TV the same way: couch mode and the stream player |
+| Games (WittyPlay) | Native: WittyPlay's Shelves home, collections and game page ([WITTYPLAY-EXPERIENCE.md](WITTYPLAY-EXPERIENCE.md)), and the shared Apple player (Games everywhere, above) with the account's touch layout. A website's game page opened in the app hands its Play to the same player | Native on Apple TV: the same Shelves home (with the TV's preview and prompt bar), collections and game page, and a player for the server's stream (the server runs every game: see [WITTYPLAY-STREAMING.md](WITTYPLAY-STREAMING.md)). Native on Android TV: couch mode and the stream player, to be restyled to [WITTYPLAY-EXPERIENCE.md](WITTYPLAY-EXPERIENCE.md) |
 | Game PCs and rigs (Moonlight) | Native | Native |
 | DVD and Blu-ray menus, the disc remote, CD player | Page: the server's player, whose remote is a sheet (Discs and the remote, above). A native disc player to build | To build: the disc player, with the real remote mapped and the remote from the player's controls (Discs and the remote, above). The page on Android TV until then |
 | Collections and smart playlists | Page | To build |
@@ -783,7 +783,7 @@ Apple TV and Android TV are the same app to look at. Sizes are given in TV units
   - **Libraries:** every library the profile can see, as a grid of tiles (the phone Menu's library list as a page):
     each tile is the library's icon in `accentText` on `accent` at 14%, then its name. Each opens the library as Home's
     rows do; a games library opens Games' view of it.
-  - **Games:** WittyPlay's couch library. With one games library it opens straight in; with several, one row per
+  - **Games:** WittyPlay's Shelves home. With one games library it opens straight in; with several, one row per
     library, as Home's rows are: the library's name, its games' covers (each opens that game's page) and a pill that
     opens the whole library.
   - **Live TV:** the WittyTV guide (below) in the account's WittyTV look, with Recordings reachable from it.
