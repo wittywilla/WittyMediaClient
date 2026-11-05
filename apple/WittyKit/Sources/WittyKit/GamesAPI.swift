@@ -13,9 +13,13 @@ extension WittyClient {
         try Self.gamesDecoder.decode(T.self, from: try await call(method, path, body: body))
     }
 
-    private func decodeAs<T: Decodable>(_ type: T.Type, _ method: String, _ path: String, body: Data? = nil) async throws -> T {
-        try Self.gamesDecoder.decode(T.self, from: try await call(method, path, body: body))
+    private func decodeAs<T: Decodable>(_ type: T.Type, _ method: String, _ path: String, body: Data? = nil, wait: TimeInterval? = nil) async throws -> T {
+        try Self.gamesDecoder.decode(T.self, from: try await call(method, path, body: body, wait: wait))
     }
+
+    /// How long starting a game may take. A disc game is read and set up first, which took 83
+    /// seconds for a PlayStation game on a Mac: the server's docs say to let it.
+    public static let gameStartWait: TimeInterval = 300
 
     private func json<T: Encodable>(_ value: T) throws -> Data { try JSONEncoder().encode(value) }
 
@@ -91,7 +95,8 @@ extension WittyClient {
     /// Starts a game. Starting another saves and ends whatever this account was playing, anywhere.
     public func playGame(_ id: Int64, resume: Bool, safeMode: Bool = false) async throws -> GameSession {
         struct Start: Encodable { let resume: Bool; let client: String; let safeMode: Bool? }
-        return try await decodeAs(GameSession.self, "POST", "/games/\(id)/play", body: try json(Start(resume: resume, client: "native", safeMode: safeMode ? true : nil)))
+        return try await decodeAs(GameSession.self, "POST", "/games/\(id)/play", body: try json(Start(resume: resume, client: "native", safeMode: safeMode ? true : nil)),
+                                  wait: Self.gameStartWait)
     }
 
     public func gameSession(_ sid: String) async throws -> GameSession { try await decode("GET", "/play/\(Self.pathPart(sid))") }
