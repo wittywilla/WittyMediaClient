@@ -699,6 +699,10 @@ Apple TV and Android TV are the same app to look at. Sizes are given in TV units
   `listings`, `bigpicture`, `outline`, `compact`, `custom`) are worked out as `web/src/pages/tv/tvThemes.ts` does, and
   each theme's layout (`web/src/pages/tv/tvthemes.css`: row height, cell shape, the now line, the preview's place, the
   font) is built natively to match, on both TVs.
+- **Recording** is offered only where the server says it can be: a channel's `canRecord` (true only for tuner
+  channels the profile may record; never for channels made from the library). Record and series record are hidden,
+  not greyed, when it's false or missing, on every device and on the website alike; no app works it out for itself,
+  and the server refuses otherwise.
 - **What a TV can't show** (the server's pages on Apple TV) is a QR card to open that page on a phone, with its address
   under it. Android TV shows the same card, so the two stay the same.
 
