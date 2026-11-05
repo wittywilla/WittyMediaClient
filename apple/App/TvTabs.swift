@@ -219,17 +219,19 @@ private extension Library {
 
 // MARK: - Games
 
-/// WittyPlay's couch library. One games library opens straight in; several are a row each.
+/// WittyPlay's couch library. One games library opens straight in; several are a row each, as Home's
+/// rows are: the library's name and a pill for the whole of it, then its covers.
 struct GamesTab: View {
     @EnvironmentObject private var model: AppModel
     @Environment(\.client) private var client
     @Environment(\.palette) private var palette
+    @Environment(\.metrics) private var metrics
     @State private var libraries: [Library]?
     @State private var error = ""
 
     private func load() async {
         do {
-            let fresh = uniqued(try await client.libraries()).filter { $0.type == "games" && !$0.isRigGames }
+            let fresh = uniqued(try await client.libraries()).filter(\.hasGameScreens)
             error = ""
             if fresh != libraries { libraries = fresh }
         } catch {
@@ -243,8 +245,16 @@ struct GamesTab: View {
             if let libraries {
                 if libraries.isEmpty {
                     EmptyMessage(title: say("gamesNone"), detail: say("gamesNoneDetail"))
+                } else if libraries.count == 1 {
+                    GamesLibraryView(library: libraries[0], console: nil)
                 } else {
-                    LibraryView(library: libraries[0])
+                    ScrollView {
+                        LazyVStack(alignment: .leading, spacing: Tokens.Space.s5) {
+                            ForEach(libraries) { GamesShelf(library: $0) }
+                        }
+                        .padding(.top, Tokens.Space.s6)
+                        .padding(.bottom, Tokens.Space.s6)
+                    }
                 }
             } else if !error.isEmpty {
                 ProblemView(words: error, retry: { error = ""; Task { await load() } })
@@ -256,6 +266,55 @@ struct GamesTab: View {
         .pageBackground(palette)
         .task { await load() }
     }
+}
+
+/// One games library's row: its name and a pill that opens it, then its most played covers.
+private struct GamesShelf: View {
+    @EnvironmentObject private var model: AppModel
+    @Environment(\.client) private var client
+    @Environment(\.metrics) private var metrics
+    let library: Library
+    @State private var games: [GameItem]?
+    @State private var consoles: [String: GameConsole] = [:]
+
+    private func load() async {
+        do {
+            async let found = client.games(library: library.id, sort: "popular", limit: GamesShelf.length)
+            async let known = client.gameConsoles(library: library.id)
+            let fresh = uniqued(try await found.items ?? [])
+            consoles = Dictionary((try? await known)?.map { ($0.id, $0) } ?? [], uniquingKeysWith: { a, _ in a })
+            if fresh != games { games = fresh }
+        } catch {
+            _ = model.handle(error)
+            if games == nil { games = [] }
+        }
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: Tokens.Space.s2) {
+            HStack(spacing: Tokens.Space.s4) {
+                SectionTitle(library.name)
+                NavigationLink(say("gamesAll"), value: Route.gameLibrary(library, console: nil)).action(pill: true)
+            }
+            .padding(.horizontal, metrics.gutter)
+            .focusSection()
+            ScrollView(.horizontal, showsIndicators: false) {
+                LazyHStack(alignment: .top, spacing: Tokens.Space.s6) {
+                    ForEach(games ?? []) { game in
+                        GameCard(game: game, console: consoles[game.console ?? ""])
+                    }
+                }
+                .padding(.horizontal, metrics.gutter)
+                .padding(.vertical, Tokens.focusRoom)
+            }
+            .frame(minHeight: games == nil ? metrics.cardWidth * 1.4 : nil)
+            .focusSection()
+        }
+        .task { if games == nil { await load() } }
+    }
+
+    /// As many covers as fill a row and a little more.
+    static let length = 20
 }
 
 // MARK: - Live TV
