@@ -70,6 +70,9 @@ class GameStreamTest {
         val older: GameSession = json.decodeFromString("""{"id":"abc","modes":["ws-jpeg"]}""")
         assertEquals(listOf("ws-jpeg"), GameModes.order(older.modeIds))
         assertEquals(GameModes.supported, GameModes.order(emptyList()))
+        // A mode this device chose is the only one tried, where the server offers it.
+        assertEquals(listOf("ws-jpeg"), GameModes.order(session.modeIds, "ws-jpeg"))
+        assertEquals(listOf("ws-h264", "ws-jpeg"), GameModes.order(session.modeIds, "webrtc"))
         assertEquals("jpeg", GameModes.video("ws-jpeg"))
         assertEquals("h264", GameModes.video("ws-h264"))
     }

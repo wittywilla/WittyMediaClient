@@ -94,10 +94,14 @@ sealed interface GameEvent {
 object GameModes {
     val supported = listOf("ws-h264", "ws-jpeg")
 
-    fun order(offered: List<String>): List<String> {
-        val ids = offered.filter { it in supported }.distinct()
-        return ids.ifEmpty { supported }
+    // `chosen` is "auto", or the one mode this device was told to use, where the server offers it.
+    fun order(offered: List<String>, chosen: String = "auto"): List<String> {
+        val ids = offered.filter { it in supported }.distinct().ifEmpty { supported }
+        return if (chosen in ids) listOf(chosen) else ids
     }
+
+    // The website's names for them.
+    val names = mapOf("auto" to "Automatic (recommended)", "ws-h264" to "WebSocket with H.264", "ws-jpeg" to "WebSocket with JPEG (most compatible)")
 
     fun video(mode: String): String = if (mode == "ws-jpeg") "jpeg" else "h264"
 

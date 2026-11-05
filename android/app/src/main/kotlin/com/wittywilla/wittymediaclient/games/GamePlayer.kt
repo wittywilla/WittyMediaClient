@@ -418,6 +418,7 @@ private fun GameMenuSheet(play: GamePlay, page: GameMenu, touchScreen: Boolean, 
                 GameMenu.Controllers -> "Controllers" to (game?.title.orEmpty())
                 GameMenu.More -> "More" to (game?.title.orEmpty())
                 GameMenu.Discs -> "Change disc" to (game?.title.orEmpty())
+                GameMenu.Connection -> "Connection" to "How the game reaches this device"
             }
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(16.dp)) {
                 if (page == GameMenu.Main && game != null && game.hasPoster) {
@@ -455,6 +456,7 @@ private fun GameMenuSheet(play: GamePlay, page: GameMenu, touchScreen: Boolean, 
                     Tile(GameIcons.Slow, if (play.slowMotion) "Normal speed" else "Slow motion", { play.toggleSlowMotion() }, cell, on = play.slowMotion)
                     Tile(GameIcons.Reset, "Undo load", { play.undoLoad() }, cell)
                     Tile(GameIcons.Reset, "Reset the game", { play.reset() }, cell)
+                    Tile(GameIcons.Connection, "Connection", { play.showMenu(GameMenu.Connection) }, cell, sub = GameModes.names[play.chosenMode].orEmpty().substringBefore(" ("))
                     Tile(GameIcons.Settings, if (play.session?.safeMode == true) "Restart with my settings" else "Restart with default settings", { play.retry(safeMode = play.session?.safeMode != true) }, cell)
                     Tile(GameIcons.Back, "Back", { play.menuBack() }, cell)
                 }
@@ -462,6 +464,13 @@ private fun GameMenuSheet(play: GamePlay, page: GameMenu, touchScreen: Boolean, 
                     for (n in 0 until play.discs) {
                         Tile(GameIcons.Disc, "Disc ${n + 1}", { play.changeDisc(n) }, Modifier.fillMaxWidth(), on = n == play.disc, sub = if (n == play.disc) "In the drive" else "", focus = if (n == 0) first else null)
                     }
+                }
+                GameMenu.Connection -> Column(verticalArrangement = Arrangement.spacedBy(gap)) {
+                    for ((i, mode) in (listOf("auto") + GameModes.supported).withIndex()) {
+                        Tile(GameIcons.Connection, GameModes.names.getValue(mode), { play.useMode(mode) }, Modifier.fillMaxWidth(), on = play.chosenMode == mode, focus = if (i == 0) first else null)
+                    }
+                    Text("Now using: ${GameModes.names[play.modeInUse] ?: "nothing yet"}", color = Color(0xFFAAB1C0), fontSize = look.small)
+                    Tile(GameIcons.Back, "Back", { play.showMenu(GameMenu.More) }, Modifier.fillMaxWidth())
                 }
                 GameMenu.Save -> SlotGrid(play, saving = true, columns = columns, first = first)
                 GameMenu.Load -> SlotGrid(play, saving = false, columns = columns, first = first)

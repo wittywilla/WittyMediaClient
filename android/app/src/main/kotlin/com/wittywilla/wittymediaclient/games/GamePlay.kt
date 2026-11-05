@@ -45,7 +45,7 @@ enum class GameStage(val words: String) {
 data class GameProblem(val title: String, val body: String, val retry: Boolean = true, val defaults: Boolean = false)
 
 // The pages of the game menu.
-enum class GameMenu { Main, Save, Load, Controllers, More, Discs }
+enum class GameMenu { Main, Save, Load, Controllers, More, Discs, Connection }
 
 private const val RECONNECT_WINDOW_MS = 55_000L
 private const val TOAST_MS = 3_000L
@@ -116,6 +116,13 @@ class GamePlay(private val app: WittyApp, val gameId: Long, private var start: G
 
     private var modes: List<String> = GameModes.supported
     private var modeIndex = 0
+    private var offeredModes: List<String> = emptyList()
+
+    // How the game reaches this device: "auto", or a mode this device chose for itself (the website's Connection).
+    var chosenMode by mutableStateOf(chosenModeFor(app))
+        private set
+    var modeInUse by mutableStateOf("")
+        private set
     private var socket: WebSocket? = null
     private var socketSerial = 0
     private var pictureTimer: Job? = null
@@ -179,7 +186,8 @@ class GamePlay(private val app: WittyApp, val gameId: Long, private var start: G
             disc = started.disc
             discs = started.discs
             for (notice in started.notices) say(notice)
-            modes = GameModes.order(started.modeIds)
+            offeredModes = started.modeIds
+            modes = GameModes.order(offeredModes, chosenMode)
             modeIndex = 0
             input.start(GameInput.Setup(controls ?: GameControls(console = console), settings, console, gameId))
             input.setEnabled(menu == null && !away)
@@ -221,6 +229,7 @@ class GamePlay(private val app: WittyApp, val gameId: Long, private var start: G
         if (stopped) return
         closeSocket()
         val mode = modes.getOrElse(modeIndex) { modes.last() }
+        modeInUse = mode
         val kind = GameModes.video(mode)
         videoKind = kind
         if (!gotPicture) stage = GameStage.Connect
@@ -441,7 +450,7 @@ class GamePlay(private val app: WittyApp, val gameId: Long, private var start: G
         when (menu) {
             null -> openMenu()
             GameMenu.Main -> closeMenu()
-            GameMenu.Discs -> menu = GameMenu.More
+            GameMenu.Discs, GameMenu.Connection -> menu = GameMenu.More
             else -> menu = GameMenu.Main
         }
     }
@@ -510,6 +519,17 @@ class GamePlay(private val app: WittyApp, val gameId: Long, private var start: G
     fun pause(on: Boolean) {
         closeMenu()
         act(GameAction("pause", on = on)) { paused = on }
+    }
+
+    // A connection mode of this device's own choosing, kept for next time, and used straight away.
+    fun useMode(mode: String) {
+        chosenMode = mode
+        app.getSharedPreferences("wittyplay", Context.MODE_PRIVATE).edit { putString("mode", mode) }
+        closeMenu()
+        if (session == null || stopped) return
+        modes = GameModes.order(offeredModes, mode)
+        modeIndex = 0
+        connect()
     }
 
     fun setDevice(port: Int, device: Int) {
@@ -627,6 +647,9 @@ class GamePlay(private val app: WittyApp, val gameId: Long, private var start: G
             prefs.edit { putString("device", made) }
             return made
         }
+
+        fun chosenModeFor(context: Context): String =
+            context.getSharedPreferences("wittyplay", Context.MODE_PRIVATE).getString("mode", "auto") ?: "auto"
 
         // Whether the touch controls show on this device, its own choice.
         fun touchShown(context: Context): Boolean = context.getSharedPreferences("wittyplay", Context.MODE_PRIVATE).getBoolean("touch", true)
