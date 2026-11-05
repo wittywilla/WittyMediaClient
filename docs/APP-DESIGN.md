@@ -646,7 +646,13 @@ Apple TV and Android TV are the same app to look at. Sizes are given in TV units
   list that clips it: rows leave 24 above and below for the ring. No system highlight, no parallax: the same on both.
   Focus starts on the screen's main action and comes back where it was left.
 - **Sign-in screens** put the words on the left half and the actions on the right half, vertically centred, inside the
-  90 gutter; the glow sits behind the words. Who's watching is the exception: centred, with the tiles in one row.
+  90 gutter; the glow sits behind the words. **Who's watching and the password screen are centred instead**, as one
+  column: the person chosen stays in the middle of the screen. The password screen on a TV: the avatar at 200, the
+  profile name in 38 semibold and `@username` in 24 `textSecondary` centred under it, `passwordHint` in 24
+  `textSecondary` centred, then 32 below, the password field and Sign in, 640 wide, centred, then Forgot your
+  password? centred. Two-step's code boxes and pad sit in the same column.
+- **A focused field** on a TV shows only the focus ring (`text`, 4 wide, 4 out, concentric); its own outline stays
+  `control`, and its label stays clear of the ring. Two outlines at once (`accent` and the ring) never show.
 - **Profile tiles** are 200 avatars in one centred row, 48 apart, with the names under them. Focused, **only the
   avatar** reacts: it lifts 6 and grows 1.06, with a `background` band 4 wide and then the `text` ring 4 wide around it,
   both concentric with its corners. The name brightens from `textSecondary` to `text` and keeps its size; the badge
