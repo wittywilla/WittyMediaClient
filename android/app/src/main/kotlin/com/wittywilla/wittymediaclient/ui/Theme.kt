@@ -106,6 +106,9 @@ data class Metrics(
 // A size from the page: points on a phone or tablet, TV units on a TV.
 fun Metrics.u(size: Number): Dp = (size.toFloat() * unit).dp
 
+// The page's radii in the same units: 6 small, 10 medium, 14 large, 20 extra.
+fun Metrics.corner(radius: Int) = RoundedCornerShape(u(radius))
+
 val PhoneMetrics = Metrics(tv = false, gutter = Space.S4, edge = Space.S2, cardWidth = 124.dp, minTarget = 44.dp)
 val TabletMetrics = PhoneMetrics.copy(gutter = Space.S8, cardWidth = 148.dp, tablet = true)
 

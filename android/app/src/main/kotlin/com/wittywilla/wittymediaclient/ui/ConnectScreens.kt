@@ -21,6 +21,7 @@ import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -367,9 +368,11 @@ private fun Fingerprint(s: Map<String, String>, fingerprint: String) {
 @Composable
 private fun QuietLinks(content: @Composable () -> Unit) {
     val tv = LocalMetrics.current.tv
+    // Far enough apart for a focused one's ring to clear the next.
     FlowRow(
         Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.spacedBy(LocalMetrics.current.u(4), if (tv) Alignment.Start else Alignment.CenterHorizontally),
+        horizontalArrangement = Arrangement.spacedBy(LocalMetrics.current.u(if (tv) 24 else 8), if (tv) Alignment.Start else Alignment.CenterHorizontally),
+        verticalArrangement = Arrangement.spacedBy(LocalMetrics.current.u(8)),
     ) { content() }
 }
 
@@ -380,7 +383,7 @@ private fun ServerFooter(nav: Nav, s: Map<String, String>) {
     val name = nav.server?.name ?: nav.brandName
     Row(
         Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.spacedBy(LocalMetrics.current.u(4), if (tv) Alignment.Start else Alignment.CenterHorizontally),
+        horizontalArrangement = Arrangement.spacedBy(LocalMetrics.current.u(8), if (tv) Alignment.Start else Alignment.CenterHorizontally),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         if (!name.isNullOrEmpty()) Text(name, color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.secondary, maxLines = 1)
@@ -562,44 +565,50 @@ fun SignInScreen(nav: Nav, s: Map<String, String>, way: SignInWay) {
     val list = profiles
     val showsProfiles = list != null && list.style == "profiles" && list.profiles.isNotEmpty()
     val chosen = list?.profiles?.firstOrNull { it.id == chosenId }
-    when {
-        step == Step.Pair -> PairScreen(nav, s, onBack = { back(pairFrom ?: Step.Usual) }) { back(pairFrom ?: Step.Usual) }
-        list == null -> Screen { Loading() }
-        secondStep -> TwoFactorStep(
-            nav, s, chosen, code,
-            onCode = { typed ->
-                code = typed.filter { it.isDigit() }.take(CODE_LENGTH)
-                problem = ""
-                if (code.length == CODE_LENGTH) login(chosen?.name ?: name, password, code)
-            },
-            checking = busy, wrong = wrong, problem = problem,
-            onBack = { secondStep = false; code = ""; problem = "" },
-        )
-        step == Step.Password && chosen != null -> PasswordStep(
-            nav, s, chosen, password, { password = it; problem = "" }, problem, busy,
-            onSubmit = { login(chosen.name, password) },
-            onBack = { back(Step.Usual) },
-        )
-        showsProfiles && step == Step.Usual -> WhoStep(
-            nav, s, list.profiles, problem, busy,
-            onPick = { p ->
-                problem = ""
-                if (p.hasPassword) {
-                    chosenId = p.id
-                    step = Step.Password
-                } else {
-                    login(p.name, "")
-                }
-            },
-            onOtherAccount = { back(Step.Form) },
-            onUseCode = ::openPair,
-        )
-        else -> FormStep(
-            nav, s, name, { name = it; problem = "" }, password, { password = it; problem = "" }, problem, busy,
-            onSubmit = { login(name, password) },
-            onBack = if (showsProfiles) { { back(Step.Usual) } } else null,
-            onUseCode = ::openPair,
-        )
+    // Each step remembers its own focus, so a step's first focus isn't lost to another's, and coming
+    // back to one puts focus where it was.
+    val memories = remember { HashMap<String, FocusMemory>() }
+    val memory = memories.getOrPut(if (secondStep) "two-factor" else step.name) { FocusMemory() }
+    CompositionLocalProvider(LocalFocusMemory provides memory) {
+        when {
+            step == Step.Pair -> PairScreen(nav, s, onBack = { back(pairFrom ?: Step.Usual) }) { back(pairFrom ?: Step.Usual) }
+            list == null -> Screen { Loading() }
+            secondStep -> TwoFactorStep(
+                nav, s, chosen, code,
+                onCode = { typed ->
+                    code = typed.filter { it.isDigit() }.take(CODE_LENGTH)
+                    problem = ""
+                    if (code.length == CODE_LENGTH) login(chosen?.name ?: name, password, code)
+                },
+                checking = busy, wrong = wrong, problem = problem,
+                onBack = { secondStep = false; code = ""; problem = "" },
+            )
+            step == Step.Password && chosen != null -> PasswordStep(
+                nav, s, chosen, password, { password = it; problem = "" }, problem, busy,
+                onSubmit = { login(chosen.name, password) },
+                onBack = { back(Step.Usual) },
+            )
+            showsProfiles && step == Step.Usual -> WhoStep(
+                nav, s, list.profiles, problem, busy,
+                onPick = { p ->
+                    problem = ""
+                    if (p.hasPassword) {
+                        chosenId = p.id
+                        step = Step.Password
+                    } else {
+                        login(p.name, "")
+                    }
+                },
+                onOtherAccount = { back(Step.Form) },
+                onUseCode = ::openPair,
+            )
+            else -> FormStep(
+                nav, s, name, { name = it; problem = "" }, password, { password = it; problem = "" }, problem, busy,
+                onSubmit = { login(name, password) },
+                onBack = if (showsProfiles) { { back(Step.Usual) } } else null,
+                onUseCode = ::openPair,
+            )
+        }
     }
 }
 
@@ -660,7 +669,7 @@ private fun WhoStep(
                     horizontalArrangement = Arrangement.spacedBy(metrics.u(48)),
                 ) { tiles() }
                 Problem(problem)
-                Row(horizontalArrangement = Arrangement.spacedBy(metrics.u(8))) {
+                Row(horizontalArrangement = Arrangement.spacedBy(metrics.u(24))) {
                     WittyButton(s["otherAccount"].orEmpty(), onOtherAccount, kind = ButtonKind.Quiet, focusKey = "other-account")
                     WittyButton(s["useCode"].orEmpty(), onUseCode, kind = ButtonKind.Quiet, focusKey = "use-code")
                     val server = nav.server
@@ -849,9 +858,6 @@ fun OnPhoneScreen(nav: Nav, s: Map<String, String>, title: String, path: String)
         nav::pop,
         words = {
             SignInHeading(title, s["openOnPhone"].orEmpty())
-            SelectionContainer(if (metrics.tv) Modifier else Modifier.align(Alignment.CenterHorizontally)) {
-                Text(address, color = LocalExtraColours.current.accentText, style = MaterialTheme.typography.label)
-            }
         },
         actions = {
             if (address.isNotEmpty()) QrCard(address, address, if (metrics.tv) Modifier else Modifier.align(Alignment.CenterHorizontally))

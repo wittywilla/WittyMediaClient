@@ -213,7 +213,7 @@ fun ServerCard(
     val words = LocalWords.current
     val spoken = listOfNotNull(name, url, if (lastUsed) words["lastUsed"] else null).joinToString(", ")
     Pressable(
-        onClick, modifier.fillMaxWidth(), shape = Radius.LG, fill = scheme.surfaceVariant, label = spoken,
+        onClick, modifier.fillMaxWidth(), shape = LocalMetrics.current.corner(14), fill = scheme.surfaceVariant, label = spoken,
         state = if (connecting) words["connecting"] else null, requestFocus = requestFocus, focusKey = focusKey, pressScale = CARD_PRESS,
     ) {
         Row(
@@ -293,9 +293,9 @@ fun CodeBoxes(digits: String, checking: Boolean, wrongCount: Int, modifier: Modi
                 Modifier
                     .width(metrics.u(if (metrics.tv) 88 else 48))
                     .height(metrics.u(if (metrics.tv) 100 else 56))
-                    .clip(Radius.MD)
+                    .clip(LocalMetrics.current.corner(10))
                     .background(scheme.surfaceVariant)
-                    .border(outline, edge, Radius.MD),
+                    .border(outline, edge, LocalMetrics.current.corner(10)),
                 contentAlignment = Alignment.Center,
             ) {
                 val digit = digits.getOrNull(place)
@@ -319,18 +319,22 @@ fun NumberPad(onDigit: (Char) -> Unit, onDelete: () -> Unit, modifier: Modifier 
     val metrics = LocalMetrics.current
     val keys = remember { List(PAD_KEYS.size) { FocusRequester() } }
     val gap = metrics.u(8)
-    Column(modifier, verticalArrangement = Arrangement.spacedBy(gap)) {
-        for (row in 0..2) {
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(gap)) {
-                for (column in 0..2) {
-                    val key = row * 3 + column
-                    PadKey(key, keys, firstFocus && key == 0, { onDigit(PAD_KEYS[key][0]) }, Modifier.weight(1f))
+    // Columns of the same width all the way down, so the 0 spans exactly two of them and the gap between.
+    BoxWithConstraints(modifier) {
+        val column = (maxWidth - gap * 2) / 3
+        Column(verticalArrangement = Arrangement.spacedBy(gap)) {
+            for (row in 0..2) {
+                Row(horizontalArrangement = Arrangement.spacedBy(gap)) {
+                    for (place in 0..2) {
+                        val key = row * 3 + place
+                        PadKey(key, keys, firstFocus && key == 0, { onDigit(PAD_KEYS[key][0]) }, Modifier.width(column))
+                    }
                 }
             }
-        }
-        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(gap)) {
-            PadKey(PAD_DELETE, keys, false, onDelete, Modifier.weight(1f))
-            PadKey(PAD_ZERO, keys, false, { onDigit('0') }, Modifier.weight(2f))
+            Row(horizontalArrangement = Arrangement.spacedBy(gap)) {
+                PadKey(PAD_DELETE, keys, false, onDelete, Modifier.width(column))
+                PadKey(PAD_ZERO, keys, false, { onDigit('0') }, Modifier.width(column * 2 + gap))
+            }
         }
     }
 }
@@ -348,7 +352,7 @@ private fun PadKey(key: Int, keys: List<FocusRequester>, requestFocus: Boolean, 
             padMove(key, PadMove.Left)?.let { left = keys[it] }
             padMove(key, PadMove.Right)?.let { right = keys[it] }
         },
-        shape = Radius.LG, fill = scheme.surfaceVariant, focusRequester = keys[key], requestFocus = requestFocus,
+        shape = LocalMetrics.current.corner(14), fill = scheme.surfaceVariant, focusRequester = keys[key], requestFocus = requestFocus,
         label = if (delete) LocalWords.current["codeDelete"] else null,
     ) {
         Box(Modifier.fillMaxWidth().height(metrics.u(if (metrics.tv) 96 else 64)), contentAlignment = Alignment.Center) {
@@ -374,11 +378,11 @@ fun Modifier.digitKeys(onDigit: (Char) -> Unit, onDelete: () -> Unit): Modifier 
 @Composable
 fun QrCard(text: String, caption: String, modifier: Modifier = Modifier) {
     val metrics = LocalMetrics.current
-    Column(modifier, horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(metrics.u(8))) {
-        Box(Modifier.clip(Radius.LG).background(androidx.compose.ui.graphics.Color.White).padding(metrics.u(16))) {
+    Column(modifier, horizontalAlignment = if (metrics.tv) Alignment.Start else Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(metrics.u(8))) {
+        Box(Modifier.clip(LocalMetrics.current.corner(14)).background(androidx.compose.ui.graphics.Color.White).padding(metrics.u(16))) {
             QrCode(text, metrics.u(if (metrics.tv) 280 else 180), Modifier.semantics { contentDescription = caption })
         }
-        if (caption.isNotEmpty()) Text(caption, color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.caption, textAlign = TextAlign.Center)
+        if (caption.isNotEmpty()) Text(caption, color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.caption, textAlign = if (metrics.tv) TextAlign.Start else TextAlign.Center)
     }
 }
 
@@ -397,7 +401,7 @@ fun LegalNote(text: String, modifier: Modifier = Modifier) {
 fun PanelCard(modifier: Modifier = Modifier, content: @Composable ColumnScope.() -> Unit) {
     val metrics = LocalMetrics.current
     Column(
-        modifier.fillMaxWidth().clip(Radius.LG).background(MaterialTheme.colorScheme.surface).padding(metrics.u(16)),
+        modifier.fillMaxWidth().clip(LocalMetrics.current.corner(14)).background(MaterialTheme.colorScheme.surface).padding(metrics.u(16)),
         verticalArrangement = Arrangement.spacedBy(metrics.u(6)),
         content = content,
     )

@@ -1,6 +1,7 @@
 package com.wittywilla.wittymediaclient.ui
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsFocusedAsState
@@ -16,9 +17,11 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.CircularProgressIndicator
@@ -46,6 +49,7 @@ import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Shape
+import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.drawOutline
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.drawscope.translate
@@ -74,6 +78,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.zIndex
 import com.wittywilla.wittymediaclient.net.Profile
 import kotlinx.coroutines.delay
 
@@ -99,7 +104,7 @@ fun Modifier.ringOutside(shape: Shape, colour: Color, gap: Dp, width: Dp): Modif
 fun Pressable(
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
-    shape: Shape = Radius.MD,
+    shape: Shape = LocalMetrics.current.corner(10),
     fill: Color = Color.Transparent,
     label: String? = null,
     state: String? = null,
@@ -111,6 +116,8 @@ fun Pressable(
     pressScale: Float = PRESS_SCALE,
     pressAlpha: Float = PRESS_ALPHA,
     ring: Boolean = true,
+    // Off for something that draws outside itself, as a profile tile's lifted, ringed avatar does.
+    clip: Boolean = true,
     content: @Composable (active: Boolean) -> Unit,
 ) {
     val interaction = remember { MutableInteractionSource() }
@@ -134,6 +141,8 @@ fun Pressable(
     val ringColour = MaterialTheme.colorScheme.onBackground
     Box(
         modifier
+            // Above its neighbours, so they don't cover its ring.
+            .zIndex(if (showsFocus) 1f else 0f)
             .graphicsLayer { scaleX = grow; scaleY = grow; alpha = dim }
             .then(if (ring && showsFocus) Modifier.ringOutside(shape, ringColour, metrics.focusRing, metrics.focusRing) else Modifier)
             .focusRequester(requester)
@@ -144,8 +153,8 @@ fun Pressable(
                 if (selected) this.selected = true
                 if (!enabled) disabled()
             }
-            .clip(shape)
-            .background(fill)
+            .then(if (clip) Modifier.clip(shape) else Modifier)
+            .background(fill, shape)
             .clickable(interactionSource = interaction, indication = null, role = Role.Button) { if (enabled) onClick() },
         contentAlignment = Alignment.Center,
     ) { content(pressed || showsFocus) }
@@ -192,7 +201,7 @@ fun WittyButton(
     }
     Pressable(
         { if (!busy) onClick() }, modifier,
-        shape = if (pill) Radius.FULL else Radius.MD, fill = fill,
+        shape = if (pill) Radius.FULL else LocalMetrics.current.corner(10), fill = fill,
         label = if (busy) text else null, state = if (busy) LocalWords.current["connecting"] else null,
         focusKey = focusKey, requestFocus = requestFocus, focusRequester = focusRequester, enabled = enabled,
     ) {
@@ -250,47 +259,53 @@ fun WittyField(
         FieldKind.Text -> KeyboardType.Text
     }
     val quiet = scheme.onSurfaceVariant
+    val fieldModifier = Modifier
+        .then(if (focusRequester != null) Modifier.focusRequester(focusRequester) else Modifier)
+        .semantics {
+            when (kind) {
+                FieldKind.Username -> contentType = ContentType.Username
+                FieldKind.Password -> contentType = ContentType.Password
+                else -> Unit
+            }
+        }
+        .tvLeavable()
+    val keyboardOptions = KeyboardOptions(keyboardType = keyboard, imeAction = imeAction, autoCorrectEnabled = false)
+    val keyboardActions = KeyboardActions(onAny = { onAction() })
+    val trailing: (@Composable () -> Unit)? = if (kind != FieldKind.Password) null else {
+        {
+            val say = if (showing) words["hidePassword"].orEmpty() else words["showPassword"].orEmpty()
+            Pressable({ showing = !showing }, Modifier.size(metrics.u(44)), shape = CircleShape, label = say) {
+                Icon(if (showing) Symbols.Hide else Symbols.Show, contentDescription = null, tint = quiet, modifier = Modifier.size(metrics.u(22)))
+            }
+        }
+    }
     Column(modifier.fillMaxWidth()) {
-        OutlinedTextField(
-            value = value,
-            onValueChange = onChange,
-            label = { Text(label) },
-            singleLine = true,
-            shape = Radius.MD,
-            leadingIcon = icon?.let { { Icon(it, contentDescription = null, modifier = Modifier.padding(start = metrics.u(4)).size(metrics.u(20))) } },
-            trailingIcon = if (kind != FieldKind.Password) null else {
-                {
-                    val say = if (showing) words["hidePassword"].orEmpty() else words["showPassword"].orEmpty()
-                    Pressable({ showing = !showing }, Modifier.size(metrics.u(44)), shape = CircleShape, label = say) {
-                        Icon(if (showing) Symbols.Hide else Symbols.Show, contentDescription = null, tint = quiet, modifier = Modifier.size(metrics.u(22)))
-                    }
-                }
-            },
-            visualTransformation = if (secret) PasswordVisualTransformation() else VisualTransformation.None,
-            keyboardOptions = KeyboardOptions(keyboardType = keyboard, imeAction = imeAction, autoCorrectEnabled = false),
-            keyboardActions = KeyboardActions(onAny = { onAction() }),
-            colors = OutlinedTextFieldDefaults.colors(
-                focusedTextColor = scheme.onBackground, unfocusedTextColor = scheme.onBackground,
-                focusedContainerColor = Color.Transparent, unfocusedContainerColor = Color.Transparent,
-                cursorColor = scheme.primary,
-                focusedBorderColor = scheme.primary, unfocusedBorderColor = scheme.outline,
-                focusedLabelColor = extra.accentText, unfocusedLabelColor = quiet,
-                focusedLeadingIconColor = quiet, unfocusedLeadingIconColor = quiet,
-                focusedTrailingIconColor = quiet, unfocusedTrailingIconColor = quiet,
-            ),
-            modifier = Modifier
-                .fillMaxWidth()
-                .heightIn(min = metrics.u(56))
-                .then(if (focusRequester != null) Modifier.focusRequester(focusRequester) else Modifier)
-                .semantics {
-                    when (kind) {
-                        FieldKind.Username -> contentType = ContentType.Username
-                        FieldKind.Password -> contentType = ContentType.Password
-                        else -> Unit
-                    }
-                }
-                .tvLeavable(),
-        )
+        if (metrics.tv) {
+            TvTextField(value, onChange, label, icon, secret, keyboardOptions, keyboardActions, trailing, fieldModifier)
+        } else {
+            OutlinedTextField(
+                value = value,
+                onValueChange = onChange,
+                label = { Text(label) },
+                singleLine = true,
+                shape = LocalMetrics.current.corner(10),
+                leadingIcon = icon?.let { { Icon(it, contentDescription = null, modifier = Modifier.padding(start = metrics.u(4)).size(metrics.u(20))) } },
+                trailingIcon = trailing,
+                visualTransformation = if (secret) PasswordVisualTransformation() else VisualTransformation.None,
+                keyboardOptions = keyboardOptions,
+                keyboardActions = keyboardActions,
+                colors = OutlinedTextFieldDefaults.colors(
+                    focusedTextColor = scheme.onBackground, unfocusedTextColor = scheme.onBackground,
+                    focusedContainerColor = Color.Transparent, unfocusedContainerColor = Color.Transparent,
+                    cursorColor = scheme.primary,
+                    focusedBorderColor = scheme.primary, unfocusedBorderColor = scheme.outline,
+                    focusedLabelColor = extra.accentText, unfocusedLabelColor = quiet,
+                    focusedLeadingIconColor = quiet, unfocusedLeadingIconColor = quiet,
+                    focusedTrailingIconColor = quiet, unfocusedTrailingIconColor = quiet,
+                ),
+                modifier = Modifier.fillMaxWidth().heightIn(min = 56.dp).then(fieldModifier),
+            )
+        }
         if (error.isNotEmpty()) {
             Row(
                 Modifier.padding(top = metrics.u(6)).semantics(mergeDescendants = true) { liveRegion = LiveRegionMode.Polite },
@@ -300,6 +315,75 @@ fun WittyField(
                 Icon(Symbols.Warning, contentDescription = null, tint = scheme.error, modifier = Modifier.size(metrics.u(16)))
                 Text(error, color = scheme.error, style = MaterialTheme.typography.caption)
             }
+        }
+    }
+}
+
+// A TV's field, drawn here at the page's 56 units: Material's keeps to 56 dp, which is twice that on a
+// TV. The same look: the label inside until there are words or focus, then on the border. Focus also
+// has the TV's ring, but doesn't grow, as a field fills its column.
+@Composable
+private fun TvTextField(
+    value: String,
+    onChange: (String) -> Unit,
+    label: String,
+    icon: ImageVector?,
+    secret: Boolean,
+    keyboardOptions: KeyboardOptions,
+    keyboardActions: KeyboardActions,
+    trailing: (@Composable () -> Unit)?,
+    fieldModifier: Modifier,
+) {
+    val scheme = MaterialTheme.colorScheme
+    val extra = LocalExtraColours.current
+    val metrics = LocalMetrics.current
+    val interaction = remember { MutableInteractionSource() }
+    val focused by interaction.collectIsFocusedAsState()
+    val raised = focused || value.isNotEmpty()
+    val quiet = scheme.onSurfaceVariant
+    val body = MaterialTheme.typography.body
+    val caption = MaterialTheme.typography.caption
+    val half = with(LocalDensity.current) { (caption.lineHeight.toDp() / 2) }
+    Box(Modifier.fillMaxWidth().padding(top = half)) {
+        Row(
+            Modifier
+                .fillMaxWidth()
+                .height(metrics.u(56))
+                .then(if (focused) Modifier.ringOutside(LocalMetrics.current.corner(10), scheme.onBackground, metrics.focusRing, metrics.focusRing) else Modifier)
+                .border(if (focused) 2.dp else 1.dp, if (focused) scheme.primary else scheme.outline, LocalMetrics.current.corner(10))
+                .padding(start = metrics.u(16), end = metrics.u(4)),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(metrics.u(12)),
+        ) {
+            if (icon != null) Icon(icon, contentDescription = null, tint = quiet, modifier = Modifier.size(metrics.u(20)))
+            BasicTextField(
+                value, onChange,
+                modifier = Modifier.weight(1f).then(fieldModifier).semantics { contentDescription = label },
+                textStyle = body.copy(color = scheme.onBackground),
+                singleLine = true,
+                cursorBrush = SolidColor(scheme.primary),
+                visualTransformation = if (secret) PasswordVisualTransformation() else VisualTransformation.None,
+                keyboardOptions = keyboardOptions,
+                keyboardActions = keyboardActions,
+                interactionSource = interaction,
+                decorationBox = { inner ->
+                    Box(contentAlignment = Alignment.CenterStart) {
+                        if (!raised) Text(label, color = quiet, style = body, maxLines = 1)
+                        inner()
+                    }
+                },
+            )
+            trailing?.invoke()
+        }
+        if (raised) {
+            Text(
+                label, color = if (focused) extra.accentText else quiet, style = caption, maxLines = 1,
+                modifier = Modifier
+                    .padding(start = metrics.u(12))
+                    .offset(y = -half)
+                    .background(scheme.background)
+                    .padding(horizontal = metrics.u(4)),
+            )
         }
     }
 }
@@ -325,7 +409,7 @@ fun Note(text: String, modifier: Modifier = Modifier, busy: Boolean = false) {
     val scheme = MaterialTheme.colorScheme
     val metrics = LocalMetrics.current
     Row(
-        modifier.fillMaxWidth().clip(Radius.LG).background(scheme.surface).padding(metrics.u(16)).semantics(mergeDescendants = true) { liveRegion = LiveRegionMode.Polite },
+        modifier.fillMaxWidth().clip(LocalMetrics.current.corner(14)).background(scheme.surface).padding(metrics.u(16)).semantics(mergeDescendants = true) { liveRegion = LiveRegionMode.Polite },
         horizontalArrangement = Arrangement.spacedBy(metrics.u(12)),
         verticalAlignment = Alignment.CenterVertically,
     ) {
@@ -415,8 +499,8 @@ fun ProfileTile(
         if (badge.isNotEmpty()) add("$badge profile")
     }.joinToString(", ")
     Pressable(
-        onClick, modifier.width(avatarSize), shape = Radius.MD, label = spoken, focusKey = focusKey, requestFocus = requestFocus,
-        pressScale = 1f, pressAlpha = 1f, ring = false,
+        onClick, modifier.width(avatarSize), shape = LocalMetrics.current.corner(10), label = spoken, focusKey = focusKey, requestFocus = requestFocus,
+        pressScale = 1f, pressAlpha = 1f, ring = false, clip = false,
     ) { active ->
         val gap = if (metrics.tv) metrics.focusRing else 3.dp
         Column(horizontalAlignment = Alignment.CenterHorizontally) {
@@ -500,7 +584,7 @@ fun GroupedList(caption: String, rows: List<GroupRow>, modifier: Modifier = Modi
         if (caption.isNotEmpty()) {
             Text(caption.uppercase(), color = scheme.onSurfaceVariant, style = MaterialTheme.typography.caption, modifier = Modifier.padding(horizontal = metrics.u(16)))
         }
-        Column(Modifier.fillMaxWidth().clip(Radius.LG).background(scheme.surface)) {
+        Column(Modifier.fillMaxWidth().clip(LocalMetrics.current.corner(14)).background(scheme.surface)) {
             rows.forEachIndexed { i, row ->
                 if (i > 0) {
                     Box(
@@ -544,7 +628,7 @@ private fun GroupRowView(row: GroupRow) {
         }
     }
     if (row.onClick != null) {
-        Pressable(row.onClick, Modifier.fillMaxWidth(), shape = Radius.SM, focusKey = row.focusKey, pressScale = 1f) { body(it) }
+        Pressable(row.onClick, Modifier.fillMaxWidth(), shape = LocalMetrics.current.corner(6), focusKey = row.focusKey, pressScale = 1f) { body(it) }
     } else {
         Box(Modifier.semantics(mergeDescendants = true) {}) { body(false) }
     }
