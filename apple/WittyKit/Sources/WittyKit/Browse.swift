@@ -1,8 +1,9 @@
 import Foundation
 
-// A film or TV library's page, as the server's own website builds it (web/src/pages/library/VideoLibrary.tsx):
-// its categories first, then rows, and a grid once a sort is chosen. Also how a library's size is said,
-// and the collections an item can be saved to. See docs/APP-DESIGN.md, One mobile design with the website.
+// A film or TV library's page, as the server's own website builds it (web/src/pages/library/VideoLibrary.tsx and
+// Filters.tsx): its shelves first, and a grid once anything is asked for, with what's chosen kept as the website
+// keeps it in its address, so a saved view means the same everywhere. Also how a library's size is said, and the
+// collections an item can be saved to. See docs/APP-DESIGN.md, One mobile design with the website.
 
 /// A picture standing for a category: the backdrop of something in it.
 public struct CategoryArt: Decodable, Equatable, Hashable {
@@ -33,18 +34,56 @@ public struct ShelfCollection: Decodable, Equatable, Identifiable, Hashable {
     public let art: [CategoryArt]?
 }
 
+/// A studio or a network on a library's page, with how many titles it has there.
+public struct ShelfBrand: Decodable, Equatable, Identifiable, Hashable {
+    public let kind: String?
+    public let name: String
+    public let key: String
+    public let count: Int?
+
+    public var id: String { key }
+}
+
+/// A streaming service that lists some of a library's titles: only what's on the server, sorted by who lists it.
+public struct ShelfPlatform: Decodable, Equatable, Identifiable, Hashable {
+    public let key: String
+    public let name: String
+    public let count: Int?
+
+    public var id: String { key }
+}
+
 /// Everything a library's page starts with, in one answer: `/browse/shelves`.
 public struct Shelves: Decodable, Equatable {
     public let categories: [ShelfCategory]?
     public let collections: [ShelfCollection]?
+    public let studios: [ShelfBrand]?
+    public let networks: [ShelfBrand]?
+    public let platforms: [ShelfPlatform]?
 
-    public init(categories: [ShelfCategory]? = nil, collections: [ShelfCollection]? = nil) {
+    public init(categories: [ShelfCategory]? = nil, collections: [ShelfCollection]? = nil, studios: [ShelfBrand]? = nil,
+                networks: [ShelfBrand]? = nil, platforms: [ShelfPlatform]? = nil) {
         self.categories = categories
         self.collections = collections
+        self.studios = studios
+        self.networks = networks
+        self.platforms = platforms
     }
 
     /// The categories to show, in the server's order; the ones its owner hid are left out.
     public var shown: [ShelfCategory] { (categories ?? []).filter { $0.hidden != true } }
+
+    /// Too small or too bare for shelves: no categories, studios or networks. The website shows such a library
+    /// as a grid from the start, whatever collections or services it has.
+    public var bare: Bool { shown.isEmpty && (studios ?? []).isEmpty && (networks ?? []).isEmpty }
+
+    /// The logos the page shows, as one lookup: the first 40 studios and networks, as the website's shelves
+    /// cut them, and the services.
+    public var logos: [LogoRef] {
+        (studios ?? []).prefix(40).map { LogoRef(kind: "studio", name: $0.name) }
+            + (networks ?? []).prefix(40).map { LogoRef(kind: "network", name: $0.name) }
+            + (platforms ?? []).map { LogoRef(kind: "platform", name: $0.name) }
+    }
 }
 
 /// One title in a browse answer: a film (an item) or a whole show.
@@ -167,45 +206,264 @@ public struct BrowseFilter: Equatable, Identifiable {
     public static let keys = ["genre", "studio", "network", "kind", "disc", "decade", "year", "content", "minRating", "resolution",
                               "audio", "subtitle", "format", "tag", "edition", "series", "watched", "platform", "search"]
 
-    /// In the order the website's Filters sheet has them.
+    /// The choices that come from the library's facets. A score and watched or not are fixed: see `FilterSection`.
     public static let groups = [
         BrowseFilter(key: "genre", title: "Category", facets: "genres", limit: 24),
         BrowseFilter(key: "kind", title: "Type", facets: "kinds", limit: 24),
         BrowseFilter(key: "studio", title: "Studio", facets: "studios", limit: 16),
         BrowseFilter(key: "network", title: "Network", facets: "networks", limit: 16),
+        BrowseFilter(key: "platform", title: "Listed on", facets: "platforms", limit: 24),
         BrowseFilter(key: "decade", title: "Decade", facets: "decades", limit: 24),
         BrowseFilter(key: "year", title: "Year", facets: "years", limit: 10),
         BrowseFilter(key: "content", title: "Age rating", facets: "content", limit: 24),
         BrowseFilter(key: "resolution", title: "Picture", facets: "resolutions", limit: 24),
+        BrowseFilter(key: "format", title: "Sound", facets: "formats", limit: 24),
         BrowseFilter(key: "audio", title: "Audio language", facets: "audio", limit: 24),
         BrowseFilter(key: "subtitle", title: "Subtitles", facets: "subtitles", limit: 24),
+        BrowseFilter(key: "edition", title: "Edition", facets: "editions", limit: 24),
+        BrowseFilter(key: "tag", title: "Tags", facets: "tags", limit: 24),
     ]
 
     /// The fixed choices, which have no facets: a score, and watched or not.
     public static let scores = ["9", "8", "7", "6"]
     public static let watched = [("no", "Not watched yet"), ("yes", "Watched")]
 
-    /// A filter's name on the chip that takes it off.
-    public static func title(of key: String) -> String {
-        switch key {
-        case "minRating": return "Score"
-        case "watched": return "Watched"
-        case "search": return "Words"
-        case "disc": return "On disc"
-        case "series": return "Collection"
-        default: return groups.first { $0.key == key }?.title ?? key.capitalized
-        }
+    /// This group's choices from the library's facets. "No sound" isn't something to look for.
+    public func choices(in facets: Facets) -> [Facet] {
+        let list = facets[self.facets]
+        return key == "format" ? list.filter { $0.value != "none" } : list
     }
 
-    /// A chosen value in words, as the website says it.
+    /// A filter's name on the chip that takes it off: the website's LABELS, which say "Tag" where the sheet
+    /// says "Tags".
+    public static let labels = [
+        "genre": "Category", "studio": "Studio", "network": "Network", "kind": "Type", "disc": "On disc", "decade": "Decade",
+        "year": "Year", "content": "Age rating", "minRating": "Score", "resolution": "Picture", "audio": "Audio language",
+        "subtitle": "Subtitles", "format": "Sound", "tag": "Tag", "edition": "Edition", "series": "Collection",
+        "watched": "Watched", "platform": "Listed on", "search": "Words",
+    ]
+
+    public static func title(of key: String) -> String { labels[key] ?? key }
+
+    /// A chosen value in words, as the website says it (Filters.tsx, `friendly`).
     public static func words(_ key: String, _ value: String) -> String {
         switch key {
+        case "audio", "subtitle": return languageName(value)
         case "minRating": return "\(value) or more"
-        case "watched": return watched.first { $0.0 == value }?.1 ?? value
+        case "decade": return "\(value)s"
+        case "watched": return value == "yes" ? "Watched" : "Not watched yet"
         case "kind": return ["video": "Video files", "dvd": "DVDs", "bluray": "Blu-rays", "disc": "DVDs and Blu-rays", "show": "TV shows"][value] ?? value
+        case "disc": return ["movie": "Films", "tv": "TV series", "music": "Music"][value] ?? value
         case "resolution": return ["4k": "4K", "1080p": "1080p", "720p": "720p", "sd": "SD"][value] ?? value
         default: return value
         }
+    }
+
+    /// The website's names for the language codes files and discs use (api.ts, `LANGS`), then the system's, then
+    /// the code as it is.
+    private static let languages = [
+        "en": "English", "nl": "Dutch", "fr": "French", "de": "German", "es": "Spanish", "it": "Italian", "pt": "Portuguese", "ja": "Japanese",
+        "zh": "Chinese", "ko": "Korean", "ru": "Russian", "sv": "Swedish", "da": "Danish", "no": "Norwegian", "fi": "Finnish", "pl": "Polish",
+        "cs": "Czech", "hu": "Hungarian", "el": "Greek", "tr": "Turkish", "he": "Hebrew", "ar": "Arabic", "hi": "Hindi", "th": "Thai",
+        "eng": "English", "dut": "Dutch", "nld": "Dutch", "fre": "French", "fra": "French", "ger": "German", "deu": "German", "spa": "Spanish",
+        "ita": "Italian", "por": "Portuguese", "jpn": "Japanese", "chi": "Chinese", "zho": "Chinese", "kor": "Korean", "rus": "Russian", "und": "Unknown",
+        "gre": "Greek", "rum": "Romanian", "cze": "Czech", "ice": "Icelandic", "per": "Persian", "baq": "Basque", "slo": "Slovak", "mac": "Macedonian",
+        "alb": "Albanian", "arm": "Armenian", "geo": "Georgian", "bur": "Burmese", "may": "Malay", "wel": "Welsh", "tib": "Tibetan", "mul": "Several languages", "zxx": "None",
+    ]
+
+    public static func languageName(_ code: String) -> String {
+        guard !code.isEmpty else { return "Unknown" }
+        let lower = code.lowercased()
+        if let name = languages[lower] { return name }
+        if let name = Locale(identifier: "en").localizedString(forLanguageCode: lower), name.lowercased() != lower { return name }
+        return code.uppercased()
+    }
+}
+
+/// One part of the website's Filters sheet, in its order: the facet groups, with a score and watched or not
+/// after the age rating.
+public enum FilterSection: Equatable, Identifiable {
+    case facets(BrowseFilter)
+    case score
+    case watched
+
+    public var id: String {
+        switch self {
+        case .facets(let filter): return filter.key
+        case .score: return "minRating"
+        case .watched: return "watched"
+        }
+    }
+
+    public var title: String {
+        switch self {
+        case .facets(let filter): return filter.title
+        case .score: return "Score"
+        case .watched: return "Watched"
+        }
+    }
+
+    public static let all: [FilterSection] = {
+        let groups = BrowseFilter.groups.map(FilterSection.facets)
+        let at = (groups.firstIndex { $0.id == "content" } ?? groups.count - 1) + 1
+        return Array(groups[..<at]) + [.score, .watched] + Array(groups[at...])
+    }()
+}
+
+// MARK: - A library page's address
+
+/// Everything a film or TV library's page shows, as the website keeps it in its address
+/// (`/library/3?genre=Drama&sort=rating&desc=1`). A saved view is this, written down.
+public struct LibraryState: Equatable, Hashable {
+    /// A sort someone chose. None is the shelves, or Title A to Z in a grid.
+    public var sort: String?
+    public var descending = false
+    /// Fixed for one shuffle, so the next page is the same shuffle.
+    public var seed: Int?
+    public var filters: [String: String] = [:]
+    /// "All films": the grid with nothing chosen.
+    public var all = false
+
+    public init(sort: String? = nil, descending: Bool = false, seed: Int? = nil, filters: [String: String] = [:], all: Bool = false) {
+        self.sort = sort
+        self.descending = descending
+        self.seed = seed
+        self.filters = filters
+        self.all = all
+    }
+
+    /// The filters that are on, in the website's order.
+    public var chosen: [(key: String, value: String)] { BrowseQuery(library: 0, filters: filters).chosen }
+
+    /// Something asked for: a grid rather than shelves.
+    public var asGrid: Bool { !chosen.isEmpty || sort != nil || all }
+
+    /// A library with nothing to put on shelves is a grid from the start.
+    public func grid(bare: Bool) -> Bool { asGrid || bare }
+
+    /// The sort to show as chosen: Title A to Z is what a grid is in until another is chosen.
+    public func shownSort(grid: Bool) -> String? { sort ?? (grid ? "title" : nil) }
+
+    /// Whether the sort can be turned round. Shuffle has no direction, and Newest and Oldest are each other's.
+    public var turns: Bool {
+        guard let sort, LibrarySort.all.contains(where: { $0.key == sort }) else { return false }
+        return !["shuffle", "newest", "oldest"].contains(sort)
+    }
+
+    public func query(library: Int64) -> BrowseQuery {
+        BrowseQuery(library: library, sort: sort ?? "title", descending: descending, filters: filters, seed: seed)
+    }
+
+    /// A sort starts in its own direction; a shuffle gets a new order each time it's chosen.
+    public mutating func choose(_ choice: LibrarySort, seed shuffle: Int) {
+        sort = choice.key
+        descending = choice.descending
+        seed = choice.key == "shuffle" ? shuffle : nil
+    }
+
+    /// A filter set, or taken off with nothing.
+    public mutating func set(_ key: String, _ value: String) {
+        filters[key] = value.isEmpty ? nil : value
+    }
+
+    /// A saved view's query, as the website reads an address: `genre=Sci-Fi+%26+Fantasy&sort=rating&desc=1`.
+    public init(query: String) {
+        var fields: [String: String] = [:]
+        for pair in query.split(separator: "&") {
+            let parts = pair.split(separator: "=", maxSplits: 1, omittingEmptySubsequences: false)
+            guard let name = parts.first.map({ Self.formDecode(String($0)) }), fields[name] == nil else { continue }
+            fields[name] = parts.count > 1 ? Self.formDecode(String(parts[1])) : ""
+        }
+        self.init()
+        for key in BrowseFilter.keys { if let value = fields[key], !value.isEmpty { filters[key] = value } }
+        if let sort = fields["sort"], !sort.isEmpty { self.sort = sort }
+        descending = fields["desc"] == "1"
+        seed = fields["seed"].flatMap { Int($0) }
+        all = fields["view"] == "all"
+    }
+
+    /// What Save this view keeps: the filters, then the sort and its direction (not a shuffle's seed).
+    public var savedQuery: String { written(whole: false) }
+
+    /// All of it, for the server's own page of the library: a shuffle's seed and "All films" too.
+    public var address: String { written(whole: true) }
+
+    private func written(whole: Bool) -> String {
+        var parts = chosen.map { "\($0.key)=\(Self.formEncode($0.value))" }
+        if let sort { parts.append("sort=\(Self.formEncode(sort))") }
+        if descending { parts.append("desc=1") }
+        if whole, let seed { parts.append("seed=\(seed)") }
+        if whole, all { parts.append("view=all") }
+        return parts.joined(separator: "&")
+    }
+
+    /// The name Save this view suggests: what's chosen, in words.
+    public var suggestedName: String {
+        String(chosen.map { BrowseFilter.words($0.key, $0.value) }.joined(separator: ", ").prefix(60))
+    }
+
+    /// As a browser writes a form: letters, digits and `*-._` as they are, a space as `+`, the rest escaped.
+    static func formEncode(_ text: String) -> String {
+        var out = ""
+        for byte in text.utf8 {
+            switch byte {
+            case UInt8(ascii: "a")...UInt8(ascii: "z"), UInt8(ascii: "A")...UInt8(ascii: "Z"), UInt8(ascii: "0")...UInt8(ascii: "9"),
+                 UInt8(ascii: "*"), UInt8(ascii: "-"), UInt8(ascii: "."), UInt8(ascii: "_"):
+                out.unicodeScalars.append(Unicode.Scalar(byte))
+            case UInt8(ascii: " "):
+                out += "+"
+            default:
+                out += String(format: "%%%02X", byte)
+            }
+        }
+        return out
+    }
+
+    static func formDecode(_ text: String) -> String {
+        let spaced = text.replacingOccurrences(of: "+", with: " ")
+        return spaced.removingPercentEncoding ?? spaced
+    }
+}
+
+/// A view someone saved of a library: `/views`.
+public struct SavedView: Decodable, Equatable, Identifiable {
+    public let id: Int64
+    public let libraryId: Int64?
+    public let name: String
+    public let query: String?
+    public let pinned: Bool?
+    public let position: Int?
+
+    public var state: LibraryState { LibraryState(query: query ?? "") }
+}
+
+/// Whether streaming listings are on, for which region and how fresh: `/listings/status`.
+public struct ListingStatus: Decodable, Equatable {
+    public let enabled: Bool?
+    public let region: String?
+    /// Seconds since 1970 of the newest listing, or 0.
+    public let newest: Int64?
+    public let attribution: String?
+}
+
+/// A library's scan, while there is one: `GET /libraries/{id}/scan`.
+public struct ScanState: Decodable, Equatable {
+    public struct Progress: Decodable, Equatable {
+        public let done: Int?
+        public let found: Int?
+
+        public init(done: Int? = nil, found: Int? = nil) {
+            self.done = done
+            self.found = found
+        }
+    }
+
+    public let scanning: Bool?
+    public let progress: Progress?
+
+    /// "Scanning… 12/40", as the website's button says it; "?" until the files are counted.
+    public static func words(_ progress: Progress) -> String {
+        "Scanning… \(progress.done ?? 0)/\(progress.found.map(String.init) ?? "?")"
     }
 }
 
@@ -253,6 +511,12 @@ public enum LibraryWords {
         default: noun = ("film", "films")
         }
         return "\(count) \(count == 1 ? noun.0 : noun.1)"
+    }
+
+    /// A category's row shows 20; when it has more, its "See all" says how many.
+    public static func seeAll(_ count: Int?) -> String {
+        guard let count, count > 20 else { return "See all" }
+        return "See all \(count)"
     }
 }
 

@@ -285,7 +285,7 @@ public final class WittyClient: @unchecked Sendable {
 
     // MARK: A library's page and saving, as the website has them: see Browse.swift
 
-    /// A film or TV library's categories and collections, which its page starts with.
+    /// A film or TV library's categories, studios, networks, collections and services, which its page starts with.
     public func shelves(library: Int64) async throws -> Shelves { try await get("/browse/shelves?library=\(library)") }
 
     /// Films and shows in a library, sorted and filtered: a row, or a page of a grid.
@@ -419,6 +419,50 @@ public final class WittyClient: @unchecked Sendable {
     /// Looks through a library's folders again. Administrators only.
     public func scan(library: Int64) async throws {
         _ = try await call("POST", "/libraries/\(library)/scan", body: Data("{}".utf8))
+    }
+
+    /// Whether a library is being scanned, and how far it has got.
+    public func scanState(library: Int64) async throws -> ScanState { try await get("/libraries/\(library)/scan") }
+
+    /// The account's saved views, of every library.
+    public func savedViews() async throws -> [SavedView] {
+        struct Answer: Decodable { let views: [SavedView]? }
+        let answer: Answer = try await get("/views")
+        return answer.views ?? []
+    }
+
+    /// Saves a view of a library: its filters and sort, as `LibraryState.savedQuery` writes them.
+    @discardableResult
+    public func saveView(library: Int64, name: String, query: String, pinned: Bool) async throws -> SavedView {
+        try decoder.decode(SavedView.self, from: try await call("POST", "/views", body: Self.savedViewBody(library: library, name: name, query: query, pinned: pinned)))
+    }
+
+    static func savedViewBody(library: Int64, name: String, query: String, pinned: Bool) throws -> Data {
+        struct Body: Encodable { let libraryId: Int64; let name: String; let query: String; let pinned: Bool }
+        return try JSONEncoder().encode(Body(libraryId: library, name: name, query: query, pinned: pinned))
+    }
+
+    /// How many of a library's titles wait for an administrator to check their match.
+    public func matchesWaiting(library: Int64) async throws -> Int {
+        struct Answer: Decodable { let counts: [String: Int]? }
+        let answer: Answer = try await get("/match/queue?library=\(library)&limit=1")
+        return answer.counts?["review"] ?? 0
+    }
+
+    public func listingStatus() async throws -> ListingStatus { try await get("/listings/status") }
+
+    /// What to show for studios, networks and services: a logo, or the name. 200 names at most, as the server takes.
+    public func logos(_ names: [LogoRef]) async throws -> [LogoInfo] {
+        guard !names.isEmpty else { return [] }
+        struct Answer: Decodable { let logos: [LogoInfo]? }
+        let body = try JSONEncoder().encode(["logos": Array(names.prefix(200))])
+        return try decoder.decode(Answer.self, from: try await call("POST", "/logos/lookup", body: body)).logos ?? []
+    }
+
+    /// A logo's picture: `white`, `dark` or `original` (see `LogoLook.variant`).
+    public func logoURL(_ logo: LogoInfo, variant: String) -> URL? {
+        guard let id = logo.id else { return nil }
+        return URL(string: "\(base)\(apiPath)/logos/\(id)/image?variant=\(Self.queryValue(variant))&v=\(logo.version ?? 0)")
     }
 
     public func collections() async throws -> [TitleCollection] { try await list("/collections") }
