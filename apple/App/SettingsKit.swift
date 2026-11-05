@@ -87,6 +87,8 @@ struct RowLabel: View {
     let title: String
     var value = ""
     var detail = ""
+    /// A small pill on the trailing side, such as "This device".
+    var badge = ""
     var chevron = true
     var destructive = false
 
@@ -105,6 +107,14 @@ struct RowLabel: View {
             Spacer(minLength: Tokens.Space.s2)
             if !value.isEmpty {
                 Text(value).font(.wmSecondary).foregroundStyle(palette.textSecondary).lineLimit(1)
+            }
+            if !badge.isEmpty {
+                Text(badge)
+                    .font(.caption.weight(.medium))
+                    .foregroundStyle(palette.text)
+                    .padding(.horizontal, Tokens.Space.s2)
+                    .padding(.vertical, 3)
+                    .background(Capsule().fill(palette.border))
             }
             if chevron {
                 Image(systemName: "chevron.right")

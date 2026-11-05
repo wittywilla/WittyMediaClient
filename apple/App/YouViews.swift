@@ -681,35 +681,24 @@ struct DevicesView: View {
         return words.localizedString(for: when, relativeTo: now)
     }
 
+    /// This device is just shown; any other is a row that asks before signing it out. The quiet
+    /// "Sign out" on the trailing side says what pressing does, without a column of red.
     @ViewBuilder private func row(_ device: SignedInDevice) -> some View {
         let detail = [Self.whereWords(device.place), device.isThisDevice ? say("activeNow") : Self.seen(device.lastSeen)]
             .filter { !$0.isEmpty }.joined(separator: " · ")
-        let label = HStack(spacing: 0) {
-            RowLabel(icon: Self.icon(device.kind), tint: RowTint.devices, title: device.name, detail: detail, chevron: false)
-            if device.isThisDevice {
-                Text(say("thisDevice"))
-                    .font(.caption.weight(.medium))
-                    .foregroundStyle(palette.text)
-                    .padding(.horizontal, Tokens.Space.s2)
-                    .padding(.vertical, 3)
-                    .background(Capsule().fill(palette.border))
-                    .padding(.trailing, Tokens.Space.s4)
-            }
-        }
-        if device.isThisDevice || metrics.tv {
-            // On a TV the whole row is the button; this device has nothing to press.
-            Button { if !device.isThisDevice { leaving = device } } label: { label }
-                .rowStyle()
-                .disabled(device.isThisDevice && !metrics.tv)
+        if device.isThisDevice {
+            RowLabel(icon: Self.icon(device.kind), tint: RowTint.devices, title: device.name, detail: detail,
+                     badge: say("thisDevice"), chevron: false)
+                #if os(tvOS)
+                .focusable()
+                #endif
         } else {
-            HStack(spacing: 0) {
-                label
-                Button(say("signOut")) { leaving = device }
-                    .font(.subheadline.weight(.medium))
-                    .foregroundStyle(palette.danger)
-                    .padding(.trailing, Tokens.Space.s4)
-                    .buttonStyle(.plain)
+            Button { leaving = device } label: {
+                RowLabel(icon: Self.icon(device.kind), tint: RowTint.devices, title: device.name, value: say("signOut"),
+                         detail: detail, chevron: false)
             }
+            .rowStyle()
+            .accessibilityHint(say("signOut"))
         }
     }
 
