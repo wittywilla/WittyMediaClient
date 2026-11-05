@@ -90,9 +90,9 @@ styles, so Dynamic Type still works; on Android they're `sp`.
 |---|---|
 | A button pressed | 0.97 scale and 85% opacity while held |
 | A screen pushed | The system's own transition |
-| A profile tile chosen | The avatar lifts 3 and gains a ring (`background` 3, then `text` 3), as on the web |
+| A profile tile chosen | The avatar lifts 3 and gains two rings concentric with it, `background` 3 then `text` 3, as on the web (on a TV: lifts 6, grows 1.06, rings 4 and 4) |
 | Something appearing | 200 ms fade, and 8 up |
-| Focus on a TV | 1.06 scale and a 4-wide ring in `text`, no animation beyond that |
+| Focus on a TV | 1.06 scale and a concentric 4-wide ring in `text`; number pad keys fill with `text` instead (see On a TV) |
 
 ### Icons
 
@@ -314,7 +314,7 @@ A single column, gutter 16, at most 640 wide and centred on a tablet; it scrolls
 | `groupAccount` | `rowNames` Name and username | `person.text.rectangle` / `badge`, `#0a6fb8` | the profile name | Names (native) | everyone |
 | | `rowPassword` Password | `key` / `key`, `#3e5bd0` | | Password (native) | adults, admins |
 | | `rowTwoStep` Two-step sign-in | `lock.shield` / `shield_lock`, `#2e7d3c` | `on` / `off` | Two-step (native) | adults, admins, when the server offers it |
-| | `rowDevices` Your devices | `iphone.and.ipad` / `devices`, `#7f46b8` | how many | Devices (native) | everyone |
+| | `rowDevices` Your devices | `ipad.and.iphone` / `devices`, `#7f46b8` | how many | Devices (native) | everyone |
 | `groupHousehold` | `rowSignInTv` Sign in a TV | `tv` / `tv`, `#bd2f85` | | Sign in a TV (native) | adults, admins; not on a TV |
 | | `rowProfiles` Profiles and parental limits | `figure.2.and.child.holdinghands` / `family_restroom`, `#b8500d` | | `/settings/users` | adults, admins |
 | `groupYours` | `rowYourYear` Your year | `sparkles` / `auto_awesome`, `#c9302f` | | `/review` | everyone |
@@ -460,12 +460,22 @@ Anything added to the server's menus later goes in the table above before it shi
 Apple TV and Android TV are the same app to look at. Sizes are given in TV units: one TV unit is one point on Apple TV
 (1920×1080) and half a dp on Android TV (960×540 dp), so a layout measured in one is the same in the other.
 
-- **Focus** is a 4-wide ring in `text` around the focused thing, 4 outside it, and a 1.06 scale. No system highlight,
-  no parallax: the same on both. Focus starts on the screen's main action and comes back where it was left.
+- **Focus** is a 4-wide ring in `text`, 4 outside the focused thing, and a 1.06 scale. The ring is **concentric**: each
+  of its corners is the thing's own radius plus its distance out (so a radius 14 key has a ring whose outer edge is
+  radius 22), never the thing's radius drawn larger. The ring scales with the thing. Focusable things sit at least 16
+  apart, so a focused one's ring never touches or covers a neighbour, and nothing that can take focus sits in a row or
+  list that clips it: rows leave 24 above and below for the ring. No system highlight, no parallax: the same on both.
+  Focus starts on the screen's main action and comes back where it was left.
 - **Sign-in screens** put the words on the left half and the actions on the right half, vertically centred, inside the
   90 gutter; the glow sits behind the words. Who's watching is the exception: centred, with the tiles in one row.
-- **Profile tiles** are 200 avatars in one centred row, 48 apart, with the names under them.
-- **The code pad** is on the right, the code boxes on the left. Digits on a remote's number keys also type.
+- **Profile tiles** are 200 avatars in one centred row, 48 apart, with the names under them. Focused, **only the
+  avatar** reacts: it lifts 6 and grows 1.06, with a `background` band 4 wide and then the `text` ring 4 wide around it,
+  both concentric with its corners. The name brightens from `textSecondary` to `text` and keeps its size; the badge
+  moves with the avatar. The row leaves 24 above the avatars, so the lifted ring is never cut off.
+- **The code pad** is on the right, the code boxes on the left. Its keys are `card`, radius 14, 96 high and **16
+  apart**. A focused key has **no ring**: it fills with `text`, its digit or the delete icon turns `background`, and it
+  grows 1.06, as both systems' own keyboards do; a grid of rings would crowd the keys. Pressed, it dims as any button.
+  Digits on a remote's number keys also type.
 - **Fields** open the system's keyboard; on Android TV the IME, on Apple TV the system keyboard, which a phone can type into.
 - **Top bar:** Home, Search and You as pills along the top, 24 from the top edge, the chosen one filled `accent` with
   its name; up from the first row reaches it.
