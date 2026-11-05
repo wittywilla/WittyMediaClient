@@ -80,10 +80,11 @@ class Api(val base: String, val token: String, private val quick: Boolean = fals
 
     // Only for a signed-in connection: an address being tried has its own words on
     // screen. A sign-in that has run out and a stream already gone are normal.
-    private fun reportsFailure(method: String, status: Int) =
-        !quick && token.isNotEmpty() && status != 401 && !(method == "DELETE" && status == 404)
+    // optional: a route an older server doesn't have, so its 404 is an answer and not a fault.
+    private fun reportsFailure(method: String, status: Int, optional: Boolean = false) =
+        !quick && token.isNotEmpty() && status != 401 && !(method == "DELETE" && status == 404) && !(optional && status == 404)
 
-    private suspend fun call(method: String, path: String, body: String? = null): String {
+    private suspend fun call(method: String, path: String, body: String? = null, optional: Boolean = false): String {
         val where = "$method ${path.substringBefore('?')}"
         val answer = try {
             raw(method, path, body)
@@ -93,7 +94,7 @@ class Api(val base: String, val token: String, private val quick: Boolean = fals
         }
         if (answer.status !in 200..299) {
             val message = errorText(answer.status, answer.text)
-            if (reportsFailure(method, answer.status)) {
+            if (reportsFailure(method, answer.status, optional)) {
                 val words = "$where answered ${answer.status}: $message"
                 if (answer.status >= 500) ClientLog.error("request", words, request = answer.requestId)
                 else ClientLog.warn("request", words, request = answer.requestId)
@@ -110,6 +111,13 @@ class Api(val base: String, val token: String, private val quick: Boolean = fals
 
     suspend fun capabilities(): Capabilities = get("/capabilities")
     suspend fun status(): ServerStatus = get("/status")
+
+    // Null from a server too old to say.
+    suspend fun remoteStatus(): RemoteStatus? = try {
+        json.decodeFromString<RemoteStatus>(call("GET", "/remote/status", optional = true))
+    } catch (e: ApiError) {
+        if (e.status == 404) null else throw e
+    }
     suspend fun profiles(): Profiles = get("/profiles")
     suspend fun home(): Home = get("/home")
     suspend fun item(id: Long): Item = get("/items/$id")

@@ -16,6 +16,15 @@ data class ServerStatus(
     val user: User? = null,
 )
 
+// How remote access stands, in the server's own words (GET /remote/status), to be shown as sent.
+// level is good, waiting or fault.
+@Serializable
+data class RemoteStatus(
+    val level: String = "",
+    val subject: String = "",
+    val summary: String = "",
+)
+
 @Serializable
 data class User(
     val id: Long = 0,
