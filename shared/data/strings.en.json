@@ -140,7 +140,7 @@
   "profileNameLabel": "Profile name",
   "profileNameHint": "What everyone sees on this server's profiles. Leave it empty to use your username.",
   "usernameHint": "What you type to sign in.",
-  "usernameKidsHint": "Only an adult can change the username of this profile.",
+  "usernameKidsHint": "Only an adult can change this profile's names.",
   "showUsernameLabel": "Show my username instead",
   "showUsernameHint": "Next to your picture in the server's own pages, in place of your profile name.",
   "errUsernameEmpty": "Type a username. It's what you sign in with.",
@@ -190,5 +190,8 @@
   "themeHint": "Only on this device. The server's own pages in the app follow it too.",
   "themeAutomatic": "Automatic",
   "themeAutomaticHint": "Light or dark, as this device is set",
-  "themeServer": "The server's choice"
+  "themeServer": "The server's choice",
+  "twoStepCodeLabel": "Code from your authenticator app",
+  "signInTvAnother": "Sign in another TV",
+  "profileNameEmptyHint": "Shown as your username."
 }
