@@ -134,10 +134,10 @@ class GamesApi(val api: Api) {
     fun backdropUrl(game: GameItem): String = "${api.base}$API/items/${game.id}/backdrop?v=${game.updatedAt}"
     fun saveThumbUrl(game: Long, slot: Int, version: Long): String = "${api.base}$API/games/$game/saves/$slot/thumb?v=$version"
 
-    // The WebSocket for a game: `video` is h264 or jpeg. OkHttp turns ws into http for the upgrade, so the
-    // app's connection adds the sign-in header to it as to any request to this server.
-    fun openSocket(sid: String, video: String, listener: WebSocketListener): WebSocket {
-        val request = Request.Builder().url(api.base + API + "/play/${q(sid)}/ws?video=${q(video)}").build()
+    // A game's WebSocket, at a path under /api/v1 (see GameTransport.kt). OkHttp turns ws into http for the upgrade, so
+    // the app's connection adds the sign-in header to it as to any request to this server, and never to an address.
+    fun openWebSocket(path: String, listener: WebSocketListener): WebSocket {
+        val request = Request.Builder().url(api.base + API + path).build()
         return socketClient.newWebSocket(request, listener)
     }
 }

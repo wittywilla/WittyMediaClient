@@ -25,6 +25,27 @@ offers Resume from the automatic save. Leaving the app lets go of every control,
 `emulation.pauseHidden` says so, and closes the connection; coming back reconnects and unpauses. Save and quit is
 `DELETE /play/{sid}` and waits for the save; leaving the player any other way still stops the game on the server.
 
+## Transports
+
+The player talks to a `GameTransport` (`games/GameTransport.kt`): media and events in, input and events out. Two are built:
+
+- **Version 1:** `GET /play/{sid}/ws?video=h264|jpeg` (WittyMediaServer `docs/GAMING-API.md`), used by servers today.
+- **Version 2:** `GET /play/{sid}/stream` as a WebSocket (WittyMediaServer `docs/GAMING-STREAM.md`), used whenever a mode in the
+  session's `modes` says `"stream": 2`. The hello goes first (this device's id and name, `seats`, `display.hz` and size,
+  `latency`, `video: ["h264"]` or none for JPEG, `audio: ["pcm"]`); frames come as `0x11` with their number and 90 kHz time,
+  and a `{"type":"report","delayMs":N}` goes twice a second (`ArrivalDelay`), so a slow link can't fill with seconds of video.
+  The stream's description sets the shape, rate and seats; `seats` follow the controllers plugged in; refusals and
+  `ended` codes show in plain words; rumble lasts its `ms` unless renewed.
+
+On Android TV the picture's surface asks for the game's own frame rate (`Surface.setFrameRate`, Android 11+), and the new
+refresh rate goes to the server as a `report`, which version 2 uses to pace the game to the screen. Controllers show their
+player number on their own lights where Android 12+ has them.
+
+Not yet: WebRTC through libwebrtc (version 2's first choice), Opus over the WebSocket (PCM is asked for instead), several
+fingers (`0xFE`), motion (`0xE1`) and the game's `led` lights. Version 2 is covered by unit tests only: the test server
+doesn't serve it yet. `GameTransportTest.playsOverTheServersTransports` runs each transport a server offers against a real
+game when `WMS_LIVE_URL`, `WMS_LIVE_TOKEN` and `WMS_LIVE_GAME` are set.
+
 ## Controls
 
 - **Gamepads** arrive as key and joystick events, read into the W3C standard layout by position, which is how Android names
@@ -35,7 +56,8 @@ offers Resume from the automatic save. Leaving the app lets go of every control,
   together open the menu; the person's Select shortcuts (`hotkeys.pad.*`) fast-forward, rewind, quick save and so on.
 - **Players**: each pad takes the next free player, 1 to 4, when it's plugged in, and keeps it; the game menu can move
   one to another player. Unplugging lets go of everything it held.
-- **Rumble** goes to the pad on that player through `VibratorManager` (two motors where it has them), or its `Vibrator`.
+- **Rumble** goes to the pad on that player through `VibratorManager` (the strong motor on the first vibrator, the weak on
+  the second, where it has two), or its `Vibrator`: until it changes on version 1, for its `ms` on version 2.
 - **A keyboard** plays as player 1 by the console's keyboard layout; Escape opens the menu, and the person's key shortcuts work.
 - **A TV remote** is for the menus (APP-DESIGN): Back or OK opens the game menu, which has Press Start and Press Select.
 - **Touch**, on phones and tablets with no controller in use: the account's layout for this device and orientation from
@@ -51,6 +73,7 @@ offers Resume from the automatic save. Leaving the app lets go of every control,
 | The player, loading steps, problems, the game menu | `games/GamePlayer.kt`, `games/GameTouchControls.kt` |
 | A session, the stream, sound, input | `games/GamePlay.kt`, `games/GameMedia.kt`, `games/GameInput.kt` |
 | Data, routes, and the logic the tests cover | `games/GameData.kt`, `games/GamesApi.kt`, `games/GamePad.kt`, `games/GameTouch.kt`, `games/GameStream.kt` |
+| How the game arrives: version 1 and version 2 | `games/GameTransport.kt` |
 | Into the app | `ui/GamesRoute.kt`, and one line each in `Nav.open`, AppRoot and `MainActivity` |
 
 ## Not yet

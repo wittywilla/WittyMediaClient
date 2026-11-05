@@ -130,7 +130,7 @@ fun GamePlayerScreen(app: WittyApp, gameId: Long, start: GameStart, onClose: () 
         if (play.session != null) {
             key(play.videoKind, fit.turns != 0) {
                 PictureSurface(
-                    play, play.videoKind, fit.turns,
+                    play, play.videoKind, fit.turns, if (look.tv) play.fps else 0.0,
                     Modifier
                         .offset { IntOffset(pictureLeft.roundToInt(), pictureTop.roundToInt()) }
                         .size(with(density) { fit.width.toDp() }, with(density) { fit.height.toDp() }),
@@ -204,18 +204,22 @@ private fun FullScreen() {
 // Where the picture is drawn. A SurfaceView, which the system shows with the least delay; a picture that has to
 // be turned goes on a TextureView, which can be.
 @Composable
-private fun PictureSurface(play: GamePlay, kind: String, turns: Int, modifier: Modifier) {
+private fun PictureSurface(play: GamePlay, kind: String, turns: Int, displayFps: Double, modifier: Modifier) {
     if (turns == 0) {
         AndroidView(
             factory = { context ->
                 SurfaceView(context).apply {
                     holder.addCallback(object : SurfaceHolder.Callback {
-                        override fun surfaceCreated(holder: SurfaceHolder) = play.surfaceFor(kind, holder.surface)
+                        override fun surfaceCreated(holder: SurfaceHolder) {
+                            matchFrameRate(holder.surface, displayFps)
+                            play.surfaceFor(kind, holder.surface)
+                        }
                         override fun surfaceChanged(holder: SurfaceHolder, format: Int, width: Int, height: Int) {}
                         override fun surfaceDestroyed(holder: SurfaceHolder) = play.surfaceFor(kind, null)
                     })
                 }
             },
+            update = { view -> view.holder.surface?.takeIf { it.isValid }?.let { matchFrameRate(it, displayFps) } },
             modifier = modifier,
         )
     } else {
@@ -248,6 +252,13 @@ private fun PictureSurface(play: GamePlay, kind: String, turns: Int, modifier: M
             )
         }
     }
+}
+
+// A TV shows the game at its own rate where it can: 50 Hz for a PAL game, 60 for the rest (docs/GAMING-STREAM.md,
+// "Frame pacing"). The display listener in GamePlay then tells the server the new rate.
+private fun matchFrameRate(surface: Surface, fps: Double) {
+    if (fps <= 0 || Build.VERSION.SDK_INT < 30) return
+    runCatching { surface.setFrameRate(fps.toFloat(), Surface.FRAME_RATE_COMPATIBILITY_FIXED_SOURCE) }
 }
 
 // The website's loading screen: the game, and each step on the way to its first picture.

@@ -8,6 +8,10 @@ import android.os.Looper
 import android.os.SystemClock
 import android.os.CombinedVibration
 import android.os.VibrationEffect
+import android.hardware.lights.Light
+import android.hardware.lights.LightState
+import android.hardware.lights.LightsManager
+import android.hardware.lights.LightsRequest
 import android.view.InputDevice
 import android.view.KeyEvent
 import android.view.MotionEvent
@@ -60,6 +64,13 @@ class GameInput(context: Context, private val scope: CoroutineScope, private val
         var strong = 0.0
         var weak = 0.0
         var rumbledAt = 0L
+
+        // Version 2 says how long each rumble lasts; version 1's last until it says otherwise, renewed here.
+        var rumbleMs = RUMBLE_MS
+        var rumbleUntil = Long.MAX_VALUE
+
+        // The player number on the controller's own lights, where it has them (Android 12 and later).
+        var lights: Any? = null
     }
 
     private val inputManager = context.getSystemService(Context.INPUT_SERVICE) as InputManager
@@ -88,6 +99,10 @@ class GameInput(context: Context, private val scope: CoroutineScope, private val
     var onMenu: () -> Unit = {}
     var onNotice: (String) -> Unit = {}
     var loadProfile: suspend (String) -> ResolvedPad? = { null }
+
+    // The players this device holds changed: a version 2 server is told, so it keeps them for this device.
+    var onSeats: (List<Int>) -> Unit = {}
+    private var lastSeats: List<Int> = listOf(0)
 
     // For the screen: who plays as whom, and whether a controller is in use (the touch controls step aside).
     var players by mutableStateOf<List<GamePlayerInfo>>(emptyList())
@@ -121,7 +136,10 @@ class GameInput(context: Context, private val scope: CoroutineScope, private val
         inputManager.unregisterInputDeviceListener(this)
         main.removeCallbacks(beat)
         main.removeCallbacks(turbo)
-        for (pad in pads.values) stopRumble(pad)
+        for (pad in pads.values) {
+            stopRumble(pad)
+            closeLights(pad)
+        }
         pads.clear()
         started = false
     }
@@ -182,6 +200,7 @@ class GameInput(context: Context, private val scope: CoroutineScope, private val
     private fun detach(deviceId: Int) {
         val pad = pads.remove(deviceId) ?: return
         stopRumble(pad)
+        closeLights(pad)
         // Fast-forward or rewind held on it stops with it.
         for (s in pad.shortcuts.endAll()) onShortcut(s, false)
         emit(pad.port)
@@ -205,6 +224,32 @@ class GameInput(context: Context, private val scope: CoroutineScope, private val
     private fun refreshPlayers() {
         players = pads.values.sortedBy { it.port }.map { GamePlayerInfo(it.deviceId, it.port, it.name, it.profile) }
         controllerInUse = pads.isNotEmpty() || keysUsed
+        for (pad in pads.values) showPlayer(pad)
+        val seats = seatPorts()
+        if (seats != lastSeats) {
+            lastSeats = seats
+            onSeats(seats)
+        }
+    }
+
+    // The players this device plays: every pad's, and the first, which the keyboard and the touch controls play.
+    fun seatPorts(): List<Int> = (pads.values.map { it.port } + 0).distinct().sorted()
+
+    // The controller's player number on its lights, as a console lights it.
+    private fun showPlayer(pad: Pad) {
+        if (Build.VERSION.SDK_INT < 31) return
+        runCatching {
+            val device = InputDevice.getDevice(pad.deviceId) ?: return
+            val manager = device.lightsManager
+            val light = manager.lights.firstOrNull { it.type == Light.LIGHT_TYPE_PLAYER_ID } ?: return
+            val session = (pad.lights as? LightsManager.LightsSession) ?: manager.openSession().also { pad.lights = it }
+            session.requestLights(LightsRequest.Builder().addLight(light, LightState.Builder().setPlayerId(pad.port + 1).build()).build())
+        }
+    }
+
+    private fun closeLights(pad: Pad) {
+        if (Build.VERSION.SDK_INT >= 31) runCatching { (pad.lights as? LightsManager.LightsSession)?.close() }
+        pad.lights = null
     }
 
     override fun onInputDeviceAdded(deviceId: Int) {
@@ -411,7 +456,11 @@ class GameInput(context: Context, private val scope: CoroutineScope, private val
                 }
             }
             val now = SystemClock.elapsedRealtime()
-            for (pad in pads.values) if ((pad.strong > 0 || pad.weak > 0) && now - pad.rumbledAt > RUMBLE_MS / 2) rumble(pad)
+            for (pad in pads.values) {
+                if (pad.strong <= 0 && pad.weak <= 0) continue
+                if (now >= pad.rumbleUntil) stopRumble(pad) // a version 2 rumble nobody renewed
+                else if (pad.rumbleUntil == Long.MAX_VALUE && now - pad.rumbledAt > RUMBLE_MS / 2) rumble(pad)
+            }
             main.postDelayed(this, HEARTBEAT_MS)
         }
     }
@@ -434,9 +483,18 @@ class GameInput(context: Context, private val scope: CoroutineScope, private val
     // MARK: rumble
 
     // A game's rumble on that player's controller: effect 0 is the strong motor, 1 the weak one.
-    fun rumble(port: Int, effect: Int, strength: Double) {
+    // `ms`, from a version 2 server, is how long to keep it unless it's said again; without it, until it changes.
+    fun rumble(port: Int, effect: Int, strength: Double, ms: Int? = null) {
+        val now = SystemClock.elapsedRealtime()
         for (pad in pads.values) if (pad.port == port) {
             if (effect == 1) pad.weak = strength else pad.strong = strength
+            if (ms != null) {
+                pad.rumbleMs = ms.toLong().coerceIn(1, 5_000)
+                pad.rumbleUntil = now + pad.rumbleMs
+            } else {
+                pad.rumbleMs = RUMBLE_MS
+                pad.rumbleUntil = Long.MAX_VALUE
+            }
             rumble(pad)
         }
     }
@@ -457,7 +515,7 @@ class GameInput(context: Context, private val scope: CoroutineScope, private val
                 }
                 val both = CombinedVibration.startParallel()
                 fun add(id: Int, v: Double) {
-                    if (amplitude(v) > 0) both.addVibrator(id, VibrationEffect.createOneShot(RUMBLE_MS, amplitude(v)))
+                    if (amplitude(v) > 0) both.addVibrator(id, VibrationEffect.createOneShot(pad.rumbleMs, amplitude(v)))
                 }
                 if (ids.size >= 2) {
                     add(ids[0], pad.strong)
@@ -474,10 +532,10 @@ class GameInput(context: Context, private val scope: CoroutineScope, private val
                 if (level <= 0) {
                     vibrator.cancel()
                 } else if (Build.VERSION.SDK_INT >= 26) {
-                    vibrator.vibrate(VibrationEffect.createOneShot(RUMBLE_MS, amplitude(level).coerceAtLeast(1)))
+                    vibrator.vibrate(VibrationEffect.createOneShot(pad.rumbleMs, amplitude(level).coerceAtLeast(1)))
                 } else {
                     @Suppress("DEPRECATION")
-                    vibrator.vibrate(RUMBLE_MS)
+                    vibrator.vibrate(pad.rumbleMs)
                 }
             }
         }
@@ -486,6 +544,7 @@ class GameInput(context: Context, private val scope: CoroutineScope, private val
     private fun stopRumble(pad: Pad) {
         pad.strong = 0.0
         pad.weak = 0.0
+        pad.rumbleUntil = Long.MAX_VALUE
         rumble(pad)
     }
 }

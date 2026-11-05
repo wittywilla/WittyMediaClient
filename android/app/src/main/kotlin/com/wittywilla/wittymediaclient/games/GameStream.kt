@@ -1,7 +1,11 @@
 package com.wittywilla.wittymediaclient.games
 
 import com.wittywilla.wittymediaclient.net.json
+import kotlinx.serialization.json.JsonArray
+import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.booleanOrNull
 import kotlin.math.floor
 import kotlin.math.min
 
@@ -10,8 +14,9 @@ import kotlin.math.min
 // into MediaCodec, or a JPEG a frame where the server has no encoder, and plain PCM sound.
 
 sealed interface StreamMessage {
-    // One frame in Annex B, with its parameter sets before each keyframe: `data` from `offset` to its end.
-    class Video(val keyframe: Boolean, val data: ByteArray, val offset: Int) : StreamMessage {
+    // One frame in Annex B, with its parameter sets before each keyframe: `data` from `offset` to its end. Version 2
+    // also numbers each frame and stamps it in 90 kHz; version 1's are -1.
+    class Video(val keyframe: Boolean, val data: ByteArray, val offset: Int, val frame: Long = -1, val timestamp90k: Long = -1) : StreamMessage {
         val size: Int get() = data.size - offset
     }
 
@@ -19,6 +24,9 @@ sealed interface StreamMessage {
 
     // Signed 16-bit little-endian stereo, at any rate a console uses, such as 32040: whole frames only.
     class Pcm(val rate: Int, val data: ByteArray, val offset: Int, val length: Int) : StreamMessage
+
+    // Version 2's sound when Opus was asked for: one 10 ms, 48 kHz stereo packet.
+    class Opus(val timestamp48k: Long, val data: ByteArray, val offset: Int) : StreamMessage
 
     data object Timing : StreamMessage
 
@@ -38,10 +46,16 @@ sealed interface StreamMessage {
                     // A stray byte would swap left and right from then on.
                     Pcm(rate, data, 5, length - length % 4)
                 }
+                0x11 -> if (data.size < 10) null else Video(data[1].toInt() and 1 == 1, data, 10, u32(data, 2), u32(data, 6))
+                0x12 -> if (data.size < 5) null else Opus(u32(data, 1), data, 5)
                 0xF2, 0xF4 -> Timing
                 else -> Unknown(kind)
             }
         }
+
+        private fun u32(data: ByteArray, at: Int): Long =
+            (data[at].toLong() and 0xff) or ((data[at + 1].toLong() and 0xff) shl 8) or
+                ((data[at + 2].toLong() and 0xff) shl 16) or ((data[at + 3].toLong() and 0xff) shl 24)
     }
 }
 
@@ -49,8 +63,8 @@ sealed interface StreamMessage {
 sealed interface GameEvent {
     data class Hello(val video: String) : GameEvent
 
-    // Strength from 0 to 1.
-    data class Rumble(val port: Int, val effect: Int, val strength: Double) : GameEvent
+    // Strength from 0 to 1. Version 2 names the motor and says how long to keep it (`ms`); version 1 doesn't.
+    data class Rumble(val port: Int, val effect: Int, val strength: Double, val ms: Int? = null) : GameEvent
     data class Message(val text: String) : GameEvent
     data class Geometry(val width: Int, val height: Int, val aspect: Double?) : GameEvent
     data class Rotation(val turns: Int) : GameEvent
@@ -59,8 +73,34 @@ sealed interface GameEvent {
     // The game ended itself: leave the player.
     data object Shutdown : GameEvent
 
-    // The game stopped: it crashed, stopped responding, or was stopped from elsewhere.
-    data class Ended(val text: String) : GameEvent
+    // The game stopped: it crashed, stopped responding, or was stopped from elsewhere. Version 2 says which in `code`:
+    // stopped, quit, crashed, idle or evicted.
+    data class Ended(val text: String, val code: String = "") : GameEvent
+
+    // Version 2: what the server is sending this connection, as the answer to the hello.
+    data class Stream(
+        val video: String,
+        val audio: String,
+        val width: Int,
+        val height: Int,
+        val aspect: Double?,
+        val fps: Double?,
+        val turns: Int,
+        val ports: Int,
+        val pace: Double,
+        val seats: List<Seat>,
+        val leds: List<Pair<Int, Int>>,
+    ) : GameEvent
+
+    // Who holds which player; `you` is this connection.
+    data class Seat(val port: Int, val name: String, val you: Boolean)
+    data class Seats(val seats: List<Seat>) : GameEvent
+
+    // One of the console's own lights.
+    data class Led(val index: Int, val state: Int) : GameEvent
+
+    // Something the server refused: seat-taken (with `port`), bad-seat, bad-message, bad-hello.
+    data class Refused(val code: String, val text: String, val port: Int?) : GameEvent
     data class Disc(val index: Int, val count: Int) : GameEvent
 
     // What the core really draws changed.
@@ -68,19 +108,41 @@ sealed interface GameEvent {
     data class Unknown(val type: String) : GameEvent
 
     companion object {
+        private fun seats(element: JsonElement?): List<Seat> = (element as? JsonArray).orEmpty().mapNotNull { e ->
+            val o = e as? JsonObject ?: return@mapNotNull null
+            Seat(o.number("port")?.toInt() ?: return@mapNotNull null, o.text("name"), (o["you"] as? JsonPrimitive)?.booleanOrNull == true)
+        }
+
         fun parse(text: String): GameEvent? {
             val o = runCatching { json.parseToJsonElement(text) as? JsonObject }.getOrNull() ?: return null
             fun int(key: String) = o.number(key)?.toInt() ?: 0
             return when (val type = o.text("type")) {
                 "" -> null
                 "hello" -> Hello(o.text("video"))
-                "rumble" -> Rumble(int("port"), int("effect"), ((o.number("strength") ?: 0.0) / 65535).coerceIn(0.0, 1.0))
+                "rumble" -> Rumble(
+                    int("port"),
+                    when (o.text("motor")) {
+                        "strong" -> 0
+                        "weak" -> 1
+                        else -> int("effect")
+                    },
+                    ((o.number("strength") ?: 0.0) / 65535).coerceIn(0.0, 1.0),
+                    o.number("ms")?.toInt(),
+                )
                 "message" -> Message(o.text("text"))
                 "geometry" -> Geometry(int("width"), int("height"), o.number("aspect"))
                 "rotation" -> Rotation(int("turns"))
                 "avinfo" -> AvInfo(o.number("aspect"), o.number("fps"), o.number("rate"))
                 "shutdown" -> Shutdown
-                "ended" -> Ended(o.text("text"))
+                "ended" -> Ended(o.text("text"), o.text("code"))
+                "stream" -> Stream(
+                    o.text("video"), o.text("audio"), int("width"), int("height"), o.number("aspect"), o.number("fps"),
+                    int("turns"), int("ports"), o.number("pace") ?: 0.0, seats(o["seats"]),
+                    (o["leds"] as? JsonArray).orEmpty().mapNotNull { (it as? JsonObject)?.let { l -> (l.number("index")?.toInt() ?: 0) to (l.number("state")?.toInt() ?: 0) } },
+                )
+                "seats" -> Seats(seats(o["seats"]))
+                "led" -> Led(int("index"), int("state"))
+                "error" -> Refused(o.text("code"), o.text("text"), o.number("port")?.toInt())
                 "disc" -> Disc(int("index"), int("count"))
                 "frame" -> Frame(int("width"), int("height"))
                 else -> Unknown(type)

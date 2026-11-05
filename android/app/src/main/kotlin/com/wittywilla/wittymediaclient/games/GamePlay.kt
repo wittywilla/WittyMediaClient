@@ -1,6 +1,8 @@
 package com.wittywilla.wittymediaclient.games
 
 import android.content.Context
+import android.hardware.display.DisplayManager
+import android.view.Display
 import android.os.Handler
 import android.os.Looper
 import android.view.Surface
@@ -19,10 +21,8 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.async
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
-import okhttp3.Response
-import okhttp3.WebSocket
-import okhttp3.WebSocketListener
-import okio.ByteString
+import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.put
 import java.io.IOException
 import java.util.UUID
 
@@ -59,7 +59,7 @@ class GamePlay(private val app: WittyApp, val gameId: Long, private var start: G
     // The picture: H.264 decoded on its own thread, or a JPEG a frame. Each says when a picture reaches the screen.
     @Volatile
     private var gotPicture = false
-    private val video = H264Player(onPicture = ::pictureArrived, needKeyframe = { socket?.send(ByteString.of(*TimingRequests.keyframe)) })
+    private val video = H264Player(onPicture = ::pictureArrived, needKeyframe = { transport?.requestKeyframe() })
     private val jpeg = JpegPlayer(onPicture = ::pictureArrived)
 
     var stage by mutableStateOf(GameStage.Prepare)
@@ -114,17 +114,29 @@ class GamePlay(private val app: WittyApp, val gameId: Long, private var start: G
     var discs by mutableIntStateOf(0)
         private set
 
-    private var modes: List<String> = GameModes.supported
-    private var modeIndex = 0
-    private var offeredModes: List<String> = emptyList()
+    private var routes: List<GameRoute> = GameRoute.plan(emptyList())
+    private var routeIndex = 0
+    private var offered: List<GameModeInfo> = emptyList()
 
     // How the game reaches this device: "auto", or a mode this device chose for itself (the website's Connection).
     var chosenMode by mutableStateOf(chosenModeFor(app))
         private set
     var modeInUse by mutableStateOf("")
         private set
-    private var socket: WebSocket? = null
-    private var socketSerial = 0
+
+    // Which version of the server's stream is in use: 1, or 2 where the server offers it (docs/GAMING-STREAM.md).
+    var streamVersion by mutableIntStateOf(0)
+        private set
+
+    // The console's own frame rate, for a TV to switch its display to.
+    var fps by mutableDoubleStateOf(0.0)
+        private set
+
+    // Who holds which player, from a version 2 server.
+    var seats by mutableStateOf<List<GameEvent.Seat>>(emptyList())
+        private set
+    private var transport: GameTransport? = null
+    private var transportSerial = 0
     private var pictureTimer: Job? = null
     private var lostAt = 0L
     private var away = false
@@ -136,12 +148,33 @@ class GamePlay(private val app: WittyApp, val gameId: Long, private var start: G
 
     val deviceId: String by lazy { deviceIdFor(app) }
 
+    // The screen's refresh rate: in the hello, and reported when it changes, so the server can run the game at it.
+    private val display = app.getSystemService(Context.DISPLAY_SERVICE) as DisplayManager
+    private var reportedHz = 0f
+    private fun displayHz(): Float = display.getDisplay(Display.DEFAULT_DISPLAY)?.refreshRate ?: 60f
+    private val displayListener = object : DisplayManager.DisplayListener {
+        override fun onDisplayAdded(displayId: Int) {}
+        override fun onDisplayRemoved(displayId: Int) {}
+        override fun onDisplayChanged(displayId: Int) {
+            if (displayId != Display.DEFAULT_DISPLAY) return
+            val hz = displayHz()
+            if (hz == reportedHz) return
+            reportedHz = hz
+            transport?.sendEvent(buildJsonObject {
+                put("type", "report")
+                put("hz", hz)
+            })
+        }
+    }
+
     // MARK: starting
 
     fun begin() {
         if (began) return
         began = true
-        input.send = { bytes -> socket?.send(ByteString.of(*bytes)) }
+        input.send = { bytes -> transport?.send(bytes) }
+        input.onSeats = { ports -> transport?.sendEvent(seatsRequest(ports)) }
+        display.registerDisplayListener(displayListener, main)
         input.onMenu = { openMenu() }
         input.onNotice = ::say
         input.onShortcut = ::shortcut
@@ -186,9 +219,10 @@ class GamePlay(private val app: WittyApp, val gameId: Long, private var start: G
             disc = started.disc
             discs = started.discs
             for (notice in started.notices) say(notice)
-            offeredModes = started.modeIds
-            modes = GameModes.order(offeredModes, chosenMode)
-            modeIndex = 0
+            offered = started.modes.mapNotNull(GameModeInfo::from)
+            routes = GameRoute.plan(offered, chosenMode)
+            routeIndex = 0
+            if (started.fps > 0) fps = started.fps
             input.start(GameInput.Setup(controls ?: GameControls(console = console), settings, console, gameId))
             input.setEnabled(menu == null && !away)
             connect()
@@ -213,7 +247,7 @@ class GamePlay(private val app: WittyApp, val gameId: Long, private var start: G
 
     // Start again after a problem: from the automatic save if there's one, or as asked.
     fun retry(safeMode: Boolean = false) {
-        closeSocket()
+        closeTransport()
         stopped = false
         lostAt = 0
         if (session != null) start = GameStart(resume = true, safeMode = safeMode)
@@ -227,80 +261,102 @@ class GamePlay(private val app: WittyApp, val gameId: Long, private var start: G
     private fun connect() {
         val sid = session?.id ?: return
         if (stopped) return
-        closeSocket()
-        val mode = modes.getOrElse(modeIndex) { modes.last() }
-        modeInUse = mode
-        val kind = GameModes.video(mode)
-        videoKind = kind
+        closeTransport()
+        val route = routes.getOrElse(routeIndex) { routes.last() }
+        modeInUse = route.modeId
+        streamVersion = route.stream
+        videoKind = route.video
         if (!gotPicture) stage = GameStage.Connect
-        val serial = ++socketSerial
-        socket = api.openSocket(sid, kind, Listener(serial))
+        val serial = ++transportSerial
+        val receiver = Receiver(serial)
+        transport = if (route.stream >= 2) WebSocketV2Transport(api, sid, hello(route), receiver) else WebSocketV1Transport(api, sid, route.video, receiver)
         pictureTimer?.cancel()
         pictureTimer = scope.launch {
             delay(GameModes.FIRST_PICTURE_MS)
-            if (serial == socketSerial && !gotPicture && !stopped) nextMode()
+            if (serial == transportSerial && !gotPicture && !stopped) nextMode()
         }
     }
 
     // No picture in time: the next way of sending it, or a problem to show.
     private fun nextMode() {
-        if (modeIndex + 1 < modes.size) {
-            modeIndex++
-            ClientLog.warn("games", "No picture over ${modes[modeIndex - 1]}; trying ${modes[modeIndex]}")
+        if (routeIndex + 1 < routes.size) {
+            routeIndex++
+            ClientLog.warn("games", "No picture over ${routes[routeIndex - 1]}; trying ${routes[routeIndex]}")
             connect()
         } else {
-            closeSocket()
+            closeTransport()
             problem = GameProblem("No picture came", "The game started on the server, but its picture didn't reach this device. Try again.")
         }
     }
 
-    private fun closeSocket() {
-        socketSerial++
+    private fun closeTransport() {
+        transportSerial++
         pictureTimer?.cancel()
-        socket?.close(1000, null)
-        socket = null
+        transport?.close()
+        transport = null
     }
 
-    private inner class Listener(private val serial: Int) : WebSocketListener() {
-        private fun current() = serial == socketSerial
+    // What this device says about itself to a version 2 server.
+    private fun hello(route: GameRoute): StreamHello {
+        val metrics = app.resources.displayMetrics
+        return StreamHello(
+            app = "WittyMediaClient Android " + runCatching { app.packageManager.getPackageInfo(app.packageName, 0).versionName }.getOrNull().orEmpty(),
+            device = deviceId,
+            name = app.deviceName,
+            video = if (route.video == "jpeg") emptyList() else listOf("h264"),
+            seats = input.seatPorts(),
+            hz = displayHz(),
+            width = metrics.widthPixels,
+            height = metrics.heightPixels,
+            latency = settings.text("emulation.latency", "auto"),
+        )
+    }
 
-        override fun onOpen(webSocket: WebSocket, response: Response) {
-            if (!current()) return
-            webSocket.send(ByteString.of(*TimingRequests.decodingOurselves))
+    // One connection's messages. Anything from a connection that has since been replaced is ignored.
+    private inner class Receiver(private val serial: Int) : GameTransport.Receiver {
+        private fun current() = serial == transportSerial
+
+        override fun opened() {
             main.post {
                 if (current() && !gotPicture) stage = GameStage.Picture
                 if (current()) input.setEnabled(menu == null && !away)
             }
         }
 
-        override fun onMessage(webSocket: WebSocket, bytes: ByteString) {
+        override fun media(message: StreamMessage) {
             if (!current()) return
-            when (val m = StreamMessage.parse(bytes.toByteArray())) {
-                is StreamMessage.Video -> video.submit(m)
-                is StreamMessage.Jpeg -> jpeg.submit(m)
-                is StreamMessage.Pcm -> sound.play(m)
+            when (message) {
+                is StreamMessage.Video -> video.submit(message)
+                is StreamMessage.Jpeg -> jpeg.submit(message)
+                is StreamMessage.Pcm -> sound.play(message)
                 else -> {}
             }
         }
 
-        override fun onMessage(webSocket: WebSocket, text: String) {
-            val event = GameEvent.parse(text) ?: return
+        override fun event(event: GameEvent) {
             main.post { if (current()) handle(event) }
         }
 
-        override fun onFailure(webSocket: WebSocket, t: Throwable, response: Response?) {
-            main.post { if (current()) lost(response?.code ?: 0) }
-        }
-
-        override fun onClosed(webSocket: WebSocket, code: Int, reason: String) {
-            main.post { if (current()) lost(0) }
+        override fun lost(status: Int) {
+            main.post { if (current()) this@GamePlay.lost(status) }
         }
     }
 
     private fun handle(event: GameEvent) {
         when (event) {
             is GameEvent.Hello -> if (event.video.isNotEmpty()) videoKind = event.video
-            is GameEvent.Rumble -> input.rumble(event.port, event.effect, event.strength)
+            is GameEvent.Rumble -> input.rumble(event.port, event.effect, event.strength, event.ms)
+            is GameEvent.Stream -> {
+                if (event.video.isNotEmpty()) videoKind = event.video
+                event.aspect?.takeIf { it > 0 }?.let { aspect = it }
+                event.fps?.takeIf { it > 0 }?.let { fps = it }
+                turns = event.turns
+                seats = event.seats
+            }
+            is GameEvent.Seats -> seats = event.seats
+            is GameEvent.Refused -> say(
+                if (event.code == "seat-taken" && event.port != null) "Player ${event.port + 1} is being played on another device" else event.text,
+            )
             is GameEvent.Message -> say(event.text)
             is GameEvent.Geometry -> {
                 event.aspect?.takeIf { it > 0 }?.let { aspect = it }
@@ -315,14 +371,16 @@ class GamePlay(private val app: WittyApp, val gameId: Long, private var start: G
             }
             GameEvent.Shutdown -> {
                 stopped = true
-                closeSocket()
+                closeTransport()
                 finished = true
             }
             is GameEvent.Ended -> {
                 stopped = true
-                closeSocket()
+                closeTransport()
                 input.setEnabled(false)
-                problem = GameProblem("The game stopped", event.text.ifEmpty { "It stopped on the server." })
+                // The game shut itself down: leave, as for version 1's shutdown.
+                if (event.code == "quit") finished = true
+                else problem = GameProblem("The game stopped", event.text.ifEmpty { "It stopped on the server." }, retry = event.code != "evicted")
             }
             else -> {}
         }
@@ -331,7 +389,7 @@ class GamePlay(private val app: WittyApp, val gameId: Long, private var start: G
     // The connection dropped. Within the server's minute the game is still there: connect again.
     private fun lost(status: Int) {
         if (stopped || away) return
-        socket = null
+        transport = null
         if (!gotPicture) {
             if (status == 404) {
                 problem = GameProblem("The game stopped", "It isn't running on the server any more.")
@@ -349,7 +407,7 @@ class GamePlay(private val app: WittyApp, val gameId: Long, private var start: G
         say("Reconnecting…")
         scope.launch {
             delay(1_000)
-            if (stopped || away || socket != null) return@launch
+            if (stopped || away || transport != null) return@launch
             val stillThere = try {
                 api.session(session?.id ?: return@launch)
                 true
@@ -400,7 +458,7 @@ class GamePlay(private val app: WittyApp, val gameId: Long, private var start: G
             pausedForAway = true
             scope.launch { runCatching { api.action(sid, GameAction("pause", on = true)) } }
         }
-        closeSocket()
+        closeTransport()
     }
 
     fun appeared() {
@@ -527,8 +585,8 @@ class GamePlay(private val app: WittyApp, val gameId: Long, private var start: G
         app.getSharedPreferences("wittyplay", Context.MODE_PRIVATE).edit { putString("mode", mode) }
         closeMenu()
         if (session == null || stopped) return
-        modes = GameModes.order(offeredModes, mode)
-        modeIndex = 0
+        routes = GameRoute.plan(offered, mode)
+        routeIndex = 0
         connect()
     }
 
@@ -604,7 +662,7 @@ class GamePlay(private val app: WittyApp, val gameId: Long, private var start: G
         stopped = true
         starting?.cancel()
         input.stop()
-        closeSocket()
+        closeTransport()
         sound.hold(true)
         scope.launch {
             if (sid != null) {
@@ -625,8 +683,9 @@ class GamePlay(private val app: WittyApp, val gameId: Long, private var start: G
     // Leaving the screen for good, any way at all: nothing is left running, and the server still saves.
     fun close() {
         starting?.cancel()
+        display.unregisterDisplayListener(displayListener)
         input.stop()
-        closeSocket()
+        closeTransport()
         video.close()
         jpeg.close()
         sound.close()
