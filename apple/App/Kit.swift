@@ -16,8 +16,8 @@ struct Metrics: Equatable {
     var focusRing: CGFloat = 3
     var focusScale: CGFloat = 1
 
-    static let phone = Metrics(tv: false, gutter: Tokens.Space.s4, edge: Tokens.Space.s2, cardWidth: 124, minTarget: 44)
-    static let tablet = Metrics(tv: false, gutter: Tokens.Space.s8, edge: Tokens.Space.s2, cardWidth: 148, minTarget: 44)
+    static let phone = Metrics(tv: false, gutter: Tokens.Space.s4, edge: Tokens.Space.s2, cardWidth: 104, minTarget: 44)
+    static let tablet = Metrics(tv: false, gutter: Tokens.Space.s8, edge: Tokens.Space.s2, cardWidth: 128, minTarget: 44)
     static let television = Metrics(tv: true, gutter: Tokens.gutter, edge: Tokens.edge, cardWidth: Tokens.cardWidth,
                                     minTarget: Tokens.minTarget, focusRing: 4, focusScale: 1.05)
 }
@@ -531,26 +531,5 @@ struct PageBackdrop: View {
             )
             .clipped()
             .accessibilityHidden(true)
-    }
-}
-
-extension View {
-    /// A screen pushed onto a tab: the system's bar keeps only its Back, over the page.
-    @ViewBuilder func plainNavigation() -> some View {
-        #if os(iOS) || os(visionOS)
-        self.navigationBarTitleDisplayMode(.inline)
-            .toolbarBackground(.hidden, for: .navigationBar)
-        #else
-        self
-        #endif
-    }
-
-    /// A tab's first screen, which has its own heading and no bar.
-    @ViewBuilder func noNavigationBar() -> some View {
-        #if os(iOS) || os(visionOS)
-        self.toolbar(.hidden, for: .navigationBar)
-        #else
-        self
-        #endif
     }
 }

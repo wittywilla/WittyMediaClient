@@ -95,6 +95,21 @@ private struct WebPlayerPage: UIViewRepresentable {
 
     func makeCoordinator() -> Coordinator { Coordinator(self) }
 
+    /// A server's page inside this app sits under the app's own strip, Back and floating bar, so it's told it's in
+    /// the app (`data-app` on its root, which the website reads to leave its own phone bars off), and a page from a
+    /// server that doesn't know that yet has them hidden here. Two bars at the bottom would be one too many. The
+    /// server's content security policy refuses a `<style>` element, so the rules go in as a constructed sheet
+    /// (iOS 16.4 and later; before that the page keeps its bars). Fixed words, with nothing of this app's or the
+    /// person's in them.
+    static let insideTheApp = """
+    try{document.documentElement.setAttribute('data-app','wittymediaclient');\
+    var c=new CSSStyleSheet();\
+    c.replaceSync('@media (max-width:700px){html[data-app] .tabbar,html[data-app] .section-row,html[data-app] .section-row-brand,\
+    html[data-app] .top-back{display:none!important}html[data-app] .topbar .act-btn{margin-left:auto}}\
+    @media (max-width:700px){html[data-app] .topbar:not(:has(.act-btn)){display:none!important}}');\
+    document.adoptedStyleSheets=document.adoptedStyleSheets.concat([c])}catch(e){}
+    """
+
     func makeUIView(context: Context) -> WKWebView {
         let config = WKWebViewConfiguration()
         config.allowsInlineMediaPlayback = true
@@ -107,6 +122,9 @@ private struct WebPlayerPage: UIViewRepresentable {
         let id = theme.filter { $0.isASCII && ($0.isLetter || $0.isNumber || $0 == "-") }
         let choice = id.isEmpty ? "localStorage.removeItem('wms.theme')" : "localStorage.setItem('wms.theme','\(id)')"
         config.userContentController.addUserScript(WKUserScript(source: "try{\(choice)}catch(e){}", injectionTime: .atDocumentStart, forMainFrameOnly: true))
+        if !keptToGames {
+            config.userContentController.addUserScript(WKUserScript(source: Self.insideTheApp, injectionTime: .atDocumentStart, forMainFrameOnly: true))
+        }
         let web = WKWebView(frame: .zero, configuration: config)
         web.isOpaque = false
         web.backgroundColor = .black

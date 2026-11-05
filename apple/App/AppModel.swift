@@ -177,6 +177,10 @@ final class AppModel: ObservableObject {
     /// Music, audiobooks and podcasts, which carry on whatever screen is showing.
     let listening = Listening()
     @Published var libraries: [Library] = []
+    /// The phone's Menu: the drawer of libraries from the left.
+    @Published var menuOpen = false
+    /// Whether this server lets this person play its game PCs, which the Menu then offers.
+    @Published var gamePCs = false
     /// Something worth saying that isn't a failure of the screen in front of the person.
     @Published var notice = ""
 
@@ -354,6 +358,8 @@ final class AppModel: ObservableObject {
         ArtCache.shared.removeAllObjects()
         user = nil
         libraries = []
+        menuOpen = false
+        gamePCs = false
         paths = [:]
         tab = .home
     }
@@ -651,6 +657,18 @@ final class AppModel: ObservableObject {
             stage = .signIn(.usual)
         }
         return plainWords(problem)
+    }
+
+    /// A library from the strip along the top or the Menu: its page on Home's stack. From another library's
+    /// page it takes that one's place, as the website's strip does, rather than piling up.
+    func openLibrary(_ library: Library) {
+        let route = libraryRoute(library)
+        var transaction = Transaction()
+        transaction.disablesAnimations = tab == .home && { if case .library? = paths[.home]?.last { return true } else { return false } }()
+        withTransaction(transaction) {
+            tab = .home
+            paths[.home] = [route]
+        }
     }
 
     func homeLoaded(_ home: Home) {

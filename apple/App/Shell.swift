@@ -1,18 +1,23 @@
 import SwiftUI
 import WittyKit
 
-/// The app's top level, as on Android (ui/Shell.kt): Home, Search and Profile. A phone, a tablet and
-/// Apple Vision Pro have them in a floating pill at the bottom, within reach of a thumb; Apple TV has
-/// the system's tabs along the top, where up from the first row gets to them. Music and the other
-/// libraries are on Home, as they are on Android.
+/// The app's top level. A phone, a tablet and Apple Vision Pro have the website's floating bar at the bottom,
+/// within reach of a thumb: Home, TV guide, Search, the Menu (not a tab, a drawer) and You. Apple TV has the
+/// system's tabs along the top, where up from the first row gets to them; the TV sessions own those.
 enum AppTab: String, CaseIterable, Identifiable, Hashable {
-    case home, search, profile
+    case home, guide, search, profile
 
     var id: String { rawValue }
+
+    /// The tabs a phone or tablet keeps a stack for.
+    static let phoneTabs: [AppTab] = [.home, .guide, .search, .profile]
+    /// Apple TV's, unchanged.
+    static let tvTabs: [AppTab] = [.home, .search, .profile]
 
     var title: String {
         switch self {
         case .home: return "Home"
+        case .guide: return "TV guide"
         case .search: return "Search"
         case .profile: return say("youTab")
         }
@@ -21,19 +26,14 @@ enum AppTab: String, CaseIterable, Identifiable, Hashable {
     var icon: String {
         switch self {
         case .home: return "house"
+        case .guide: return "tv"
         case .search: return "magnifyingglass"
         case .profile: return "person"
         }
     }
 
-    /// Not every one of these has a filled form. A symbol that doesn't exist draws nothing.
-    var openIcon: String {
-        switch self {
-        case .home: return "house.fill"
-        case .profile: return "person.fill"
-        case .search: return icon
-        }
-    }
+    /// The website's icons in the floating bar.
+    var barIcon: String { self == .home ? "house.fill" : icon }
 }
 
 struct BrowseShell: View {
@@ -56,6 +56,15 @@ private struct TabRoot: View {
         case .home: HomeView()
         case .search: SearchView()
         case .profile: YouView()
+        case .guide:
+            // The guide and live channels: the server's page here, Apple TV's own screens there.
+            #if os(iOS) || os(visionOS)
+            WebPlayerView(path: ServerPages.guide, keptToGames: false)
+            #elseif os(tvOS)
+            GuideView()
+            #else
+            ElsewhereNote(path: ServerPages.guide)
+            #endif
         }
     }
 
@@ -66,16 +75,17 @@ private struct TabRoot: View {
                 .navigationDestination(for: Route.self) { route in
                     switch route {
                     case .library(let library):
+                        // A library's page is a top of its own, with the strip and no Back, as on the website.
                         if library.hasListeningScreens {
-                            ListeningLibraryView(library: library).plainNavigation()
+                            ListeningLibraryView(library: library).noNavigationBar()
                         } else {
-                            LibraryView(library: library).plainNavigation()
+                            LibraryView(library: library).noNavigationBar()
                         }
                     case .listeningAlbum(let library, let album, let artist):
                         AlbumScreen(library: library, album: album, artist: artist).plainNavigation()
                     case .artist(let library, let name): ArtistScreen(library: library, name: name).plainNavigation()
-                    case .show(let id): ShowView(id: id).plainNavigation()
-                    case .item(let id): ItemView(id: id).plainNavigation()
+                    case .show(let id): ShowView(id: id).plainNavigation(overPicture: true)
+                    case .item(let id): ItemView(id: id).plainNavigation(overPicture: true)
                     // A new identity for each thing played, so the next episode gets a new player
                     // and not the last one's state.
                     case .player(let id, let startOver): PlayerScreen(id: id, startOver: startOver).id(id)
@@ -96,7 +106,7 @@ private struct TabRoot: View {
                         #endif
                     case .page(let path):
                         #if os(iOS) || os(visionOS)
-                        WebPlayerView(path: path, keptToGames: false)
+                        WebPlayerView(path: path, keptToGames: false).plainNavigation()
                         #else
                         ElsewhereNote(path: path)
                         #endif
@@ -132,7 +142,7 @@ private struct TopTabs: View {
 
     var body: some View {
         TabView(selection: $model.tab) {
-            ForEach(AppTab.allCases) { tab in
+            ForEach(AppTab.tvTabs) { tab in
                 TabRoot(tab: tab)
                     .safeAreaInset(edge: .bottom) { MiniPlayerSlot(tab: tab) }
                     .tabItem { Label(tab.title, systemImage: tab.icon) }
@@ -142,92 +152,64 @@ private struct TopTabs: View {
     }
 }
 #else
-/// The system's tab view holds the three stacks, with its own bar hidden and the pill in its place.
+/// The system's tab view holds the stacks, with its own bar hidden and the website's floating bar in its place.
+/// The Menu's drawer is over all of it, the bar included.
 private struct PillShell: View {
     @EnvironmentObject private var model: AppModel
     @Environment(\.palette) private var palette
+    /// The room the clock and the home indicator take.
+    @State private var insets = EdgeInsets()
+    /// The bar goes behind the keyboard while one is up, as on the website.
+    @State private var typing = false
 
     var body: some View {
+        // 16 from the bottom edge, just above the home indicator, as from the sides.
+        let lift = typing ? 0 : Tokens.Space.s4 - insets.bottom
         TabView(selection: $model.tab) {
-            ForEach(AppTab.allCases) { tab in
+            ForEach(AppTab.phoneTabs) { tab in
                 TabRoot(tab: tab)
-                    .safeAreaInset(edge: .bottom) {
-                        // The mini player sits above the pill, as on Android.
+                    .safeAreaInset(edge: .bottom, spacing: 0) {
+                        // The mini player sits above the bar.
                         VStack(spacing: Tokens.Space.s2) {
                             MiniPlayerSlot(tab: tab)
-                            if !model.hidesBars { PillBar() }
+                            if !model.hidesBars && !typing { FloatingBar() }
                         }
+                        .padding(.bottom, model.hidesBars || typing ? 0 : lift)
                     }
                     .toolbar(.hidden, for: .tabBar)
                     .tag(tab)
             }
         }
+        .background {
+            GeometryReader { geo in
+                Color.clear
+                    .onAppear { insets = geo.safeAreaInsets }
+                    .onChange(of: geo.safeAreaInsets) { insets = $0 }
+            }
+            .ignoresSafeArea(.keyboard)
+        }
+        #if os(iOS)
+        .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillShowNotification)) { _ in typing = true }
+        .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillHideNotification)) { _ in typing = false }
+        #endif
         // What scrolls under the clock and the battery fades out, so they can still be read.
         .overlay {
             if !model.hidesBars {
-                // Measured from the very top of the screen, so the inset it reports is the clock's.
-                GeometryReader { geo in
-                    VStack(spacing: 0) {
-                        LinearGradient(colors: [palette.background.opacity(0.92), palette.background.opacity(0)], startPoint: .top, endPoint: .bottom)
-                            .frame(height: geo.safeAreaInsets.top)
-                        Spacer(minLength: 0)
-                    }
+                VStack(spacing: 0) {
+                    LinearGradient(colors: [palette.background.opacity(0.92), palette.background.opacity(0)], startPoint: .top, endPoint: .bottom)
+                        .frame(height: insets.top)
+                    Spacer(minLength: 0)
                 }
                 .ignoresSafeArea()
                 .allowsHitTesting(false)
                 .accessibilityHidden(true)
             }
         }
-    }
-}
-
-/// Android's floating bar: the open section filled in the accent colour with its name, the others
-/// as their icons. Real buttons, each saying which section it is and whether it's the one open.
-private struct PillBar: View {
-    @EnvironmentObject private var model: AppModel
-    @Environment(\.palette) private var palette
-
-    private func press(_ tab: AppTab) {
-        if model.tab == tab {
-            // Choosing the open section again goes back to its top, as tab bars do.
-            model.paths[tab] = []
-        } else {
-            model.tab = tab
-        }
-    }
-
-    var body: some View {
-        HStack(spacing: Tokens.Space.s1) {
-            ForEach(AppTab.allCases) { tab in
-                let open = model.tab == tab
-                Button {
-                    press(tab)
-                } label: {
-                    HStack(spacing: Tokens.Space.s2) {
-                        if tab == .profile, let user = model.user {
-                            // The person's own face: who's signed in, at a glance.
-                            AvatarTile(name: user.shownName, size: 24)
-                                .overlay(Circle().strokeBorder(open ? palette.onAccent.opacity(0.9) : palette.border, lineWidth: 1.5))
-                        } else {
-                            Image(systemName: open ? tab.openIcon : tab.icon).font(.body.weight(.semibold))
-                        }
-                        if open { Text(tab.title).font(.wmLabel) }
-                    }
-                    .foregroundStyle(open ? palette.onAccent : palette.text)
-                    .padding(.horizontal, open ? Tokens.Space.s5 : Tokens.Space.s4)
-                    .padding(.vertical, Tokens.Space.s3)
-                }
-                .buttonStyle(SurfaceStyle(fill: open ? palette.accent : nil, radius: 999))
-                .accessibilityLabel(tab.title)
-                .accessibilityAddTraits(open ? [.isSelected] : [])
-            }
-        }
-        .padding(Tokens.Space.s1)
-        .background(Capsule().fill(palette.panel))
-        .overlay(Capsule().stroke(palette.border, lineWidth: 1))
-        .shadow(color: .black.opacity(0.25), radius: 8, y: 2)
-        .padding(.bottom, Tokens.Space.s3)
-        .frame(maxWidth: .infinity)
+        .overlay { MenuDrawer() }
+        #if os(iOS)
+        .onAppear { BackSwipe.paused = model.hidesBars }
+        .onChange(of: model.hidesBars) { BackSwipe.paused = $0 }
+        #endif
     }
 }
 #endif
@@ -361,6 +343,7 @@ struct SearchView: View {
     @State private var error = ""
     @State private var searching = false
     @FocusState private var focused: String?
+    @FocusState private var typing: Bool
 
     private func run(_ words: String) async {
         error = ""
@@ -385,6 +368,14 @@ struct SearchView: View {
     }
 
     var body: some View {
+        Group {
+            if metrics.tv { tvPage } else { page }
+        }
+        .task(id: query) { await run(query) }
+    }
+
+    /// Apple TV's, as it was.
+    private var tvPage: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: Tokens.Space.s3) {
                 Heading("Search")
@@ -408,6 +399,98 @@ struct SearchView: View {
         }
         .scrollDismissesKeyboardIfAvailable()
         .pageBackground(palette)
-        .task(id: query) { await run(query) }
+    }
+
+    /// The website's Search on a phone: the box, then the results grouped, three posters across.
+    private var page: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: Tokens.Space.s4) {
+                Text("Search").pageFont(.title).foregroundStyle(palette.text).accessibilityAddTraits(.isHeader)
+                box
+                results(for: query.trimmingCharacters(in: .whitespacesAndNewlines))
+            }
+            .padding(.horizontal, metrics.gutter)
+            .padding(.top, Tokens.Space.s2)
+            .padding(.bottom, Tokens.Space.s6)
+        }
+        .scrollDismissesKeyboardIfAvailable()
+        .pageBackground(palette)
+        .onAppear {
+            // Arriving with nothing typed, the box is the next step, as on the website.
+            if query.isEmpty { DispatchQueue.main.async { typing = true } }
+        }
+    }
+
+    /// 44 high, the theme's medium radius, `card`, with a search icon.
+    private var box: some View {
+        let shape = RoundedRectangle(cornerRadius: Tokens.Radius.md, style: .continuous)
+        return HStack(spacing: Tokens.Space.s2) {
+            Image(systemName: "magnifyingglass")
+                .font(.system(size: 16, weight: .medium))
+                .foregroundStyle(palette.textHint)
+                .frame(width: 20)
+                .accessibilityHidden(true)
+            TextField("", text: $query, prompt: Text("Search your libraries…").foregroundColor(palette.textHint))
+                .pageFont(.body)
+                .foregroundStyle(palette.text)
+                .tint(palette.accent)
+                .focused($typing)
+                .submitLabel(.search)
+                .autocorrectionDisabled()
+                #if os(iOS) || os(visionOS)
+                .textInputAutocapitalization(.never)
+                #endif
+                .accessibilityLabel("Search")
+            if !query.isEmpty {
+                Button {
+                    query = ""
+                    typing = true
+                } label: {
+                    Image(systemName: "xmark.circle.fill").foregroundStyle(palette.textHint).frame(width: 32, height: 32)
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("Clear")
+            }
+        }
+        .padding(.leading, Tokens.Space.s3)
+        .padding(.trailing, Tokens.Space.s1)
+        .frame(height: 44)
+        .background(shape.fill(palette.card))
+        .overlay(shape.strokeBorder(typing ? palette.accentText : palette.control, lineWidth: typing ? 2 : 1))
+        .contentShape(shape)
+        .onTapGesture { typing = true }
+    }
+
+    @ViewBuilder private func results(for words: String) -> some View {
+        if WittyClient.searchQuery(words) == nil {
+            EmptyState(icon: "magnifyingglass", title: "Find anything on this server",
+                       detail: "Type a title in the search box: movies, shows, episodes, music, books and games are all included.")
+        } else if !error.isEmpty {
+            VStack(alignment: .leading, spacing: Tokens.Space.s3) {
+                ProblemLine(error)
+                Button("Try again") { Task { await run(query) } }.pageButton(.primary)
+            }
+        } else if let results, !(searching && results.isEmpty) {
+            if results.isEmpty {
+                EmptyState(icon: "magnifyingglass", title: "No results",
+                           detail: "Nothing on this server matches “\(words)”. Try a shorter or different word.")
+            } else {
+                let types = Dictionary(model.libraries.map { ($0.id, $0.type) }, uniquingKeysWith: { first, _ in first })
+                VStack(alignment: .leading, spacing: Tokens.Space.s6) {
+                    ForEach(SearchGroups.group(items: results.items, shows: results.shows, libraryTypes: types)) { group in
+                        VStack(alignment: .leading, spacing: Tokens.Space.s3) {
+                            SectionHead(title: group.title)
+                            LazyVGrid(columns: posterColumns(metrics), alignment: .leading, spacing: Tokens.Space.s6) {
+                                ForEach(group.shows) { ShowTile(show: $0, inRow: false, focus: $focused) }
+                                ForEach(ServerPages.albumsOnce(group.items)) { ItemTile(item: $0, inRow: false, focus: $focused) }
+                            }
+                        }
+                    }
+                }
+                .opacity(searching ? 0.6 : 1)
+            }
+        } else {
+            SkeletonGrid()
+        }
     }
 }

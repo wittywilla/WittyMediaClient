@@ -173,7 +173,13 @@ struct ListeningLibraryView: View {
         let type = library.type
         let pods = type == "podcasts"
         VStack(alignment: .leading, spacing: Tokens.Space.s2) {
-            Heading(library.name).padding(.horizontal, metrics.gutter)
+            if metrics.tv {
+                Heading(library.name).padding(.horizontal, metrics.gutter)
+            } else {
+                // A library's page on a phone or tablet: under the strip, its name in Title, as the website's.
+                Text(library.name).pageFont(.title).foregroundStyle(palette.text).accessibilityAddTraits(.isHeader)
+                    .padding(.horizontal, metrics.gutter)
+            }
             ChoiceRow {
                 Choice(words: ListeningRules.albumsWord(libraryType: type), chosen: part == .albums) { part = .albums }
                 if !pods { Choice(words: ListeningRules.artistsWord(libraryType: type), chosen: part == .artists) { part = .artists } }
@@ -203,7 +209,10 @@ struct ListeningLibraryView: View {
                 .padding(.bottom, Tokens.Space.s6)
             }
         }
-        .padding(.top, Tokens.Space.s4)
+        .padding(.top, metrics.tv ? Tokens.Space.s4 : 44 + Tokens.Space.s3)
+        .overlay(alignment: .top) {
+            if !metrics.tv { LibraryStrip(current: library.id) }
+        }
         .pageBackground(palette)
     }
 }

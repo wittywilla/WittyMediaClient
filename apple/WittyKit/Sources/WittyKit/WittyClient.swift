@@ -283,6 +283,44 @@ public final class WittyClient: @unchecked Sendable {
 
     public func libraries() async throws -> [Library] { try await list("/libraries") }
 
+    // MARK: A library's page and saving, as the website has them: see Browse.swift
+
+    /// A film or TV library's categories and collections, which its page starts with.
+    public func shelves(library: Int64) async throws -> Shelves { try await get("/browse/shelves?library=\(library)") }
+
+    /// Films and shows in a library, sorted and filtered: a row, or a page of a grid.
+    public func browse(_ query: BrowseQuery, offset: Int = 0, limit: Int = 20) async throws -> BrowseResult {
+        try await get(query.path(offset: offset, limit: limit))
+    }
+
+    /// Home's "Because you watch…" row.
+    public func recommended() async throws -> Recommended { try await get("/me/recommended") }
+
+    /// What a library's titles can be filtered by, for the Filters sheet.
+    public func facets(library: Int64) async throws -> Facets { try await get("/browse/facets?library=\(library)") }
+
+    /// Looks through a library's folders again. Administrators only.
+    public func scan(library: Int64) async throws {
+        _ = try await call("POST", "/libraries/\(library)/scan", body: Data("{}".utf8))
+    }
+
+    public func collections() async throws -> [TitleCollection] { try await list("/collections") }
+
+    /// The collections that already hold this item.
+    public func collectionsHolding(item: Int64) async throws -> [Int64] { try await list("/collections/holding?item=\(item)&show=0") }
+
+    /// Adds to the person's own Watch later, making it the first time. Says which collection that is.
+    @discardableResult
+    public func saveForLater(item: Int64) async throws -> Int64 {
+        struct Answer: Decodable { let collectionId: Int64? }
+        let data = try await call("POST", "/collections/watch-later/items", body: try JSONEncoder().encode(["items": [item]]))
+        return (try? decoder.decode(Answer.self, from: data))?.collectionId ?? 0
+    }
+
+    public func setInCollection(_ collection: Int64, item: Int64, _ inIt: Bool) async throws {
+        _ = try await call(inIt ? "POST" : "DELETE", "/collections/\(collection)/items", body: try JSONEncoder().encode(["items": [item]]))
+    }
+
     /// Albums, books or podcasts: by `title`, `artist`, `added` or `year`. With an artist, only theirs.
     public func albums(library: Int64, sort: String, artist: String? = nil) async throws -> [Album] {
         try await list("/music/albums?library=\(library)&sort=\(Self.queryValue(sort))" + (artist.map { "&artist=\(Self.queryValue($0))" } ?? ""))
@@ -503,6 +541,11 @@ public final class WittyClient: @unchecked Sendable {
     public func posterURL(_ show: Show) -> URL? { URL(string: "\(base)\(apiPath)/shows/\(show.id)/art/poster?v=\(show.updatedAt ?? 0)") }
     public func backdropURL(_ item: Item) -> URL? { URL(string: "\(base)\(apiPath)/items/\(item.id)/backdrop?v=\(item.updatedAt ?? 0)") }
     public func backdropURL(_ show: Show) -> URL? { URL(string: "\(base)\(apiPath)/shows/\(show.id)/art/backdrop?v=\(show.updatedAt ?? 0)") }
+    /// The picture a category or collection shows: the backdrop of a title in it.
+    public func backdropURL(_ art: CategoryArt) -> URL? {
+        let path = art.isShow ? "/shows/\(art.id)/art/backdrop" : "/items/\(art.id)/backdrop"
+        return URL(string: "\(base)\(apiPath)\(path)?v=\(art.v ?? 0)")
+    }
 
     /// Addresses in answers start with /api/: the server's address goes in front, nothing else changes.
     /// One that would end up anywhere but this server comes back nil.
