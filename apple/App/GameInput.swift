@@ -177,14 +177,14 @@ final class GameInput {
 
     // MARK: Controllers
 
-    /// How many players the game takes: 4, or up to 8 where the second stream says its core has a multitap.
-    var maxPorts = 4 {
-        didSet { maxPorts = min(8, max(1, maxPorts)) }
-    }
+    /// The ports a controller can be a player on (WittyKit `GamePorts.players`): the first four, or
+    /// up to eight where the second stream says the core has more that take a controller.
+    var playerPorts: [Int] = [0, 1, 2, 3]
 
     private func freePort() -> UInt8 {
-        let taken = Set(pads.values.map(\.port))
-        return (0..<UInt8(maxPorts)).first { !taken.contains($0) } ?? UInt8(maxPorts - 1)
+        let taken = Set(pads.values.map { Int($0.port) })
+        let ports = playerPorts.isEmpty ? [0] : playerPorts
+        return UInt8(ports.first { !taken.contains($0) } ?? ports[ports.count - 1])
     }
 
     private func attach(_ controller: GCController, announce: Bool) {

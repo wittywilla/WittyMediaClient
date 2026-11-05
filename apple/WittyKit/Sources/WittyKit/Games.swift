@@ -203,6 +203,18 @@ public struct GameMode: Decodable, Equatable {
 public struct GameDeviceType: Decodable, Equatable, Hashable {
     public let id: Int
     public let name: String
+
+    public init(id: Int, name: String) {
+        self.id = id
+        self.name = name
+    }
+
+    /// A controller someone holds, by the names emulators give them ("Gamepad", "SNES Controller",
+    /// "Standard", "DualShock", "MD Joypad 6 Button"), and not a light gun, mouse, mat or adapter.
+    public var isController: Bool {
+        let n = name.lowercased()
+        return ["gamepad", "joypad", "controller", "standard", "dualshock", "retropad", "control pad"].contains { n.contains($0) }
+    }
 }
 
 public struct GamePortDevices: Decodable, Equatable {
@@ -222,8 +234,23 @@ public struct GamePortDevices: Decodable, Equatable {
     public func padForNewPlayer(plugged: Int?) -> GameDeviceType? {
         guard let types, let now = plugged ?? current,
               types.first(where: { $0.id == now })?.name.lowercased() == "auto" else { return nil }
-        let pads = ["gamepad", "joypad", "controller", "standard"]
-        return types.first { t in pads.contains { t.name.lowercased().contains($0) } }
+        return types.first(where: \.isController)
+    }
+
+    /// Whether this port is a player's: it takes a controller. An NES's fifth port is the Famicom's
+    /// expansion port (Arkanoid, Hyper Shot, a tablet), not a player; a Super Nintendo's is, through its multitap.
+    public var takesController: Bool { (types ?? []).contains(where: \.isController) }
+}
+
+public enum GamePorts {
+    /// The ports a controller can be a player on, of the `count` the game takes (4 when it doesn't
+    /// say, at most 8): the first four, as always, and past them only those whose devices take a
+    /// controller. Device names vary by emulator ("Nintendo DS", "Saturn Pad"), so they decide only
+    /// the ports where the question is real.
+    public static func players(count: Int?, devices: [GamePortDevices]?) -> [Int] {
+        let byPort = Dictionary((devices ?? []).map { ($0.port, $0) }, uniquingKeysWith: { a, _ in a })
+        let n = min(8, max(1, count ?? 4))
+        return (0..<n).filter { port in port < 4 || byPort[port]?.takesController == true }
     }
 }
 

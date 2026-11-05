@@ -358,6 +358,7 @@ final class GamePlayerModel: ObservableObject {
         discs = max(1, session.discs ?? 1)
         modes = GameModes.order(session.modes)
         devices = (session.devices ?? []).filter { ($0.types ?? []).count > 1 }
+        input.playerPorts = GamePorts.players(count: nil, devices: session.devices)
         plugged = Dictionary(devices.compactMap { d in d.current.map { (d.port, $0) } }, uniquingKeysWith: { a, _ in a })
         for words in session.notices ?? [] where !words.isEmpty { say(words) }
         updateLayout()
@@ -588,7 +589,7 @@ final class GamePlayerModel: ObservableObject {
             // game takes, and whose motion it reads.
             if let shape = s.aspect, shape > 0 { aspect = shape }
             turns = s.turns
-            if s.ports > 0 { input.maxPorts = s.ports }
+            if s.ports > 0 { input.playerPorts = GamePorts.players(count: s.ports, devices: session?.devices) }
             for want in s.motionOn { input.setMotion(want) }
             updateLayout()
         case .refused(let code, let text, _):

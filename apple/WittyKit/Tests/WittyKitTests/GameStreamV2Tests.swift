@@ -157,4 +157,31 @@ final class GameStreamV2Tests: XCTestCase {
         let hard = GameMotion.encoded(port: 0, accel: (-20, 0, 0), gyro: (0, 0, 0))
         XCTAssertEqual(Int16(bitPattern: UInt16(hard[2]) | UInt16(hard[3]) << 8), -32767, "held at the edge of the range")
     }
+
+    /// The NES's and the Super Nintendo's sessions both say 5 ports: a fifth player on one, an expansion port on the other.
+    func testWhichPortsArePlayers() throws {
+        let nes = try JSONDecoder().decode([GamePortDevices].self, from: Data("""
+        [{"port":0,"current":1,"types":[{"id":1,"name":"Auto"},{"id":513,"name":"Gamepad"},{"id":258,"name":"Zapper"}]},
+         {"port":1,"current":1,"types":[{"id":1,"name":"Auto"},{"id":513,"name":"Gamepad"},{"id":514,"name":"Arkanoid"},{"id":258,"name":"Zapper"},{"id":259,"name":"Power Pad A"},{"id":515,"name":"Power Pad B"}]},
+         {"port":2,"current":1,"types":[{"id":1,"name":"Auto"},{"id":513,"name":"Gamepad"},{"id":259,"name":"Power Pad A"},{"id":515,"name":"Power Pad B"}]},
+         {"port":3,"current":1,"types":[{"id":1,"name":"Auto"},{"id":513,"name":"Gamepad"}]},
+         {"port":4,"current":1,"types":[{"id":1,"name":"Auto"},{"id":2,"name":"Arkanoid"},{"id":3,"name":"Hyper Shot"},{"id":4,"name":"Oeka Kids tablet"},{"id":5,"name":"Family Trainer"},{"id":6,"name":"4-player adapter"}]}]
+        """.utf8))
+        XCTAssertEqual(GamePorts.players(count: 5, devices: nes), [0, 1, 2, 3], "the Famicom's expansion port isn't a player")
+        let snes = try JSONDecoder().decode([GamePortDevices].self, from: Data("""
+        [{"port":0,"current":1,"types":[{"id":0,"name":"None"},{"id":257,"name":"SNES Controller"},{"id":770,"name":"SNES Mouse"}]},
+         {"port":1,"current":1,"types":[{"id":0,"name":"None"},{"id":257,"name":"SNES Controller"},{"id":770,"name":"SNES Mouse"},{"id":262,"name":"Super Scope"},{"id":513,"name":"Multitap"}]},
+         {"port":2,"current":1,"types":[{"id":257,"name":"SNES Controller"}]},
+         {"port":3,"current":1,"types":[{"id":257,"name":"SNES Controller"}]},
+         {"port":4,"current":1,"types":[{"id":257,"name":"SNES Controller"}]}]
+        """.utf8))
+        XCTAssertEqual(GamePorts.players(count: 5, devices: snes), [0, 1, 2, 3, 4], "five, through the multitap")
+        XCTAssertEqual(GamePorts.players(count: nil, devices: nil), [0, 1, 2, 3], "the first stream: four")
+        XCTAssertEqual(GamePorts.players(count: 12, devices: nil), [0, 1, 2, 3], "nothing said past the fourth")
+        let ds = [GamePortDevices(port: 0, current: 1, types: [GameDeviceType(id: 1, name: "Nintendo DS")])]
+        XCTAssertEqual(GamePorts.players(count: 1, devices: ds), [0], "a console's own name for its pad still plays")
+        XCTAssertEqual(GamePorts.players(count: 4, devices: ds), [0, 1, 2, 3])
+        XCTAssertFalse(GameDeviceType(id: 259, name: "Power Pad A").isController, "a floor mat")
+        XCTAssertTrue(GameDeviceType(id: 1, name: "MD Joypad 6 Button").isController)
+    }
 }
