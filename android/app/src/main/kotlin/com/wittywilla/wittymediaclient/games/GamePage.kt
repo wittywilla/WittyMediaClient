@@ -131,7 +131,11 @@ fun GamePageScreen(nav: GamesNav, gameId: Long) {
     val ready = canPlay(check, console, details)
     val resumes = resumes(resumeSetting, auto != null)
     val playButton = remember { FocusRequester() }
-    LaunchedEffect(ready, resumes) { if (ready) runCatching { playButton.requestFocus() } }
+    val favouriteButton = remember { FocusRequester() }
+    // Focus lands on Play, or on a TV where there's no Play, on the first thing that can take it.
+    LaunchedEffect(ready, resumes, mine != null) {
+        if (ready) runCatching { playButton.requestFocus() } else if (look.tv && mine != null) runCatching { favouriteButton.requestFocus() }
+    }
 
     Box(Modifier.fillMaxSize().background(GameColours.background)) {
         // The backdrop across the top, faint and fading into the page.
@@ -185,7 +189,7 @@ fun GamePageScreen(nav: GamesNav, gameId: Long) {
                             mine?.let { m ->
                                 GameIconButton(GameIcons.Star, if (m.favourite) "Favourite" else "Add to favourites", {
                                     scope.launch { runCatching { api.setFavourite(g.id, !m.favourite) }.onSuccess { mine = it } }
-                                }, on = m.favourite, tint = if (m.favourite) Color(0xFFFFC94D) else null)
+                                }, on = m.favourite, tint = if (m.favourite) Color(0xFFFFC94D) else null, focusRequester = favouriteButton)
                             }
                             if (ready) GameIconButton(GameIcons.More, "More for this game", { moreOpen = !moreOpen }, on = moreOpen)
                         }

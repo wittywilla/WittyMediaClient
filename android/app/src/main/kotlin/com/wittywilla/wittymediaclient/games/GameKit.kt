@@ -279,9 +279,9 @@ fun GameButton(
 
 // A square button with an icon alone, its words for screen readers.
 @Composable
-fun GameIconButton(icon: ImageVector, label: String, onClick: () -> Unit, modifier: Modifier = Modifier, on: Boolean = false, tint: Color? = null) {
+fun GameIconButton(icon: ImageVector, label: String, onClick: () -> Unit, modifier: Modifier = Modifier, on: Boolean = false, tint: Color? = null, focusRequester: FocusRequester? = null) {
     val look = gameLook()
-    Pressable(onClick, modifier.size(look.button), label = label, fill = GameColours.card) {
+    Pressable(onClick, modifier.size(look.button), label = label, fill = GameColours.card, focusRequester = focusRequester) {
         Icon(icon, null, Modifier.align(Alignment.Center).size(look.icon + 2.dp), tint = tint ?: if (on) GameColours.accentText else GameColours.text)
     }
 }

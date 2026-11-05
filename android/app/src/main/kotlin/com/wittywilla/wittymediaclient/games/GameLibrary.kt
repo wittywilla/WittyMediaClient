@@ -436,8 +436,9 @@ private fun Hero(nav: GamesNav, api: GamesApi, list: List<GameItem>, consoles: M
     val density = LocalDensity.current
     val front = remember { FocusRequester() }
     var flowFocused by remember { mutableStateOf(false) }
-    // Focus stays on the front cover as it changes.
+    // Focus stays on the front cover as it changes; a TV starts there, as a console does.
     LaunchedEffect(index) { if (flowFocused) runCatching { front.requestFocus() } }
+    LaunchedEffect(Unit) { if (look.tv) runCatching { front.requestFocus() } }
     Column(Modifier.fillMaxWidth().padding(bottom = look.sectionGap * 0.6f), horizontalAlignment = Alignment.CenterHorizontally) {
         Box(
             Modifier
