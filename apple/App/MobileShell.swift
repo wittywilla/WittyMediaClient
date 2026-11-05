@@ -46,7 +46,7 @@ extension View {
 /// and TV guide in 15 bold `textSecondary`, 20 apart, 44 high and 4 from the bar's top and foot, scrolling sideways
 /// and fading out over the last 20 before the activity button; the current one in `text` over a 2-high `accentText`
 /// line. The server's lockup when there's nothing to list. Once the page scrolls under it, it gains `background` at
-/// 85% with a blur, and a hairline. Over a picture, a soft scrim of `background` behind it keeps the names readable.
+/// 85% with a blur (the regular material, nearest the website's 20 px: a thinner one left a title under it readable), and a hairline. Over a picture, a soft scrim of `background` behind it keeps the names readable.
 struct LibraryStrip: View {
     static let height: CGFloat = 52
     @EnvironmentObject private var model: AppModel
@@ -115,7 +115,7 @@ struct LibraryStrip: View {
         .frame(height: Self.height)
         .background(alignment: .bottom) {
             ZStack {
-                Rectangle().fill(.ultraThinMaterial)
+                Rectangle().fill(.regularMaterial)
                 palette.background.opacity(0.85)
             }
             .overlay(alignment: .bottom) { Rectangle().fill(palette.border).frame(height: 1) }
@@ -197,7 +197,7 @@ private struct BackBar: ViewModifier {
                             .frame(maxHeight: .infinity, alignment: .top)
                     }
                     ZStack {
-                        Rectangle().fill(.ultraThinMaterial)
+                        Rectangle().fill(.regularMaterial)
                         palette.background.opacity(0.85)
                     }
                     .overlay(alignment: .bottom) { Rectangle().fill(palette.border).frame(height: 1) }
