@@ -7,9 +7,10 @@ import WittyKit
 
 // MARK: - The bar
 
-/// Six pills, the gutter in from the side and 24 down: Home, Libraries, Games, Live TV, Search and You.
-/// Choosing one shows that tab and keeps focus on its pill, one press from what's below. Back from
-/// here goes to Home's pill, and from Home's out of the app, as the system does.
+/// Pills the gutter in from the sides and 24 down: Home, Libraries, Games, Live TV and Search from the left, and
+/// You on its own at the right edge. Focus goes along the whole row, You last. Choosing one shows that tab and
+/// keeps focus on its pill, one press from what's below. Back from here goes to Home's pill, and from Home's out
+/// of the app, as the system does.
 struct TvTopBar: View {
     @EnvironmentObject private var model: AppModel
     @Environment(\.metrics) private var metrics
@@ -40,10 +41,11 @@ struct TvTopBar: View {
         let ring = metrics.focusRing
         HStack(spacing: Tokens.Space.s4 - ring * 2) {
             ForEach(AppTab.tvTabs) { tab in
+                // Space, not a line, keeps You apart from the rest.
+                if tab == .profile { Spacer(minLength: Tokens.Space.s8) }
                 TvTabPill(tab: tab, chosen: model.tab == tab, user: model.user) { choose(tab) }
                     .focused(focus, equals: tab)
             }
-            Spacer(minLength: 0)
         }
         .padding(.horizontal, metrics.gutter - ring)
         .padding(.top, Tokens.Space.s6 - ring)
