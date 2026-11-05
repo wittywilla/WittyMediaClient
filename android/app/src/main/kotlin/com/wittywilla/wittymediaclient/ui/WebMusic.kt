@@ -164,7 +164,7 @@ import kotlin.math.sin
 // podcast; an artist or an author. The words and order are in MusicLook. Android TV keeps its own (ListeningScreens.kt).
 
 // Something just done, said in a toast at the foot of the page, as the website's toast() does.
-private val LocalSay = staticCompositionLocalOf<(String) -> Unit> { {} }
+internal val LocalSay = staticCompositionLocalOf<(String) -> Unit> { {} }
 
 // The website's --hover and --scrim.
 private const val HOVER = 0.07f
@@ -656,7 +656,7 @@ private fun SongRow(nav: Nav, t: Item, play: () -> Unit) {
 // The three little bars of what's playing (`.ab-eq`): 3 wide, 2 apart, 12 high, each rising and falling over 0.9 s,
 // a third of that apart. Still at 70% when motion is reduced.
 @Composable
-private fun PlayingBars(colour: Color) {
+internal fun PlayingBars(colour: Color) {
     val still = LocalReduceMotion.current
     val beat = rememberInfiniteTransition(label = "bars")
     Row(Modifier.height(12.dp), horizontalArrangement = Arrangement.spacedBy(2.dp), verticalAlignment = Alignment.Bottom) {
@@ -1330,7 +1330,7 @@ private fun Nav.startStation(track: Item, say: (String) -> Unit) {
 // Add to a playlist (audio/controls.tsx PlaylistPicker): New playlist, then each of this person's own; a new one is
 // named in a field and made with "Make it".
 @Composable
-private fun PlaylistPicker(nav: Nav, items: List<Item>, done: () -> Unit) {
+internal fun PlaylistPicker(nav: Nav, items: List<Item>, done: () -> Unit) {
     val api = nav.app.api
     val say = LocalSay.current
     var lists by remember { mutableStateOf<List<Collection>?>(null) }
@@ -1386,7 +1386,7 @@ private fun PlaylistPicker(nav: Nav, items: List<Item>, done: () -> Unit) {
 // below, its right edge at the button's and 8 from the screen's edges; the panel colour, a hairline, radius 14, 6
 // inside, at least 220 wide, rows 1 apart.
 @Composable
-private fun PopPanel(close: () -> Unit, content: @Composable ColumnScope.() -> Unit) {
+internal fun PopPanel(close: () -> Unit, content: @Composable ColumnScope.() -> Unit) {
     val scheme = MaterialTheme.colorScheme
     val density = LocalDensity.current
     val config = LocalConfiguration.current

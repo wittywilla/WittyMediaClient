@@ -724,7 +724,7 @@ private fun SoundHint(words: String) {
 private fun EqRow(name: String, value: Double, label: String, enabled: Boolean, change: (Double) -> Unit) {
     Row(Modifier.fillMaxWidth().heightIn(min = 32.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
         Text(name, color = Np.fg2, fontSize = 12.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.width(44.dp))
-        NpSlider(value, -12.0, 12.0, 1.0, label, "${number(value)} decibels", enabled, Modifier.weight(1f), change)
+        NpSlider(value, -12.0, 12.0, 1.0, label, "${number(value)} decibels", enabled, Modifier.weight(1f), change = change)
         Text(Equaliser.decibels(value), color = Np.fg2, fontSize = 12.sp, textAlign = TextAlign.End, style = TextStyle(fontFeatureSettings = "tnum"), modifier = Modifier.width(34.dp))
     }
 }
@@ -794,7 +794,7 @@ private object UnderTheRight : PopupPositionProvider {
 // The website's range on black for a value between two ends: a 4 high track, white to the value, and a 14 thumb, in a
 // 32 high target. It moves in steps.
 @Composable
-internal fun NpSlider(value: Double, low: Double, high: Double, step: Double, label: String, spoken: String, enabled: Boolean, modifier: Modifier = Modifier, change: (Double) -> Unit) {
+internal fun NpSlider(value: Double, low: Double, high: Double, step: Double, label: String, spoken: String, enabled: Boolean, modifier: Modifier = Modifier, fill: Color = Color.White, track: Color = Color.White.copy(alpha = 0.28f), change: (Double) -> Unit) {
     var width by remember { mutableIntStateOf(1) }
     fun at(x: Float): Double {
         val raw = low + (x / width).coerceIn(0f, 1f) * (high - low)
@@ -817,9 +817,31 @@ internal fun NpSlider(value: Double, low: Double, high: Double, step: Double, la
         val top = (size.height - h) / 2
         val part = ((value - low) / (high - low)).toFloat().coerceIn(0f, 1f)
         val x = r + part * (size.width - 2 * r)
-        drawRoundRect(Color.White.copy(alpha = 0.28f), Offset(0f, top), Size(size.width, h), CornerRadius(h / 2))
-        drawRoundRect(Color.White, Offset(0f, top), Size(x, h), CornerRadius(h / 2))
+        drawRoundRect(track, Offset(0f, top), Size(size.width, h), CornerRadius(h / 2))
+        drawRoundRect(fill, Offset(0f, top), Size(x, h), CornerRadius(h / 2))
         drawCircle(Color(0x73000000), r, Offset(x, size.height / 2 + 1.dp.toPx()))
         drawCircle(Color.White, r, Offset(x, size.height / 2))
+    }
+}
+
+// MARK: the volume
+
+// A tablet's volume (`Volume`, `.mp-volume`): Mute, and how loud, in steps of 2%. On Now Playing's black, or on the
+// theme's own panel in the bar.
+@Composable
+internal fun VolumeCard(listening: com.wittywilla.wittymediaclient.player.Listening, onBlack: Boolean) {
+    val scheme = androidx.compose.material3.MaterialTheme.colorScheme
+    val s = listening.sound
+    val shown = if (s.muted) 0.0 else s.volume
+    val ink = if (onBlack) Np.fg else scheme.onBackground
+    Row(Modifier.widthIn(min = 240.dp).padding(start = 2.dp, end = 8.dp, top = 2.dp, bottom = 2.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        Pressable({ listening.setSound { it.copy(muted = !it.muted) } }, Modifier.size(44.dp), shape = androidx.compose.foundation.shape.CircleShape, fill = Color.Transparent, label = if (s.muted) "Turn the sound back on" else "Mute", selected = s.muted, pressScale = 0.94f, ring = false) {
+            Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { Icon(if (shown == 0.0) WebIcons.Mute else WebIcons.Volume, null, tint = ink, modifier = Modifier.size(20.dp)) }
+        }
+        val percent = Math.round(shown * 100).toDouble()
+        NpSlider(
+            percent, 0.0, 100.0, 2.0, "Volume", "${percent.toInt()}%", true, Modifier.weight(1f),
+            fill = if (onBlack) Color.White else scheme.primary, track = if (onBlack) Color.White.copy(alpha = 0.28f) else scheme.onBackground.copy(alpha = 0.28f),
+        ) { v -> listening.setSound { it.copy(volume = v / 100, muted = false) } }
     }
 }

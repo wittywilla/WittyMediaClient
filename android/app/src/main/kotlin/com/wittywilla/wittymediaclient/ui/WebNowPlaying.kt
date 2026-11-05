@@ -18,6 +18,7 @@ import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -71,6 +72,7 @@ import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -377,6 +379,10 @@ fun WebNowPlaying(nav: Nav) {
     val title = about.title?.toString().orEmpty()
     val artistName = about.artist?.toString().orEmpty().ifEmpty { about.albumArtist?.toString().orEmpty() }
     val runtime = (about.durationMs ?: 0L) / 1000.0
+    // What's playing, over where it's from, in the top bar of a tablet.
+    var libraryType by remember(library) { mutableStateOf("") }
+    LaunchedEffect(library) { if (library > 0) libraryType = nav.libraryType(library) }
+    val kind = if (!books) "Now playing" else if (libraryType == "podcasts") "Podcast" else "Audiobook"
     // What came with the album, for Read.
     var extras by remember { mutableStateOf(emptyList<com.wittywilla.wittymediaclient.net.Extra>()) }
     LaunchedEffect(trackId, music) {
@@ -401,95 +407,137 @@ fun WebNowPlaying(nav: Nav) {
         // Behind everything but the glow: the visualizer, when the server has it and it's on.
         if (vizHere && vizLoaded && viz.viz) VisualizerBackground(style, viz.slow, tint, listening.isPlaying)
         Column(Modifier.fillMaxSize()) {
-            // The top bar: Close at the start; Add to a playlist, Sleep, Queue, Like and More at the end.
-            Row(Modifier.fillMaxWidth().padding(start = 12.dp, end = 12.dp, top = maxOf(14.dp, status), bottom = 4.dp), verticalAlignment = Alignment.CenterVertically) {
-                NpRound(NpIcons.Down, "Close the full player", 44.dp, 20.dp) { nav.pop() }
-                Spacer(Modifier.weight(1f))
-                Row(horizontalArrangement = Arrangement.spacedBy(2.dp)) {
-                    if (trackId > 0) NpRound(NpIcons.AddList, "Add to a playlist", 44.dp, 20.dp, modifier = Modifier.anchor(NpMenu.Playlist)) { toggle(NpMenu.Playlist) }
-                    val sleepSet = listening.sleepAt != null || listening.sleepAfterThis
-                    NpRound(NpIcons.Moon, if (sleepSet) "Sleep timer: stops ${listening.sleepAt?.let { "at " + SimpleDateFormat("HH:mm", locale).format(Date(it)) } ?: "after this one"}" else "Sleep timer", 44.dp, 20.dp, on = sleepSet, modifier = Modifier.anchor(NpMenu.Sleep)) { toggle(NpMenu.Sleep) }
-                    NpRound(if (books) WebIcons.Chapters else NpIcons.List, if (books) "Chapters" else "Queue", 44.dp, 20.dp, on = panel == NpPanel.Queue) { togglePanel(NpPanel.Queue) }
-                    if (!books && library > 0) {
-                        val on = trackId in liked
-                        NpRound(if (on) NpIcons.HeartOn else NpIcons.Heart, if (on) "Remove from liked songs" else "Add to liked songs", 44.dp, 20.dp, tint = if (on) Np.loved else null) {
-                            liked = if (on) liked - trackId else liked + trackId
-                            scope.launch { runCatching { api.react(trackId, if (on) 0 else 1) }.onFailure { liked = if (on) liked + trackId else liked - trackId } }
-                        }
-                    }
-                    NpRound(WebIcons.More, "More", 44.dp, 20.dp, modifier = Modifier.anchor(NpMenu.More)) { toggle(NpMenu.More) }
+            // The top bar: Close at the start; the volume (not on a phone, which has its own), Add to a playlist,
+            // Sleep, Queue, Like and More at the end. Between them on a tablet, what's playing and from where.
+            val place: @Composable (Modifier) -> Unit = { m ->
+                Column(m.semantics(mergeDescendants = true) {}, horizontalAlignment = Alignment.CenterHorizontally) {
+                    Text(kind, color = Np.fg2, fontSize = 13.sp, fontWeight = FontWeight.SemiBold, maxLines = 1)
+                    Text(about.albumTitle?.toString().orEmpty().ifEmpty { artistName }, color = Np.fg, fontSize = 14.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 }
             }
-            val playSize = (screenH * 0.10f).coerceIn(66f, 96f).dp
-            Column(Modifier.weight(1f).fillMaxWidth().padding(horizontal = 16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                if (panel != NpPanel.None) {
-                    // A panel takes the artwork's place (`.np-panel`): radius 20, on its own near-black, a hairline round it.
-                    Box(Modifier.weight(1f).fillMaxWidth().clip(RoundedCornerShape(20.dp)).background(Np.panel).border(1.dp, Np.line, RoundedCornerShape(20.dp))) {
-                        when (panel) {
-                            NpPanel.Queue -> QueuePanel(nav, glow, Modifier.fillMaxSize()) { panel = NpPanel.None }
-                            NpPanel.Lyrics -> LyricsPanel(nav, words, trackId, title, artistName, runtime, { panel = NpPanel.None }) { toast = it }
-                            NpPanel.Read -> ReadPanel(nav, trackId, extras, words) { panel = NpPanel.None }
-                            NpPanel.Sound -> SoundPanel(nav) { panel = NpPanel.None }
-                            else -> {}
+            val topSide = if (compact) 12.dp else (screenW * 0.02f).coerceIn(12f, 24f).dp
+            Box(Modifier.fillMaxWidth().padding(start = topSide, end = topSide, top = maxOf(14.dp, status), bottom = 4.dp), contentAlignment = Alignment.Center) {
+                if (!compact) place(Modifier.widthIn(max = (screenW * 0.46f).dp))
+                Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    NpRound(NpIcons.Down, "Close the full player", 44.dp, 20.dp) { nav.pop() }
+                    if (compact && !phone) place(Modifier.weight(1f)) else Spacer(Modifier.weight(1f))
+                    Row(horizontalArrangement = Arrangement.spacedBy(if (phone) 2.dp else if (compact) 4.dp else 6.dp)) {
+                        if (!phone) {
+                            val silent = listening.sound.muted || listening.sound.volume == 0.0
+                            NpRound(if (silent) WebIcons.Mute else WebIcons.Volume, "Volume", 44.dp, 20.dp, on = menu == NpMenu.Volume, modifier = Modifier.anchor(NpMenu.Volume)) { toggle(NpMenu.Volume) }
+                        }
+                        if (trackId > 0) NpRound(NpIcons.AddList, "Add to a playlist", 44.dp, 20.dp, modifier = Modifier.anchor(NpMenu.Playlist)) { toggle(NpMenu.Playlist) }
+                        val sleepSet = listening.sleepAt != null || listening.sleepAfterThis
+                        NpRound(NpIcons.Moon, if (sleepSet) "Sleep timer: stops ${listening.sleepAt?.let { "at " + SimpleDateFormat("HH:mm", locale).format(Date(it)) } ?: "after this one"}" else "Sleep timer", 44.dp, 20.dp, on = sleepSet, modifier = Modifier.anchor(NpMenu.Sleep)) { toggle(NpMenu.Sleep) }
+                        NpRound(if (books) WebIcons.Chapters else NpIcons.List, if (books) "Chapters" else "Queue", 44.dp, 20.dp, on = panel == NpPanel.Queue) { togglePanel(NpPanel.Queue) }
+                        if (!books && library > 0) {
+                            val on = trackId in liked
+                            NpRound(if (on) NpIcons.HeartOn else NpIcons.Heart, if (on) "Remove from liked songs" else "Add to liked songs", 44.dp, 20.dp, tint = if (on) Np.loved else null) {
+                                liked = if (on) liked - trackId else liked + trackId
+                                scope.launch { runCatching { api.react(trackId, if (on) 0 else 1) }.onFailure { liked = if (on) liked + trackId else liked - trackId } }
+                            }
+                        }
+                        NpRound(WebIcons.More, "More", 44.dp, 20.dp, modifier = Modifier.anchor(NpMenu.More)) { toggle(NpMenu.More) }
+                    }
+                }
+            }
+            // The website's sizes: a phone's buttons up to 480, a tablet's above; one column up to 860; and a low, wide
+            // window keeps the artwork small and without its reflection.
+            val lowWide = !compact && screenH <= 620
+            val tall = if (phone) 46.dp else if (lowWide) 44.dp else 56.dp
+            val taller = if (phone) 56.dp else if (lowWide) 50.dp else 66.dp
+            val playSize = if (lowWide) 60.dp else (screenH * 0.10f).coerceIn(66f, 96f).dp
+            val transportGap = (screenW * 0.012f).coerceIn(6f, 16f).dp
+            val panelBox: @Composable (Modifier) -> Unit = { m ->
+                // A panel (`.np-panel`): radius 20, on its own near-black, a hairline round it.
+                Box(m.clip(RoundedCornerShape(20.dp)).background(Np.panel).border(1.dp, Np.line, RoundedCornerShape(20.dp))) {
+                    when (panel) {
+                        NpPanel.Queue -> QueuePanel(nav, glow, wide = !compact, anchor = Modifier.anchor(NpMenu.SaveQueue), saving = menu == NpMenu.SaveQueue, save = { toggle(NpMenu.SaveQueue) }, modifier = Modifier.fillMaxSize()) { panel = NpPanel.None }
+                        NpPanel.Lyrics -> LyricsPanel(nav, words, trackId, title, artistName, runtime, { panel = NpPanel.None }) { toast = it }
+                        NpPanel.Read -> ReadPanel(nav, trackId, extras, words) { panel = NpPanel.None }
+                        NpPanel.Sound -> SoundPanel(nav) { panel = NpPanel.None }
+                        else -> {}
+                    }
+                }
+            }
+            val main: @Composable (Modifier) -> Unit = { m ->
+                Column(
+                    m.verticalScroll(rememberScrollState()).padding(vertical = 4.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy((screenH * 0.013f).coerceIn(6f, 16f).dp, Alignment.CenterVertically),
+                ) {
+                    val side = when {
+                        compact -> minOf(screenW * 0.66f, screenH * 0.32f)
+                        lowWide -> (screenH * 0.30f).coerceIn(110f, 220f)
+                        else -> (screenH * 0.38f).coerceIn(150f, 440f)
+                    }.dp
+                    val reflection = (if (compact) (screenH * 0.044f).coerceIn(16f, 40f) else (screenH * 0.056f).coerceIn(26f, 64f)).dp
+                    val below = if (compact) (screenH * 0.04f).coerceIn(16f, 36f).dp else if (lowWide) 8.dp else (screenH * 0.062f).coerceIn(30f, 72f).dp
+                    Box(Modifier.padding(bottom = below)) {
+                        Box(Modifier.size(side).cssShadow(16.dp, 60.dp, Color(0x8C000000), 14.dp).clip(RoundedCornerShape(14.dp)).background(Np.well)) {
+                            WebArt(art, about.albumTitle?.toString() ?: title, side, 1f, Modifier.fillMaxSize())
+                        }
+                        // The reflection: the artwork's foot, mirrored, fading from 34%.
+                        if (art != null && !lowWide) Box(
+                            Modifier.offset(y = side + 8.dp).size(side, reflection).clip(RoundedCornerShape(topStart = 14.dp, topEnd = 14.dp))
+                                .graphicsLayer { compositingStrategy = CompositingStrategy.Offscreen }
+                                .drawWithContent { drawContent(); drawRect(Brush.verticalGradient(listOf(Color.Black.copy(alpha = 0.34f), Color.Transparent)), blendMode = BlendMode.DstIn) },
+                        ) {
+                            WebArt(art, "", side, 1f, Modifier.size(side).graphicsLayer { scaleY = -1f }.offset(y = 0.dp), placeholderless = true)
                         }
                     }
-                } else {
-                    Column(
-                        Modifier.weight(1f).fillMaxWidth().verticalScroll(rememberScrollState()).padding(vertical = 4.dp),
-                        horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy((screenH * 0.013f).coerceIn(6f, 16f).dp, Alignment.CenterVertically),
+                    Column(Modifier.widthIn(max = 760.dp).padding(horizontal = 12.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+                        Text(title, color = Np.fg, fontSize = (screenH * 0.036f).coerceIn(22.4f, 44.8f).sp, fontWeight = FontWeight.ExtraBold, letterSpacing = (-0.022).em, lineHeight = ((screenH * 0.036f).coerceIn(22.4f, 44.8f) * 1.12f).sp, textAlign = TextAlign.Center)
+                        if (artistName.isNotEmpty()) Text(
+                            artistName, color = Np.fg2, fontSize = (screenH * 0.021f).coerceIn(16f, 20.8f).sp, fontWeight = FontWeight.SemiBold, textAlign = TextAlign.Center,
+                            modifier = Modifier.padding(top = 2.dp).clip(RoundedCornerShape(6.dp)).then(if (!books && library > 0) Modifier.clickable { nav.pop(); nav.push(Route.Artist(library, artistName)) } else Modifier).padding(horizontal = 8.dp, vertical = 2.dp),
+                        )
+                    }
+                    NpSeek(nav)
+                    Transport(nav, books, playSize, taller, tall, transportGap)
+                    Tools(
+                        compact, vizHere && vizLoaded, viz, style, tint, listening.speed,
+                        setViz = ::setViz, pickStyle = ::pickStyle,
+                        shuffleAnchor = Modifier.anchor(NpMenu.Shuffle), speedAnchor = Modifier.anchor(NpMenu.Speed),
+                        shuffleOpen = menu == NpMenu.Shuffle, openShuffle = { toggle(NpMenu.Shuffle) }, openSpeed = { toggle(NpMenu.Speed) },
                     ) {
-                        val side = minOf(screenW * 0.66f, screenH * 0.32f).dp
-                        val reflection = (screenH * 0.044f).coerceIn(16f, 40f).dp
-                        Box(Modifier.padding(bottom = (screenH * 0.04f).coerceIn(16f, 36f).dp)) {
-                            Box(Modifier.size(side).cssShadow(16.dp, 60.dp, Color(0x8C000000), 14.dp).clip(RoundedCornerShape(14.dp)).background(Np.well)) {
-                                WebArt(art, about.albumTitle?.toString() ?: about.title?.toString().orEmpty(), side, 1f, Modifier.fillMaxSize())
-                            }
-                            // The reflection: the artwork's foot, mirrored, fading from 34%.
-                            if (art != null) Box(
-                                Modifier.offset(y = side + 8.dp).size(side, reflection).clip(RoundedCornerShape(topStart = 14.dp, topEnd = 14.dp))
-                                    .graphicsLayer { compositingStrategy = CompositingStrategy.Offscreen }
-                                    .drawWithContent { drawContent(); drawRect(Brush.verticalGradient(listOf(Color.Black.copy(alpha = 0.34f), Color.Transparent)), blendMode = BlendMode.DstIn) },
-                            ) {
-                                WebArt(art, "", side, 1f, Modifier.size(side).graphicsLayer { scaleY = -1f }.offset(y = 0.dp), placeholderless = true)
-                            }
-                        }
-                        Column(Modifier.widthIn(max = 760.dp).padding(horizontal = 12.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-                            Text(about.title?.toString().orEmpty(), color = Np.fg, fontSize = (screenH * 0.036f).coerceIn(22.4f, 44.8f).sp, fontWeight = FontWeight.ExtraBold, letterSpacing = (-0.022).em, lineHeight = ((screenH * 0.036f).coerceIn(22.4f, 44.8f) * 1.12f).sp, textAlign = TextAlign.Center)
-                            val artist = about.artist?.toString().orEmpty().ifEmpty { about.albumArtist?.toString().orEmpty() }
-                            if (artist.isNotEmpty()) Text(
-                                artist, color = Np.fg2, fontSize = (screenH * 0.021f).coerceIn(16f, 20.8f).sp, fontWeight = FontWeight.SemiBold, textAlign = TextAlign.Center,
-                                modifier = Modifier.padding(top = 2.dp).clip(RoundedCornerShape(6.dp)).then(if (!books && library > 0) Modifier.clickable { nav.pop(); nav.push(Route.Artist(library, artist)) } else Modifier).padding(horizontal = 8.dp, vertical = 2.dp),
-                            )
-                        }
-                        NpSeek(nav)
-                        Transport(nav, books, playSize, small = false)
-                        Tools(
-                            compact, vizHere && vizLoaded, viz, style, tint, listening.speed,
-                            setViz = ::setViz, pickStyle = ::pickStyle,
-                            shuffleAnchor = Modifier.anchor(NpMenu.Shuffle), speedAnchor = Modifier.anchor(NpMenu.Speed),
-                            shuffleOpen = menu == NpMenu.Shuffle, openShuffle = { toggle(NpMenu.Shuffle) }, openSpeed = { toggle(NpMenu.Speed) },
-                        ) {
-                            // The words' chips, for music.
-                            if (music) {
-                                NpChip("Lyrics", on = panel == NpPanel.Lyrics, icon = WebIcons.Mic) { togglePanel(NpPanel.Lyrics) }
-                                NpChip("Karaoke", icon = NpIcons.Karaoke) { karaoke = true }
-                                // How many things there are to read beside the album, in a white circle.
-                                NpChip(
-                                    "Read", on = panel == NpPanel.Read, icon = NpIcons.ReadOpen, label = "Read the words, or the album's booklet" + if (extras.isNotEmpty()) ", ${extras.size}" else "",
-                                    after = if (extras.isEmpty()) null else {
-                                        {
-                                            Box(Modifier.heightIn(min = 20.dp).widthIn(min = 20.dp).clip(RoundedCornerShape(50)).background(Np.fg).padding(horizontal = 5.dp), contentAlignment = Alignment.Center) {
-                                                Text("${extras.size}", color = Color.Black, fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
-                                            }
+                        // The words' chips, for music.
+                        if (music) {
+                            NpChip("Lyrics", on = panel == NpPanel.Lyrics, icon = WebIcons.Mic) { togglePanel(NpPanel.Lyrics) }
+                            NpChip("Karaoke", icon = NpIcons.Karaoke) { karaoke = true }
+                            // How many things there are to read beside the album, in a white circle.
+                            NpChip(
+                                "Read", on = panel == NpPanel.Read, icon = NpIcons.ReadOpen, label = "Read the words, or the album's booklet" + if (extras.isNotEmpty()) ", ${extras.size}" else "",
+                                after = if (extras.isEmpty()) null else {
+                                    {
+                                        Box(Modifier.heightIn(min = 20.dp).widthIn(min = 20.dp).clip(RoundedCornerShape(50)).background(Np.fg).padding(horizontal = 5.dp), contentAlignment = Alignment.Center) {
+                                            Text("${extras.size}", color = Color.Black, fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
                                         }
-                                    },
-                                ) { togglePanel(NpPanel.Read) }
-                            }
+                                    }
+                                },
+                            ) { togglePanel(NpPanel.Read) }
                         }
                     }
                 }
-                if (panel != NpPanel.None) Transport(nav, books, 56.dp, small = true, Modifier.padding(top = 8.dp, bottom = maxOf(10.dp, inset)))
-                else Spacer(Modifier.height(inset))
+            }
+            if (compact) {
+                // One column: a panel takes the place of the artwork, the title, the seek bar and the tools, above a
+                // smaller transport.
+                Column(Modifier.weight(1f).fillMaxWidth().padding(horizontal = 16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    if (panel != NpPanel.None) {
+                        panelBox(Modifier.weight(1f).fillMaxWidth())
+                        Transport(nav, books, 56.dp, 48.dp, 44.dp, transportGap, Modifier.padding(top = 4.dp, bottom = maxOf(10.dp, inset)))
+                    } else {
+                        main(Modifier.weight(1f).fillMaxWidth())
+                        Spacer(Modifier.height(inset))
+                    }
+                }
+            } else {
+                // Wider, the panel sits beside the player.
+                val gap = (screenW * 0.03f).coerceIn(16f, 40f).dp
+                Row(Modifier.weight(1f).fillMaxWidth().padding(horizontal = gap), horizontalArrangement = Arrangement.spacedBy(gap)) {
+                    main(Modifier.weight(1f).fillMaxHeight().padding(bottom = inset))
+                    if (panel != NpPanel.None) panelBox(Modifier.width((screenW * 0.42f).coerceIn(320f, 480f).dp).fillMaxHeight().padding(top = 4.dp, bottom = maxOf(8.dp, inset)))
+                }
             }
         }
         when (menu) {
@@ -539,6 +587,8 @@ fun WebNowPlaying(nav: Nav) {
                 ) { menu = NpMenu.None }
             }
             NpMenu.Playlist -> PlaylistMenu(nav, listOf(trackId), at(NpMenu.Playlist), { toast = it }) { menu = NpMenu.None }
+            NpMenu.SaveQueue -> PlaylistMenu(nav, listening.queue.mapNotNull { it.mediaId.toLongOrNull() }, at(NpMenu.SaveQueue), { toast = it }) { menu = NpMenu.None }
+            NpMenu.Volume -> PopAt(at(NpMenu.Volume), { menu = NpMenu.None }, minWidth = 240.dp) { VolumeCard(listening, onBlack = true) }
             else -> {}
         }
         if (karaoke) KaraokeScreen(nav, words, title, artistName, tint) { karaoke = false }
@@ -659,69 +709,73 @@ private fun NpRange(fraction: Float, seek: (Float) -> Unit) {
     }
 }
 
-// Shuffle, Previous, Play, Next and Repeat for music; Back 15, Previous, Play, Next and Forward 30 for books. 6 apart.
+// Shuffle, Previous, Play, Next and Repeat for music; Back 15, Previous, Play, Next and Forward 30 for books. `taller` is
+// Previous and Next, `tall` the ones at the ends, `gap` between them all (clamp(6, 1.2vw, 16)).
 @Composable
-private fun Transport(nav: Nav, books: Boolean, play: Dp, small: Boolean, modifier: Modifier = Modifier) {
+private fun Transport(nav: Nav, books: Boolean, play: Dp, taller: Dp, tall: Dp, gap: Dp, modifier: Modifier = Modifier) {
     val listening = nav.app.listening
-    val side = if (small) 44.dp else 46.dp
-    val step = if (small) 48.dp else 56.dp
-    Row(modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp, Alignment.CenterHorizontally), verticalAlignment = Alignment.CenterVertically) {
-        if (books) JumpRound(true, 15, "Back 15 seconds", side, 24.dp) { listening.seekBy(-15.0) }
-        else NpRound(NpIcons.Shuffle, "Shuffle", side, 20.dp, on = listening.shuffle) { listening.toggleShuffle() }
-        NpRound(WebIcons.Prev, "Previous", step, 28.dp) { listening.previous() }
+    val glyph = if (taller >= 56.dp) 28.dp else 24.dp
+    Row(modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(gap, Alignment.CenterHorizontally), verticalAlignment = Alignment.CenterVertically) {
+        if (books) JumpRound(true, 15, "Back 15 seconds", tall, 24.dp) { listening.seekBy(-15.0) }
+        else NpRound(NpIcons.Shuffle, "Shuffle", tall, 20.dp, on = listening.shuffle) { listening.toggleShuffle() }
+        NpRound(WebIcons.Prev, "Previous", taller, glyph) { listening.previous() }
         Pressable(listening::toggle, Modifier.size(play), shape = CircleShape, fill = Color.White, label = if (listening.isPlaying) "Pause" else "Play", pressScale = 0.96f, ring = false) {
             Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { Icon(if (listening.isPlaying) WebIcons.Pause else WebIcons.Play, null, tint = Color.Black, modifier = Modifier.size(36.dp)) }
         }
-        NpRound(WebIcons.Next, "Next", step, 28.dp) { if (listening.canGoNext) listening.next() }
-        if (books) JumpRound(false, 30, "Forward 30 seconds", side, 24.dp) { listening.seekBy(30.0) }
+        NpRound(WebIcons.Next, "Next", taller, glyph) { if (listening.canGoNext) listening.next() }
+        if (books) JumpRound(false, 30, "Forward 30 seconds", tall, 24.dp) { listening.seekBy(30.0) }
         else {
             val words = when (listening.repeat) { Player.REPEAT_MODE_ALL -> "Repeat all"; Player.REPEAT_MODE_ONE -> "Repeat this song"; else -> "Repeat off" }
-            NpRound(if (listening.repeat == Player.REPEAT_MODE_ONE) NpIcons.RepeatOne else NpIcons.Repeat, words, side, 20.dp, on = listening.repeat != Player.REPEAT_MODE_OFF) { listening.cycleRepeat() }
+            NpRound(if (listening.repeat == Player.REPEAT_MODE_ONE) NpIcons.RepeatOne else NpIcons.Repeat, words, tall, 20.dp, on = listening.repeat != Player.REPEAT_MODE_OFF) { listening.cycleRepeat() }
         }
     }
 }
 
-// The queue, in place of the artwork: what's to come and how long, each row 56 high with its picture, title and artist,
-// the current one tinted with the artwork's colour; Move down and Remove on each.
+// The queue (`QueuePanel`): what's to come and how long, Save the queue as a playlist and Clear what's to come for
+// music; each row 56 high with its picture, title and artist and the time, the current one tinted with the artwork's
+// colour and its picture showing the playing bars; Move up (over 860 across), Move down and Remove on each. A tap on a
+// row plays it. Moving isn't offered while the queue is shuffled, as the order on screen isn't the one in the queue.
 @Composable
-private fun QueuePanel(nav: Nav, glow: Triple<Int, Int, Int>, modifier: Modifier, close: () -> Unit) {
+private fun QueuePanel(nav: Nav, glow: Triple<Int, Int, Int>, wide: Boolean, anchor: Modifier, saving: Boolean, save: () -> Unit, modifier: Modifier, close: () -> Unit) {
     val listening = nav.app.listening
     val books = listening.keepsPlace
+    val heading = if (books) "Chapters" else "Queue"
     val queue = listening.queue
     val current = queue.indexOfFirst { it.index == listening.nowIndex }
     val after = if (current >= 0) queue.drop(current + 1) else emptyList()
     val tint = Color(glow.first, glow.second, glow.third)
     Column(modifier.fillMaxWidth()) {
-        Row(Modifier.fillMaxWidth().padding(start = 16.dp, end = 8.dp, top = 12.dp, bottom = 8.dp), verticalAlignment = Alignment.CenterVertically) {
-            Column(Modifier.weight(1f)) {
-                Text(if (books) "Chapters" else "Queue", color = Np.fg, fontSize = 17.sp, fontWeight = FontWeight.Bold)
-                Text(if (after.isEmpty()) "Nothing after this" else "${after.size} to come · ${clock(after.sumOf { it.durationSec })}", color = Np.fg2, fontSize = 12.sp)
-            }
-            if (!books) Pressable({ after.indices.reversed().forEach { listening.remove(current + 1 + it) } }, Modifier.heightIn(min = 36.dp), shape = RoundedCornerShape(50), fill = Np.chip, label = "Clear what's to come", ring = false) {
-                Box(Modifier.heightIn(min = 36.dp).padding(horizontal = 12.dp), contentAlignment = Alignment.Center) { Text("Clear what's to come", color = Np.fg, fontSize = 13.sp, fontWeight = FontWeight.SemiBold) }
-            }
-            NpRound(WebIcons.Close, "Close", 36.dp, 18.dp, onClick = close)
+        NpSideHead(heading, "Close the ${heading.lowercase(Locale.ROOT)}", close) {
+            Text(if (after.isEmpty()) "Nothing after this" else "${after.size} to come · ${clock(after.sumOf { it.durationSec })}", color = Np.fg2, fontSize = 12.sp, maxLines = 1)
+        }
+        if (!books) Row(Modifier.fillMaxWidth().padding(start = 16.dp, end = 16.dp, bottom = 8.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            NpRound(NpIcons.AddList, "Save the queue as a playlist", 44.dp, 20.dp, on = saving, modifier = anchor, onClick = save)
+            NpChip("Clear what's to come", small = true, enabled = after.isNotEmpty()) { after.indices.reversed().forEach { listening.remove(after[it].index) } }
         }
         LazyColumn(Modifier.weight(1f).padding(start = 8.dp, end = 8.dp, bottom = 10.dp)) {
             itemsIndexed(queue, key = { _, e -> "${e.index}-${e.mediaId}" }) { i, e ->
                 val isNow = i == current
-                Row(
-                    Modifier.fillMaxWidth().clip(RoundedCornerShape(10.dp)).background(if (isNow) tint.copy(alpha = 0.24f) else Color.Transparent)
-                        .clickable { listening.jumpTo(e.index) }.heightIn(min = 56.dp).padding(horizontal = 8.dp, vertical = 6.dp),
-                    verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp),
-                ) {
-                    Box(Modifier.size(44.dp).clip(RoundedCornerShape(6.dp)).background(Np.well)) { WebArt(e.artwork?.toString(), "", 44.dp, 1f, Modifier.fillMaxSize(), placeholderless = true) }
-                    Column(Modifier.weight(1f)) {
-                        Text(e.title, color = Np.fg, fontSize = 14.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                        if (e.artist.isNotEmpty()) Text(e.artist, color = Np.fg2, fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(10.dp)).background(if (isNow) tint.copy(alpha = 0.24f) else Color.Transparent), verticalAlignment = Alignment.CenterVertically) {
+                    Row(
+                        Modifier.weight(1f).clip(RoundedCornerShape(10.dp)).clickable { listening.jumpTo(e.index) }.heightIn(min = 56.dp).padding(horizontal = 8.dp, vertical = 6.dp)
+                            .semantics(mergeDescendants = true) { if (isNow) stateDescription = "Playing" },
+                        verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp),
+                    ) {
+                        Box(Modifier.size(44.dp).clip(RoundedCornerShape(6.dp)).background(Np.well), contentAlignment = Alignment.Center) {
+                            WebArt(e.artwork?.toString(), "", 44.dp, 1f, Modifier.fillMaxSize(), placeholderless = true)
+                            if (isNow && listening.isPlaying) Box(Modifier.clip(RoundedCornerShape(6.dp)).background(Np.plate).padding(4.dp)) { PlayingBars(Color.White) }
+                        }
+                        Column(Modifier.weight(1f)) {
+                            Text(e.title, color = Np.fg, fontSize = 14.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                            if (e.artist.isNotEmpty()) Text(e.artist, color = Np.fg2, fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                        }
+                        Text(clock(e.durationSec), color = Np.fg2, fontSize = 12.sp, style = androidx.compose.ui.text.TextStyle(fontFeatureSettings = "tnum"))
                     }
-                    if (e.durationSec > 0) Text(clock(e.durationSec), color = Np.fg2, fontSize = 12.sp)
-                    Pressable({ listening.move(e.index, e.index + 1) }, Modifier.size(36.dp), shape = CircleShape, fill = Color.Transparent, label = "Move down", ring = false) {
-                        Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { Icon(NpIcons.Down, null, tint = Np.fg, modifier = Modifier.size(18.dp)) }
+                    if (!listening.shuffle) {
+                        if (wide) NpRound(WebIcons.Up, "Move ${e.title} up", 36.dp, 18.dp, fill = Color.Transparent, enabled = i > 0) { listening.move(e.index, e.index - 1) }
+                        NpRound(NpIcons.Down, "Move ${e.title} down", 36.dp, 18.dp, fill = Color.Transparent, enabled = i < queue.lastIndex) { listening.move(e.index, e.index + 1) }
                     }
-                    Pressable({ listening.remove(e.index) }, Modifier.size(36.dp), shape = CircleShape, fill = Color.Transparent, label = "Remove", ring = false) {
-                        Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { Icon(WebIcons.Close, null, tint = Np.fg, modifier = Modifier.size(18.dp)) }
-                    }
+                    NpRound(WebIcons.Close, "Remove ${e.title} from the queue", 36.dp, 18.dp, fill = Color.Transparent) { listening.remove(e.index) }
                 }
             }
         }

@@ -66,6 +66,27 @@ class Listening(private val app: WittyApp) {
     // Asked for by a tap on the notification, or a TV starting a queue, for when the screens are ready.
     var wantsScreen by mutableStateOf(false)
 
+    // The bar folded into a round button in the corner, as the website keeps it (`wms.audio.collapsed`).
+    var barCollapsed by mutableStateOf(false)
+        private set
+
+    fun collapseBar(collapsed: Boolean) {
+        barCollapsed = collapsed
+        prefs.edit { putBoolean(KEY_COLLAPSED, collapsed) }
+    }
+
+    // Whether the server has the music player's visualizer, for the wide bar's button: asked once for each sign-in.
+    var visualizerHere by mutableStateOf(true)
+        private set
+    private var visualizerAsked = false
+
+    fun askAboutVisualizer() {
+        if (visualizerAsked) return
+        visualizerAsked = true
+        val api = app.api
+        app.scope.launch { runCatching { api.playerPrefs() }.onSuccess { visualizerHere = it.visualizer != false }.onFailure { visualizerAsked = false } }
+    }
+
     // How Now Playing opens from the wide bar: with the queue, or with the visualizer turned on.
     var screenWithQueue = false
     var screenWithVisualizer = false
@@ -113,6 +134,7 @@ class Listening(private val app: WittyApp) {
 
     init {
         sound = SoundSettings.read(prefs.getString(KEY_SOUND, null))
+        barCollapsed = prefs.getBoolean(KEY_COLLAPSED, false)
         shapeSound()
     }
 
@@ -408,11 +430,14 @@ class Listening(private val app: WittyApp) {
         liked.clear()
         likesAsked.clear()
         heldLyrics.clear()
+        visualizerAsked = false
+        visualizerHere = true
         return app.scope.launch { sent?.join() }
     }
 
     private companion object {
         const val KEY_BOOK_SPEED = "bookSpeed"
         const val KEY_SOUND = "wms.sound"
+        const val KEY_COLLAPSED = "wms.audio.collapsed"
     }
 }
