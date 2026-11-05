@@ -128,7 +128,7 @@ fun PhoneLibrary(nav: Nav, library: Library, chosen: Map<String, String> = empty
     val results = remember(library.id, query) { mutableStateListOf<BrowseHit>() }
     var gridTotal by remember(library.id, query) { mutableStateOf<Int?>(null) }
     var loading by remember(library.id, query) { mutableStateOf(false) }
-    val state = rememberLazyGridState()
+    val state = androidx.compose.runtime.key(library.id) { rememberLazyGridState() }
     TracksScroll(state)
     suspend fun page() {
         if (loading || (gridTotal != null && results.size >= (gridTotal ?: 0))) return
@@ -268,8 +268,9 @@ private fun Modifier.layoutBleed(): Modifier = this.layout { measurable, constra
 
 @Composable
 private fun BrowseRow(nav: Nav, library: Library, title: String, query: String, action: String? = null, go: (() -> Unit)? = null) {
-    var hits by remember(query) { mutableStateOf<List<BrowseHit>?>(null) }
-    LaunchedEffect(query) { hits = runCatching { nav.app.api.browse(library.id, query, 0, 20).results }.getOrDefault(emptyList()) }
+    // Kept by library and query both: another library in the same place must not show this one's rows.
+    var hits by remember(library.id, query) { mutableStateOf<List<BrowseHit>?>(null) }
+    LaunchedEffect(library.id, query) { hits = runCatching { nav.app.api.browse(library.id, query, 0, 20).results }.getOrDefault(emptyList()) }
     val h = hits ?: return Box(Modifier.height(240.dp))
     if (h.isEmpty()) return
     Column(Modifier.padding(bottom = 28.dp).layoutBleed()) {
