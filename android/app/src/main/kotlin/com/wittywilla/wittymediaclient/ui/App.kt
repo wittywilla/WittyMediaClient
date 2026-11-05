@@ -149,9 +149,10 @@ class Nav(val app: WittyApp, private val s: Map<String, String>) {
     fun push(r: Route) { stack.add(r) }
 
     // This app's own screens for what it has them for, and the server's page for all the rest.
-    fun open(library: com.wittywilla.wittymediaclient.net.Library) = push(if (library.hasOwnScreen) Route.Library(library) else Route.Page(library.pagePath()))
+    fun open(library: com.wittywilla.wittymediaclient.net.Library) = push(gamesRouteFor(library) ?: if (library.hasOwnScreen) Route.Library(library) else Route.Page(library.pagePath()))
     fun open(item: com.wittywilla.wittymediaclient.net.Item) = push(
         when {
+            gamesRouteFor(item) != null -> gamesRouteFor(item)!!
             item.isTrack -> Route.Album(item.libraryId, item.album, item.albumArtist.ifEmpty { item.artist })
             item.hasOwnScreen -> Route.Item(item.id)
             else -> Route.Page(item.pagePath())
@@ -494,6 +495,7 @@ fun AppRoot(app: WittyApp) {
                         is Route.Player -> PlayerScreen(nav, route.id, route.startOver)
                         is Route.Web -> ServerPageScreen(nav, route, route.path, keptToGames = true)
                         is Route.Page -> ServerPageScreen(nav, route, route.path, keptToGames = false)
+                        is GamesRoute -> GamesRouteScreen(nav, route)
                     }
                 }
             }
