@@ -379,6 +379,20 @@ fun WebNowPlaying(nav: Nav) {
     val title = about.title?.toString().orEmpty()
     val artistName = about.artist?.toString().orEmpty().ifEmpty { about.albumArtist?.toString().orEmpty() }
     val runtime = (about.durationMs ?: 0L) / 1000.0
+    // A song's music video, the first it's tied to, to go to at the same place: music only.
+    var video by remember { mutableStateOf<com.wittywilla.wittymediaclient.net.MusicLink?>(null) }
+    LaunchedEffect(trackId, music) {
+        video = null
+        if (music && trackId > 0) video = runCatching { api.musicLinks(trackId).tied.firstOrNull() }.getOrNull()
+    }
+    // On its page, as the website's, from here when the two line up. The song stops there.
+    fun watchVideo() {
+        val tied = video ?: return
+        val path = MusicVideos.watchPath(tied, listening.positionSec())
+        if (listening.isPlaying) listening.toggle()
+        nav.pop()
+        nav.push(Route.Page(path))
+    }
     // What's playing, over where it's from, in the top bar of a tablet.
     var libraryType by remember(library) { mutableStateOf("") }
     LaunchedEffect(library) { if (library > 0) libraryType = nav.libraryType(library) }
@@ -491,6 +505,13 @@ fun WebNowPlaying(nav: Nav) {
                             artistName, color = Np.fg2, fontSize = (screenH * 0.021f).coerceIn(16f, 20.8f).sp, fontWeight = FontWeight.SemiBold, textAlign = TextAlign.Center,
                             modifier = Modifier.padding(top = 2.dp).clip(RoundedCornerShape(6.dp)).then(if (!books && library > 0) Modifier.clickable { nav.pop(); nav.push(Route.Artist(library, artistName)) } else Modifier).padding(horizontal = 8.dp, vertical = 2.dp),
                         )
+                        // Watch the video (`.np-video`): a chip 10 under the artist, 40 high, in 13.
+                        if (video != null) Pressable(::watchVideo, Modifier.padding(top = 10.dp).heightIn(min = 40.dp), shape = RoundedCornerShape(50), fill = Np.chip, label = "Watch the video, from here when the two line up", ring = false) {
+                            Row(Modifier.heightIn(min = 40.dp).padding(horizontal = 16.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                Icon(WebIcons.Play, null, tint = Np.fg, modifier = Modifier.size(16.dp))
+                                Text("Watch the video", color = Np.fg, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
+                            }
+                        }
                     }
                     NpSeek(nav)
                     Transport(nav, books, playSize, taller, tall, transportGap)
@@ -581,6 +602,7 @@ fun WebNowPlaying(nav: Nav) {
                         } else null,
                         if (album.isNotEmpty() && library > 0) MenuItem(if (books) "Go to book" else "Go to album") { nav.pop(); nav.push(Route.Album(library, album, artist)) } else null,
                         if (!books && artist.isNotEmpty() && library > 0) MenuItem("Go to artist") { nav.pop(); nav.push(Route.Artist(library, artist)) } else null,
+                        if (video != null) MenuItem("Watch the video") { watchVideo() } else null,
                         MenuItem("Stop and close", WebIcons.Close) { listening.stop(); nav.pop() },
                     ),
                     at(NpMenu.More),

@@ -689,3 +689,67 @@ data class ExtraText(val text: String = "")
 // The volume correction a file is tagged with (GET /music/loudness/{id}): each may be missing.
 @Serializable
 data class Loudness(val trackDb: Double? = null, val albumDb: Double? = null, val trackPeak: Double? = null, val albumPeak: Double? = null)
+
+// Songs tied to their music videos (GET /music/links/{id}, docs/CLIENT-API.md, Music videos): the song or the video at
+// one end of a tie, as /music/links and /music/videos send it.
+@Serializable
+data class MusicLinkSide(
+    val id: Long = 0,
+    val libraryId: Long = 0,
+    val title: String = "",
+    // A song's artist (its album's when it has none of its own), or a video's.
+    val artist: String = "",
+    val album: String = "",
+    val runtimeSec: Double = 0.0,
+    val updatedAt: Long = 0,
+)
+
+// `syncMs` is where the song starts in the video; missing when the two don't line up. `state` is `tied`, or
+// `suggested` for an administrator to look at.
+@Serializable
+data class MusicLink(
+    val songId: Long = 0,
+    val videoId: Long = 0,
+    val state: String = "",
+    val how: String = "",
+    val syncMs: Long? = null,
+    val song: MusicLinkSide = MusicLinkSide(),
+    val video: MusicLinkSide = MusicLinkSide(),
+)
+
+// What one song or video is tied to. `role` is `song`, `video`, or empty for what can't be tied.
+@Serializable
+data class MusicLinks(
+    val itemId: Long = 0,
+    val role: String = "",
+    val tied: List<MusicLink> = emptyList(),
+    val suggested: List<MusicLink> = emptyList(),
+    val canEdit: Boolean = false,
+)
+
+// A music video in a music library's Music videos: the creator video card, with the song it's tied to when this person
+// may see that song.
+@Serializable
+data class MusicVideoCard(
+    val id: Long = 0,
+    val libraryId: Long = 0,
+    val title: String = "",
+    val durationSec: Double = 0.0,
+    val vertical: Boolean = false,
+    val creatorId: Long = 0,
+    // Whose it is: the artist.
+    val creator: String = "",
+    val hasAvatar: Boolean = false,
+    val uploadDate: String = "",
+    // Plays on this server, and what the source said when it was archived.
+    val views: Long = 0,
+    val origViews: Long = 0,
+    val positionSec: Double = 0.0,
+    val watched: Boolean = false,
+    val updatedAt: Long = 0,
+    val song: MusicLinkSide? = null,
+    val syncMs: Long? = null,
+)
+
+@Serializable
+data class MusicVideoPage(val videos: List<MusicVideoCard> = emptyList(), val more: Boolean = false)

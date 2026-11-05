@@ -203,7 +203,9 @@ private fun MusicLibraryPage(nav: Nav, library: Library, chosen: Map<String, Str
     val pods = type == "podcasts"
     val admin = nav.me?.isAdmin == true
     var tabKey by rememberSaveable(library.id) { mutableStateOf(MusicTab.of(chosen["tab"]).key) }
-    val tab = MusicTab.of(tabKey).takeIf { t -> MusicLook.tabs(type).any { it.first == t } } ?: MusicTab.Home
+    // Music videos, when this person can see a music videos library.
+    val videos = type == "music" && MusicVideos.available(nav.libraries)
+    val tab = MusicTab.of(tabKey).takeIf { t -> MusicLook.tabs(type, videos).any { it.first == t } } ?: MusicTab.Home
     var sort by rememberSaveable(library.id) { mutableStateOf(MusicLook.startSort(tab, type)) }
     var desc by rememberSaveable(library.id) { mutableStateOf(false) }
     var view by rememberSaveable(library.id) { mutableStateOf(chosen["view"].orEmpty()) }
@@ -225,7 +227,7 @@ private fun MusicLibraryPage(nav: Nav, library: Library, chosen: Map<String, Str
     val head: LazyListScope.() -> Unit = {
         item(key = "head") { MusicHeader(library, sorts, sort, desc, { k, d -> sort = k; desc = d }) { more = true } }
         item(key = "tabs") {
-            Seg(MusicLook.tabs(type), tab, "Parts of ${library.name}", Modifier.padding(start = 16.dp, end = 16.dp, top = 4.dp, bottom = 16.dp)) { choose(it) }
+            Seg(MusicLook.tabs(type, videos), tab, "Parts of ${library.name}", Modifier.padding(start = 16.dp, end = 16.dp, top = 4.dp, bottom = 16.dp)) { choose(it) }
         }
     }
     val notice = if (pods) "webMedia" else "general"
@@ -236,6 +238,7 @@ private fun MusicLibraryPage(nav: Nav, library: Library, chosen: Map<String, Str
                 MusicTab.Albums -> AlbumsTab(nav, library, sort, desc, genre, { genre = it }, head, notice)
                 MusicTab.Artists -> ArtistsTab(nav, library, sort, desc, head, notice)
                 MusicTab.Songs -> SongsTab(nav, library, view, { view = it }, sort, desc, genre, { genre = it }, head, notice)
+                MusicTab.Videos -> MusicVideosTab(nav, library, head, notice)
                 MusicTab.Playlists -> PlaylistsTab(nav, library, head, notice) { choose(MusicTab.Songs, it) }
             }
         }
@@ -462,6 +465,7 @@ private fun MusicHomeTab(nav: Nav, library: Library, head: LazyListScope.() -> U
                 if (music) item(key = "songs") {
                     Shelf("Songs", h.counts.songs, seeAll = { seeAll(MusicTab.Songs, "") }) { SongShelf(nav, h.songs) }
                 }
+                if (music && MusicVideos.available(nav.libraries)) item(key = "videos") { MusicVideosShelf(nav, library) { seeAll(MusicTab.Videos, "") } }
                 if (music && h.recent.isNotEmpty()) item(key = "recent") {
                     Shelf("Played lately", seeAll = { seeAll(MusicTab.Songs, "recent") }) { SongShelf(nav, h.recent) }
                 }
@@ -1765,4 +1769,182 @@ private fun rememberArtColour(url: String?): Color {
         rgb = found
     }
     return Color(rgb.first, rgb.second, rgb.third)
+}
+
+// MARK: music videos
+
+// Music videos (music/MusicVideos.tsx): the videos of every music video library this person can see, in artist order
+// from the server, each tile naming its artist; a video tied to a song says so under it. 120 at a time, the next as the
+// end comes near or with Show more. A video opens on the server's own page for it, as the website's does.
+@Composable
+private fun MusicVideosTab(nav: Nav, library: Library, head: LazyListScope.() -> Unit, notice: String) {
+    val api = nav.app.api
+    val scheme = MaterialTheme.colorScheme
+    val locale = pageLocale()
+    var words by rememberSaveable(library.id) { mutableStateOf("") }
+    var search by remember { mutableStateOf(words.trim()) }
+    var videos by remember(search) { mutableStateOf<List<com.wittywilla.wittymediaclient.net.MusicVideoCard>?>(null) }
+    var more by remember(search) { mutableStateOf(false) }
+    var busy by remember(search) { mutableStateOf(false) }
+    // A quarter of a second after the last letter.
+    LaunchedEffect(words) {
+        delay(250)
+        search = words.trim()
+    }
+    suspend fun load(from: Int) {
+        if (busy && from > 0) return
+        busy = true
+        try {
+            val page = api.musicVideos(MusicVideos.path(search, from))
+            val have = videos
+            videos = if (from == 0 || have == null) page.videos else have + page.videos.filter { v -> have.none { it.id == v.id } }
+            more = page.more
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            if (videos == null) videos = emptyList()
+        }
+        busy = false
+    }
+    LaunchedEffect(search) { load(0) }
+    val list = videos
+    val columns = MusicLook.columns(LocalConfiguration.current.screenWidthDp - 32f, 260f, 16f)
+    val scope = androidx.compose.runtime.rememberCoroutineScope()
+    MusicList(nav, head, notice) {
+        item(key = "filters") {
+            Column(Modifier.padding(start = 16.dp, end = 16.dp, bottom = 16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                if (list != null) Text(MusicVideos.count(list.size, more, locale), color = scheme.onBackground, fontSize = 15.sp, lineHeight = BODY_LINE.em)
+                WebInput(words, { words = it }, "Find a video or an artist…", Modifier.fillMaxWidth().semantics { contentDescription = "Find a music video" })
+            }
+        }
+        when {
+            list == null -> item(key = "loading") { MusicSpinner() }
+            list.isEmpty() -> item(key = "empty") {
+                val (title, text) = MusicVideos.empty(search.isNotEmpty())
+                MusicEmpty(WebIcons.Channels, title, text)
+            }
+            else -> {
+                val rows = list.chunked(columns)
+                itemsIndexed(rows, key = { i, _ -> "videos-$i" }) { i, row ->
+                    Row(Modifier.fillMaxWidth().padding(start = 16.dp, end = 16.dp, top = if (i > 0) 22.dp else 0.dp), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+                        row.forEach { v -> Box(Modifier.weight(1f)) { MusicVideoTile(nav, v, library.id) } }
+                        repeat(columns - row.size) { Spacer(Modifier.weight(1f)) }
+                    }
+                }
+                // Show more, which also comes by itself as it nears the screen.
+                if (more) item(key = "more") {
+                    LaunchedEffect(list.size) { load(list.size) }
+                    Box(Modifier.fillMaxWidth().padding(top = 8.dp, bottom = 24.dp), contentAlignment = Alignment.Center) {
+                        WebButton("Show more", { scope.launch { load(list.size) } }, WebButtonKind.Ghost)
+                    }
+                }
+            }
+        }
+    }
+}
+
+// The newest music videos on a music library's Home, when there are any, with See all.
+@Composable
+private fun MusicVideosShelf(nav: Nav, library: Library, seeAll: () -> Unit) {
+    val api = nav.app.api
+    var videos by remember(library.id) { mutableStateOf<List<com.wittywilla.wittymediaclient.net.MusicVideoCard>?>(null) }
+    LaunchedEffect(library.id) { videos = runCatching { api.musicVideos(MusicVideos.LATEST_PATH).videos }.getOrDefault(emptyList()) }
+    val shown = videos.orEmpty()
+    if (shown.isEmpty()) return
+    val width = minOf(260f, LocalConfiguration.current.screenWidthDp * 0.7f).dp
+    Shelf("Music videos", seeAll = seeAll) {
+        // `.ch-shelf-row`: sideways, 10 apart, 3 inside.
+        LazyRow(Modifier.fillMaxWidth().padding(horizontal = 13.dp), contentPadding = PaddingValues(3.dp), horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.Top) {
+            items(shown, key = { it.id }) { v -> Box(Modifier.width(width)) { MusicVideoTile(nav, v, library.id) } }
+        }
+    }
+}
+
+// A video, and under it the song it's tied to: its album when that's in this library, else its artist.
+@Composable
+private fun MusicVideoTile(nav: Nav, video: com.wittywilla.wittymediaclient.net.MusicVideoCard, library: Long) {
+    val scheme = MaterialTheme.colorScheme
+    Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+        VideoTileBody(nav, video)
+        val song = video.song
+        val words = MusicVideos.songWords(video)
+        if (song != null && words != null) {
+            // `.mh-video-song`: 13 in textSecondary on a pill of the panel colour, 2 by 8 inside.
+            Pressable(
+                {
+                    when (val place = MusicVideos.songPlace(song, library)) {
+                        is MusicVideoSongPlace.Album -> nav.push(Route.Album(place.library, place.album, place.artist))
+                        is MusicVideoSongPlace.Artist -> nav.push(Route.Artist(place.library, place.name))
+                    }
+                },
+                Modifier, shape = RoundedCornerShape(50), fill = scheme.surface, label = words, pressScale = 1f, ring = false,
+            ) {
+                Row(Modifier.padding(horizontal = 8.dp, vertical = 2.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    Icon(WebIcons.Audio, null, tint = scheme.onSurfaceVariant, modifier = Modifier.size(14.dp))
+                    Text(words, color = scheme.onSurfaceVariant, fontSize = 13.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                }
+            }
+        }
+    }
+}
+
+// The website's video tile (creators/parts.tsx `VideoTile`, creators.css `.cr-tile`): the picture 16:9, or 9:16 for a
+// vertical video, on the card colour with radius 10, its length at the lower right, a tick once watched and how far in
+// along the bottom; 8 under it the creator's picture at 34, and 10 beside that the title in 14 semibold (two lines), the
+// creator, and the views and how long ago in 12.
+@Composable
+private fun VideoTileBody(nav: Nav, video: com.wittywilla.wittymediaclient.net.MusicVideoCard) {
+    val api = nav.app.api
+    val scheme = MaterialTheme.colorScheme
+    val extra = LocalExtraColours.current
+    val facts = MusicVideos.facts(video)
+    val progress = MusicVideos.progress(video)
+    Pressable(
+        { nav.push(Route.Page(MusicVideos.watchPath(video.id), video.title)) }, Modifier.fillMaxWidth(), shape = RoundedCornerShape(10.dp), fill = Color.Transparent,
+        label = listOf(video.title, video.creator, facts).filter { it.isNotEmpty() }.joinToString(", "), pressScale = 0.985f, ring = false, clip = false,
+    ) {
+        Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Box(Modifier.fillMaxWidth().aspectRatio(if (video.vertical) 9f / 16f else 16f / 9f).clip(RoundedCornerShape(10.dp)).background(scheme.surfaceVariant)) {
+                WebArt(api.videoThumbUrl(video.id, 480, video.updatedAt), "", 260.dp, if (video.vertical) 9f / 16f else 16f / 9f, Modifier.fillMaxSize(), placeholderless = true)
+                if (video.durationSec > 0) Text(
+                    clock(video.durationSec), color = Color.White, fontSize = 12.sp, fontWeight = FontWeight.SemiBold, style = NUMBERS,
+                    modifier = Modifier.align(Alignment.BottomEnd).padding(6.dp).clip(RoundedCornerShape(4.dp)).background(SCRIM).padding(horizontal = 6.dp, vertical = 1.dp),
+                )
+                if (video.watched) Box(Modifier.align(Alignment.TopStart).padding(6.dp).size(22.dp).clip(CircleShape).background(SCRIM), contentAlignment = Alignment.Center) {
+                    Icon(WebIcons.Check, "Watched", tint = Color.White, modifier = Modifier.size(14.dp))
+                }
+                if (progress > 0) Box(Modifier.align(Alignment.BottomStart).fillMaxWidth().height(4.dp).background(Color.White.copy(alpha = 0.3f))) {
+                    Box(Modifier.fillMaxWidth(progress.toFloat()).fillMaxHeight().background(scheme.primary))
+                }
+            }
+            Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                CreatorAvatar(nav, video.creatorId, video.creator, video.hasAvatar, 34.dp)
+                Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(1.dp)) {
+                    Text(video.title, color = scheme.onBackground, fontSize = 14.sp, fontWeight = FontWeight.SemiBold, lineHeight = 1.3.em, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                    Text(video.creator, color = extra.hint, fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    if (facts.isNotEmpty()) Text(facts, color = extra.hint, fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                }
+            }
+        }
+    }
+}
+
+// A creator's round picture, or their initial in bold white on a colour of their own when there's none, as the
+// website's Avatar.
+@Composable
+private fun CreatorAvatar(nav: Nav, id: Long, name: String, has: Boolean, size: Dp) {
+    var broken by remember(id) { mutableStateOf(false) }
+    Box(Modifier.size(size).clip(CircleShape).clearAndSetSemantics { }, contentAlignment = Alignment.Center) {
+        if (has && !broken) {
+            Box(Modifier.fillMaxSize().background(LocalExtraColours.current.raised))
+            val context = LocalContext.current
+            val px = with(LocalDensity.current) { size.roundToPx() }
+            val request = remember(id, px) { coil3.request.ImageRequest.Builder(context).data(nav.app.api.creatorAvatarUrl(id)).size(px).build() }
+            coil3.compose.AsyncImage(request, null, contentScale = androidx.compose.ui.layout.ContentScale.Crop, modifier = Modifier.fillMaxSize(), onError = { broken = true })
+        } else {
+            Box(Modifier.fillMaxSize().background(Color(androidx.core.graphics.ColorUtils.HSLToColor(floatArrayOf(MusicVideos.avatarHue(name).toFloat(), 0.35f, 0.36f)))), contentAlignment = Alignment.Center) {
+                Text(name.trim().take(1).uppercase().ifEmpty { "?" }, color = Color.White, fontSize = (size.value * 0.45f).sp, fontWeight = FontWeight.Bold)
+            }
+        }
+    }
 }

@@ -248,6 +248,12 @@ class Api(val base: String, val token: String, private val quick: Boolean = fals
     suspend fun saveLyrics(id: Long, text: String) { call("PUT", "/music/lyrics/$id", body(mapOf("text" to JsonPrimitive(text)))) }
     suspend fun markInstrumental(id: Long) { call("PUT", "/music/lyrics/$id", body(mapOf("instrumental" to JsonPrimitive(true)))) }
     suspend fun forgetLyrics(id: Long) { call("DELETE", "/music/lyrics/$id") }
+    // A music library's Music videos, the newest of them, and what a song or a video is tied to (MusicVideosLook.kt).
+    suspend fun musicVideos(path: String): MusicVideoPage = get(path)
+    suspend fun musicLinks(id: Long): MusicLinks = get("/music/links/$id")
+    fun videoThumbUrl(id: Long, width: Int, version: Long) = "$base$API/items/$id/poster?w=$width" + if (version > 0) "&v=$version" else ""
+    fun creatorAvatarUrl(id: Long) = "$base$API/creators/$id/art/avatar"
+
     // The volume correction a song is tagged with, for ReplayGain.
     suspend fun loudness(id: Long): Loudness = get("/music/loudness/$id")
 

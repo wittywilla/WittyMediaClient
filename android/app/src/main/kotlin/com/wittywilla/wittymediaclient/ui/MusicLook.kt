@@ -17,7 +17,7 @@ import kotlin.math.floor
 
 // A part of a listening library, as the website's tabs name them (?tab=).
 enum class MusicTab(val key: String) {
-    Home("home"), Albums("albums"), Artists("artists"), Songs("songs"), Playlists("playlists");
+    Home("home"), Albums("albums"), Artists("artists"), Songs("songs"), Videos("videos"), Playlists("playlists");
 
     companion object {
         fun of(key: String?): MusicTab = entries.firstOrNull { it.key == key } ?: Home
@@ -27,10 +27,14 @@ enum class MusicTab(val key: String) {
 object MusicLook {
     // MARK: tabs and sorts
 
-    fun tabs(libraryType: String): List<Pair<MusicTab, String>> = when (libraryType) {
+    // A music library has Music videos when this person can see a music videos library (`videos`).
+    fun tabs(libraryType: String, videos: Boolean = false): List<Pair<MusicTab, String>> = when (libraryType) {
         "podcasts" -> listOf(MusicTab.Home to "Home", MusicTab.Albums to "Podcasts")
         "audiobooks" -> listOf(MusicTab.Home to "Home", MusicTab.Albums to "Books", MusicTab.Artists to "Authors")
-        else -> listOf(MusicTab.Home to "Home", MusicTab.Albums to "Albums", MusicTab.Artists to "Artists", MusicTab.Songs to "Songs", MusicTab.Playlists to "Playlists")
+        else -> listOfNotNull(
+            MusicTab.Home to "Home", MusicTab.Albums to "Albums", MusicTab.Artists to "Artists", MusicTab.Songs to "Songs",
+            if (videos) MusicTab.Videos to "Music videos" else null, MusicTab.Playlists to "Playlists",
+        )
     }
 
     // A sort the header offers, and whether choosing it starts from the other end: newest, most.

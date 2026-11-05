@@ -155,6 +155,10 @@ class Nav(val app: WittyApp, private val s: Map<String, String>) {
     // The website's menus: the library strip and the Menu drawer. Loaded once for each sign-in.
     var menu by mutableStateOf<List<MenuEntry>>(emptyList())
         private set
+
+    // Every library this person can see, as the menus were made from: what a music library's Music videos needs.
+    var libraries by mutableStateOf<List<com.wittywilla.wittymediaclient.net.Library>>(emptyList())
+        private set
     var serverVersion by mutableStateOf("")
         private set
     var legal by mutableStateOf<com.wittywilla.wittymediaclient.net.LegalNotices?>(null)
@@ -166,6 +170,7 @@ class Nav(val app: WittyApp, private val s: Map<String, String>) {
         if (api.token.isEmpty() || menuFor == api.token) return
         menuFor = api.token
         val libraries = runCatching { api.libraries() }.getOrDefault(emptyList())
+        this.libraries = libraries
         val list = libraries.filter { it.inMainMenus }.map { MenuEntry("lib:" + it.id, it.name, WebIcons.forLibrary(it.type), libraryRoute(it)) }.toMutableList()
         if (libraries.isNotEmpty()) list += MenuEntry("collections", "Collections", WebIcons.Library, Route.Page("/collections", "Collections"))
         if (runCatching { api.couchStatus().allowed }.getOrDefault(false)) list += MenuEntry("couch", "Game PCs", WebIcons.Gamepad, Route.Page("/couch", "Game PCs"))
