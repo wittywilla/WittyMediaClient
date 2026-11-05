@@ -94,7 +94,7 @@ private val ICONS: Map<String, () -> ImageVector> = mapOf(
     "devices" to { Symbols.Devices }, "tv" to { Symbols.Tv }, "family_restroom" to { Symbols.Family },
     "auto_awesome" to { Symbols.Sparkles }, "library_books" to { Symbols.Collections }, "link" to { Symbols.Address },
     "monitoring" to { Symbols.Activity }, "sports_esports" to { Symbols.Games }, "gamepad" to { Symbols.Gamepad },
-    "palette" to { Symbols.Palette }, "video_library" to { Symbols.Libraries }, "image_search" to { Symbols.ImageSearch },
+    "palette" to { Symbols.Palette }, "toolbar" to { Symbols.TopMenu }, "video_library" to { Symbols.Libraries }, "image_search" to { Symbols.ImageSearch },
     "auto_fix_high" to { Symbols.FixMatches }, "smart_display" to { Symbols.Playback }, "live_tv" to { Symbols.LiveTv },
     "computer" to { Symbols.Computer }, "bolt" to { Symbols.Bolt }, "autorenew" to { Symbols.Autorenew },
     "public" to { Symbols.Globe }, "brush" to { Symbols.Brush }, "dns" to { Symbols.Server }, "article" to { Symbols.Article },
@@ -181,6 +181,7 @@ fun YouScreen(nav: Nav, s: Map<String, String>) {
                     "rowTwoStep" -> twoStep?.let { s[if (it.on) "on" else "off"] }.orEmpty()
                     "rowDevices" -> deviceCount?.toString().orEmpty()
                     "rowTheme" -> themeName(nav, themes, nav.themeChoice, s)
+                    "rowTopMenu" -> if (nav.topMenu.isEmpty()) "" else nav.topMenu.size.toString()
                     "rowAboutServer" -> version
                     else -> ""
                 },
@@ -312,6 +313,7 @@ fun YouSettingScreen(nav: Nav, s: Map<String, String>, screen: YouNative) {
         YouNative.Devices -> DevicesScreen(nav, s)
         YouNative.SignInTv -> SignInTvScreen(nav, s)
         YouNative.Theme -> ThemeScreen(nav, s)
+        YouNative.TopMenu -> TopMenuScreen(nav, s)
         YouNative.Licences -> NoticesScreen(nav)
         YouNative.Log -> LogsScreen(nav)
     }
@@ -1165,5 +1167,36 @@ private fun Swatch(page: ThemeColour, card: ThemeColour, accent: ThemeColour) {
     ) {
         Box(Modifier.align(Alignment.BottomCenter).fillMaxWidth().height(size * 0.36f).background(Color(card.argb)))
         Box(Modifier.align(Alignment.TopEnd).padding(size * 0.18f).size(size * 0.32f).clip(CircleShape).background(Color(accent.argb)))
+    }
+}
+
+// Which libraries join a TV's top menu, after Search (docs/APP-DESIGN.md, On a TV). Only on this TV, per server and
+// per profile. Choosing a library adds it, or takes it out again.
+@Composable
+private fun TopMenuScreen(nav: Nav, s: Map<String, String>) {
+    var libraries by remember { mutableStateOf(nav.remembered<List<com.wittywilla.wittymediaclient.net.Library>>("libraries").orEmpty()) }
+    LaunchedEffect(Unit) {
+        runCatching { nav.app.api.libraries().distinctBy { it.id } }.getOrNull()?.let {
+            libraries = it
+            nav.remember("libraries", it)
+        }
+    }
+    SettingsPage(nav, s["rowTopMenu"].orEmpty(), s["topMenuHint"].orEmpty()) {
+        GroupedList(
+            "",
+            libraries.mapIndexed { index, library ->
+                val added = library.id in nav.topMenu
+                GroupRow(
+                    library.name, onClick = { nav.toggleTopMenu(library) }, icon = library.barSymbol, tint = Color(0xFF0E7C6F),
+                    chevron = false, selected = added, focusKey = "top-menu-${library.id}", requestFocus = index == 0,
+                    trailing = {
+                        Icon(
+                            Symbols.Check, contentDescription = null, tint = LocalExtraColours.current.accentText,
+                            modifier = Modifier.size(LocalMetrics.current.u(20)).graphicsLayer { alpha = if (added) 1f else 0f },
+                        )
+                    },
+                )
+            },
+        )
     }
 }

@@ -17,10 +17,17 @@ android {
         targetSdk = 36
         versionCode = 6
         versionName = "0.3.0"
-        // One APK for every Android device. 32-bit ARM stays, for old TV sticks and phones.
-        // scripts/check-abis.sh fails if a native library is missing for any of these.
-        ndk {
-            abiFilters += listOf("armeabi-v7a", "arm64-v8a", "x86", "x86_64")
+    }
+
+    // One APK for each processor, as WebRTC's native library is 7 to 16 MB a processor, and a universal APK with all four
+    // for anyone who doesn't know which they have. 32-bit ARM stays, for old TV sticks and phones. All five have the same
+    // version code, so any one of them can replace another. scripts/check-abis.sh fails if a library is missing from one.
+    splits {
+        abi {
+            isEnable = true
+            reset()
+            include("armeabi-v7a", "arm64-v8a", "x86", "x86_64")
+            isUniversalApk = true
         }
     }
 
@@ -78,6 +85,8 @@ dependencies {
     implementation("org.bouncycastle:bcprov-jdk18on:1.86")
     // The QR code on the TV sign-in screen.
     implementation("com.google.zxing:core:3.5.4")
+    // WittyPlay's stream, version 2: WebRTC first (the server's docs/GAMING-STREAM.md). libwebrtc decodes with MediaCodec.
+    implementation("io.github.webrtc-sdk:android:144.7559.15")
 
     testImplementation("junit:junit:4.13.2")
 }

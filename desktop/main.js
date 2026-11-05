@@ -257,7 +257,7 @@ async function check(url) {
     }
     return {
       url: r.url, version: guards.cleanText(data.version, 40), name: guards.cleanName(data.brandName || data.name),
-      setupRequired: data.setupRequired === true, identity: await identify(r.url),
+      brandLogo: guards.logoVersion(data.brandLogo), setupRequired: data.setupRequired === true, identity: await identify(r.url),
     }
   } catch (err) {
     log.noteError('warn', 'network', 'A server could not be reached', err, { where: r.url })
@@ -272,12 +272,39 @@ async function probe(url) {
   const found = await check(url)
   if (found.error) return { error: found.error }
   const { identity } = found
-  shown = { url: found.url, state: identity.state, publicKey: identity.publicKey || '' }
+  // What a server says about itself only counts once it has proved who it is.
+  const logo = identity.state === 'new' || identity.state === 'same' ? await logoOf(found.url, found.brandLogo) : null
+  shown = { url: found.url, state: identity.state, publicKey: identity.publicKey || '', logo }
   return {
     ok: true, url: found.url, version: found.version, name: found.name, setupRequired: found.setupRequired,
-    identity: { state: identity.state, fingerprint: identity.fingerprint || '' },
+    logo: logo ? logo.data : '', identity: { state: identity.state, fingerprint: identity.fingerprint || '' },
   }
 }
+
+// A server's own logo, fetched here because the connect page loads no pictures from anywhere,
+// and kept with the saved server by its version, so it's only fetched again when it changes.
+async function logoOf(url, version) {
+  if (!version) return null
+  const kept = (saved.recent || []).find((s) => s.url === url && s.logo && s.logo.version === version)
+  if (kept) return kept.logo
+  try {
+    const res = await fetchJson(`${url}/api/branding/logo?v=${encodeURIComponent(version)}`)
+    const type = guards.logoType(res.headers.get('content-type'))
+    if (!res.ok || !type) {
+      res.body?.cancel().catch(() => {})
+      log.info('network', `The server's logo was answered with ${res.status} ${type || 'and no picture'}`, { where: url })
+      return null
+    }
+    const bytes = await guards.readBytes(res, guards.MAX_LOGO_BYTES)
+    return { version, data: `data:${type};base64,${bytes.toString('base64')}` }
+  } catch (err) {
+    log.noteError('info', 'network', "The server's logo could not be fetched", err, { where: url })
+    return null
+  }
+}
+
+// The logo the person was shown with this server, to keep with it.
+const shownLogo = (url) => (shown && shown.url === url ? shown.logo : undefined)
 
 // Asks the server again, and holds the answer to what the person was shown.
 async function admitted(url, trust) {
@@ -300,8 +327,8 @@ async function dropUnfitSignIn(url, identity) {
   if (!signInFits(url, identity, saved.recent)) await forgetSignIn(url)
 }
 
-function rememberServer(url, name, identity) {
-  saved = state.remember(saved, { url, name, serverId: identity.serverId, publicKey: identity.publicKey, fingerprint: identity.fingerprint })
+function rememberServer(url, name, identity, logo) {
+  saved = state.remember(saved, { url, name, serverId: identity.serverId, publicKey: identity.publicKey, fingerprint: identity.fingerprint, logo })
   saveState()
 }
 
@@ -316,7 +343,7 @@ async function openServer(request) {
     log.noteError('warn', 'app', 'An old sign-in could not be forgotten', err, { where: found.url })
     return { error: 'identity' }
   }
-  rememberServer(found.url, found.name, found.identity)
+  rememberServer(found.url, found.name, found.identity, shownLogo(found.url))
   showServer(found.url)
   return { ok: true }
 }
@@ -358,7 +385,7 @@ async function keepSignIn(found, token) {
     log.noteError('error', 'app', 'The sign-in could not be kept', err, { where: found.url })
     return { error: 'unreachable' }
   }
-  rememberServer(found.url, found.name, found.identity)
+  rememberServer(found.url, found.name, found.identity, shownLogo(found.url))
   showServer(found.url)
   return { ok: true }
 }
@@ -596,7 +623,7 @@ function createWindow() {
 }
 
 ipcMain.handle('probe', (e, url) => (fromConnect(e) ? probe(String(url)) : { error: 'invalid' }))
-ipcMain.handle('recent', (e) => (fromConnect(e) ? (saved.recent || []).map(({ url, name }) => ({ url, name })) : []))
+ipcMain.handle('recent', (e) => (fromConnect(e) ? (saved.recent || []).map(({ url, name, logo }) => ({ url, name, logo: logo ? logo.data : '' })) : []))
 ipcMain.handle('redeem', (e, url, code) => (fromConnect(e) ? redeem(String(url), String(code)) : { error: 'invalid' }))
 ipcMain.handle('open-server', (e, request) => (fromConnect(e) ? openServer(request) : { error: 'invalid' }))
 ipcMain.handle('pair-start', (e, url) => (fromConnect(e) ? pairStart(String(url)) : { error: 'invalid' }))

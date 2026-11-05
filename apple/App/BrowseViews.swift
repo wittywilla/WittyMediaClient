@@ -362,10 +362,38 @@ private struct WideHero: View {
     }
 
     var body: some View {
-        ZStack(alignment: .leading) {
+        // On a TV the words may take up to half the screen, and a long title wraps to three lines before it
+        // shrinks, to three quarters at most; the hero grows to fit them (docs/APP-DESIGN.md, On a TV).
+        VStack(alignment: .leading, spacing: Tokens.Space.s2) {
+            Text(displayTitle(item))
+                .font(.wmDisplay)
+                .foregroundStyle(palette.text)
+                .lineLimit(metrics.tv ? 3 : 2)
+                .minimumScaleFactor(metrics.tv ? 0.75 : 1)
+                .accessibilityAddTraits(.isHeader)
+            Secondary([item.year.map(String.init), item.genres?.first, item.contentRating].compactMap { $0 }.filter { !$0.isEmpty }.joined(separator: " · "))
+            if let overview = item.overview, !overview.isEmpty { Secondary(overview, lines: 2) }
+            HStack(spacing: Tokens.Space.s3) {
+                PlayOrOpen(item: item, route: playRoute(for: item)) {
+                    Label(item.resumeSeconds == nil ? "Play" : "Resume", systemImage: "play.fill")
+                }
+                .mainAction()
+                .firstFocus(in: scope)
+                .accessibilityLabel("\(item.resumeSeconds == nil ? "Play" : "Resume") \(displayTitle(item))")
+                NavigationLink("More", value: route(for: item)).action(pill: true)
+                    .accessibilityLabel("More about \(displayTitle(item))")
+            }
+            .padding(.top, Tokens.Space.s1)
+            .remoteSection()
+        }
+        .frame(maxWidth: Tokens.heroTextWidth, alignment: .leading)
+        .padding(.horizontal, metrics.gutter)
+        .padding(.top, clock)
+        .padding(.vertical, metrics.tv ? Tokens.Space.s6 : 0)
+        .frame(maxWidth: .infinity, minHeight: height + clock, alignment: .leading)
+        .background {
             ArtImage(url: client.backdropURL(item), width: 1280, blank: true)
-                .frame(maxWidth: .infinity)
-                .frame(height: height + clock)
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
                 .opacity(0.5)
                 .clipped()
                 .overlay(LinearGradient(stops: [.init(color: palette.background, location: 0), .init(color: .clear, location: 0.75)],
@@ -373,28 +401,7 @@ private struct WideHero: View {
                 .overlay(LinearGradient(stops: [.init(color: .clear, location: 0.6), .init(color: palette.background, location: 1)],
                                         startPoint: .top, endPoint: .bottom))
                 .accessibilityHidden(true)
-            VStack(alignment: .leading, spacing: Tokens.Space.s2) {
-                Text(displayTitle(item)).font(.wmDisplay).foregroundStyle(palette.text).lineLimit(2).accessibilityAddTraits(.isHeader)
-                Secondary([item.year.map(String.init), item.genres?.first, item.contentRating].compactMap { $0 }.filter { !$0.isEmpty }.joined(separator: " · "))
-                if let overview = item.overview, !overview.isEmpty { Secondary(overview, lines: 2) }
-                HStack(spacing: Tokens.Space.s3) {
-                    PlayOrOpen(item: item, route: playRoute(for: item)) {
-                        Label(item.resumeSeconds == nil ? "Play" : "Resume", systemImage: "play.fill")
-                    }
-                    .mainAction()
-                    .firstFocus(in: scope)
-                    .accessibilityLabel("\(item.resumeSeconds == nil ? "Play" : "Resume") \(displayTitle(item))")
-                    NavigationLink("More", value: route(for: item)).action(pill: true)
-                        .accessibilityLabel("More about \(displayTitle(item))")
-                }
-                .padding(.top, Tokens.Space.s1)
-                .remoteSection()
-            }
-            .frame(maxWidth: 560, alignment: .leading)
-            .padding(.horizontal, metrics.gutter)
-            .padding(.top, clock)
         }
-        .frame(height: height + clock)
     }
 }
 
@@ -418,6 +425,11 @@ private struct TvHomeView: View {
     @State private var error = ""
     @State private var gamePCs = false
     @State private var onNow: [GuideChannel] = []
+    #if DEBUG
+    /// For checking the hero with a title of one's choosing on a simulator: `-WittyHomeHero <item id>` at launch
+    /// puts that item first, whatever the server features.
+    @State private var pinnedHero: Item?
+    #endif
     @FocusState private var focused: String?
     /// What had focus when this screen was left. Coming back puts it there.
     @State private var lastFocused: String?
@@ -431,6 +443,9 @@ private struct TvHomeView: View {
         var list = ServerPages.albumsOnce(uniqued(pool))
         #if os(tvOS)
         list = list.filter(\.isPlayable)
+        #endif
+        #if DEBUG
+        if let pinnedHero { list.insert(pinnedHero, at: 0) }
         #endif
         return Array(list.prefix(8))
     }
@@ -456,6 +471,10 @@ private struct TvHomeView: View {
         if let guide { await model.learnTvLook(from: guide, client: client) }
         #endif
         onNow = channels.filter(\.canTune)
+        #if DEBUG
+        let pin = UserDefaults.standard.integer(forKey: "WittyHomeHero")
+        if pin > 0, pinnedHero == nil { pinnedHero = try? await client.item(Int64(pin)) }
+        #endif
     }
 
     @ViewBuilder private func page(_ home: Home) -> some View {

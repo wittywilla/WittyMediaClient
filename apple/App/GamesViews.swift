@@ -116,7 +116,7 @@ private func gameSubtitle(_ game: GameItem, _ console: GameConsole?) -> String {
 }
 
 /// A game's card: its box, its name, its console and year.
-private struct GameCard: View {
+struct GameCard: View {
     @Environment(\.palette) private var palette
     @Environment(\.metrics) private var metrics
     let game: GameItem

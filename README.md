@@ -30,7 +30,7 @@ Native apps say plainly that an item can't play yet, rather than failing, for an
 | Folder | What it is |
 |---|---|
 | [`desktop/`](desktop) | Windows, macOS, Linux, FreeBSD and KDE's Plasma Bigscreen: a frameless window around the server's web interface, in Electron |
-| [`android/`](android) | Android TV, Google TV, Fire TV, phones and tablets, one APK for ARM and x86, 32-bit and 64-bit: Kotlin, Compose, Media3 |
+| [`android/`](android) | Android TV, Google TV, Fire TV, phones and tablets, on ARM and x86, 32-bit and 64-bit, with an APK for each: Kotlin, Compose, Media3 |
 | [`apple/`](apple) | Apple TV, iPhone, iPad and Apple Vision Pro: SwiftUI, AVPlayer, laid out as the Android app. A Mac has the desktop app |
 | [`shared/`](shared) | What every app shares, as plain data: themes, wording, button meanings and test cases |
 | [`docs/`](docs) | [Installing and removing](docs/INSTALLING.md), [design](docs/DESIGN.md), [status](docs/PLATFORMS.md), [porting to TVs](docs/PORTING.md), [what the owner needs to do](docs/OWNER-STEPS.md) |
@@ -81,7 +81,23 @@ The FreeBSD package holds only the app, under a megabyte, and uses the system's 
 
 **On a TV with Plasma Bigscreen,** the Linux app opens as a TV app by itself: the whole screen, no title bar, the server's big screen mode, and everything reachable with arrows, Enter and Back. Install a `.deb`, `.rpm` or `.pacman` so it appears in the launcher, as an AppImage doesn't add itself to any. Anywhere else, `wittymediaclient --tv` asks for the same, and `--no-tv` turns it off inside Bigscreen. Back at the top of the app opens a small menu with Change server and Quit.
 
-**Android.** Each release has a sideload `.apk`, the same one for phones and TVs. It's signed with a throwaway key and is for testing, so it can't update to a store version without uninstalling first. There's no store listing yet.
+**Android.** Each release has a sideload APK for each kind of processor, `wittymediaclient-<version>-android-<processor>.apk`, and a universal one with all four. Phones and TVs use the same ones:
+
+| Processor | Size | For |
+|---|---|---|
+| `arm64-v8a` | 16 MB | Nearly every phone and tablet from the last several years, and TVs and boxes that run 64-bit Android |
+| `armeabi-v7a` | 10 MB | Older phones, and TVs and sticks that run 32-bit Android, as many do even on a 64-bit chip |
+| `x86_64` | 20 MB | Android on a PC with an Intel or AMD processor, and Android's emulators |
+| `x86` | 16 MB | Older 32-bit Intel tablets and emulators |
+| `universal` | 51 MB | Any of them: the one to take if you're not sure |
+
+With Android's `adb` tool, this lists what a device runs, best first, and the first is its APK:
+
+```bash
+adb shell getprop ro.product.cpu.abilist
+```
+
+A device refuses an APK it can't run when installing it, and nothing changes. All five have the same version, so any one can replace another. They're signed with a throwaway key and are for testing, so they can't update to a store version without uninstalling first. There's no store listing yet.
 
 **iPhone, iPad, Apple TV, Apple Vision Pro.** There's nothing to download yet. They need a Mac to build.
 
@@ -89,7 +105,7 @@ The FreeBSD package holds only the app, under a megabyte, and uses the system's 
 
 - A WittyMediaServer to connect to. The native apps talk to its client API, which is in **Help** inside the server.
 - **Desktop:** Windows 10 or later, macOS, Linux on x64, FreeBSD on amd64, or Plasma Bigscreen. It brings its own Electron, except on FreeBSD, where the package brings in the system's.
-- **Android:** Android 6 or later, on ARM or x86, 32-bit or 64-bit, in one APK. Fire TV needs Fire OS 6 or later.
+- **Android:** Android 6 or later, on ARM or x86, 32-bit or 64-bit: an APK for each, or a universal one. Fire TV needs Fire OS 6 or later.
 - **Apple:** iOS 16, tvOS 16, or visionOS 2, or later. A Mac has the desktop app.
 - **Games on a PC:** the Moonlight app, installed separately, only where it's the fallback.
 
@@ -104,7 +120,7 @@ The FreeBSD package holds only the app, under a megabyte, and uses the system's 
 | macOS | Packaged on a Mac for Apple silicon and Intel, and run from source on macOS 27 on Apple silicon, where `npm run test:app` passes. The Apple silicon package was opened and used with a server. Not run on an Intel Mac |
 | Android TV | Run on an emulator, Android 16, with arrow keys and OK only |
 | Android phones | Run on emulators, Android 16 and Android 6. Android 7 to 15 not run |
-| Android on x86 and ARM | One APK carries all four. The emulators were 64-bit x86, and the other three are compiled, never run |
+| Android on x86 and ARM | An APK for each of the four, and a universal one. The emulators were 64-bit x86, and the other three are compiled, never run |
 | Google TV, Fire TV, tablets | Compiled, never run |
 | iPhone | Run in the iOS 27 simulator: connected, signed in, Home, a library, an item, and a film played. Never on a real iPhone |
 | Apple TV, iPad, Apple Vision Pro | Compiled by Xcode 27 on a Mac, unsigned, for the devices and their simulators |
@@ -151,10 +167,10 @@ gradle testDebugUnitTest lintSideload assembleSideload
 ```
 
 ```bash
-sh scripts/check-abis.sh app/build/outputs/apk/sideload/app-sideload.apk
+sh scripts/check-abis.sh app/build/outputs/apk/sideload
 ```
 
-`lintSideload` is what keeps Android 6 honest: it fails on a call that version doesn't have. `check-abis.sh` says which processors the APK carries, and fails if a native library is missing for any of the four.
+`lintSideload` is what keeps Android 6 honest: it fails on a call that version doesn't have. `check-abis.sh` says which processors each of the five APKs carries, and fails if one is missing a native library for its processor, or carries another's.
 
 **Apple.** Run on any system with Swift:
 

@@ -73,6 +73,7 @@
   --card-mark: 2.5rem;
   --pill-mark: 1.5rem;
   --lockup-gap: .625rem;
+  --wordmark: var(--text-headline);
   --box-w: 3rem;
   --box-h: 3.5rem;
   --key-h: 4rem;
@@ -106,14 +107,17 @@
   --sp-16: 6rem;
   --column: 40rem;
   --gutter: 5.625rem;
-  --button-h: 4.5rem;
-  --quiet-h: 4rem;
-  --field-h: 5rem;
+  /* Buttons are the height of the systems' own text fields, so a field and its buttons look alike. */
+  --button-h: 4.125rem;
+  --quiet-h: 3.5rem;
+  --field-h: 4.125rem;
   --icon: 1.875rem;
-  --mark: 3rem;
+  /* The lockup reads from across the room: a 72 mark and the wordmark at Display size, 20 apart. */
+  --mark: 4.5rem;
+  --wordmark: 3rem;
   --card-mark: 3.75rem;
   --pill-mark: 2.25rem;
-  --lockup-gap: .9375rem;
+  --lockup-gap: 1.25rem;
   --box-w: 5.5rem;
   --box-h: 6.25rem;
   --key-h: 6rem;
@@ -174,9 +178,14 @@ h2 {
 /* The lockup: the mark, then the wordmark with "Media" in the accent. */
 .lockup { display: flex; align-items: center; margin: 0 0 var(--sp-8); }
 .lockup .mark { width: var(--mark); height: var(--mark); margin-right: var(--lockup-gap); }
-.wordmark { font-size: var(--text-headline); font-weight: 700; line-height: 1; letter-spacing: var(--tracking-heading); }
-.wordmark .media { color: var(--accent-text); }
+.lockup { min-width: 0; }
+.wordmark { font-size: var(--wordmark); font-weight: 700; line-height: 1.1; letter-spacing: var(--tracking-heading); }
+/* A server's own name, in text, however long. */
+.wordmark.own { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.media { color: var(--accent-text); }
 .mark { display: block; flex: none; }
+/* A server's own logo, in the mark's rounded square. */
+img.mark.logo { border-radius: 22%; background: var(--mark-tile); object-fit: contain; }
 .mark-tile { fill: var(--mark-tile); }
 .mark-from { stop-color: var(--mark-from); }
 .mark-to { stop-color: var(--mark-to); }
@@ -282,7 +291,11 @@ button.server {
   text-align: left;
 }
 button.server:active { transform: scale(.98); }
-.server .mark { width: var(--card-mark); height: var(--card-mark); margin-right: var(--sp-3); }
+.server .mark, .server .glyph { width: var(--card-mark); height: var(--card-mark); margin-right: var(--sp-3); }
+/* A server only found on the network: the plain server icon, in a raised square. */
+.server .glyph { display: flex; flex: none; align-items: center; justify-content: center; border-radius: var(--r-md); background: var(--bg-4); color: var(--fg-2); }
+/* A hovered card takes the raised colour itself, so the square goes a step the other way. */
+button.server:hover .glyph, button.server:hover .pill { background: var(--bg-3); }
 .server .who { display: flex; flex: 1; flex-direction: column; min-width: 0; }
 .server .name, .server .where { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .server .name { font-weight: 600; }
@@ -392,7 +405,7 @@ button.server:active { transform: scale(.98); }
   font-weight: 500;
 }
 .server-pill .mark { width: var(--pill-mark); height: var(--pill-mark); margin-right: var(--sp-2); }
-.server-pill span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.server-pill > span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .code { display: flex; justify-content: center; margin: 0 0 var(--sp-4); }
 .box {
   position: relative;
@@ -475,9 +488,17 @@ main.compact { padding-top: var(--sp-6); padding-bottom: var(--sp-6); }
 .tv .box:last-child { margin-right: 0; }
 .tv .fingerprint.caption { text-align: left; }
 .tv .links { flex-direction: column; align-items: flex-start; margin: var(--sp-3) 0 0 calc(-1 * var(--sp-2)); }
-.tv .links button.quiet + button.quiet { margin-top: var(--sp-2); }
-/* Room for focus to grow into without touching what's next to it. */
-.tv .pad { grid-gap: var(--sp-3); }
+/* Focusable things sit at least 16 apart, so a focused one's ring never touches a neighbour. */
+.tv .links button.quiet + button.quiet { margin-top: 1rem; }
+.tv .pad { grid-gap: 1rem; }
+/* Every button on a TV is a pill, 32 inside; a quiet one is a pill only as its focus ring. Keys and
+   server cards keep their rounded squares. */
+.tv button { padding-left: 2rem; padding-right: 2rem; border-radius: var(--r-pill); }
+.tv button.quiet { padding-left: var(--sp-4); padding-right: var(--sp-4); }
+.tv button.server { padding: var(--sp-4); border-radius: var(--r-lg); }
+.tv button.key { padding: 0; border-radius: var(--r-lg); }
+/* A focused key has no ring: it fills with text and its digit turns background, as the systems' keyboards do. */
+.tv button.key:focus { outline: none; background: var(--fg); color: var(--bg); }
 .tv .list > * + * { margin-top: var(--sp-3); }
 .tv .waiting { justify-content: flex-start; }
 .tv .qr { align-items: flex-start; }
@@ -487,8 +508,10 @@ main.compact { padding-top: var(--sp-6); padding-bottom: var(--sp-6); }
 /* On a TV, focus also makes the thing a little bigger, and inputs get the ring too. */
 .tv button:focus { transform: scale(var(--focus-scale)); }
 .tv button:focus:active { transform: scale(calc(var(--focus-scale) * .97)); }
-/* Outside the label too, where it has risen onto the outline. */
+/* A focused field shows only the ring, outside the label where it has risen onto the outline; its own
+   outline stays as it was, so two outlines never show at once. */
 .tv .field input:focus { outline: var(--focus-width) solid var(--focus); outline-offset: calc(var(--text-caption) / 2 + var(--focus-offset)); }
+.tv .field input:focus ~ fieldset { border: 1px solid var(--control-line); padding: 0 var(--sp-3); }
 
 .sr-only {
   position: absolute;
@@ -515,6 +538,7 @@ main.compact { padding-top: var(--sp-6); padding-bottom: var(--sp-6); }
   button, .note, .facts, .pair-code, .server-pill, .box, .field fieldset { border: 1px solid ButtonText; }
   button.quiet { border-color: transparent; }
   button:focus, input:focus { outline-color: Highlight; }
+  .tv button.key:focus { outline: var(--focus-width) solid Highlight; }
   .field input:focus ~ fieldset, .box.next, .code.checking .box { border: 2px solid Highlight; }
   .error:empty + .icon { display: none; }
   /* The brand, and a code a camera has to read, keep their own colours. */

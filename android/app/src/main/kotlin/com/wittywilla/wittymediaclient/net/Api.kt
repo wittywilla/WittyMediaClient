@@ -120,6 +120,10 @@ class Api(val base: String, val token: String, private val quick: Boolean = fals
     suspend fun items(library: Long, offset: Int, limit: Int): ItemPage =
         get("/items?library=$library&offset=$offset&limit=$limit&sort=title")
 
+    // A games library's games in the order its own page opens with, most played first, as Apple TV asks for them.
+    suspend fun popularGames(library: Long, limit: Int): ItemPage =
+        get("/items?library=$library&kind=game&sort=popular&desc=0&offset=0&limit=$limit")
+
     private fun query(text: String) = URLEncoder.encode(text, "UTF-8")
     suspend fun searchItems(text: String, limit: Int): ItemPage = get("/items?search=${query(text)}&noEpisodes=1&limit=$limit")
     suspend fun searchShows(text: String, limit: Int): ShowPage = get("/shows?search=${query(text)}&limit=$limit")

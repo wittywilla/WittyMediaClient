@@ -4,7 +4,7 @@ package com.wittywilla.wittymediaclient.ui
 // Apart from the screen, so it can be tested without one. Rows the server would refuse are left out,
 // not greyed.
 
-enum class YouNative { Names, Password, TwoStep, Devices, SignInTv, Theme, Licences, Log }
+enum class YouNative { Names, Password, TwoStep, Devices, SignInTv, Theme, TopMenu, Licences, Log }
 
 sealed interface YouOpens {
     data class Native(val screen: YouNative) : YouOpens
@@ -61,7 +61,14 @@ fun youGroups(who: YouWho): List<YouGroup> {
             if (who.hasGames) page("rowControllers", "gamepad", "#3e5bd0", "/controllers") else null,
         ),
     )
-    groups += YouGroup("groupDevice", listOf(native("rowTheme", "palette", "#0e7c6f", YouNative.Theme)))
+    groups += YouGroup(
+        "groupDevice",
+        listOfNotNull(
+            native("rowTheme", "palette", "#0e7c6f", YouNative.Theme),
+            // Which libraries join the bar along the top: a TV's alone.
+            if (who.onTv) native("rowTopMenu", "toolbar", "#bd2f85", YouNative.TopMenu) else null,
+        ),
+    )
     if (who.admin) {
         groups += YouGroup(
             "groupServer",

@@ -83,6 +83,12 @@ sealed interface Route {
     data object Home : Route { override val key = "home" }
     data object Search : Route { override val key = "search" }
     data object Profile : Route { override val key = "profile" }
+    // A TV's own tabs, beside Home, Search and You: see TvTabs.kt.
+    data object Libraries : Route { override val key = "libraries" }
+    data object Games : Route { override val key = "games" }
+    data object LiveTv : Route { override val key = "live-tv" }
+    // A library added to a TV's top menu, as a tab of its own.
+    data class Pinned(val library: com.wittywilla.wittymediaclient.net.Library) : Route { override val key = "pinned-${library.id}" }
     data object Notices : Route { override val key = "notices" }
     data object Logs : Route { override val key = "logs" }
     data class Library(val library: com.wittywilla.wittymediaclient.net.Library) : Route { override val key = "library-${library.id}" }
@@ -105,7 +111,7 @@ sealed interface Route {
     // The app's own screens leave room for the mini player. A film, a server's page and signing in don't have it.
     val hasMiniPlayer: Boolean
         get() = when (this) {
-            Home, Search, Profile, Notices, Logs, is Library, is Show, is Item, is Album, is Artist, is You -> true
+            Home, Search, Profile, Libraries, Games, Notices, Logs, is Library, is Pinned, is Show, is Item, is Album, is Artist, is You -> true
             else -> false
         }
 }
@@ -146,6 +152,22 @@ class Nav(val app: WittyApp, private val s: Map<String, String>) {
 
     // Who is signed in, for the avatar on the You tab.
     var me by mutableStateOf<User?>(null)
+
+    // The libraries added to a TV's top menu (docs/APP-DESIGN.md, On a TV), for whoever is signed in here.
+    var topMenu by mutableStateOf<List<Long>>(emptyList())
+        private set
+
+    fun loadTopMenu() {
+        val base = server?.url ?: return
+        topMenu = app.store.topMenu(base, me?.name.orEmpty())
+    }
+
+    // Adds a library to the top menu, or takes it out again.
+    fun toggleTopMenu(library: com.wittywilla.wittymediaclient.net.Library) {
+        val base = server?.url ?: return
+        topMenu = if (library.id in topMenu) topMenu - library.id else topMenu + library.id
+        app.store.keepTopMenu(base, me?.name.orEmpty(), topMenu)
+    }
 
     // This device's theme for the server: "" for the server's own, "auto", or a theme's id.
     var themeChoice by mutableStateOf("")
@@ -249,9 +271,10 @@ class Nav(val app: WittyApp, private val s: Map<String, String>) {
     fun push(r: Route) { stack.add(r) }
 
     // This app's own screens for what it has them for, and the server's page for all the rest.
-    fun open(library: com.wittywilla.wittymediaclient.net.Library) = push(if (library.hasOwnScreen) Route.Library(library) else Route.Page(library.pagePath()))
+    fun open(library: com.wittywilla.wittymediaclient.net.Library) = push(gamesRouteFor(library) ?: if (library.hasOwnScreen) Route.Library(library) else Route.Page(library.pagePath()))
     fun open(item: com.wittywilla.wittymediaclient.net.Item) = push(
         when {
+            gamesRouteFor(item) != null -> gamesRouteFor(item)!!
             item.isTrack -> Route.Album(item.libraryId, item.album, item.albumArtist.ifEmpty { item.artist })
             item.hasOwnScreen -> Route.Item(item.id)
             else -> Route.Page(item.pagePath())
@@ -309,7 +332,7 @@ class Nav(val app: WittyApp, private val s: Map<String, String>) {
     }
 
     // Back from the middle of the app goes up a level, and from a tab goes to Home.
-    val backStaysInApp: Boolean get() = stack.size > 1 || current == Route.Search || current == Route.Profile
+    val backStaysInApp: Boolean get() = stack.size > 1 || current in TABS_BESIDE_HOME
 
     fun back() {
         if (stack.size > 1) pop() else if (backStaysInApp) reset(Route.Home)
@@ -622,6 +645,10 @@ fun AppRoot(app: WittyApp) {
                         Route.Home -> Shell(nav) { HomeScreen(nav, strings) }
                         Route.Search -> Shell(nav) { SearchScreen(nav, strings) }
                         Route.Profile -> Shell(nav) { YouScreen(nav, strings) }
+                        Route.Libraries -> Shell(nav) { LibrariesScreen(nav, strings) }
+                        Route.Games -> Shell(nav) { GamesTabScreen(nav, strings) }
+                        Route.LiveTv -> Shell(nav) { LiveTvScreen(nav, strings) }
+                        is Route.Pinned -> Shell(nav) { PinnedLibraryScreen(nav, strings, route.library) }
                         Route.Notices -> NoticesScreen(nav)
                         Route.Logs -> LogsScreen(nav)
                         is Route.Library -> if (route.library.isListening) ListeningLibraryScreen(nav, strings, route.library) else LibraryScreen(nav, strings, route.library)
@@ -636,6 +663,7 @@ fun AppRoot(app: WittyApp) {
                         is Route.You -> YouSettingScreen(nav, strings, route.screen)
                         is Route.Help -> ServerPageScreen(nav, route, route.path, keptToGames = false, public = true)
                         is Route.OnPhone -> OnPhoneScreen(nav, strings, route.title, route.path)
+                        is GamesRoute -> GamesRouteScreen(nav, route)
                     }
                 }
             }

@@ -3,6 +3,7 @@ const assert = require('node:assert')
 const {
   CONNECT_PAGE, BAR_PAGE, isConnectUrl, pageFile, navigation, outsideAddress, budget, downloadAllowed, readJson, whyFailed, isCertificateCode,
   cleanName, cleanMessage, validCode, validToken, validPairCode, validDeviceSecret, serverPage, pollSeconds, menuPoint, MAX_ANSWER_BYTES,
+  logoType, logoVersion,
 } = require('../guards.js')
 
 test('only the app\'s own connect page counts as the connect page', () => {
@@ -159,4 +160,12 @@ test('a menu position is only used if it is in the window', () => {
   for (const bad of [undefined, null, {}, { x: '1', y: 2 }, { x: 1.5, y: 2 }, { x: -1, y: 2 }, { x: 900, y: 2 }, { x: 1, y: 900 }]) {
     assert.deepStrictEqual(menuPoint(bad, 800, 600), {}, JSON.stringify(bad))
   }
+})
+
+test('a server\'s logo is only a picture, and its version a plain word', () => {
+  assert.strictEqual(logoType('image/png'), 'image/png')
+  assert.strictEqual(logoType('image/svg+xml; charset=utf-8'), 'image/svg+xml')
+  for (const bad of ['text/html', 'image/x-icon', 'application/octet-stream', '', null]) assert.strictEqual(logoType(bad), '', String(bad))
+  assert.strictEqual(logoVersion('1730800000'), '1730800000')
+  for (const bad of ['', 'a b', 'x'.repeat(65), 7, null, 'v1\n']) assert.strictEqual(logoVersion(bad), '', String(bad))
 })

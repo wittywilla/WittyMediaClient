@@ -5,6 +5,7 @@ import com.wittywilla.wittymediaclient.net.ProfileUpdate
 import com.wittywilla.wittymediaclient.net.TwoFactorStatus
 import com.wittywilla.wittymediaclient.net.json
 import com.wittywilla.wittymediaclient.net.themeSyncScript
+import com.wittywilla.wittymediaclient.ui.YouNative
 import com.wittywilla.wittymediaclient.ui.YouOpens
 import com.wittywilla.wittymediaclient.ui.YouWho
 import com.wittywilla.wittymediaclient.ui.deviceKind
@@ -60,6 +61,14 @@ class YouTest {
     fun aTvDoesntSignInTvs() {
         assertFalse("rowSignInTv" in rows(adult.copy(onTv = true)))
         assertTrue("rowProfiles" in rows(adult.copy(onTv = true)))
+    }
+
+    @Test
+    fun onlyATvChoosesItsTopMenu() {
+        assertTrue("rowTopMenu" in rows(adult.copy(onTv = true)))
+        assertFalse("rowTopMenu" in rows(adult))
+        val tv = youGroups(adult.copy(onTv = true)).flatMap { it.rows }.associateBy { it.key }
+        assertEquals(YouOpens.Native(YouNative.TopMenu), tv.getValue("rowTopMenu").opens)
     }
 
     @Test

@@ -33,6 +33,9 @@ class WittyApp : Application(), SingletonImageLoader.Factory {
     @Volatile
     var showingPage = false
 
+    // A debug build only: an item put first in Home's hero, to check a title of one's choosing. See MainActivity.
+    var pinnedHero = 0L
+
     // The controller last used, if the last thing pressed was on one.
     @Volatile
     var lastPad = -1

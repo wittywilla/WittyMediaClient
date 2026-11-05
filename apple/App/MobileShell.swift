@@ -282,9 +282,10 @@ extension View {
         #endif
     }
 
-    /// A tab's first screen or a library's page, which has its own top and no Back.
+    /// A tab's first screen or a library's page, which has its own top and no Back. On Apple TV an empty bar would
+    /// still keep its room at the top, under the tabs.
     @ViewBuilder func noNavigationBar() -> some View {
-        #if os(iOS) || os(visionOS)
+        #if os(iOS) || os(visionOS) || os(tvOS)
         self.toolbar(.hidden, for: .navigationBar)
         #else
         self
