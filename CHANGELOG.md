@@ -5,6 +5,9 @@ What changed in WittyMediaClient, newest first. What changed before it had a rep
 
 ## Unreleased
 
+- **iPhone, iPad and Apple Vision Pro play the server's games in the same player as Apple TV.** With no controller connected, the account's touch
+  controls from the server are drawn over the game as the website draws them, in the layout saved for this device, upright or sideways; on a DS or
+  3DS a finger on the picture is the stylus. Controllers work as on Apple TV.
 - **Apple TV plays the server's games.** A games library opens as the website's couch mode: covers at the top with one at the front, tinted by its
   colour, then Continue playing, the consoles, the shelves and every game. A game's page has Play or Resume, Start over, a favourite, where you left off,
   its save states and how it plays. The game plays on the server, as it does for the website, and streams to the Apple TV, which decodes it in hardware and

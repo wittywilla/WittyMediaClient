@@ -422,10 +422,14 @@ public struct GameControls: Decodable, Equatable {
         /// RetroPad target to a `KeyboardEvent.code` name.
         public let keyboard: [String: String]?
         public let options: PadOptions?
+        /// The touch layout, held each way, with every control.
+        public let touch: TouchLayouts?
     }
     public struct Saved: Decodable, Equatable {
         /// Layouts by the pad's model name.
         public let gamepad: [String: PadMap]?
+        /// What this device changed of the touch layout, when the request named it.
+        public let touch: TouchLayouts?
     }
     public struct Target: Decodable, Equatable, Hashable {
         public let id: Int
@@ -437,6 +441,8 @@ public struct GameControls: Decodable, Equatable {
     public let defaults: Defaults?
     public let saved: Saved?
     public let targets: [Target]?
+    /// What a touch layout can place.
+    public let controls: [TouchControl]?
 }
 
 /// What a controller should do here, from `GET /game-profiles/resolve`.
