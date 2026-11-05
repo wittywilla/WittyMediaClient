@@ -29,7 +29,9 @@ private struct SafariPage: UIViewControllerRepresentable {
         let configuration = SFSafariViewController.Configuration()
         configuration.entersReaderIfAvailable = false
         let controller = SFSafariViewController(url: url, configuration: configuration)
-        controller.dismissButtonStyle = .close
+        #if os(iOS)
+        controller.dismissButtonStyle = .close // Vision Pro has its own way to close a window
+        #endif
         return controller
     }
 
