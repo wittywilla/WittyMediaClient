@@ -124,6 +124,11 @@ SF Symbols on Apple, Material Symbols (rounded) on Android, mapped one to one:
 | Sign out | `rectangle.portrait.and.arrow.right` | `logout` |
 | Warning | `exclamationmark.triangle.fill` | `warning` |
 | Check | `checkmark` | `check` |
+| Home | `house` | `home` |
+| Libraries | `books.vertical` | `video_library` |
+| Games | `gamecontroller` | `sports_esports` |
+| Live TV | `tv` | `live_tv` |
+| Search | `magnifyingglass` | `search` |
 
 ## Themes
 
@@ -710,8 +715,30 @@ Apple TV and Android TV are the same app to look at. Sizes are given in TV units
   grows 1.06, as both systems' own keyboards do; a grid of rings would crowd the keys. Pressed, it dims as any button.
   Digits on a remote's number keys also type.
 - **Fields** open the system's keyboard; on Android TV the IME, on Apple TV the system keyboard, which a phone can type into.
-- **Top bar:** the phone's five, Home, TV guide, Search, Libraries (the Menu's list as a page) and You, as pills along
-  the top, 24 from the top edge, the chosen one with `accent` at 14% and its name; up from the first row reaches it.
+- **Top bar:** one row of pills along the top, the same on both TVs, 24 from the top edge, in two parts. **On the left**,
+  from the gutter and 16 apart: **Home, Libraries, Games, Live TV, Search**, each its icon and its name in Label.
+  **Pinned to the right edge** (the gutter in from it), on the same row and centred with them: **You**, the person's
+  avatar at 28 (a circle) with their name. Space keeps You apart from the rest, not a line. The chosen pill, You
+  included, has `accent` at 14% behind it and its words in `accentText`; the others are `textSecondary`. Focused, a
+  pill takes the ring and scale as any control. Focus moves along the whole row from left to right with You last, so
+  right from Search reaches You. Up from a tab's first row lands on that tab's own pill. Back from inside a tab goes
+  to the bar; Back from the bar goes to Home's pill; Back on Home's pill leaves the app. A screen opened from a tab
+  has the whole screen, and Back from it returns to the tab.
+  - **Libraries:** every library the profile can see, as a grid of tiles (the phone Menu's library list as a page):
+    each tile is the library's icon in `accentText` on `accent` at 14%, then its name. Each opens the library as Home's
+    rows do; a games library opens Games' view of it.
+  - **Games:** WittyPlay's couch library. With one games library it opens straight in; with several, one row per
+    library, as Home's rows are: the library's name, its games' covers (each opens that game's page) and a pill that
+    opens the whole library.
+  - **Live TV:** the WittyTV guide (below) in the account's WittyTV look, with Recordings reachable from it.
+  - All six always show. A server with no games or no live TV shows that tab with a plain empty state saying what's
+    missing and that an owner adds it on the server's website (`gamesNone` / `gamesNoneDetail`, `liveTvNone` /
+    `liveTvNoneDetail`). Never a broken or blank page.
+- **Home's hero** on a TV: its words (title, facts, overview and buttons, in one column) may take up to half the
+  screen, 900 wide. The title wraps to up to 3 lines at the Display size; only if it still doesn't fit does it shrink,
+  to three quarters at most, and an ellipsis is the very last resort, so "Harry Potter and the Philosopher's Stone"
+  shows in full. The overview keeps to 2 lines. The hero is at least 620 high and grows to fit its words, so nothing
+  overlaps the first row. Titles under the posters in Home's rows take up to 2 lines.
 - **Themes** are the same as on a phone, through the same translation (see Themes).
 - **WittyTV** (the guide and live channels) keeps its own looks, chosen per account in `/me/ui` → `tvLook` with the
   owner's default in `/guide`: the colours of each of its themes (`modern`, `classic`, `satellite`, `teletext`,
