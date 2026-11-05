@@ -13,6 +13,8 @@ public struct ServerStatus: Decodable, Equatable {
     public let brandLogo: String?
     public let theme: String?
     public let user: User?
+    /// A newer version the server's update check found, for administrators; empty or missing when there's none.
+    public let update: String?
 
     /// Comes from a server that may not have proved anything yet, so it is cleaned before showing.
     public var displayName: String {
@@ -113,8 +115,14 @@ public struct Library: Decodable, Identifiable, Hashable {
     public let type: String
     public let console: String?
     public let itemCount: Int?
+    /// The server is looking through its folders now.
+    public let scanning: Bool?
+    /// A commercials library its owner chose to show in the menus and on Home.
+    public let showMain: Bool?
 
     public var isShows: Bool { type == "shows" || type == "anime" }
+    /// Commercials stay out of the menus and Home unless switched on, as on the website.
+    public var inMainMenus: Bool { type != "commercials" || showMain == true }
     /// The games on someone's own PC: see Rigs.swift.
     public var isRigGames: Bool { type == "games" && console == "rig" }
     /// Lists what these apps can open: video, and games on someone's own PC. Types are a list
@@ -171,6 +179,12 @@ public struct Item: Decodable, Identifiable, Equatable {
     public let cdDisc: Int64?
     /// A podcast episode's date, as the server writes it.
     public let aired: String?
+    /// The score out of 10 from where its details came from.
+    public let rating: Double?
+    /// A DVD's or a Blu-ray's own facts, for one that is.
+    public let disc: DiscInfo?
+    /// How a book is read in the browser (`epub`, `cbz`, `pdf`); missing when it can't be.
+    public let reader: String?
 
     /// Video plays in these apps' own player. Anything else opens the server's page: see ServerPages.swift.
     public var isPlayable: Bool { kind == "video" }
@@ -197,6 +211,11 @@ public struct Item: Decodable, Identifiable, Equatable {
         if let episodeEnd, episodeEnd != 0 { label += "–\(episodeEnd)" }
         return season == 0 ? "Special · \(label)" : "S\(season) · \(label)"
     }
+}
+
+/// What's known about a disc beyond its item. Only what these apps use.
+public struct DiscInfo: Decodable, Equatable {
+    public let hasMenus: Bool?
 }
 
 /// An album, a book or a podcast. The server groups them from their tracks, so they have no ID of
@@ -257,8 +276,19 @@ public struct Hub: Decodable, Identifiable, Equatable {
     public let key: String
     public let title: String
     public let libraryId: Int64?
+    /// For a saved view: what its library's address takes after "?" to show the view whole.
+    public let query: String?
     public let items: [Item]?
     public let shows: [Show]?
+
+    public init(key: String, title: String, libraryId: Int64?, query: String? = nil, items: [Item]?, shows: [Show]?) {
+        self.key = key
+        self.title = title
+        self.libraryId = libraryId
+        self.query = query
+        self.items = items
+        self.shows = shows
+    }
 
     public var id: String { key }
     public var isEmpty: Bool { (items ?? []).isEmpty && (shows ?? []).isEmpty }

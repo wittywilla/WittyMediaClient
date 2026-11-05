@@ -80,6 +80,8 @@ public struct GuideProgramme: Decodable, Equatable {
     public let desc: String?
     public let rating: String?
     public let year: Int?
+    /// The library title it plays, on a channel made from a library: its backdrop is the programme's picture.
+    public let itemId: Int64?
 
     /// How far through it is at this moment, from 0 to 1.
     public func fraction(at now: Int64) -> Double {
@@ -104,6 +106,10 @@ public struct GuideChannel: Decodable, Identifiable, Equatable {
     /// The owner's picture for it, as an address on the server. Not every channel has one.
     public let logo: String?
     public let programmes: [GuideProgramme]?
+    /// `library`, a channel the server makes from its own titles, or `tuner`, a broadcast.
+    public let kind: String?
+    /// One this person marked as a favourite in the guide.
+    public let favourite: Bool?
 
     public var id: String { key }
     public var canTune: Bool { (encrypted ?? "").isEmpty }
