@@ -90,7 +90,13 @@ jobs:
         with:
           release: '15.1'
           usesh: true
-          prepare: pkg install -y node22 npm-node22
+          # A FreeBSD release installs from the quarterly packages, and so does this: the image
+          # comes set to latest, whose Electron for amd64 can be missing for weeks while it builds.
+          prepare: |
+            mkdir -p /usr/local/etc/pkg/repos
+            echo 'FreeBSD: { url: "pkg+https://pkg.FreeBSD.org/${ABI}/quarterly" }' > /usr/local/etc/pkg/repos/FreeBSD.conf
+            pkg update -f
+            pkg install -y node22 npm-node22
           run: |
             set -e
             cd desktop
