@@ -1,9 +1,11 @@
 # WittyPlay: the games experience
 
-**Prototype:** [WittyPlay prototype](https://claude.ai/artifact/ArXyR6wEt5xHdHkapHYE2p): three directions for the games
-home, the moment a game boots, the game menu built from each core's data (one screen, two screens, discs), every input
-method with hints that match it, the TV, and every server theme. Click through it; every screen carries its notes. It's
-private to its owner until shared from its Share menu.
+**Prototype:** [WittyPlay prototype](https://claude.ai/artifact/ArXyR6wEt5xHdHkapHYE2p): the Shelves home (and the
+two directions it was chosen over), the moment a game boots, the game menu built from each core's data (one screen, two
+screens, discs), every input method with hints that match it, the TV, and every server theme. Click through it; every
+screen carries its notes. It's private to its owner until shared from its Share menu.
+
+**Status:** settled. The decisions are recorded under [Decisions](#decisions); build to this page.
 
 WittyPlay is the games part of WittyMediaServer: the server runs every game and streams it, and a device shows the
 picture and sends the controls back ([How the apps look](APP-DESIGN.md#games-everywhere-wittyplay)). This page is
@@ -20,7 +22,7 @@ part of it works by touch, controller, TV remote and keyboard.
 
 - [Legally distinct](#legally-distinct)
 - [Words](#words)
-- [Three directions, and the one to build](#three-directions-and-the-one-to-build)
+- [The games home: Shelves](#the-games-home-shelves)
 - [Signature details](#signature-details)
 - [Where everything is](#where-everything-is)
 - [On a phone](#on-a-phone)
@@ -34,7 +36,7 @@ part of it works by touch, controller, TV remote and keyboard.
 - [Server work](#server-work)
 - [States](#states)
 - [Access](#access)
-- [Decisions to confirm](#decisions-to-confirm)
+- [Decisions](#decisions)
 - [Checking a build against this](#checking-a-build-against-this)
 
 ## Legally distinct
@@ -57,7 +59,7 @@ copies nothing of any console maker's.
 - **Button hints are our drawing.** A hint shows the label the connected pad prints, as plain text or a plain outline
   shape in the theme's `text` colour, inside our own round key: never the maker's colours, typeface or glyph artwork.
   "Position only" (a diamond of four dots with the one to press filled) is always available, and is what a pad we can't
-  identify gets. See [Decisions](#decisions-to-confirm).
+  identify gets.
 - **Sounds are original.** Every interface sound is synthesized for WittyPlay from simple tones and noise (see
   [Sound and haptics](#sound-and-haptics)) and checked against the console makers' start-up and menu sounds so none
   resembles one. They're off until someone turns them on.
@@ -66,8 +68,8 @@ copies nothing of any console maker's.
 
 ## Words
 
-Plain words, from `shared/data/strings.en.json` once added. Keys use a `wp` prefix; the English is final once
-confirmed.
+Plain words, from `shared/data/strings.en.json` once added. Keys use a `wp` prefix. The words are confirmed: they go
+into `strings.en.json` and the website as they are, and change only together.
 
 | What | WittyPlay says | Key | Server's own name |
 |---|---|---|---|
@@ -99,42 +101,31 @@ touch controls", `wpPressStart` "Press Start", `wpPressSelect` "Press Select", `
 `wpChangeDisc` "Change disc", `wpMemoryCards` "Memory cards", `wpShortcuts` "Shortcuts", `wpButtonHints` "Button hints",
 and the states' words under [States](#states).
 
-## Three directions, and the one to build
+## The games home: Shelves
 
-The prototype shows three ways to browse a games library. All three share everything else on this page: the game's
-page, the boot, the player, the game menu, moments, seats.
+Decided on 5 November 2026, from three directions explored in the prototype (Shelves, a Timeline of eras, Channels).
 
-### A · Shelves (recommended)
+**Shelves is the games home.** Each console is a shelf of **spines**, standing on a ledge, in its covers' colour. The
+shelf's first game is turned **face out**. Touch a spine and it **pulls out** to face you, with Resume or Play under the
+shelf. A game in progress has a **ribbon** in its spine; a favourite a small star. Long shelves get **letter dividers**,
+like a record shop's. Above the shelves, the one obvious next step: **Where you left off**, the last moment's picture,
+large.
 
-Each console is a shelf of **spines**, standing on a ledge, in its covers' colour. The shelf's first game is turned
-**face out**. Touch a spine and it **pulls out** to face you, with Resume or Play under the shelf. A game in progress has
-a **ribbon** in its spine; a favourite a small star. Long shelves get **letter dividers**, like a record shop's. Above the
-shelves, the one obvious next step: **Where you left off**, the last moment's picture, large.
+It scales: 415 SNES games are a long shelf with dividers, not a wall of covers. Every input moves along it naturally:
+along a shelf, between shelves, a letter at a time on the triggers. Each console gets a personality (colour, grain,
+type, the shape of its spines) without a logo. Resume points have a physical place: the ribbon. It costs the server
+nothing, and it belongs to a media server that keeps books and records as well as games.
 
-**Why this one.** It scales: 415 SNES games are a long shelf with dividers, not a wall of covers. Every input moves
-along it naturally: along a shelf, between shelves, a letter at a time on the triggers. Each console gets a personality
-(colour, grain, type, the shape of its spines) without a logo. Resume points have a physical place: the ribbon. It costs
-the server nothing. And it belongs to a media server that keeps books and records as well as games.
+The other two directions live inside it:
 
-### B · Timeline of eras
-
-A living timeline you drag through. The year in huge numerals, the era's name and its grain change as you go;
-consoles are bands from their launch to their last years, filled with their covers' colour when you have games for
-them and outlined when you don't; your games from consoles alive in that year sit underneath.
-
-**What it becomes:** the **Eras** page inside Shelves (from an era tile, or the Eras chip in Search). It's beautiful for
-exploring and for a sense of history, but slow for getting back into a game or finding one title, so not the home.
-
-### C · Channels
-
-Every collection is a channel that's already playing: swipe up or down (Channel up and down on a remote) to change
-channel; each channel runs an attract preview of its games and your moments, drifting, in the console's Look, with Now
-and Next as WittyTV's guide says it, and Play.
-
-**What it becomes:** the TV's **Leave it on** mode (after two idle minutes on the TV's games home, it starts flicking
-through channels like a screensaver that sells the library; any press stops it on that game) and a **Channels** row at
-the foot of the phone's home. It's the most alive, but slow for finding a game on a phone and dependent on attract
-previews.
+- **The Timeline is the Eras page** (from an era tile, or the Era chip in Search): a living timeline you drag through,
+  the year in huge numerals, the era's name and grain changing as you go, consoles as bands from launch to their last
+  years (filled with their covers' colour when you have games for them, outlined when you don't), and your games from
+  consoles alive in that year underneath.
+- **Channels is the TV's Leave it on mode and a row on the phone's home.** Every collection is a channel already playing
+  an attract preview of its games and your moments, in the console's Look, with Now and Next as WittyTV's guide says it,
+  and Play. On a TV left alone for two minutes on the games home, it starts flicking through channels like a
+  screensaver that sells the library; any press stops it on that game.
 
 ## Signature details
 
@@ -382,7 +373,9 @@ Held: the touch bar's Rewind, Select and L on a pad (`hotkeys.pad.rewind`), Back
 game runs backwards, the picture drains and the tape band sweeps; along its foot, "−07.4 s" in 22 monospaced semibold
 and a 6-high track of what's kept (`emulation.rewindSeconds`) with a white playhead moving left. Let go to play on.
 **With a remote:** Rewind in the game menu closes the menu into rewind: hold ◀, OK plays on, Back leaves it paused there.
-When rewind is off for this game, the button and tile say "Rewind is off" and open the setting.
+Rewind is **on by default for 8-bit, 16-bit and Pocket consoles** (20 seconds, within the administrator's memory limit)
+and off elsewhere until someone turns it on. When it's off for this game, the button and tile say "Rewind is off" and
+open the setting.
 
 ### The game menu
 
@@ -428,6 +421,9 @@ Four seats (two across, 132 high, `panel`): "Seat {n}", the avatar 40, name, how
 how to take it. Joining from another device: a four-letter code (from APP-DESIGN's TV-code alphabet) in 52×64 boxes and
 a QR card, lasting 10 minutes; a joiner gets the picture and their own controls, or "Controller only". **Watching** shows
 who's watching. Pressing a button on a new controller takes the next free seat; dragging a seat onto another swaps them.
+
+**Who can take a seat:** the host's own devices always; other adults and Kids profiles on the server, with the code;
+Guest only with the code. Saves, moments and play time stay the host's. The host can free any seat.
 
 ### Controllers
 
@@ -778,9 +774,9 @@ Nothing here blocks the first native build: everything marked "exists" in the pr
 4. **Rewind by default** for 8-bit, 16-bit and Pocket consoles within the administrator's limit, and a `rewind` event with
    the seconds kept.
 5. **Eras and years:** `era`, `launched` and `ended` per console; `era=` on `/items` and facets.
-6. **Made for two** as a `players` shelf in `/games/home`; one home across games libraries (Decisions).
+6. **Made for two** as a `players` shelf in `/games/home`.
 7. **Seats for other profiles:** `POST /play/{sid}/invite` → `{code, expires}`; `POST /play/join`; seat tokens; a `seats`
-   event; the host can free a seat; saves stay the host's.
+   event; the host can free a seat; saves stay the host's. Adults and Kids join with the code, Guest only with the code.
 8. **More input:** a motion state message (gyroscope and accelerometer, for cores with motion), a light-gun flag on the
    pointer message (aim plus trigger), and a relative mouse message.
 9. **Shortcuts:** swap screens, next screen layout, change disc, and full screen in `hotkeys.*`; touch-bar keys in touch
@@ -829,23 +825,25 @@ A moment that won't load leaves the game as it was and says so, with **Undo load
 - Reduce Motion: see Motion with meaning. Fast-forward and flicker carry the server's cautions; flicker stays off.
 - Sounds are never the only sign of anything.
 
-## Decisions to confirm
+## Decisions
 
-Before the Apple and Android builds start:
+Confirmed by the user on 5 November 2026:
 
-1. **Shelves as the games home**, with the Timeline as the Eras page and Channels as the TV's Leave it on mode and a row;
-   or one of the other directions as the home.
-2. **The words:** Shelf, Spine, Collection, Era, Made for two, Moment, Where you left off, Look, Seat, Channel, Leave it
-   on, Continue here, Game menu. Once confirmed they go into `strings.en.json` and the website, and change only together.
-3. **Button hints:** the connected pad's own labels drawn in our style (letters, and shapes as plain outlines in the
-   theme's colour), with Position only as a setting and for unknown pads; or position only everywhere.
-4. **Who can take a seat** in someone's game: other adults with a code, Kids too, Guest only with a code; saves stay the
-   host's. Same-account joining ships first with today's API.
-5. **Rewind on by default** for 8-bit, 16-bit and Pocket consoles (20 seconds, within the administrator's memory limit),
-   or off until each person turns it on, as today.
+1. **Shelves is the games home.** The Timeline is the Eras page inside it; Channels is the TV's Leave it on mode and a
+   row on the phone's home.
+2. **The words** are Shelf, Spine, Collection, Era, Made for two, Moment, Where you left off, Look, Seat, Channel, Leave
+   it on, Continue here and Game menu, as under [Words](#words). They go into `strings.en.json` and the website as they
+   are, and change only together.
+3. **Button hints** show the connected pad's own labels, drawn in WittyPlay's style (letters, and shapes as plain
+   outlines in the theme's colour) with no maker's colours or artwork. **Position only** stays as a setting, and is what
+   a pad that can't be identified gets.
+4. **Seats:** other adults and Kids profiles join someone's game with a code; Guest only with a code; saves stay with
+   the host. Same-account joining ships first with today's API.
+5. **Rewind is on by default** for 8-bit, 16-bit and Pocket consoles (20 seconds, within the administrator's memory
+   limit).
 
-With defaults unless you say otherwise: one WittyPlay home per games library, as today (one across all libraries needs
-server work); menu sounds off until turned on; haptics following the system.
+Defaults that stand: one WittyPlay home per games library, as today; menu sounds off until turned on; haptics following
+the system.
 
 ## Checking a build against this
 
