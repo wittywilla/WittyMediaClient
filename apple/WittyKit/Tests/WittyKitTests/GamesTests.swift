@@ -241,6 +241,79 @@ final class GamesTests: XCTestCase {
         XCTAssertEqual(both.l2, 9)
     }
 
+    // MARK: Every button, as the server sends each console's controls
+
+    /// `defaults` cut from the local server's own answers to `GET /consoles/{id}/controls`.
+    private static let consoleControls: [String: (gamepad: PadMap, keyboard: [String: String], targets: [Int])] = [
+        "nes": (["0": .button(0), "2": .button(8), "3": .button(9), "4": .button(12), "5": .button(13), "6": .button(14), "7": .button(15), "8": .button(1)],
+                ["0": "KeyZ", "2": "ShiftRight", "3": "Enter", "4": "ArrowUp", "5": "ArrowDown", "6": "ArrowLeft", "7": "ArrowRight", "8": "KeyX"],
+                [4, 5, 6, 7, 0, 8, 2, 3]),
+        "snes": (["0": .button(0), "1": .button(2), "10": .button(4), "11": .button(5), "2": .button(8), "3": .button(9), "4": .button(12), "5": .button(13),
+                  "6": .button(14), "7": .button(15), "8": .button(1), "9": .button(3)],
+                 ["0": "KeyZ", "1": "KeyA", "10": "KeyQ", "11": "KeyW", "2": "ShiftRight", "3": "Enter", "4": "ArrowUp", "5": "ArrowDown", "6": "ArrowLeft",
+                  "7": "ArrowRight", "8": "KeyX", "9": "KeyS"],
+                 [4, 5, 6, 7, 1, 9, 0, 8, 10, 11, 2, 3]),
+    ]
+
+    func testEveryButtonOfEachConsoleFromAPad() {
+        // The DS's controls are the Super Nintendo's, with a touch screen as well.
+        var all = Self.consoleControls
+        all["nds"] = all["snes"]
+        for (console, controls) in all {
+            let mapper = PadMapper(defaults: controls.gamepad, options: PadOptions(deadzone: 0.15, threshold: 0.5, stickDpad: true))
+            for target in controls.targets {
+                guard let source = controls.gamepad[String(target)] ?? nil, let w3c = source.b else {
+                    XCTFail("\(console): nothing presses \(target)")
+                    continue
+                }
+                var pad = StandardPadReading()
+                pad[button: w3c] = 1
+                XCTAssertEqual(mapper.state(pad, port: 2).buttons, RetroPad.bit(target), "\(console): W3C \(w3c) presses only RetroPad \(target)")
+            }
+            // Nothing the pad has presses a button the console doesn't have.
+            var everything = StandardPadReading()
+            for n in 0...15 { everything[button: n] = 1 }
+            let pressed = mapper.state(everything, port: 0).buttons
+            let expected = controls.targets.reduce(UInt16(0)) { $0 | RetroPad.bit($1) }
+            XCTAssertEqual(pressed, expected, console)
+            // The left stick steers the D-pad too, at full range.
+            XCTAssertEqual(mapper.state(StandardPadReading(axes: [-1, 0, 0, 0]), port: 0).buttons, RetroPad.bit(RetroPad.left), console)
+        }
+    }
+
+    func testEveryButtonOfEachConsoleFromAKeyboard() {
+        for (console, controls) in Self.consoleControls {
+            let keys = KeyMapper(controls.keyboard)
+            for target in controls.targets {
+                guard let name = controls.keyboard[String(target)] else {
+                    XCTFail("\(console): no key for \(target)")
+                    continue
+                }
+                XCTAssertEqual(keys.state(held: [name]).buttons, RetroPad.bit(target), "\(console): \(name)")
+            }
+        }
+    }
+
+    func testAnalogTriggersAndSticksPassThrough() {
+        // A console with sticks and analog triggers, mapped as the server maps them.
+        let map: PadMap = ["16": .axis(0, -1), "17": .axis(0, 1), "18": .axis(1, -1), "19": .axis(1, 1),
+                           "20": .axis(2, -1), "21": .axis(2, 1), "22": .axis(3, -1), "23": .axis(3, 1),
+                           "12": .button(6), "13": .button(7)]
+        let mapper = PadMapper(defaults: map, options: PadOptions(deadzone: 0, threshold: 0.5, stickDpad: false))
+        var pad = StandardPadReading(axes: [1, -1, -0.5, 0.25])
+        pad[button: StandardPadReading.l2] = 1
+        pad[button: StandardPadReading.r2] = 0.25
+        let state = mapper.state(pad, port: 3)
+        XCTAssertEqual(state.lx, 32767)
+        XCTAssertEqual(state.ly, -32767)
+        XCTAssertEqual(state.rx, -16384)
+        XCTAssertEqual(state.ry, 8192)
+        XCTAssertEqual(state.l2, 255)
+        XCTAssertEqual(state.r2, 64)
+        XCTAssertEqual([UInt8](state.encoded()).count, 13)
+        XCTAssertEqual(state.encoded().first, 3, "player 4")
+    }
+
     // MARK: Shortcuts
 
     func testStartAndSelectOpenTheMenu() {
@@ -381,5 +454,22 @@ final class GamesTests: XCTestCase {
     func testSoundLatency() {
         XCTAssertLessThan(GameSoundLatency.seconds("lowest"), GameSoundLatency.seconds("balanced"))
         XCTAssertLessThan(GameSoundLatency.seconds("balanced"), GameSoundLatency.seconds("smooth"))
+    }
+
+    /// The local server's NES (fceumm) and SNES (Mesen-S) sessions, as they list their ports.
+    func testAThirdPlayerGetsAGamepadWhereThePortIsOnAuto() throws {
+        let nes = try JSONDecoder().decode([GamePortDevices].self, from: Data("""
+        [{"port":0,"current":1,"types":[{"id":1,"name":"Auto"},{"id":513,"name":"Gamepad"},{"id":258,"name":"Zapper"}]},
+         {"port":2,"current":1,"types":[{"id":1,"name":"Auto"},{"id":513,"name":"Gamepad"},{"id":259,"name":"Power Pad A"},{"id":515,"name":"Power Pad B"}]},
+         {"port":3,"current":1,"types":[{"id":1,"name":"Auto"},{"id":513,"name":"Gamepad"}]}]
+        """.utf8))
+        XCTAssertEqual(nes[1].padForNewPlayer(plugged: nil)?.id, 513, "player 3 plays through the Four Score once a gamepad is in")
+        XCTAssertEqual(nes[2].padForNewPlayer(plugged: 1)?.id, 513)
+        XCTAssertNil(nes[1].padForNewPlayer(plugged: 259), "a Power Pad someone chose stays")
+        XCTAssertNil(nes[1].padForNewPlayer(plugged: 513), "already a gamepad")
+        let snes = try JSONDecoder().decode(GamePortDevices.self, from: Data("""
+        {"port":1,"current":1,"types":[{"id":0,"name":"None"},{"id":257,"name":"SNES Controller"},{"id":513,"name":"Multitap"}]}
+        """.utf8))
+        XCTAssertNil(snes.padForNewPlayer(plugged: nil), "not on Auto: left as the server plugged it")
     }
 }

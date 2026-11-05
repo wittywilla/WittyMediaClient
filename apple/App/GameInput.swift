@@ -80,6 +80,8 @@ final class GameInput {
     var onMenu: (() -> Void)?
     /// What to show when a controller comes or goes.
     var onNotice: ((String) -> Void)?
+    /// A controller became this port's player.
+    var onJoin: ((Int) -> Void)?
 
     /// Who's on which player, for the menu: the controller and the profile it plays by.
     var players: [GamePlayer] {
@@ -202,6 +204,7 @@ final class GameInput {
         }
         // Home, where the system lets it through, opens the menu, and so do Start and Select together.
         if announce { onNotice?("\(controller.vendorName ?? "A controller") is player \(port + 1)") }
+        onJoin?(Int(port))
         Task { await loadProfile(for: id) }
         updateTurboTimer()
     }

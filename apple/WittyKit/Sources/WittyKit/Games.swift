@@ -206,6 +206,22 @@ public struct GamePortDevices: Decodable, Equatable {
     public let port: Int
     public let current: Int?
     public let types: [GameDeviceType]?
+
+    public init(port: Int, current: Int?, types: [GameDeviceType]?) {
+        self.port = port
+        self.current = current
+        self.types = types
+    }
+
+    /// What to plug in when a controller joins as this port's player, if anything. A port left on
+    /// "Auto" can mean nothing is there: an NES's players 3 and 4 only play through a Four Score
+    /// once a gamepad is in their ports. A port with something else chosen is left as it is.
+    public func padForNewPlayer(plugged: Int?) -> GameDeviceType? {
+        guard let types, let now = plugged ?? current,
+              types.first(where: { $0.id == now })?.name.lowercased() == "auto" else { return nil }
+        let pads = ["gamepad", "joypad", "controller", "standard"]
+        return types.first { t in pads.contains { t.name.lowercased().contains($0) } }
+    }
 }
 
 /// A game being played, from `POST /games/{id}/play`.

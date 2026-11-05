@@ -73,7 +73,7 @@ As documented in `docs/GAMING-API.md`, "Controller states", and nothing new:
 |---|---|---|
 | MFi, Xbox, DualShock 4, DualSense, Switch Pro, Joy-Cons (a pair, or one on its side), and anything else GameController knows | Read through GameController. A Joy-Con on its own is a small pad: its stick is the D-pad | Yes |
 | Every button, the D-pad, both sticks at full range, analog triggers | Read in the W3C standard layout the profiles are written in; triggers go out as 0 to 255 as well as their button bits | Yes: 16 buttons, two i16 sticks, two u8 triggers |
-| Four players | Each controller gets the next free player, keeps it while connected, and a pad that goes lets go of everything at once. The Siri Remote plays as player 1 alongside a pad | Yes, ports 0 to 3. No more than four |
+| Four players | Each controller gets the next free player, keeps it while connected, and a pad that goes lets go of everything at once. The Siri Remote plays as player 1 alongside a pad. A console that needed an adapter for players 3 and 4 needs it plugged in: on an NES, a controller that joins as player 3 or 4 plugs a gamepad into that port when it's on "Auto", which turns the Four Score on. On a Super Nintendo, the Multitap goes into player 2's port from the game menu's Controllers page | Yes, ports 0 to 3, and `device` actions. No more than four |
 | The account's profiles | `/game-profiles/resolve` per controller, console and game; dead zone, press point, stick-as-D-pad, turbo and no rumble applied on the device | Yes |
 | Rumble | Core Haptics on the player's pad, by the strength the event gives | Yes: `rumble` with `strength`. The two motors' `effect` isn't told apart yet |
 | DualSense and DualShock 4 touchpad, for a console with a touch screen (DS, 3DS) | The touchpad is the touch screen: where the finger is, and a click to press. A press is sent again every 250 ms, and a release three times | Yes: the 6-byte pointer message. One point only |
@@ -92,6 +92,10 @@ As documented in `docs/GAMING-API.md`, "Controller states", and nothing new:
 - **Rumble's two motors.** The event has `effect`; the client could play the strong and weak motors on a pad's two handles once it's documented which is which.
 - **More touch.** One point only, with no hover. Enough for DS and 3DS styluses.
 - **Players past four,** for the consoles that had multitaps.
+- **Which adapter a third player needs.** The session lists each port's devices, but not that an
+  NES's players 3 and 4 need a gamepad in their own ports while a Super Nintendo's need a Multitap
+  in player 2's. The server could plug in what four players need when the app says how many are
+  holding controllers, or say it per console, instead of each app knowing each core.
 
 ## Saves and states
 
@@ -149,8 +153,8 @@ started with `POST /games/{id}/play`.
 device, so they follow every theme and WittyTV look as the rest of the app does.
 
 **Consoles:** every console the server plays, since the TV only shows its stream. The Nintendo DS and
-3DS only partly: their touch screen can't be reached from an Apple TV, so games that need the
-stylus are for a browser or a phone, and the game's page says so.
+3DS need a DualSense or DualShock 4 for their touch screen, whose touchpad becomes it; without one,
+games that need the stylus are for a browser or a phone, and the game's page says so.
 
 ## Which consoles play from this Mac's server
 
@@ -167,6 +171,29 @@ Tried from Apple TV's own decoding code against the local server, with one game 
 | Nintendo 3DS | Azahar | **Can't play**: the only game is an encrypted file, which the server refuses and never decrypts |
 
 Two things on the server side came out of this. `GET /games/{id}/check` says ready for the graphics-card consoles on a Mac, which can't run them. And three of those failing in a row took WittyPlay out of use for every game until it was put back.
+
+## Controllers, checked on NES, Super Nintendo and DS
+
+Against the local server, two ways.
+
+**On the Apple TV simulator,** in the app: the NES and Super Nintendo 240p Test Suites and a DS game
+(Resume) played. The D-pad, A and B moved through the suites' menus and opened and closed their tests.
+The game menu opened, paused the game, and its Controllers page listed the four players' ports with
+what each console's emulator offers. When the same account started a game elsewhere, the TV said the
+game had stopped and been saved. The simulator has no real controller, so its keyboard stood in.
+
+**Button by button,** from WittyKit's own encoding through the same socket code as the app: each
+button held while the server took the game's picture (`GET /play/{id}/screenshot`), against the
+suites' controller tests.
+
+| Console | What lit up |
+|---|---|
+| Super Nintendo | B, Y, Select, Start, Up, Down, Left, Right, A, X, L and R, each on player 1 alone and only its own label; player 2's L, Up and A on player 2 alone |
+| NES | B, Select, Start, Up, Down, Left, Right and A on controller 1 alone (Y, which an NES lacks, nothing); player 2 on controller 2. Players 3 and 4 only once a gamepad was plugged into their ports, then each on its own controller |
+| Nintendo DS | Touching the middle of the lower screen moved past a title that waits for a touch, which it didn't do untouched for as long; Start moved on from the title |
+
+Still to try with real hardware: rumble, the light bar, the touchpad itself (its pointer was sent as
+the app sends it), Home and Options, and analog sticks and triggers in a game that shows them.
 
 ## Testing it without a server that plays
 

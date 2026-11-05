@@ -9,7 +9,7 @@ What changed in WittyMediaClient, newest first. What changed before it had a rep
   colour, then Continue playing, the consoles, the shelves and every game. A game's page has Play or Resume, Start over, a favourite, where you left off,
   its save states and how it plays. The game plays on the server, as it does for the website, and streams to the Apple TV, which decodes it in hardware and
   draws it with the person's picture settings, scanlines and bezels included. MFi, Xbox and PlayStation controllers and the Siri Remote work, with the
-  account's controller profiles and shortcuts, and a game menu to save, load, press Start or Select, change disc, reset and quit. Saves are the server's, so a
+  account's controller profiles and shortcuts, up to four players (an NES's third and fourth through its Four Score, plugged in as they join), and a game menu to save, load, press Start or Select, change disc, reset and quit. Saves are the server's, so a
   game started on the TV resumes in a browser and the other way round. Games on someone's own PC still go through Moonlight. No emulator is in the app:
   `docs/WITTYPLAY-STREAMING.md` has the design.
 - **Apple: music, audiobooks and podcasts have a player of their own, as on Android.** On iPhone, iPad, Apple Vision Pro and Apple TV: albums, artists or authors,

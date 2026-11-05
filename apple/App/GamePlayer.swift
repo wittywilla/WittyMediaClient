@@ -290,6 +290,7 @@ final class GamePlayerModel: ObservableObject {
         input.onMenu = { [weak self] in self?.openMenu() }
         input.onShortcut = { [weak self] shortcut, down in self?.shortcut(shortcut, down) }
         input.onNotice = { [weak self] words in self?.say(words) }
+        input.onJoin = { [weak self] port in self?.joined(port: port) }
         host.screen.onPress = { [weak self] name, down in self?.input.press(name, down: down) }
         host.screen.onKey = { [weak self] code, down in self?.input.typed(code, down: down) }
         host.screen.onMenu = { [weak self] in self?.openMenu() }
@@ -448,9 +449,31 @@ final class GamePlayerModel: ObservableObject {
         }
     }
 
+    /// Ports whose new player may need something plugged in, once the game is running.
+    private var joinedPorts: Set<Int> = []
+    private var autoPlugged: Set<Int> = []
+
+    private func joined(port: Int) {
+        joinedPorts.insert(port)
+        if hadPicture { plugForNewPlayers() }
+    }
+
+    /// An NES's players 3 and 4 play through a Four Score only once a gamepad is in their ports:
+    /// a controller that joins as one of them plugs one in, once, where the port is on "Auto".
+    private func plugForNewPlayers() {
+        for port in joinedPorts.sorted() where !autoPlugged.contains(port) {
+            autoPlugged.insert(port)
+            if let d = devices.first(where: { $0.port == port }), let pad = d.padForNewPlayer(plugged: plugged[port]) {
+                plug(port: port, device: pad)
+            }
+        }
+        joinedPorts = []
+    }
+
     private func firstPicture() {
         phase = .playing
         hadPicture = true
+        plugForNewPlayers()
         players = input.players
         if let slot = loadAfterStart {
             loadAfterStart = nil
