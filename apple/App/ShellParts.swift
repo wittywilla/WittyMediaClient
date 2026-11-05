@@ -275,24 +275,29 @@ struct PageFoot: View {
     @EnvironmentObject private var model: AppModel
     @Environment(\.palette) private var palette
     @Environment(\.metrics) private var metrics
-    var notice = "general"
+    var notices = ["general"]
+
+    init(notice: String = "general") { notices = notice.isEmpty ? [] : [notice] }
+    init(notices: [String]) { self.notices = notices }
 
     var body: some View {
         let version = VersionTag.parts(model.serverVersion)
         VStack(alignment: .leading, spacing: 28) {
-            if let notice = model.legal?.notices[self.notice] {
-                let link = model.legal?.linkText ?? "Legal"
-                (Text(notice.text + " ") + Text(.init("[\(link)](wms://legal)")))
-                    .font(.system(size: 12))
-                    .foregroundStyle(palette.textHint)
-                    .tint(palette.accentText)
-                    .lineSpacing(3)
-                    .environment(\.openURL, OpenURLAction { _ in
-                        model.path.append(.page("/settings/legal" + ((notice.section ?? "").isEmpty ? "" : "#\(notice.section!)")))
-                        return .handled
-                    })
-                    .accessibilityElement(children: .combine)
-                    .accessibilityLabel("Legal notice: \(notice.text)")
+            ForEach(notices, id: \.self) { kind in
+                if let notice = model.legal?.notices[kind] {
+                    let link = model.legal?.linkText ?? "Legal"
+                    (Text(notice.text + " ") + Text(.init("[\(link)](wms://legal)")))
+                        .font(.system(size: 12))
+                        .foregroundStyle(palette.textHint)
+                        .tint(palette.accentText)
+                        .lineSpacing(3)
+                        .environment(\.openURL, OpenURLAction { _ in
+                            model.path.append(.page("/settings/legal" + ((notice.section ?? "").isEmpty ? "" : "#\(notice.section!)")))
+                            return .handled
+                        })
+                        .accessibilityElement(children: .combine)
+                        .accessibilityLabel("Legal notice: \(notice.text)")
+                }
             }
             HStack(spacing: 6) {
                 Text("WittyMediaServer \(version.number)").font(.system(size: 15)).foregroundStyle(palette.text)
