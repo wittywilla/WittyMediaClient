@@ -12,6 +12,7 @@ import androidx.compose.foundation.interaction.collectIsFocusedAsState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.WindowInsets
@@ -41,6 +42,7 @@ import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
@@ -76,6 +78,7 @@ import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
 import com.wittywilla.wittymediaclient.net.GUIDE_PATH
 import com.wittywilla.wittymediaclient.net.Item
+import com.wittywilla.wittymediaclient.net.RemoteStatus
 import com.wittywilla.wittymediaclient.net.SETTINGS_PATH
 import com.wittywilla.wittymediaclient.net.Show
 import com.wittywilla.wittymediaclient.net.problemWords
@@ -261,6 +264,8 @@ fun ProfileScreen(nav: Nav, s: Map<String, String>) {
     val server = nav.server
     var who by remember { mutableStateOf("") }
     LaunchedEffect(Unit) { who = runCatching { nav.app.api.status().user?.name.orEmpty() }.getOrDefault("") }
+    var remote by remember { mutableStateOf<RemoteStatus?>(null) }
+    LaunchedEffect(Unit) { remote = runCatching { nav.app.api.remoteStatus() }.getOrNull() }
     val version = remember { runCatching { context.packageManager.getPackageInfo(context.packageName, 0).versionName }.getOrNull().orEmpty() }
     Column(
         Modifier
@@ -278,6 +283,7 @@ fun ProfileScreen(nav: Nav, s: Map<String, String>) {
             SectionTitle(server.name)
             Secondary(server.url)
             if (server.fingerprint.isNotEmpty()) Secondary("${s["fingerprintLabel"]}: ${server.fingerprint}")
+            remote?.takeIf { it.subject.isNotEmpty() }?.let { RemoteAccessLine(it) }
         }
         ActionButton("Server settings", { nav.push(Route.Page(SETTINGS_PATH)) }, Modifier.fillMaxWidth(), focusKey = "settings")
         ActionButton("Sign out", nav::signOut, Modifier.fillMaxWidth(), focusKey = "switch")
@@ -287,6 +293,25 @@ fun ProfileScreen(nav: Nav, s: Map<String, String>) {
         ActionButton("Licences", { nav.push(Route.Notices) }, Modifier.fillMaxWidth(), focusKey = "notices")
         ActionButton("This app's log", { nav.push(Route.Logs) }, Modifier.fillMaxWidth(), focusKey = "logs")
         Secondary(s["legalConnect"].orEmpty())
+    }
+}
+
+// Remote access in the server's words, read as one line by a screen reader. The dot's colour adds to
+// the subject, which says the same in words ("Reachable from away: not yet").
+@Composable
+private fun RemoteAccessLine(remote: RemoteStatus) {
+    val colour = when (remote.level) {
+        "good" -> LocalExtraColours.current.ok
+        "fault" -> MaterialTheme.colorScheme.error
+        else -> LocalExtraColours.current.accentText
+    }
+    Row(Modifier.semantics(mergeDescendants = true) {}, horizontalArrangement = Arrangement.spacedBy(Space.S2)) {
+        Box(Modifier.padding(top = Space.S2).size(Space.S3).clip(CircleShape).background(colour))
+        Column(verticalArrangement = Arrangement.spacedBy(Space.S1)) {
+            Text("Remote access: ${remote.subject}", color = MaterialTheme.colorScheme.onBackground, style = MaterialTheme.typography.bodyLarge)
+            if (remote.summary.isNotEmpty()) Secondary(remote.summary)
+            if (remote.away.isNotEmpty()) Secondary(remote.away)
+        }
     }
 }
 
