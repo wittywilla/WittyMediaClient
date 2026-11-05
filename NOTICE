@@ -39,6 +39,7 @@ Apple (Apple TV, iPhone, iPad, Apple Vision Pro, Mac)
   WebRTC (libwebrtc)       BSD-3-Clause     https://webrtc.googlesource.com/src
     as LiveKit's build, LiveKitWebRTC 144.7559.15 (MIT),
     https://github.com/livekit/webrtc-xcframework, for games over WebRTC.
+    It adds about 11 MB to the installed app.
     It includes the parts WebRTC builds in (BoringSSL, Opus, libvpx, libyuv,
     libsrtp, usrsctp, Abseil), each under its own permissive licence, listed
     with WebRTC's source.
