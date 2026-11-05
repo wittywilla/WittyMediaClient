@@ -140,7 +140,8 @@ public final class WittyClient: @unchecked Sendable {
         answerLimit = quick ? AnswerLimit.unproved : AnswerLimit.signedIn
         let config = URLSessionConfiguration.ephemeral
         config.timeoutIntervalForRequest = quick ? 5 : 60 // the first play request probes the file
-        config.timeoutIntervalForResource = quick ? 5 : 180
+        // Starting a disc game can take minutes on a small server: see `playGame`.
+        config.timeoutIntervalForResource = quick ? 5 : 600
         // Only ever the bearer token: no cookies, no remembered passwords, nothing kept on disk.
         config.httpCookieStorage = nil
         config.httpCookieAcceptPolicy = .never
@@ -177,11 +178,13 @@ public final class WittyClient: @unchecked Sendable {
         }
     }
 
-    private func call(_ method: String, _ path: String, body: Data? = nil) async throws -> Data {
+    /// `wait` is how long to wait for the answer, for the few routes that take minutes on purpose.
+    func call(_ method: String, _ path: String, body: Data? = nil, wait: TimeInterval? = nil) async throws -> Data {
         guard let url = URL(string: base + apiPath + path) else {
             throw APIError(status: 0, message: "That server address can't be used.")
         }
         var request = URLRequest(url: url)
+        if let wait { request.timeoutInterval = wait }
         request.httpMethod = method
         request.httpBody = body
         if body != nil { request.setValue("application/json", forHTTPHeaderField: "Content-Type") }

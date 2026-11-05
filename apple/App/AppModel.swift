@@ -116,6 +116,11 @@ enum Route: Hashable {
     case logs
     /// The person's own account and this device's choices, from You: see YouViews.swift.
     case names, password, twoStep, devices, signInTv, theme
+    /// WittyPlay on Apple TV: a games library or one console's games in it, a game's page, and a
+    /// game being played. See GamesViews.swift and GamePlayer.swift.
+    case gameLibrary(Library, console: String?)
+    case game(Int64)
+    case playGame(Int64, GameStart)
 }
 
 /// A page a module adds to the menus, with the module it belongs to.
@@ -230,7 +235,7 @@ final class AppModel: ObservableObject {
     /// The player and the game page have the whole screen.
     var hidesBars: Bool {
         switch path.last {
-        case .player?, .web?: return true
+        case .player?, .web?, .playGame?: return true
         case .page?: return pagePlaying
         default: return false
         }
@@ -807,6 +812,14 @@ final class AppModel: ObservableObject {
     }
 
     private func openWaitingLink() {
+        #if DEBUG && os(tvOS)
+        // For checking a game on the simulator: `-WittyPlayOpenGame <id>` at launch opens its page.
+        let game = UserDefaults.standard.integer(forKey: "WittyPlayOpenGame")
+        if game > 0, paths[.home]?.isEmpty ?? true {
+            paths[.home] = [.game(Int64(game))]
+            return
+        }
+        #endif
         guard let link = waitingLink else { return }
         waitingLink = nil
         tab = .home
