@@ -1,4 +1,4 @@
-#if os(tvOS)
+#if os(tvOS) || os(iOS) || os(visionOS)
 import GameController
 import MetalKit
 import SwiftUI
@@ -126,7 +126,7 @@ private struct GameScreen: UIViewControllerRepresentable {
 
 // MARK: - The stream
 
-/// From the socket to the screen and the speakers, on the socket's own thread.
+/// From the transport to the screen and the speakers, on the transport's own thread.
 private final class GamePipeline: @unchecked Sendable {
     let renderer: GamePictureRenderer?
     let sound = GameSound()
@@ -241,7 +241,7 @@ final class GamePlayerModel: ObservableObject {
     let host = GameHostController()
     private let input = GameInput()
     private var pipeline: GamePipeline?
-    private var socket: GameSocket?
+    private var transport: GameTransport?
     private var client = WittyClient(base: "")
     private var gameId: Int64 = 0
     private var start: GameStart = .fresh
@@ -286,7 +286,7 @@ final class GamePlayerModel: ObservableObject {
             phase = .failed("This Apple TV couldn't set up its graphics for the game.")
             return
         }
-        input.send = { [weak self] data in self?.socket?.send(data) }
+        input.send = { [weak self] data in self?.transport?.sendInput(data) }
         input.onMenu = { [weak self] in self?.openMenu() }
         input.onShortcut = { [weak self] shortcut, down in self?.shortcut(shortcut, down) }
         input.onNotice = { [weak self] words in self?.say(words) }
@@ -296,7 +296,7 @@ final class GamePlayerModel: ObservableObject {
         host.screen.onMenu = { [weak self] in self?.openMenu() }
         pipeline?.askKeyframe = { @Sendable [weak self] in
             // The stack has no way of its own to ask: the server's 0xF7.
-            Task { @MainActor in self?.socket?.send(Data([0xF7])) }
+            Task { @MainActor in self?.transport?.askKeyframe() }
         }
         settings = (try? await client.gameSettings(item: id)) ?? GameSettings(values: [:])
         guard live else { return }
@@ -380,34 +380,33 @@ final class GamePlayerModel: ObservableObject {
 
     private func connect() {
         guard let session, !stopped else { return }
-        socket?.close()
+        transport?.close()
         let id = pipeline?.restart() ?? 0
         let mode = modes[min(modeAt, modes.count - 1)]
-        guard let request = client.gameSocketRequest(session.id, video: GameModes.video(for: mode)) else {
+        guard let transport = GameTransports.make(mode: mode, session: session.id, client: client) else {
             phase = .failed("This server's address can't be used for a game.")
             return
         }
         phase = .connecting
-        let socket = GameSocket()
         let pipeline = self.pipeline
-        socket.onMessage = { @Sendable message in pipeline?.take(message, from: id) }
-        socket.onEvent = { @Sendable [weak self] event in
+        transport.onMessage = { @Sendable message in pipeline?.take(message, from: id) }
+        transport.onEvent = { @Sendable [weak self] event in
             Task { @MainActor in self?.handle(event) }
         }
-        socket.onClose = { @Sendable [weak self] status in
-            Task { @MainActor in self?.connectionLost(status: status) }
+        transport.onEnd = { @Sendable [weak self] end in
+            Task { @MainActor in self?.connectionLost(end) }
         }
-        self.socket = socket
+        self.transport = transport
         connectedAt = Date()
         framesAt = Date()
         framesSeen = pipeline?.frames ?? 0
-        socket.open(request)
+        transport.open()
     }
 
-    private func connectionLost(status: Int) {
+    private func connectionLost(_ end: GameTransportEnd) {
         guard !stopped else { return }
         // Gone from the server: stopped from elsewhere, another game started, or left too long.
-        if [401, 403, 404, 410].contains(status) {
+        if end == .gone {
             finish(saying: "This game has stopped. It may have been started on another device, or left for more than a minute.")
             return
         }
@@ -512,7 +511,7 @@ final class GamePlayerModel: ObservableObject {
 
     private func finish(saying words: String) {
         stopped = true
-        socket?.close()
+        transport?.close()
         input.stop()
         pipeline?.sound.stop()
         watchdog?.invalidate()
@@ -665,7 +664,7 @@ final class GamePlayerModel: ObservableObject {
         busy = true
         stopped = true
         input.stop()
-        socket?.close()
+        transport?.close()
         pipeline?.sound.stop()
         watchdog?.invalidate()
         if let session { try? await client.stopGame(session.id) }
@@ -678,7 +677,7 @@ final class GamePlayerModel: ObservableObject {
         guard !stopped else { return }
         stopped = true
         input.stop()
-        socket?.close()
+        transport?.close()
         pipeline?.sound.stop()
         watchdog?.invalidate()
         if let session { Task.detached { [client] in try? await client.stopGame(session.id) } }
@@ -689,12 +688,12 @@ final class GamePlayerModel: ObservableObject {
         guard !stopped, session != nil else { return }
         switch phase {
         case .active:
-            if socket == nil || self.phase == .connecting { connect() }
+            if transport == nil || self.phase == .connecting { connect() }
             input.setEnabled(!menuOpen)
         case .background:
             input.setEnabled(false)
-            socket?.close()
-            socket = nil
+            transport?.close()
+            transport = nil
         default:
             input.setEnabled(false)
         }
@@ -716,6 +715,23 @@ final class GamePlayerModel: ObservableObject {
 
 // MARK: - The screen
 
+/// The game player on any Apple device: the screen to show for a server game, given its item id.
+/// Present it full screen (a navigation destination, or a full-screen cover on iPhone and iPad);
+/// it leaves by `leave`, or by stepping back from the navigation path when there's none.
+struct GamePlayerView: View {
+    let gameId: Int64
+    var start: GameStart = .resume
+    var leave: (() -> Void)?
+
+    init(gameId: Int64, start: GameStart = .resume, leave: (() -> Void)? = nil) {
+        self.gameId = gameId
+        self.start = start
+        self.leave = leave
+    }
+
+    var body: some View { GamePlayerScreen(id: gameId, start: start, leave: leave) }
+}
+
 struct GamePlayerScreen: View {
     @EnvironmentObject private var app: AppModel
     @Environment(\.client) private var client
@@ -724,8 +740,10 @@ struct GamePlayerScreen: View {
     @StateObject private var game = GamePlayerModel()
     let id: Int64
     let start: GameStart
+    var leave: (() -> Void)?
 
     private func goBack() {
+        if let leave { leave(); return }
         if case .playGame? = app.path.last { app.path.removeLast() }
     }
 
@@ -755,6 +773,27 @@ struct GamePlayerScreen: View {
                 .allowsHitTesting(false)
                 .transition(.opacity)
             }
+            #if !os(tvOS)
+            // No remote here: the menu has a button of its own.
+            if !game.menuOpen, game.phase == .playing || game.phase == .connecting {
+                VStack {
+                    HStack {
+                        Button { game.openMenu() } label: {
+                            Image(systemName: "pause.fill")
+                                .font(.title3)
+                                .foregroundStyle(palette.text)
+                                .frame(width: 44, height: 44)
+                                .background(Circle().fill(palette.panel.opacity(0.7)))
+                        }
+                        .buttonStyle(.plain)
+                        .accessibilityLabel("Game menu")
+                        Spacer()
+                    }
+                    Spacer()
+                }
+                .padding(Tokens.Space.s3)
+            }
+            #endif
             if game.menuOpen {
                 GameMenu(game: game, gameId: id)
             }
@@ -795,7 +834,7 @@ private struct Waiting: View {
     var body: some View {
         VStack(spacing: Tokens.Space.s4) {
             if let fraction {
-                ProgressView(value: fraction).frame(width: 480)
+                ProgressView(value: fraction).frame(maxWidth: 480)
             } else {
                 ProgressView()
             }
@@ -821,8 +860,59 @@ private struct GameProblem: View {
         .padding(Tokens.Space.s10)
         .frame(maxWidth: 900, alignment: .leading)
         .background(RoundedRectangle(cornerRadius: Tokens.Radius.xl).fill(palette.panel))
-        .onExitCommand(perform: back)
+        .onTVBack(back)
     }
+}
+
+private extension View {
+    /// The remote's Back on Apple TV. Elsewhere the screen has buttons for it.
+    @ViewBuilder func onTVBack(_ action: @escaping () -> Void) -> some View {
+        #if os(tvOS)
+        onExitCommand(perform: action)
+        #else
+        self
+        #endif
+    }
+
+    @ViewBuilder func tvFocusSection() -> some View {
+        #if os(tvOS)
+        focusSection()
+        #else
+        self
+        #endif
+    }
+
+    /// Text the remote can stop on, so it can be read.
+    @ViewBuilder func tvFocusable() -> some View {
+        #if os(tvOS)
+        focusable(true)
+        #else
+        self
+        #endif
+    }
+
+    @ViewBuilder func slotButtonStyle() -> some View {
+        #if os(tvOS)
+        buttonStyle(.card)
+        #else
+        buttonStyle(.plain)
+        #endif
+    }
+}
+
+/// Words that differ by what the device is held with.
+private enum MenuWords {
+    #if os(tvOS)
+    static let opens = "Start and Select together, or the remote's Back button, open this menu."
+    static let noPads = "The Siri Remote"
+    static let alone = "The Siri Remote is player 1: its clickpad is the D-pad, a click in the middle is A, and Play/Pause is B. Connect a game controller in Settings, Remotes and Devices for games that need more buttons."
+    static let alongside = "The Siri Remote plays as player 1 too."
+    #else
+    static let opens = "Start and Select together, or the pause button, open this menu."
+    static let noPads = "Touch controls"
+    static let alone = "The touch controls are player 1. Connect a game controller in Settings, Bluetooth for games that need more buttons."
+    static let alongside = "The touch controls hide while a controller is connected."
+    #endif
 }
 
 // MARK: - The game menu
@@ -850,6 +940,11 @@ private struct GameMenu: View {
             ScrollView {
                 VStack(alignment: .leading, spacing: Tokens.Space.s3) {
                     Text(title).font(.wmPage).foregroundStyle(palette.text).lineLimit(2).accessibilityAddTraits(.isHeader)
+                    #if !os(tvOS)
+                    if game.page != .main {
+                        Button { game.back() } label: { Label("Back", systemImage: "chevron.left") }.action(pill: true)
+                    }
+                    #endif
                     switch game.page {
                     case .main: main
                     case .save: slots(saving: true)
@@ -863,13 +958,13 @@ private struct GameMenu: View {
                 }
                 .padding(Tokens.Space.s10)
             }
-            .frame(width: game.page == .main || game.page == .reset || game.page == .quit ? 640 : 1100)
+            .frame(maxWidth: game.page == .main || game.page == .reset || game.page == .quit ? 640 : 1100)
             .background(palette.background.opacity(0.96))
             Spacer(minLength: 0)
         }
         .ignoresSafeArea()
         .background(Color.black.opacity(0.35).ignoresSafeArea())
-        .onExitCommand { game.back() }
+        .onTVBack { game.back() }
         .onAppear { DispatchQueue.main.async { focused = "resume" } }
         .onChange(of: game.page) { _ in DispatchQueue.main.async { focused = game.page == .main ? "resume" : "first" } }
     }
@@ -906,10 +1001,10 @@ private struct GameMenu: View {
                 if n != game.disc { row("Change to disc \(n + 1)", "opticaldisc", key: "disc\(n)", sub: "Disc \(game.disc + 1) is in") { game.changeDisc(n) } }
             }
         }
-        row("Controllers", "gamecontroller", key: "pads", sub: game.players.isEmpty ? "The Siri Remote" : "\(game.players.count) connected") { game.page = .controllers }
+        row("Controllers", "gamecontroller", key: "pads", sub: game.players.isEmpty ? MenuWords.noPads : "\(game.players.count) connected") { game.page = .controllers }
         row("Reset", "arrow.counterclockwise", key: "reset") { if game.confirms { game.page = .reset } else { game.reset() } }
         row("Save and quit", "xmark", key: "quit") { if game.confirms { game.page = .quit } else { Task { await game.quit() } } }
-        Secondary("Start and Select together, or the remote's Back button, open this menu.")
+        Secondary(MenuWords.opens)
             .padding(.top, Tokens.Space.s4)
     }
 
@@ -917,7 +1012,7 @@ private struct GameMenu: View {
     @ViewBuilder private var controllers: some View {
         VStack(alignment: .leading, spacing: Tokens.Space.s2) {
             if game.players.isEmpty {
-                Secondary("The Siri Remote is player 1: its clickpad is the D-pad, a click in the middle is A, and Play/Pause is B. Connect a game controller in Settings, Remotes and Devices for games that need more buttons.")
+                Secondary(MenuWords.alone)
             } else {
                 ForEach(game.players, id: \.port) { p in
                     VStack(alignment: .leading, spacing: 2) {
@@ -925,11 +1020,11 @@ private struct GameMenu: View {
                         Secondary(p.profile.isEmpty ? "The console's own layout" : "Your profile \u{201C}\(p.profile)\u{201D}")
                     }
                 }
-                Secondary("The Siri Remote plays as player 1 too.")
+                Secondary(MenuWords.alongside)
             }
             Secondary("Profiles are made on the website, under Controllers, and follow you here.")
         }
-        .focusable(true)
+        .tvFocusable()
         .accessibilityElement(children: .combine)
         ForEach(Array(game.devices.enumerated()), id: \.element.port) { n, port in
             VStack(alignment: .leading, spacing: Tokens.Space.s2) {
@@ -947,7 +1042,7 @@ private struct GameMenu: View {
                 }
             }
             .padding(.top, Tokens.Space.s2)
-            .focusSection()
+            .tvFocusSection()
         }
     }
 
@@ -983,7 +1078,7 @@ private struct GameMenu: View {
                     }
                     .padding(Tokens.Space.s2)
                 }
-                .buttonStyle(.card)
+                .slotButtonStyle()
                 .focused($focused, equals: n == 0 ? "first" : "slot\(slot)")
                 .disabled(game.busy)
                 .accessibilityLabel(saving ? "Save to \(GameWords.slotName(slot))\(save == nil ? "" : ", replacing a save")" : "Load \(GameWords.slotName(slot))")

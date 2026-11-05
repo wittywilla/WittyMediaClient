@@ -117,6 +117,21 @@ final class GamesTests: XCTestCase {
         XCTAssertEqual(secure.gameSocketRequest("a", video: "jpeg")?.url?.scheme, "wss")
     }
 
+    func testTransportsByMode() {
+        let client = WittyClient(base: "http://127.0.0.1:9797", token: "t")
+        XCTAssertTrue(GameTransports.make(mode: "ws-h264", session: "s", client: client) is GameWebSocketTransport)
+        XCTAssertTrue(GameTransports.make(mode: "ws-jpeg", session: "s", client: client) is GameWebSocketTransport)
+        XCTAssertNil(GameTransports.make(mode: "webrtc", session: "s", client: client), "not one this app has yet")
+        for mode in GameModes.supported {
+            XCTAssertNotNil(GameTransports.make(mode: mode, session: "s", client: client), "every mode the app asks for has a transport")
+        }
+    }
+
+    func testAGameGoneFromTheServerIsNotConnectedAgain() {
+        for status in [401, 403, 404, 410] { XCTAssertEqual(GameTransportEnd(upgradeStatus: status), .gone) }
+        for status in [0, 101, 429, 500, 502, 503] { XCTAssertEqual(GameTransportEnd(upgradeStatus: status), .dropped) }
+    }
+
     // MARK: Words
 
     func testWords() {

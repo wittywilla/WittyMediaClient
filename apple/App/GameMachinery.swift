@@ -1,4 +1,4 @@
-#if os(tvOS)
+#if os(tvOS) || os(iOS) || os(visionOS)
 import AVFoundation
 import CoreMedia
 import ImageIO
@@ -471,77 +471,6 @@ final class GameSound {
             self.player.stop()
             self.engine.stop()
         }
-    }
-}
-
-// MARK: - The connection
-
-/// One WebSocket to a game. Everything that arrives goes to `onMessage` or `onEvent` on the
-/// socket's own thread; controller states go out as they come.
-final class GameSocket: NSObject, URLSessionWebSocketDelegate {
-    private var session: URLSession?
-    private var task: URLSessionWebSocketTask?
-    private var closed = false
-    var onMessage: (@Sendable (GameStreamMessage) -> Void)?
-    var onEvent: (@Sendable (GameEvent) -> Void)?
-    /// Called once, when it closes or fails, unless it was closed here.
-    /// With the HTTP status of the upgrade, or 0: 404 means the game has gone from the server.
-    var onClose: (@Sendable (Int) -> Void)?
-
-    func open(_ request: URLRequest) {
-        let config = URLSessionConfiguration.ephemeral
-        config.httpCookieStorage = nil
-        config.urlCache = nil
-        config.timeoutIntervalForRequest = 30
-        let session = URLSession(configuration: config, delegate: self, delegateQueue: nil)
-        let task = session.webSocketTask(with: request)
-        // A keyframe of a big game is more than the usual megabyte.
-        task.maximumMessageSize = 32 << 20
-        self.session = session
-        self.task = task
-        task.resume()
-        receive()
-    }
-
-    private func receive() {
-        task?.receive { [weak self] result in
-            guard let self, !self.closed else { return }
-            switch result {
-            case .success(.data(let data)):
-                if let message = GameStreamMessage.parse(data) { self.onMessage?(message) }
-                self.receive()
-            case .success(.string(let text)):
-                if let event = GameEvent.parse(text) { self.onEvent?(event) }
-                self.receive()
-            case .success:
-                self.receive()
-            case .failure:
-                self.finish()
-            }
-        }
-    }
-
-    func send(_ data: Data) {
-        guard !closed else { return }
-        task?.send(.data(data)) { _ in }
-    }
-
-    private func finish() {
-        guard !closed else { return }
-        closed = true
-        onClose?((task?.response as? HTTPURLResponse)?.statusCode ?? 0)
-        session?.invalidateAndCancel()
-    }
-
-    func close() {
-        guard !closed else { return }
-        closed = true
-        task?.cancel(with: .normalClosure, reason: nil)
-        session?.finishTasksAndInvalidate()
-    }
-
-    func urlSession(_ session: URLSession, webSocketTask: URLSessionWebSocketTask, didCloseWith closeCode: URLSessionWebSocketTask.CloseCode, reason: Data?) {
-        finish()
     }
 }
 #endif

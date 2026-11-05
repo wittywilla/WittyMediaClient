@@ -1,4 +1,4 @@
-#if os(tvOS)
+#if os(tvOS) || os(iOS) || os(visionOS)
 import CoreHaptics
 import GameController
 import UIKit
