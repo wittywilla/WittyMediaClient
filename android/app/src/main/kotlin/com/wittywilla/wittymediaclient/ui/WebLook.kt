@@ -84,6 +84,8 @@ object WebIcons {
     val Refresh: ImageVector by lazy { webIcon("refresh", "M17.6 6.4A8 8 0 004.3 10h2.1a6 6 0 019.8-2.2L13 11h7V4zm-11.2 11.2A8 8 0 0019.7 14h-2.1a6 6 0 01-9.8 2.2L11 13H4v7z") }
     val Edit: ImageVector by lazy { webIcon("edit", "M3 17.3V21h3.7L17.8 9.9l-3.7-3.7zm17.7-10.2a1 1 0 000-1.4l-2.4-2.4a1 1 0 00-1.4 0l-1.8 1.8 3.7 3.7z") }
     val Up: ImageVector by lazy { webIcon("up", "M7.4 15.4L12 10.8l4.6 4.6L18 14l-6-6-6 6z") }
+    val Down: ImageVector by lazy { webIcon("down", "M7.4 8.6L12 13.2l4.6-4.6L18 10l-6 6-6-6z") }
+    val Grip: ImageVector by lazy { webIcon("grip", "M9 5a2 2 0 110 4 2 2 0 010-4zm6 0a2 2 0 110 4 2 2 0 010-4zM9 10a2 2 0 110 4 2 2 0 010-4zm6 0a2 2 0 110 4 2 2 0 010-4zM9 15a2 2 0 110 4 2 2 0 010-4zm6 0a2 2 0 110 4 2 2 0 010-4z") }
     val Plug: ImageVector by lazy { webIcon("plug", "M16 7V3h-2v4h-4V3H8v4H6v6l4 4v4h4v-4l4-4V7z") }
 
     // libIcon (web/src/icons.tsx): each kind of library's icon, the disc for anything else.

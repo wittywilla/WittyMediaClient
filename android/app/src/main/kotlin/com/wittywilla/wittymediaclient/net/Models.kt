@@ -16,6 +16,8 @@ data class ServerStatus(
     val brandLogo: String = "",
     val theme: String = "default",
     val user: User? = null,
+    // A newer version the server's update check found, for administrators only; empty for none.
+    val update: String = "",
 )
 
 @Serializable
@@ -194,6 +196,8 @@ data class Hub(
     val key: String = "",
     val title: String = "",
     val libraryId: Long? = null,
+    // A saved view's choices, as the library page's address carries them: "genre=Drama&sort=added".
+    val query: String = "",
     val items: List<Item> = emptyList(),
     val shows: List<Show> = emptyList(),
 )
@@ -218,6 +222,8 @@ data class GuideChannel(
     val key: String = "",
     val number: String = "",
     val name: String = "",
+    // "library" for a channel the server makes from a library, which is off air between its programmes.
+    val kind: String = "",
     val encrypted: String = "", // why it can't be tuned: this server never decrypts a broadcast
     val favourite: Boolean = false,
     val programmes: List<GuideProgramme> = emptyList(),
@@ -225,6 +231,21 @@ data class GuideChannel(
 
 @Serializable
 data class Guide(val channels: List<GuideChannel> = emptyList())
+
+// What GET /update says, for administrators: only what Home's notice of a newer server uses.
+@Serializable
+data class UpdateChange(val version: String = "", val notes: String = "")
+
+@Serializable
+data class UpdateLatest(val version: String = "", val changes: List<UpdateChange> = emptyList())
+
+@Serializable
+data class UpdateStatus(
+    val current: String = "",
+    val latest: UpdateLatest? = null,
+    // apply, installer or docker: a server in Docker is updated by its owner, so the notice says how.
+    val method: String = "",
+)
 
 @Serializable
 data class ItemPage(val items: List<Item> = emptyList(), val total: Int = 0)

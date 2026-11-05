@@ -121,11 +121,11 @@ fun TracksScroll(state: LazyGridState) {
     LaunchedEffect(under) { shell.under = under }
 }
 
-// The page has a picture under the top bar.
+// The page has a picture under the top bar, or, on Home, has one no longer.
 @Composable
-fun HeroPage() {
+fun HeroPage(on: Boolean = true) {
     val shell = LocalShellScroll.current
-    LaunchedEffect(Unit) { shell.hero = true }
+    LaunchedEffect(on) { shell.hero = on }
 }
 
 // The website's top pages (TopBar.tsx): Home, the TV guide, Search, You, Settings and every place in the strip.

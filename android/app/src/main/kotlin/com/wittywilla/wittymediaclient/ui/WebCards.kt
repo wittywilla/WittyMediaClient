@@ -14,6 +14,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -46,7 +47,9 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.draw.drawWithContent
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -122,38 +125,50 @@ fun WebArt(url: String?, title: String, widthDp: Dp, aspect: Float, modifier: Mo
 // The hairline over artwork: white at 8%, inside the corner.
 private fun Modifier.artHairline(radius: Dp): Modifier = this.border(1.dp, Color(0x14FFFFFF), RoundedCornerShape(radius))
 
+// A plate on a card's picture (`.badge`), 20 high in 11 bold, 8 in from the corner: the kind of disc in white on the
+// scrim at the left; how many episodes are left in onAccent on the accent, or a tick in a round scrim once it's all
+// watched, at the right.
 @Composable
-private fun Badge(words: String, modifier: Modifier, fill: Color = Color(0xAD000000), ink: Color = ON_IMAGE) {
+private fun BoxScope.Plates(badges: List<CardBadge>) {
+    badges.forEach { badge ->
+        when (badge) {
+            is CardBadge.Disc -> Plate(badge.name, Modifier.align(Alignment.TopStart).padding(8.dp))
+            is CardBadge.Unwatched -> Plate("${badge.count}", Modifier.align(Alignment.TopEnd).padding(8.dp), MaterialTheme.colorScheme.primary, MaterialTheme.colorScheme.onPrimary)
+            CardBadge.Seen -> Box(Modifier.align(Alignment.TopEnd).padding(8.dp).size(20.dp).clip(CircleShape).background(SCRIM), contentAlignment = Alignment.Center) {
+                Icon(WebIcons.Check, null, tint = ON_IMAGE, modifier = Modifier.size(14.dp))
+            }
+        }
+    }
+}
+
+@Composable
+private fun Plate(words: String, modifier: Modifier, fill: Color = SCRIM, ink: Color = ON_IMAGE) {
     Box(modifier.heightIn(min = 20.dp).widthIn(min = 20.dp).clip(RoundedCornerShape(4.dp)).background(fill).padding(horizontal = 6.dp), contentAlignment = Alignment.Center) {
         Text(words, color = ink, fontSize = 11.sp, fontWeight = FontWeight.Bold, letterSpacing = 0.02.em)
     }
 }
 
-private fun discBadge(it: Item): String? = when (it.kind) {
-    "dvd-iso", "dvd-folder" -> "DVD"
-    "bluray-iso", "bluray-folder" -> "Blu-ray"
-    "cd-image" -> "CD"
-    else -> null
-}
+// The plate behind words on artwork: black at 68%.
+private val SCRIM = Color(0xAD000000)
 
-// "1 h 40 min", "45 min", "30 s", as the website writes a length.
+// "1 h 52 min", "45 min", "30 s", as the website writes a length (fmtRuntime): the minutes rounded, and "2 h 0 min"
+// kept whole.
 fun runtimeWords(sec: Double): String {
-    val s = sec.toLong()
-    return when {
-        s <= 0 -> ""
-        s < 60 -> "$s s"
-        s < 3600 -> "${s / 60} min"
-        s % 3600 / 60 == 0L -> "${s / 3600} h"
-        else -> "${s / 3600} h ${s % 3600 / 60} min"
-    }
+    if (sec == 0.0 || sec.isNaN()) return ""
+    if (sec < 60) return "${maxOf(1L, Math.round(sec))} s"
+    val hours = (sec / 3600).toLong()
+    val minutes = Math.round((sec % 3600) / 60)
+    return if (hours > 0) "$hours h $minutes min" else "$minutes min"
 }
 
-fun isAudio(it: Item) = it.kind in setOf("audio", "track", "audiobook", "podcast", "cd-image") || it.album.isNotEmpty()
-
-private fun cardSub(it: Item): String = when {
-    it.showId != null -> listOf(it.season?.let { s -> "S$s · E${it.episode ?: 0}" }.orEmpty(), it.title).filter { s -> s.isNotEmpty() }.joinToString(" · ")
-    isAudio(it) -> it.albumArtist.ifEmpty { it.artist }
-    else -> listOfNotNull(it.year?.toString(), runtimeWords(it.runtimeSec).ifEmpty { null }).joinToString(" · ")
+// CSS's linear-gradient at an angle: 0 points up, 90 right, as the website writes it.
+private fun Modifier.angledGradient(angle: Float, from: Color, to: Color): Modifier = drawBehind {
+    val turn = Math.toRadians(angle.toDouble())
+    val dx = kotlin.math.sin(turn).toFloat()
+    val dy = -kotlin.math.cos(turn).toFloat()
+    val half = (kotlin.math.abs(size.width * dx) + kotlin.math.abs(size.height * dy)) / 2
+    val centre = Offset(size.width / 2, size.height / 2)
+    drawRect(Brush.linearGradient(listOf(from, to), centre - Offset(dx * half, dy * half), centre + Offset(dx * half, dy * half)))
 }
 
 @Composable
@@ -163,49 +178,55 @@ private fun Progress(fraction: Float, modifier: Modifier) {
     }
 }
 
-// A card for an item: an episode is a landscape card (232, 16:9) under its show's name; sound is a square; the rest a
-// poster 2:3. Title 14 semibold (two lines; one on a landscape card), the facts 12 in textHint.
+// A card for an item, as the website's ItemCard: an episode is a landscape card (232, 16:9) of its still under its
+// show's name; songs and CDs are square; the rest a poster 2:3. A frame from the video as a poster shows whole, 16:9 on
+// the title's own colours. Title 14 semibold (two lines; one on a landscape card), the facts 12 in textHint.
 @Composable
 fun WebItemCard(nav: Nav, item: Item, forceWide: Boolean = false, onOpen: (() -> Unit)? = null) {
-    val wide = forceWide || item.showId != null
-    val square = !wide && isAudio(item)
+    val look = CardLook.item(item, forceWide || item.showId != null)
+    val wide = look.shape == CardShape.Wide
     val width = cardWidth(wide)
-    val aspect = when { wide -> 16f / 9f; square -> 1f; else -> 2f / 3f }
-    val api = nav.app.api
-    val url = if (wide) api.backdropUrl(item) else api.posterUrl(item)
-    val title = if (item.showId != null) item.showTitle?.ifEmpty { null } ?: item.title else if (square && item.album.isNotEmpty()) item.album else item.title
-    val progress = item.progress?.takeIf { p -> !p.watched && p.positionSec > 0 && p.durationSec > 0 }?.let { p -> (p.positionSec / p.durationSec).toFloat() }
-    Pressable(onOpen ?: { nav.open(item) }, Modifier.width(width), shape = RoundedCornerShape(10.dp), fill = Color.Transparent, label = listOf(title, cardSub(item)).filter { s -> s.isNotEmpty() }.joinToString(", "), pressScale = 0.975f, ring = false) {
+    val aspect = when (look.shape) { CardShape.Wide -> 16f / 9f; CardShape.Square -> 1f; CardShape.Poster -> 2f / 3f }
+    val url = nav.app.api.posterUrl(item)
+    val label = (listOf(look.title, look.subtitle) + look.badges.map { it.spoken }).filter { s -> s.isNotEmpty() }.joinToString(", ")
+    Pressable(onOpen ?: { nav.open(item) }, Modifier.width(width), shape = RoundedCornerShape(10.dp), fill = Color.Transparent, label = label, pressScale = 0.975f, ring = false) {
         Column(Modifier.width(width)) {
             Box(Modifier.fillMaxWidth().aspectRatio(aspect).restingShadow(10.dp).clip(RoundedCornerShape(10.dp)).background(MaterialTheme.colorScheme.surfaceVariant)) {
-                WebArt(if (item.poster.isEmpty() && !wide && item.updatedAt == 0L) null else url, title, width, aspect, Modifier.fillMaxSize())
-                discBadge(item)?.let { words -> Badge(words, Modifier.align(Alignment.TopStart).padding(8.dp)) }
-                if (item.progress?.watched == true) Box(Modifier.align(Alignment.TopEnd).padding(8.dp).size(20.dp).clip(CircleShape).background(Color(0xAD000000)), contentAlignment = Alignment.Center) {
-                    Icon(WebIcons.Check, null, tint = ON_IMAGE, modifier = Modifier.size(14.dp))
+                when {
+                    item.poster.isEmpty() -> Placeholder(item.title, Modifier.fillMaxSize())
+                    item.hasGeneratedArt && !wide -> {
+                        val hue = titleHue(item.title)
+                        Box(Modifier.fillMaxSize().angledGradient(170f, Color.hsl(hue, 0.26f, 0.26f), Color.hsl((hue + 40) % 360, 0.34f, 0.11f)), contentAlignment = Alignment.Center) {
+                            WebArt(url, item.title, width, 16f / 9f, Modifier.fillMaxWidth().aspectRatio(16f / 9f).cssShadow(6.dp, 18.dp, Color(0x66000000), 0.dp), placeholderless = true)
+                        }
+                    }
+                    else -> WebArt(url, item.title, width, aspect, Modifier.fillMaxSize())
                 }
-                if (progress != null) Progress(progress, Modifier.align(Alignment.BottomStart))
+                Plates(look.badges)
+                look.progress?.let { Progress(it, Modifier.align(Alignment.BottomStart)) }
                 Box(Modifier.fillMaxSize().artHairline(10.dp))
             }
-            Text(title, color = MaterialTheme.colorScheme.onBackground, fontSize = 14.sp, fontWeight = FontWeight.SemiBold, lineHeight = 18.sp, maxLines = if (wide) 1 else 2, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = 8.dp))
-            val sub = cardSub(item)
-            if (sub.isNotEmpty()) Text(sub, color = LocalExtraColours.current.hint, fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = 2.dp))
+            Text(look.title, color = MaterialTheme.colorScheme.onBackground, fontSize = 14.sp, fontWeight = FontWeight.SemiBold, lineHeight = 18.sp, maxLines = if (wide) 1 else 2, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = 8.dp))
+            if (look.subtitle.isNotEmpty()) Text(look.subtitle, color = LocalExtraColours.current.hint, fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = 2.dp))
         }
     }
 }
 
+// A show's card, as the website's ShowCard: "2019 · 3 seasons", with how many episodes are left or a tick.
 @Composable
 fun WebShowCard(nav: Nav, s: Show) {
     val width = cardWidth()
-    val sub = listOfNotNull(s.year?.toString(), if (s.seasonCount > 0) "${s.seasonCount} season${if (s.seasonCount == 1) "" else "s"}" else null).joinToString(" · ")
-    Pressable({ nav.push(Route.Show(s.id)) }, Modifier.width(width), shape = RoundedCornerShape(10.dp), fill = Color.Transparent, label = listOf(s.title, sub).joinToString(", "), pressScale = 0.975f, ring = false) {
+    val look = CardLook.show(s)
+    val label = (listOf(look.title, look.subtitle) + look.badges.map { it.spoken }).joinToString(", ")
+    Pressable({ nav.push(Route.Show(s.id)) }, Modifier.width(width), shape = RoundedCornerShape(10.dp), fill = Color.Transparent, label = label, pressScale = 0.975f, ring = false) {
         Column(Modifier.width(width)) {
             Box(Modifier.fillMaxWidth().aspectRatio(2f / 3f).restingShadow(10.dp).clip(RoundedCornerShape(10.dp)).background(MaterialTheme.colorScheme.surfaceVariant)) {
                 WebArt(nav.app.api.showPosterUrl(s), s.title, width, 2f / 3f, Modifier.fillMaxSize())
-                if (s.unwatched in 1 until s.episodeCount) Badge("${s.unwatched}", Modifier.align(Alignment.TopEnd).padding(8.dp), MaterialTheme.colorScheme.primary, MaterialTheme.colorScheme.onPrimary)
+                Plates(look.badges)
                 Box(Modifier.fillMaxSize().artHairline(10.dp))
             }
             Text(s.title, color = MaterialTheme.colorScheme.onBackground, fontSize = 14.sp, fontWeight = FontWeight.SemiBold, lineHeight = 18.sp, maxLines = 2, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = 8.dp))
-            if (sub.isNotEmpty()) Text(sub, color = LocalExtraColours.current.hint, fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = 2.dp))
+            Text(look.subtitle, color = LocalExtraColours.current.hint, fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = 2.dp))
         }
     }
 }
@@ -227,14 +248,18 @@ fun HubHead(title: String, action: String? = null, onAction: (() -> Unit)? = nul
     }
 }
 
-// A row that scrolls sideways, 16 apart, 12 above and 16 below, snapping to the start of a card.
+// A row that scrolls sideways, 16 apart, 12 above and 16 below, snapping to the start of a card. `side` is the room
+// at its ends: the page's 16, or none in Customize home's small look at it.
 @Composable
-fun HubRow(content: LazyListScope.() -> Unit) {
+fun HubRow(content: LazyListScope.() -> Unit) = HubRow(16.dp, content)
+
+@Composable
+fun HubRow(side: Dp, content: LazyListScope.() -> Unit) {
     val state = rememberLazyListState()
     LazyRow(
         state = state,
         flingBehavior = rememberSnapFlingBehavior(state, SnapPosition.Start),
-        contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 12.dp, bottom = 16.dp),
+        contentPadding = PaddingValues(start = side, end = side, top = 12.dp, bottom = 16.dp),
         horizontalArrangement = Arrangement.spacedBy(16.dp),
         content = content,
     )
@@ -245,25 +270,31 @@ fun LazyListScope.itemCards(nav: Nav, items: List<Item>, shows: List<Show> = emp
     items(shows, key = { "s${it.id}" }) { WebShowCard(nav, it) }
 }
 
-// The website's buttons on a touch screen: 44 high, 16 inside, radius 10, 14 semibold, an 18 icon 8 before.
+// The website's buttons on a touch screen: 44 high, 16 inside, radius 10, 14 semibold, an 18 icon 8 before. Small is
+// `.btn.sm`: 12 inside, 13, a 16 icon 6 before. Square is only the icon, 44 square, with the words for a screen reader.
+// Disabled, it fades to 45%.
 enum class WebButtonKind { Primary, Secondary, Ghost }
 
 @Composable
-fun WebButton(words: String, onClick: () -> Unit, kind: WebButtonKind = WebButtonKind.Secondary, icon: ImageVector? = null, modifier: Modifier = Modifier, small: Boolean = false) {
+fun WebButton(
+    words: String, onClick: () -> Unit, kind: WebButtonKind = WebButtonKind.Secondary, icon: ImageVector? = null, modifier: Modifier = Modifier,
+    small: Boolean = false, square: Boolean = false, enabled: Boolean = true,
+) {
     val scheme = MaterialTheme.colorScheme
     val (fill, ink) = when (kind) {
         WebButtonKind.Primary -> scheme.primary to scheme.onPrimary
         WebButtonKind.Secondary -> scheme.surfaceVariant to scheme.onBackground
         WebButtonKind.Ghost -> Color.Transparent to scheme.onBackground
     }
-    Pressable(onClick, modifier.heightIn(min = 44.dp), shape = RoundedCornerShape(10.dp), fill = fill, label = words, pressScale = 0.975f, ring = false) {
+    Pressable(onClick, modifier.heightIn(min = 44.dp).then(if (square) Modifier.widthIn(min = 44.dp) else Modifier), shape = RoundedCornerShape(10.dp), fill = fill, label = words, enabled = enabled, pressScale = 0.975f, disabledAlpha = 0.45f, ring = false) {
         Row(
-            Modifier.heightIn(min = 44.dp).then(if (kind == WebButtonKind.Ghost) Modifier.border(1.dp, scheme.onBackground.copy(alpha = 0.2f), RoundedCornerShape(10.dp)) else Modifier)
-                .padding(horizontal = if (small) 12.dp else 16.dp),
+            Modifier.heightIn(min = 44.dp).then(if (square) Modifier.widthIn(min = 44.dp) else Modifier)
+                .then(if (kind == WebButtonKind.Ghost) Modifier.border(1.dp, scheme.onBackground.copy(alpha = 0.2f), RoundedCornerShape(10.dp)) else Modifier)
+                .padding(horizontal = if (square) 0.dp else if (small) 12.dp else 16.dp),
             verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(if (small) 6.dp else 8.dp, Alignment.CenterHorizontally),
         ) {
             if (icon != null) Icon(icon, null, tint = ink, modifier = Modifier.size(if (small) 16.dp else 18.dp))
-            Text(words, color = ink, fontSize = if (small) 13.sp else 14.sp, fontWeight = FontWeight.SemiBold, maxLines = 1)
+            if (!square) Text(words, color = ink, fontSize = if (small) 13.sp else 14.sp, fontWeight = FontWeight.SemiBold, maxLines = 1)
         }
     }
 }

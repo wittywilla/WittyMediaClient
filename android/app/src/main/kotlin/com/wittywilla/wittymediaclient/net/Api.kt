@@ -10,6 +10,8 @@ import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.serialization.SerializationException
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
@@ -237,6 +239,18 @@ class Api(val base: String, val token: String, private val quick: Boolean = fals
     suspend fun watchLater(what: CollectionItems): WatchLater = json.decodeFromString(call("POST", "/collections/watch-later/items", json.encodeToString(what)))
     suspend fun newCollection(name: String): Collection = json.decodeFromString(call("POST", "/collections", json.encodeToString(NewCollection(name))))
     suspend fun randomItem(): Item? = get<ItemPage>("/items?sort=random&limit=1&noEpisodes=1&watchable=1").items.firstOrNull()
+
+    // Home's choices in /me/ui: how it's arranged, and the newer version an administrator put off. Saving reads the
+    // rest first and keeps it, as the website does.
+    suspend fun homeChoices(): HomeChoices = readHomeChoices(call("GET", "/me/ui"))
+    suspend fun saveHomeLayout(layout: HomeLayout) = setChoice("home", layout.toJson())
+    suspend fun putOffUpdate(version: String) = setChoice("updateLater", JsonPrimitive(version))
+    private suspend fun setChoice(key: String, value: JsonElement) {
+        call("PUT", "/me/ui", withChoice(call("GET", "/me/ui"), key, value))
+    }
+
+    // What the server knows about a newer version of itself, for administrators.
+    suspend fun updateStatus(): UpdateStatus = get("/update")
 
     // Themes: docs/APP-DESIGN.md, Themes. The list and each theme's tokens are public; the person's own look is theirs.
     suspend fun themes(): ThemeList = get("/themes")
