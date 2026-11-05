@@ -98,6 +98,7 @@ builds Electron itself instead. As of November 2026 the tree has `devel/electron
 - **`npm run package:freebsd`** runs on FreeBSD, finds the newest Electron with a package, and builds with `pkg create`. CI does this free of
   charge in a virtual machine on GitHub's Linux runners, with `vmactions/freebsd-vm`, from the quarterly packages a FreeBSD release uses. The
   latest packages, which that virtual machine comes set to, can go weeks with no Electron for amd64 while a new one builds: in November 2026 they had none.
+  A package depending on an Electron that people's systems don't have couldn't be installed.
 - **The launcher, `desktop/build/freebsd/wittymediaclient.sh`,** sorts out what the app can't:
   - **Sound.** This Electron plays through a sound server, and a video it can't open sound for never starts its clock. FreeBSD runs none by default, so the
     launcher starts `sndiod` for as long as the app is open if nothing is running. With no sound card, it asks Chromium for no sound, and the picture plays.
