@@ -64,6 +64,10 @@ class Listening(private val app: WittyApp) {
     // Asked for by a tap on the notification, or a TV starting a queue, for when the screens are ready.
     var wantsScreen by mutableStateOf(false)
 
+    // How Now Playing opens from the wide bar: with the queue, or with the visualizer turned on.
+    var screenWithQueue = false
+    var screenWithVisualizer = false
+
     // Liked songs, for the hearts on the music pages, as the website's player keeps them: one set for the app, each
     // library's asked for once.
     val liked = mutableStateMapOf<Long, Boolean>()

@@ -8,10 +8,12 @@ import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -38,6 +40,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -46,6 +49,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawWithContent
+import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.BlendMode
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
@@ -54,15 +58,23 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.drawscope.scale
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.layout.Layout
+import androidx.compose.ui.layout.boundsInRoot
+import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.semantics.LiveRegionMode
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.liveRegion
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.em
@@ -75,7 +87,10 @@ import coil3.toBitmap
 import com.wittywilla.wittymediaclient.player.EXTRA_LIBRARY
 import com.wittywilla.wittymediaclient.player.Start
 import com.wittywilla.wittymediaclient.player.clock
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -83,22 +98,30 @@ import java.util.Locale
 // The website's Now Playing on a phone (web/src/audio/NowPlaying.tsx, nowplaying.css): black in every theme, with a glow
 // coloured from the artwork, the artwork with its reflection, the title and artist, the seek bar, the transport and the
 // tools; Sleep, Queue and More at the top. A panel (the queue) takes the artwork's place, above a smaller transport.
-private object Np {
+internal object Np {
     val fg = Color.White
     val fg2 = Color.White.copy(alpha = 0.72f)
+    val fg3 = Color.White.copy(alpha = 0.62f)
     val chip = Color.White.copy(alpha = 0.10f)
+    val chip2 = Color.White.copy(alpha = 0.18f)
     val line = Color.White.copy(alpha = 0.14f)
     val panel = Color(0xF0101014)
     val menu = Color(0xFF15151A)
     val well = Color(0xFF24242C)
     val loved = Color(0xFFFF6B81)
+    val past = Color.White.copy(alpha = 0.42f)
+    val rule = Color.White.copy(alpha = 0.08f)
+    val plate = Color.Black.copy(alpha = 0.35f)
+    val frame = Color.White.copy(alpha = 0.45f)
+    val control = Color.White.copy(alpha = 0.40f)
+    val ghost = Color.White.copy(alpha = 0.26f)
 }
 
 private fun webIconPath(name: String, path: String) = androidx.compose.ui.graphics.vector.ImageVector.Builder(name, 24.dp, 24.dp, 24f, 24f)
     .addPath(androidx.compose.ui.graphics.vector.addPathNodes(spacedArcs(path)), fill = androidx.compose.ui.graphics.SolidColor(Color.Black)).build()
 
-// The audio player's own icons, the website's paths (web/src/icons.tsx).
-private object NpIcons {
+// The audio player's own icons, the website's paths (web/src/icons.tsx, web/src/audio/icons.tsx).
+internal object NpIcons {
     val Down by lazy { webIconPath("down", "M7.4 8.6L12 13.2l4.6-4.6L18 10l-6 6-6-6z") }
     val Shuffle by lazy { webIconPath("shuffle", "M17 4l4 3.5L17 11V8.5h-1.6a3 3 0 00-2.4 1.2l-4.6 6.1A5 5 0 014.4 18H3v-2h1.4a3 3 0 002.4-1.2l4.6-6.1a5 5 0 014-2H17zm0 9l4 3.5-4 3.5v-2.5h-1.6a5 5 0 01-4-2l-.5-.7 1.3-1.6.8 1.1a3 3 0 002.4 1.2H17zM3 6.5h1.4a5 5 0 014 2l.5.7-1.3 1.6-.8-1.1a3 3 0 00-2.4-1.2H3z") }
     val Repeat by lazy { webIconPath("repeat", "M17 2l4 4-4 4V7H7a2 2 0 00-2 2v3H3V9a4 4 0 014-4h10zM7 22l-4-4 4-4v3h10a2 2 0 002-2v-3h2v3a4 4 0 01-4 4H7z") }
@@ -111,6 +134,12 @@ private object NpIcons {
     val AddList by lazy { webIconPath("add-list", "M3 6h13v2H3zm0 5h13v2H3zm0 5h9v2H3zm15-3h2v3h3v2h-3v3h-2v-3h-3v-2h3z") }
     // The jump arrow; forward is the same, mirrored.
     val Jump by lazy { webIconPath("jump", "M12 4V1L7 5l5 4V6a7.5 7.5 0 11-7.5 7.5h-2A9.5 9.5 0 1012 4z") }
+    val Visualizer by lazy { webIconPath("visualizer", "M4 13h2.5v8H4zm4.5-8H11v16H8.5zm4.5 5h2.5v11H13zm4.5-7H20v18h-2.5z") }
+    val Turtle by lazy { webIconPath("turtle", "M9 6a6 6 0 016 6v1h2.400l1.800-2.600A2.500 2.500 0 0123.500 12a2.500 2.500 0 01-2.500 2.500h-1l-1.500 2h1V19h-3v-2H9.500v2h-3v-2.200L3 15a1 1 0 011-2h-.5A1.500 1.500 0 012 11.500 5.500 5.500 0 019 6zm0 2a3.500 3.500 0 00-3.300 3H13a4 4 0 00-4-3z") }
+    val Karaoke by lazy { webIconPath("karaoke", "M15.500 2a6.500 6.500 0 11-6.400 7.700L3.600 18l2.400 2.400 8.300-5.500A6.500 6.500 0 0115.500 2zm-4.300 5.900a4.500 4.500 0 004.900 4.900zm1.400-1.400l4.900 4.900a4.500 4.500 0 00-4.900-4.900z") }
+    val ReadOpen by lazy { webIconPath("read-open", "M21 5c-1.100-.3-2.300-.5-3.500-.5-2 0-4.100.4-5.500 1.500-1.400-1.100-3.500-1.500-5.500-1.500S2.400 4.900 1 6v14.600c0 .3.300.5.500.5h.3c1.300-.7 3.200-1.100 4.700-1.100 2 0 4.100.4 5.500 1.500 1.300-.9 3.800-1.500 5.500-1.500 1.700 0 3.400.3 4.800 1.100h.2c.3 0 .5-.2.500-.5V6c-.6-.4-1.200-.7-2-1zm0 13.500c-1.100-.3-2.300-.5-3.500-.5-1.700 0-4.200.7-5.500 1.500V8c1.300-.8 3.800-1.500 5.500-1.500 1.200 0 2.400.2 3.500.5z") }
+    val Sliders by lazy { webIconPath("sliders", "M5 3h2v9.200a3 3 0 010 5.600V21H5v-3.200a3 3 0 010-5.600zm0 12a1 1 0 102 0 1 1 0 00-2 0zm6-12h2v3.200a3 3 0 010 5.600V21h-2v-9.200a3 3 0 010-5.600zm0 6a1 1 0 102 0 1 1 0 00-2 0zm6-6h2v11.200a3 3 0 010 5.600V21h-2v-1.200a3 3 0 010-5.600zm0 14a1 1 0 102 0 1 1 0 00-2 0z") }
+    val File by lazy { webIconPath("file", "M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8l-6-6zm4 18H6V4h7v5h5v11z") }
 }
 
 // Back 15 and Forward 30 as the website draws them: the circular arrow with the number in it, 7.4 bold at 16.6 down.
@@ -152,47 +181,102 @@ fun artColour(bitmap: Bitmap?): Triple<Int, Int, Int> {
 }
 
 @Composable
-private fun NpRound(icon: ImageVector, label: String, size: Dp, iconSize: Dp, on: Boolean = false, tint: Color? = null, onClick: () -> Unit) {
-    Pressable(onClick, Modifier.size(size), shape = CircleShape, fill = if (on) Np.fg else Np.chip, label = label, selected = on, pressScale = 0.94f, ring = false) {
+internal fun NpRound(icon: ImageVector, label: String, size: Dp, iconSize: Dp, on: Boolean = false, tint: Color? = null, fill: Color = Np.chip, modifier: Modifier = Modifier, enabled: Boolean = true, onClick: () -> Unit) {
+    Pressable(onClick, modifier.size(size), shape = CircleShape, fill = if (on) Np.fg else fill, label = label, selected = on, enabled = enabled, disabledAlpha = 0.4f, pressScale = 0.94f, ring = false) {
         Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
             Icon(icon, null, tint = tint ?: if (on) Color.Black else Np.fg, modifier = Modifier.size(iconSize))
         }
     }
 }
 
+// The website's chip (`.np-chip`): a pill of white at 10%, 44 high and 16 inside, 14 semibold; white with black words
+// when it's on. Small (`.np-chip.small`) is 36 high, 12 inside and 13.
 @Composable
-private fun NpChip(words: String, on: Boolean = false, icon: ImageVector? = null, onClick: () -> Unit) {
-    Pressable(onClick, Modifier.heightIn(min = 44.dp), shape = RoundedCornerShape(50), fill = if (on) Np.fg else Np.chip, label = words, selected = on, ring = false) {
-        Row(Modifier.heightIn(min = 44.dp).padding(horizontal = 16.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            if (icon != null) Icon(icon, null, tint = if (on) Color.Black else Np.fg, modifier = Modifier.size(20.dp))
-            Text(words, color = if (on) Color.Black else Np.fg, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
+internal fun NpChip(words: String, on: Boolean = false, icon: ImageVector? = null, iconSize: Dp = 20.dp, small: Boolean = false, modifier: Modifier = Modifier, enabled: Boolean = true, label: String = words, after: (@Composable () -> Unit)? = null, onClick: () -> Unit) {
+    val high = if (small) 36.dp else 44.dp
+    Pressable(onClick, modifier.heightIn(min = high), shape = RoundedCornerShape(50), fill = if (on) Np.fg else Np.chip, label = label, selected = on, enabled = enabled, disabledAlpha = 0.45f, ring = false) {
+        Row(Modifier.heightIn(min = high).padding(horizontal = if (small) 12.dp else 16.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            if (icon != null) Icon(icon, null, tint = if (on) Color.Black else Np.fg, modifier = Modifier.size(iconSize))
+            Text(words, color = if (on) Color.Black else Np.fg, fontSize = if (small) 13.sp else 14.sp, fontWeight = FontWeight.SemiBold, maxLines = 1)
+            after?.invoke()
         }
     }
 }
 
-private data class MenuItem(val words: String, val icon: ImageVector? = null, val chosen: Boolean = false, val run: () -> Unit)
+internal data class MenuItem(val words: String, val icon: ImageVector? = null, val chosen: Boolean = false, val note: Boolean = false, val rule: Boolean = false, val run: () -> Unit = {})
 
-// The website's pop menu: #15151a, a hairline, radius 14, 6 inside, at least 220 wide; rows 44 high.
+// Where something opens from a button, as the website's Pop places it: right-aligned to the button, 8 below it when it
+// fits (or above it for `up`), else the other way, and 8 from the screen's edges. At least 220 wide, at most the
+// screen less 16, and at most min(60% of the height, 460) high. A press outside closes it.
 @Composable
-private fun PopMenu(items: List<MenuItem>, modifier: Modifier, close: () -> Unit) {
+internal fun PopAt(anchor: Rect?, close: () -> Unit, up: Boolean = false, minWidth: Dp = 220.dp, content: @Composable ColumnScope.() -> Unit) {
     Box(Modifier.fillMaxSize().clickable(remember { MutableInteractionSource() }, null, onClick = close)) {
-        Column(
-            modifier.widthIn(min = 220.dp, max = 340.dp).cssShadow(10.dp, 30.dp, Color(0x73000000), 14.dp).clip(RoundedCornerShape(14.dp)).background(Np.menu)
-                .border(1.dp, Np.line, RoundedCornerShape(14.dp)).padding(6.dp).verticalScroll(rememberScrollState()),
-        ) {
-            items.forEach { item ->
-                Pressable({ item.run(); close() }, Modifier.fillMaxWidth().heightIn(min = 44.dp), shape = RoundedCornerShape(10.dp), fill = Color.Transparent, label = item.words, selected = item.chosen, ring = false) {
-                    Row(Modifier.fillMaxWidth().heightIn(min = 44.dp).padding(horizontal = 12.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                        if (item.icon != null) Icon(item.icon, null, tint = Np.fg, modifier = Modifier.size(18.dp))
-                        Text((if (item.chosen) "✓ " else "") + item.words, color = Np.fg, fontSize = 14.sp, fontWeight = if (item.chosen) FontWeight.Bold else FontWeight.Normal, maxLines = 1)
-                    }
+        Layout(
+            content = {
+                Column(
+                    Modifier.widthIn(min = minWidth).cssShadow(10.dp, 30.dp, Color(0x73000000), 14.dp).clip(RoundedCornerShape(14.dp)).background(Np.menu)
+                        .border(1.dp, Np.line, RoundedCornerShape(14.dp))
+                        // A press inside isn't one outside.
+                        .clickable(remember { MutableInteractionSource() }, null) {}
+                        .padding(6.dp).verticalScroll(rememberScrollState()),
+                    content = content,
+                )
+            },
+            modifier = Modifier.fillMaxSize(),
+        ) { parts, constraints ->
+            val room = 8.dp.roundToPx()
+            val w = constraints.maxWidth
+            val h = constraints.maxHeight
+            val card = parts.first().measure(Constraints(maxWidth = (w - 2 * room).coerceAtLeast(0), maxHeight = minOf((h * 0.6f).toInt(), 460.dp.roundToPx())))
+            layout(w, h) {
+                val b = anchor ?: Rect(w / 2f + card.width / 2f, h / 2f - card.height / 2f - room, w / 2f + card.width / 2f, h / 2f - card.height / 2f - room)
+                val left = (b.right.toInt() - card.width).coerceIn(room, (w - card.width - room).coerceAtLeast(room))
+                val below = b.bottom.toInt() + room
+                val above = b.top.toInt() - card.height - room
+                val fitsBelow = below + card.height <= h - room
+                val top = if (up) (if (above >= room) above else below) else if (fitsBelow) below else maxOf(room, above)
+                card.place(left, top)
+            }
+        }
+    }
+}
+
+// The website's pop menu (`.mp-menu`): rows 44 high, 12 inside, 10 between an icon and the words, 14; a chosen one bold
+// with a tick before it; notes in 12 at 72%, and rules.
+@Composable
+internal fun PopMenu(items: List<MenuItem>, anchor: Rect?, up: Boolean = false, minWidth: Dp = 220.dp, close: () -> Unit) {
+    PopAt(anchor, close, up, minWidth) { MenuRows(items, close) }
+}
+
+@Composable
+internal fun MenuRows(items: List<MenuItem>, close: () -> Unit) {
+    items.forEach { item ->
+        when {
+            item.rule -> Box(Modifier.padding(horizontal = 8.dp, vertical = 4.dp).fillMaxWidth().height(1.dp).background(Np.line))
+            item.note -> Text(item.words, color = Np.fg2, fontSize = 12.sp, lineHeight = 1.45.em, modifier = Modifier.widthIn(max = 260.dp).padding(horizontal = 12.dp, vertical = 6.dp))
+            else -> Pressable({ item.run(); close() }, Modifier.fillMaxWidth().heightIn(min = 44.dp), shape = RoundedCornerShape(10.dp), fill = Color.Transparent, label = item.words, selected = item.chosen, ring = false) {
+                Row(Modifier.fillMaxWidth().heightIn(min = 44.dp).padding(horizontal = 12.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                    if (item.chosen) Text("✓", color = Np.fg, fontSize = 14.sp, fontWeight = FontWeight.Bold)
+                    if (item.icon != null) Icon(item.icon, null, tint = Np.fg, modifier = Modifier.size(18.dp))
+                    Text(item.words, color = Np.fg, fontSize = 14.sp, fontWeight = if (item.chosen) FontWeight.Bold else FontWeight.Normal, maxLines = 1)
                 }
             }
         }
     }
 }
 
-private enum class NpMenu { None, Playlist, Sleep, More, Speed }
+// Something said to a screen reader as it changes, as the website's `aria-live` line.
+@Composable
+internal fun Spoken(words: String) {
+    Box(Modifier.size(1.dp).semantics { liveRegion = LiveRegionMode.Polite; contentDescription = words })
+}
+
+internal enum class NpPanel { None, Queue, Lyrics, Sound, Read }
+
+private enum class NpMenu { None, Playlist, Sleep, More, Speed, Shuffle, Volume, SaveQueue }
+
+// The visualizer's choices are saved one after another, as the website chains them, so the last one wins.
+private val vizSaving = Mutex()
 
 @Composable
 fun WebNowPlaying(nav: Nav) {
@@ -205,8 +289,10 @@ fun WebNowPlaying(nav: Nav) {
         LaunchedEffect(Unit) { nav.pop() }
         return
     }
+    val api = nav.app.api
     val about = now.mediaMetadata
     val books = listening.keepsPlace
+    val music = !books
     val library = about.extras?.getLong(EXTRA_LIBRARY) ?: 0L
     val trackId = now.mediaId.toLongOrNull() ?: 0L
     val art = about.artworkUri?.toString()
@@ -218,12 +304,53 @@ fun WebNowPlaying(nav: Nav) {
         }.getOrDefault(Triple(120, 120, 135))
     }
     var liked by remember(library) { mutableStateOf(emptySet<Long>()) }
-    LaunchedEffect(library) { if (!books && library > 0) liked = runCatching { nav.app.api.likes(library).toSet() }.getOrDefault(emptySet()) }
-    var panel by remember { mutableStateOf(false) }
+    LaunchedEffect(library) { if (!books && library > 0) liked = runCatching { api.likes(library).toSet() }.getOrDefault(emptySet()) }
+    var panel by remember { mutableStateOf(if (listening.screenWithQueue) NpPanel.Queue else NpPanel.None) }
     var menu by remember { mutableStateOf(NpMenu.None) }
+    val anchors = remember { mutableStateMapOf<NpMenu, Rect>() }
+    var origin by remember { mutableStateOf(androidx.compose.ui.geometry.Offset.Zero) }
+    fun Modifier.anchor(key: NpMenu) = onGloballyPositioned { anchors[key] = it.boundsInRoot() }
+    fun at(key: NpMenu): Rect? = anchors[key]?.translate(-origin)
     var toast by remember { mutableStateOf("") }
+    var said by remember { mutableStateOf("") }
     var maxSpeed by remember { mutableStateOf(4.0) }
-    LaunchedEffect(Unit) { maxSpeed = runCatching { nav.app.api.playerPrefs().maxSpeed }.getOrDefault(4.0) }
+    // The visualizer: whether the server has it, and this person's choices.
+    var vizHere by remember { mutableStateOf(true) }
+    var viz by remember { mutableStateOf(VisualizerPrefs()) }
+    var vizLoaded by remember { mutableStateOf(false) }
+    // What Styles is showing now, while it changes by itself.
+    var shownStyle by remember { mutableStateOf("") }
+    LaunchedEffect(Unit) {
+        val wantsViz = listening.screenWithVisualizer
+        listening.screenWithQueue = false
+        listening.screenWithVisualizer = false
+        val prefs = runCatching { api.playerPrefs() }.getOrNull()
+        maxSpeed = prefs?.maxSpeed ?: 4.0
+        vizHere = prefs?.visualizer != false
+        runCatching { VisualizerPrefs.read(api.musicPlayerChoice()) }.getOrNull()?.let { viz = if (wantsViz) it.copy(viz = true) else it }
+        vizLoaded = true
+    }
+    fun setViz(change: (VisualizerPrefs) -> VisualizerPrefs) {
+        val next = change(viz)
+        viz = next
+        nav.app.scope.launch { vizSaving.withLock { runCatching { api.saveMusicPlayerChoice(next.toJson()) } } }
+    }
+    // Styles: only ever because someone chose it, among the player's own styles.
+    LaunchedEffect(viz.viz, viz.shuffleEvery, viz.style) {
+        shownStyle = ""
+        if (!viz.viz || viz.shuffleEvery <= 0) return@LaunchedEffect
+        while (true) {
+            delay(viz.shuffleEvery * 1000L)
+            val current = shownStyle.ifEmpty { viz.nativeStyle }
+            shownStyle = VisualizerPrefs.STYLES.map { it.first }.filter { it != current }.random()
+        }
+    }
+    val style = shownStyle.ifEmpty { viz.nativeStyle }
+    fun pickStyle(id: String, name: String) {
+        shownStyle = ""
+        setViz { it.copy(style = id, viz = true) }
+        said = "Visualizer: $name"
+    }
     // Opening: a fade and a 16 rise over 240 ms.
     val rise = remember { Animatable(0f) }
     LaunchedEffect(Unit) { rise.animateTo(1f, tween(240, easing = CubicBezierEasing(0.2f, 0.8f, 0.2f, 1f))) }
@@ -231,11 +358,17 @@ fun WebNowPlaying(nav: Nav) {
     val inset = with(LocalDensity.current) { WindowInsets.navigationBars.getBottom(this).toDp() }
     val screenH = LocalConfiguration.current.screenHeightDp
     val screenW = LocalConfiguration.current.screenWidthDp
+    // The website's breakpoints: one column up to 860, and a phone's top bar up to 480.
+    val compact = screenW <= 860
+    val phone = screenW <= 480
     val locale = androidx.core.os.ConfigurationCompat.getLocales(LocalConfiguration.current)[0] ?: Locale.ROOT
     val tint = Color(glow.first, glow.second, glow.third)
+    fun toggle(chosen: NpMenu) { menu = if (menu == chosen) NpMenu.None else chosen }
+    fun togglePanel(chosen: NpPanel) { panel = if (panel == chosen) NpPanel.None else chosen }
 
     Box(
-        Modifier.fillMaxSize().background(Color.Black).graphicsLayer { alpha = rise.value; translationY = (1 - rise.value) * 16.dp.toPx() }
+        Modifier.fillMaxSize().background(Color.Black).onGloballyPositioned { origin = it.boundsInRoot().topLeft }
+            .graphicsLayer { alpha = rise.value; translationY = (1 - rise.value) * 16.dp.toPx() }
             .drawWithContent {
                 // radial-gradient(90% 60% at 50% 0%, art/.34, art/.10 55%, transparent 80%)
                 val rx = size.width * 0.9f
@@ -253,24 +386,24 @@ fun WebNowPlaying(nav: Nav) {
                 NpRound(NpIcons.Down, "Close the full player", 44.dp, 20.dp) { nav.pop() }
                 Spacer(Modifier.weight(1f))
                 Row(horizontalArrangement = Arrangement.spacedBy(2.dp)) {
-                    if (trackId > 0) NpRound(NpIcons.AddList, "Add to a playlist", 44.dp, 20.dp) { menu = NpMenu.Playlist }
+                    if (trackId > 0) NpRound(NpIcons.AddList, "Add to a playlist", 44.dp, 20.dp, modifier = Modifier.anchor(NpMenu.Playlist)) { toggle(NpMenu.Playlist) }
                     val sleepSet = listening.sleepAt != null || listening.sleepAfterThis
-                    NpRound(NpIcons.Moon, if (sleepSet) "Sleep timer: stops ${listening.sleepAt?.let { "at " + SimpleDateFormat("HH:mm", locale).format(Date(it)) } ?: "after this one"}" else "Sleep timer", 44.dp, 20.dp, on = sleepSet) { menu = NpMenu.Sleep }
-                    NpRound(if (books) WebIcons.Chapters else NpIcons.List, if (books) "Chapters" else "Queue", 44.dp, 20.dp, on = panel) { panel = !panel }
+                    NpRound(NpIcons.Moon, if (sleepSet) "Sleep timer: stops ${listening.sleepAt?.let { "at " + SimpleDateFormat("HH:mm", locale).format(Date(it)) } ?: "after this one"}" else "Sleep timer", 44.dp, 20.dp, on = sleepSet, modifier = Modifier.anchor(NpMenu.Sleep)) { toggle(NpMenu.Sleep) }
+                    NpRound(if (books) WebIcons.Chapters else NpIcons.List, if (books) "Chapters" else "Queue", 44.dp, 20.dp, on = panel == NpPanel.Queue) { togglePanel(NpPanel.Queue) }
                     if (!books && library > 0) {
                         val on = trackId in liked
                         NpRound(if (on) NpIcons.HeartOn else NpIcons.Heart, if (on) "Remove from liked songs" else "Add to liked songs", 44.dp, 20.dp, tint = if (on) Np.loved else null) {
                             liked = if (on) liked - trackId else liked + trackId
-                            scope.launch { runCatching { nav.app.api.react(trackId, if (on) 0 else 1) }.onFailure { liked = if (on) liked + trackId else liked - trackId } }
+                            scope.launch { runCatching { api.react(trackId, if (on) 0 else 1) }.onFailure { liked = if (on) liked + trackId else liked - trackId } }
                         }
                     }
-                    NpRound(WebIcons.More, "More", 44.dp, 20.dp) { menu = NpMenu.More }
+                    NpRound(WebIcons.More, "More", 44.dp, 20.dp, modifier = Modifier.anchor(NpMenu.More)) { toggle(NpMenu.More) }
                 }
             }
             val playSize = (screenH * 0.10f).coerceIn(66f, 96f).dp
             Column(Modifier.weight(1f).fillMaxWidth().padding(horizontal = 16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                if (panel) {
-                    QueuePanel(nav, glow, Modifier.weight(1f)) { panel = false }
+                if (panel == NpPanel.Queue) {
+                    QueuePanel(nav, glow, Modifier.weight(1f)) { panel = NpPanel.None }
                 } else {
                     Column(
                         Modifier.weight(1f).fillMaxWidth().verticalScroll(rememberScrollState()).padding(vertical = 4.dp),
@@ -301,13 +434,15 @@ fun WebNowPlaying(nav: Nav) {
                         }
                         NpSeek(nav)
                         Transport(nav, books, playSize, small = false)
-                        // The tools: speed (and the music-only chips to come).
-                        FlowRow(Modifier.fillMaxWidth().padding(top = 2.dp, bottom = 6.dp), horizontalArrangement = Arrangement.spacedBy(6.dp, Alignment.CenterHorizontally), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                            NpChip(com.wittywilla.wittymediaclient.player.speedWords(listening.speed)) { menu = NpMenu.Speed }
-                        }
+                        Tools(
+                            compact, vizHere && vizLoaded, viz, style, tint, listening.speed,
+                            setViz = ::setViz, pickStyle = ::pickStyle,
+                            shuffleAnchor = Modifier.anchor(NpMenu.Shuffle), speedAnchor = Modifier.anchor(NpMenu.Speed),
+                            shuffleOpen = menu == NpMenu.Shuffle, openShuffle = { toggle(NpMenu.Shuffle) }, openSpeed = { toggle(NpMenu.Speed) },
+                        )
                     }
                 }
-                if (panel) Transport(nav, books, 56.dp, small = true, Modifier.padding(top = 8.dp, bottom = maxOf(10.dp, inset)))
+                if (panel != NpPanel.None) Transport(nav, books, 56.dp, small = true, Modifier.padding(top = 8.dp, bottom = maxOf(10.dp, inset)))
                 else Spacer(Modifier.height(inset))
             }
         }
@@ -323,14 +458,19 @@ fun WebNowPlaying(nav: Nav) {
                         MenuItem("In 1 hour", run = inMinutes(60)), MenuItem("In 90 minutes", run = inMinutes(90)),
                         MenuItem(if (books) "At the end of this chapter" else "After this song", chosen = listening.sleepAfterThis) { listening.sleep(null, true) },
                     ),
-                    Modifier.align(Alignment.TopEnd).padding(top = maxOf(14.dp, status) + 52.dp, end = 12.dp),
+                    at(NpMenu.Sleep),
                 ) { menu = NpMenu.None }
             }
             NpMenu.Speed -> PopMenu(
                 listOf(0.75f, 1f, 1.25f, 1.5f, 1.75f, 2f, 2.5f, 3f).filter { it <= maxSpeed }.map { s ->
                     MenuItem(com.wittywilla.wittymediaclient.player.speedWords(s), chosen = kotlin.math.abs(listening.speed - s) < 0.01f) { listening.chooseSpeed(s) }
                 },
-                Modifier.align(Alignment.BottomCenter).padding(bottom = 120.dp),
+                at(NpMenu.Speed), up = true,
+            ) { menu = NpMenu.None }
+            NpMenu.Shuffle -> PopMenu(
+                listOf(MenuItem("Change style by itself. It stays still unless you choose this.", note = true)) +
+                    VisualizerPrefs.SHUFFLE_CHOICES.map { every -> MenuItem(VisualizerPrefs.everyWords(every), chosen = viz.shuffleEvery == every) { setViz { it.copy(shuffleEvery = every) } } },
+                at(NpMenu.Shuffle), up = true, minWidth = 240.dp,
             ) { menu = NpMenu.None }
             NpMenu.More -> {
                 val album = about.albumTitle?.toString().orEmpty()
@@ -339,24 +479,101 @@ fun WebNowPlaying(nav: Nav) {
                     listOfNotNull(
                         if (!books && trackId > 0) MenuItem("Start a station from this song", NpIcons.Station) {
                             scope.launch {
-                                val tracks = runCatching { nav.app.api.songRadio(trackId) }.getOrDefault(emptyList())
+                                val tracks = runCatching { api.songRadio(trackId) }.getOrDefault(emptyList())
                                 if (tracks.size >= 2) listening.play(tracks, Start(0), false)
+                                else toast = "There isn't enough here yet to make a station from this song"
                             }
                         } else null,
                         if (album.isNotEmpty() && library > 0) MenuItem(if (books) "Go to book" else "Go to album") { nav.pop(); nav.push(Route.Album(library, album, artist)) } else null,
                         if (!books && artist.isNotEmpty() && library > 0) MenuItem("Go to artist") { nav.pop(); nav.push(Route.Artist(library, artist)) } else null,
                         MenuItem("Stop and close", WebIcons.Close) { listening.stop(); nav.pop() },
                     ),
-                    Modifier.align(Alignment.TopEnd).padding(top = maxOf(14.dp, status) + 52.dp, end = 12.dp),
+                    at(NpMenu.More),
                 ) { menu = NpMenu.None }
             }
-            NpMenu.Playlist -> PlaylistMenu(nav, trackId, Modifier.align(Alignment.TopEnd).padding(top = maxOf(14.dp, status) + 52.dp, end = 12.dp), { toast = it }) { menu = NpMenu.None }
-            NpMenu.None -> {}
+            NpMenu.Playlist -> PlaylistMenu(nav, listOf(trackId), at(NpMenu.Playlist), { toast = it }) { menu = NpMenu.None }
+            else -> {}
         }
         if (toast.isNotEmpty()) Toast(toast, { toast = "" }, Modifier.align(Alignment.BottomCenter).padding(bottom = 140.dp))
+        Spoken(said)
     }
 }
 
+// The tools under the transport (`.np-tools`), wrapping and centred, 6 apart on a phone and 8 wider. On a narrow screen
+// the words come first, as they're what a thumb came here for: Lyrics, Karaoke and Read, then the visualizer's switch
+// and its styles, then Slow, Styles and the speed. Wider, the visualizer's group comes first, a rule, then the words.
+@Composable
+private fun Tools(
+    compact: Boolean, vizHere: Boolean, viz: VisualizerPrefs, style: String, tint: Color, speed: Float,
+    setViz: ((VisualizerPrefs) -> VisualizerPrefs) -> Unit, pickStyle: (String, String) -> Unit,
+    shuffleAnchor: Modifier, speedAnchor: Modifier, shuffleOpen: Boolean, openShuffle: () -> Unit, openSpeed: () -> Unit,
+    words: @Composable () -> Unit = {},
+) {
+    val gap = if (compact) 6.dp else 8.dp
+    FlowRow(
+        Modifier.fillMaxWidth().padding(top = 2.dp, bottom = 6.dp),
+        horizontalArrangement = Arrangement.spacedBy(gap, Alignment.CenterHorizontally), verticalArrangement = Arrangement.spacedBy(gap),
+        itemVerticalAlignment = Alignment.CenterVertically,
+    ) {
+        if (compact) words()
+        if (vizHere) {
+            // Easy to see: larger, with a word beside the icon, and lit with the artwork's colour when on.
+            val on = viz.viz
+            Pressable({ setViz { it.copy(viz = !it.viz) } }, Modifier.heightIn(min = if (compact) 44.dp else 48.dp), shape = RoundedCornerShape(50), fill = if (on) tint.copy(alpha = 0.45f) else Np.plate, label = "Visualizer", selected = on, ring = false) {
+                Row(
+                    Modifier.heightIn(min = if (compact) 44.dp else 48.dp).border(2.dp, if (on) Np.fg else Np.frame, RoundedCornerShape(50)).padding(horizontal = 18.dp),
+                    verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    Icon(NpIcons.Visualizer, null, tint = Np.fg, modifier = Modifier.size(22.dp))
+                    Text("Visualizer", color = Np.fg, fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
+                }
+            }
+            if (on) {
+                // The styles: on white at 10%, 3 inside and 2 apart; sideways when there isn't room.
+                Row(
+                    Modifier.clip(RoundedCornerShape(50)).background(Np.chip).horizontalScroll(rememberScrollState()).padding(3.dp)
+                        .semantics { contentDescription = "Visualizer style" },
+                    horizontalArrangement = Arrangement.spacedBy(2.dp),
+                ) {
+                    VisualizerPrefs.STYLES.forEach { (id, name) ->
+                        val chosen = style == id
+                        Pressable({ pickStyle(id, name) }, Modifier.heightIn(min = 40.dp), shape = RoundedCornerShape(50), fill = if (chosen) Np.fg else Color.Transparent, label = name, selected = chosen, ring = false) {
+                            Box(Modifier.heightIn(min = 40.dp).padding(horizontal = 16.dp), contentAlignment = Alignment.Center) {
+                                Text(name, color = if (chosen) Color.Black else Np.fg, fontSize = 14.sp, fontWeight = FontWeight.SemiBold, maxLines = 1)
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        if (!compact) {
+            if (vizHere && viz.viz) VizExtras(viz, setViz, shuffleAnchor, shuffleOpen, openShuffle)
+            if (vizHere) Box(Modifier.padding(horizontal = 4.dp).size(1.dp, 30.dp).background(Np.line))
+            words()
+        }
+        if (compact && vizHere && viz.viz) VizExtras(viz, setViz, shuffleAnchor, shuffleOpen, openShuffle)
+        // The speed, as the website's select: 44 high, 10 inside, with its small arrow.
+        Pressable(openSpeed, speedAnchor.heightIn(min = 44.dp), shape = RoundedCornerShape(50), fill = Np.chip, label = "Playback speed, ${com.wittywilla.wittymediaclient.player.speedWords(speed)}", ring = false) {
+            Row(Modifier.heightIn(min = 44.dp).padding(horizontal = 10.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                Text(com.wittywilla.wittymediaclient.player.speedWords(speed), color = Np.fg, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
+                androidx.compose.foundation.Canvas(Modifier.size(10.dp, 5.dp)) {
+                    drawPath(androidx.compose.ui.graphics.Path().apply { moveTo(0f, 0f); lineTo(size.width, 0f); lineTo(size.width / 2, size.height); close() }, Np.fg)
+                }
+            }
+        }
+    }
+}
+
+// Slow, and changing style by itself.
+@Composable
+private fun VizExtras(viz: VisualizerPrefs, setViz: ((VisualizerPrefs) -> VisualizerPrefs) -> Unit, shuffleAnchor: Modifier, shuffleOpen: Boolean, openShuffle: () -> Unit) {
+    NpChip("Slow", on = viz.slow, icon = NpIcons.Turtle, label = "Slow: a slower, gentler pace") { setViz { it.copy(slow = !it.slow) } }
+    NpChip(
+        VisualizerPrefs.chipWords(viz.shuffleEvery), on = viz.shuffleEvery > 0 || shuffleOpen, icon = NpIcons.Shuffle, iconSize = 18.dp, modifier = shuffleAnchor,
+        label = if (viz.shuffleEvery > 0) "Shuffling visualizers: ${VisualizerPrefs.everyWords(viz.shuffleEvery)}" else "Shuffle visualizers",
+        onClick = openShuffle,
+    )
+}
 // The seek bar and the times under it: white on white 28%, the elapsed and the whole length in 13 semibold.
 @Composable
 private fun NpSeek(nav: Nav) {
@@ -464,35 +681,38 @@ private fun QueuePanel(nav: Nav, glow: Triple<Int, Int, Int>, modifier: Modifier
 }
 
 // Add to a playlist (web/src/audio/controls.tsx, PlaylistPicker): New playlist, then each of this person's own
-// playlists; choosing one adds the song and says so. A new one is named in a field and made with "Make it".
+// playlists; choosing one adds the songs and says so. A new one is named in a field and made with "Make it".
 @Composable
-private fun PlaylistMenu(nav: Nav, trackId: Long, modifier: Modifier, said: (String) -> Unit, close: () -> Unit) {
+private fun PlaylistMenu(nav: Nav, ids: List<Long>, anchor: Rect?, said: (String) -> Unit, close: () -> Unit) {
     val scope = rememberCoroutineScope()
     var lists by remember { mutableStateOf<List<com.wittywilla.wittymediaclient.net.Collection>?>(null) }
     var making by remember { mutableStateOf(false) }
+    var busy by remember { mutableStateOf(false) }
     var name by remember { mutableStateOf("") }
     LaunchedEffect(Unit) { lists = runCatching { nav.app.api.collections().filter { it.kind == "manual" && it.system.isEmpty() } }.getOrDefault(emptyList()) }
     fun add(id: Long, called: String) = scope.launch {
-        runCatching { nav.app.api.addToCollection(id, com.wittywilla.wittymediaclient.net.CollectionItems(listOf(trackId))) }
+        busy = true
+        runCatching { nav.app.api.addToCollection(id, com.wittywilla.wittymediaclient.net.CollectionItems(ids)) }
             .onSuccess { said("Added to $called"); close() }
             .onFailure { said(it.message ?: "Couldn't add it") }
+        busy = false
     }
-    if (making) {
-        Box(Modifier.fillMaxSize().clickable(remember { MutableInteractionSource() }, null, onClick = close)) {
-            Row(
-                modifier.widthIn(min = 220.dp, max = 340.dp).clip(RoundedCornerShape(14.dp)).background(Np.menu).border(1.dp, Np.line, RoundedCornerShape(14.dp)).padding(6.dp),
-                verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp),
-            ) {
-                WebInput(name, { name = it.take(120) }, "Name", Modifier.weight(1f))
+    PopAt(anchor, close, minWidth = 240.dp) {
+        if (making) {
+            Column(Modifier.padding(6.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                WebInput(name, { name = it.take(120) }, "Name", Modifier.fillMaxWidth())
                 WebButton("Make it", {
                     val n = name.trim()
-                    if (n.isNotEmpty()) scope.launch { runCatching { nav.app.api.newCollection(n) }.onSuccess { add(it.id, n) }.onFailure { said(it.message ?: "Couldn't make it") } }
-                }, WebButtonKind.Primary, small = true)
+                    if (n.isNotEmpty()) scope.launch {
+                        busy = true
+                        runCatching { nav.app.api.newCollection(n) }.onSuccess { add(it.id, n) }.onFailure { said(it.message ?: "Couldn't make it"); busy = false }
+                    }
+                }, WebButtonKind.Primary, small = true, enabled = !busy && name.isNotBlank())
             }
+        } else {
+            MenuRows(listOf(MenuItem("New playlist", WebIcons.Plus) { making = true }), close = {})
+            if (lists == null) Text("Loading…", color = Np.fg2, fontSize = 12.sp, modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp))
+            MenuRows(lists.orEmpty().map { c -> MenuItem(c.name) { if (!busy) add(c.id, c.name) } }, close = {})
         }
-        return
-    }
-    PopMenu(listOf(MenuItem("New playlist", WebIcons.Plus) { making = true }) + lists.orEmpty().map { c -> MenuItem(c.name) { add(c.id, c.name) } }, modifier) {
-        if (!making) close()
     }
 }

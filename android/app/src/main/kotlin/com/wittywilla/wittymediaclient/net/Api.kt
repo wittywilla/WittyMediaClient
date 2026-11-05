@@ -257,6 +257,10 @@ class Api(val base: String, val token: String, private val quick: Boolean = fals
     suspend fun homeChoices(): HomeChoices = readHomeChoices(call("GET", "/me/ui"))
     suspend fun saveHomeLayout(layout: HomeLayout) = setChoice("home", layout.toJson())
     suspend fun putOffUpdate(version: String) = setChoice("updateLater", JsonPrimitive(version))
+
+    // The music player's visualizer, kept with the rest as the website keeps it (`musicPlayer`).
+    suspend fun musicPlayerChoice(): JsonElement? = (json.parseToJsonElement(call("GET", "/me/ui")) as? kotlinx.serialization.json.JsonObject)?.get("musicPlayer")
+    suspend fun saveMusicPlayerChoice(value: JsonElement) = setChoice("musicPlayer", value)
     private suspend fun setChoice(key: String, value: JsonElement) {
         call("PUT", "/me/ui", withChoice(call("GET", "/me/ui"), key, value))
     }

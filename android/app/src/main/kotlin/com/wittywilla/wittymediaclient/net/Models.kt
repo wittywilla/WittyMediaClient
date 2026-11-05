@@ -346,8 +346,9 @@ data class VideoStream(val index: Int = 0, val title: String = "", val width: In
 data class Recommendation(val item: Item? = null, val show: Show? = null)
 
 // GET /prefs: the server's limits for players, and how a show's episodes are laid out unless it says otherwise.
+// `visualizer` is false when the owner has taken the music player's visualizer off the server.
 @Serializable
-data class PlayerPrefs(val maxSpeed: Double = 4.0, val episodeView: String = "")
+data class PlayerPrefs(val maxSpeed: Double = 4.0, val episodeView: String = "", val visualizer: Boolean? = null)
 
 @Serializable
 data class Explanation(
