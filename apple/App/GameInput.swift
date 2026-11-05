@@ -43,8 +43,11 @@ final class GameInput {
     private var pads: [ObjectIdentifier: Pad] = [:]
     private var remote: KeyMapper = KeyMapper(nil)
     private var keyboard: KeyMapper = KeyMapper(nil)
-    /// Remote and keyboard keys held now, by `KeyboardEvent.key` and `.code` names.
+    /// Remote and keyboard keys held now, by `KeyboardEvent.key` and `.code` names: from the Siri
+    /// Remote through GameController, from presses that come through UIKit, and from a keyboard.
+    private var remotePad: Set<String> = []
     private var remoteHeld: Set<String> = []
+    private var remotes: [GCController] = []
     private var keysHeld: Set<String> = []
     private var remoteShortcuts = PadShortcuts(settings: nil, consoleButtons: [])
     private var sent: [UInt8: PadState] = [:]
@@ -105,10 +108,16 @@ final class GameInput {
         GCController.stopWirelessControllerDiscovery()
         for pad in pads.values {
             pad.controller.extendedGamepad?.valueChangedHandler = nil
-            pad.controller.microGamepad?.valueChangedHandler = nil
             pad.haptics?.stop()
         }
         pads = [:]
+        // The rest of the app has the remote back as it was.
+        for remote in remotes {
+            remote.microGamepad?.valueChangedHandler = nil
+            remote.microGamepad?.buttonMenu.pressedChangedHandler = nil
+            remote.microGamepad?.reportsAbsoluteDpadValues = false
+        }
+        remotes = []
         GCKeyboard.coalesced?.keyboardInput?.keyChangedHandler = nil
     }
 
@@ -129,6 +138,8 @@ final class GameInput {
         let id = ObjectIdentifier(controller)
         guard pads[id] == nil else { return }
         if controller.extendedGamepad == nil, let micro = controller.microGamepad {
+            guard !remotes.contains(where: { $0 === controller }) else { return }
+            remotes.append(controller)
             // The Siri Remote: absolute positions, so a click at the edge of the clickpad is a direction.
             micro.reportsAbsoluteDpadValues = true
             micro.allowsRotation = false
@@ -249,7 +260,7 @@ final class GameInput {
             }
         }
         if micro.buttonX.isPressed { held.insert("MediaPlayPause") }
-        remoteHeld = held
+        remotePad = held
         flush(port: 0)
     }
 
@@ -315,7 +326,7 @@ final class GameInput {
             state = state.merged(held)
         }
         if port == 0 {
-            var keys = remote.state(held: remoteHeld)
+            var keys = remote.state(held: remoteHeld.union(remotePad))
             let typed = keyboard.state(held: keysHeld)
             keys = keys.merged(typed)
             let filtered = remoteShortcuts.filter(keys.buttons)
@@ -355,6 +366,7 @@ final class GameInput {
     /// Lets go of everything, on every player: for the menu, and for leaving.
     func releaseAll() {
         remoteHeld = []
+        remotePad = []
         keysHeld = []
         for port in activePorts {
             let released = PadState(port: port)

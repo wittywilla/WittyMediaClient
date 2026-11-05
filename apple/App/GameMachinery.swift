@@ -235,41 +235,47 @@ final class GamePictureRenderer: NSObject, MTKViewDelegate {
     func mtkView(_ view: MTKView, drawableSizeWillChange size: CGSize) {}
 
     func draw(in view: MTKView) {
-        lock.lock()
-        let tex = texture
-        lock.unlock()
         guard let pass = view.currentRenderPassDescriptor, let drawable = view.currentDrawable,
-              let buffer = queue.makeCommandBuffer(), let encoder = buffer.makeRenderCommandEncoder(descriptor: pass) else { return }
-        if let tex {
-            let size = view.drawableSize
-            let inset = min(0.45, max(0, layout.inset / 100))
-            let box = (width: Double(size.width) * (1 - inset), height: Double(size.height) * (1 - inset))
-            let fit = PictureLayout.fit(settings: layout.settings, aspect: layout.aspect, frame: layout.frame, turns: layout.turns, box: box)
-            let w = Float(fit.width / Double(size.width)), h = Float(fit.height / Double(size.height))
-            var u = LookUniforms()
-            u.rect = SIMD4(-w, h, w, -h)
-            u.cropMin = SIMD2(look.cropX, look.cropY)
-            u.cropMax = SIMD2(1 - look.cropX, 1 - look.cropY)
-            let source = layout.frame.width > 0 ? SIMD2(Float(layout.frame.width), Float(layout.frame.height)) : SIMD2(Float(tex.width), Float(tex.height))
-            u.source = source
-            u.texture = SIMD2(Float(tex.width), Float(tex.height))
-            u.output = fit.turns % 2 == 1 ? SIMD2(Float(fit.height), Float(fit.width)) : SIMD2(Float(fit.width), Float(fit.height))
-            u.effects = SIMD4(look.scanlines, look.curve, look.mask, look.vignette)
-            u.colour = SIMD4(look.brightness, look.contrast, look.saturation, look.gamma)
-            u.lcdGrid = look.lcdGrid
-            u.turns = Int32(fit.turns)
-            u.sharp = look.scaling == "sharp" ? 1 : 0
-            encoder.setRenderPipelineState(pipeline)
-            encoder.setVertexBytes(&u, length: MemoryLayout<LookUniforms>.stride, index: 0)
-            encoder.setFragmentBytes(&u, length: MemoryLayout<LookUniforms>.stride, index: 0)
-            encoder.setFragmentTexture(tex, index: 0)
-            encoder.setFragmentSamplerState(look.scaling == "pixel" ? nearest : linear, index: 0)
-            encoder.drawPrimitives(type: .triangleStrip, vertexStart: 0, vertexCount: 4)
-        }
-        encoder.endEncoding()
+              let buffer = queue.makeCommandBuffer() else { return }
+        encode(buffer, pass: pass, size: view.drawableSize)
         buffer.present(drawable)
         buffer.commit()
     }
+
+    /// Draws the newest frame into whatever the pass renders to: the screen, or a texture to look at.
+    func encode(_ buffer: MTLCommandBuffer, pass: MTLRenderPassDescriptor, size: CGSize) {
+        lock.lock()
+        let tex = texture
+        lock.unlock()
+        guard let encoder = buffer.makeRenderCommandEncoder(descriptor: pass) else { return }
+        defer { encoder.endEncoding() }
+        guard let tex, size.width > 0, size.height > 0 else { return }
+        let inset = min(0.45, max(0, layout.inset / 100))
+        let box = (width: Double(size.width) * (1 - inset), height: Double(size.height) * (1 - inset))
+        let fit = PictureLayout.fit(settings: layout.settings, aspect: layout.aspect, frame: layout.frame, turns: layout.turns, box: box)
+        let w = Float(fit.width / Double(size.width)), h = Float(fit.height / Double(size.height))
+        var u = LookUniforms()
+        u.rect = SIMD4(-w, h, w, -h)
+        u.cropMin = SIMD2(look.cropX, look.cropY)
+        u.cropMax = SIMD2(1 - look.cropX, 1 - look.cropY)
+        u.source = layout.frame.width > 0 ? SIMD2(Float(layout.frame.width), Float(layout.frame.height)) : SIMD2(Float(tex.width), Float(tex.height))
+        u.texture = SIMD2(Float(tex.width), Float(tex.height))
+        u.output = fit.turns % 2 == 1 ? SIMD2(Float(fit.height), Float(fit.width)) : SIMD2(Float(fit.width), Float(fit.height))
+        u.effects = SIMD4(look.scanlines, look.curve, look.mask, look.vignette)
+        u.colour = SIMD4(look.brightness, look.contrast, look.saturation, look.gamma)
+        u.lcdGrid = look.lcdGrid
+        u.turns = Int32(fit.turns)
+        u.sharp = look.scaling == "sharp" ? 1 : 0
+        encoder.setRenderPipelineState(pipeline)
+        encoder.setVertexBytes(&u, length: MemoryLayout<LookUniforms>.stride, index: 0)
+        encoder.setFragmentBytes(&u, length: MemoryLayout<LookUniforms>.stride, index: 0)
+        encoder.setFragmentTexture(tex, index: 0)
+        encoder.setFragmentSamplerState(look.scaling == "pixel" ? nearest : linear, index: 0)
+        encoder.drawPrimitives(type: .triangleStrip, vertexStart: 0, vertexCount: 4)
+    }
+
+    /// For checking the picture away from a screen.
+    func makeCommandBuffer() -> MTLCommandBuffer? { queue.makeCommandBuffer() }
 }
 
 // MARK: - H.264
