@@ -47,7 +47,8 @@ preview licence too, such as the Android 8, 9, 10 and 11 TV images and the Andro
 Once CI is green:
 
 1. On GitHub, open the repository's **Actions** tab, then the latest **wittymediaclient** run.
-2. Under **Artifacts**, download **wittymedia-android-sideload**, and unzip it to get an `.apk` file.
+2. Under **Artifacts**, download **wittymedia-android-sideload**, and unzip it. It has an APK for each kind of processor and
+   `app-universal-sideload.apk`, which works on any of them: the README's Android section says which to choose.
 3. Put it on the device:
    - **Phone or tablet:** copy it over and open it. Android asks you to allow installing from that app.
    - **Android TV, Google TV, Fire TV:** in Settings, turn on Developer options and network debugging
@@ -59,7 +60,7 @@ adb connect 192.168.1.50
 ```
 
 ```bash
-adb install app-sideload.apk
+adb install app-universal-sideload.apk
 ```
 
 This build is signed with a throwaway key. It's for testing only, and can't be updated to a store version

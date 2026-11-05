@@ -5,6 +5,11 @@ What changed in WittyMediaClient, newest first. What changed before it had a rep
 
 ## Unreleased
 
+- **Android: games stream over WebRTC first where the server has version 2 of its game stream.** Late frames are dropped rather than
+  waited for, so a game keeps up on a poor network. The WebSocket takes over if WebRTC hasn't connected in 5 seconds or shown a
+  picture in 8.
+- **Android: an APK for each kind of processor, and a universal one.** WebRTC's library is 7 to 16 MB for each, so a device need only
+  download its own: the README's Android section says which to install. The universal APK works anywhere, at 51 MB to 64-bit ARM's 16.
 - **Android: the server's games play in the app, on phones, tablets and Android TV.** The server runs every game and streams it; the app shows the picture
   (H.264 through the device's own decoder, drawn as soon as it's decoded, or a picture a frame where the server has no encoder), plays the sound and sends the
   controls. Controllers play by the console's layout with the account's own profile over it, up to four at once, plugged in or out while playing, with rumble.

@@ -1,6 +1,6 @@
-# A version tag builds the desktop apps for each system and the Android sideload build, and publishes
-# them with a checksum list. The apps aren't installed through a server, so this holds no module key. Signing
-# them for each platform is a step for its owner: docs/OWNER-STEPS.md.
+# A version tag builds the desktop apps for each system and the Android sideload APKs, one for each processor and a
+# universal one, and publishes them with a checksum list. The apps aren't installed through a server, so this holds no
+# module key. Signing them for each platform is a step for its owner: docs/OWNER-STEPS.md.
 name: release
 on:
   push:
@@ -112,11 +112,17 @@ jobs:
         run: gradle --no-daemon testDebugUnitTest lintSideload assembleSideload
       - name: Native code for all four processors
         working-directory: android
-        run: sh scripts/check-abis.sh app/build/outputs/apk/sideload/app-sideload.apk
+        run: sh scripts/check-abis.sh app/build/outputs/apk/sideload
+      - name: Name each APK as the release's other files are
+        working-directory: android/app/build/outputs/apk/sideload
+        run: |
+          for abi in universal arm64-v8a armeabi-v7a x86_64 x86; do
+            mv "app-$abi-sideload.apk" "wittymediaclient-${GITHUB_REF_NAME#v}-android-$abi.apk"
+          done
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
         with:
           name: android
-          path: android/app/build/outputs/apk/sideload/*.apk
+          path: android/app/build/outputs/apk/sideload/wittymediaclient-*.apk
           if-no-files-found: error
 
   # Publishing runs no project code at all.
