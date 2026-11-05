@@ -348,34 +348,53 @@ struct FloatingBar: View {
         .accessibilityAddTraits(chosen ? [.isSelected] : [])
     }
 
+    /// The menu's name for a tab, where the person can hide it: Home and TV guide.
+    private func menuKey(_ tab: AppTab) -> String {
+        switch tab {
+        case .home: return "home"
+        case .guide: return "tv"
+        default: return ""
+        }
+    }
+
+    /// Home and TV guide go when the person hid them from their menu, as the website's bar.
+    private var shownTabs: [AppTab] {
+        let hidden: [String] = model.navPrefs.hidden ?? []
+        let tabs: [AppTab] = [.home, .guide, .search]
+        return tabs.filter { (tab: AppTab) -> Bool in !hidden.contains(menuKey(tab)) }
+    }
+
+    private func barIcon(_ symbol: String, size: CGFloat = 20) -> some View {
+        Image(systemName: symbol).font(.system(size: size, weight: .medium)).frame(width: 24, height: 24)
+    }
+
+    /// An update to install, for whoever can: the website's dot on You.
+    @ViewBuilder private var updateDot: some View {
+        if model.user?.isAdmin == true, !model.serverUpdate.isEmpty {
+            Circle().fill(palette.accent).frame(width: 8, height: 8)
+                .background(Circle().fill(palette.accent.opacity(0.25)).frame(width: 14, height: 14))
+                .offset(x: 2, y: -6)
+                .accessibilityLabel("Version \(model.serverUpdate) is available")
+        }
+    }
+
+    @ViewBuilder private func profileIcon(_ name: String) -> some View {
+        if model.user != nil {
+            AvatarTile(name: name, size: 32).overlay(alignment: .topTrailing) { updateDot }
+        } else {
+            Image(systemName: "person.crop.circle").font(.system(size: 22, weight: .medium))
+        }
+    }
+
     var body: some View {
+        let name: String = model.user?.shownName ?? ""
+        let you: String = name.isEmpty ? AppTab.profile.title : AppTab.profile.title + ", " + name
         HStack(spacing: 0) {
-            // Home and TV guide go when the person hid them from their menu, as the website's bar.
-            ForEach([AppTab.home, .guide, .search].filter { !(model.navPrefs.hidden ?? []).contains($0 == .home ? "home" : $0 == .guide ? "tv" : "") }, id: \.self) { tab in
-                slot(tab.title, chosen: marked(tab), action: { press(tab) }) {
-                    Image(systemName: tab.barIcon).font(.system(size: 20, weight: .medium)).frame(width: 24, height: 24)
-                }
+            ForEach(shownTabs, id: \.self) { (tab: AppTab) in
+                slot(tab.title, chosen: marked(tab), action: { press(tab) }) { barIcon(tab.barIcon) }
             }
-            slot("Menu", chosen: false, action: { model.menuOpen = true }) {
-                Image(systemName: "line.3.horizontal").font(.system(size: 20, weight: .medium)).frame(width: 24, height: 24)
-            }
-            let name = model.user?.shownName ?? ""
-            slot(name.isEmpty ? AppTab.profile.title : "\(AppTab.profile.title), \(name)", chosen: marked(.profile), action: { press(.profile) }) {
-                if model.user != nil {
-                    AvatarTile(name: name, size: 32)
-                        .overlay(alignment: .topTrailing) {
-                            // An update to install, for whoever can: the website's dot.
-                            if model.user?.isAdmin == true, !model.serverUpdate.isEmpty {
-                                Circle().fill(palette.accent).frame(width: 8, height: 8)
-                                    .background(Circle().fill(palette.accent.opacity(0.25)).frame(width: 14, height: 14))
-                                    .offset(x: 2, y: -6)
-                                    .accessibilityLabel("Version \(model.serverUpdate) is available")
-                            }
-                        }
-                } else {
-                    Image(systemName: "person.crop.circle").font(.system(size: 22, weight: .medium))
-                }
-            }
+            slot("Menu", chosen: false, action: { model.menuOpen = true }) { barIcon("line.3.horizontal") }
+            slot(you, chosen: marked(.profile), action: { press(.profile) }) { profileIcon(name) }
         }
         .padding(Tokens.Space.s1)
         .frame(height: 60)

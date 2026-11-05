@@ -29,22 +29,39 @@ struct FlowRow: Layout {
         return all
     }
 
+    /// A row's tallest, and its width with the gaps: spelled out, as CI's type-checker gave up on the one-liners.
+    private func rowHeight(_ row: [Int], _ sizes: [CGSize]) -> CGFloat {
+        var tallest: CGFloat = 0
+        for index in row { tallest = max(tallest, sizes[index].height) }
+        return tallest
+    }
+
+    private func rowWidth(_ row: [Int], _ sizes: [CGSize]) -> CGFloat {
+        var total: CGFloat = 0
+        for index in row { total += sizes[index].width }
+        return total + CGFloat(max(0, row.count - 1)) * spacing
+    }
+
     func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
-        let width = proposal.width ?? .infinity
-        let sizes = subviews.map { $0.sizeThatFits(.unspecified) }
-        let rows = lines(sizes, width: width)
-        let height = rows.reduce(0) { $0 + ($1.map { sizes[$0].height }.max() ?? 0) } + CGFloat(max(0, rows.count - 1)) * lineSpacing
-        let widest = rows.map { row in row.reduce(0) { $0 + sizes[$1].width } + CGFloat(max(0, row.count - 1)) * spacing }.max() ?? 0
+        let width: CGFloat = proposal.width ?? .infinity
+        let sizes: [CGSize] = subviews.map { $0.sizeThatFits(.unspecified) }
+        let rows: [[Int]] = lines(sizes, width: width)
+        var height: CGFloat = CGFloat(max(0, rows.count - 1)) * lineSpacing
+        var widest: CGFloat = 0
+        for row in rows {
+            height += rowHeight(row, sizes)
+            widest = max(widest, rowWidth(row, sizes))
+        }
         return CGSize(width: proposal.width ?? widest, height: height)
     }
 
     func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
-        let sizes = subviews.map { $0.sizeThatFits(.unspecified) }
-        var y = bounds.minY
+        let sizes: [CGSize] = subviews.map { $0.sizeThatFits(.unspecified) }
+        var y: CGFloat = bounds.minY
         for row in lines(sizes, width: bounds.width) {
-            let rowWidth = row.reduce(0) { $0 + sizes[$1].width } + CGFloat(max(0, row.count - 1)) * spacing
-            let rowHeight = row.map { sizes[$0].height }.max() ?? 0
-            var x = centred ? bounds.minX + (bounds.width - rowWidth) / 2 : bounds.minX
+            let rowWidth: CGFloat = rowWidth(row, sizes)
+            let rowHeight: CGFloat = rowHeight(row, sizes)
+            var x: CGFloat = centred ? bounds.minX + (bounds.width - rowWidth) / 2 : bounds.minX
             for index in row {
                 subviews[index].place(at: CGPoint(x: x, y: y + (rowHeight - sizes[index].height) / 2), proposal: ProposedViewSize(sizes[index]))
                 x += sizes[index].width + spacing

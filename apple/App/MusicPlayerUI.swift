@@ -530,12 +530,39 @@ struct PhoneNowPlaying: View {
         go(.page(path))
     }
 
+    /// A short word about what just happened, at the bottom, as the website's toast.
+    @ViewBuilder private func toast(bottom: CGFloat) -> some View {
+        if !said.isEmpty {
+            Text(said)
+                .font(.system(size: 14, weight: .semibold))
+                .foregroundStyle(NPInk.fg)
+                .padding(.horizontal, 16).frame(minHeight: 44)
+                .background(Capsule().fill(NPInk.pop))
+                .overlay(Capsule().strokeBorder(NPInk.line, lineWidth: 1))
+                .frame(maxHeight: .infinity, alignment: .bottom)
+                .padding(.bottom, bottom + 24)
+                .transition(.opacity)
+                .accessibilityHidden(true)
+        }
+    }
+
+    @ViewBuilder private func karaokeLayer(_ safe: EdgeInsets) -> some View {
+        if karaoke, let item = now?.item {
+            let loading: Bool = words.loading || (words.lyrics == nil && words.failed.isEmpty)
+            let insets = EdgeInsets(top: safe.top, leading: 0, bottom: safe.bottom, trailing: 0)
+            KaraokeView(item: item, lyrics: words.lyrics, loading: loading, glow: glow,
+                        offset: words.offset, setOffset: { (offset: Double) in words.setOffset(offset, client: client) }, close: { karaoke = false },
+                        insets: insets)
+                .transition(.move(edge: .bottom))
+        }
+    }
+
     var body: some View {
         GeometryReader { geo in
-            let safe = geo.safeAreaInsets
+            let safe: EdgeInsets = geo.safeAreaInsets
             let full = CGSize(width: geo.size.width, height: geo.size.height + safe.top + safe.bottom)
-            let compact = geo.size.width <= 860
-            let phone = geo.size.width <= 480
+            let compact: Bool = geo.size.width <= 860
+            let phone: Bool = geo.size.width <= 480
             ZStack(alignment: .top) {
                 Color.black
                 glowLayer(full)
@@ -547,24 +574,8 @@ struct PhoneNowPlaying: View {
                         .padding(.top, safe.top + max(14 - safe.top, 0))
                     stage(full: full, compact: compact, phone: phone, bottom: safe.bottom)
                 }
-                if !said.isEmpty {
-                    Text(said)
-                        .font(.system(size: 14, weight: .semibold))
-                        .foregroundStyle(NPInk.fg)
-                        .padding(.horizontal, 16).frame(minHeight: 44)
-                        .background(Capsule().fill(NPInk.pop))
-                        .overlay(Capsule().strokeBorder(NPInk.line, lineWidth: 1))
-                        .frame(maxHeight: .infinity, alignment: .bottom)
-                        .padding(.bottom, safe.bottom + 24)
-                        .transition(.opacity)
-                        .accessibilityHidden(true)
-                }
-                if karaoke, let item = now?.item {
-                    KaraokeView(item: item, lyrics: words.lyrics, loading: words.loading || (words.lyrics == nil && words.failed.isEmpty), glow: glow,
-                                offset: words.offset, setOffset: { words.setOffset($0, client: client) }, close: { karaoke = false },
-                                insets: EdgeInsets(top: safe.top, leading: 0, bottom: safe.bottom, trailing: 0))
-                        .transition(.move(edge: .bottom))
-                }
+                toast(bottom: safe.bottom)
+                karaokeLayer(safe)
             }
             .ignoresSafeArea()
             .overlayPreferenceValue(MenuAnchors.self) { anchors in

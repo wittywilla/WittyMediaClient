@@ -65,14 +65,14 @@ public struct ItemFacts: Decodable, Equatable {
         poster = try? c.decodeIfPresent(String.self, forKey: .poster)
         backdrop = try? c.decodeIfPresent(String.self, forKey: .backdrop)
         provider = try? c.decodeIfPresent(String.self, forKey: .provider)
-        providerId = (try? c.decodeIfPresent(String.self, forKey: .providerId)) ?? (try? c.decodeIfPresent(Int64.self, forKey: .providerId)).flatMap { $0.map(String.init) }
+        providerId = TitleDecoding.words(c, .providerId)
         width = try? c.decodeIfPresent(Int.self, forKey: .width)
         height = try? c.decodeIfPresent(Int.self, forKey: .height)
         videoCodec = try? c.decodeIfPresent(String.self, forKey: .videoCodec)
         container = try? c.decodeIfPresent(String.self, forKey: .container)
         audioLangs = try? c.decodeIfPresent([String].self, forKey: .audioLangs)
         subLangs = try? c.decodeIfPresent([String].self, forKey: .subLangs)
-        sizeBytes = (try? c.decodeIfPresent(Int64.self, forKey: .sizeBytes)) ?? (try? c.decodeIfPresent(Double.self, forKey: .sizeBytes)).flatMap { $0.map { Int64($0) } }
+        sizeBytes = TitleDecoding.whole(c, .sizeBytes)
         path = try? c.decodeIfPresent(String.self, forKey: .path)
         disc = try? c.decodeIfPresent(DiscInfo.self, forKey: .disc)
         startMode = try? c.decodeIfPresent(String.self, forKey: .startMode)
@@ -310,8 +310,25 @@ public struct ShowFacts: Decodable, Equatable {
         network = try? c.decodeIfPresent(String.self, forKey: .network)
         status = try? c.decodeIfPresent(String.self, forKey: .status)
         provider = try? c.decodeIfPresent(String.self, forKey: .provider)
-        providerId = (try? c.decodeIfPresent(String.self, forKey: .providerId)) ?? (try? c.decodeIfPresent(Int64.self, forKey: .providerId)).flatMap { $0.map(String.init) }
+        providerId = TitleDecoding.words(c, .providerId)
         view = try? c.decodeIfPresent(String.self, forKey: .view)
+    }
+}
+
+/// What the server sends either way, spelled out for the type-checker (CI's ran out of time on the one-line forms).
+enum TitleDecoding {
+    /// An id sent as words or as a number.
+    static func words<K: CodingKey>(_ c: KeyedDecodingContainer<K>, _ key: K) -> String? {
+        if let words = try? c.decodeIfPresent(String.self, forKey: key) { return words }
+        if let number = try? c.decodeIfPresent(Int64.self, forKey: key) { return String(number) }
+        return nil
+    }
+
+    /// A whole number sent as one or with a fraction.
+    static func whole<K: CodingKey>(_ c: KeyedDecodingContainer<K>, _ key: K) -> Int64? {
+        if let whole = try? c.decodeIfPresent(Int64.self, forKey: key) { return whole }
+        if let number = try? c.decodeIfPresent(Double.self, forKey: key), number.isFinite { return Int64(number) }
+        return nil
     }
 }
 
