@@ -251,17 +251,13 @@ fun ServerPill(name: String, logoUrl: String, modifier: Modifier = Modifier) {
     }
 }
 
-// docs/APP-DESIGN.md, "Code entry": six boxes, the digits typed so far, and a blinking caret in the next.
-// While a finished code is checked every box is outlined in the accent; a wrong one shakes them once.
+// A shake, once each time `count` goes up, as a refused code or password does. Still with Reduce Motion.
 @Composable
-fun CodeBoxes(digits: String, checking: Boolean, wrongCount: Int, modifier: Modifier = Modifier) {
-    val scheme = MaterialTheme.colorScheme
-    val metrics = LocalMetrics.current
-    val words = LocalWords.current
+fun rememberShake(count: Int): Animatable<Float, androidx.compose.animation.core.AnimationVector1D> {
     val reduce = LocalReduceMotion.current
     val shake = remember { Animatable(0f) }
-    LaunchedEffect(wrongCount) {
-        if (wrongCount == 0 || reduce) return@LaunchedEffect
+    LaunchedEffect(count) {
+        if (count == 0 || reduce) return@LaunchedEffect
         shake.animateTo(0f, keyframes {
             durationMillis = SHAKE_MS
             -10f at 50
@@ -271,6 +267,18 @@ fun CodeBoxes(digits: String, checking: Boolean, wrongCount: Int, modifier: Modi
             0f at SHAKE_MS
         })
     }
+    return shake
+}
+
+// docs/APP-DESIGN.md, "Code entry": six boxes, the digits typed so far, and a blinking caret in the next.
+// While a finished code is checked every box is outlined in the accent; a wrong one shakes them once.
+@Composable
+fun CodeBoxes(digits: String, checking: Boolean, wrongCount: Int, modifier: Modifier = Modifier) {
+    val scheme = MaterialTheme.colorScheme
+    val metrics = LocalMetrics.current
+    val words = LocalWords.current
+    val reduce = LocalReduceMotion.current
+    val shake = rememberShake(wrongCount)
     val caret = if (reduce) {
         null
     } else {

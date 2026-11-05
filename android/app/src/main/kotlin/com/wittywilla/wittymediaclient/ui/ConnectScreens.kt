@@ -492,6 +492,9 @@ private fun PairScreen(nav: Nav, s: Map<String, String>, onBack: () -> Unit, onU
 
 private enum class Step { Usual, Form, Password, Pair }
 
+// Where a password was typed, for the words when it's refused.
+private enum class Typed { Tile, Password, Form }
+
 // 4, 5 and 6: who's watching, a profile's password, and the sign-in form, with the two-factor step
 // when an account asks for it. 8 too, as a way of signing in from here.
 @Composable
@@ -505,9 +508,15 @@ fun SignInScreen(nav: Nav, s: Map<String, String>, way: SignInWay) {
     var chosenId by rememberSaveable { mutableStateOf<Long?>(null) }
     var name by rememberSaveable { mutableStateOf("") }
     var password by remember { mutableStateOf("") }
-    // The second step: the password was right, and the account wants its authenticator's code too.
+    // A wrong password: its field is red until the person types again, and shakes once each time.
+    var refused by remember { mutableStateOf(false) }
+    var wrongPasswords by remember { mutableIntStateOf(0) }
+    // The second step: the password was right, and the account wants its authenticator's code too,
+    // or one of its recovery codes.
     var secondStep by remember { mutableStateOf(false) }
     var code by remember { mutableStateOf("") }
+    var useRecovery by remember { mutableStateOf(false) }
+    var recovery by remember { mutableStateOf("") }
     var wrong by remember { mutableIntStateOf(0) }
     var problem by remember { mutableStateOf("") }
     var busy by remember { mutableStateOf(false) }
@@ -516,15 +525,15 @@ fun SignInScreen(nav: Nav, s: Map<String, String>, way: SignInWay) {
         profiles = runCatching { nav.app.api.profiles() }.getOrDefault(Profiles())
     }
 
-    fun login(who: String, secret: String, typed: String = "") {
+    fun login(who: String, secret: String, typed: String = "", from: Typed = Typed.Password) {
         if (busy) return
         busy = true
         problem = ""
         scope.launch {
             try {
-                val refused = nav.server?.let { nav.clearToSend(it) }
-                if (refused != null) {
-                    problem = refused
+                val stopped = nav.server?.let { nav.clearToSend(it) }
+                if (stopped != null) {
+                    problem = stopped
                 } else {
                     val result = nav.app.api.login(who, secret, nav.app.deviceName, typed)
                     if (result.token.isEmpty()) problem = s["errInvalid"].orEmpty() else nav.signedIn(result.token, result.user)
@@ -532,16 +541,26 @@ fun SignInScreen(nav: Nav, s: Map<String, String>, way: SignInWay) {
             } catch (e: CancellationException) {
                 throw e
             } catch (e: ApiError) {
-                if (e.twoFactor) {
-                    // The first answer only asks; after a code it says that one was wrong.
-                    if (typed.isNotEmpty()) {
-                        problem = e.message.orEmpty()
-                        wrong++
+                when {
+                    e.twoFactor -> {
+                        // The first answer only asks; after a code it says that one was wrong.
+                        if (typed.isNotEmpty()) {
+                            problem = s[if (useRecovery) "errWrongRecovery" else "errWrongCode"].orEmpty()
+                            wrong++
+                            if (useRecovery) recovery = ""
+                        }
+                        secondStep = true
+                        code = ""
                     }
-                    secondStep = true
-                    code = ""
-                } else {
-                    problem = problemWords(e, s["errLost"].orEmpty())
+                    // Cleared and asked for again, as every phone does: no one fixes a password they can't see.
+                    e.status == 401 && from != Typed.Tile -> {
+                        problem = s[if (from == Typed.Form) "errWrongNameOrPassword" else "errWrongPassword"].orEmpty()
+                        password = ""
+                        refused = true
+                        wrongPasswords++
+                    }
+                    // Too many tries (429) says how long to wait, in the server's own words.
+                    else -> problem = problemWords(e, s["errLost"].orEmpty())
                 }
             } catch (e: Exception) {
                 problem = problemWords(e, s["errLost"].orEmpty())
@@ -556,7 +575,10 @@ fun SignInScreen(nav: Nav, s: Map<String, String>, way: SignInWay) {
         step = to
         problem = ""
         password = ""
+        refused = false
         secondStep = false
+        useRecovery = false
+        recovery = ""
         code = ""
     }
 
@@ -568,6 +590,7 @@ fun SignInScreen(nav: Nav, s: Map<String, String>, way: SignInWay) {
     val list = profiles
     val showsProfiles = list != null && list.style == "profiles" && list.profiles.isNotEmpty()
     val chosen = list?.profiles?.firstOrNull { it.id == chosenId }
+    val signingInAs = chosen?.name ?: name
     // Each step remembers its own focus, so a step's first focus isn't lost to another's, and coming
     // back to one, as from the help, puts focus where it was. Kept with the app's screens.
     val memory = nav.focusFor("signin-step-" + if (secondStep) "two-factor" else step.name)
@@ -580,13 +603,17 @@ fun SignInScreen(nav: Nav, s: Map<String, String>, way: SignInWay) {
                 onCode = { typed ->
                     code = typed.filter { it.isDigit() }.take(CODE_LENGTH)
                     problem = ""
-                    if (code.length == CODE_LENGTH) login(chosen?.name ?: name, password, code)
+                    if (code.length == CODE_LENGTH) login(signingInAs, password, code)
                 },
                 checking = busy, wrong = wrong, problem = problem,
-                onBack = { secondStep = false; code = ""; problem = "" },
+                useRecovery = useRecovery, recovery = recovery,
+                onRecovery = { recovery = it; problem = "" },
+                onSubmitRecovery = { if (recovery.isNotBlank()) login(signingInAs, password, recovery.trim()) },
+                onSwitch = { useRecovery = !useRecovery; recovery = ""; code = ""; problem = "" },
+                onBack = { secondStep = false; useRecovery = false; recovery = ""; code = ""; problem = "" },
             )
             step == Step.Password && chosen != null -> PasswordStep(
-                nav, s, chosen, password, { password = it; problem = "" }, problem, busy,
+                nav, s, chosen, password, { password = it; problem = ""; refused = false }, problem, busy, refused, wrongPasswords,
                 onSubmit = { login(chosen.name, password) },
                 onBack = { back(Step.Usual) },
             )
@@ -598,15 +625,16 @@ fun SignInScreen(nav: Nav, s: Map<String, String>, way: SignInWay) {
                         chosenId = p.id
                         step = Step.Password
                     } else {
-                        login(p.name, "")
+                        login(p.name, "", from = Typed.Tile)
                     }
                 },
                 onOtherAccount = { back(Step.Form) },
                 onUseCode = ::openPair,
             )
             else -> FormStep(
-                nav, s, name, { name = it; problem = "" }, password, { password = it; problem = "" }, problem, busy,
-                onSubmit = { login(name, password) },
+                nav, s, name, { name = it; problem = ""; refused = false }, password, { password = it; problem = ""; refused = false },
+                problem, busy, refused, wrongPasswords,
+                onSubmit = { login(name, password, from = Typed.Form) },
                 onBack = if (showsProfiles) { { back(Step.Usual) } } else null,
                 onUseCode = ::openPair,
             )
@@ -706,7 +734,8 @@ private fun WhoStep(
     }
 }
 
-// 5. A profile's password, under its face.
+// 5. A profile's password, under its face. A wrong one clears the field, keeps focus in it, turns it red
+// and shakes it once.
 @Composable
 private fun PasswordStep(
     nav: Nav,
@@ -716,6 +745,8 @@ private fun PasswordStep(
     onChange: (String) -> Unit,
     problem: String,
     busy: Boolean,
+    refused: Boolean,
+    wrongPasswords: Int,
     onSubmit: () -> Unit,
     onBack: () -> Unit,
 ) {
@@ -724,6 +755,7 @@ private fun PasswordStep(
     // On the first look; coming back, as from the help, focus goes back where it was.
     val firstLook = LocalFocusMemory.current.last == null
     LaunchedEffect(who.id) { if (firstLook) runCatching { field.requestFocus() } }
+    LaunchedEffect(wrongPasswords) { if (wrongPasswords > 0) runCatching { field.requestFocus() } }
     SignInLayout(
         onBack,
         words = {
@@ -736,7 +768,7 @@ private fun PasswordStep(
         actions = {
             WittyField(
                 password, onChange, s["passwordLabel"].orEmpty(), kind = FieldKind.Password, icon = Symbols.Password,
-                imeAction = ImeAction.Go, onAction = onSubmit, focusRequester = field,
+                imeAction = ImeAction.Go, onAction = onSubmit, focusRequester = field, isError = refused, shake = wrongPasswords,
             )
             Problem(problem, Modifier.fillMaxWidth())
             WittyButton(s["signIn"].orEmpty(), onSubmit, Modifier.fillMaxWidth(), kind = ButtonKind.Primary, busy = busy, tall = true)
@@ -769,7 +801,7 @@ private fun ForgotPassword(nav: Nav, s: Map<String, String>, modifier: Modifier 
     )
 }
 
-// 6. Sign in with a username and password.
+// 6. Sign in with a username and password. Refused, both fields turn red and the password is asked for again.
 @Composable
 private fun FormStep(
     nav: Nav,
@@ -780,6 +812,8 @@ private fun FormStep(
     onPassword: (String) -> Unit,
     problem: String,
     busy: Boolean,
+    refused: Boolean,
+    wrongPasswords: Int,
     onSubmit: () -> Unit,
     onBack: (() -> Unit)?,
     onUseCode: () -> Unit,
@@ -788,6 +822,7 @@ private fun FormStep(
     val first = remember { FocusRequester() }
     val second = remember { FocusRequester() }
     LaunchedEffect(Unit) { if (!metrics.tv) runCatching { first.requestFocus() } }
+    LaunchedEffect(wrongPasswords) { if (wrongPasswords > 0) runCatching { second.requestFocus() } }
     SignInLayout(
         onBack,
         words = {
@@ -798,10 +833,11 @@ private fun FormStep(
             WittyField(
                 name, onName, s["usernameLabel"].orEmpty(), kind = FieldKind.Username, icon = Symbols.Person,
                 imeAction = ImeAction.Next, onAction = { runCatching { second.requestFocus() } }, focusRequester = first,
+                isError = refused, shake = wrongPasswords,
             )
             WittyField(
                 password, onPassword, s["passwordLabel"].orEmpty(), kind = FieldKind.Password, icon = Symbols.Password,
-                imeAction = ImeAction.Go, onAction = onSubmit, focusRequester = second,
+                imeAction = ImeAction.Go, onAction = onSubmit, focusRequester = second, isError = refused, shake = wrongPasswords,
             )
             Problem(problem, Modifier.fillMaxWidth())
             WittyButton(s["signIn"].orEmpty(), onSubmit, Modifier.fillMaxWidth(), kind = ButtonKind.Primary, busy = busy, tall = true, requestFocus = metrics.tv, focusKey = "sign-in")
@@ -812,7 +848,7 @@ private fun FormStep(
 }
 
 // 5, second step: the six digits from an authenticator app. A phone types them with its own number
-// keyboard, which can fill in a code it was sent; a TV has the pad.
+// keyboard, which can fill in a code it was sent; a TV has the pad. Or, for a lost phone, a recovery code.
 @Composable
 private fun TwoFactorStep(
     nav: Nav,
@@ -823,46 +859,77 @@ private fun TwoFactorStep(
     checking: Boolean,
     wrong: Int,
     problem: String,
+    useRecovery: Boolean,
+    recovery: String,
+    onRecovery: (String) -> Unit,
+    onSubmitRecovery: () -> Unit,
+    onSwitch: () -> Unit,
     onBack: () -> Unit,
 ) {
     val metrics = LocalMetrics.current
     val field = remember { FocusRequester() }
-    LaunchedEffect(Unit) { if (!metrics.tv) runCatching { field.requestFocus() } }
-    val press = { digit: Char -> if (!checking) onCode(code + digit) }
-    val erase = { if (!checking) onCode(code.dropLast(1)) }
-    Box(Modifier.digitKeys(press, erase)) {
+    val recoveryField = remember { FocusRequester() }
+    LaunchedEffect(useRecovery) {
+        if (useRecovery) runCatching { recoveryField.requestFocus() } else if (!metrics.tv) runCatching { field.requestFocus() }
+    }
+    val press = { digit: Char -> if (!checking && !useRecovery) onCode(code + digit) }
+    val erase = { if (!checking && !useRecovery) onCode(code.dropLast(1)) }
+    val switch: @Composable (Modifier) -> Unit = { modifier ->
+        WittyButton(
+            s[if (useRecovery) "useAuthenticatorCode" else "useRecoveryCode"].orEmpty(), onSwitch, modifier,
+            kind = ButtonKind.Quiet, focusKey = "recovery-switch",
+        )
+    }
+    Box(if (useRecovery) Modifier else Modifier.digitKeys(press, erase)) {
         SignInLayout(
             onBack,
             words = {
                 val centre = if (metrics.tv) Modifier else Modifier.align(Alignment.CenterHorizontally)
                 if (who != null) Avatar(avatarName(who.displayName, who.name), metrics.u(if (metrics.tv) 200 else 120), centre)
                 else Lockup(nav.brandName, nav.brandLogo, centre)
-                SignInHeading(s["twoFactorTitle"].orEmpty())
-                Note(s["twoFactorHint"].orEmpty())
-                Box(centre) {
-                    CodeBoxes(code, checking, wrong)
-                    if (!metrics.tv) {
-                        // What the keyboard types into, under the boxes: they show it.
-                        BasicTextField(
-                            code, { if (!checking) onCode(it) },
-                            singleLine = true,
-                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.NumberPassword, imeAction = ImeAction.Done),
-                            modifier = Modifier
-                                .matchParentSize()
-                                .graphicsLayer { alpha = 0f }
-                                .focusRequester(field)
-                                .semantics { contentType = ContentType.SmsOtpCode },
-                        )
+                if (useRecovery) {
+                    SignInHeading(s["recoveryTitle"].orEmpty(), detail = s["recoveryHint"].orEmpty())
+                } else {
+                    SignInHeading(s["twoFactorTitle"].orEmpty())
+                    Note(s["twoFactorHint"].orEmpty())
+                    Box(centre) {
+                        CodeBoxes(code, checking, wrong)
+                        if (!metrics.tv) {
+                            // What the keyboard types into, under the boxes: they show it.
+                            BasicTextField(
+                                code, { if (!checking) onCode(it) },
+                                singleLine = true,
+                                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.NumberPassword, imeAction = ImeAction.Done),
+                                modifier = Modifier
+                                    .matchParentSize()
+                                    .graphicsLayer { alpha = 0f }
+                                    .focusRequester(field)
+                                    .semantics { contentType = ContentType.SmsOtpCode },
+                            )
+                        }
                     }
+                    Problem(problem, Modifier.fillMaxWidth())
                 }
-                Problem(problem, Modifier.fillMaxWidth())
             },
             actions = {
-                if (metrics.tv) NumberPad(press, erase, Modifier.fillMaxWidth(), firstFocus = true)
+                if (useRecovery) {
+                    WittyField(
+                        recovery, onRecovery, s["recoveryLabel"].orEmpty(), icon = Symbols.Key, imeAction = ImeAction.Go,
+                        onAction = onSubmitRecovery, focusRequester = recoveryField, isError = problem.isNotEmpty(), shake = wrong, maxLength = RECOVERY_MOST,
+                    )
+                    Problem(problem, Modifier.fillMaxWidth())
+                    WittyButton(s["signIn"].orEmpty(), onSubmitRecovery, Modifier.fillMaxWidth(), kind = ButtonKind.Primary, busy = checking, tall = true)
+                } else if (metrics.tv) {
+                    NumberPad(press, erase, Modifier.fillMaxWidth(), firstFocus = true)
+                }
+                switch(if (metrics.tv) Modifier else Modifier.align(Alignment.CenterHorizontally))
             },
         )
     }
 }
+
+// The server takes at most 32 characters of a code.
+private const val RECOVERY_MOST = 32
 
 // What a TV doesn't open itself, such as the help on a forgotten password: a QR card for a phone, with
 // the address under it, as Apple TV has.

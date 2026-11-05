@@ -279,11 +279,17 @@ fun WittyField(
     imeAction: ImeAction = ImeAction.Done,
     onAction: () -> Unit = {},
     focusRequester: FocusRequester? = null,
+    // Refused, as a wrong password is: the outline and label turn `danger` until the person types again.
+    isError: Boolean = false,
+    // Counts refusals: each one shakes the field once.
+    shake: Int = 0,
+    maxLength: Int = Int.MAX_VALUE,
 ) {
     val scheme = MaterialTheme.colorScheme
     val extra = LocalExtraColours.current
     val metrics = LocalMetrics.current
     val words = LocalWords.current
+    val shaking = rememberShake(shake)
     var showing by rememberSaveable { mutableStateOf(false) }
     val secret = kind == FieldKind.Password && !showing
     val keyboard = when (kind) {
@@ -313,13 +319,15 @@ fun WittyField(
             }
         }
     }
-    Column(modifier.fillMaxWidth()) {
+    val limited: (String) -> Unit = { onChange(it.take(maxLength)) }
+    Column(modifier.fillMaxWidth().graphicsLayer { translationX = shaking.value * density }) {
         if (metrics.tv) {
-            TvTextField(value, onChange, label, icon, secret, keyboardOptions, keyboardActions, trailing, fieldModifier)
+            TvTextField(value, limited, label, icon, secret, keyboardOptions, keyboardActions, trailing, isError, fieldModifier)
         } else {
             OutlinedTextField(
                 value = value,
-                onValueChange = onChange,
+                onValueChange = limited,
+                isError = isError,
                 label = { Text(label) },
                 singleLine = true,
                 shape = LocalMetrics.current.corner(10),
@@ -336,6 +344,9 @@ fun WittyField(
                     focusedLabelColor = extra.accentText, unfocusedLabelColor = quiet,
                     focusedLeadingIconColor = quiet, unfocusedLeadingIconColor = quiet,
                     focusedTrailingIconColor = quiet, unfocusedTrailingIconColor = quiet,
+                    errorTextColor = scheme.onBackground, errorContainerColor = Color.Transparent, errorCursorColor = scheme.primary,
+                    errorBorderColor = scheme.error, errorLabelColor = scheme.error,
+                    errorLeadingIconColor = quiet, errorTrailingIconColor = quiet,
                 ),
                 modifier = Modifier.fillMaxWidth().heightIn(min = 56.dp).then(fieldModifier),
             )
@@ -366,6 +377,7 @@ private fun TvTextField(
     keyboardOptions: KeyboardOptions,
     keyboardActions: KeyboardActions,
     trailing: (@Composable () -> Unit)?,
+    isError: Boolean,
     modifier: Modifier = Modifier,
 ) {
     val scheme = MaterialTheme.colorScheme
@@ -384,7 +396,15 @@ private fun TvTextField(
                 .fillMaxWidth()
                 .height(metrics.u(56))
                 .then(if (focused) Modifier.ringOutside(LocalMetrics.current.corner(10), scheme.onBackground, metrics.focusRing, metrics.focusRing) else Modifier)
-                .border(if (focused) 2.dp else 1.dp, if (focused) scheme.primary else scheme.outline, LocalMetrics.current.corner(10))
+                .border(
+                    if (focused || isError) 2.dp else 1.dp,
+                    when {
+                        isError -> scheme.error
+                        focused -> scheme.primary
+                        else -> scheme.outline
+                    },
+                    LocalMetrics.current.corner(10),
+                )
                 .padding(start = metrics.u(16), end = metrics.u(4)),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(metrics.u(12)),
@@ -411,7 +431,12 @@ private fun TvTextField(
         }
         if (raised) {
             Text(
-                label, color = if (focused) extra.accentText else quiet, style = caption, maxLines = 1,
+                label, color = when {
+                    isError -> scheme.error
+                    focused -> extra.accentText
+                    else -> quiet
+                },
+                style = caption, maxLines = 1,
                 modifier = Modifier
                     .padding(start = metrics.u(12))
                     .offset(y = -half)
