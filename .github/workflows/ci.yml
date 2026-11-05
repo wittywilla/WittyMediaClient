@@ -22,7 +22,7 @@ jobs:
         run: |
           bad=$(git ls-files -s -z | while IFS=$'\t' read -r -d '' info f; do
             case "$f" in *.sh) ;; *) head -c2 "$f" 2>/dev/null | grep -qa '^#!' || continue ;; esac
-            [ "${info% *}" = 100755 ] || echo "$f"
+            [ "${info%% *}" = 100755 ] || echo "$f"
           done)
           [ -z "$bad" ] || { echo "Not executable in git. Run git update-index --chmod=+x on:"; echo "$bad"; exit 1; }
 
@@ -90,7 +90,14 @@ jobs:
         with:
           release: '15.1'
           usesh: true
-          prepare: pkg install -y node22 npm-node22
+          # A FreeBSD release installs from the quarterly packages, and so does this: the image
+          # comes set to latest, whose Electron for amd64 can be missing for weeks while it builds.
+          # On FreeBSD 15 the packages are FreeBSD-ports; FreeBSD is the base system.
+          prepare: |
+            mkdir -p /usr/local/etc/pkg/repos
+            echo 'FreeBSD-ports: { url: "pkg+https://pkg.FreeBSD.org/${ABI}/quarterly", mirror_type: "srv" }' > /usr/local/etc/pkg/repos/FreeBSD-ports.conf
+            pkg update -f
+            pkg install -y node22 npm-node22
           run: |
             set -e
             cd desktop
