@@ -33,6 +33,19 @@ final class AccountTests: XCTestCase {
         XCTAssertEqual(setup.groupedSecret, "ABCD EFGH IJ")
     }
 
+    func testSavedServerKeepsItsLogo() throws {
+        let old = #"{"url":"http://127.0.0.1:9797","name":"WittyMediaServer"}"#
+        let saved = try JSONDecoder().decode(SavedServer.self, from: Data(old.utf8))
+        XCTAssertEqual(saved.brandLogo, "")
+        let named = saved.with(name: "Home cinema", brandLogo: "7")
+        XCTAssertEqual(named.name, "Home cinema")
+        XCTAssertEqual(named.brandLogo, "7")
+        XCTAssertEqual(named.moved(to: "http://10.0.0.2:9797").brandLogo, "7")
+        XCTAssertEqual(saved.with(name: "  ", brandLogo: "").name, "WittyMediaServer")
+        let again = try JSONDecoder().decode(SavedServer.self, from: JSONEncoder().encode(named))
+        XCTAssertEqual(again, named)
+    }
+
     func testProfileChangeLeavesOutWhatIsNil() throws {
         let data = try JSONEncoder().encode(ProfileChange(displayName: "Mum", username: nil, showUsername: nil))
         XCTAssertEqual(String(decoding: data, as: UTF8.self), #"{"displayName":"Mum"}"#)

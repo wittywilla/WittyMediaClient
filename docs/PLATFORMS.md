@@ -21,7 +21,7 @@ should be expected to have some too.
 | Platform | Status | Notes |
 |---|---|---|
 | Windows 10 and later | **Ran** | From source and as a packaged app. The setup and uninstaller ran under Wine, not yet on a real Windows. |
-| macOS | **Ran** | The desktop app, packaged on a Mac (macOS 27) for Apple silicon and Intel. The Apple silicon one was opened, connected to a server and used by the owner. Its uninstaller only ran on Linux with a stand-in home folder. It's the Mac's only client: the Apple project no longer builds a Mac app of its own. |
+| macOS | **Ran** | The desktop app, from source and packaged on a Mac (macOS 27) for Apple silicon and Intel, where `npm run test:app` passes. The Apple silicon one was opened, connected to a server and used by the owner; not run on an Intel Mac or an older macOS. Its uninstaller only ran on Linux with a stand-in home folder. It's the Mac's only client: the Apple project no longer builds a Mac app of its own. |
 | Linux | **Ran** | `.deb` and `.rpm` installed, opened on a virtual screen, upgraded and removed in containers. `.pacman` the same. The `.rpm` also ran on Fedora 44 in a virtual machine, and from source on Ubuntu 26.04. See [below](#freebsd-plasma-bigscreen-and-linux). |
 | FreeBSD 15.1, amd64 | **Ran** | In a virtual machine, as an installed package: picture and sound seen. Needs the system's Electron from the ports tree. See [below](#freebsd-plasma-bigscreen-and-linux). |
 | FreeBSD 14.4, amd64 | **Ran** | The same package, in a virtual machine: installed on a bare system, opened as far as the connect screen, upgraded and removed. No video played on it. |
@@ -499,12 +499,20 @@ checked package, no `file://` privileges):
 - Starting with a remembered server, another key at it, a server that has gone, a damaged state file and a bad
   certificate, which also proves that listening to `certificate-error` doesn't accept one.
 
+On macOS 27 on Apple silicon, `npm run test:app` passes from source too. There it also checks the menu bar (Help, Change server
+only with a server open, zooming the page and not the title bar) and that the title bar leaves the window's buttons and Help to
+the system. A scripted run saw Select All from the Edit menu reach the page, the title centred, and the title bar and the window's
+buttons step aside for a video in full screen and come back.
+
 ## Not checked on the desktop client
 
 - **Sound.** Nothing here listens to it.
 - **Game controllers** and real TV remotes. Key presses were simulated.
 - **Linux** on a real computer. It ran in containers and virtual machines.
-- **macOS** beyond opening it and using it with a server: not the uninstaller, the firewall's question, or an Intel Mac.
+- **macOS** beyond opening it and using it with a server: not the uninstaller or the firewall's question; not on an Intel Mac or before macOS 27.
+- On a Mac, the window's buttons and a double-click on the title bar, seen on screen: nothing here could capture the screen or click.
+  Where the buttons sit matches the system's own (14 points, 9 in, in a 32-point title bar), measured with a window of its own.
+  A double-click on the bar is answered by the system itself, as Chromium's source for this version of Electron shows, and the page never sees it.
 - **The network search with real sockets** on this version: it would ask the Windows firewall.
 - The package check failing as it should when the package is changed.
 - A server asking for a client certificate, which needs one in the system's store.

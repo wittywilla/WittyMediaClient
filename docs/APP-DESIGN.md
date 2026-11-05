@@ -251,6 +251,29 @@ website at 375 wide.
 3. **Rows**, each a Section title with "See all ›" (13 medium, `textSecondary`): Continue watching, Next up, Because you
    watch…, Recently added in each library. Each row scrolls sideways with snapping, 16 from the left edge.
 
+### Playback and the media player
+
+Playing looks and works as the website's player does on a phone, control for control; only the engine underneath is
+the device's own (AVPlayer on Apple, ExoPlayer/Media3 on Android), for smooth playback, picture in picture, AirPlay and
+Chromecast, and the lock screen. The website's code is the reference, in the server's `web/src/player/` and
+`web/src/audio/`:
+
+- **Video** (`player/VideoPlayer.tsx`, `player/Controls.tsx`, `player/chrome.tsx`, `player/TrackPicker.tsx`,
+  `player/PlayInfoPanel.tsx`, `player/ViewSettings.tsx`, `player/PickIntroBar.tsx`): the same controls in the same
+  places, the seek bar with chapter marks and preview, skip intro and credits, next episode, the audio and subtitle
+  picker, speed, picture fit, the info panel, and the same timing for hiding the controls. Leaving the player for
+  the rest of the app keeps it playing in the mini player dock, as `/play` does.
+- **Discs** (`player/DvdPlayer.tsx`, `player/CdPlayer.tsx`, `player/InsertDisc.tsx`, `player/Remote.tsx`): menus,
+  chapters, the remote, insert-disc, and the CD player.
+- **Music, audiobooks, podcasts** (`audio/MiniPlayer.tsx`, `audio/NowPlaying.tsx`, `audio/controls.tsx`,
+  `audio/QueuePanel.tsx`, `audio/LyricsPanel.tsx`, `audio/Karaoke.tsx`, `audio/SoundPanel.tsx`, `audio/visualizer.tsx`,
+  `audio/nowplaying.css`): the mini bar above the floating bar, and Now Playing full screen with its artwork,
+  backdrop, lyrics, karaoke, queue, Sound (EQ, loudness, vocals, key), sleep timer, repeat, shuffle, song radio and
+  the visualizer.
+
+Nothing is invented on top: where the app and the website differ, the website wins, unless this page marks an
+improvement for both (**→ web**).
+
 ### Components
 
 | Component | Look |
@@ -305,6 +328,9 @@ keeping its one-line descriptions under each row, which the apps show too for th
 | Destructive | `card` fill, `danger` words | Sign out, forget, remove |
 
 Full width in a column on the sign-in screens, 52 high, words centred, an optional leading icon 8 before the words.
+**On a TV every button is a pill** (fully round), 66 high, the height of the systems' own text fields, with 32
+inside, so a field and its buttons look like one family; a Quiet one is 56 high and takes the pill only as its focus
+ring. Number pad keys stay rounded squares, as the systems' keyboards have them. No square-cornered button on a TV.
 While busy, the words are replaced by a spinner in the words' colour and the button keeps its size; it stays
 focusable on a TV. Disabled only where pressing would do harm, at 55% opacity.
 
@@ -573,8 +599,11 @@ then a confirmation). Under the list, Destructive `signOutOthers`, with a confir
 
 ### Sign in a TV
 
-Back; Title `rowSignInTv`; Body `signInTvHint` ("Type the code your TV shows."). The six code boxes and the numeric
-keyboard; six digits send `POST /pair/info`. Then a `panel` card: the device's name in Label, platform and address in
+Back; Title `rowSignInTv`; Body `signInTvHint` ("Type the code your TV shows."). **Eight letter boxes**, four, a dash,
+then four, as the TV shows its code (`ABCD-EFGH`, letters from `BCDFGHJKLMNPQRSTVWXZ`), over the system keyboard in
+capitals; any case typed counts, and the dash and spaces are ignored. On a phone the boxes are 34 wide and 48 high, 6
+apart, so eight fit. The eighth letter sends `POST /pair/info` with the code as typed. (The six digits are the other
+direction: the code `/pair/invite` makes, which the TV types on Enter the security code.) Then a `panel` card: the device's name in Label, platform and address in
 Secondary, and `signInTvAs` with the profiles it may sign in as (the person, and Kids and Guest profiles they look
 after) as profile tiles at 72, the person first and chosen. Primary `signInTvApprove`, Quiet `signInTvDeny`. Done:
 a check in `ok` and `signInTvDone`. Quiet `signInTvInvite` ("The TV asks for a code?") makes one instead
@@ -592,6 +621,25 @@ chosen one. Choosing applies at once, with a 200 ms cross-fade. Kept per server 
 A tablet uses the same page at 640 wide. A TV puts the header on the left third (avatar 200, names, `switchProfile`,
 `signOut`), vertically centred, and the groups in a focusable list on the right two-thirds; a row's screen replaces
 the list. The TV's rows are 72 high with 32 icon tiles, Label at TV size, and the focus ring around the whole row.
+
+## Games everywhere (WittyPlay)
+
+Every game the server can run plays on every device. The server always runs the game and streams it
+(`docs/GAMING-API.md` in the server: sessions, `ws-h264` video with `ws-jpeg` as the fallback, PCM sound, input up the same
+socket); a device only shows the picture and sends the controls, so nothing about a console has to be on the device.
+
+| Device | Player | Controls |
+|---|---|---|
+| Website (desktop and phone), desktop apps | The website's own player | Gamepad API, keyboard, and its touch layout on a phone |
+| iPhone, iPad, Vision Pro | The one native Apple player (shared with Apple TV): VideoToolbox H.264, AVAudioEngine sound | GameController (Xbox, PlayStation, Switch, MFi): every button, analog sticks and triggers, rumble and light bar, touchpad and motion where the console uses them; up to four at once. With no controller, the account's touch layout from the server, drawn over the picture |
+| Apple TV | The same native Apple player | GameController as above; the Siri Remote for menus and as a fallback pad |
+| Android phone, tablet, Android TV | A native Android player: MediaCodec H.264, AudioTrack sound | Android's gamepad input (every button, sticks, triggers, rumble), several at once; the touch layout on phones and tablets; the TV remote for menus |
+
+Around the player, every device shows the same things as the website's games: the library in couch mode, a game's page
+(Play or Resume, saves, versions), the pause menu (save state, load state, controller settings, quit), and the
+account's controller profiles (`/game-profiles`). A game the server can't run says why on its page (see the server's
+readiness check), on every device alike; Play never appears for it. Saves are the server's, so a game started on one
+device carries on from the same place on any other.
 
 ## Feature map
 
@@ -616,8 +664,8 @@ TV, which has none, everything is native.
 | Shorts, creators, channel videos | Page | To build |
 | Radio | Page | To build |
 | Live TV guide and watching, WittyTV's looks | Page | Native, every WittyTV look and layout |
-| Recordings and series rules | Page | To build |
-| Games (WittyPlay) | Page (iPhone and iPad) | Native on Apple TV: couch mode's library and game page, and a player for the server's stream (the server runs every game: see [WITTYPLAY-STREAMING.md](WITTYPLAY-STREAMING.md)). The page on Android TV |
+| Recordings and series rules | Page | Native on Apple TV (with reminders); Android TV to build |
+| Games (WittyPlay) | To build: the shared Apple player (Games everywhere, above), with the account's touch layout; the page until then | Native on Apple TV: a player for the server's stream (the server runs every game: see [WITTYPLAY-STREAMING.md](WITTYPLAY-STREAMING.md)), with couch mode's library and game page. The page on Android TV |
 | Game PCs and rigs (Moonlight) | Native | Native |
 | DVD and Blu-ray menus, CD player | Page | To build |
 | Collections and smart playlists | Page | To build |
@@ -670,6 +718,10 @@ Apple TV and Android TV are the same app to look at. Sizes are given in TV units
   `listings`, `bigpicture`, `outline`, `compact`, `custom`) are worked out as `web/src/pages/tv/tvThemes.ts` does, and
   each theme's layout (`web/src/pages/tv/tvthemes.css`: row height, cell shape, the now line, the preview's place, the
   font) is built natively to match, on both TVs.
+- **Recording** is offered only where the server says it can be: a channel's `canRecord` (true only for tuner
+  channels the profile may record; never for channels made from the library). Record and series record are hidden,
+  not greyed, when it's false or missing, on every device and on the website alike; no app works it out for itself,
+  and the server refuses otherwise.
 - **What a TV can't show** (the server's pages on Apple TV) is a QR card to open that page on a phone, with its address
   under it. Android TV shows the same card, so the two stay the same.
 

@@ -381,6 +381,117 @@ public final class WittyClient: @unchecked Sendable {
         _ = try await call("POST", "/tv/\(WittyClient.pathPart(key))/leave?viewer=\(WittyClient.pathPart(viewer))", body: Data("{}".utf8))
     }
 
+    // MARK: WittyTV: the guide, recordings and reminders
+
+    /// A page of the guide's channels with their schedule: see `GuideRules.query`.
+    public func guidePage(_ query: String) async throws -> Guide { try await get(query) }
+
+    /// Every channel's number and name, for going through them without the schedule.
+    public func lineup() async throws -> Guide { try await get("/guide?list=1&limit=20000") }
+
+    /// A day of one channel's schedule.
+    public func guideDay(_ key: String, from: Int64) async throws -> [GuideProgramme] {
+        let page: Guide = try await get("/guide?from=\(from)&hours=24&limit=1&channel=\(WittyClient.queryValue(key))")
+        return page.channels?.first?.programmes ?? []
+    }
+
+    /// What's coming up that matches some words.
+    public func searchGuide(_ words: String, days: Int = 7) async throws -> [GuideHit] {
+        guard let query = Self.searchQuery(words) else { return [] }
+        return try await list("/guide/search?q=\(query)&days=\(days)&limit=60")
+    }
+
+    public func setFavourite(_ key: String, _ on: Bool) async throws {
+        _ = try await call(on ? "PUT" : "DELETE", "/tv/favourites/\(WittyClient.pathPart(key))", body: on ? Data("{}".utf8) : nil)
+    }
+
+    public func recordings() async throws -> [Recording] { try await list("/recordings") }
+    public func recordingRules() async throws -> [RecordingRule] { try await list("/recording-rules") }
+
+    /// Records one programme of a tuner channel.
+    public func record(channel: String, title: String, sub: String?, start: Int64, stop: Int64) async throws {
+        struct Ask: Encodable { let channel: String; let title: String; let sub: String?; let start: Int64; let stop: Int64 }
+        _ = try await call("POST", "/recordings", body: try JSONEncoder().encode(Ask(channel: channel, title: title, sub: sub, start: start, stop: stop)))
+    }
+
+    /// Cancels one to come, or takes a finished one off the list. Only an administrator can delete its file too.
+    public func removeRecording(_ id: Int64, deleteFile: Bool = false) async throws {
+        _ = try await call("DELETE", "/recordings/\(id)" + (deleteFile ? "?deleteFile=1" : ""))
+    }
+
+    /// Records every airing of a title on a channel.
+    public func recordSeries(channel: String, title: String) async throws {
+        _ = try await call("POST", "/recording-rules", body: try JSONEncoder().encode(["channel": channel, "title": title]))
+    }
+
+    public func removeRecordingRule(_ id: Int64) async throws {
+        _ = try await call("DELETE", "/recording-rules/\(id)")
+    }
+
+    public func reminders() async throws -> [TvReminder] { try await list("/tv/reminders") }
+
+    public func addReminder(channel: String, title: String, sub: String?, start: Int64, end: Int64) async throws -> TvReminder {
+        struct Ask: Encodable { let channel: String; let title: String; let sub: String?; let start: Int64; let end: Int64 }
+        let body = try JSONEncoder().encode(Ask(channel: channel, title: title, sub: sub, start: start, end: end))
+        return try decoder.decode(TvReminder.self, from: try await call("POST", "/tv/reminders", body: body))
+    }
+
+    public func removeReminder(_ id: Int64) async throws {
+        _ = try await call("DELETE", "/tv/reminders/\(id)")
+    }
+
+    /// What the logo service has for some networks or studios, in one request.
+    public func lookupLogos(_ brands: [GuideBrand]) async throws -> [LogoInfo] {
+        struct Ask: Encodable { let logos: [[String: String]] }
+        struct Answer: Decodable { let logos: [LogoInfo]? }
+        let body = try JSONEncoder().encode(Ask(logos: brands.prefix(200).map { ["kind": $0.kind, "name": $0.name] }))
+        return try decoder.decode(Answer.self, from: try await call("POST", "/logos/lookup", body: body)).logos ?? []
+    }
+
+    /// A logo's picture, white for a dark background, dark for a light one, or as it is for one on a plate.
+    public func logoImageURL(_ logo: LogoInfo, variant: String) -> URL? {
+        guard let id = logo.id else { return nil }
+        return mediaURL("/api/logos/\(id)/image?variant=\(WittyClient.queryValue(variant))&v=\(logo.version ?? 0)")
+    }
+
+    /// The short legal notices by kind (`tv`, `logos`, `logosBrief` and so on): the same words everywhere.
+    public func legalNotices() async throws -> [String: String] {
+        struct Notice: Decodable { let text: String }
+        struct Notices: Decodable { let notices: [String: Notice]? }
+        let all: Notices = try await get("/legal/notices")
+        return (all.notices ?? [:]).mapValues(\.text)
+    }
+
+    /// What the server's theme suggests for WittyTV, from its tokens: the page reads the same from its CSS.
+    public func themeSuggestsTv(_ themeId: String) async throws -> String? {
+        struct Theme: Decodable { let other: [String: String]? }
+        let theme: Theme = try await get("/themes/\(WittyClient.pathPart(themeId))/tokens.json")
+        return theme.other?["tv-theme"]
+    }
+
+    /// GET /me/ui as it is: every interface choice the account has, for reading one and keeping the rest.
+    public func rawUI() async throws -> Data { try await call("GET", "/me/ui") }
+
+    /// Changes some of this account's WittyTV choices, and keeps everything else in /me/ui as it was,
+    /// as the page does: the server keeps an account's interface choices whole.
+    public func saveTvLook(_ change: [String: Any?]) async throws {
+        let data = try await call("GET", "/me/ui")
+        var ui = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any] ?? [:]
+        var look = ui["tvLook"] as? [String: Any] ?? [:]
+        for (key, value) in change {
+            if let value { look[key] = value } else { look.removeValue(forKey: key) }
+        }
+        // Beside the theme, what it comes to in the two looks an older app knows about.
+        if let theme = look["theme"] as? String, let named = TvTheme.byId(theme) {
+            let shape = theme == "custom" ? TvShape(rawValue: (look["custom"] as? [String: Any])?["shape"] as? String ?? "") ?? .modern : named.shape
+            let was = TvLook.legacyOf(theme, shape: shape)
+            look["layout"] = was.layout
+            look["colours"] = was.colours
+        }
+        ui["tvLook"] = look
+        _ = try await call("PUT", "/me/ui", body: try JSONSerialization.data(withJSONObject: ui))
+    }
+
     /// A channel's key goes in the address as it is, and only ever as one piece of it.
     public static func pathPart(_ text: String) -> String {
         text.addingPercentEncoding(withAllowedCharacters: .alphanumerics.union(CharacterSet(charactersIn: "-_"))) ?? ""
@@ -403,6 +514,22 @@ public final class WittyClient: @unchecked Sendable {
 
     public func logout() async throws {
         _ = try await call("POST", "/logout", body: Data("{}".utf8))
+    }
+
+    // MARK: Themes
+
+    /// Every theme the server has, with preview colours, and which is its default. Anyone may ask.
+    public func themeList() async throws -> ThemeList { try await get("/themes") }
+
+    /// One theme as data: docs/APP-DESIGN.md, Themes.
+    public func themeTokens(_ id: String) async throws -> ThemeTokens {
+        try await get("/themes/\(WittyClient.pathPart(id))/tokens.json")
+    }
+
+    /// The look this person made with the website's theme maker, if they did.
+    public func customTheme() async throws -> ThemeMakerInput? {
+        let choices: AccountChoices = try await get("/me/ui")
+        return choices.customTheme
     }
 
     // MARK: Your own account

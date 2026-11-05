@@ -108,8 +108,13 @@ struct ConnectView: View {
 
     private var searching: Bool { found.isEmpty && !searchedLong && !refused }
 
+    /// Servers found on the network that haven't been added.
+    private func foundOnly(_ added: [SavedServer]) -> [FoundServer] {
+        found.filter { server in !added.contains { $0.url == server.url || (!$0.serverId.isEmpty && $0.serverId == server.id) } }
+    }
+
     @ViewBuilder private var findWords: some View {
-        BrandLockup()
+        BrandLockup(app: true)
         SignInHeading(title: say("findTitle"), detail: say("findSubtitle"), display: true)
         if !error.isEmpty { ProblemLine(error) }
     }
@@ -121,15 +126,15 @@ struct ConnectView: View {
                 NoteCard(words: refused ? say("findNotSupported") : searchedLong ? say("findNone") : say("findSearching"),
                          busy: searching, icon: refused ? "wifi.slash" : "magnifyingglass")
             }
-            ForEach(found) { server in
-                ServerCard(name: server.name, url: server.url, lastUsed: server.url == model.lastUsedURL,
-                           connecting: connectingTo == server.url) { Task { await connect(server.url) } }
+            // A found server says nothing about itself until it's added: only where it is.
+            ForEach(foundOnly(others)) { server in
+                ServerCard(url: server.url, connecting: connectingTo == server.url) { Task { await connect(server.url) } }
                     .focused($spot, equals: .found(server.id))
             }
             if !others.isEmpty {
                 SearchingCaption(words: say("recentServers")).padding(.top, Tokens.Space.s2)
                 ForEach(others) { server in
-                    ServerCard(name: server.name, url: server.url, lastUsed: server.url == model.lastUsedURL,
+                    ServerCard(saved: server, url: server.url, lastUsed: server.url == model.lastUsedURL,
                                connecting: connectingTo == server.url) { Task { await connect(server.url) } }
                         .focused($spot, equals: .recent(server.url))
                 }
@@ -149,6 +154,7 @@ struct ConnectView: View {
     }
 
     @ViewBuilder private var addressWords: some View {
+        BrandLockup(app: true)
         SignInHeading(title: say("addressTitle"), detail: say("addressHint"))
     }
 
@@ -162,7 +168,8 @@ struct ConnectView: View {
     }
 
     var body: some View {
-        let others = uniqued(model.recent).filter { saved in !found.contains { $0.url == saved.url || $0.id == saved.serverId } }
+        // Every added server is listed as itself; one also found on the network isn't listed twice.
+        let others = uniqued(model.recent)
         Group {
             if showForm {
                 SignInLayout(back: closeForm) { addressWords } actions: { addressActions }
@@ -194,13 +201,16 @@ struct ConnectView: View {
 
 /// Which server a code or a sign-in goes to: its mark and name in a quiet pill.
 private struct ServerPill: View {
+    @EnvironmentObject private var model: AppModel
     @Environment(\.palette) private var palette
+    @Environment(\.metrics) private var metrics
     let name: String
 
     var body: some View {
         HStack(spacing: Tokens.Space.s2) {
-            BrandMark(size: 24)
-            Text(name).font(.wmLabel).foregroundStyle(palette.text).lineLimit(1)
+            // Big enough to read from across the room on a TV.
+            BrandMark(size: metrics.tv ? 40 : 24, logo: model.client.brandLogoURL(version: model.brandLogo))
+            Text(name).font(metrics.tv ? .wmSection : .wmLabel).foregroundStyle(palette.text).lineLimit(1)
         }
         .padding(.leading, Tokens.Space.s1)
         .padding(.trailing, Tokens.Space.s3)
@@ -515,6 +525,8 @@ struct SignInView: View {
     /// The last password was refused, and nothing new has been typed since.
     @State private var refused = false
     @State private var wrongPasswords = 0
+    /// The first face takes the remote's focus once the profiles have arrived, whatever screen came before.
+    @FocusState private var firstTile: Bool?
     @State private var help: URL?
     @Namespace private var scope
 
@@ -600,7 +612,11 @@ struct SignInView: View {
 
     private var forgotURL: URL? { model.client.mediaURL("/help/accounts#if-you-forget-your-password") }
 
-    private var serverName: String { model.current?.name ?? "WittyMediaServer" }
+    private var serverName: String {
+        if !model.brandName.isEmpty { return model.brandName }
+        let saved = model.current?.name ?? ""
+        return saved.isEmpty ? "WittyMediaServer" : saved
+    }
 
     /// The other ways in, and which server this is, under whatever the screen is mainly for. On a TV's
     /// Who's watching, which is centred, they're one centred row, as on Android TV.
@@ -623,8 +639,10 @@ struct SignInView: View {
         .frame(maxWidth: .infinity, alignment: middle ? .center : .leading)
         .remoteSection()
         HStack(spacing: Tokens.Space.s1) {
-            Image(systemName: "server.rack").font(.caption).foregroundStyle(palette.textHint)
-            Text(serverName).font(.wmSecondary).foregroundStyle(palette.textSecondary).lineLimit(1)
+            // This server as itself: its logo and name, larger on a TV so it reads from the sofa.
+            BrandMark(size: metrics.tv ? 32 : 20, logo: model.client.brandLogoURL(version: model.brandLogo))
+                .padding(.trailing, Tokens.Space.s1)
+            Text(serverName).font(metrics.tv ? .wmLabel : .wmSecondary).foregroundStyle(palette.textSecondary).lineLimit(1)
             Button(say("changeServer")) { model.changeServer() }.action(.quiet)
         }
         .frame(maxWidth: .infinity, alignment: middle ? .center : .leading)
@@ -641,6 +659,7 @@ struct SignInView: View {
                 ForEach(Array(people.enumerated()), id: \.element.id) { index, profile in
                     ProfileTile(profile: profile, avatarSize: size) { choose(profile) }
                         .firstFocus(in: scope, when: index == 0)
+                        .focused($firstTile, equals: index == 0 ? true : nil)
                         .disabled(busy)
                 }
             }
@@ -660,17 +679,20 @@ struct SignInView: View {
 
     /// 5: one person's password, or the authenticator's code after it.
     @ViewBuilder private func passwordStep(_ profile: Profile) -> some View {
-        SignInLayout(back: back) {
+        // One centred column on every device: the face, its names centred under it, then the way in.
+        SignInLayout(back: back, centred: true) {
             VStack(spacing: Tokens.Space.s2) {
                 AvatarTile(name: profile.shownName, size: metrics.tv ? 200 : 120)
+                    .padding(.bottom, metrics.tv ? Tokens.Space.s2 : 0)
                 Text(profile.shownName).font(.wmHero).foregroundStyle(palette.text).lineLimit(1)
                 if profile.showsUsername {
                     Text("@\(profile.name)").font(.wmSecondary).foregroundStyle(palette.textSecondary)
                 }
             }
-            .frame(maxWidth: .infinity, alignment: metrics.tv ? .leading : .center)
+            .multilineTextAlignment(.center)
+            .frame(maxWidth: .infinity, alignment: .center)
             .accessibilityElement(children: .combine)
-            SignInHeading(title: needsCode ? twoFactorTitle : "", detail: needsCode ? twoFactorHint : say("passwordHint"))
+            SignInHeading(title: needsCode ? twoFactorTitle : "", detail: needsCode ? twoFactorHint : say("passwordHint"), centred: true)
         } actions: {
             if needsCode {
                 twoFactorEntry { login(profile.name, password, code: $0) }
@@ -684,7 +706,7 @@ struct SignInView: View {
                 Button { login(profile.name, password) } label: { BusyText(say("signIn"), busy: busy) }
                     .action(.primary, wide: true, tall: true)
                 Button(say("forgotPassword")) { help = forgotURL }.action(.quiet)
-                    .frame(maxWidth: .infinity, alignment: metrics.tv ? .leading : .center)
+                    .frame(maxWidth: .infinity, alignment: .center)
             }
         }
     }
@@ -718,6 +740,12 @@ struct SignInView: View {
     private var twoFactorTitle: String { say(useRecovery ? "recoveryTitle" : "twoFactorTitle") }
     private var twoFactorHint: String { say(useRecovery ? "recoveryHint" : "twoFactorHint") }
 
+    /// The password screen is one centred column, TVs included; the sign-in form keeps a TV's two halves.
+    private var twoFactorCentred: Bool {
+        if case .password = step { return true }
+        return !metrics.tv
+    }
+
     @ViewBuilder private func twoFactorEntry(_ send: @escaping (String) -> Void) -> some View {
         if useRecovery {
             let typed = recoveryCode.trimmingCharacters(in: .whitespaces)
@@ -732,7 +760,7 @@ struct SignInView: View {
                 .disabled(typed.isEmpty || busy)
         } else {
             CodeBoxes(digits: twoFactorCode, checking: busy, wrongTries: wrongCodes)
-                .frame(maxWidth: .infinity, alignment: metrics.tv ? .leading : .center)
+                .frame(maxWidth: .infinity, alignment: twoFactorCentred ? .center : .leading)
             #if os(tvOS)
             NumberPad(onDigit: { digit in
                 guard twoFactorCode.count < 6 else { return }
@@ -751,7 +779,7 @@ struct SignInView: View {
             if useRecovery { wantRecovery = true }
         }
         .action(.quiet)
-        .frame(maxWidth: .infinity, alignment: metrics.tv ? .leading : .center)
+        .frame(maxWidth: .infinity, alignment: twoFactorCentred ? .center : .leading)
     }
 
     var body: some View {
@@ -782,6 +810,9 @@ struct SignInView: View {
         .task {
             profiles = (try? await model.client.profiles()) ?? Profiles(style: "classic", profiles: nil)
             if !showsPeople { wantName = true }
+            #if os(tvOS)
+            if showsPeople { DispatchQueue.main.async { firstTile = true } }
+            #endif
         }
     }
 }

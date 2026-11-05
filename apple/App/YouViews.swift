@@ -100,7 +100,7 @@ struct YouView: View {
             }
         }
         ListGroup(title: say("groupDevice")) {
-            row(.theme, "paintpalette", RowTint.teal, "rowTheme", value: ThemeView.name(of: model.themeChoice, server: model.themeId))
+            row(.theme, "paintpalette", RowTint.teal, "rowTheme", value: ThemeView.name(of: model.themeChoice, server: model.themeId, list: model.themeList))
         }
         if isAdmin {
             ListGroup(title: say("groupServer")) {
@@ -775,7 +775,8 @@ struct SignInTvView: View {
         problem = ""
         Task {
             do {
-                let digits = (info.code ?? code).filter(\.isNumber)
+                // The code as the TV shows it; the server ignores case, spaces and the dash.
+                let digits = info.code ?? code
                 if approve, let chosen {
                     try await client.pairApprove(code: digits, userId: chosen)
                     outcome = say("signInTvDone")
@@ -887,7 +888,7 @@ struct SignInTvView: View {
             } else if let info {
                 card(info)
             } else {
-                DigitsEntry(code: $code, checking: busy, wrongTries: wrongTries, onComplete: look)
+                LetterCodeEntry(code: $code, checking: busy, wrongTries: wrongTries, onComplete: look)
                 if !problem.isEmpty { ProblemLine(problem) }
                 Button(say("signInTvInvite")) { makeInvite() }
                     .action(.quiet)
@@ -910,11 +911,33 @@ struct ThemeView: View {
     @EnvironmentObject private var model: AppModel
     @Environment(\.palette) private var palette
 
-    static func name(of choice: String, server: String?) -> String {
+    /// One theme on offer: the server's list when there is one, the built-ins otherwise.
+    struct Choice: Identifiable {
+        let id: String
+        let name: String
+        let bg, surface, accent: String
+        let webOnly: Bool
+    }
+
+    static func choices(_ list: ThemeList?) -> [Choice] {
+        if let themes = list?.themes, !themes.isEmpty {
+            return themes.map { t in
+                Choice(id: t.id, name: t.shownName, bg: t.preview?.bg ?? "#0f1115", surface: t.preview?.surface ?? "#1f232c",
+                       accent: t.preview?.accent ?? "#7955ff", webOnly: t.webOnly == true)
+            }
+        }
+        return SharedData.themes.map { t in
+            Choice(id: t.id, name: t.name ?? t.id, bg: t.colours.background, surface: t.colours.card, accent: t.colours.accent, webOnly: false)
+        }
+    }
+
+    static func name(of choice: String, server: String?, list: ThemeList? = nil) -> String {
+        func named(_ id: String?) -> String? { choices(list).first { $0.id == id }?.name ?? SharedData.exactTheme(id)?.name }
         switch choice {
-        case "": return SharedData.exactTheme(server)?.name ?? say("themeServer")
+        case "": return named(server) ?? say("themeServer")
         case "auto": return say("themeAutomatic")
-        default: return SharedData.exactTheme(choice)?.name ?? choice
+        case "custom": return say("themeMadeByYou")
+        default: return named(choice) ?? choice
         }
     }
 
@@ -922,15 +945,14 @@ struct ThemeView: View {
         withAnimation(.easeInOut(duration: 0.2)) { model.chooseTheme(id) }
     }
 
-    @ViewBuilder private func swatch(_ theme: SharedData.Theme) -> some View {
-        let c = theme.colours
+    @ViewBuilder private func swatch(bg: String, surface: String, accent: String) -> some View {
         RoundedRectangle(cornerRadius: 7, style: .continuous)
-            .fill(Color(hex: c.background))
+            .fill(Color(hex: bg))
             .overlay(alignment: .bottom) {
-                Rectangle().fill(Color(hex: c.card)).frame(height: 10)
+                Rectangle().fill(Color(hex: surface)).frame(height: 10)
             }
             .overlay(alignment: .topTrailing) {
-                Circle().fill(Color(hex: c.accent)).frame(width: 9, height: 9).padding(5)
+                Circle().fill(Color(hex: accent)).frame(width: 9, height: 9).padding(5)
             }
             .clipShape(RoundedRectangle(cornerRadius: 7, style: .continuous))
             .overlay(RoundedRectangle(cornerRadius: 7, style: .continuous).strokeBorder(palette.border, lineWidth: 1))
@@ -946,34 +968,39 @@ struct ThemeView: View {
             .accessibilityHidden(true)
     }
 
+    private func row(_ id: String, icon: String, tint: String, title: String, detail: String) -> some View {
+        Button { pick(id) } label: {
+            HStack(spacing: 0) {
+                RowLabel(icon: icon, tint: tint, title: title, detail: detail, chevron: false)
+                check(id).padding(.trailing, Tokens.Space.s4)
+            }
+        }
+        .rowStyle()
+        .accessibilityAddTraits(model.themeChoice == id ? [.isSelected] : [])
+    }
+
     var body: some View {
         SettingsScreen(title: say("rowTheme"), detail: say("themeHint")) {
             ListGroup(title: "") {
-                Button { pick("auto") } label: {
-                    HStack(spacing: 0) {
-                        RowLabel(icon: "circle.lefthalf.filled", tint: RowTint.teal, title: say("themeAutomatic"),
-                                 detail: say("themeAutomaticHint"), chevron: false)
-                        check("auto").padding(.trailing, Tokens.Space.s4)
-                    }
+                row("auto", icon: "circle.lefthalf.filled", tint: RowTint.teal, title: say("themeAutomatic"), detail: say("themeAutomaticHint"))
+                row("", icon: "server.rack", tint: RowTint.quiet, title: say("themeServer"),
+                    detail: Self.name(of: model.themeId ?? "default", server: nil, list: model.themeList))
+                if model.customTheme != nil {
+                    row("custom", icon: "paintbrush.pointed", tint: RowTint.tv, title: say("themeMadeByYou"),
+                        detail: model.customTheme?.name ?? "")
                 }
-                .rowStyle()
-                .accessibilityAddTraits(model.themeChoice == "auto" ? [.isSelected] : [])
-                Button { pick("") } label: {
-                    HStack(spacing: 0) {
-                        RowLabel(icon: "server.rack", tint: RowTint.quiet, title: say("themeServer"),
-                                 detail: SharedData.exactTheme(model.themeId)?.name ?? "", chevron: false)
-                        check("").padding(.trailing, Tokens.Space.s4)
-                    }
-                }
-                .rowStyle()
-                .accessibilityAddTraits(model.themeChoice.isEmpty ? [.isSelected] : [])
             }
-            ListGroup(title: "") {
-                ForEach(SharedData.themes) { theme in
+            ListGroup(title: "", footer: Self.choices(model.themeList).contains(where: \.webOnly) ? say("themeWebOnly") : "") {
+                ForEach(Self.choices(model.themeList)) { theme in
                     Button { pick(theme.id) } label: {
                         HStack(spacing: Tokens.Space.s3) {
-                            swatch(theme)
-                            Text(theme.name ?? theme.id).font(.subheadline).foregroundStyle(palette.text)
+                            swatch(bg: theme.bg, surface: theme.surface, accent: theme.accent)
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text(theme.name).font(.subheadline).foregroundStyle(palette.text)
+                                if theme.webOnly {
+                                    Text(say("themeLooksPlainer")).font(.wmSecondary).foregroundStyle(palette.textSecondary)
+                                }
+                            }
                             Spacer(minLength: 0)
                             check(theme.id)
                         }
@@ -985,10 +1012,11 @@ struct ThemeView: View {
                         .contentShape(Rectangle())
                     }
                     .rowStyle()
-                    .accessibilityLabel(theme.name ?? theme.id)
+                    .accessibilityLabel(theme.name)
                     .accessibilityAddTraits(model.themeChoice == theme.id ? [.isSelected] : [])
                 }
             }
         }
+        .task { await model.loadThemes() }
     }
 }
