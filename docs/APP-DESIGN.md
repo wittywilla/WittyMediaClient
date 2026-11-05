@@ -251,6 +251,29 @@ website at 375 wide.
 3. **Rows**, each a Section title with "See all ›" (13 medium, `textSecondary`): Continue watching, Next up, Because you
    watch…, Recently added in each library. Each row scrolls sideways with snapping, 16 from the left edge.
 
+### Playback and the media player
+
+Playing looks and works as the website's player does on a phone, control for control; only the engine underneath is
+the device's own (AVPlayer on Apple, ExoPlayer/Media3 on Android), for smooth playback, picture in picture, AirPlay and
+Chromecast, and the lock screen. The website's code is the reference, in the server's `web/src/player/` and
+`web/src/audio/`:
+
+- **Video** (`player/VideoPlayer.tsx`, `player/Controls.tsx`, `player/chrome.tsx`, `player/TrackPicker.tsx`,
+  `player/PlayInfoPanel.tsx`, `player/ViewSettings.tsx`, `player/PickIntroBar.tsx`): the same controls in the same
+  places, the seek bar with chapter marks and preview, skip intro and credits, next episode, the audio and subtitle
+  picker, speed, picture fit, the info panel, and the same timing for hiding the controls. Leaving the player for
+  the rest of the app keeps it playing in the mini player dock, as `/play` does.
+- **Discs** (`player/DvdPlayer.tsx`, `player/CdPlayer.tsx`, `player/InsertDisc.tsx`, `player/Remote.tsx`): menus,
+  chapters, the remote, insert-disc, and the CD player.
+- **Music, audiobooks, podcasts** (`audio/MiniPlayer.tsx`, `audio/NowPlaying.tsx`, `audio/controls.tsx`,
+  `audio/QueuePanel.tsx`, `audio/LyricsPanel.tsx`, `audio/Karaoke.tsx`, `audio/SoundPanel.tsx`, `audio/visualizer.tsx`,
+  `audio/nowplaying.css`): the mini bar above the floating bar, and Now Playing full screen with its artwork,
+  backdrop, lyrics, karaoke, queue, Sound (EQ, loudness, vocals, key), sleep timer, repeat, shuffle, song radio and
+  the visualizer.
+
+Nothing is invented on top: where the app and the website differ, the website wins, unless this page marks an
+improvement for both (**→ web**).
+
 ### Components
 
 | Component | Look |
