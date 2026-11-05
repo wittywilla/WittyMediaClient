@@ -163,10 +163,10 @@ jobs:
         working-directory: apple
         run: xcodegen generate
       # Compile only: nothing is signed, and nothing here can run on a device.
-      - name: Build for Apple TV, iPhone and iPad, Mac, and Apple Vision Pro
+      - name: Build for Apple TV, iPhone and iPad, and Apple Vision Pro
         working-directory: apple
         run: |
-          pairs="WittyMedia-tvOS|generic/platform=tvOS WittyMedia-iOS|generic/platform=iOS WittyMedia-macOS|generic/platform=macOS"
+          pairs="WittyMedia-tvOS|generic/platform=tvOS WittyMedia-iOS|generic/platform=iOS"
           # The iPhone and iPad target builds for Apple Vision Pro too, where the runner's Xcode has its SDK.
           if xcodebuild -showsdks | grep -q -- '-sdk xros'; then
             pairs="$pairs WittyMedia-iOS|generic/platform=visionOS"

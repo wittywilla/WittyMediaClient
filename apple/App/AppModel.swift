@@ -15,8 +15,9 @@ enum SharedData {
         let background, panel, card, border, text, textSecondary, accent, onAccent, danger: String
         let textHint, accentText, ok: String?
     }
-    struct Theme: Decodable {
+    struct Theme: Decodable, Identifiable {
         let id: String
+        let name: String?
         let scheme: String
         let colours: ThemeColours
     }
@@ -25,6 +26,29 @@ enum SharedData {
         let themes: [Theme]
     }
     private static let themeFile = load("themes").flatMap { try? JSONDecoder().decode(ThemeFile.self, from: $0) }
+
+    /// Every theme the server is built with, in the order its Appearance page lists them.
+    static var themes: [Theme] {
+        let order = ["default", "light", "midnight", "cinema", "evergreen", "paper", "oled", "contrast"]
+        return (themeFile?.themes ?? []).sorted { (order.firstIndex(of: $0.id) ?? 99, $0.id) < (order.firstIndex(of: $1.id) ?? 99, $1.id) }
+    }
+
+    /// Only that theme, with no stand-in.
+    static func exactTheme(_ id: String?) -> Theme? { themeFile?.themes.first { $0.id == id } }
+
+    /// A built-in theme, through the same translation as the server's tokens, so the first screen and a server
+    /// that can't be reached look the same as once the server answers.
+    static func appTheme(_ id: String?) -> AppTheme {
+        guard let theme = exactTheme(id) ?? theme(id) else { return ThemeTranslator.translate(ThemeTokens(id: "default", colors: ThemeTranslator.witty)) }
+        let c = theme.colours
+        var colors = ["bg": c.background, "bg-2": c.panel, "bg-3": c.card, "bg-4": c.border, "fg": c.text,
+                      "fg-2": c.textSecondary, "accent": c.accent, "accent-fg": c.onAccent, "danger": c.danger]
+        colors["fg-3"] = c.textHint
+        colors["accent-text"] = c.accentText
+        colors["ok"] = c.ok
+        return ThemeTranslator.translate(ThemeTokens(id: theme.id, name: theme.name, scheme: theme.scheme, colors: colors,
+                                                     lengths: ["radius": 10]))
+    }
 
     /// A theme uploaded to the server has no entry here, and gets the default look.
     static func theme(_ id: String?) -> Theme? {
@@ -76,11 +100,22 @@ enum Route: Hashable {
     case page(String)
     /// An album or a book's chapters, on Apple TV.
     case album(library: Int64, name: String)
+    /// An album, a book or a podcast, asked for by its name and whose it is: see ListeningViews.swift.
+    case listeningAlbum(library: Int64, album: String, artist: String)
+    /// Everything of one artist's or author's in a library.
+    case artist(library: Int64, name: String)
     /// A photo and the ones around it, on Apple TV.
     case photo(library: Int64, id: Int64)
     /// Live channels, on Apple TV.
     case guide
     case channel(key: String)
+    /// Recordings and series, on Apple TV.
+    case recordings
+    /// The licences of what this app ships, and its own log, from You.
+    case notices
+    case logs
+    /// The person's own account and this device's choices, from You: see YouViews.swift.
+    case names, password, twoStep, devices, signInTv, theme
 }
 
 /// A list of tracks being played, in order, on Apple TV.
@@ -119,13 +154,36 @@ final class AppModel: ObservableObject {
     /// The account's WittyTV colours and whether it wants logos, once the guide has asked.
     var tvColours: TvColours?
     var tvLogos = true
+    /// The server's theme, from `/status`.
     @Published var themeId: String?
+    /// This device's own theme for this server: "" follows the server, "auto" follows the device's
+    /// light or dark, anything else is a theme's id. Kept on the device, as the web keeps it per browser.
+    @Published private(set) var themeChoice = ""
+    /// The device's own light or dark, which the automatic theme follows.
+    @Published var systemScheme: ColorScheme = .dark {
+        didSet { if themeChoice == "auto" && oldValue != systemScheme { refreshTheme() } }
+    }
+    /// The theme in use, translated from the server's tokens: docs/APP-DESIGN.md, Themes.
+    @Published private(set) var appTheme: AppTheme = SharedData.appTheme("default") {
+        didSet { Tokens.Radius.theme = CGFloat(appTheme.radius) }
+    }
+    /// Every theme the server has, once asked.
+    @Published private(set) var themeList: ThemeList?
+    /// The look this person made with the website's theme maker.
+    @Published private(set) var customTheme: ThemeMakerInput?
+    private var themeFetch: Task<Void, Never>?
+    /// The owner's own name and logo for the server, from `/status`, shown on the sign-in screens.
+    @Published var brandName = ""
+    @Published var brandLogo = ""
     @Published var user: User?
+    /// Music, audiobooks and podcasts, which carry on whatever screen is showing.
+    let listening = Listening()
     @Published var libraries: [Library] = []
     /// Something worth saying that isn't a failure of the screen in front of the person.
     @Published var notice = ""
 
-    private(set) var client = WittyClient(base: "") {
+    // Published, so the screens that get it from the environment never see the one before it.
+    @Published private(set) var client = WittyClient(base: "") {
         didSet { ClientLog.shared.use(client) }
     }
 
@@ -159,6 +217,8 @@ final class AppModel: ObservableObject {
         return "tvOS"
         #elseif os(macOS)
         return "macOS"
+        #elseif os(visionOS)
+        return "visionOS"
         #else
         return "iOS"
         #endif
@@ -171,6 +231,8 @@ final class AppModel: ObservableObject {
         return given.isEmpty ? "Apple TV" : given
         #elseif os(macOS)
         return "Mac"
+        #elseif os(visionOS)
+        return "Apple Vision Pro"
         #else
         return UIDevice.current.userInterfaceIdiom == .pad ? "iPad" : "iPhone"
         #endif
@@ -189,7 +251,69 @@ final class AppModel: ObservableObject {
         set { defaults.set(newValue, forKey: "server") }
     }
 
-    var palette: Palette { Palette(SharedData.theme(themeId)?.colours) }
+    /// The theme in use: this device's choice, or the server's.
+    var effectiveThemeId: String? {
+        switch themeChoice {
+        case "": return themeId
+        case "auto": return systemScheme == .light ? "light" : "default"
+        case "custom": return customTheme == nil ? themeId : "custom"
+        default: return themeChoice
+        }
+    }
+
+    var palette: Palette { Palette(appTheme) }
+
+    func chooseTheme(_ id: String) {
+        themeChoice = id
+        defaults.set(id, forKey: "theme." + client.base)
+        refreshTheme()
+    }
+
+    private func preview(_ id: String) -> ThemeList.ThemeSummary.Preview? {
+        themeList?.themes.first { $0.id == id }?.preview
+    }
+
+    private func tokensKey(_ id: String) -> String { "themeTokens|\(client.base)|\(id)" }
+
+    /// The theme in use, at once from what this device kept (or the built-in copy), then from the server.
+    func refreshTheme() {
+        let id = effectiveThemeId ?? "default"
+        if id == "custom", let made = customTheme {
+            appTheme = ThemeTranslator.translate(made: made)
+            return
+        }
+        if let data = defaults.data(forKey: tokensKey(id)), let kept = try? JSONDecoder().decode(ThemeTokens.self, from: data) {
+            appTheme = ThemeTranslator.translate(kept, preview: preview(id))
+        } else if SharedData.exactTheme(id) != nil {
+            appTheme = SharedData.appTheme(id)
+        }
+        let asking = client
+        guard !asking.base.isEmpty else { return }
+        themeFetch?.cancel()
+        themeFetch = Task { [weak self] in
+            guard let tokens = try? await asking.themeTokens(id), !Task.isCancelled, let self,
+                  self.client.base == asking.base, (self.effectiveThemeId ?? "default") == id else { return }
+            if let data = try? JSONEncoder().encode(tokens) { self.defaults.set(data, forKey: self.tokensKey(id)) }
+            self.appTheme = ThemeTranslator.translate(tokens, preview: self.preview(id))
+        }
+    }
+
+    /// What themes the server has, and the person's own, once signed in.
+    func loadThemes() async {
+        let asking = client
+        async let list = try? asking.themeList()
+        async let made = try? asking.customTheme()
+        let (l, m) = await (list, made)
+        guard client.base == asking.base else { return }
+        if let l { themeList = l }
+        customTheme = m ?? nil
+        refreshTheme()
+    }
+
+    /// The account as the server has it now, after a change from You.
+    func refreshUser() async {
+        if let fresh = try? await client.status().user { user = fresh }
+    }
     /// What the owner set, in the guide, and what this account chose, for Apple TV's guide and channels.
     func learnTvLook(from guide: Guide, client: WittyClient) async {
         let saved = try? await client.tvSaved()
@@ -199,11 +323,17 @@ final class AppModel: ObservableObject {
 
     /// The app's theme, for the WittyTV themes that follow it.
     var tvAppColours: TvAppColours {
-        guard let c = SharedData.theme(themeId)?.colours else { return .fallback }
-        return TvAppColours(bg: c.background, bg2: c.panel, bg3: c.card, bg4: c.border, fg: c.text, fg2: c.textSecondary,
-                            accent: c.accent, accentText: c.accentText ?? c.accent, accentFg: c.onAccent, border: c.border)
+        let t = appTheme
+        func hex(_ c: ThemeColour) -> String { String(c.over(t.background).hex.prefix(7)) }
+        return TvAppColours(bg: hex(t.background), bg2: hex(t.panel), bg3: hex(t.card), bg4: hex(t.raised), fg: hex(t.text),
+                            fg2: hex(t.textSecondary), accent: hex(t.accent), accentText: hex(t.accentText),
+                            accentFg: hex(t.onAccent), border: hex(t.raised))
     }
-    var scheme: ColorScheme { SharedData.theme(themeId)?.scheme == "light" ? .light : .dark }
+    /// Nothing for the automatic theme, so the device's own light or dark comes through to be followed.
+    var scheme: ColorScheme? {
+        if themeChoice == "auto" { return nil }
+        return appTheme.isLight ? .light : .dark
+    }
 
     /// Only for a server whose identity has just been checked.
     private func openServer(_ opening: SavedServer, token: String = "") {
@@ -220,6 +350,7 @@ final class AppModel: ObservableObject {
     }
 
     private func forgetSignIn() {
+        listening.forget()
         Keychain.clear()
         TopShelfWriter.clear()
         ArtCache.shared.removeAllObjects()
@@ -239,7 +370,7 @@ final class AppModel: ObservableObject {
                 return reasonText(reason)
             }
             let status = try await client.status()
-            themeId = status.theme
+            learn(status)
             paths = [:]
             user = status.user
             if status.user != nil {
@@ -280,7 +411,7 @@ final class AppModel: ObservableObject {
             saved = saved.moved(to: found.url)
             proof = await WittyClient.identify(found.url, saved: [saved])
         }
-        let checked = proof.saved(url: saved.url, name: saved.name)
+        let checked = proof.saved(url: saved.url, name: saved.name, brandLogo: saved.brandLogo)
         switch Identity.stepAtStart(proof.state, tokenFits: tokenFits(pin: Keychain.pin, proof: proof)) {
         case .warn:
             stage = .mismatch(checked)
@@ -293,7 +424,7 @@ final class AppModel: ObservableObject {
         case .askCode, .signIn:
             openServer(checked)
             do {
-                themeId = try await client.status().theme
+                learn(try await client.status())
                 stage = .signIn(.usual)
             } catch {
                 stage = .connect(message: say("errLost"))
@@ -308,9 +439,10 @@ final class AppModel: ObservableObject {
         let proof = await WittyClient.identify(using.url, saved: [using])
         guard proof.state == .different || proof.state == .bad else { return }
         current = nil
+        listening.forget()
         client = WittyClient(base: "")
         paths = [:]
-        stage = proof.state == .bad ? .connect(message: say("identityBad")) : .mismatch(proof.saved(url: using.url, name: using.name))
+        stage = proof.state == .bad ? .connect(message: say("identityBad")) : .mismatch(proof.saved(url: using.url, name: using.name, brandLogo: using.brandLogo))
     }
 
     /// Someone chose this server, and it says it's a WittyMediaServer. Its identity
@@ -318,9 +450,9 @@ final class AppModel: ObservableObject {
     func arrive(url: String, status: ServerStatus) async -> String? {
         let proof = await WittyClient.identify(url, saved: recent)
         let pin = Keychain.pin
-        let checked = proof.saved(url: url, name: status.displayName)
+        let checked = proof.saved(url: url, name: status.displayName, brandLogo: PlainWords.clean(status.brandLogo ?? "", limit: 64))
         let step = Identity.nextStep(proof.state, tokenFits: !pin.isEmpty && tokenFits(pin: pin, proof: proof))
-        if step != .refuse && step != .lost { themeId = status.theme }
+        if step != .refuse && step != .lost { learn(status) }
         switch step {
         case .warn:
             stage = .mismatch(checked)
@@ -351,7 +483,7 @@ final class AppModel: ObservableObject {
             stage = .code(shown, fromSignIn: false)
             return nil
         case .new:
-            stage = .mismatch(proof.saved(url: shown.url, name: shown.name))
+            stage = .mismatch(proof.saved(url: shown.url, name: shown.name, brandLogo: shown.brandLogo))
             return nil
         default:
             return say("identityBad")
@@ -379,7 +511,7 @@ final class AppModel: ObservableObject {
         case .refuse:
             return say("identityBad")
         case .changed:
-            stage = .mismatch(proof.saved(url: shown.url, name: shown.name))
+            stage = .mismatch(proof.saved(url: shown.url, name: shown.name, brandLogo: shown.brandLogo))
             return say("identityBad")
         }
     }
@@ -402,16 +534,29 @@ final class AppModel: ObservableObject {
     }
 
     /// A name and password, or a profile with neither. The server's own words say what was wrong.
-    func passwordSignIn(name: String, password: String) async -> String? {
-        if let current, let refused = await refuseToSend(to: current) { return refused }
+    enum SignInOutcome: Equatable {
+        case signedIn
+        /// The account asks for the code from an authenticator app. The words say why when a code was wrong.
+        case needsCode(String)
+        /// The name and password didn't match. The screen words it, since it knows which was asked for.
+        case wrong
+        case failed(String)
+    }
+
+    /// A name and password, and the authenticator's code when the account has asked for one.
+    func passwordSignIn(name: String, password: String, code: String = "") async -> SignInOutcome {
+        if let current, let refused = await refuseToSend(to: current) { return .failed(refused) }
         do {
-            let result = try await client.login(name: name, password: password, device: deviceName)
+            let result = try await client.login(name: name, password: password, device: deviceName, code: code)
             signedIn(token: result.token, user: result.user)
-            return nil
+            return .signedIn
         } catch let error as APIError {
-            return error.message
+            if error.twoFactor { return .needsCode(code.isEmpty ? "" : error.message) }
+            // The server's own 429 words already say how long to wait.
+            if error.status == 401 { return .wrong }
+            return .failed(error.message)
         } catch {
-            return plainWords(Problem.of(error))
+            return .failed(plainWords(Problem.of(error)))
         }
     }
 
@@ -426,15 +571,21 @@ final class AppModel: ObservableObject {
         paths = [:]
         tab = .home
         stage = .browsing
+        Task { await loadThemes() }
         if user == nil {
             Task { self.user = try? await client.status().user }
         }
     }
 
+    /// The last place listened to is sent before the sign-in ends.
     private func endSession() {
         let old = client
+        let placeSent = listening.forget()
         guard !old.token.isEmpty else { return }
-        Task { try? await old.logout() }
+        Task {
+            await placeSent?.value
+            try? await old.logout()
+        }
     }
 
     func signOut() {
@@ -451,8 +602,46 @@ final class AppModel: ObservableObject {
         server = ""
         client = WittyClient(base: "")
         themeId = nil
+        themeChoice = ""
+        themeList = nil
+        customTheme = nil
+        appTheme = SharedData.appTheme("default")
+        brandName = ""
+        brandLogo = ""
         stage = .connect(message: "")
     }
+
+    /// What a server says about how it looks: its theme, and the owner's name and logo for it.
+    private func learn(_ status: ServerStatus) {
+        themeId = status.theme
+        themeChoice = defaults.string(forKey: "theme." + client.base) ?? ""
+        refreshTheme()
+        brandName = PlainWords.clean(status.brandName ?? "", limit: 60)
+        brandLogo = PlainWords.clean(status.brandLogo ?? "", limit: 64)
+        rememberLook(of: status)
+    }
+
+    /// An added server's name and logo go with it into the list of servers, the logo's picture kept on the device.
+    private func rememberLook(of status: ServerStatus) {
+        guard let saved = current else { return }
+        let updated = saved.with(name: status.displayName, brandLogo: brandLogo)
+        if updated != saved {
+            current = updated
+            recent = recent.map { $0.url == updated.url ? updated : $0 }
+        }
+        let version = brandLogo
+        guard !version.isEmpty, LogoCache.image(server: updated.url, version: version) == nil,
+              let url = client.brandLogoURL(version: version) else { return }
+        let asking = client
+        Task {
+            guard let data = try? await asking.imageData(url) else { return }
+            LogoCache.keep(data, server: updated.url, version: version)
+            objectWillChange.send()
+        }
+    }
+
+    /// The address of the server used last, which the connect screen marks.
+    var lastUsedURL: String { server }
 
     /// Words for a failure, with a sign-in the server no longer accepts meaning signing in again.
     /// Empty means there's nothing to show: the screen went away, or the stage has changed.

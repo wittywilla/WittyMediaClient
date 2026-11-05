@@ -7,7 +7,6 @@ options:
     # tvOS 16 is what every Apple TV HD and 4K can run, and what NavigationStack needs.
     iOS: "16.0"
     tvOS: "16.0"
-    macOS: "13.0"
     # Every Apple Vision Pro can run visionOS 2.
     visionOS: "2.0"
   createIntermediateGroups: true
@@ -34,6 +33,9 @@ targetTemplates:
       # The themes, wording and test data every client shares.
       - path: ../shared/data
         type: folder
+        buildPhase: resources
+      # What Profile's Licences page shows: every third-party part and its licence.
+      - path: ../NOTICE
         buildPhase: resources
     dependencies:
       - package: WittyKit
@@ -123,14 +125,3 @@ targets:
         SUPPORTS_XR_DESIGNED_FOR_IPHONE_IPAD: "NO"
         INFOPLIST_KEY_UILaunchScreen_Generation: "YES"
         INFOPLIST_KEY_UISupportedInterfaceOrientations: "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight"
-  WittyMedia-macOS:
-    templates: [App]
-    platform: macOS
-    entitlements:
-      path: Generated/WittyMedia-macOS.entitlements
-      properties:
-        com.apple.security.app-sandbox: true
-        com.apple.security.network.client: true
-    settings:
-      base:
-        ENABLE_HARDENED_RUNTIME: "YES"
