@@ -143,19 +143,9 @@ private const val TAB_HEIGHT = 52
 
 // Home, Search and You. A phone has them in a floating pill at the bottom, within reach of a
 // thumb. A TV has them along the top, where up from the first row gets to them.
-// Pages below the tabs: the website's shell on a phone or tablet; on a TV, as before.
-@Composable
-fun PageShell(nav: Nav, content: @Composable () -> Unit) {
-    if (LocalMetrics.current.tv) content() else PhoneShell(nav, content)
-}
-
 @Composable
 fun Shell(nav: Nav, content: @Composable () -> Unit) {
     val metrics = LocalMetrics.current
-    if (!metrics.tv) {
-        PhoneShell(nav, content)
-        return
-    }
     // Whose avatar the You tab shows, when the app opened already signed in some other way.
     LaunchedEffect(Unit) {
         if (nav.me == null) nav.me = runCatching { nav.app.api.status().user }.getOrNull()
