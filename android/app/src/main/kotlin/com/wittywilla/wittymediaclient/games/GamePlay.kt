@@ -404,7 +404,8 @@ class GamePlay(
             is GameEvent.Hello -> if (event.video.isNotEmpty()) videoKind = event.video
             is GameEvent.Rumble -> input.rumble(event.port, event.effect, event.strength, event.ms)
             is GameEvent.Stream -> {
-                if (event.video.isNotEmpty()) videoKind = event.video
+                // Over a WebSocket the stream says whether pictures come as H.264 or JPEG. WebRTC draws its own, whatever the codec.
+                if (event.video.isNotEmpty() && videoKind != "webrtc") videoKind = if (event.video == "jpeg") "jpeg" else "h264"
                 event.aspect?.takeIf { it > 0 }?.let { aspect = it }
                 event.fps?.takeIf { it > 0 }?.let { fps = it }
                 turns = event.turns
