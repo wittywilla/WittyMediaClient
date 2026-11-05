@@ -5,6 +5,13 @@ What changed in WittyMediaClient, newest first. What changed before it had a rep
 
 ## Unreleased
 
+- **Apple TV plays the server's games.** A games library opens as the website's couch mode: covers at the top with one at the front, tinted by its
+  colour, then Continue playing, the consoles, the shelves and every game. A game's page has Play or Resume, Start over, a favourite, where you left off,
+  its save states and how it plays. The game plays on the server, as it does for the website, and streams to the Apple TV, which decodes it in hardware and
+  draws it with the person's picture settings, scanlines and bezels included. MFi, Xbox and PlayStation controllers and the Siri Remote work, with the
+  account's controller profiles and shortcuts, and a game menu to save, load, press Start or Select, change disc, reset and quit. Saves are the server's, so a
+  game started on the TV resumes in a browser and the other way round. Games on someone's own PC still go through Moonlight. No emulator is in the app:
+  see `docs/WITTYPLAY-APPLE-TV.md` for why, and for what the emulators' licences mean.
 - **Apple: music, audiobooks and podcasts have a player of their own, as on Android.** On iPhone, iPad, Apple Vision Pro and Apple TV: albums, artists or authors,
   songs and podcast episodes have the app's own screens, with a queue you can add to, rearrange and shuffle, and a mini player above the bar. Sound carries on
   with the screen off and after leaving the app, with the player on the lock screen and in Control Center, and headphone and media keys work. Books and

@@ -617,7 +617,7 @@ TV, which has none, everything is native.
 | Radio | Page | To build |
 | Live TV guide and watching, WittyTV's looks | Page | Native, every WittyTV look and layout |
 | Recordings and series rules | Page | To build |
-| Games (WittyPlay) | Page (iPhone and iPad), the emulator in the app | To build: native emulator cores on Apple TV, the page on Android TV |
+| Games (WittyPlay) | Page (iPhone and iPad) | Native on Apple TV: couch mode's library and game page, and a player for the server's stream (the server runs every game: see [WITTYPLAY-APPLE-TV.md](WITTYPLAY-APPLE-TV.md)). The page on Android TV |
 | Game PCs and rigs (Moonlight) | Native | Native |
 | DVD and Blu-ray menus, CD player | Page | To build |
 | Collections and smart playlists | Page | To build |

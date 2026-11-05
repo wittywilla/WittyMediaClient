@@ -100,6 +100,11 @@ enum Route: Hashable {
     case logs
     /// The person's own account and this device's choices, from You: see YouViews.swift.
     case names, password, twoStep, devices, signInTv, theme
+    /// WittyPlay on Apple TV: a games library or one console's games in it, a game's page, and a
+    /// game being played. See GamesViews.swift and GamePlayer.swift.
+    case gameLibrary(Library, console: String?)
+    case game(Int64)
+    case playGame(Int64, GameStart)
 }
 
 /// A list of tracks being played, in order, on Apple TV.
@@ -180,7 +185,7 @@ final class AppModel: ObservableObject {
     /// The player and the game page have the whole screen.
     var hidesBars: Bool {
         switch path.last {
-        case .player?, .web?: return true
+        case .player?, .web?, .playGame?: return true
         default: return false
         }
     }

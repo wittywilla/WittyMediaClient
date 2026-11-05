@@ -177,7 +177,7 @@ public final class WittyClient: @unchecked Sendable {
         }
     }
 
-    private func call(_ method: String, _ path: String, body: Data? = nil) async throws -> Data {
+    func call(_ method: String, _ path: String, body: Data? = nil) async throws -> Data {
         guard let url = URL(string: base + apiPath + path) else {
             throw APIError(status: 0, message: "That server address can't be used.")
         }
