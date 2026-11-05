@@ -180,7 +180,8 @@ data class Season(
     val title: String = "",
     val overview: String = "",
     val episodeCount: Int = 0,
-    val unwatched: Int = 0,
+    // Left out until something has been watched.
+    val unwatched: Int? = null,
 )
 
 @Serializable
@@ -311,9 +312,9 @@ data class VideoStream(val index: Int = 0, val title: String = "", val width: In
 @Serializable
 data class Recommendation(val item: Item? = null, val show: Show? = null)
 
-// GET /prefs: the server's limits for players.
+// GET /prefs: the server's limits for players, and how a show's episodes are laid out unless it says otherwise.
 @Serializable
-data class PlayerPrefs(val maxSpeed: Double = 4.0)
+data class PlayerPrefs(val maxSpeed: Double = 4.0, val episodeView: String = "")
 
 @Serializable
 data class Explanation(

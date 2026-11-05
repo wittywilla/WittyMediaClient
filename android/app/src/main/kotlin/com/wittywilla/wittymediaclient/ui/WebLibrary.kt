@@ -97,12 +97,12 @@ private fun artHue(name: String): Float {
 }
 
 @Composable
-fun PhoneLibrary(nav: Nav, library: Library) {
+fun PhoneLibrary(nav: Nav, library: Library, chosen: Map<String, String> = emptyMap()) {
     val scheme = MaterialTheme.colorScheme
     val extra = LocalExtraColours.current
     val api = nav.app.api
     val scope = rememberCoroutineScope()
-    val filters = remember(library.id) { mutableStateOf(mapOf<String, String>()) }
+    val filters = remember(library.id) { mutableStateOf(chosen) }
     var sort by remember(library.id) { mutableStateOf<Sort?>(null) }
     var desc by remember(library.id) { mutableStateOf(false) }
     var seed by remember { mutableIntStateOf(0) }

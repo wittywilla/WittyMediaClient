@@ -66,6 +66,7 @@ import coil3.compose.AsyncImage
 import coil3.request.ImageRequest
 import com.wittywilla.wittymediaclient.net.Item
 import com.wittywilla.wittymediaclient.net.Show
+import com.wittywilla.wittymediaclient.net.notice
 
 // The website's cards at phone width (web/src/ui/Surface.tsx, components/common.tsx, styles.css): posters 104 wide
 // (148 on a wider screen), landscape cards for episodes, the placeholder made from the title's colour, the hub
@@ -107,9 +108,13 @@ fun Placeholder(title: String, modifier: Modifier = Modifier, centred: Boolean =
     }
 }
 
-// A picture from the server over its placeholder, which shows while it loads or if there is none.
+// A picture from the server over its placeholder, which shows while it loads or if there is none. `alignment` is
+// where a picture that doesn't fit is cut, as CSS's background-position.
 @Composable
-fun WebArt(url: String?, title: String, widthDp: Dp, aspect: Float, modifier: Modifier = Modifier, centred: Boolean = true, placeholderless: Boolean = false) {
+fun WebArt(
+    url: String?, title: String, widthDp: Dp, aspect: Float, modifier: Modifier = Modifier, centred: Boolean = true, placeholderless: Boolean = false,
+    alignment: Alignment = Alignment.Center,
+) {
     val context = LocalContext.current
     val px = with(LocalDensity.current) { widthDp.toPx() }.toInt().coerceAtLeast(1)
     var failed by remember(url) { mutableStateOf(false) }
@@ -117,7 +122,7 @@ fun WebArt(url: String?, title: String, widthDp: Dp, aspect: Float, modifier: Mo
         if (!placeholderless) Placeholder(title, Modifier.fillMaxSize(), centred)
         if (url != null && !failed) {
             val request = remember(url, px) { ImageRequest.Builder(context).data(url).size(px, (px / aspect).toInt().coerceAtLeast(1)).build() }
-            AsyncImage(request, null, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize(), onError = { failed = true })
+            AsyncImage(request, null, contentScale = ContentScale.Crop, alignment = alignment, modifier = Modifier.fillMaxSize(), onError = { failed = true })
         }
     }
 }
@@ -162,7 +167,7 @@ fun runtimeWords(sec: Double): String {
 }
 
 // CSS's linear-gradient at an angle: 0 points up, 90 right, as the website writes it.
-private fun Modifier.angledGradient(angle: Float, from: Color, to: Color): Modifier = drawBehind {
+internal fun Modifier.angledGradient(angle: Float, from: Color, to: Color): Modifier = drawBehind {
     val turn = Math.toRadians(angle.toDouble())
     val dx = kotlin.math.sin(turn).toFloat()
     val dy = -kotlin.math.cos(turn).toFloat()
@@ -272,13 +277,13 @@ fun LazyListScope.itemCards(nav: Nav, items: List<Item>, shows: List<Show> = emp
 
 // The website's buttons on a touch screen: 44 high, 16 inside, radius 10, 14 semibold, an 18 icon 8 before. Small is
 // `.btn.sm`: 12 inside, 13, a 16 icon 6 before. Square is only the icon, 44 square, with the words for a screen reader.
-// Disabled, it fades to 45%.
+// Disabled, it fades to 45%. `spoken` is what a screen reader says instead of the words, as an aria-label.
 enum class WebButtonKind { Primary, Secondary, Ghost }
 
 @Composable
 fun WebButton(
     words: String, onClick: () -> Unit, kind: WebButtonKind = WebButtonKind.Secondary, icon: ImageVector? = null, modifier: Modifier = Modifier,
-    small: Boolean = false, square: Boolean = false, enabled: Boolean = true,
+    small: Boolean = false, square: Boolean = false, enabled: Boolean = true, spoken: String? = null,
 ) {
     val scheme = MaterialTheme.colorScheme
     val (fill, ink) = when (kind) {
@@ -286,7 +291,7 @@ fun WebButton(
         WebButtonKind.Secondary -> scheme.surfaceVariant to scheme.onBackground
         WebButtonKind.Ghost -> Color.Transparent to scheme.onBackground
     }
-    Pressable(onClick, modifier.heightIn(min = 44.dp).then(if (square) Modifier.widthIn(min = 44.dp) else Modifier), shape = RoundedCornerShape(10.dp), fill = fill, label = words, enabled = enabled, pressScale = 0.975f, disabledAlpha = 0.45f, ring = false) {
+    Pressable(onClick, modifier.heightIn(min = 44.dp).then(if (square) Modifier.widthIn(min = 44.dp) else Modifier), shape = RoundedCornerShape(10.dp), fill = fill, label = spoken ?: words, enabled = enabled, pressScale = 0.975f, disabledAlpha = 0.45f, ring = false) {
         Row(
             Modifier.heightIn(min = 44.dp).then(if (square) Modifier.widthIn(min = 44.dp) else Modifier)
                 .then(if (kind == WebButtonKind.Ghost) Modifier.border(1.dp, scheme.onBackground.copy(alpha = 0.2f), RoundedCornerShape(10.dp)) else Modifier)
@@ -318,25 +323,25 @@ fun Skel(modifier: Modifier, radius: Dp = 4.dp) {
 
 // The foot of a page, as the website's (App.tsx, components/common.tsx LegalNote and VersionTag): the server's short
 // legal notice with a link to Legal, then "WittyMediaServer 0.6.2" and its stage. A page with a notice of its own
-// (an item's "metadata") shows that one instead of the general one.
+// shows that one instead of the general one (styles.css hides .legal-foot); one that shows its notice in its own
+// place, as an item's and a show's do, passes "" for the version alone.
 @Composable
 fun PageFoot(nav: Nav, notice: String = "general") {
     val scheme = MaterialTheme.colorScheme
     val extra = LocalExtraColours.current
     val (number, stage) = com.wittywilla.wittymediaclient.net.versionParts(nav.serverVersion)
     Column(Modifier.fillMaxWidth().padding(start = 16.dp, end = 16.dp, top = 28.dp), verticalArrangement = Arrangement.spacedBy(28.dp)) {
-        nav.legal?.notices?.get(notice)?.let { n ->
-            val link = nav.legal?.linkText?.ifEmpty { null } ?: "Legal"
+        nav.legal?.notice(notice)?.let { n ->
             val words = androidx.compose.ui.text.buildAnnotatedString {
-                append(n.text + " ")
+                append(n.words + " ")
                 pushStyle(androidx.compose.ui.text.SpanStyle(color = extra.accentText, textDecoration = androidx.compose.ui.text.style.TextDecoration.Underline))
-                append(link)
+                append(n.link)
                 pop()
             }
             Text(
                 words, color = extra.hint, fontSize = 12.sp, lineHeight = 18.sp,
-                modifier = Modifier.semantics { contentDescription = "Legal notice: ${n.text}" }
-                    .clickableNoRipple { nav.push(Route.Page("/settings/legal" + if (n.section.isEmpty()) "" else "#${n.section}", link)) },
+                modifier = Modifier.semantics { contentDescription = "Legal notice: ${n.words}" }
+                    .clickableNoRipple { nav.push(Route.Page(n.path, n.link)) },
             )
         }
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp, Alignment.CenterHorizontally), verticalAlignment = Alignment.CenterVertically) {

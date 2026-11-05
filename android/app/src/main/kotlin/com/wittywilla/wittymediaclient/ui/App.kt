@@ -86,8 +86,12 @@ sealed interface Route {
     data object Profile : Route { override val key = "profile" }
     data object Notices : Route { override val key = "notices" }
     data object Logs : Route { override val key = "logs" }
-    data class Library(val library: com.wittywilla.wittymediaclient.net.Library) : Route { override val key = "library-${library.id}" }
-    data class Show(val id: Long) : Route { override val key = "show-$id" }
+    // With something chosen, as the website's /library/3?genre=Drama: from a title's genre, tag or service.
+    data class Library(val library: com.wittywilla.wittymediaclient.net.Library, val chosen: Map<String, String> = emptyMap()) : Route {
+        override val key = "library-${library.id}" + chosen.entries.joinToString("") { "&${it.key}=${it.value}" }
+    }
+    // A season to open at, as the website's ?season=: -1 is Other videos. None opens at the next episode's.
+    data class Show(val id: Long, val season: Int? = null) : Route { override val key = "show-$id" + (season?.let { "-$it" } ?: "") }
     data class Item(val id: Long) : Route { override val key = "item-$id" }
     data class Player(val id: Long, val startOver: Boolean) : Route { override val key = "player-$id" }
     data class Web(val path: String) : Route { override val key = "web-$path" }
@@ -705,8 +709,8 @@ fun AppRoot(app: WittyApp) {
                         Route.Profile -> Shell(nav) { YouScreen(nav, strings) }
                         Route.Notices -> NoticesScreen(nav)
                         Route.Logs -> LogsScreen(nav)
-                        is Route.Library -> PageShell(nav) { if (route.library.isListening) ListeningLibraryScreen(nav, strings, route.library) else if (LocalMetrics.current.tv) LibraryScreen(nav, strings, route.library) else PhoneLibrary(nav, route.library) }
-                        is Route.Show -> PageShell(nav) { if (LocalMetrics.current.tv) ShowScreen(nav, strings, route.id) else PhoneShow(nav, strings, route.id) }
+                        is Route.Library -> PageShell(nav) { if (route.library.isListening) ListeningLibraryScreen(nav, strings, route.library) else if (LocalMetrics.current.tv) LibraryScreen(nav, strings, route.library) else PhoneLibrary(nav, route.library, route.chosen) }
+                        is Route.Show -> PageShell(nav) { if (LocalMetrics.current.tv) ShowScreen(nav, strings, route.id) else PhoneShow(nav, strings, route.id, route.season) }
                         is Route.Item -> PageShell(nav) { if (LocalMetrics.current.tv) ItemScreen(nav, strings, route.id) else PhoneItem(nav, strings, route.id) }
                         is Route.Album -> PageShell(nav) { AlbumScreen(nav, strings, route) }
                         is Route.Artist -> PageShell(nav) { ArtistScreen(nav, strings, route.library, route.name) }

@@ -249,6 +249,30 @@ class Api(val base: String, val token: String, private val quick: Boolean = fals
         call("PUT", "/me/ui", withChoice(call("GET", "/me/ui"), key, value))
     }
 
+    // A title's page, as the website's (see TitlePage.kt): an item or a show, and the rest of what its page shows,
+    // from one answer.
+    suspend fun itemPage(id: Long): Pair<Item, ItemFacts> {
+        val text = call("GET", "/items/$id")
+        return json.decodeFromString<Item>(text) to ItemFacts.read(text)
+    }
+
+    suspend fun showPage(id: Long): Pair<ShowDetail, ShowFacts> {
+        val text = call("GET", "/shows/$id")
+        return json.decodeFromString<ShowDetail>(text) to ShowFacts.read(text)
+    }
+
+    suspend fun attached(target: TitleTarget, id: Long): TitleAttached = get("/meta/${target.word}/$id/attached")
+    suspend fun listings(target: TitleTarget, id: Long): TitleListings = get("/meta/${target.word}/$id/listings")
+
+    // What the logo service has for some studios, networks or streaming services: up to 200 at a time.
+    suspend fun lookUpLogos(names: List<Pair<String, String>>): List<LogoAnswer> =
+        json.decodeFromString<LogoAnswers>(call("POST", "/logos/lookup", json.encodeToString(LogoLookup(names.take(200).map { LogoAsk(it.first, it.second) })))).logos
+
+    // A show's episode layout for everyone: "cards", "list", or "" for the server's. Administrators only.
+    suspend fun setShowView(id: Long, view: String) {
+        call("PUT", "/shows/$id/view", json.encodeToString(ShowView(view)))
+    }
+
     // What the server knows about a newer version of itself, for administrators.
     suspend fun updateStatus(): UpdateStatus = get("/update")
 
@@ -315,6 +339,10 @@ class Api(val base: String, val token: String, private val quick: Boolean = fals
     fun showPosterUrl(s: Show) = "$base$API/shows/${s.id}/art/poster?v=${s.updatedAt}"
     fun showBackdropUrl(s: Show) = "$base$API/shows/${s.id}/art/backdrop?v=${s.updatedAt}"
     fun seasonPosterUrl(s: Show, n: Int) = "$base$API/shows/${s.id}/art/season?n=$n&v=${s.updatedAt}"
+    // A title's logo, drawn in place of its name where it has one.
+    fun titleLogoUrl(target: TitleTarget, id: Long, version: Long) = "$base$API/meta/${target.word}/$id/art/logo?v=$version"
+    // A studio's, network's or service's logo: white for a dark page, dark for a light one, or as it was drawn.
+    fun logoImageUrl(logo: LogoAnswer, variant: String): String? = logo.id?.let { "$base$API/logos/$it/image?variant=${queryValue(variant)}&v=${logo.version}" }
 
     // Addresses in answers start with /api/: the server's address goes in front, nothing else
     // changes. A server's answer can't point the player, with what it carries, somewhere else.
