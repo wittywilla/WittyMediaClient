@@ -66,7 +66,8 @@ struct GuideDetails: View {
             if let s = channel.security, s.state == "unknown" { Text(s.detail).font(.wmSecondary).foregroundStyle(palette.textSecondary) }
             if let why = channel.noRecord, !why.isEmpty { Text("This channel can't be recorded: \(why).").font(.wmSecondary).foregroundStyle(palette.textSecondary) }
             ForEach(channel.notices ?? [], id: \.self) { Text($0).font(.wmSecondary).foregroundStyle(palette.textSecondary) }
-            if channel.kind == "library" {
+            // Only ever an explanation: whether Record is offered is the server's canRecord alone.
+            if channel.canRecord != true, channel.kind == "library" {
                 Text("Library channels can't be recorded: what they play is already in your library.").font(.wmSecondary).foregroundStyle(palette.textSecondary)
             }
         }

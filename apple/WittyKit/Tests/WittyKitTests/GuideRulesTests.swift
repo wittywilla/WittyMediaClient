@@ -100,7 +100,6 @@ final class GuideRulesTests: XCTestCase {
     func testTheWholeChannelFromTheServer() throws {
         let json = ##"{"key":"tun-1","kind":"tuner","id":1,"number":"201","name":"News","group":"Test","canRecord":true,"hd":true,"accent":"#ff8800","favourite":true,"brand":{"kind":"network","name":"News"},"security":{"state":"unknown","label":"Not checked yet","detail":"Checked when you tune in."},"alternative":{"key":"tun-2","number":"202","name":"News HD"},"notices":["No sound"],"programmes":[{"start":1,"end":2,"kind":"broadcast","title":"Bulletin","genre":"News","itemId":5,"showId":6,"season":1,"episode":2}]}"##
         let c = try channel(json)
-        XCTAssertTrue(c.isTuner)
         XCTAssertEqual(c.canRecord, true)
         XCTAssertEqual(c.security?.label, "Not checked yet")
         XCTAssertEqual(c.alternative?.number, "202")
@@ -109,6 +108,15 @@ final class GuideRulesTests: XCTestCase {
         let cell = GuideRules.cells(c, from: 1, to: 2, pointsPerSecond: 100)[0]
         XCTAssertTrue(cell.isBroadcast)
         XCTAssertFalse(cell.isDim)
+    }
+
+    func testOnlyTheServerSaysWhatCanBeRecorded() throws {
+        let unsaid = try channel(#"{"key":"tun-1","kind":"tuner","name":"News","programmes":[{"start":1,"end":2,"kind":"broadcast","title":"Bulletin"}]}"#)
+        XCTAssertNotEqual(unsaid.canRecord, true, "a tuner channel without the flag isn't recordable")
+        let library = try channel(#"{"key":"lib-1","kind":"library","name":"Films","canRecord":false}"#)
+        XCTAssertNotEqual(library.canRecord, true)
+        let tuner = try channel(#"{"key":"tun-2","kind":"tuner","name":"Sport","canRecord":true}"#)
+        XCTAssertEqual(tuner.canRecord, true)
     }
 
     func testRecordingsSayWhereTheyAre() throws {

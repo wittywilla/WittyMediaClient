@@ -154,6 +154,8 @@ public struct GuideChannel: Decodable, Identifiable, Equatable {
     public let atsc3: Bool?
     /// Why it can't be tuned. This server never decrypts a broadcast.
     public let encrypted: String?
+    /// Whether Record is offered: the server's word alone, and missing means no. Only tuner channels the
+    /// profile may record ever have it; no app works it out for itself (docs/APP-DESIGN.md, On a TV).
     public let canRecord: Bool?
     public let noRecord: String?
     public let security: GuideSecurity?
@@ -171,7 +173,6 @@ public struct GuideChannel: Decodable, Identifiable, Equatable {
 
     public var id: String { key }
     public var canTune: Bool { (encrypted ?? "").isEmpty }
-    public var isTuner: Bool { kind == "tuner" }
     public var label: String { [number, name].compactMap { $0 }.filter { !$0.isEmpty }.joined(separator: "  ") }
 
     public func on(at now: Int64) -> GuideProgramme? {
