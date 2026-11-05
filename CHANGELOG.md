@@ -5,6 +5,12 @@ What changed in WittyMediaClient, newest first. What changed before it had a rep
 
 ## Unreleased
 
+- **WittyPlay's Shelves on every Apple device.** A games library opens on Shelves, as the website's: Where you left off, the other games in
+  progress, then a shelf for each console and the shelves the server picks, with every game A to Z at the foot. Games stand in their console's
+  kind of case, as their cartridge, card or disc, or as spines in their covers' colours with letter dividers, as each device remembers; a game
+  in progress has a ribbon. Press a game to pull it out, again to play it. On Apple TV the focused game rises into a preview at the top, and
+  Play/Pause plays it. A console's page is its collection, and a game's page has its picture drifting behind, Resume, Where you left off, its
+  moments and how it plays, or why it can't play here. iPhone, iPad and Apple Vision Pro open these instead of the website's game pages.
 - **Games over WebRTC on every Apple device, and Apple TV now needs tvOS 17.** Where the server has its second stream, the Apple
   player connects over WebRTC first (LiveKit's build of libwebrtc), with the stream's WebSocket behind it, and plays Opus sound;
   every rumble motor, motion, lights and up to eight players pass through. tvOS 17 runs on every Apple TV HD and 4K.
