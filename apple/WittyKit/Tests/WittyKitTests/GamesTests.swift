@@ -117,6 +117,23 @@ final class GamesTests: XCTestCase {
         XCTAssertEqual(secure.gameSocketRequest("a", video: "jpeg")?.url?.scheme, "wss")
     }
 
+    func testTransportsByMode() {
+        let client = WittyClient(base: "http://127.0.0.1:9797", token: "t")
+        XCTAssertTrue(GameTransports.make(mode: "ws-h264", session: "s", client: client) is GameWebSocketTransport)
+        XCTAssertTrue(GameTransports.make(mode: "ws-jpeg", session: "s", client: client) is GameWebSocketTransport)
+        XCTAssertNil(GameTransports.make(mode: "webrtc", session: "s", client: client), "not one this app has yet")
+        let hello = GameHello(app: "a", device: "d", name: "n", seats: [0], display: .init(hz: 60, width: 1, height: 1))
+        for mode in GameModes.supported where mode != GameModes.streamWebRTC {
+            XCTAssertNotNil(GameTransports.make(mode: mode, session: "s", client: client, hello: hello), "every mode the app asks for has a transport")
+        }
+        XCTAssertNil(GameTransports.make(mode: GameModes.streamWebRTC, session: "s", client: client, hello: hello), "WebRTC is the app's to give")
+    }
+
+    func testAGameGoneFromTheServerIsNotConnectedAgain() {
+        for status in [401, 403, 404, 410] { XCTAssertEqual(GameTransportEnd(upgradeStatus: status), .gone) }
+        for status in [0, 101, 429, 500, 502, 503] { XCTAssertEqual(GameTransportEnd(upgradeStatus: status), .dropped) }
+    }
+
     // MARK: Words
 
     func testWords() {
@@ -402,7 +419,7 @@ final class GamesTests: XCTestCase {
 
     func testEvents() {
         XCTAssertEqual(GameEvent.parse(#"{"type":"hello","video":"h264"}"#), .hello(video: "h264"))
-        XCTAssertEqual(GameEvent.parse(#"{"type":"rumble","port":1,"effect":0,"strength":65535}"#), .rumble(port: 1, strength: 1))
+        XCTAssertEqual(GameEvent.parse(#"{"type":"rumble","port":1,"effect":0,"strength":65535}"#), .rumble(port: 1, strength: 1, motor: .strong))
         XCTAssertEqual(GameEvent.parse(#"{"type":"geometry","width":320,"height":240,"aspect":1.333}"#), .geometry(width: 320, height: 240, aspect: 1.333))
         XCTAssertEqual(GameEvent.parse(#"{"type":"ended","text":"The game stopped responding."}"#), .ended("The game stopped responding."))
         XCTAssertEqual(GameEvent.parse(#"{"type":"disc","index":1,"count":3}"#), .disc(index: 1, count: 3))

@@ -1,4 +1,4 @@
-#if os(tvOS)
+#if os(tvOS) || os(iOS) || os(visionOS)
 import AVFoundation
 import CoreMedia
 import ImageIO
@@ -158,6 +158,21 @@ final class GamePictureRenderer: NSObject, MTKViewDelegate {
     var look = PictureLook()
     var layout: (settings: GameSettings, aspect: Double, frame: (width: Double, height: Double), turns: Int, inset: Double)
         = (GameSettings(values: [:]), 4.0 / 3.0, (0, 0), 0, 0)
+    /// Where on the screen the picture is centred, as fractions of it: all of it, or the part above
+    /// a phone's touch controls.
+    var area: (x: Double, y: Double, width: Double, height: Double) {
+        get { lock.lock(); defer { lock.unlock() }; return areaNow }
+        set { lock.lock(); areaNow = newValue; lock.unlock() }
+    }
+    private var areaNow: (x: Double, y: Double, width: Double, height: Double) = (0, 0, 1, 1)
+    private var drawnAt: (x: Double, y: Double, width: Double, height: Double, turns: Int) = (0, 0, 0, 0, 0)
+
+    /// Where the picture was last drawn, as fractions of the screen, and its quarter turns: for a
+    /// finger on a touch-screen console's picture.
+    var drawnPicture: (x: Double, y: Double, width: Double, height: Double, turns: Int) {
+        lock.lock(); defer { lock.unlock() }
+        return drawnAt
+    }
 
     init?(view: MTKView) {
         guard let device = MTLCreateSystemDefaultDevice(), let queue = device.makeCommandQueue() else { return nil }
@@ -254,11 +269,17 @@ final class GamePictureRenderer: NSObject, MTKViewDelegate {
         defer { encoder.endEncoding() }
         guard let tex, size.width > 0, size.height > 0 else { return }
         let inset = min(0.45, max(0, layout.inset / 100))
-        let box = (width: Double(size.width) * (1 - inset), height: Double(size.height) * (1 - inset))
+        let area = self.area
+        let box = (width: Double(size.width) * area.width * (1 - inset), height: Double(size.height) * area.height * (1 - inset))
         let fit = PictureLayout.fit(settings: layout.settings, aspect: layout.aspect, frame: layout.frame, turns: layout.turns, box: box)
         let w = Float(fit.width / Double(size.width)), h = Float(fit.height / Double(size.height))
+        // The area's middle, from the screen's fractions down-positive to Metal's up-positive -1 to 1.
+        let cx = Float((area.x + area.width / 2) * 2 - 1), cy = Float(1 - (area.y + area.height / 2) * 2)
+        lock.lock()
+        drawnAt = (Double((cx - w + 1) / 2), Double((1 - (cy + h)) / 2), Double(w), Double(h), fit.turns)
+        lock.unlock()
         var u = LookUniforms()
-        u.rect = SIMD4(-w, h, w, -h)
+        u.rect = SIMD4(cx - w, cy + h, cx + w, cy - h)
         u.cropMin = SIMD2(look.cropX, look.cropY)
         u.cropMax = SIMD2(1 - look.cropX, 1 - look.cropY)
         u.source = layout.frame.width > 0 ? SIMD2(Float(layout.frame.width), Float(layout.frame.height)) : SIMD2(Float(tex.width), Float(tex.height))
@@ -384,6 +405,57 @@ func decodeGameJPEG(_ data: Data) -> CGImage? {
 
 // MARK: - Sound
 
+/// The second stream's sound over its WebSocket: Opus, one 10 ms 48 kHz stereo packet at a time,
+/// into the signed 16-bit stereo the sound plays.
+final class GameOpusDecoder {
+    static let rate = 48_000
+    private let input: AVAudioFormat
+    private let output: AVAudioFormat
+    private let converter: AVAudioConverter
+
+    init?() {
+        var description = AudioStreamBasicDescription(mSampleRate: Double(Self.rate), mFormatID: kAudioFormatOpus, mFormatFlags: 0,
+                                                      mBytesPerPacket: 0, mFramesPerPacket: 480, mBytesPerFrame: 0,
+                                                      mChannelsPerFrame: 2, mBitsPerChannel: 0, mReserved: 0)
+        guard let input = AVAudioFormat(streamDescription: &description),
+              let output = AVAudioFormat(commonFormat: .pcmFormatInt16, sampleRate: Double(Self.rate), channels: 2, interleaved: true),
+              let converter = AVAudioConverter(from: input, to: output) else { return nil }
+        self.input = input
+        self.output = output
+        self.converter = converter
+    }
+
+    /// Whether this device can decode Opus, so the hello can ask for it.
+    static let available: Bool = GameOpusDecoder() != nil
+
+    func reset() { converter.reset() }
+
+    func decode(_ packet: Data) -> Data? {
+        guard !packet.isEmpty else { return nil }
+        let compressed = AVAudioCompressedBuffer(format: input, packetCapacity: 1, maximumPacketSize: packet.count)
+        packet.withUnsafeBytes { compressed.data.copyMemory(from: $0.baseAddress!, byteCount: packet.count) }
+        compressed.byteLength = UInt32(packet.count)
+        compressed.packetCount = 1
+        compressed.packetDescriptions?[0] = AudioStreamPacketDescription(mStartOffset: 0, mVariableFramesInPacket: 0,
+                                                                          mDataByteSize: UInt32(packet.count))
+        // Room for the longest Opus packet, 120 ms.
+        guard let out = AVAudioPCMBuffer(pcmFormat: output, frameCapacity: 5760) else { return nil }
+        var given = false
+        var error: NSError?
+        let status = converter.convert(to: out, error: &error) { _, state in
+            if given {
+                state.pointee = .noDataNow
+                return nil
+            }
+            given = true
+            state.pointee = .haveData
+            return compressed
+        }
+        guard status != .error, out.frameLength > 0, let samples = out.int16ChannelData?[0] else { return nil }
+        return Data(bytes: samples, count: Int(out.frameLength) * 4)
+    }
+}
+
 /// PCM as it comes, at whatever rate the console makes it. What's waiting to be played is kept
 /// short, by the person's `audio.latency`: past that, a little is left out to catch up, as the
 /// browser's player does.
@@ -399,6 +471,9 @@ final class GameSound {
 
     init() {
         engine.attach(player)
+        // A game is heard with the silent switch on, as a film is.
+        try? AVAudioSession.sharedInstance().setCategory(.playback, mode: .default)
+        try? AVAudioSession.sharedInstance().setActive(true)
     }
 
     func setVolume(_ volume: Double, muted: Bool) {
@@ -471,77 +546,6 @@ final class GameSound {
             self.player.stop()
             self.engine.stop()
         }
-    }
-}
-
-// MARK: - The connection
-
-/// One WebSocket to a game. Everything that arrives goes to `onMessage` or `onEvent` on the
-/// socket's own thread; controller states go out as they come.
-final class GameSocket: NSObject, URLSessionWebSocketDelegate {
-    private var session: URLSession?
-    private var task: URLSessionWebSocketTask?
-    private var closed = false
-    var onMessage: (@Sendable (GameStreamMessage) -> Void)?
-    var onEvent: (@Sendable (GameEvent) -> Void)?
-    /// Called once, when it closes or fails, unless it was closed here.
-    /// With the HTTP status of the upgrade, or 0: 404 means the game has gone from the server.
-    var onClose: (@Sendable (Int) -> Void)?
-
-    func open(_ request: URLRequest) {
-        let config = URLSessionConfiguration.ephemeral
-        config.httpCookieStorage = nil
-        config.urlCache = nil
-        config.timeoutIntervalForRequest = 30
-        let session = URLSession(configuration: config, delegate: self, delegateQueue: nil)
-        let task = session.webSocketTask(with: request)
-        // A keyframe of a big game is more than the usual megabyte.
-        task.maximumMessageSize = 32 << 20
-        self.session = session
-        self.task = task
-        task.resume()
-        receive()
-    }
-
-    private func receive() {
-        task?.receive { [weak self] result in
-            guard let self, !self.closed else { return }
-            switch result {
-            case .success(.data(let data)):
-                if let message = GameStreamMessage.parse(data) { self.onMessage?(message) }
-                self.receive()
-            case .success(.string(let text)):
-                if let event = GameEvent.parse(text) { self.onEvent?(event) }
-                self.receive()
-            case .success:
-                self.receive()
-            case .failure:
-                self.finish()
-            }
-        }
-    }
-
-    func send(_ data: Data) {
-        guard !closed else { return }
-        task?.send(.data(data)) { _ in }
-    }
-
-    private func finish() {
-        guard !closed else { return }
-        closed = true
-        onClose?((task?.response as? HTTPURLResponse)?.statusCode ?? 0)
-        session?.invalidateAndCancel()
-    }
-
-    func close() {
-        guard !closed else { return }
-        closed = true
-        task?.cancel(with: .normalClosure, reason: nil)
-        session?.finishTasksAndInvalidate()
-    }
-
-    func urlSession(_ session: URLSession, webSocketTask: URLSessionWebSocketTask, didCloseWith closeCode: URLSessionWebSocketTask.CloseCode, reason: Data?) {
-        finish()
     }
 }
 #endif
