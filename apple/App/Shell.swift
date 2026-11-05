@@ -81,22 +81,27 @@ private struct TabRoot: View {
                 .navigationDestination(for: Route.self) { route in
                     switch route {
                     case .library(let library):
-                        // A library's page is a top of its own, with the strip and no Back, as on the website.
-                        if library.hasGameScreens {
-                            #if os(tvOS)
-                            GamesLibraryView(library: library, console: nil).plainNavigation()
-                            #else
-                            LibraryView(library: library).noNavigationBar()
-                            #endif
-                        } else if library.hasListeningScreens {
-                            #if os(iOS) || os(visionOS)
-                            MusicLibraryPage(library: library).noNavigationBar()
-                            #else
-                            ListeningLibraryView(library: library).noNavigationBar()
-                            #endif
-                        } else {
-                            LibraryView(library: library).noNavigationBar()
+                        // A library's page is a top of its own, with the strip and no Back, as on the website. Going from one
+                        // section to another replaces the page in place, so each library is a page of its own (`id`):
+                        // otherwise the last one's shelves, count and choices stayed under the new one's name.
+                        Group {
+                            if library.hasGameScreens {
+                                #if os(tvOS)
+                                GamesLibraryView(library: library, console: nil).plainNavigation()
+                                #else
+                                LibraryView(library: library).noNavigationBar()
+                                #endif
+                            } else if library.hasListeningScreens {
+                                #if os(iOS) || os(visionOS)
+                                MusicLibraryPage(library: library).noNavigationBar()
+                                #else
+                                ListeningLibraryView(library: library).noNavigationBar()
+                                #endif
+                            } else {
+                                LibraryView(library: library).noNavigationBar()
+                            }
                         }
+                        .id(library.id)
                     #if os(iOS) || os(visionOS)
                     // The website's album and artist pages, over their artwork's colour.
                     case .listeningAlbum(let library, let album, let artist):
@@ -144,7 +149,7 @@ private struct TabRoot: View {
                         if let found = model.libraryPage(path) {
                             // A saved view, or a genre, studio or network from an item's page: the app's own library
                             // page with that chosen, as the website opens /library/3?genre=Drama.
-                            LibraryView(library: found.library, start: found.state).noNavigationBar()
+                            LibraryView(library: found.library, start: found.state).noNavigationBar().id(path)
                         } else if model.isTopPage(path) {
                             // Collections, Game PCs and modules' pages are sections of their own, under the strip.
                             WebPlayerView(path: path, keptToGames: false).underStrip(path: path, hidden: playing)

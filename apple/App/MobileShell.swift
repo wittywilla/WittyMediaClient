@@ -32,11 +32,31 @@ extension View {
     /// How solid the strip over a page is, from 0 at rest to 1 once 64 points have gone under it. Only
     /// a change that shows is passed on, so scrolling doesn't redraw the page on every frame.
     func stripSolidity(_ solid: Binding<Double>) -> some View {
-        coordinateSpace(name: ScrollTop.space)
-            .onPreferenceChange(ScrollOffsetKey.self) { offset in
-                let next = (min(max((offset - 8) / 56, 0), 1) * 10).rounded() / 10
-                if next != solid.wrappedValue { solid.wrappedValue = next }
+        modifier(StripSolidity(solid: solid))
+    }
+}
+
+/// Where the page's scroll view is, read from the scroll view itself where the system says (iOS 18 on): the
+/// offset a `ScrollTop` reports through a preference no longer arrives while scrolling there, so the strip stayed
+/// clear over whatever went under it. Earlier systems still read `ScrollTop`.
+private struct StripSolidity: ViewModifier {
+    @Binding var solid: Double
+
+    private func scrolled(_ offset: CGFloat) {
+        let next = (min(max((offset - 8) / 56, 0), 1) * 10).rounded() / 10
+        if next != solid { solid = next }
+    }
+
+    func body(content: Content) -> some View {
+        if #available(iOS 18, tvOS 18, visionOS 2, *) {
+            content.onScrollGeometryChange(for: CGFloat.self, of: { $0.contentOffset.y + $0.contentInsets.top }) { _, offset in
+                scrolled(offset)
             }
+        } else {
+            content
+                .coordinateSpace(name: ScrollTop.space)
+                .onPreferenceChange(ScrollOffsetKey.self) { scrolled($0) }
+        }
     }
 }
 
