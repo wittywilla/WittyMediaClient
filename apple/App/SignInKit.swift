@@ -600,18 +600,24 @@ struct CodeBoxes: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     let digits: String
     var count = 6
+    /// A dash after this many boxes, as a TV shows its code: ABCD-EFGH.
+    var split: Int?
     /// The whole code is in and being checked.
     var checking = false
     /// Goes up by one for each wrong code, which shakes the boxes.
     var wrongTries = 0
 
     var body: some View {
-        let width: CGFloat = metrics.tv ? 88 : 46
-        let height: CGFloat = metrics.tv ? 100 : 56
+        // Eight boxes fit a phone's width only a little narrower.
+        let width: CGFloat = metrics.tv ? 88 : (count > 6 ? 34 : 46)
+        let height: CGFloat = metrics.tv ? 100 : (count > 6 ? 48 : 56)
         let typed = Array(digits)
-        HStack(spacing: Tokens.Space.s2) {
+        HStack(spacing: count > 6 ? 6 : Tokens.Space.s2) {
             ForEach(0..<count, id: \.self) { place in
                 let next = place == typed.count && !checking
+                if let split, place == split {
+                    Text("–").font(.title2.weight(.semibold)).foregroundStyle(palette.textHint).accessibilityHidden(true)
+                }
                 RoundedRectangle(cornerRadius: Tokens.Radius.md, style: .continuous)
                     .fill(palette.card)
                     .overlay {

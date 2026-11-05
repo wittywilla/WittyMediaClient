@@ -251,6 +251,29 @@ website at 375 wide.
 3. **Rows**, each a Section title with "See all ›" (13 medium, `textSecondary`): Continue watching, Next up, Because you
    watch…, Recently added in each library. Each row scrolls sideways with snapping, 16 from the left edge.
 
+### Playback and the media player
+
+Playing looks and works as the website's player does on a phone, control for control; only the engine underneath is
+the device's own (AVPlayer on Apple, ExoPlayer/Media3 on Android), for smooth playback, picture in picture, AirPlay and
+Chromecast, and the lock screen. The website's code is the reference, in the server's `web/src/player/` and
+`web/src/audio/`:
+
+- **Video** (`player/VideoPlayer.tsx`, `player/Controls.tsx`, `player/chrome.tsx`, `player/TrackPicker.tsx`,
+  `player/PlayInfoPanel.tsx`, `player/ViewSettings.tsx`, `player/PickIntroBar.tsx`): the same controls in the same
+  places, the seek bar with chapter marks and preview, skip intro and credits, next episode, the audio and subtitle
+  picker, speed, picture fit, the info panel, and the same timing for hiding the controls. Leaving the player for
+  the rest of the app keeps it playing in the mini player dock, as `/play` does.
+- **Discs** (`player/DvdPlayer.tsx`, `player/CdPlayer.tsx`, `player/InsertDisc.tsx`, `player/Remote.tsx`): menus,
+  chapters, the remote, insert-disc, and the CD player.
+- **Music, audiobooks, podcasts** (`audio/MiniPlayer.tsx`, `audio/NowPlaying.tsx`, `audio/controls.tsx`,
+  `audio/QueuePanel.tsx`, `audio/LyricsPanel.tsx`, `audio/Karaoke.tsx`, `audio/SoundPanel.tsx`, `audio/visualizer.tsx`,
+  `audio/nowplaying.css`): the mini bar above the floating bar, and Now Playing full screen with its artwork,
+  backdrop, lyrics, karaoke, queue, Sound (EQ, loudness, vocals, key), sleep timer, repeat, shuffle, song radio and
+  the visualizer.
+
+Nothing is invented on top: where the app and the website differ, the website wins, unless this page marks an
+improvement for both (**→ web**).
+
 ### Components
 
 | Component | Look |
@@ -576,8 +599,11 @@ then a confirmation). Under the list, Destructive `signOutOthers`, with a confir
 
 ### Sign in a TV
 
-Back; Title `rowSignInTv`; Body `signInTvHint` ("Type the code your TV shows."). The six code boxes and the numeric
-keyboard; six digits send `POST /pair/info`. Then a `panel` card: the device's name in Label, platform and address in
+Back; Title `rowSignInTv`; Body `signInTvHint` ("Type the code your TV shows."). **Eight letter boxes**, four, a dash,
+then four, as the TV shows its code (`ABCD-EFGH`, letters from `BCDFGHJKLMNPQRSTVWXZ`), over the system keyboard in
+capitals; any case typed counts, and the dash and spaces are ignored. On a phone the boxes are 34 wide and 48 high, 6
+apart, so eight fit. The eighth letter sends `POST /pair/info` with the code as typed. (The six digits are the other
+direction: the code `/pair/invite` makes, which the TV types on Enter the security code.) Then a `panel` card: the device's name in Label, platform and address in
 Secondary, and `signInTvAs` with the profiles it may sign in as (the person, and Kids and Guest profiles they look
 after) as profile tiles at 72, the person first and chosen. Primary `signInTvApprove`, Quiet `signInTvDeny`. Done:
 a check in `ok` and `signInTvDone`. Quiet `signInTvInvite` ("The TV asks for a code?") makes one instead
@@ -673,6 +699,10 @@ Apple TV and Android TV are the same app to look at. Sizes are given in TV units
   `listings`, `bigpicture`, `outline`, `compact`, `custom`) are worked out as `web/src/pages/tv/tvThemes.ts` does, and
   each theme's layout (`web/src/pages/tv/tvthemes.css`: row height, cell shape, the now line, the preview's place, the
   font) is built natively to match, on both TVs.
+- **Recording** is offered only where the server says it can be: a channel's `canRecord` (true only for tuner
+  channels the profile may record; never for channels made from the library). Record and series record are hidden,
+  not greyed, when it's false or missing, on every device and on the website alike; no app works it out for itself,
+  and the server refuses otherwise.
 - **What a TV can't show** (the server's pages on Apple TV) is a QR card to open that page on a phone, with its address
   under it. Android TV shows the same card, so the two stay the same.
 
