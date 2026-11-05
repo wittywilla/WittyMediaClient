@@ -14,6 +14,8 @@ struct TvTopBar: View {
     @EnvironmentObject private var model: AppModel
     @Environment(\.metrics) private var metrics
     var focus: FocusState<AppTab?>.Binding
+    /// Which pill had focus last, nil while it's below the bar.
+    @State private var inside: AppTab?
 
     private func choose(_ tab: AppTab) {
         if model.tab == tab {
@@ -48,6 +50,15 @@ struct TvTopBar: View {
         .padding(.bottom, Tokens.Space.s4 - ring)
         .focusSection()
         .onExitCommand(perform: back)
+        // Up from a tab lands on that tab's pill, whichever pill happens to be above.
+        .onChange(of: focus.wrappedValue) { next in
+            if let next, inside == nil, next != model.tab {
+                focus.wrappedValue = model.tab
+                inside = model.tab
+            } else {
+                inside = next
+            }
+        }
     }
 }
 

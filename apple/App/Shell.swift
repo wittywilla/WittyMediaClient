@@ -158,27 +158,40 @@ private struct TabRoot: View {
 }
 
 #if os(tvOS)
-/// The bar along the top over the tabs' stacks. The system's tab view keeps each stack as it was left,
-/// with its own bar hidden. A tab's first screen has the bar above it; a screen opened from there has
-/// the whole screen, and Back from it comes back to the tab.
+/// The bar along the top over the chosen tab. A tab's first screen has the bar above it; a screen opened
+/// from there has the whole screen, and Back from it comes back to the tab. Only the chosen tab is drawn:
+/// the bar can only be reached from a tab's first screen, and where each stack had got to is kept in the
+/// model. (The system's tab view keeps room for its own bar above every tab, even with the bar hidden.)
 private struct TopTabs: View {
     @EnvironmentObject private var model: AppModel
     @Environment(\.palette) private var palette
+    @Environment(\.resetFocus) private var resetFocus
     @FocusState private var bar: AppTab?
+    @Namespace private var root
+    /// Whether Home's first look has arrived.
+    @State private var settled = false
 
     var body: some View {
         VStack(spacing: 0) {
-            if model.path.isEmpty { TvTopBar(focus: $bar) }
-            TabView(selection: $model.tab) {
-                ForEach(AppTab.tvTabs) { tab in
-                    TabRoot(tab: tab, toBar: { bar = tab })
-                        .safeAreaInset(edge: .bottom) { MiniPlayerSlot(tab: tab) }
-                        .toolbar(.hidden, for: .tabBar)
-                        .tag(tab)
-                }
+            if model.path.isEmpty {
+                TvTopBar(focus: $bar).ignoresSafeArea(.container, edges: .horizontal)
             }
+            TabRoot(tab: model.tab, toBar: { bar = model.tab })
+                .id(model.tab)
+                .safeAreaInset(edge: .bottom) { MiniPlayerSlot(tab: model.tab) }
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                // Focus starts on the tab's own main action, not on the bar above it.
+                .prefersDefaultFocus(in: root)
         }
+        .focusScope(root)
         .background(palette.background.ignoresSafeArea())
+        // Home's first look comes after the bar, which has focus meanwhile as the only thing there. Once,
+        // if nobody has moved it, it goes on to Home's main action.
+        .onChange(of: model.libraries) { _ in
+            guard !settled else { return }
+            settled = true
+            if bar == .home { DispatchQueue.main.async { resetFocus(in: root) } }
+        }
         // A WittyTV reminder comes up on whatever's showing.
         .modifier(TvReminderAlert())
     }
