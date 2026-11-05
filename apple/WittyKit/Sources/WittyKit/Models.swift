@@ -113,6 +113,8 @@ public struct Library: Decodable, Identifiable, Hashable {
     public let type: String
     public let console: String?
     public let itemCount: Int?
+    /// A commercials library the owner put in the main menus.
+    public let showMain: Bool?
 
     public var isShows: Bool { type == "shows" || type == "anime" }
     /// The games on someone's own PC: see Rigs.swift.

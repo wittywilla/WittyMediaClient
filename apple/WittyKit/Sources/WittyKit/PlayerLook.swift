@@ -277,6 +277,8 @@ public struct ServerPrefs: Decodable, Equatable {
     public let maxSpeed: Double?
     /// False when the owner has taken the visualizer off the server.
     public let visualizer: Bool?
+    /// The owner's arrangement of the menu, as JSON: see NavPrefs.owner.
+    public let navDefault: String?
 }
 
 /// What to watch after something with no next episode: `/items/{id}/recommend`.

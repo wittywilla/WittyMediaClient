@@ -54,12 +54,18 @@ private struct TabRoot: View {
     @ViewBuilder private var first: some View {
         switch tab {
         case .home: HomeView()
+        #if os(iOS) || os(visionOS)
+        // The website's other top pages have the strip too.
+        case .search: SearchView().underStrip()
+        case .profile: YouView().underStrip()
+        #else
         case .search: SearchView()
         case .profile: YouView()
+        #endif
         case .guide:
             // The guide and live channels: the server's page here, Apple TV's own screens there.
             #if os(iOS) || os(visionOS)
-            WebPlayerView(path: ServerPages.guide, keptToGames: false)
+            WebPlayerView(path: ServerPages.guide, keptToGames: false).underStrip(hidden: model.pagePlaying && (model.paths[.guide] ?? []).isEmpty)
             #elseif os(tvOS)
             GuideView()
             #else
@@ -117,7 +123,13 @@ private struct TabRoot: View {
                         #endif
                     case .page(let path):
                         #if os(iOS) || os(visionOS)
-                        WebPlayerView(path: path, keptToGames: false).plainNavigation(hidden: model.pagePlaying && model.paths[tab]?.last == .page(path))
+                        let playing = model.pagePlaying && model.paths[tab]?.last == .page(path)
+                        if model.isTopPage(path) {
+                            // Collections, Game PCs and modules' pages are sections of their own, under the strip.
+                            WebPlayerView(path: path, keptToGames: false).underStrip(path: path, hidden: playing)
+                        } else {
+                            WebPlayerView(path: path, keptToGames: false).plainNavigation(hidden: playing)
+                        }
                         #else
                         ElsewhereNote(path: path)
                         #endif
@@ -175,8 +187,8 @@ private struct PillShell: View {
     @Environment(\.scenePhase) private var scenePhase
 
     var body: some View {
-        // 16 from the bottom edge, just above the home indicator, as from the sides.
-        let lift = typing ? 0 : Tokens.Space.s4 - insets.bottom
+        // 8 above the home indicator's room, as the website's bar (shell.css: bottom 8 + the safe area).
+        let lift = typing ? 0 : Tokens.Space.s2
         TabView(selection: $model.tab) {
             ForEach(AppTab.phoneTabs) { tab in
                 TabRoot(tab: tab)
@@ -220,6 +232,8 @@ private struct PillShell: View {
             }
         }
         .overlay { MenuDrawer() }
+        // The menus' arrangement, modules' pages and the legal notices, once per server and person.
+        .task(id: "\(model.client.base)|\(model.user?.id ?? 0)") { await model.loadNavigation() }
         // A video in the dock keeps its place and stops in the background, as on its own screen.
         .onChange(of: scenePhase) { model.video?.sceneChanged($0) }
         #if os(iOS)
@@ -355,6 +369,8 @@ struct SearchView: View {
     @Environment(\.palette) private var palette
     @Environment(\.metrics) private var metrics
     @State private var query = ""
+    /// What was asked for: on a phone, the box searches when Search is pressed, as the website's does.
+    @State private var asked = ""
     @State private var results: SearchResults?
     @State private var error = ""
     @State private var searching = false
@@ -387,7 +403,7 @@ struct SearchView: View {
         Group {
             if metrics.tv { tvPage } else { page }
         }
-        .task(id: query) { await run(query) }
+        .task(id: metrics.tv ? query : asked) { await run(metrics.tv ? query : asked) }
     }
 
     /// Apple TV's, as it was.
@@ -417,16 +433,26 @@ struct SearchView: View {
         .pageBackground(palette)
     }
 
-    /// The website's Search on a phone: the box, then the results grouped, three posters across.
+    /// The website's Search on a phone: "Search" with what was asked in quotes beside it, the box, then shows and
+    /// everything else, three posters across, and the notice about results.
     private var page: some View {
         ScrollView {
-            VStack(alignment: .leading, spacing: Tokens.Space.s4) {
-                Text("Search").pageFont(.title).foregroundStyle(palette.text).accessibilityAddTraits(.isHeader)
-                box
-                results(for: query.trimmingCharacters(in: .whitespacesAndNewlines))
+            VStack(alignment: .leading, spacing: 0) {
+                ScrollTop()
+                HStack(alignment: .firstTextBaseline, spacing: Tokens.Space.s3) {
+                    Text("Search").pageFont(.title).foregroundStyle(palette.text).accessibilityAddTraits(.isHeader)
+                    if !asked.isEmpty {
+                        Text("“\(asked)”").font(.system(size: 14)).foregroundStyle(palette.textHint).lineLimit(1)
+                    }
+                }
+                .padding(.top, Tokens.Space.s3)
+                box.padding(.top, 20)
+                results(for: asked).padding(.top, Tokens.Space.s2)
+                #if !os(tvOS)
+                PageFoot(notice: "")
+                #endif
             }
             .padding(.horizontal, metrics.gutter)
-            .padding(.top, Tokens.Space.s2)
             .padding(.bottom, Tokens.Space.s6)
         }
         .scrollDismissesKeyboardIfAvailable()
@@ -452,6 +478,10 @@ struct SearchView: View {
                 .tint(palette.accent)
                 .focused($typing)
                 .submitLabel(.search)
+                .onSubmit {
+                    let words = query.trimmingCharacters(in: .whitespacesAndNewlines)
+                    if !words.isEmpty { asked = words }
+                }
                 .autocorrectionDisabled()
                 #if os(iOS) || os(visionOS)
                 .textInputAutocapitalization(.never)
@@ -477,20 +507,29 @@ struct SearchView: View {
         .onTapGesture { typing = true }
     }
 
+    private func searchHead(_ title: String) -> some View {
+        Text(title).font(.system(size: 20, weight: .bold)).foregroundStyle(palette.text).accessibilityAddTraits(.isHeader)
+            .padding(.top, 28).padding(.bottom, Tokens.Space.s3)
+    }
+
     @ViewBuilder private func results(for words: String) -> some View {
         if WittyClient.searchQuery(words) == nil {
             EmptyState(icon: "magnifyingglass", title: "Find anything on this server",
                        detail: "Type a title in the search box: movies, shows, episodes, music, books and games are all included.")
         } else if !error.isEmpty {
-            VStack(alignment: .leading, spacing: Tokens.Space.s3) {
-                ProblemLine(error)
-                Button("Try again") { Task { await run(query) } }.pageButton(.primary)
+            if metrics.tv {
+                VStack(alignment: .leading, spacing: Tokens.Space.s3) {
+                    ProblemLine(error)
+                    Button("Try again") { Task { await run(query) } }.pageButton(.primary)
+                }
+            } else {
+                EmptyState(icon: "magnifyingglass", title: "The search didn’t work", detail: error)
             }
         } else if let results, !(searching && results.isEmpty) {
             if results.isEmpty {
                 EmptyState(icon: "magnifyingglass", title: "No results",
                            detail: "Nothing on this server matches “\(words)”. Try a shorter or different word.")
-            } else {
+            } else if metrics.tv {
                 let types = Dictionary(model.libraries.map { ($0.id, $0.type) }, uniquingKeysWith: { first, _ in first })
                 VStack(alignment: .leading, spacing: Tokens.Space.s6) {
                     ForEach(SearchGroups.group(items: results.items, shows: results.shows, libraryTypes: types)) { group in
@@ -501,6 +540,27 @@ struct SearchView: View {
                                 ForEach(ServerPages.albumsOnce(group.items)) { ItemTile(item: $0, inRow: false, focus: $focused) }
                             }
                         }
+                    }
+                }
+                .opacity(searching ? 0.6 : 1)
+            } else {
+                // The website's two groups: shows, then everything else under its own heading only when there are shows.
+                VStack(alignment: .leading, spacing: 0) {
+                    if !results.shows.isEmpty {
+                        searchHead("Shows")
+                        LazyVGrid(columns: posterColumns(metrics), alignment: .leading, spacing: Tokens.Space.s6) {
+                            ForEach(results.shows) { ShowTile(show: $0, inRow: false, focus: $focused) }
+                        }
+                    }
+                    if !results.items.isEmpty {
+                        if !results.shows.isEmpty { searchHead("Everything else") }
+                        LazyVGrid(columns: posterColumns(metrics), alignment: .leading, spacing: Tokens.Space.s6) {
+                            ForEach(results.items) { ItemTile(item: $0, inRow: false, focus: $focused) }
+                        }
+                        .padding(.top, results.shows.isEmpty ? Tokens.Space.s5 : 0)
+                    }
+                    if let notice = model.legal?.notices["searchResults"] {
+                        Text(notice.text).font(.system(size: 12)).foregroundStyle(palette.textHint).lineSpacing(3).padding(.top, Tokens.Space.s4)
                     }
                 }
                 .opacity(searching ? 0.6 : 1)

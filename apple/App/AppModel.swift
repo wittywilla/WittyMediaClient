@@ -116,6 +116,12 @@ enum Route: Hashable {
     case names, password, twoStep, devices, signInTv, theme
 }
 
+/// A page a module adds to the menus, with the module it belongs to.
+struct ModulePlace: Equatable {
+    let module: String
+    let page: ModulePage
+}
+
 /// A list of tracks being played, in order, on Apple TV.
 extension AppModel {
     func play(_ tracks: [Item], from track: Item) {
@@ -183,6 +189,12 @@ final class AppModel: ObservableObject {
     @Published var pagePlaying = false
     /// Whether this server lets this person play its game PCs, which the Menu then offers.
     @Published var gamePCs = false
+    /// The website's menus: how this person (or the owner) arranged them, and the pages modules add.
+    @Published var navPrefs = NavPrefs()
+    @Published var modulePages: [ModulePlace] = []
+    /// The server's version, for the line at the foot of every page, and its short legal notices.
+    @Published var serverVersion = ""
+    @Published var legal: LegalNotices?
     /// The video playing on a phone or tablet, on its screen or in the dock above the bar once that's left, as the
     /// website's player keeps playing in its mini player.
     @Published var video: PlaybackModel?
@@ -364,6 +376,9 @@ final class AppModel: ObservableObject {
         ArtCache.shared.removeAllObjects()
         user = nil
         libraries = []
+        navPrefs = NavPrefs()
+        modulePages = []
+        legal = nil
         menuOpen = false
         gamePCs = false
         video?.stop()
@@ -625,6 +640,7 @@ final class AppModel: ObservableObject {
 
     /// What a server says about how it looks: its theme, and the owner's name and logo for it.
     private func learn(_ status: ServerStatus) {
+        serverVersion = status.version ?? ""
         themeId = status.theme
         themeChoice = defaults.string(forKey: "theme." + client.base) ?? ""
         refreshTheme()
@@ -669,10 +685,51 @@ final class AppModel: ObservableObject {
 
     /// A library from the strip along the top or the Menu: its page on Home's stack. From another library's
     /// page it takes that one's place, as the website's strip does, rather than piling up.
+    /// Every place in the menu, in this person's order: Home, TV guide, libraries, Collections, Game PCs, modules' pages.
+    var navPlaces: [NavPlace] {
+        NavPlaces.arrange(NavPlaces.all(libraries: libraries, gamePCs: gamePCs, modulePages: modulePages.map { ($0.module, $0.page) }), navPrefs)
+    }
+
+    /// The strip's places: the menu's but Home and TV guide, which are on the bar.
+    var stripPlaces: [NavPlace] { NavPlaces.strip(navPlaces) }
+
+    /// A server page that's a top of its own (Collections, Game PCs, a module's page): it gets the strip, not Back.
+    func isTopPage(_ path: String) -> Bool { stripPlaces.contains { $0.path == path } }
+
+    /// The menus' arrangement, modules' pages and the legal notices, asked for once a person is in.
+    func loadNavigation() async {
+        async let bundles = try? client.moduleBundles()
+        async let prefs = try? client.prefs()
+        async let mine = try? client.interfaceChoice("nav", as: NavPrefs.self)
+        async let notices = try? client.legalNotices()
+        async let couch = try? client.couchStatus()
+        let (found, owner, own, words, pcs) = await (bundles, prefs, mine, notices, couch)
+        modulePages = (found ?? []).flatMap { bundle in (bundle.pages ?? []).map { ModulePlace(module: bundle.id, page: $0) } }
+        navPrefs = own ?? NavPrefs.owner(owner?.navDefault) ?? NavPrefs()
+        if let words { legal = words }
+        if let pcs { gamePCs = pcs.allowed == true }
+    }
+
+    /// A place in the strip or the menu, as the website goes there: a library's page, or the server's page.
+    func open(_ place: NavPlace) {
+        if let id = place.libraryId, let library = libraries.first(where: { $0.id == id }) {
+            openLibrary(library)
+            return
+        }
+        let route: Route = place.id == "couch" ? .web(WebPlayer.gamePCsPath) : .page(place.path)
+        var transaction = Transaction()
+        transaction.disablesAnimations = tab == .home && (paths[.home]?.count ?? 0) == 1
+        withTransaction(transaction) {
+            tab = .home
+            paths[.home] = [route]
+        }
+    }
+
     func openLibrary(_ library: Library) {
         let route = libraryRoute(library)
         var transaction = Transaction()
-        transaction.disablesAnimations = tab == .home && { if case .library? = paths[.home]?.last { return true } else { return false } }()
+        // From a section to a section: no slide, as the website's strip changes the page in place.
+        transaction.disablesAnimations = tab == .home && (paths[.home]?.count ?? 0) == 1
         withTransaction(transaction) {
             tab = .home
             paths[.home] = [route]

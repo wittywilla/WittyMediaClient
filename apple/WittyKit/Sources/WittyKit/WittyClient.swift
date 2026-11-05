@@ -445,6 +445,34 @@ public final class WittyClient: @unchecked Sendable {
 
     public func artists(library: Int64) async throws -> [Artist] { try await list("/music/artists?library=\(library)") }
 
+    /// Modules' pages for the menus.
+    public func moduleBundles() async throws -> [ModuleBundle] {
+        struct Answer: Decodable { let bundles: [ModuleBundle]? }
+        let answer: Answer = try await get("/modules/web")
+        return answer.bundles ?? []
+    }
+
+    /// The short legal notices, by kind.
+    public func legalNotices() async throws -> LegalNotices { try await get("/legal/notices") }
+
+    /// What the server is busy with, for those the owner lets see it.
+    public func activity() async throws -> ActivityTasks { try await get("/system/tasks") }
+
+    /// Pause, resume, cancel or retry a task.
+    public func taskAction(_ id: String, _ action: String) async throws {
+        _ = try await call("POST", "/system/tasks/\(Self.queryValue(id))/\(action)", body: Data("{}".utf8))
+    }
+
+    /// What's finished lately, newest first; only the failed ones if asked.
+    public func taskHistory(failed: Bool, before: Double? = nil, limit: Int = 30) async throws -> [ActivityTasks.Task] {
+        struct Answer: Decodable { let tasks: [ActivityTasks.Task]? }
+        var path = "/system/tasks/history?limit=\(limit)"
+        if failed { path += "&state=failed" }
+        if let before { path += "&before=\(Int(before))" }
+        let answer: Answer = try await get(path)
+        return answer.tasks ?? []
+    }
+
     /// A listening library's front page.
     public func musicHome(library: Int64) async throws -> MusicHome { try await get("/music/home?library=\(library)") }
 

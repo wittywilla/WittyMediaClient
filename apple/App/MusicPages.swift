@@ -541,7 +541,7 @@ struct MusicLibraryPage: View {
                             sort: sort, desc: desc, admin: model.user?.isAdmin == true,
                             chooseTab: choose, chooseSort: { sort = $0; desc = $1 }, tools: { toolsOpen = true })
                     .padding(.horizontal, metrics.gutter)
-                    .padding(.top, 44 + Tokens.Space.s2)
+                    .padding(.top, LibraryStrip.height + Tokens.Space.s3)
                 if !said.isEmpty {
                     Text(said).pageFont(.secondary).foregroundStyle(palette.textSecondary).padding(.horizontal, metrics.gutter).padding(.top, Tokens.Space.s2)
                 }
@@ -555,6 +555,7 @@ struct MusicLibraryPage: View {
                     }
                 }
                 .padding(.top, Tokens.Space.s4)
+                PageFoot(notice: library.type == "podcasts" ? "webMedia" : "general")
             }
             .padding(.bottom, Tokens.Space.s6)
         }
@@ -1217,13 +1218,14 @@ struct MusicAlbumPage: View {
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 0) {
+                ScrollTop()
                 if let tracks {
                     content(tracks)
                 } else {
                     ProgressView().frame(maxWidth: .infinity).padding(.top, 120)
                 }
             }
-            .padding(.top, 52)
+            .padding(.top, LibraryStrip.height)
             .padding(.bottom, Tokens.Space.s6)
         }
         .background(alignment: .top) { ArtGlow(url: tracks?.first { $0.libraryId != nil }.flatMap { client.posterURL($0) }).frame(height: 720) }
@@ -1320,6 +1322,7 @@ struct MusicAlbumPage: View {
                 .padding(.horizontal, metrics.gutter - Tokens.Space.s2)
             if !versions.isEmpty { albumRow("Other versions", versions, seeAll: nil) }
             if !more.isEmpty, !books { albumRow("More by \(artist)", more, seeAll: .artist(library: library, name: artist)) }
+            PageFoot(notice: pods ? "webMedia" : "metadata")
         }
     }
 
@@ -1366,6 +1369,7 @@ struct MusicArtistPage: View {
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 0) {
+                ScrollTop()
                 if failed {
                     EmptyState(icon: "music.note", title: "Nobody by that name here", detail: "They may have been moved or renamed.")
                 } else if let info {
@@ -1374,7 +1378,7 @@ struct MusicArtistPage: View {
                     ProgressView().frame(maxWidth: .infinity).padding(.top, 120)
                 }
             }
-            .padding(.top, 52)
+            .padding(.top, LibraryStrip.height)
             .padding(.bottom, Tokens.Space.s6)
         }
         .background(alignment: .top) { ArtGlow(url: client.artistPhotoURL(library: library, name: name)).frame(height: 720) }
@@ -1479,6 +1483,7 @@ struct MusicArtistPage: View {
                 }
                 .padding(.horizontal, metrics.gutter)
             }
+            PageFoot()
         }
     }
 }

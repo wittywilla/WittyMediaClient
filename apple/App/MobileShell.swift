@@ -42,55 +42,77 @@ extension View {
 
 // MARK: - The library strip
 
-/// The libraries' names along the top of Home and the library pages: 15 bold, `textSecondary`, 20 apart, 44 high,
-/// scrolling sideways, the current one in `text` over a 2-high `accent` line. Once the page scrolls under it, it
-/// gains `background` at 85% with a blur, and a hairline. Over a picture, a soft scrim of `background` fades down
-/// behind it, so the names stay sharp and readable on any picture (a glow round each word blurs them).
+/// The website's bar on a phone's top pages (shell.css, TopBar.tsx SectionRow): 52 high, the menu's places but Home
+/// and TV guide in 15 bold `textSecondary`, 20 apart, 44 high and 4 from the bar's top and foot, scrolling sideways
+/// and fading out over the last 20 before the activity button; the current one in `text` over a 2-high `accentText`
+/// line. The server's lockup when there's nothing to list. Once the page scrolls under it, it gains `background` at
+/// 85% with a blur, and a hairline. Over a picture, a soft scrim of `background` behind it keeps the names readable.
 struct LibraryStrip: View {
+    static let height: CGFloat = 52
     @EnvironmentObject private var model: AppModel
     @Environment(\.palette) private var palette
     @Environment(\.metrics) private var metrics
     /// The library whose page this is, if any.
     var current: Int64?
+    /// Or the server page's address, for Collections, Game PCs and modules' pages.
+    var currentPath: String?
     /// 0 over a picture or at rest, 1 once something has scrolled under it.
     var solid: Double = 0
     /// Whether it starts over a picture, as on Home's hero.
     var overPicture = false
 
+    private func isCurrent(_ place: NavPlace) -> Bool {
+        if let current { return place.libraryId == current }
+        if let currentPath { return place.path == currentPath }
+        return false
+    }
+
     var body: some View {
-        ScrollViewReader { proxy in
-            ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: Tokens.Space.s5) {
-                    ForEach(model.libraries) { library in
-                        let here = library.id == current
-                        Button {
-                            model.openLibrary(library)
-                        } label: {
-                            Text(library.name)
-                                .font(.system(size: PageType.body.size, weight: .bold))
-                                .foregroundStyle(here ? palette.text : palette.textSecondary)
-                                .lineLimit(1)
-                                .frame(height: 44)
-                                .overlay(alignment: .bottom) {
-                                    if here { Rectangle().fill(palette.accent).frame(height: 2) }
+        let places = model.stripPlaces
+        HStack(spacing: Tokens.Space.s2) {
+            if places.isEmpty {
+                BrandLockup().padding(.leading, metrics.gutter)
+                Spacer(minLength: 0)
+            } else {
+                ScrollViewReader { proxy in
+                    ScrollView(.horizontal, showsIndicators: false) {
+                        HStack(spacing: Tokens.Space.s5) {
+                            ForEach(places) { place in
+                                let here = isCurrent(place)
+                                Button { model.open(place) } label: {
+                                    Text(place.label)
+                                        .font(.system(size: 15, weight: .bold))
+                                        .foregroundStyle(here ? palette.text : palette.textSecondary)
+                                        .lineLimit(1)
+                                        .frame(height: 44)
+                                        .overlay(alignment: .bottom) {
+                                            if here { Rectangle().fill(palette.accentText).frame(height: 2) }
+                                        }
+                                        // Just enough of an edge to part a word from a busy picture, without softening it.
+                                        .shadow(color: palette.background.opacity(overPicture && solid < 1 ? 0.5 : 0), radius: 0, y: 1)
+                                        .contentShape(Rectangle())
                                 }
-                                // Just enough of an edge to part a word from a busy picture, without softening it.
-                                .shadow(color: palette.background.opacity(overPicture && solid < 1 ? 0.5 : 0), radius: 1)
-                                .contentShape(Rectangle())
+                                .buttonStyle(.plain)
+                                .id(place.id)
+                                .accessibilityAddTraits(here ? [.isSelected] : [])
+                            }
                         }
-                        .buttonStyle(.plain)
-                        .id(library.id)
-                        .accessibilityAddTraits(here ? [.isSelected] : [])
+                        .padding(.leading, metrics.gutter)
+                        .padding(.trailing, Tokens.Space.s5)
+                    }
+                    .mask(LinearGradient(stops: [.init(color: .black, location: 0), .init(color: .black, location: 0.9),
+                                                 .init(color: .clear, location: 1)], startPoint: .leading, endPoint: .trailing)
+                        .frame(maxWidth: .infinity))
+                    .onAppear {
+                        if let here = places.first(where: isCurrent) { proxy.scrollTo(here.id, anchor: .center) }
                     }
                 }
-                .padding(.leading, metrics.gutter)
-                .padding(.trailing, Tokens.Space.s5)
             }
-            .onAppear {
-                if let current { proxy.scrollTo(current, anchor: .center) }
-            }
+            #if !os(tvOS)
+            ActivityButton().padding(.trailing, metrics.gutter - 2)
+            #endif
         }
-        .frame(height: 44)
+        .frame(height: Self.height)
         .background(alignment: .bottom) {
             ZStack {
                 Rectangle().fill(.ultraThinMaterial)
@@ -102,7 +124,7 @@ struct LibraryStrip: View {
             .allowsHitTesting(false)
         }
         .accessibilityElement(children: .contain)
-        .accessibilityLabel("Libraries")
+        .accessibilityLabel("Sections")
     }
 }
 
@@ -115,10 +137,10 @@ struct StripScrim: View {
     var body: some View {
         LinearGradient(stops: [
             .init(color: palette.background.opacity(0.8), location: 0),
-            .init(color: palette.background.opacity(0.7), location: (top + 22) / (top + 76)),
+            .init(color: palette.background.opacity(0.7), location: (top + LibraryStrip.height / 2) / (top + LibraryStrip.height + Tokens.Space.s8)),
             .init(color: palette.background.opacity(0), location: 1),
         ], startPoint: .top, endPoint: .bottom)
-        .frame(height: top + 44 + Tokens.Space.s8)
+        .frame(height: top + LibraryStrip.height + Tokens.Space.s8)
         .allowsHitTesting(false)
         .accessibilityHidden(true)
     }
@@ -153,36 +175,83 @@ private struct BackBar: ViewModifier {
     @Environment(\.metrics) private var metrics
     let overPicture: Bool
     var hidden = false
+    @State private var solid = 0.0
+
+    /// The website's bar below a tab's first page: 52 high with the round Back 16 from the side. Clear at the top of
+    /// the page; once the page scrolls under it (a page that starts with ScrollTop says so), `background` at 85% with
+    /// a blur and a hairline. Over a picture, a scrim of `background` behind it, fading as that surface comes in.
+    private func bar(top: CGFloat) -> some View {
+        HStack {
+            PageBackButton()
+            Spacer(minLength: 0)
+            #if !os(tvOS)
+            ActivityButton()
+            #endif
+        }
+            .padding(.horizontal, metrics.gutter - 2)
+            .frame(height: LibraryStrip.height)
+            .background(alignment: .bottom) {
+                ZStack {
+                    if overPicture {
+                        StripScrim(top: top).opacity(1 - solid)
+                            .frame(maxHeight: .infinity, alignment: .top)
+                    }
+                    ZStack {
+                        Rectangle().fill(.ultraThinMaterial)
+                        palette.background.opacity(0.85)
+                    }
+                    .overlay(alignment: .bottom) { Rectangle().fill(palette.border).frame(height: 1) }
+                    .opacity(solid)
+                }
+                .ignoresSafeArea(edges: .top)
+                .allowsHitTesting(false)
+            }
+    }
 
     func body(content: Content) -> some View {
-        // Where the website's has it: in a bar 52 high, the circle 6 from its top and 16 from the side. Hidden, it
-        // leaves the page where it is: a server's page underneath mustn't be made again, which would reload it.
+        // Hidden, it leaves the page where it is: a server's page underneath mustn't be made again, which would reload it.
         if overPicture {
-            content.overlay(alignment: .topLeading) {
-                if !hidden {
-                    PageBackButton().padding(.leading, metrics.gutter - 2).padding(.top, Tokens.Space.s1)
+            content
+                .stripSolidity($solid)
+                .overlay(alignment: .top) {
+                    if !hidden {
+                        GeometryReader { geo in bar(top: geo.safeAreaInsets.top) }.frame(height: LibraryStrip.height)
+                    }
                 }
-            }
         } else {
-            content.safeAreaInset(edge: .top, spacing: 0) {
-                if !hidden {
-                    HStack { PageBackButton(); Spacer(minLength: 0) }
-                        .padding(.horizontal, metrics.gutter - 2)
-                        .padding(.vertical, Tokens.Space.s1)
-                        .background {
-                            ZStack {
-                                Rectangle().fill(.ultraThinMaterial)
-                                palette.background.opacity(0.85)
-                            }
-                            .ignoresSafeArea(edges: .top)
-                        }
-                }
-            }
+            content
+                .stripSolidity($solid)
+                .safeAreaInset(edge: .top, spacing: 0) { if !hidden { bar(top: 0) } }
         }
     }
 }
 
+/// A top page of the website's other than Home and a library's: the strip above it, its own solid once the page
+/// scrolls under it (if the page starts with ScrollTop).
+private struct UnderStrip: ViewModifier {
+    var path: String?
+    var hidden = false
+    @State private var solid = 0.0
+
+    func body(content: Content) -> some View {
+        content
+            .stripSolidity($solid)
+            .safeAreaInset(edge: .top, spacing: 0) {
+                if !hidden { LibraryStrip(currentPath: path, solid: solid) }
+            }
+    }
+}
+
 extension View {
+    /// The strip over a top page: Search, You, the TV guide, and the strip's own sections.
+    @ViewBuilder func underStrip(path: String? = nil, hidden: Bool = false) -> some View {
+        #if os(iOS) || os(visionOS)
+        self.toolbar(.hidden, for: .navigationBar).modifier(UnderStrip(path: path, hidden: hidden))
+        #else
+        self
+        #endif
+    }
+
     /// A screen pushed onto a tab: no system bar, and the round Back at the top left. Over a picture it floats
     /// on it; otherwise the page starts below it.
     @ViewBuilder func plainNavigation(overPicture: Bool = false, hidden: Bool = false) -> some View {
@@ -242,6 +311,9 @@ struct FloatingBar: View {
         }
     }
 
+    /// A tab is marked only on its own page, as the website's: none on a library's, a title's or a section's.
+    private func marked(_ tab: AppTab) -> Bool { model.tab == tab && (model.paths[tab] ?? []).isEmpty }
+
     private func slot<Icon: View>(_ name: String, chosen: Bool, action: @escaping () -> Void, @ViewBuilder icon: () -> Icon) -> some View {
         Button(action: action) {
             icon()
@@ -258,7 +330,7 @@ struct FloatingBar: View {
     var body: some View {
         HStack(spacing: 0) {
             ForEach([AppTab.home, .guide, .search], id: \.self) { tab in
-                slot(tab.title, chosen: model.tab == tab, action: { press(tab) }) {
+                slot(tab.title, chosen: marked(tab), action: { press(tab) }) {
                     Image(systemName: tab.barIcon).font(.system(size: 20, weight: .medium)).frame(width: 24, height: 24)
                 }
             }
@@ -266,7 +338,7 @@ struct FloatingBar: View {
                 Image(systemName: "line.3.horizontal").font(.system(size: 20, weight: .medium)).frame(width: 24, height: 24)
             }
             let name = model.user?.shownName ?? ""
-            slot(name.isEmpty ? AppTab.profile.title : "\(AppTab.profile.title), \(name)", chosen: model.tab == .profile, action: { press(.profile) }) {
+            slot(name.isEmpty ? AppTab.profile.title : "\(AppTab.profile.title), \(name)", chosen: marked(.profile), action: { press(.profile) }) {
                 if model.user != nil {
                     AvatarTile(name: name, size: 32)
                 } else {
@@ -277,7 +349,7 @@ struct FloatingBar: View {
         .padding(Tokens.Space.s1)
         .frame(height: 60)
         .background(Capsule().fill(palette.card))
-        .overlay(Capsule().strokeBorder(palette.control, lineWidth: 1))
+        .overlay(Capsule().strokeBorder(palette.text.opacity(0.2), lineWidth: 1))
         .shadow(color: .black.opacity(0.45), radius: 15, y: 10)
         .frame(maxWidth: 416)
         .padding(.horizontal, Tokens.Space.s4)
@@ -296,101 +368,134 @@ private struct BarPressStyle: ButtonStyle {
 
 // MARK: - The menu
 
-/// A drawer from the left, 280 wide (at most 80%), in `panel`: the server's lockup, then `LIBRARIES`, then every
-/// library as a row 44 high, and the other places. A `scrim` covers everything else, the bar included.
-/// Swiping left or tapping the scrim closes it.
+/// The website's drawer on a phone (shell/Sidebar.tsx, styles.css): 240 wide in `panel`, the server's lockup, then
+/// the menu's places but Home and TV guide (which are on the bar), the libraries under `LIBRARIES` (or in the
+/// person's groups), as rows 40 high in 14 medium `textSecondary` with an 18 icon in `textHint`; the page you're on
+/// in `accent` at 14% with its words semibold and its icon in `accentText`. The version at its foot. A `scrim` covers
+/// the rest; tapping it closes the drawer, at once, as the website's does.
 struct MenuDrawer: View {
     @EnvironmentObject private var model: AppModel
     @Environment(\.palette) private var palette
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    @State private var drag: CGFloat = 0
 
     private func close() { model.menuOpen = false }
 
-    private func row(_ name: String, symbol: String, action: @escaping () -> Void) -> some View {
-        Button(action: action) {
+    /// The place whose page is on top of Home's stack, if it's one of the menu's.
+    private var currentId: String? {
+        switch model.paths[.home]?.last {
+        case .library(let library)?: return "lib:\(library.id)"
+        case .page(let path)?: return model.navPlaces.first { $0.path == path }?.id
+        case .web(let path)? where path == WebPlayer.gamePCsPath: return "couch"
+        default: return nil
+        }
+    }
+
+    private func row(_ place: NavPlace) -> some View {
+        let here = place.id == currentId && model.tab == .home
+        return Button {
+            close()
+            model.open(place)
+        } label: {
             HStack(spacing: Tokens.Space.s3) {
-                Image(systemName: symbol)
-                    .font(.system(size: 16, weight: .medium))
-                    .foregroundStyle(palette.textSecondary)
-                    .frame(width: 22)
+                Image(systemName: symbol(place))
+                    .font(.system(size: 15, weight: .medium))
+                    .foregroundStyle(here ? palette.accentText : palette.textHint)
+                    .frame(width: 18, height: 18)
                     .accessibilityHidden(true)
-                Text(name).pageFont(.label).foregroundStyle(palette.text).lineLimit(1)
+                Text(place.label).font(.system(size: 14, weight: here ? .semibold : .medium))
+                    .foregroundStyle(here ? palette.text : palette.textSecondary).lineLimit(1)
                 Spacer(minLength: 0)
             }
             .padding(.horizontal, Tokens.Space.s3)
-            .frame(minHeight: 44)
+            .frame(minHeight: 40)
+            .background(RoundedRectangle(cornerRadius: Tokens.Radius.md, style: .continuous).fill(here ? palette.accent.opacity(0.14) : .clear))
             .contentShape(Rectangle())
         }
         .buttonStyle(DrawerRowStyle())
+        .accessibilityAddTraits(here ? [.isSelected] : [])
     }
 
-    private func go(_ route: Route) {
-        close()
-        model.tab = .home
-        model.paths[.home] = [route]
+    private func symbol(_ place: NavPlace) -> String {
+        switch place.id {
+        case "collections": return "books.vertical"
+        case "couch": return "gamecontroller"
+        default:
+            if let kind = place.kind, kind.hasPrefix("module:") { return kind == "module:chart" ? "chart.bar" : "puzzlepiece" }
+            if let id = place.libraryId, let library = model.libraries.first(where: { $0.id == id }) { return library.symbol }
+            return "folder"
+        }
+    }
+
+    private func caption(_ words: String) -> some View {
+        Text(words.uppercased()).font(.system(size: 11, weight: .semibold)).tracking(0.77).foregroundStyle(palette.textHint)
+            .padding(.horizontal, Tokens.Space.s3).padding(.top, Tokens.Space.s5).padding(.bottom, Tokens.Space.s2)
+            .accessibilityAddTraits(.isHeader)
     }
 
     private var panel: some View {
-        VStack(alignment: .leading, spacing: 0) {
+        let places = model.navPlaces.filter { $0.id != "home" && $0.id != "tv" }
+        let grouped = model.navPrefs.grouped == true
+        let firstLibrary = places.firstIndex { $0.libraryId != nil }
+        let version = VersionTag.parts(model.serverVersion)
+        return VStack(alignment: .leading, spacing: 0) {
             BrandLockup()
                 .padding(.horizontal, Tokens.Space.s3)
                 .padding(.top, Tokens.Space.s3)
-                .padding(.bottom, Tokens.Space.s5)
             ScrollView {
                 VStack(alignment: .leading, spacing: 2) {
-                    CaptionLabel("Libraries").padding(.horizontal, Tokens.Space.s3).padding(.bottom, Tokens.Space.s2)
-                    ForEach(model.libraries) { library in
-                        row(library.name, symbol: library.symbol) {
-                            close()
-                            model.openLibrary(library)
+                    ForEach(Array(places.enumerated()), id: \.element.id) { at, place in
+                        if grouped, let group = NavPlaces.group(place, model.navPrefs), at == places.firstIndex(where: { NavPlaces.group($0, model.navPrefs) == group }) {
+                            caption(group)
+                        } else if !grouped, at == firstLibrary {
+                            caption("Libraries")
                         }
+                        row(place)
                     }
-                    CaptionLabel("More").padding(.horizontal, Tokens.Space.s3).padding(.top, Tokens.Space.s5).padding(.bottom, Tokens.Space.s2)
-                    row("Collections", symbol: "square.stack") { go(.page(ServerPages.collections)) }
-                    if model.gamePCs {
-                        row("Game PCs", symbol: "desktopcomputer") { go(.web(WebPlayer.gamePCsPath)) }
+                    if model.libraries.isEmpty {
+                        Text("No libraries yet").font(.system(size: 13)).foregroundStyle(palette.textHint)
+                            .padding(.horizontal, Tokens.Space.s3).padding(.vertical, Tokens.Space.s1)
                     }
                 }
-                .padding(.bottom, Tokens.Space.s6)
+                .padding(.bottom, Tokens.Space.s4)
             }
+            HStack(spacing: 6) {
+                Text("WittyMediaServer \(version.number)")
+                if !version.stage.isEmpty {
+                    Text(version.stage).font(.system(size: 11, weight: .bold)).tracking(0.55)
+                        .foregroundStyle(palette.accentText)
+                        .padding(.horizontal, 6)
+                        .background(RoundedRectangle(cornerRadius: Tokens.Radius.xs, style: .continuous).fill(palette.accent.opacity(0.16)))
+                }
+            }
+            .font(.system(size: 12))
+            .foregroundStyle(palette.textHint)
+            .padding(.horizontal, Tokens.Space.s3).padding(.top, Tokens.Space.s4).padding(.bottom, Tokens.Space.s2)
         }
         .padding(.horizontal, Tokens.Space.s3)
         .frame(maxHeight: .infinity, alignment: .top)
         .background(palette.panel.ignoresSafeArea())
-        .overlay(alignment: .trailing) { Rectangle().fill(palette.border).frame(width: 1).ignoresSafeArea() }
+        .shadow(color: .black.opacity(0.45), radius: 15, y: 10)
     }
 
     var body: some View {
-        GeometryReader { geo in
-            let width = min(280, geo.size.width * 0.8)
-            ZStack(alignment: .leading) {
-                if model.menuOpen {
-                    palette.scrim
-                        .ignoresSafeArea()
-                        .onTapGesture(perform: close)
-                        .transition(.opacity)
-                        .accessibilityLabel("Close the menu")
-                        .accessibilityAddTraits(.isButton)
-                        .accessibilityAction { close() }
-                    panel
-                        .frame(width: width)
-                        .offset(x: min(drag, 0))
-                        .gesture(
-                            DragGesture(minimumDistance: 12)
-                                .onChanged { drag = $0.translation.width }
-                                .onEnded { value in
-                                    if value.translation.width < -width / 4 || value.predictedEndTranslation.width < -width / 2 { close() }
-                                    drag = 0
-                                }
-                        )
-                        .transition(reduceMotion ? .opacity : .move(edge: .leading))
-                        .accessibilityAddTraits(.isModal)
-                        .accessibilityAction(.escape) { close() }
-                }
+        ZStack(alignment: .leading) {
+            if model.menuOpen {
+                palette.scrim
+                    .ignoresSafeArea()
+                    .onTapGesture(perform: close)
+                    .transition(.opacity)
+                    .accessibilityLabel("Close the menu")
+                    .accessibilityAddTraits(.isButton)
+                    .accessibilityAction { close() }
+                panel
+                    .frame(width: 240)
+                    .transition(reduceMotion ? .opacity : .move(edge: .leading))
+                    .accessibilityAddTraits(.isModal)
+                    .accessibilityAction(.escape) { close() }
             }
-            .animation(reduceMotion ? .easeOut(duration: Tokens.Motion.focus) : .easeOut(duration: Tokens.Motion.appear), value: model.menuOpen)
         }
+        // Opening slides in; closing is at once, as the website's drawer hides.
+        .animation(model.menuOpen ? (reduceMotion ? .easeOut(duration: Tokens.Motion.focus) : .easeOut(duration: Tokens.Motion.appear)) : nil, value: model.menuOpen)
     }
 }
 
