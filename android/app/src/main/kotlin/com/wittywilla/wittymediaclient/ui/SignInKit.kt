@@ -392,11 +392,11 @@ fun Modifier.digitKeys(onDigit: (Char) -> Unit, onDelete: () -> Unit): Modifier 
 // docs/APP-DESIGN.md, "QR card": black on white whatever the theme, at 180 on a phone and 280 units on a
 // TV, with what it's for under it.
 @Composable
-fun QrCard(text: String, caption: String, modifier: Modifier = Modifier) {
+fun QrCard(text: String, caption: String, modifier: Modifier = Modifier, size: Int? = null) {
     val metrics = LocalMetrics.current
     Column(modifier, horizontalAlignment = if (metrics.tv) Alignment.Start else Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(metrics.u(8))) {
         Box(Modifier.clip(LocalMetrics.current.corner(14)).background(androidx.compose.ui.graphics.Color.White).padding(metrics.u(16))) {
-            QrCode(text, metrics.u(if (metrics.tv) 280 else 180), Modifier.semantics { contentDescription = caption })
+            QrCode(text, metrics.u(size ?: if (metrics.tv) 280 else 180), Modifier.semantics { contentDescription = caption })
         }
         if (caption.isNotEmpty()) Text(caption, color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.caption, textAlign = if (metrics.tv) TextAlign.Start else TextAlign.Center)
     }

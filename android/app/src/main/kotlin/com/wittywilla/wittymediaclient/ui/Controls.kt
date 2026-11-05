@@ -284,6 +284,8 @@ fun WittyField(
     // Counts refusals: each one shakes the field once.
     shake: Int = 0,
     maxLength: Int = Int.MAX_VALUE,
+    // Shown but not changeable, as a Kids profile's names are.
+    enabled: Boolean = true,
 ) {
     val scheme = MaterialTheme.colorScheme
     val extra = LocalExtraColours.current
@@ -322,12 +324,13 @@ fun WittyField(
     val limited: (String) -> Unit = { onChange(it.take(maxLength)) }
     Column(modifier.fillMaxWidth().graphicsLayer { translationX = shaking.value * density }) {
         if (metrics.tv) {
-            TvTextField(value, limited, label, icon, secret, keyboardOptions, keyboardActions, trailing, isError, fieldModifier)
+            TvTextField(value, limited, label, icon, secret, keyboardOptions, keyboardActions, trailing, isError, enabled, fieldModifier)
         } else {
             OutlinedTextField(
                 value = value,
                 onValueChange = limited,
                 isError = isError,
+                enabled = enabled,
                 label = { Text(label) },
                 singleLine = true,
                 shape = LocalMetrics.current.corner(10),
@@ -347,6 +350,8 @@ fun WittyField(
                     errorTextColor = scheme.onBackground, errorContainerColor = Color.Transparent, errorCursorColor = scheme.primary,
                     errorBorderColor = scheme.error, errorLabelColor = scheme.error,
                     errorLeadingIconColor = quiet, errorTrailingIconColor = quiet,
+                    disabledTextColor = scheme.onSurfaceVariant, disabledBorderColor = scheme.outline, disabledLabelColor = quiet,
+                    disabledLeadingIconColor = quiet, disabledContainerColor = Color.Transparent,
                 ),
                 modifier = Modifier.fillMaxWidth().heightIn(min = 56.dp).then(fieldModifier),
             )
@@ -378,6 +383,7 @@ private fun TvTextField(
     keyboardActions: KeyboardActions,
     trailing: (@Composable () -> Unit)?,
     isError: Boolean,
+    enabled: Boolean,
     modifier: Modifier = Modifier,
 ) {
     val scheme = MaterialTheme.colorScheme
@@ -413,7 +419,8 @@ private fun TvTextField(
             BasicTextField(
                 value, onChange,
                 modifier = Modifier.weight(1f).then(modifier).semantics { contentDescription = label },
-                textStyle = body.copy(color = scheme.onBackground),
+                enabled = enabled,
+                textStyle = body.copy(color = if (enabled) scheme.onBackground else scheme.onSurfaceVariant),
                 singleLine = true,
                 cursorBrush = SolidColor(scheme.primary),
                 visualTransformation = if (secret) PasswordVisualTransformation() else VisualTransformation.None,
@@ -637,68 +644,109 @@ data class GroupRow(
     val icon: ImageVector? = null,
     val tint: Color = Color.Unspecified,
     val value: String = "",
+    val valueColour: Color = Color.Unspecified,
     val detail: String = "",
     val destructive: Boolean = false,
     val focusKey: String? = null,
+    // Instead of the icon tile, such as a theme's swatch.
+    val leading: (@Composable () -> Unit)? = null,
+    // Instead of the chevron, such as a switch, a check or a quiet button.
+    val trailing: (@Composable () -> Unit)? = null,
+    val chevron: Boolean = onClick != null,
+    val selected: Boolean = false,
+    // The screen's first focus on a TV.
+    val requestFocus: Boolean = false,
 )
 
 // docs/APP-DESIGN.md, "Grouped list": for You and settings. A caption above, rows in a panel, hairlines
-// between them, inset past the icons.
+// between them, inset past the icons. On a TV each row is a panel of its own, 72 high and 16 apart, so
+// the focus ring around a whole row never covers the next one or gets cut off.
 @Composable
 fun GroupedList(caption: String, rows: List<GroupRow>, modifier: Modifier = Modifier) {
     val scheme = MaterialTheme.colorScheme
     val metrics = LocalMetrics.current
-    Column(modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(metrics.u(8))) {
+    Column(modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(metrics.u(if (metrics.tv) 12 else 8))) {
         if (caption.isNotEmpty()) {
             Text(caption.uppercase(), color = scheme.onSurfaceVariant, style = MaterialTheme.typography.caption, modifier = Modifier.padding(horizontal = metrics.u(16)))
         }
-        Column(Modifier.fillMaxWidth().clip(LocalMetrics.current.corner(14)).background(scheme.surface)) {
-            rows.forEachIndexed { i, row ->
-                if (i > 0) {
-                    Box(
-                        Modifier
-                            .padding(start = if (rows[i].icon != null) metrics.u(52) else metrics.u(16))
-                            .fillMaxWidth()
-                            .height(1.dp)
-                            .background(scheme.outline),
-                    )
+        if (metrics.tv) {
+            Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(metrics.u(16))) {
+                rows.forEach { GroupRowView(it, Modifier.background(scheme.surface, metrics.corner(14))) }
+            }
+        } else {
+            Column(Modifier.fillMaxWidth().clip(metrics.corner(14)).background(scheme.surface)) {
+                rows.forEachIndexed { i, row ->
+                    if (i > 0) {
+                        Box(
+                            Modifier
+                                .padding(start = if (rows[i].icon != null || rows[i].leading != null) metrics.u(56) else metrics.u(16))
+                                .fillMaxWidth()
+                                .height(1.dp)
+                                .background(scheme.outline),
+                        )
+                    }
+                    GroupRowView(row)
                 }
-                GroupRowView(row)
             }
         }
     }
 }
 
+// An icon on a quiet tint of its colour, as a grouped list's rows have.
 @Composable
-private fun GroupRowView(row: GroupRow) {
+fun IconTile(icon: ImageVector, tint: Color, modifier: Modifier = Modifier) {
+    val metrics = LocalMetrics.current
+    val size = metrics.u(if (metrics.tv) 32 else 28)
+    Box(
+        modifier.size(size).clip(RoundedCornerShape(size / 4)).background(tint.copy(alpha = ICON_TINT)),
+        contentAlignment = Alignment.Center,
+    ) { Icon(icon, contentDescription = null, tint = tint, modifier = Modifier.size(size * 0.64f)) }
+}
+
+@Composable
+private fun GroupRowView(row: GroupRow, modifier: Modifier = Modifier) {
     val scheme = MaterialTheme.colorScheme
     val metrics = LocalMetrics.current
     val ink = if (row.destructive) scheme.error else scheme.onSurface
+    val tall = metrics.u(
+        when {
+            metrics.tv -> 72
+            row.detail.isEmpty() -> 52
+            else -> 64
+        },
+    )
     val body: @Composable (Boolean) -> Unit = {
         Row(
-            Modifier.fillMaxWidth().heightIn(min = metrics.u(if (row.detail.isEmpty()) 52 else 64)).padding(horizontal = metrics.u(16), vertical = metrics.u(8)),
+            Modifier.fillMaxWidth().heightIn(min = tall).padding(horizontal = metrics.u(16), vertical = metrics.u(8)),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(metrics.u(12)),
         ) {
-            if (row.icon != null) {
-                val tint = if (row.tint == Color.Unspecified) scheme.onSurfaceVariant else row.tint
-                Box(
-                    Modifier.size(metrics.u(28)).clip(RoundedCornerShape(metrics.u(7))).background(tint.copy(alpha = ICON_TINT)),
-                    contentAlignment = Alignment.Center,
-                ) { Icon(row.icon, contentDescription = null, tint = tint, modifier = Modifier.size(metrics.u(18))) }
+            when {
+                row.leading != null -> row.leading.invoke()
+                row.icon != null -> IconTile(row.icon, if (row.tint == Color.Unspecified) scheme.onSurfaceVariant else row.tint)
             }
             Column(Modifier.weight(1f)) {
-                Text(row.title, color = ink, style = MaterialTheme.typography.body)
+                Text(row.title, color = ink, style = if (metrics.tv) MaterialTheme.typography.label else MaterialTheme.typography.body)
                 if (row.detail.isNotEmpty()) Text(row.detail, color = scheme.onSurfaceVariant, style = MaterialTheme.typography.secondary)
             }
-            if (row.value.isNotEmpty()) Text(row.value, color = scheme.onSurfaceVariant, style = MaterialTheme.typography.secondary, maxLines = 1)
-            if (row.onClick != null) Icon(Symbols.Next, contentDescription = null, tint = LocalExtraColours.current.hint, modifier = Modifier.size(metrics.u(20)))
+            if (row.value.isNotEmpty()) {
+                Text(
+                    row.value, color = if (row.valueColour == Color.Unspecified) scheme.onSurfaceVariant else row.valueColour,
+                    style = MaterialTheme.typography.secondary, maxLines = 1,
+                )
+            }
+            row.trailing?.invoke()
+            if (row.chevron) Icon(Symbols.Next, contentDescription = null, tint = LocalExtraColours.current.hint, modifier = Modifier.size(metrics.u(20)))
         }
     }
     if (row.onClick != null) {
-        Pressable(row.onClick, Modifier.fillMaxWidth(), shape = LocalMetrics.current.corner(6), focusKey = row.focusKey, pressScale = 1f) { body(it) }
+        // The ring goes round the whole row; a row this wide doesn't grow.
+        Pressable(
+            row.onClick, modifier.fillMaxWidth(), shape = metrics.corner(if (metrics.tv) 14 else 6), focusKey = row.focusKey,
+            pressScale = 1f, grows = false, selected = row.selected, label = null, requestFocus = row.requestFocus,
+        ) { body(it) }
     } else {
-        Box(Modifier.semantics(mergeDescendants = true) {}) { body(false) }
+        Box(modifier.semantics(mergeDescendants = true) {}) { body(false) }
     }
 }
 

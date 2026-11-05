@@ -32,12 +32,16 @@ import android.webkit.WebView
 import android.webkit.WebViewClient
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawingPadding
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
@@ -68,6 +72,7 @@ import com.wittywilla.wittymediaclient.net.pageFillsScreen
 import com.wittywilla.wittymediaclient.net.sameServer
 import com.wittywilla.wittymediaclient.net.webViewTooOld
 import com.wittywilla.wittymediaclient.net.sessionCookie
+import com.wittywilla.wittymediaclient.net.themeSyncScript
 import com.wittywilla.wittymediaclient.net.staysInWebPlayer
 import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 
@@ -225,7 +230,8 @@ private fun saveDownload(context: Context, api: Api, url: String, userAgent: Str
 // open wherever it's taken, until Back has nothing left to go back through.
 @Composable
 // public: a page anyone may read, opened before signing in. It goes without a sign-in cookie.
-fun ServerPageScreen(nav: Nav, route: Route, path: String, keptToGames: Boolean, public: Boolean = false) {
+// title: a native bar with Back and the page's name above it, as You's rows open pages.
+fun ServerPageScreen(nav: Nav, route: Route, path: String, keptToGames: Boolean, public: Boolean = false, title: String = "") {
     val context = LocalContext.current
     val api = nav.app.api
     val background = MaterialTheme.colorScheme.background.toArgb()
@@ -265,7 +271,11 @@ fun ServerPageScreen(nav: Nav, route: Route, path: String, keptToGames: Boolean,
             },
             onFail = { failed = CANT_OPEN },
             onShowing = { showing = true },
-            onLoaded = { padForPage(nav.app)?.let { showPadToPage(web, it) } },
+            onLoaded = {
+                padForPage(nav.app)?.let { showPadToPage(web, it) }
+                // The page follows the theme chosen on this device, as the app does.
+                if (!keptToGames) themeSyncScript(nav.themeChoice)?.let { web.evaluateJavascript(it, null) }
+            },
             onAppBack = { if (nav.current == route) nav.pop() },
             isTv = nav.app.isTv && !keptToGames,
         )
@@ -352,6 +362,23 @@ fun ServerPageScreen(nav: Nav, route: Route, path: String, keptToGames: Boolean,
             Column(Modifier.safeDrawingPadding().padding(32.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 ErrorText(failed)
                 ActionButton("Back", nav::pop, requestFocus = true)
+            }
+        } else if (title.isNotEmpty() && !fills) {
+            Column(Modifier.fillMaxSize().safeDrawingPadding()) {
+                Row(
+                    Modifier.fillMaxWidth().padding(end = Space.S4),
+                    verticalAlignment = androidx.compose.ui.Alignment.CenterVertically,
+                ) {
+                    BackArrow(nav::pop, Modifier.padding(Space.S1))
+                    Text(title, color = MaterialTheme.colorScheme.onBackground, style = MaterialTheme.typography.section, maxLines = 1)
+                }
+                Box(Modifier.weight(1f).fillMaxWidth()) {
+                    AndroidView(factory = { web }, modifier = Modifier.fillMaxSize())
+                    if (!showing) Loading()
+                }
+            }
+            fullScreen?.let { view ->
+                AndroidView(factory = { view.also { it.requestFocus() } }, modifier = Modifier.fillMaxSize())
             }
         } else {
             val room = if (fills) Modifier.imePadding() else Modifier.safeDrawingPadding()

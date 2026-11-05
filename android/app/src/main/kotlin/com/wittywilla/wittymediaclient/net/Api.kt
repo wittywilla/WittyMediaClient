@@ -183,6 +183,43 @@ class Api(val base: String, val token: String, private val quick: Boolean = fals
     suspend fun couchStatus(): CouchStatus = get("/couch")
     suspend fun guide(hours: Int, limit: Int): Guide = get("/guide?hours=$hours&limit=$limit")
 
+    // You and settings.
+    suspend fun updateProfile(id: Long, change: ProfileUpdate): User =
+        json.decodeFromString(call("PUT", "/users/$id/profile", json.encodeToString(change)))
+
+    suspend fun changePassword(id: Long, current: String, password: String) {
+        call("PUT", "/users/$id/password", json.encodeToString(PasswordChange(password, current)))
+    }
+
+    suspend fun twoFactor(): TwoFactorStatus = get("/me/2fa")
+    suspend fun twoFactorSetup(password: String): TwoFactorSetup =
+        json.decodeFromString(call("POST", "/me/2fa/setup", json.encodeToString(PasswordOnly(password))))
+    suspend fun twoFactorConfirm(code: String): RecoveryCodes =
+        json.decodeFromString(call("POST", "/me/2fa/confirm", json.encodeToString(CodeOnly(code))))
+    suspend fun twoFactorDisable(password: String, code: String) {
+        call("POST", "/me/2fa/disable", json.encodeToString(PasswordAndCode(password, code)))
+    }
+
+    suspend fun sessions(): List<DeviceSession> = getList("/sessions")
+    suspend fun endSession(id: String) {
+        call("DELETE", "/sessions/${query(id)}")
+    }
+    suspend fun endOtherSessions() {
+        call("DELETE", "/sessions")
+    }
+
+    // Signing in a TV from here: what's asking, then yes (as someone) or no. Or a code for the TV to type.
+    suspend fun pairInfo(code: String): PairInfo =
+        json.decodeFromString(call("POST", "/pair/info", json.encodeToString(CodeOnly(code))))
+    suspend fun pairApprove(code: String, userId: Long) {
+        call("POST", "/pair/approve", json.encodeToString(PairAnswer(code, userId)))
+    }
+    suspend fun pairDeny(code: String) {
+        call("POST", "/pair/deny", json.encodeToString(PairAnswer(code)))
+    }
+    suspend fun pairInvite(userId: Long): PairInvite =
+        json.decodeFromString(call("POST", "/pair/invite", json.encodeToString(UserIdOnly(userId))))
+
     suspend fun logout() {
         call("POST", "/logout", "{}")
     }

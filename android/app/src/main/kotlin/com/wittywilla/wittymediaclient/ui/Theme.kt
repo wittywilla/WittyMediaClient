@@ -1,6 +1,9 @@
 package com.wittywilla.wittymediaclient.ui
 
 import android.content.Context
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.snap
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Typography
@@ -43,7 +46,7 @@ data class ThemeColours(
 )
 
 @Serializable
-data class ThemeData(val id: String, val scheme: String, val colours: ThemeColours)
+data class ThemeData(val id: String, val scheme: String, val colours: ThemeColours, val name: String = id)
 
 @Serializable
 data class ThemeFile(val defaultTheme: String, val themes: List<ThemeData>)
@@ -176,22 +179,33 @@ val Typography.caption get() = labelSmall
 @Composable
 fun WittyTheme(theme: ThemeData, metrics: Metrics, reduceMotion: Boolean, words: Map<String, String>, content: @Composable () -> Unit) {
     val t = theme.colours
-    val scheme = remember(theme) {
-        if (theme.scheme == "light") {
-            lightColorScheme(
-                primary = c(t.accent), onPrimary = c(t.onAccent), background = c(t.background), onBackground = c(t.text),
-                surface = c(t.panel), onSurface = c(t.text), surfaceVariant = c(t.card), onSurfaceVariant = c(t.textSecondary),
-                outline = c(t.border), error = c(t.danger),
-            )
-        } else {
-            darkColorScheme(
-                primary = c(t.accent), onPrimary = c(t.onAccent), background = c(t.background), onBackground = c(t.text),
-                surface = c(t.panel), onSurface = c(t.text), surfaceVariant = c(t.card), onSurfaceVariant = c(t.textSecondary),
-                outline = c(t.border), error = c(t.danger),
-            )
-        }
+    // A new theme cross-fades in 200 ms, or at once with Reduce Motion.
+    @Composable
+    fun shown(hex: String): Color =
+        animateColorAsState(c(hex), if (reduceMotion) snap() else tween(THEME_FADE_MS), label = "theme").value
+    val accent = shown(t.accent)
+    val onAccent = shown(t.onAccent)
+    val background = shown(t.background)
+    val text = shown(t.text)
+    val panel = shown(t.panel)
+    val card = shown(t.card)
+    val secondary = shown(t.textSecondary)
+    val border = shown(t.border)
+    val danger = shown(t.danger)
+    val scheme = if (theme.scheme == "light") {
+        lightColorScheme(
+            primary = accent, onPrimary = onAccent, background = background, onBackground = text,
+            surface = panel, onSurface = text, surfaceVariant = card, onSurfaceVariant = secondary,
+            outline = border, error = danger,
+        )
+    } else {
+        darkColorScheme(
+            primary = accent, onPrimary = onAccent, background = background, onBackground = text,
+            surface = panel, onSurface = text, surfaceVariant = card, onSurfaceVariant = secondary,
+            outline = border, error = danger,
+        )
     }
-    val extra = remember(theme) { ExtraColours(c(t.textHint), c(t.accentText), c(t.ok)) }
+    val extra = ExtraColours(shown(t.textHint), shown(t.accentText), shown(t.ok))
     val type = remember(metrics.tv) { typeScale(if (metrics.tv) TvType else PhoneType) }
     CompositionLocalProvider(
         LocalMetrics provides metrics, LocalExtraColours provides extra, LocalReduceMotion provides reduceMotion, LocalWords provides words,
@@ -199,3 +213,5 @@ fun WittyTheme(theme: ThemeData, metrics: Metrics, reduceMotion: Boolean, words:
         MaterialTheme(colorScheme = scheme, typography = type, content = content)
     }
 }
+
+private const val THEME_FADE_MS = 200

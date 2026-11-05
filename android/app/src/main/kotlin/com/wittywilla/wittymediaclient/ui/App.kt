@@ -7,6 +7,7 @@ import androidx.activity.SystemBarStyle
 import androidx.activity.compose.BackHandler
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.foundation.background
+import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.WindowInsets
@@ -82,7 +83,10 @@ sealed interface Route {
     data class Item(val id: Long) : Route { override val key = "item-$id" }
     data class Player(val id: Long, val startOver: Boolean) : Route { override val key = "player-$id" }
     data class Web(val path: String) : Route { override val key = "web-$path" }
-    data class Page(val path: String) : Route { override val key = "page-$path" }
+    // The server's own page; with a title, it has a native bar with Back above it, as You's rows do.
+    data class Page(val path: String, val title: String = "") : Route { override val key = "page-$path" }
+    // One of You's own screens: names, password, two-step, devices, signing in a TV, theme.
+    data class You(val screen: YouNative) : Route { override val key = "you-$screen" }
     // A page anyone may read, such as the help on a forgotten password, which opens before signing in.
     data class Help(val path: String) : Route { override val key = "help-$path" }
     // What a TV doesn't open itself: a QR card for a phone, as on Apple TV.
@@ -94,7 +98,7 @@ sealed interface Route {
     // The app's own screens leave room for the mini player. A film, a server's page and signing in don't have it.
     val hasMiniPlayer: Boolean
         get() = when (this) {
-            Home, Search, Profile, Notices, Logs, is Library, is Show, is Item, is Album, is Artist -> true
+            Home, Search, Profile, Notices, Logs, is Library, is Show, is Item, is Album, is Artist, is You -> true
             else -> false
         }
 }
@@ -135,6 +139,15 @@ class Nav(val app: WittyApp, private val s: Map<String, String>) {
 
     // Who is signed in, for the avatar on the You tab.
     var me by mutableStateOf<User?>(null)
+
+    // This device's theme for the server: "" for the server's own, "auto", or a theme's id.
+    var themeChoice by mutableStateOf("")
+        private set
+
+    fun chooseTheme(choice: String) {
+        themeChoice = choice
+        server?.let { app.store.chooseTheme(it.url, choice) }
+    }
 
     private fun showBrand(base: String, status: ServerStatus) {
         brandName = status.brandName
@@ -246,6 +259,7 @@ class Nav(val app: WittyApp, private val s: Map<String, String>) {
     // Only for a server whose identity has just been checked.
     private fun openServer(opening: SavedServer, token: String = "") {
         server = opening
+        themeChoice = app.store.themeChoice(opening.url)
         app.store.server = opening.url
         app.api = Api(opening.url, token)
         if (token.isNotEmpty()) ClientLog.kick()
@@ -442,6 +456,7 @@ class Nav(val app: WittyApp, private val s: Map<String, String>) {
         endSession()
         server = null
         me = null
+        themeChoice = ""
         forgetBrand()
         app.store.server = ""
         app.store.forgetToken()
@@ -479,7 +494,14 @@ fun AppRoot(app: WittyApp) {
     val metrics = if (app.isTv) TvMetrics else if (width >= TABLET_WIDTH_DP) TabletMetrics else PhoneMetrics
     val reduceMotion = remember { runCatching { Settings.Global.getFloat(context.contentResolver, Settings.Global.ANIMATOR_DURATION_SCALE, 1f) == 0f }.getOrDefault(false) }
 
-    val theme = pickTheme(themes, nav.themeId)
+    // The person's choice on this device, else the server's. Automatic follows the device's light or dark.
+    val dark = isSystemInDarkTheme()
+    val shownTheme = when (nav.themeChoice) {
+        "" -> nav.themeId
+        AUTO_THEME -> if (dark) themes.defaultTheme else LIGHT_THEME
+        else -> nav.themeChoice
+    }
+    val theme = pickTheme(themes, shownTheme)
     // The system bars follow this app's theme, not the device's: dark icons on a dark page can't be read.
     DisposableEffect(theme.scheme, theme.colours.background) {
         (context as? ComponentActivity)?.let { showSystemBars(it, theme.scheme == "light", theme.colours.background.toColorInt()) }
@@ -518,7 +540,7 @@ fun AppRoot(app: WittyApp) {
                         is Route.SignIn -> SignInScreen(nav, strings, route.way)
                         Route.Home -> Shell(nav) { HomeScreen(nav, strings) }
                         Route.Search -> Shell(nav) { SearchScreen(nav, strings) }
-                        Route.Profile -> Shell(nav) { ProfileScreen(nav, strings) }
+                        Route.Profile -> Shell(nav) { YouScreen(nav, strings) }
                         Route.Notices -> NoticesScreen(nav)
                         Route.Logs -> LogsScreen(nav)
                         is Route.Library -> if (route.library.isListening) ListeningLibraryScreen(nav, strings, route.library) else LibraryScreen(nav, strings, route.library)
@@ -529,7 +551,8 @@ fun AppRoot(app: WittyApp) {
                         Route.NowPlaying -> NowPlayingScreen(nav)
                         is Route.Player -> PlayerScreen(nav, route.id, route.startOver)
                         is Route.Web -> ServerPageScreen(nav, route, route.path, keptToGames = true)
-                        is Route.Page -> ServerPageScreen(nav, route, route.path, keptToGames = false)
+                        is Route.Page -> ServerPageScreen(nav, route, route.path, keptToGames = false, title = route.title)
+                        is Route.You -> YouSettingScreen(nav, strings, route.screen)
                         is Route.Help -> ServerPageScreen(nav, route, route.path, keptToGames = false, public = true)
                         is Route.OnPhone -> OnPhoneScreen(nav, strings, route.title, route.path)
                     }
@@ -552,4 +575,6 @@ fun AppRoot(app: WittyApp) {
 }
 
 private const val TABLET_WIDTH_DP = 600
+const val AUTO_THEME = "auto"
+private const val LIGHT_THEME = "light"
 private const val NAV_VEIL_ALPHA = 0xB3

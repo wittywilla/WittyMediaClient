@@ -32,6 +32,7 @@ import androidx.compose.foundation.layout.windowInsetsTopHeight
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
@@ -95,7 +96,7 @@ private data class Tab(val route: Route, val label: String, val icon: ImageVecto
 private val TABS = listOf(
     Tab(Route.Home, "Home", Icons.Filled.Home),
     Tab(Route.Search, "Search", Icons.Filled.Search),
-    Tab(Route.Profile, "You", null),
+    Tab(Route.Profile, "", null),
 )
 
 @Composable
@@ -104,14 +105,16 @@ private fun TabButton(nav: Nav, tab: Tab, modifier: Modifier = Modifier, wide: B
     val metrics = LocalMetrics.current
     val active = nav.current == tab.route
     val ink = if (active) scheme.onPrimary else scheme.onSurface
+    // You's name comes from the shared wording.
+    val name = tab.label.ifEmpty { LocalWords.current["youTab"].orEmpty() }
     Pressable(
         { if (!active) nav.reset(tab.route) }, modifier,
         shape = Radius.FULL, fill = if (active) scheme.primary else Color.Transparent,
-        label = tab.label, state = if (active) "Selected" else null, selected = active,
+        label = name, state = if (active) "Selected" else null, selected = active,
         // A remote that has just chosen a tab stays on it, one press from what's below. Home has its
         // own first focus on Play. Elsewhere nothing would have focus, and the next press would land on Home.
         requestFocus = active && tab.route != Route.Home && metrics.tv,
-        focusKey = "tab-${tab.label}",
+        focusKey = "tab-$name",
     ) {
         Row(
             Modifier.padding(horizontal = if (wide) metrics.u(20) else metrics.u(16), vertical = metrics.u(12)),
@@ -121,10 +124,14 @@ private fun TabButton(nav: Nav, tab: Tab, modifier: Modifier = Modifier, wide: B
             if (tab.icon != null) {
                 Icon(tab.icon, contentDescription = null, tint = ink, modifier = Modifier.size(metrics.u(24)))
             } else {
+                // The person's avatar, ringed in the accent's words colour while You is chosen.
                 val me = nav.me
-                Avatar(if (me == null) "?" else avatarName(me.displayName, me.name), metrics.u(28))
+                Avatar(
+                    if (me == null) "?" else avatarName(me.displayName, me.name), metrics.u(28),
+                    if (active) Modifier.ringOutside(CircleShape, scheme.onPrimary, 0.dp, metrics.u(2).coerceAtLeast(1.dp)) else Modifier,
+                )
             }
-            if (wide) Text(tab.label, color = ink, style = MaterialTheme.typography.label)
+            if (wide) Text(name, color = ink, style = MaterialTheme.typography.label)
         }
     }
 }
@@ -263,43 +270,6 @@ fun SearchScreen(nav: Nav, s: Map<String, String>) {
                 }
             }
         }
-    }
-}
-
-// Who's signed in and to what, and the ways out of that. Everything here works with a remote.
-@Composable
-fun ProfileScreen(nav: Nav, s: Map<String, String>) {
-    val metrics = LocalMetrics.current
-    val context = LocalContext.current
-    val server = nav.server
-    var who by remember { mutableStateOf("") }
-    LaunchedEffect(Unit) { who = runCatching { nav.app.api.status().user?.name.orEmpty() }.getOrDefault("") }
-    val version = remember { runCatching { context.packageManager.getPackageInfo(context.packageName, 0).versionName }.getOrNull().orEmpty() }
-    Column(
-        Modifier
-            .fillMaxSize()
-            .verticalScroll(rememberScrollState())
-            .statusBarsPadding()
-            .padding(horizontal = metrics.gutter, vertical = Space.S4)
-            .padding(bottom = LocalBottomRoom.current),
-        verticalArrangement = Arrangement.spacedBy(Space.S3),
-    ) {
-        Heading("You")
-        ErrorText(nav.notice)
-        if (who.isNotEmpty()) Secondary("Signed in as $who")
-        if (server != null) {
-            SectionTitle(server.name)
-            Secondary(server.url)
-            if (server.fingerprint.isNotEmpty()) Secondary("${s["fingerprintLabel"]}: ${server.fingerprint}")
-        }
-        ActionButton("Server settings", { nav.push(Route.Page(SETTINGS_PATH)) }, Modifier.fillMaxWidth(), focusKey = "settings")
-        ActionButton("Sign out", nav::signOut, Modifier.fillMaxWidth(), focusKey = "switch")
-        ActionButton(s["changeServer"].orEmpty(), nav::changeServer, Modifier.fillMaxWidth(), focusKey = "server")
-        SectionTitle("About this app")
-        Secondary("WittyMediaClient $version")
-        ActionButton("Licences", { nav.push(Route.Notices) }, Modifier.fillMaxWidth(), focusKey = "notices")
-        ActionButton("This app's log", { nav.push(Route.Logs) }, Modifier.fillMaxWidth(), focusKey = "logs")
-        Secondary(s["legalConnect"].orEmpty())
     }
 }
 

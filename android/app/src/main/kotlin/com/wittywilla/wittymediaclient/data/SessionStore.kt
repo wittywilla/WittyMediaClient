@@ -58,6 +58,14 @@ class SessionStore(context: Context) {
         prefs.edit().remove(KEY_TOKEN).apply()
     }
 
+    // This device's theme for a server: "" for the server's own, "auto" for light or dark with the
+    // device, or a theme's id. Kept per server, on this device only.
+    fun themeChoice(server: String): String = prefs.getString(KEY_THEME + server, "") ?: ""
+
+    fun chooseTheme(server: String, choice: String) {
+        prefs.edit().putString(KEY_THEME + server, choice).apply()
+    }
+
     var recent: List<SavedServer>
         get() = runCatching { json.decodeFromString<List<SavedServer>>(prefs.getString(KEY_RECENT, "[]") ?: "[]") }.getOrDefault(emptyList())
         set(v) = prefs.edit().putString(KEY_RECENT, json.encodeToString(v)).apply()
@@ -122,6 +130,7 @@ class SessionStore(context: Context) {
         const val KEY_SERVER = "server"
         const val KEY_TOKEN = "signin"
         const val KEY_RECENT = "recent"
+        const val KEY_THEME = "theme:"
         const val KEYSTORE = "AndroidKeyStore"
         const val ALIAS = "wittymediaclient-session"
         const val TRANSFORM = "AES/GCM/NoPadding"
