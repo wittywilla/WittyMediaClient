@@ -7,6 +7,7 @@ import androidx.activity.SystemBarStyle
 import androidx.activity.compose.BackHandler
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.foundation.background
+import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.WindowInsets
@@ -30,10 +31,10 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.core.graphics.ColorUtils
-import androidx.core.graphics.toColorInt
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LifecycleEventEffect
 import com.wittywilla.wittymediaclient.WittyApp
+import com.wittywilla.wittymediaclient.data.LogoCache
 import com.wittywilla.wittymediaclient.data.SavedServer
 import com.wittywilla.wittymediaclient.diag.ClientLog
 import com.wittywilla.wittymediaclient.net.Api
@@ -44,6 +45,15 @@ import com.wittywilla.wittymediaclient.net.NextStep
 import com.wittywilla.wittymediaclient.net.SendStep
 import com.wittywilla.wittymediaclient.net.ServerProof
 import com.wittywilla.wittymediaclient.net.ServerStatus
+import com.wittywilla.wittymediaclient.net.User
+import androidx.compose.runtime.mutableStateMapOf
+import com.wittywilla.wittymediaclient.net.json
+import com.wittywilla.wittymediaclient.net.ThemeTranslator
+import com.wittywilla.wittymediaclient.net.ThemeTokens
+import com.wittywilla.wittymediaclient.net.ThemeMakerInput
+import com.wittywilla.wittymediaclient.net.ThemeList
+import com.wittywilla.wittymediaclient.net.AppTheme
+import com.wittywilla.wittymediaclient.net.brandLogoUrl
 import com.wittywilla.wittymediaclient.net.GUIDE_PATH
 import com.wittywilla.wittymediaclient.net.findServerById
 import com.wittywilla.wittymediaclient.net.hasOwnScreen
@@ -80,7 +90,14 @@ sealed interface Route {
     data class Item(val id: Long) : Route { override val key = "item-$id" }
     data class Player(val id: Long, val startOver: Boolean) : Route { override val key = "player-$id" }
     data class Web(val path: String) : Route { override val key = "web-$path" }
-    data class Page(val path: String) : Route { override val key = "page-$path" }
+    // The server's own page; with a title, it has a native bar with Back above it, as You's rows do.
+    data class Page(val path: String, val title: String = "") : Route { override val key = "page-$path" }
+    // One of You's own screens: names, password, two-step, devices, signing in a TV, theme.
+    data class You(val screen: YouNative) : Route { override val key = "you-$screen" }
+    // A page anyone may read, such as the help on a forgotten password, which opens before signing in.
+    data class Help(val path: String) : Route { override val key = "help-$path" }
+    // What a TV doesn't open itself: a QR card for a phone, as on Apple TV.
+    data class OnPhone(val title: String, val path: String) : Route { override val key = "on-phone-$path" }
     data class Album(val library: Long, val album: String, val artist: String) : Route { override val key = "album-$library-$artist-$album" }
     data class Artist(val library: Long, val name: String) : Route { override val key = "artist-$library-$name" }
     data object NowPlaying : Route { override val key = "now-playing" }
@@ -88,7 +105,7 @@ sealed interface Route {
     // The app's own screens leave room for the mini player. A film, a server's page and signing in don't have it.
     val hasMiniPlayer: Boolean
         get() = when (this) {
-            Home, Search, Profile, Notices, Logs, is Library, is Show, is Item, is Album, is Artist -> true
+            Home, Search, Profile, Notices, Logs, is Library, is Show, is Item, is Album, is Artist, is You -> true
             else -> false
         }
 }
@@ -120,6 +137,89 @@ class Nav(val app: WittyApp, private val s: Map<String, String>) {
 
     // A notice for after signing in, such as the sign-in not being kept on this device.
     var notice by mutableStateOf("")
+
+    // The server's own name and logo for the sign-in screens, once it has been chosen. Empty for the app's own.
+    var brandName by mutableStateOf("")
+        private set
+    var brandLogo by mutableStateOf("")
+        private set
+
+    // Who is signed in, for the avatar on the You tab.
+    var me by mutableStateOf<User?>(null)
+
+    // This device's theme for the server: "" for the server's own, "auto", or a theme's id.
+    var themeChoice by mutableStateOf("")
+        private set
+
+    fun chooseTheme(choice: String) {
+        themeChoice = choice
+        server?.let { app.store.chooseTheme(it.url, choice) }
+        wantTheme(choice.ifEmpty { themeId })
+    }
+
+    // The server's themes (docs/APP-DESIGN.md, Themes): its list, each one read and translated as it's wanted,
+    // and the person's own look. The built-in ones in shared/data stand in until then.
+    var themeList by mutableStateOf<ThemeList?>(null)
+        private set
+    val themes = mutableStateMapOf<String, AppTheme>()
+    var customTheme by mutableStateOf<ThemeMakerInput?>(null)
+        private set
+
+    // Reads the list, then the themes in use. Quiet on failure: the built-ins and what was kept stand in.
+    fun loadThemes(signedIn: Boolean) {
+        val base = server?.url ?: return
+        val api = app.api
+        app.scope.launch {
+            runCatching { api.themes() }.getOrNull()?.let { if (server?.url == base) themeList = it }
+            wantTheme(themeId)
+            if (themeChoice.isNotEmpty() && themeChoice != AUTO_THEME) wantTheme(themeChoice)
+            if (signedIn) customTheme = runCatching { api.customTheme() }.getOrNull()
+        }
+    }
+
+    // One theme's tokens, from what was kept when its modTime hasn't changed, else from the server.
+    fun wantTheme(id: String) {
+        if (id.isEmpty() || id == AUTO_THEME || id == ThemeTranslator.CUSTOM_THEME) return
+        val base = server?.url ?: return
+        val summary = themeList?.themes?.firstOrNull { it.id == id }
+        val modTime = summary?.modTime ?: 0
+        app.store.themeTokens(base, id, modTime)?.let { kept ->
+            runCatching { json.decodeFromString<ThemeTokens>(kept) }.getOrNull()?.let {
+                themes[id] = ThemeTranslator.translate(it, summary?.preview)
+                return
+            }
+        }
+        val api = app.api
+        app.scope.launch {
+            val tokens = runCatching { api.themeTokens(id) }.getOrNull() ?: return@launch
+            if (server?.url != base) return@launch
+            app.store.keepThemeTokens(base, id, modTime, json.encodeToString(ThemeTokens.serializer(), tokens))
+            themes[id] = ThemeTranslator.translate(tokens, summary?.preview)
+        }
+    }
+
+    private fun forgetThemes() {
+        themeList = null
+        themes.clear()
+        customTheme = null
+    }
+
+    private fun showBrand(base: String, status: ServerStatus) {
+        brandName = status.brandName
+        brandLogo = brandLogoUrl(base, status.brandLogo)
+    }
+
+    // A server whose identity has been checked: keep its name and logo with it, the picture on the device.
+    private fun keepBrand(opened: SavedServer, status: ServerStatus): SavedServer {
+        val named = opened.copy(name = status.brandName.ifEmpty { opened.name.ifEmpty { "WittyMediaServer" } }, brandLogo = status.brandLogo)
+        if (status.brandLogo.isNotEmpty()) app.scope.launch { LogoCache.keep(app, named.url, status.brandLogo) }
+        return named
+    }
+
+    private fun forgetBrand() {
+        brandName = ""
+        brandLogo = ""
+    }
 
     // What each screen last showed, in memory only. Coming back draws it straight away and asks
     // the server again underneath, so a dropped network shows what was there, not a blank screen.
@@ -222,6 +322,7 @@ class Nav(val app: WittyApp, private val s: Map<String, String>) {
     // Only for a server whose identity has just been checked.
     private fun openServer(opening: SavedServer, token: String = "") {
         server = opening
+        themeChoice = app.store.themeChoice(opening.url)
         app.store.server = opening.url
         app.api = Api(opening.url, token)
         if (token.isNotEmpty()) ClientLog.kick()
@@ -241,6 +342,13 @@ class Nav(val app: WittyApp, private val s: Map<String, String>) {
         openServer(opening, app.store.token)
         val status = app.api.status()
         themeId = status.theme
+        showBrand(opening.url, status)
+        keepBrand(opening, status).let {
+            server = it
+            app.store.remember(it)
+        }
+        loadThemes(status.user != null)
+        me = status.user
         reset(if (status.user != null) Route.Home else Route.SignIn())
         null
     } catch (_: IOException) {
@@ -280,7 +388,11 @@ class Nav(val app: WittyApp, private val s: Map<String, String>) {
             else -> {
                 openServer(checked)
                 try {
-                    themeId = app.api.status().theme
+                    val status = app.api.status()
+                    themeId = status.theme
+                    showBrand(checked.url, status)
+                    server = keepBrand(checked, status)
+                    loadThemes(false)
                     reset(Route.SignIn())
                 } catch (_: Exception) {
                     reset(Route.Connect(s["errLost"].orEmpty()))
@@ -307,16 +419,19 @@ class Nav(val app: WittyApp, private val s: Map<String, String>) {
     // decides what comes next. Answers words to show if that's nowhere.
     suspend fun arrive(url: String, status: ServerStatus): String? {
         val proof = identify(url, app.store.recent)
-        val checked = proof.savedAs(url, status.brandName.ifEmpty { status.name })
+        val checked = proof.savedAs(url, status.brandName.ifEmpty { status.name }).copy(brandLogo = status.brandLogo)
         val sameServerAsToken = app.store.server == url || app.store.find(app.store.server)?.publicKey == proof.publicKey
         val step = Identity.nextStep(proof.state, sameServerAsToken && tokenFits(proof))
-        if (step != NextStep.Refuse && step != NextStep.Lost) themeId = status.theme
+        if (step != NextStep.Refuse && step != NextStep.Lost) {
+            themeId = status.theme
+            showBrand(url, status)
+        }
         return when (step) {
             NextStep.Warn -> { push(Route.Mismatch(checked)); null }
             NextStep.Refuse -> s["identityBad"].orEmpty()
             NextStep.Lost -> s["errUnreachable"].orEmpty()
-            NextStep.AskCode -> { push(Route.Code(checked)); null }
-            NextStep.SignIn -> { signInTo(checked); null }
+            NextStep.AskCode -> { push(Route.Code(keepBrand(checked, status))); null }
+            NextStep.SignIn -> { signInTo(keepBrand(checked, status)); loadThemes(false); null }
             NextStep.Open -> openWithToken(checked)
         }
     }
@@ -373,16 +488,19 @@ class Nav(val app: WittyApp, private val s: Map<String, String>) {
         }
     }
 
-    fun signedIn(token: String) {
+    fun signedIn(token: String, user: User? = null) {
         val kept = server ?: SavedServer(app.api.base, "WittyMediaServer")
+        me = user
         if (!app.store.signedIn(kept, token)) notice = s["notKept"].orEmpty()
         app.api = Api(kept.url, token)
+        loadThemes(true)
         ClientLog.kick()
         forgetScreens()
         reset(Route.Home)
     }
 
     private fun forgetSignIn() {
+        me = null
         app.store.forgetToken()
         app.api = Api(app.api.base, "")
         forgetScreens()
@@ -408,6 +526,11 @@ class Nav(val app: WittyApp, private val s: Map<String, String>) {
     fun changeServer() {
         endSession()
         server = null
+        me = null
+        themeChoice = ""
+        themeId = "default"
+        forgetThemes()
+        forgetBrand()
         app.store.server = ""
         app.store.forgetToken()
         app.api = Api("", "")
@@ -444,14 +567,30 @@ fun AppRoot(app: WittyApp) {
     val metrics = if (app.isTv) TvMetrics else if (width >= TABLET_WIDTH_DP) TabletMetrics else PhoneMetrics
     val reduceMotion = remember { runCatching { Settings.Global.getFloat(context.contentResolver, Settings.Global.ANIMATOR_DURATION_SCALE, 1f) == 0f }.getOrDefault(false) }
 
-    val theme = pickTheme(themes, nav.themeId)
+    // The person's choice on this device, else the server's. Automatic follows the device's light or dark; Made by you
+    // is the account's own look, made as the website makes it. A theme not read yet stands in as the built-in one.
+    val dark = isSystemInDarkTheme()
+    val wanted = when (nav.themeChoice) {
+        "" -> nav.themeId
+        AUTO_THEME -> if (dark) themes.defaultTheme else LIGHT_THEME
+        else -> nav.themeChoice
+    }
+    val custom = nav.customTheme
+    val theme = remember(wanted, nav.themes[wanted], custom) {
+        when {
+            wanted == ThemeTranslator.CUSTOM_THEME && custom != null -> ThemeTranslator.translateMade(custom)
+            nav.themes[wanted] != null -> nav.themes.getValue(wanted)
+            else -> bundledTheme(themes, if (wanted == ThemeTranslator.CUSTOM_THEME) nav.themeId else wanted)
+        }
+    }
+    LaunchedEffect(wanted) { nav.wantTheme(wanted) }
     // The system bars follow this app's theme, not the device's: dark icons on a dark page can't be read.
-    DisposableEffect(theme.scheme, theme.colours.background) {
-        (context as? ComponentActivity)?.let { showSystemBars(it, theme.scheme == "light", theme.colours.background.toColorInt()) }
+    DisposableEffect(theme.isLight, theme.background) {
+        (context as? ComponentActivity)?.let { showSystemBars(it, theme.isLight, theme.background.argb or (0xFF shl 24)) }
         onDispose { }
     }
 
-    WittyTheme(theme, metrics, reduceMotion) {
+    WittyTheme(theme, metrics, reduceMotion, strings) {
         LaunchedEffect(Unit) { nav.startUp() }
         DisposableEffect(Unit) {
             app.onGuideKey = nav::openGuide
@@ -483,7 +622,7 @@ fun AppRoot(app: WittyApp) {
                         is Route.SignIn -> SignInScreen(nav, strings, route.way)
                         Route.Home -> Shell(nav) { HomeScreen(nav, strings) }
                         Route.Search -> Shell(nav) { SearchScreen(nav, strings) }
-                        Route.Profile -> Shell(nav) { ProfileScreen(nav, strings) }
+                        Route.Profile -> Shell(nav) { YouScreen(nav, strings) }
                         Route.Notices -> NoticesScreen(nav)
                         Route.Logs -> LogsScreen(nav)
                         is Route.Library -> if (route.library.isListening) ListeningLibraryScreen(nav, strings, route.library) else LibraryScreen(nav, strings, route.library)
@@ -494,7 +633,10 @@ fun AppRoot(app: WittyApp) {
                         Route.NowPlaying -> NowPlayingScreen(nav)
                         is Route.Player -> PlayerScreen(nav, route.id, route.startOver)
                         is Route.Web -> ServerPageScreen(nav, route, route.path, keptToGames = true)
-                        is Route.Page -> ServerPageScreen(nav, route, route.path, keptToGames = false)
+                        is Route.Page -> ServerPageScreen(nav, route, route.path, keptToGames = false, title = route.title)
+                        is Route.You -> YouSettingScreen(nav, strings, route.screen)
+                        is Route.Help -> ServerPageScreen(nav, route, route.path, keptToGames = false, public = true)
+                        is Route.OnPhone -> OnPhoneScreen(nav, strings, route.title, route.path)
                         is GamesRoute -> GamesRouteScreen(nav, route)
                     }
                 }
@@ -516,4 +658,6 @@ fun AppRoot(app: WittyApp) {
 }
 
 private const val TABLET_WIDTH_DP = 600
+const val AUTO_THEME = "auto"
+private const val LIGHT_THEME = "light"
 private const val NAV_VEIL_ALPHA = 0xB3

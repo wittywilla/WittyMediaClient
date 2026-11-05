@@ -144,7 +144,7 @@ Gamepad API, so the page's own controller code in `web/src/tv.ts` takes over. Th
 is Escape. So in TV mode, `desktop/preload.js` waits until the page's own listeners have run, and if nothing used the Escape and nothing is open, the app goes back
 a page. At the top of the app it opens the menu instead. The list of what counts as open is copied from `web/src/tv.ts`, so if that changes, this has to as well.
 
-**The interface is the server's own big screen mode.** The app adds `?tv=1` to the address, which is the same mode a TV browser gets. There's no second interface to keep up.
+**The interface is the server's own TV mode** (it was its big screen mode until WittyMediaServer [#297](https://github.com/wittywilla/WittyMediaServer/pull/297)). The app adds `?tv=1` to the address, which is the same mode a TV browser gets. There's no second interface to keep up. What comes next for Bigscreen, a native Kirigami app included, and how to build and test it: [PLASMA-BIGSCREEN.md](PLASMA-BIGSCREEN.md).
 
 **Packages:** `.deb`, `.rpm` and `.pacman` add the entry a launcher needs. An AppImage doesn't. **There's no Flatpak**, on purpose for now: Bigscreen's own distributions use
 their package managers, and one that hasn't been seen working isn't worth offering. Flathub is the place to add it when someone wants it.
