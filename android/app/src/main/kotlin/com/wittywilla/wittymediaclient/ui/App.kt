@@ -697,7 +697,7 @@ fun AppRoot(app: WittyApp) {
                         Route.Profile -> Shell(nav) { YouScreen(nav, strings) }
                         Route.Notices -> NoticesScreen(nav)
                         Route.Logs -> LogsScreen(nav)
-                        is Route.Library -> PageShell(nav) { if (route.library.isListening) ListeningLibraryScreen(nav, strings, route.library) else LibraryScreen(nav, strings, route.library) }
+                        is Route.Library -> PageShell(nav) { if (route.library.isListening) ListeningLibraryScreen(nav, strings, route.library) else if (LocalMetrics.current.tv) LibraryScreen(nav, strings, route.library) else PhoneLibrary(nav, route.library) }
                         is Route.Show -> PageShell(nav) { if (LocalMetrics.current.tv) ShowScreen(nav, strings, route.id) else PhoneShow(nav, strings, route.id) }
                         is Route.Item -> PageShell(nav) { if (LocalMetrics.current.tv) ItemScreen(nav, strings, route.id) else PhoneItem(nav, strings, route.id) }
                         is Route.Album -> PageShell(nav) { AlbumScreen(nav, strings, route) }

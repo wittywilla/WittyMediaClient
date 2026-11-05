@@ -219,6 +219,12 @@ class Api(val base: String, val token: String, private val quick: Boolean = fals
     suspend fun modulePages(): List<Pair<String, ModulePage>> = get<ModuleBundles>("/modules/web").bundles.flatMap { b -> b.pages.map { b.id to it } }
     suspend fun guide(hours: Int, limit: Int): Guide = get("/guide?hours=$hours&limit=$limit")
     suspend fun forYou(): ForYou = get("/me/recommended")
+    suspend fun shelves(library: Long): Shelves = get("/browse/shelves?library=$library")
+    // The query is the website's: sort, desc, seed and the filters, already encoded.
+    suspend fun browse(library: Long, query: String, offset: Int, limit: Int): BrowsePage = get("/browse?library=$library&$query&offset=$offset&limit=$limit")
+    suspend fun facets(library: Long): Map<String, List<Facet>> = get("/browse/facets?library=$library")
+    suspend fun scan(library: Long) { call("POST", "/libraries/$library/scan", "{}") }
+    fun encode(text: String): String = query(text)
     suspend fun collections(): List<Collection> = getList("/collections")
     suspend fun holding(item: Long, show: Long): List<Long> = getList("/collections/holding?item=$item&show=$show")
     suspend fun addToCollection(id: Long, what: CollectionItems) { call("POST", "/collections/$id/items", json.encodeToString(what)) }

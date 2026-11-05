@@ -102,12 +102,12 @@ fun Placeholder(title: String, modifier: Modifier = Modifier, centred: Boolean =
 
 // A picture from the server over its placeholder, which shows while it loads or if there is none.
 @Composable
-fun WebArt(url: String?, title: String, widthDp: Dp, aspect: Float, modifier: Modifier = Modifier, centred: Boolean = true) {
+fun WebArt(url: String?, title: String, widthDp: Dp, aspect: Float, modifier: Modifier = Modifier, centred: Boolean = true, placeholderless: Boolean = false) {
     val context = LocalContext.current
     val px = with(LocalDensity.current) { widthDp.toPx() }.toInt().coerceAtLeast(1)
     var failed by remember(url) { mutableStateOf(false) }
     Box(modifier) {
-        Placeholder(title, Modifier.fillMaxSize(), centred)
+        if (!placeholderless) Placeholder(title, Modifier.fillMaxSize(), centred)
         if (url != null && !failed) {
             val request = remember(url, px) { ImageRequest.Builder(context).data(url).size(px, (px / aspect).toInt().coerceAtLeast(1)).build() }
             AsyncImage(request, null, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize(), onError = { failed = true })
@@ -209,7 +209,8 @@ fun WebShowCard(nav: Nav, s: Show) {
 // A hub's head: the title 20 at weight 650, and its action in 13 medium with a 16 chevron, 44 to tap.
 @Composable
 fun HubHead(title: String, action: String? = null, onAction: (() -> Unit)? = null) {
-    Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp).padding(bottom = 12.dp).heightIn(min = 44.dp), verticalAlignment = Alignment.CenterVertically) {
+    // Only an action needs the 44 to tap; a plain head is just its words.
+    Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp).padding(bottom = if (action != null) 0.dp else 12.dp).then(if (action != null) Modifier.heightIn(min = 44.dp) else Modifier), verticalAlignment = Alignment.CenterVertically) {
         Text(title, color = MaterialTheme.colorScheme.onBackground, fontSize = 20.sp, fontWeight = FontWeight.SemiBold, letterSpacing = (-0.24).sp, lineHeight = 23.sp, modifier = Modifier.weight(1f))
         if (action != null && onAction != null) {
             Pressable(onAction, Modifier.heightIn(min = 44.dp), shape = RoundedCornerShape(10.dp), fill = Color.Transparent, label = action, ring = false) {

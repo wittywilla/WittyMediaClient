@@ -503,3 +503,28 @@ data class WatchLater(val collectionId: Long = 0)
 
 @Serializable
 data class NewCollection(val name: String, val kind: String = "manual")
+
+// GET /browse/shelves: a library's categories, collections, studios and networks.
+@Serializable
+data class ArtRef(val type: String = "item", val id: Long = 0, val v: Long = 0)
+
+@Serializable
+data class ShelfCard(val id: Long = 0, val key: String = "", val name: String = "", val genre: String = "", val kind: String = "", val count: Int = 0, val art: List<ArtRef> = emptyList())
+
+@Serializable
+data class Shelves(
+    val categories: List<ShelfCard> = emptyList(),
+    val collections: List<ShelfCard> = emptyList(),
+    val studios: List<ShelfCard> = emptyList(),
+    val networks: List<ShelfCard> = emptyList(),
+)
+
+// GET /browse: items and shows together, and how many there are in all.
+@Serializable
+data class BrowseHit(val type: String = "item", val item: Item? = null, val show: Show? = null)
+
+@Serializable
+data class BrowsePage(val results: List<BrowseHit> = emptyList(), val total: Int = 0)
+
+@Serializable
+data class Facet(val value: String = "", val label: String = "", val count: Int = 0)
