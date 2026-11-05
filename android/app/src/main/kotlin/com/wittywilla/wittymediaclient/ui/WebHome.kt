@@ -130,7 +130,7 @@ fun PhoneHome(nav: Nav, s: Map<String, String>) {
             val library = h.libraries.firstOrNull { it.id == row.libraryId }
             val wide = library?.type in setOf("photos", "channels", "musicvideos")
             Column(Modifier.padding(bottom = 28.dp)) {
-                HubHead(row.title, if (library != null) "See all" else null) { library?.let { nav.push(Route.Library(it)) } }
+                HubHead(row.title, if (library != null) "See all" else null) { library?.let { nav.open(it) } }
                 HubRow { itemCards(nav, albumsOnce(row.items.distinctBy { it.id }), row.shows.distinctBy { it.id }, wide) }
             }
         }
@@ -279,7 +279,7 @@ private fun LibraryTiles(nav: Nav, libraries: List<Library>) {
                     pair.forEach { t ->
                         if (t is Triple<*, *, *>) {
                             val l = t.third as Library
-                            Tile(l.name, t.second as String, WebIcons.forLibrary(l.type), false, Modifier.weight(1f)) { nav.push(Route.Library(l)) }
+                            Tile(l.name, t.second as String, WebIcons.forLibrary(l.type), false, Modifier.weight(1f)) { nav.open(l) }
                         } else {
                             Tile("Add a library", "Another folder of media", WebIcons.Plus, true, Modifier.weight(1f)) { nav.push(Route.Page("/settings/libraries", "Libraries")) }
                         }

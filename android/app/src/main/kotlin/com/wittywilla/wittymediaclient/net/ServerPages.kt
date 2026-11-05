@@ -104,7 +104,7 @@ fun webViewTooOld(userAgent: String): Boolean {
     return version < OLDEST_WEB_VIEW
 }
 
-private val FILLS_THE_SCREEN = listOf("/play/", "/read/", "/tv/watch/", "/game/", "/couch-rig/", "/big")
+private val FILLS_THE_SCREEN = listOf("/play/", "/cd/", "/read/", "/tv/watch/", "/game/", "/couch-rig/", "/big")
 
 // A player, a book or a game has the whole screen, and keeps it awake. The rest sits between the system's bars.
 fun pageFillsScreen(path: String) = FILLS_THE_SCREEN.any { path.startsWith(it) } || (path.startsWith("/couch/") && "/play/" in path)

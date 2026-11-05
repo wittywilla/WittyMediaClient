@@ -128,8 +128,10 @@ fun HeroPage() {
     LaunchedEffect(Unit) { shell.hero = true }
 }
 
+// The website's top pages (TopBar.tsx): Home, the TV guide, Search, You, Settings and every place in the strip.
 private fun isTopPage(route: Route, menu: List<MenuEntry>): Boolean =
-    route == Route.Home || route == Route.Search || route == Route.Profile || menu.any { it.route.key == route.key }
+    route == Route.Home || route == Route.Search || route == Route.Profile || menu.any { it.route.key == route.key } ||
+        (route as? Route.Page)?.path?.substringBefore('?')?.let { it == GUIDE_PATH || it == "/settings" } == true
 
 @Composable
 fun PhoneShell(nav: Nav, content: @Composable () -> Unit) {
@@ -195,7 +197,9 @@ private fun TopBar(nav: Nav, scroll: ShellScroll, status: Dp, top: Boolean) {
             if (top) LibraryStrip(nav, Modifier.weight(1f), overPicture = scroll.hero && !scroll.under)
             else {
                 Spacer(Modifier.width(8.dp))
-                RoundBack(nav::back)
+                // Back as the system's: a server page goes back inside itself first, as the website's history does.
+                val dispatcher = androidx.activity.compose.LocalOnBackPressedDispatcherOwner.current?.onBackPressedDispatcher
+                RoundBack { dispatcher?.onBackPressed() ?: nav.back() }
             }
         }
     }

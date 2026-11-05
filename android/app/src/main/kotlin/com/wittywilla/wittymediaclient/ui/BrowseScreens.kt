@@ -122,6 +122,9 @@ fun LoadFailed(nav: Nav, message: String, retry: () -> Unit) {
 
 fun Nav.play(item: Item) = when {
     item.isTrack -> playTrack(item)
+    // The website's disc and CD players, as Play does there.
+    item.isDisc && !app.isTv -> push(Route.Page("/play/${item.id}"))
+    item.kind == "cd-image" && !app.isTv -> push(Route.Page("/cd/${item.id}?play=1"))
     item.isRigGame -> push(Route.Item(item.id))
     item.hasOwnScreen -> push(Route.Player(item.id, false))
     else -> push(Route.Page(item.pagePath()))

@@ -1,5 +1,6 @@
 package com.wittywilla.wittymediaclient.ui
 
+import com.wittywilla.wittymediaclient.net.pageFillsScreen
 import android.graphics.Color
 import android.provider.Settings
 import androidx.activity.ComponentActivity
@@ -159,7 +160,7 @@ class Nav(val app: WittyApp, private val s: Map<String, String>) {
         if (api.token.isEmpty() || menuFor == api.token) return
         menuFor = api.token
         val libraries = runCatching { api.libraries() }.getOrDefault(emptyList())
-        val list = libraries.filter { it.inMainMenus }.map { MenuEntry("lib:" + it.id, it.name, WebIcons.forLibrary(it.type), Route.Library(it)) }.toMutableList()
+        val list = libraries.filter { it.inMainMenus }.map { MenuEntry("lib:" + it.id, it.name, WebIcons.forLibrary(it.type), libraryRoute(it)) }.toMutableList()
         if (libraries.isNotEmpty()) list += MenuEntry("collections", "Collections", WebIcons.Library, Route.Page("/collections", "Collections"))
         if (runCatching { api.couchStatus().allowed }.getOrDefault(false)) list += MenuEntry("couch", "Game PCs", WebIcons.Gamepad, Route.Page("/couch", "Game PCs"))
         runCatching { api.modulePages() }.getOrDefault(emptyList()).filter { it.second.where == "main" }.forEach { (module, page) ->
@@ -316,11 +317,15 @@ class Nav(val app: WittyApp, private val s: Map<String, String>) {
     fun push(r: Route) { stack.add(r) }
 
     // This app's own screens for what it has them for, and the server's page for all the rest.
-    fun open(library: com.wittywilla.wittymediaclient.net.Library) = push(if (library.hasOwnScreen) Route.Library(library) else Route.Page(library.pagePath()))
+    fun open(library: com.wittywilla.wittymediaclient.net.Library) = push(libraryRoute(library))
+
+    // A library's own page: the app's for films, shows, discs and listening, the website's for every other kind.
+    fun libraryRoute(library: com.wittywilla.wittymediaclient.net.Library): Route = if (library.hasOwnScreen) Route.Library(library) else Route.Page(library.pagePath(), library.name)
     fun open(item: com.wittywilla.wittymediaclient.net.Item) = push(
         when {
             item.isTrack -> Route.Album(item.libraryId, item.album, item.albumArtist.ifEmpty { item.artist })
-            item.hasOwnScreen -> Route.Item(item.id)
+            // A disc has the app's own page on a phone or tablet, with Insert; its player is the website's.
+            item.hasOwnScreen || (item.isDisc && !app.isTv) -> Route.Item(item.id)
             else -> Route.Page(item.pagePath())
         },
     )
@@ -705,7 +710,8 @@ fun AppRoot(app: WittyApp) {
                         Route.NowPlaying -> if (LocalMetrics.current.tv) NowPlayingScreen(nav) else WebNowPlaying(nav)
                         is Route.Player -> if (LocalMetrics.current.tv) PlayerScreen(nav, route.id, route.startOver) else VideoPlayerScreen(nav, route)
                         is Route.Web -> ServerPageScreen(nav, route, route.path, keptToGames = true)
-                        is Route.Page -> ServerPageScreen(nav, route, route.path, keptToGames = false, title = route.title)
+                        is Route.Page -> if (!LocalMetrics.current.tv && !pageFillsScreen(route.path)) PageShell(nav) { ServerPageScreen(nav, route, route.path, keptToGames = false, title = route.title, inShell = true) }
+                            else ServerPageScreen(nav, route, route.path, keptToGames = false, title = route.title)
                         is Route.You -> YouSettingScreen(nav, strings, route.screen)
                         is Route.Help -> ServerPageScreen(nav, route, route.path, keptToGames = false, public = true)
                         is Route.OnPhone -> OnPhoneScreen(nav, strings, route.title, route.path)
