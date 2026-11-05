@@ -18,6 +18,8 @@ private final class Pad {
     var shortcuts: PadShortcuts
     var haptics: CHHapticEngine?
     var last = PadState()
+    /// The account's profile in use for it here, if any.
+    var profile = ""
 
     init(controller: GCController, port: UInt8, mapper: PadMapper, shortcuts: PadShortcuts) {
         self.controller = controller
@@ -25,6 +27,13 @@ private final class Pad {
         self.mapper = mapper
         self.shortcuts = shortcuts
     }
+}
+
+/// A player and what they play with, for the menu.
+struct GamePlayer: Equatable {
+    let port: Int
+    let name: String
+    let profile: String
 }
 
 @MainActor
@@ -63,9 +72,11 @@ final class GameInput {
     /// What to show when a controller comes or goes.
     var onNotice: ((String) -> Void)?
 
-    /// Who's on which player, for the menu.
-    var players: [(port: Int, name: String)] {
-        pads.values.sorted { $0.port < $1.port }.map { (Int($0.port), $0.controller.vendorName ?? $0.controller.productCategory) }
+    /// Who's on which player, for the menu: the controller and the profile it plays by.
+    var players: [GamePlayer] {
+        pads.values.sorted { $0.port < $1.port }.map {
+            GamePlayer(port: Int($0.port), name: $0.controller.vendorName ?? $0.controller.productCategory, profile: $0.profile)
+        }
     }
 
     func start(client: WittyClient, setup: Setup) {
@@ -188,7 +199,8 @@ final class GameInput {
         guard let pad = pads[id] else { return }
         pad.mapper = PadMapper(defaults: setup.controls?.defaults?.gamepad, layers: [saved, resolved?.map],
                                options: resolved?.options, defaultOptions: setup.controls?.defaults?.options)
-        if let name = resolved?.profile?.name, !name.isEmpty { onNotice?("Player \(pad.port + 1): \(name)") }
+        pad.profile = resolved?.profile?.name ?? ""
+        if !pad.profile.isEmpty { onNotice?("Player \(pad.port + 1): \(pad.profile)") }
         updateTurboTimer()
         padChanged(id)
     }

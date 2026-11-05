@@ -188,7 +188,7 @@ final class GamePlayerModel: ObservableObject {
     }
 
     enum MenuPage: Equatable {
-        case main, save, load, reset, quit
+        case main, save, load, controllers, reset, quit
     }
 
     @Published var phase: Phase = .loading
@@ -201,7 +201,10 @@ final class GamePlayerModel: ObservableObject {
     @Published private(set) var disc = 0
     @Published private(set) var discs = 1
     @Published private(set) var busy = false
-    @Published private(set) var players: [(port: Int, name: String)] = []
+    @Published private(set) var players: [GamePlayer] = []
+    /// What each player has plugged in, where the console's emulator offers a choice.
+    @Published private(set) var devices: [GamePortDevices] = []
+    @Published private(set) var plugged: [Int: Int] = [:]
     @Published var leave = false
 
     let host = GameHostController()
@@ -292,6 +295,8 @@ final class GamePlayerModel: ObservableObject {
         disc = session.disc ?? 0
         discs = max(1, session.discs ?? 1)
         modes = GameModes.order(session.modes)
+        devices = (session.devices ?? []).filter { ($0.types ?? []).count > 1 }
+        plugged = Dictionary(devices.compactMap { d in d.current.map { (d.port, $0) } }, uniquingKeysWith: { a, _ in a })
         for words in session.notices ?? [] where !words.isEmpty { say(words) }
         updateLayout()
         let console = session.console ?? ""
@@ -500,6 +505,13 @@ final class GamePlayerModel: ObservableObject {
 
     func reset() {
         Task { if await act(.reset, done: "The game was reset") { closeMenu() } }
+    }
+
+    /// Plugs another kind of controller into a player's port, as the emulator offers.
+    func plug(port: Int, device: GameDeviceType) {
+        Task {
+            if await act(.device(port: port, device: device.id), done: "Player \(port + 1): \(device.name)") { plugged[port] = device.id }
+        }
     }
 
     func changeDisc(_ to: Int) {
@@ -730,6 +742,7 @@ private struct GameMenu: View {
         case .load: return "Load state"
         case .reset: return "Reset the game?"
         case .quit: return "Save and quit?"
+        case .controllers: return "Controllers"
         }
     }
 
@@ -742,6 +755,7 @@ private struct GameMenu: View {
                     case .main: main
                     case .save: slots(saving: true)
                     case .load: slots(saving: false)
+                    case .controllers: controllers
                     case .reset: confirm("Everything since your last save is lost.", yes: "Reset") { game.reset() }
                     case .quit: confirm("The game saves where you are, and you can resume it here or on any other device.", yes: "Save and quit") {
                             Task { await game.quit() }
@@ -793,19 +807,49 @@ private struct GameMenu: View {
                 if n != game.disc { row("Change to disc \(n + 1)", "opticaldisc", key: "disc\(n)", sub: "Disc \(game.disc + 1) is in") { game.changeDisc(n) } }
             }
         }
+        row("Controllers", "gamecontroller", key: "pads", sub: game.players.isEmpty ? "The Siri Remote" : "\(game.players.count) connected") { game.page = .controllers }
         row("Reset", "arrow.counterclockwise", key: "reset") { if game.confirms { game.page = .reset } else { game.reset() } }
         row("Save and quit", "xmark", key: "quit") { if game.confirms { game.page = .quit } else { Task { await game.quit() } } }
-        VStack(alignment: .leading, spacing: Tokens.Space.s1) {
-            Text("Controllers").font(.wmSection).foregroundStyle(palette.text)
+        Secondary("Start and Select together, or the remote's Back button, open this menu.")
+            .padding(.top, Tokens.Space.s4)
+    }
+
+    /// Who's on which player and what they play by, and what each player has plugged in.
+    @ViewBuilder private var controllers: some View {
+        VStack(alignment: .leading, spacing: Tokens.Space.s2) {
             if game.players.isEmpty {
-                Secondary("The Siri Remote is player 1. Connect a game controller in Settings, Remotes and Devices, for games that need more buttons.")
+                Secondary("The Siri Remote is player 1: its clickpad is the D-pad, a click in the middle is A, and Play/Pause is B. Connect a game controller in Settings, Remotes and Devices for games that need more buttons.")
             } else {
-                ForEach(game.players, id: \.port) { p in Secondary("Player \(p.port + 1): \(p.name)") }
+                ForEach(game.players, id: \.port) { p in
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("Player \(p.port + 1): \(p.name)").foregroundStyle(palette.text)
+                        Secondary(p.profile.isEmpty ? "The console's own layout" : "Your profile \u{201C}\(p.profile)\u{201D}")
+                    }
+                }
+                Secondary("The Siri Remote plays as player 1 too.")
             }
-            Secondary("Start and Select together, or the remote's Back button, open this menu.")
+            Secondary("Profiles are made on the website, under Controllers, and follow you here.")
         }
-        .padding(.top, Tokens.Space.s4)
-        .focusable(false)
+        .focusable(true)
+        .accessibilityElement(children: .combine)
+        ForEach(Array(game.devices.enumerated()), id: \.element.port) { n, port in
+            VStack(alignment: .leading, spacing: Tokens.Space.s2) {
+                Text("Player \(port.port + 1) has plugged in").font(.wmSection).foregroundStyle(palette.text)
+                FlowLayout(spacing: Tokens.Space.s2) {
+                    ForEach(port.types ?? [], id: \.id) { type in
+                        Button { game.plug(port: port.port, device: type) } label: {
+                            ChipLabel(title: type.name, selected: game.plugged[port.port] == type.id)
+                        }
+                        .buttonStyle(SurfaceStyle(radius: 999))
+                        .focused($focused, equals: n == 0 && type.id == port.types?.first?.id ? "first" : "dev\(port.port)-\(type.id)")
+                        .disabled(game.busy)
+                        .accessibilityAddTraits(game.plugged[port.port] == type.id ? [.isSelected] : [])
+                    }
+                }
+            }
+            .padding(.top, Tokens.Space.s2)
+            .focusSection()
+        }
     }
 
     private func thumb(_ save: GameSave?) -> some View {
