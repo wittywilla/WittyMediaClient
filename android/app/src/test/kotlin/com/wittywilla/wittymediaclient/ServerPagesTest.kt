@@ -84,7 +84,7 @@ class ServerPagesTest {
 
     @Test
     fun whatIsOnNowAndHowFarThrough() {
-        val channel = GuideChannel(key = "lib-1", programmes = listOf(GuideProgramme(100, 200, "First"), GuideProgramme(200, 400, "Second")))
+        val channel = GuideChannel(key = "lib-1", programmes = listOf(GuideProgramme(100, 200, title = "First"), GuideProgramme(200, 400, title = "Second")))
         assertEquals("First", channel.programmeAt(150)?.title)
         assertEquals("Second", channel.programmeAt(200)?.title)
         assertEquals(null, channel.programmeAt(900))
