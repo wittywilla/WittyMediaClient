@@ -37,7 +37,6 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.DateRange
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.Icon
@@ -76,7 +75,6 @@ import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
-import com.wittywilla.wittymediaclient.net.GUIDE_PATH
 import com.wittywilla.wittymediaclient.net.Item
 import com.wittywilla.wittymediaclient.net.SETTINGS_PATH
 import com.wittywilla.wittymediaclient.net.Show
@@ -141,14 +139,14 @@ private fun TabButton(nav: Nav, tab: Tab, modifier: Modifier = Modifier, wide: B
 
 private const val TAB_HEIGHT = 52
 
-// Home, Search and You. A phone has them in a floating pill at the bottom, within reach of a
-// thumb. A TV has them along the top, where up from the first row gets to them.
 // Pages below the tabs: the website's shell on a phone or tablet; on a TV, as before.
 @Composable
 fun PageShell(nav: Nav, content: @Composable () -> Unit) {
     if (LocalMetrics.current.tv) content() else PhoneShell(nav, content)
 }
 
+// Home, Search and You in a floating pill at the bottom of a phone, within reach of a thumb. A TV has six
+// along the top instead, where up from a tab's first row gets to them: see TvTabs.kt.
 @Composable
 fun Shell(nav: Nav, content: @Composable () -> Unit) {
     val metrics = LocalMetrics.current
@@ -162,29 +160,8 @@ fun Shell(nav: Nav, content: @Composable () -> Unit) {
     }
     Screen {
         if (metrics.tv) {
-            Column(Modifier.fillMaxSize()) {
-                // docs/APP-DESIGN.md, "On a TV": pills along the top, 24 units down. Up from the first row reaches them.
-                Row(
-                    Modifier.fillMaxWidth().padding(start = metrics.gutter, end = metrics.gutter, top = metrics.u(24), bottom = metrics.u(16)).remoteRow(),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(metrics.u(16)),
-                ) {
-                    TABS.forEach { TabButton(nav, it, wide = true) }
-                    if (nav.hasGuide) {
-                        Pressable({ nav.push(Route.Page(GUIDE_PATH)) }, focusKey = "tab-guide", shape = Radius.FULL, label = "TV guide") {
-                            Row(
-                                Modifier.height(metrics.u(TAB_HEIGHT)).padding(horizontal = metrics.u(20)),
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(metrics.u(8)),
-                            ) {
-                                Icon(Icons.Filled.DateRange, contentDescription = null, tint = MaterialTheme.colorScheme.onSurface, modifier = Modifier.size(metrics.u(24)))
-                                Text("TV guide", color = MaterialTheme.colorScheme.onSurface, style = MaterialTheme.typography.label)
-                            }
-                        }
-                    }
-                }
-                Box(Modifier.weight(1f)) { content() }
-            }
+            // docs/APP-DESIGN.md, "On a TV": six pills along the top, as Apple TV has them (TvTabs.kt).
+            TvShell(nav, content)
         } else {
             Box(Modifier.fillMaxSize()) {
             // A phone on its side has its navigation bar and any camera cut-out at the sides. The margins

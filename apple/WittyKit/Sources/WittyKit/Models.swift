@@ -13,6 +13,8 @@ public struct ServerStatus: Decodable, Equatable {
     public let brandLogo: String?
     public let theme: String?
     public let user: User?
+    /// A newer version the server's update check found, for administrators; empty or missing when there's none.
+    public let update: String?
 
     /// Comes from a server that may not have proved anything yet, so it is cleaned before showing.
     public var displayName: String {
@@ -113,8 +115,14 @@ public struct Library: Decodable, Identifiable, Hashable {
     public let type: String
     public let console: String?
     public let itemCount: Int?
+    /// The server is looking through its folders now.
+    public let scanning: Bool?
+    /// A commercials library its owner chose to show in the menus and on Home.
+    public let showMain: Bool?
 
     public var isShows: Bool { type == "shows" || type == "anime" }
+    /// Commercials stay out of the menus and Home unless switched on, as on the website.
+    public var inMainMenus: Bool { type != "commercials" || showMain == true }
     /// The games on someone's own PC: see Rigs.swift.
     public var isRigGames: Bool { type == "games" && console == "rig" }
     /// Lists what these apps can open: video, and games on someone's own PC. Types are a list
@@ -166,6 +174,17 @@ public struct Item: Decodable, Identifiable, Equatable {
     public let albumArtist: String?
     public let artist: String?
     public let track: Int?
+    /// Which disc of a set a track is on, and the CD image it was ripped from, if it was.
+    public let discNo: Int?
+    public let cdDisc: Int64?
+    /// A podcast episode's date, as the server writes it.
+    public let aired: String?
+    /// The score out of 10 from where its details came from.
+    public let rating: Double?
+    /// A DVD's or a Blu-ray's own facts, for one that is.
+    public let disc: DiscInfo?
+    /// How a book is read in the browser (`epub`, `cbz`, `pdf`); missing when it can't be.
+    public let reader: String?
 
     /// Video plays in these apps' own player. Anything else opens the server's page: see ServerPages.swift.
     public var isPlayable: Bool { kind == "video" }
@@ -200,6 +219,7 @@ public struct Album: Decodable, Equatable, Hashable {
     public let artist: String?
     public let title: String?
     public let year: Int?
+    public let genre: String?
     public let tracks: Int?
     public let durationSec: Double?
     public let coverItem: Int64?
@@ -251,8 +271,19 @@ public struct Hub: Decodable, Identifiable, Equatable {
     public let key: String
     public let title: String
     public let libraryId: Int64?
+    /// For a saved view: what its library's address takes after "?" to show the view whole.
+    public let query: String?
     public let items: [Item]?
     public let shows: [Show]?
+
+    public init(key: String, title: String, libraryId: Int64?, query: String? = nil, items: [Item]?, shows: [Show]?) {
+        self.key = key
+        self.title = title
+        self.libraryId = libraryId
+        self.query = query
+        self.items = items
+        self.shows = shows
+    }
 
     public var id: String { key }
     public var isEmpty: Bool { (items ?? []).isEmpty && (shows ?? []).isEmpty }
@@ -329,6 +360,15 @@ public struct Explanation: Decodable, Equatable {
     public let sound: String?
     public let subtitles: String?
     public let reasons: [String]?
+    /// How hard the server works: none, light or heavy.
+    public let load: String?
+    public let streaming: String?
+}
+
+/// A chapter of a video, where it starts in the film's time.
+public struct Chapter: Decodable, Equatable {
+    public let start: Double
+    public let title: String?
 }
 
 /// What POST /items/{id}/playback answers: see docs/CLIENT-API.md. The film's
@@ -353,10 +393,12 @@ public struct Playback: Decodable, Equatable {
     public let explain: Explanation?
     /// A 3D picture stored in the frame: sbs or tab. Asking with `flatten3d` shows one eye.
     public let stereo: String?
+    /// The film's chapters, for the marks on the seek bar and the Scenes panel.
+    public let chapters: [Chapter]?
 
     private enum CodingKeys: String, CodingKey {
         case decision, url, streamId, durationSec, seek, startAtSec, timeOffsetSec, audio, subtitles
-        case audioIndex, subtitleIndex, subtitleDelivery, intro, nextId, explain, stereo
+        case audioIndex, subtitleIndex, subtitleDelivery, intro, nextId, explain, stereo, chapters
         case protocolName = "protocol"
     }
 
@@ -374,15 +416,20 @@ public struct PlaybackRequest: Encodable {
     public var startSec: Double?
     /// This device couldn't decode what it was sent: ask for a conversion instead.
     public var forceTranscode: Bool?
+    /// This device's streaming choice ("standard", "robust"), and what its connection carries, for robust streams.
+    public var streaming: String?
+    public var measuredKbps: Double?
 
     public init(profile: String, capabilities: DeviceCapabilities? = nil, audio: Int? = nil, subtitle: Int? = nil, startSec: Double? = nil,
-                forceTranscode: Bool? = nil) {
+                forceTranscode: Bool? = nil, streaming: String? = nil, measuredKbps: Double? = nil) {
         self.profile = profile
         self.capabilities = capabilities
         self.audio = audio
         self.subtitle = subtitle
         self.startSec = startSec
         self.forceTranscode = forceTranscode
+        self.streaming = streaming
+        self.measuredKbps = measuredKbps
     }
 }
 
@@ -398,9 +445,13 @@ public struct Capabilities: Decodable, Equatable {
     /// The lowest version of each kind of client (`android`, `apple`, `desktop`) this server works
     /// with. An older server doesn't send it, and a platform not listed means fine.
     public let minClientVersions: [String: String]?
+    /// How the server sends viewers away from home their video: "standard" or "robust".
+    public let remoteStreaming: String?
+
+    private struct PlaybackFacts: Decodable { let remoteStreaming: String? }
 
     private enum CodingKeys: String, CodingKey {
-        case server, version, apiVersion, apiRevision, apiVersions, setupRequired, features, minClientVersions
+        case server, version, apiVersion, apiRevision, apiVersions, setupRequired, features, minClientVersions, playback
     }
 
     /// An optional field that can't be read counts as absent, so it can't stop anyone connecting.
@@ -414,6 +465,7 @@ public struct Capabilities: Decodable, Equatable {
         setupRequired = try? values.decodeIfPresent(Bool.self, forKey: .setupRequired)
         features = try? values.decodeIfPresent([String].self, forKey: .features)
         minClientVersions = try? values.decodeIfPresent([String: String].self, forKey: .minClientVersions)
+        remoteStreaming = (try? values.decodeIfPresent(PlaybackFacts.self, forKey: .playback))??.remoteStreaming
     }
 
     /// Optional abilities go by name, never by comparing server versions.

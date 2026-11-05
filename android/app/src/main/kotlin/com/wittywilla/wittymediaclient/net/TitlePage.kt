@@ -138,7 +138,7 @@ data class ListedPlatform(val key: String = "", val name: String = "")
 // The logo service's answer for one name (POST /logos/lookup): a logo, or only the name. An opaque picture has a
 // background of its own, which can't change colour, so it goes on a white plate.
 @Serializable
-data class LogoAnswer(val id: Long? = null, val kind: String = "", val name: String = "", val has: Boolean = false, val version: Long = 0, val opaque: Boolean = false) {
+data class BrandLogoAnswer(val id: Long? = null, val kind: String = "", val name: String = "", val has: Boolean = false, val version: Long = 0, val opaque: Boolean = false) {
     companion object {
         // The key a page keeps an answer under, as the website matches them: case and spaces at the ends don't count.
         fun key(kind: String, name: String): String = kind + "|" + name.trim().lowercase(Locale.ROOT)
@@ -152,19 +152,19 @@ data class LogoAsk(val kind: String, val name: String)
 data class LogoLookup(val logos: List<LogoAsk>)
 
 @Serializable
-data class LogoAnswers(val logos: List<LogoAnswer> = emptyList())
+data class LogoAnswers(val logos: List<BrandLogoAnswer> = emptyList())
 
 @Serializable
 data class ShowView(val view: String)
 
 // One of the server's short legal notices: its words, the words of its link, and where that goes.
-data class Notice(val words: String, val link: String, val path: String)
+data class NoticeLine(val words: String, val link: String, val path: String)
 
 // A notice by its kind. An unknown kind is a newer server's, and is nothing here.
-fun LegalNotices.notice(kind: String): Notice? {
+fun LegalNotices.notice(kind: String): NoticeLine? {
     val notice = notices[kind] ?: return null
     if (notice.text.isEmpty()) return null
-    return Notice(plainWords(notice.text, 2000), plainWords(linkText, 40).ifEmpty { "Legal" }, "/settings/legal" + if (notice.section.isEmpty()) "" else "#" + notice.section)
+    return NoticeLine(plainWords(notice.text, 2000), plainWords(linkText, 40).ifEmpty { "Legal" }, "/settings/legal" + if (notice.section.isEmpty()) "" else "#" + notice.section)
 }
 
 // Words from a server, kept to something a screen can show: no control characters or direction overrides, and not a

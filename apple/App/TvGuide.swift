@@ -391,7 +391,7 @@ struct GuideView: View {
         _ = await (lookLoaded, remindersLoaded)
         model.channels = store.lineup
         await logos.ask(store.lineup.compactMap(\.brand), client: client)
-        if notices.isEmpty, let all = try? await client.legalNotices() { notices = all }
+        if notices.isEmpty, let all = try? await client.legalNoticeWords() { notices = all }
         placeFirstFocus()
     }
 

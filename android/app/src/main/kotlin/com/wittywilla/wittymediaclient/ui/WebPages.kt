@@ -89,7 +89,7 @@ import com.wittywilla.wittymediaclient.net.Collection
 import com.wittywilla.wittymediaclient.net.CollectionItems
 import com.wittywilla.wittymediaclient.net.Item
 import com.wittywilla.wittymediaclient.net.ItemFacts
-import com.wittywilla.wittymediaclient.net.LogoAnswer
+import com.wittywilla.wittymediaclient.net.BrandLogoAnswer
 import com.wittywilla.wittymediaclient.net.ShowDetail
 import com.wittywilla.wittymediaclient.net.ShowFacts
 import com.wittywilla.wittymediaclient.net.TitleAttached
@@ -420,7 +420,7 @@ fun PhoneItem(nav: Nav, s: Map<String, String>, id: Long) {
     var attempt by remember { mutableIntStateOf(0) }
     var attached by remember(id) { mutableStateOf<TitleAttached?>(null) }
     var listings by remember(id) { mutableStateOf<TitleListings?>(null) }
-    var logos by remember(id) { mutableStateOf<Map<String, LogoAnswer>>(emptyMap()) }
+    var logos by remember(id) { mutableStateOf<Map<String, BrandLogoAnswer>>(emptyMap()) }
     var more by remember { mutableStateOf(false) }
     var save by remember { mutableStateOf(false) }
     LaunchedEffect(id, attempt) {
@@ -537,7 +537,7 @@ fun PhoneShow(nav: Nav, s: Map<String, String>, id: Long, asked: Int? = null) {
     var attached by remember(id) { mutableStateOf<TitleAttached?>(null) }
     var listings by remember(id) { mutableStateOf<TitleListings?>(null) }
     var extrasIn by remember(id) { mutableStateOf(false) }
-    var logos by remember(id) { mutableStateOf<Map<String, LogoAnswer>>(emptyMap()) }
+    var logos by remember(id) { mutableStateOf<Map<String, BrandLogoAnswer>>(emptyMap()) }
     var serverView by remember { mutableStateOf<String?>(null) }
     // The layout chosen here, over the show's own; "" goes back to the server's.
     var chosenView by remember(id) { mutableStateOf<String?>(null) }
@@ -630,7 +630,7 @@ fun PhoneShow(nav: Nav, s: Map<String, String>, id: Long, asked: Int? = null) {
                     TitleBackLink("Back to library", Modifier.padding(top = 32.dp)) { facts.libraryId?.let { l -> nav.openLibraryPage(l) } ?: nav.back() }
                     TitleLook.credit(facts.provider, facts.providerId, show = true)?.let { FinePrint(it, Modifier.padding(top = 12.dp)) }
                     LegalLine(nav, "metadata", Modifier.padding(top = 16.dp))
-                    if (network.isNotEmpty() && logos[LogoAnswer.key("network", network)]?.has == true) LegalLine(nav, "logos", Modifier.padding(top = 16.dp))
+                    if (network.isNotEmpty() && logos[BrandLogoAnswer.key("network", network)]?.has == true) LegalLine(nav, "logos", Modifier.padding(top = 16.dp))
                 }
             }
             PageFoot(nav, "")
@@ -649,7 +649,7 @@ fun PhoneShow(nav: Nav, s: Map<String, String>, id: Long, asked: Int? = null) {
 // A show's facts: its year, rating box, network's logo (which opens the network's page), status, how many seasons and
 // episodes, and its genres.
 @Composable
-private fun ShowMeta(nav: Nav, show: com.wittywilla.wittymediaclient.net.Show, facts: ShowFacts, logos: Map<String, LogoAnswer>, modifier: Modifier) {
+private fun ShowMeta(nav: Nav, show: com.wittywilla.wittymediaclient.net.Show, facts: ShowFacts, logos: Map<String, BrandLogoAnswer>, modifier: Modifier) {
     val rated = facts.contentRating?.ifEmpty { null }
     val network = facts.network?.ifEmpty { null }
     val status = facts.status?.ifEmpty { null }
@@ -665,7 +665,7 @@ private fun ShowMeta(nav: Nav, show: com.wittywilla.wittymediaclient.net.Show, f
             Box(
                 Modifier.height(22.4.dp).then(if (library != null) Modifier.clickable { nav.push(Route.Page(TitleLook.brandPath("network", network, library))) } else Modifier),
                 contentAlignment = Alignment.Center,
-            ) { BrandLogo(nav.app.api, network, logos[LogoAnswer.key("network", network)], 120.dp, 22.4.dp, 14, MaterialTheme.colorScheme.onSurfaceVariant) }
+            ) { BrandLogo(nav.app.api, network, logos[BrandLogoAnswer.key("network", network)], 120.dp, 22.4.dp, 14, MaterialTheme.colorScheme.onSurfaceVariant) }
         }
         if (status != null) Dotted(!(afterPill && network == null)) { MetaWords(status) }
         Dotted(!(afterPill && network == null && status == null)) { MetaWords(TitleLook.seasonsLine(show.seasonCount, show.episodeCount)) }

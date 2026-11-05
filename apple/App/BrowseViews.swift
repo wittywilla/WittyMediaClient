@@ -5,7 +5,7 @@ import WittyKit
 // through at the top of Home with a Play pill, the libraries as pills, rows of poster cards, and item
 // and show pages over their picture, dimmed and fading into the page.
 
-private func runtimeText(_ seconds: Double?) -> String? {
+func runtimeText(_ seconds: Double?) -> String? {
     guard let seconds, seconds > 0 else { return nil }
     let hours = Int(seconds) / 3600
     let minutes = (Int(seconds) % 3600 + 30) / 60
@@ -13,7 +13,7 @@ private func runtimeText(_ seconds: Double?) -> String? {
 }
 
 /// One line of facts about something, with the dots only between what's there.
-private func factLine(_ item: Item) -> String {
+func factLine(_ item: Item) -> String {
     var facts: [String] = []
     if let year = item.year { facts.append(String(year)) }
     if let runtime = runtimeText(item.runtimeSec) { facts.append(runtime) }
@@ -21,14 +21,15 @@ private func factLine(_ item: Item) -> String {
     return facts.joined(separator: " · ")
 }
 
-private func displayTitle(_ item: Item) -> String {
+func displayTitle(_ item: Item) -> String {
     (item.showTitle?.isEmpty == false ? item.showTitle : nil) ?? item.title
 }
 
 /// Where choosing something goes: this app's own screen where it has one, and otherwise the server's
 /// page, or on Apple TV what it can do.
-private func route(for item: Item) -> Route {
-    if item.isPlayable || item.isRigGame { return .item(item.id) }
+func route(for item: Item) -> Route {
+    // A disc has this app's own page, with Play and its menus, as the website's item page has.
+    if item.isPlayable || item.isRigGame || item.isDisc { return .item(item.id) }
     // A song or a chapter opens its album or book, as on Android.
     if item.isAudio, let library = item.libraryId { return .listeningAlbum(library: library, album: item.album ?? "", artist: item.albumArtistName) }
     #if os(tvOS)
@@ -41,18 +42,21 @@ private func route(for item: Item) -> Route {
 }
 
 /// What Play does from Home: plays a film or an episode, and opens anything else where it's played.
-private func playRoute(for item: Item) -> Route {
+func playRoute(for item: Item) -> Route {
     if item.isPlayable { return .player(item.id, startOver: item.resumeSeconds == nil) }
     return route(for: item)
 }
 
-private func route(for library: Library) -> Route {
+/// A library's own page in this app, or the server's page for the kinds this app doesn't show itself.
+func libraryRoute(_ library: Library) -> Route {
     #if os(tvOS)
     return .library(library)
     #else
     return library.opensHere || library.hasListeningScreens ? .library(library) : .page(ServerPages.path(library))
     #endif
 }
+
+private func route(for library: Library) -> Route { libraryRoute(library) }
 
 // MARK: - Cards
 
@@ -71,11 +75,34 @@ struct Tile: View {
     var aspect: CGFloat = 2.0 / 3.0
     /// The row's card width, or nil to fill a grid's column.
     var width: CGFloat?
+    /// The plates on its picture, on a phone or a tablet.
+    var badges: [CardBadge] = []
+    var titleLines = 2
     let focus: FocusState<String?>.Binding
     let focusKey: String
 
+    private var spokenValue: String {
+        let watched = progress.map { ["\(Int($0 * 100)) percent watched"] } ?? []
+        return (badges.map(\.spoken) + watched).joined(separator: ", ")
+    }
+
     var body: some View {
         NavigationLink(value: route) {
+            if metrics.tv {
+                tvCard
+            } else {
+                PosterCard(title: title, subtitle: subtitle, url: url, progress: progress, aspect: aspect, width: width,
+                           badges: badges, titleLines: titleLines)
+            }
+        }
+        .tileStyle()
+        .focused(focus, equals: focusKey)
+        .accessibilityLabel(subtitle.isEmpty ? title : "\(title), \(subtitle)")
+        .accessibilityValue(spokenValue)
+    }
+
+    /// Apple TV's card, as it was.
+    private var tvCard: some View {
             VStack(alignment: .leading, spacing: Tokens.Space.s1) {
                 ArtImage(url: url, width: width ?? metrics.cardWidth, placeholder: title)
                     .aspectRatio(aspect, contentMode: .fit)
@@ -100,43 +127,71 @@ struct Tile: View {
             .frame(width: width, alignment: .leading)
             .frame(maxWidth: width == nil ? .infinity : nil, alignment: .leading)
             .contentShape(Rectangle())
-        }
-        .tileStyle()
-        .focused(focus, equals: focusKey)
-        .accessibilityLabel(subtitle.isEmpty ? title : "\(title), \(subtitle)")
-        .accessibilityValue(progress.map { "\(Int($0 * 100)) percent watched" } ?? "")
     }
 }
 
-private struct ItemTile: View {
+/// The website's `--card-wide-w`: 232 on a phone, 260 wider.
+func wideCardWidth(_ metrics: Metrics) -> CGFloat { metrics.cardWidth <= 104 ? 232 : 260 }
+
+/// On a phone or a tablet, the website's ItemCard (web/src/components/common.tsx): episodes as wide stills with their
+/// show's name, songs and CDs square, and the plates for a disc and for watched.
+struct ItemTile: View {
     @Environment(\.client) private var client
     @Environment(\.metrics) private var metrics
     let item: Item
     var inRow = true
+    /// Pictures and creator videos are wide; a poster's shape would crop them (on a phone or tablet).
+    var wide = false
     let focus: FocusState<String?>.Binding
 
     var body: some View {
-        Tile(title: item.cardTitle, subtitle: item.cardSubtitle, url: client.posterURL(item), route: route(for: item),
-             progress: item.progressFraction, aspect: item.isAudio ? 1 : 2.0 / 3.0,
-             width: inRow ? metrics.cardWidth : nil, focus: focus, focusKey: "item\(item.id)")
+        if metrics.tv {
+            Tile(title: item.cardTitle, subtitle: item.cardSubtitle, url: client.posterURL(item), route: route(for: item),
+                 progress: item.progressFraction, aspect: item.isAudio ? 1 : 2.0 / 3.0,
+                 width: inRow ? metrics.cardWidth : nil, focus: focus, focusKey: "item\(item.id)")
+        } else {
+            let look = CardLook.item(item, wide: wide || item.showId != nil)
+            Tile(title: look.title, subtitle: look.subtitle, url: client.posterURL(item), route: route(for: item),
+                 progress: look.progress, aspect: look.shape.aspect,
+                 width: inRow ? (look.shape == .wide ? wideCardWidth(metrics) : metrics.cardWidth) : nil,
+                 badges: look.badges, titleLines: look.shape == .wide ? 1 : 2, focus: focus, focusKey: "item\(item.id)")
+        }
     }
 }
 
-private struct ShowTile: View {
+/// On a phone or a tablet, the website's ShowCard: "2019 · 3 seasons", with how many episodes are left or a tick.
+struct ShowTile: View {
     @Environment(\.client) private var client
     @Environment(\.metrics) private var metrics
     let show: Show
     var inRow = true
     let focus: FocusState<String?>.Binding
 
-    private var subtitle: String {
+    private var tvSubtitle: String {
         if let unwatched = show.unwatched, unwatched > 0 { return "\(unwatched) unwatched" }
         return show.year.map(String.init) ?? ""
     }
 
     var body: some View {
-        Tile(title: show.title, subtitle: subtitle, url: client.posterURL(show), route: .show(show.id),
-             width: inRow ? metrics.cardWidth : nil, focus: focus, focusKey: "show\(show.id)")
+        if metrics.tv {
+            Tile(title: show.title, subtitle: tvSubtitle, url: client.posterURL(show), route: .show(show.id),
+                 width: inRow ? metrics.cardWidth : nil, focus: focus, focusKey: "show\(show.id)")
+        } else {
+            let look = CardLook.show(show)
+            Tile(title: look.title, subtitle: look.subtitle, url: client.posterURL(show), route: .show(show.id),
+                 width: inRow ? metrics.cardWidth : nil, badges: look.badges, focus: focus, focusKey: "show\(show.id)")
+        }
+    }
+}
+
+extension CardShape {
+    /// Width over height.
+    var aspect: CGFloat {
+        switch self {
+        case .poster: return 2.0 / 3.0
+        case .wide: return 16.0 / 9.0
+        case .square: return 1
+        }
     }
 }
 
@@ -150,8 +205,9 @@ struct CardGrid: View {
     var onLast: (() async -> Void)?
 
     var body: some View {
-        LazyVGrid(columns: [GridItem(.adaptive(minimum: metrics.cardWidth - Tokens.Space.s3), spacing: Tokens.Space.s2, alignment: .top)],
-                  alignment: .leading, spacing: Tokens.Space.s4) {
+        LazyVGrid(columns: metrics.tv ? [GridItem(.adaptive(minimum: metrics.cardWidth - Tokens.Space.s3), spacing: Tokens.Space.s2, alignment: .top)]
+                                      : posterColumns(metrics),
+                  alignment: .leading, spacing: metrics.tv ? Tokens.Space.s4 : Tokens.Space.s6) {
             ForEach(shows) { ShowTile(show: $0, inRow: false, focus: focus) }
             ForEach(ServerPages.albumsOnce(items)) { item in
                 ItemTile(item: item, inRow: false, focus: focus).task {
@@ -216,7 +272,7 @@ private struct LibraryPills: View {
 }
 
 /// What's on the channels right now, as on the server's own Home. Choosing one watches it.
-private struct OnNowRow: View {
+struct OnNowRow: View {
     @Environment(\.palette) private var palette
     @Environment(\.metrics) private var metrics
     let channels: [GuideChannel]
@@ -283,111 +339,7 @@ private struct OnNowRow: View {
 
 // MARK: - The top of Home
 
-/// Which of the posters at the top is in front, as they scroll.
-private struct HeroFrontKey: PreferenceKey {
-    static var defaultValue: Int64?
-    static func reduce(value: inout Int64?, nextValue: () -> Int64?) { value = value ?? nextValue() }
-}
-
-private extension View {
-    /// The posters stop with one in the middle, where the system can do that.
-    @ViewBuilder func heroSnapping(side: CGFloat) -> some View {
-        if #available(iOS 17.0, tvOS 17.0, *) {
-            self.contentMargins(.horizontal, side, for: .scrollContent).scrollTargetBehavior(.viewAligned)
-        } else {
-            self
-        }
-    }
-
-    @ViewBuilder func heroSnapTargets(side: CGFloat) -> some View {
-        if #available(iOS 17.0, tvOS 17.0, *) {
-            self.scrollTargetLayout()
-        } else {
-            self.padding(.horizontal, side)
-        }
-    }
-}
-
-/// On a phone: posters to swipe through, with the one in front named below and a Play pill, in the
-/// layout people know from the big music and video apps. It's only a shortcut: every item is in the
-/// rows below too.
-private struct PhoneHero: View {
-    @Environment(\.client) private var client
-    @Environment(\.palette) private var palette
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    let heroes: [Item]
-    let scope: Namespace.ID
-    /// The room the clock and battery take at the top.
-    var clock: CGFloat = 0
-    @State private var front: Int64?
-    private let posterWidth: CGFloat = 220
-
-    var body: some View {
-        let current = heroes.first { $0.id == front } ?? heroes[0]
-        VStack(spacing: Tokens.Space.s3) {
-            GeometryReader { geo in
-                let side = max((geo.size.width - posterWidth) / 2, 0)
-                ScrollView(.horizontal, showsIndicators: false) {
-                    LazyHStack(spacing: Tokens.Space.s3) {
-                        ForEach(heroes) { item in
-                            GeometryReader { place in
-                                let apart = min(abs(place.frame(in: .named("heroes")).midX - geo.size.width / 2) / (posterWidth + Tokens.Space.s3), 1)
-                                NavigationLink(value: route(for: item)) {
-                                    ArtImage(url: client.posterURL(item), width: posterWidth, placeholder: item.title)
-                                        .frame(width: posterWidth, height: posterWidth * 1.5)
-                                        .clipShape(RoundedRectangle(cornerRadius: Tokens.Radius.lg, style: .continuous))
-                                }
-                                .buttonStyle(.plain)
-                                .scaleEffect(reduceMotion ? 1 : 1 - apart * 0.12)
-                                .opacity(1 - apart * 0.4)
-                                .preference(key: HeroFrontKey.self, value: apart < 0.5 ? item.id : nil)
-                                .accessibilityLabel(displayTitle(item))
-                            }
-                            .frame(width: posterWidth, height: posterWidth * 1.5)
-                        }
-                    }
-                    .heroSnapTargets(side: side)
-                }
-                .heroSnapping(side: side)
-                .coordinateSpace(name: "heroes")
-            }
-            .frame(height: posterWidth * 1.5)
-            .onPreferenceChange(HeroFrontKey.self) { if let id = $0, id != front { front = id } }
-            Text(displayTitle(current))
-                .font(.wmHero)
-                .foregroundStyle(palette.text)
-                .lineLimit(2)
-                .multilineTextAlignment(.center)
-                .padding(.horizontal, Tokens.Space.s6)
-                .accessibilityAddTraits(.isHeader)
-            Secondary([current.year.map(String.init), current.genres?.first].compactMap { $0 }.joined(separator: " · "))
-            PlayOrOpen(item: current, route: playRoute(for: current)) {
-                Label(current.resumeSeconds == nil ? "Play" : "Resume", systemImage: "play.fill")
-            }
-            .mainAction()
-            .firstFocus(in: scope)
-            .accessibilityLabel("\(current.resumeSeconds == nil ? "Play" : "Resume") \(displayTitle(current))")
-        }
-        .padding(.top, clock + Tokens.Space.s12)
-        .frame(maxWidth: .infinity)
-        // The front poster's own colours would need a blur. A dimmed backdrop fading into the page
-        // gives much the same depth, and runs up under the clock.
-        .background(alignment: .top) {
-            GeometryReader { geo in
-                ArtImage(url: client.backdropURL(current), width: 600, blank: true)
-                    .frame(width: geo.size.width, height: geo.size.width)
-                    .opacity(0.35)
-                    .overlay(LinearGradient(stops: [.init(color: .clear, location: 0.3), .init(color: palette.background, location: 1)],
-                                            startPoint: .top, endPoint: .bottom))
-                    .clipped()
-            }
-            .accessibilityHidden(true)
-        }
-    }
-}
-
-/// On a TV, a tablet, or a phone on its side: the picture across the top with the title, its facts
-/// and Play beside it.
+/// On a TV: the picture across the top with the title, its facts and Play beside it.
 private struct WideHero: View {
     @Environment(\.client) private var client
     @Environment(\.palette) private var palette
@@ -410,10 +362,38 @@ private struct WideHero: View {
     }
 
     var body: some View {
-        ZStack(alignment: .leading) {
+        // On a TV the words may take up to half the screen, and a long title wraps to three lines before it
+        // shrinks, to three quarters at most; the hero grows to fit them (docs/APP-DESIGN.md, On a TV).
+        VStack(alignment: .leading, spacing: Tokens.Space.s2) {
+            Text(displayTitle(item))
+                .font(.wmDisplay)
+                .foregroundStyle(palette.text)
+                .lineLimit(metrics.tv ? 3 : 2)
+                .minimumScaleFactor(metrics.tv ? 0.75 : 1)
+                .accessibilityAddTraits(.isHeader)
+            Secondary([item.year.map(String.init), item.genres?.first, item.contentRating].compactMap { $0 }.filter { !$0.isEmpty }.joined(separator: " · "))
+            if let overview = item.overview, !overview.isEmpty { Secondary(overview, lines: 2) }
+            HStack(spacing: Tokens.Space.s3) {
+                PlayOrOpen(item: item, route: playRoute(for: item)) {
+                    Label(item.resumeSeconds == nil ? "Play" : "Resume", systemImage: "play.fill")
+                }
+                .mainAction()
+                .firstFocus(in: scope)
+                .accessibilityLabel("\(item.resumeSeconds == nil ? "Play" : "Resume") \(displayTitle(item))")
+                NavigationLink("More", value: route(for: item)).action(pill: true)
+                    .accessibilityLabel("More about \(displayTitle(item))")
+            }
+            .padding(.top, Tokens.Space.s1)
+            .remoteSection()
+        }
+        .frame(maxWidth: Tokens.heroTextWidth, alignment: .leading)
+        .padding(.horizontal, metrics.gutter)
+        .padding(.top, clock)
+        .padding(.vertical, metrics.tv ? Tokens.Space.s6 : 0)
+        .frame(maxWidth: .infinity, minHeight: height + clock, alignment: .leading)
+        .background {
             ArtImage(url: client.backdropURL(item), width: 1280, blank: true)
-                .frame(maxWidth: .infinity)
-                .frame(height: height + clock)
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
                 .opacity(0.5)
                 .clipped()
                 .overlay(LinearGradient(stops: [.init(color: palette.background, location: 0), .init(color: .clear, location: 0.75)],
@@ -421,59 +401,39 @@ private struct WideHero: View {
                 .overlay(LinearGradient(stops: [.init(color: .clear, location: 0.6), .init(color: palette.background, location: 1)],
                                         startPoint: .top, endPoint: .bottom))
                 .accessibilityHidden(true)
-            VStack(alignment: .leading, spacing: Tokens.Space.s2) {
-                Text(displayTitle(item)).font(.wmDisplay).foregroundStyle(palette.text).lineLimit(2).accessibilityAddTraits(.isHeader)
-                Secondary([item.year.map(String.init), item.genres?.first, item.contentRating].compactMap { $0 }.filter { !$0.isEmpty }.joined(separator: " · "))
-                if let overview = item.overview, !overview.isEmpty { Secondary(overview, lines: 2) }
-                HStack(spacing: Tokens.Space.s3) {
-                    PlayOrOpen(item: item, route: playRoute(for: item)) {
-                        Label(item.resumeSeconds == nil ? "Play" : "Resume", systemImage: "play.fill")
-                    }
-                    .mainAction()
-                    .firstFocus(in: scope)
-                    .accessibilityLabel("\(item.resumeSeconds == nil ? "Play" : "Resume") \(displayTitle(item))")
-                    NavigationLink("More", value: route(for: item)).action(pill: true)
-                        .accessibilityLabel("More about \(displayTitle(item))")
-                }
-                .padding(.top, Tokens.Space.s1)
-                .remoteSection()
-            }
-            .frame(maxWidth: 560, alignment: .leading)
-            .padding(.horizontal, metrics.gutter)
-            .padding(.top, clock)
         }
-        .frame(height: height + clock)
     }
 }
 
 // MARK: - Home
 
+/// Home: the website's on a phone and a tablet, and Apple TV's own, which its sessions look after.
 struct HomeView: View {
+    @Environment(\.metrics) private var metrics
+
+    var body: some View {
+        if metrics.tv { TvHomeView() } else { PhoneHome() }
+    }
+}
+
+private struct TvHomeView: View {
     @EnvironmentObject private var model: AppModel
     @Environment(\.client) private var client
     @Environment(\.palette) private var palette
     @Environment(\.metrics) private var metrics
-    #if os(iOS) || os(visionOS)
-    @Environment(\.horizontalSizeClass) private var sizeClass
-    @Environment(\.verticalSizeClass) private var verticalSizeClass
-    #endif
     @State private var home: Home?
     @State private var error = ""
     @State private var gamePCs = false
     @State private var onNow: [GuideChannel] = []
+    #if DEBUG
+    /// For checking the hero with a title of one's choosing on a simulator: `-WittyHomeHero <item id>` at launch
+    /// puts that item first, whatever the server features.
+    @State private var pinnedHero: Item?
+    #endif
     @FocusState private var focused: String?
     /// What had focus when this screen was left. Coming back puts it there.
     @State private var lastFocused: String?
     @Namespace private var scope
-
-    /// Posters to swipe through on a phone held upright; the wide picture everywhere else.
-    private var phoneUpright: Bool {
-        #if os(iOS) || os(visionOS)
-        return sizeClass == .compact && verticalSizeClass != .compact
-        #else
-        return false
-        #endif
-    }
 
     /// Featured first, and otherwise whatever someone was in the middle of. Apple TV can only start
     /// what it can play itself.
@@ -483,6 +443,9 @@ struct HomeView: View {
         var list = ServerPages.albumsOnce(uniqued(pool))
         #if os(tvOS)
         list = list.filter(\.isPlayable)
+        #endif
+        #if DEBUG
+        if let pinnedHero { list.insert(pinnedHero, at: 0) }
         #endif
         return Array(list.prefix(8))
     }
@@ -508,6 +471,10 @@ struct HomeView: View {
         if let guide { await model.learnTvLook(from: guide, client: client) }
         #endif
         onNow = channels.filter(\.canTune)
+        #if DEBUG
+        let pin = UserDefaults.standard.integer(forKey: "WittyHomeHero")
+        if pin > 0, pinnedHero == nil { pinnedHero = try? await client.item(Int64(pin)) }
+        #endif
     }
 
     @ViewBuilder private func page(_ home: Home) -> some View {
@@ -520,11 +487,7 @@ struct HomeView: View {
         ScrollView {
             LazyVStack(alignment: .leading, spacing: Tokens.Space.s5) {
                 if let first = heroes.first {
-                    if phoneUpright {
-                        PhoneHero(heroes: heroes, scope: scope, clock: clock)
-                    } else {
-                        WideHero(item: first, scope: scope, clock: clock)
-                    }
+                    WideHero(item: first, scope: scope, clock: clock)
                 }
                 if !model.notice.isEmpty {
                     ProblemLine(model.notice).padding(.horizontal, metrics.gutter)
@@ -640,8 +603,19 @@ struct LibraryContent: View {
     }
 }
 
-/// A library as a screen of its own: its name, and its posters filling the width.
+/// A library as a screen of its own: the website's library page on a phone and a tablet, Apple TV's own there.
 struct LibraryView: View {
+    @Environment(\.metrics) private var metrics
+    let library: Library
+    var start = LibraryState()
+
+    var body: some View {
+        if metrics.tv { TvLibraryView(library: library) } else { LibraryPage(library: library, start: start) }
+    }
+}
+
+/// Apple TV's: its name, and its posters filling the width.
+private struct TvLibraryView: View {
     @Environment(\.palette) private var palette
     @Environment(\.metrics) private var metrics
     let library: Library
@@ -663,6 +637,15 @@ struct LibraryView: View {
 // MARK: - Shows
 
 struct ShowView: View {
+    @Environment(\.metrics) private var metrics
+    let id: Int64
+
+    var body: some View {
+        if metrics.tv { TvShowView(id: id) } else { ShowPage(id: id) }
+    }
+}
+
+private struct TvShowView: View {
     @EnvironmentObject private var model: AppModel
     @Environment(\.client) private var client
     @Environment(\.palette) private var palette
@@ -768,6 +751,15 @@ struct ShowView: View {
 // MARK: - Items
 
 struct ItemView: View {
+    @Environment(\.metrics) private var metrics
+    let id: Int64
+
+    var body: some View {
+        if metrics.tv { TvItemView(id: id) } else { ItemPage(id: id) }
+    }
+}
+
+private struct TvItemView: View {
     @EnvironmentObject private var model: AppModel
     @Environment(\.client) private var client
     @Environment(\.palette) private var palette

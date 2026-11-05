@@ -89,7 +89,7 @@ class Api(val base: String, val token: String, private val quick: Boolean = fals
     private fun reportsFailure(method: String, status: Int) =
         !quick && token.isNotEmpty() && status != 401 && !(method == "DELETE" && status == 404)
 
-    private suspend fun call(method: String, path: String, body: String? = null): String {
+    internal suspend fun call(method: String, path: String, body: String? = null): String {
         val where = "$method ${path.substringBefore('?')}"
         val answer = try {
             raw(method, path, body)
@@ -123,6 +123,10 @@ class Api(val base: String, val token: String, private val quick: Boolean = fals
     suspend fun shows(library: Long, offset: Int, limit: Int): ShowPage = get("/shows?library=$library&offset=$offset&limit=$limit&sort=title")
     suspend fun items(library: Long, offset: Int, limit: Int): ItemPage =
         get("/items?library=$library&offset=$offset&limit=$limit&sort=title")
+
+    // A games library's games in the order its own page opens with, most played first, as Apple TV asks for them.
+    suspend fun popularGames(library: Long, limit: Int): ItemPage =
+        get("/items?library=$library&kind=game&sort=popular&desc=0&offset=0&limit=$limit")
 
     private fun query(text: String) = URLEncoder.encode(text, "UTF-8")
     suspend fun searchItems(text: String, limit: Int): ItemPage = get("/items?search=${query(text)}&noEpisodes=1&limit=$limit")
@@ -233,7 +237,7 @@ class Api(val base: String, val token: String, private val quick: Boolean = fals
     suspend fun modulePages(): List<Pair<String, ModulePage>> = get<ModuleBundles>("/modules/web").bundles.flatMap { b -> b.pages.map { b.id to it } }
     suspend fun guide(hours: Int, limit: Int): Guide = get("/guide?hours=$hours&limit=$limit")
     suspend fun forYou(): ForYou = get("/me/recommended")
-    suspend fun legalNotices(): LegalNotices = get("/legal/notices")
+    suspend fun legalNoticesAndLink(): LegalNotices = get("/legal/notices")
     // Music: a station from a song, this person's liked songs in a library, and liking one.
     suspend fun songRadio(id: Long): List<Item> = getList("/music/radio/$id")
     suspend fun likes(library: Long): List<Long> = getList("/music/likes?library=$library")
@@ -313,7 +317,7 @@ class Api(val base: String, val token: String, private val quick: Boolean = fals
     suspend fun listings(target: TitleTarget, id: Long): TitleListings = get("/meta/${target.word}/$id/listings")
 
     // What the logo service has for some studios, networks or streaming services: up to 200 at a time.
-    suspend fun lookUpLogos(names: List<Pair<String, String>>): List<LogoAnswer> =
+    suspend fun lookUpLogos(names: List<Pair<String, String>>): List<BrandLogoAnswer> =
         json.decodeFromString<LogoAnswers>(call("POST", "/logos/lookup", json.encodeToString(LogoLookup(names.take(200).map { LogoAsk(it.first, it.second) })))).logos
 
     // A show's episode layout for everyone: "cards", "list", or "" for the server's. Administrators only.
@@ -391,7 +395,7 @@ class Api(val base: String, val token: String, private val quick: Boolean = fals
     // A title's logo, drawn in place of its name where it has one.
     fun titleLogoUrl(target: TitleTarget, id: Long, version: Long) = "$base$API/meta/${target.word}/$id/art/logo?v=$version"
     // A studio's, network's or service's logo: white for a dark page, dark for a light one, or as it was drawn.
-    fun logoImageUrl(logo: LogoAnswer, variant: String): String? = logo.id?.let { "$base$API/logos/$it/image?variant=${queryValue(variant)}&v=${logo.version}" }
+    fun logoImageUrl(logo: BrandLogoAnswer, variant: String): String? = logo.id?.let { "$base$API/logos/$it/image?variant=${queryValue(variant)}&v=${logo.version}" }
 
     // Addresses in answers start with /api/: the server's address goes in front, nothing else
     // changes. A server's answer can't point the player, with what it carries, somewhere else.

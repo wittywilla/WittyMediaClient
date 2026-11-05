@@ -5,7 +5,7 @@ import com.wittywilla.wittymediaclient.net.DiscInfo
 import com.wittywilla.wittymediaclient.net.Item
 import com.wittywilla.wittymediaclient.net.ItemFacts
 import com.wittywilla.wittymediaclient.net.LegalNotices
-import com.wittywilla.wittymediaclient.net.LogoAnswer
+import com.wittywilla.wittymediaclient.net.BrandLogoAnswer
 import com.wittywilla.wittymediaclient.net.Season
 import com.wittywilla.wittymediaclient.net.ShowDetail
 import com.wittywilla.wittymediaclient.net.ShowFacts
@@ -370,8 +370,8 @@ class TitlePageTest {
 
     @Test
     fun aLogoIsMatchedByItsNameWhateverItsCase() {
-        assertEquals(LogoAnswer.key("studio", " Warner Bros. "), LogoAnswer.key("studio", "warner bros."))
-        assertFalse(LogoAnswer.key("studio", "HBO") == LogoAnswer.key("network", "HBO"))
+        assertEquals(BrandLogoAnswer.key("studio", " Warner Bros. "), BrandLogoAnswer.key("studio", "warner bros."))
+        assertFalse(BrandLogoAnswer.key("studio", "HBO") == BrandLogoAnswer.key("network", "HBO"))
     }
 
     // MARK: what's asked of the server
@@ -419,7 +419,7 @@ class TitlePageTest {
         assertEquals("tmdb", facts.provider)
         assertEquals(listOf("/api/v1/items/7"), asked.map { it.path })
         assertEquals("${api.base}/api/v1/meta/show/3/art/logo?v=12", api.titleLogoUrl(TitleTarget.Show, 3, 12))
-        val logo = LogoAnswer(id = 4, kind = "network", name = "HBO", has = true, version = 2, opaque = false)
+        val logo = BrandLogoAnswer(id = 4, kind = "network", name = "HBO", has = true, version = 2, opaque = false)
         assertEquals("${api.base}/api/v1/logos/4/image?variant=white&v=2", api.logoImageUrl(logo, "white"))
         assertNull(api.logoImageUrl(logo.copy(id = null), "white"))
     }

@@ -30,12 +30,18 @@ extension WittyClient {
         try await decodeAs([GameConsole]?.self, "GET", "/games/consoles" + (library.map { "?library=\($0)" } ?? "")) ?? []
     }
 
-    /// `sort` is `popular`, `title`, `newest`, `oldest`, `rating` or `added`, as the website's.
-    public func games(library: Int64, console: String? = nil, sort: String = "popular", offset: Int = 0, limit: Int = 60) async throws -> GameItemPage {
+    /// `sort` is `popular`, `title`, `newest`, `oldest`, `rating` or `added`, as the website's. `players`
+    /// keeps games for at least that many, as the website's Made for two shelf (`players=2`).
+    public func games(library: Int64, console: String? = nil, players: Int? = nil, sort: String = "popular", offset: Int = 0, limit: Int = 60) async throws -> GameItemPage {
+        try await decode("GET", Self.gamesPath(library: library, console: console, players: players, sort: sort, offset: offset, limit: limit))
+    }
+
+    static func gamesPath(library: Int64, console: String? = nil, players: Int? = nil, sort: String = "popular", offset: Int = 0, limit: Int = 60) -> String {
         let descending = sort == "rating" || sort == "added"
-        var path = "/items?library=\(library)&kind=game&sort=\(Self.queryValue(sort))&desc=\(descending ? 1 : 0)&offset=\(offset)&limit=\(limit)"
-        if let console, !console.isEmpty { path += "&console=\(Self.queryValue(console))" }
-        return try await decode("GET", path)
+        var path = "/items?library=\(library)&kind=game&sort=\(queryValue(sort))&desc=\(descending ? 1 : 0)&offset=\(offset)&limit=\(limit)"
+        if let console, !console.isEmpty { path += "&console=\(queryValue(console))" }
+        if let players, players > 1 { path += "&players=\(players)" }
+        return path
     }
 
     public func gameItem(_ id: Int64) async throws -> GameItem { try await decode("GET", "/items/\(id)") }
@@ -112,8 +118,29 @@ extension WittyClient {
 
     /// The WebSocket for a game: `video` is `h264` or `jpeg`. The sign-in goes in its header, as
     /// for every other request, and never in the address.
+    /// The second stream's WebRTC offer, `POST /play/{sid}/stream`, signed in by header.
+    public func gameStreamOfferRequest(_ sid: String) -> URLRequest? {
+        guard let url = mediaURL("/api/v1/play/\(Self.pathPart(sid))/stream") else { return nil }
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.timeoutInterval = 15
+        for (name, value) in authHeaders { request.setValue(value, forHTTPHeaderField: name) }
+        return request
+    }
+
+    /// The second stream's WebSocket: the hello goes first, as text.
+    public func gameStreamRequest(_ sid: String) -> URLRequest? {
+        socketRequest("/api/v1/play/\(Self.pathPart(sid))/stream")
+    }
+
     public func gameSocketRequest(_ sid: String, video: String) -> URLRequest? {
-        guard let http = mediaURL("/api/v1/play/\(Self.pathPart(sid))/ws?video=\(Self.queryValue(video))"),
+        socketRequest("/api/v1/play/\(Self.pathPart(sid))/ws?video=\(Self.queryValue(video))")
+    }
+
+    /// A WebSocket's request, signed in by header: the token never goes in the address.
+    private func socketRequest(_ path: String) -> URLRequest? {
+        guard let http = mediaURL(path),
               var parts = URLComponents(url: http, resolvingAgainstBaseURL: false) else { return nil }
         parts.scheme = parts.scheme == "https" ? "wss" : "ws"
         guard let url = parts.url else { return nil }

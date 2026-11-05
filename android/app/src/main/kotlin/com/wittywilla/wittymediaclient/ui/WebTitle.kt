@@ -71,7 +71,7 @@ import coil3.compose.AsyncImage
 import coil3.request.ImageRequest
 import com.wittywilla.wittymediaclient.net.Api
 import com.wittywilla.wittymediaclient.net.Item
-import com.wittywilla.wittymediaclient.net.LogoAnswer
+import com.wittywilla.wittymediaclient.net.BrandLogoAnswer
 import com.wittywilla.wittymediaclient.net.TitleAttached
 import com.wittywilla.wittymediaclient.net.TitleListings
 import com.wittywilla.wittymediaclient.net.TitleTarget
@@ -206,7 +206,7 @@ fun MetaStar(rating: Double) {
 
 // Which of a logo's pictures reads on this theme: the page's background decides, as the website's logoVariant does.
 @Composable
-private fun logoVariant(logo: LogoAnswer): String {
+private fun logoVariant(logo: BrandLogoAnswer): String {
     if (logo.opaque) return "original"
     val bg = MaterialTheme.colorScheme.background
     return if (0.2126 * bg.red * 255 + 0.7152 * bg.green * 255 + 0.0722 * bg.blue * 255 > 140) "dark" else "white"
@@ -215,7 +215,7 @@ private fun logoVariant(logo: LogoAnswer): String {
 // A studio's, a network's or a streaming service's logo from the logo service, or its name (`BrandLogo`). A logo with
 // its own background is on a white plate, radius 4, 4 inside. The name is semibold, a little tight, centred.
 @Composable
-fun BrandLogo(api: Api, name: String, logo: LogoAnswer?, maxWidth: Dp, maxHeight: Dp, size: Int, colour: Color) {
+fun BrandLogo(api: Api, name: String, logo: BrandLogoAnswer?, maxWidth: Dp, maxHeight: Dp, size: Int, colour: Color) {
     val url = logo?.takeIf { it.has }?.let { api.logoImageUrl(it, logoVariant(it)) }
     val plate = logo?.opaque == true
     val room = if (plate) 8.dp else 0.dp
@@ -230,7 +230,7 @@ fun BrandLogo(api: Api, name: String, logo: LogoAnswer?, maxWidth: Dp, maxHeight
 
 // A studio or a streaming service as a tile (`.title-brand`): 120 by 56, 8 and 12 inside, radius 10, card colour.
 @Composable
-fun BrandTile(api: Api, name: String, logo: LogoAnswer?, open: () -> Unit) {
+fun BrandTile(api: Api, name: String, logo: BrandLogoAnswer?, open: () -> Unit) {
     val scheme = MaterialTheme.colorScheme
     Pressable(open, Modifier.size(120.dp, 56.dp), shape = RoundedCornerShape(10.dp), fill = scheme.surfaceVariant, label = name, pressScale = 0.975f, ring = false) {
         Box(Modifier.fillMaxSize().padding(horizontal = 12.dp, vertical = 8.dp), contentAlignment = Alignment.Center) {
@@ -239,10 +239,10 @@ fun BrandTile(api: Api, name: String, logo: LogoAnswer?, open: () -> Unit) {
     }
 }
 
-// What the logo service has for these names, kept by LogoAnswer.key. Nothing when it can't say.
-suspend fun lookUpLogos(api: Api, names: List<Pair<String, String>>): Map<String, LogoAnswer> {
+// What the logo service has for these names, kept by BrandLogoAnswer.key. Nothing when it can't say.
+suspend fun lookUpLogos(api: Api, names: List<Pair<String, String>>): Map<String, BrandLogoAnswer> {
     if (names.isEmpty()) return emptyMap()
-    return runCatching { api.lookUpLogos(names) }.getOrDefault(emptyList()).associateBy { LogoAnswer.key(it.kind, it.name) }
+    return runCatching { api.lookUpLogos(names) }.getOrDefault(emptyList()).associateBy { BrandLogoAnswer.key(it.kind, it.name) }
 }
 
 // MARK: small print
@@ -345,12 +345,12 @@ private fun TagChip(words: String, open: () -> Unit) {
 // The website's TitleExtras: who made it, its editions and tags, its studios, other versions, bonus features, and
 // where it's listed if the owner turned that on. 16 apart.
 @Composable
-fun TitleExtras(nav: Nav, target: TitleTarget, attached: TitleAttached, listings: TitleListings?, libraryId: Long?, logos: Map<String, LogoAnswer>, modifier: Modifier = Modifier) {
+fun TitleExtras(nav: Nav, target: TitleTarget, attached: TitleAttached, listings: TitleListings?, libraryId: Long?, logos: Map<String, BrandLogoAnswer>, modifier: Modifier = Modifier) {
     val scheme = MaterialTheme.colorScheme
     val extra = LocalExtraColours.current
     val api = nav.app.api
     val platforms = listings?.platforms.orEmpty()
-    val logoShown = attached.studios.any { logos[LogoAnswer.key("studio", it)]?.has == true } || platforms.any { logos[LogoAnswer.key("platform", it.name)]?.has == true }
+    val logoShown = attached.studios.any { logos[BrandLogoAnswer.key("studio", it)]?.has == true } || platforms.any { logos[BrandLogoAnswer.key("platform", it.name)]?.has == true }
     Column(modifier, verticalArrangement = Arrangement.spacedBy(16.dp)) {
         if (attached.director.isNotEmpty() || attached.edition.isNotEmpty() || attached.tags.isNotEmpty()) {
             FlowRow(horizontalArrangement = Arrangement.spacedBy(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp), itemVerticalAlignment = Alignment.CenterVertically) {
@@ -367,7 +367,7 @@ fun TitleExtras(nav: Nav, target: TitleTarget, attached: TitleAttached, listings
         }
         if (attached.studios.isNotEmpty() && libraryId != null) {
             FlowRow(Modifier.semantics { contentDescription = "Studios" }, horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                attached.studios.forEach { name -> BrandTile(api, name, logos[LogoAnswer.key("studio", name)]) { nav.push(Route.Page(TitleLook.brandPath("studio", name, libraryId))) } }
+                attached.studios.forEach { name -> BrandTile(api, name, logos[BrandLogoAnswer.key("studio", name)]) { nav.push(Route.Page(TitleLook.brandPath("studio", name, libraryId))) } }
             }
         }
         if (attached.versions.isNotEmpty()) {
@@ -398,7 +398,7 @@ fun TitleExtras(nav: Nav, target: TitleTarget, attached: TitleAttached, listings
             Column {
                 ExtrasHeading("Also listed on")
                 FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    platforms.forEach { p -> BrandTile(api, p.name, logos[LogoAnswer.key("platform", p.name)]) { nav.openLibraryWith(libraryId, "platform", p.key, TitleLook.platformPath(libraryId, p.key)) } }
+                    platforms.forEach { p -> BrandTile(api, p.name, logos[BrandLogoAnswer.key("platform", p.name)]) { nav.openLibraryWith(libraryId, "platform", p.key, TitleLook.platformPath(libraryId, p.key)) } }
                 }
                 val locale = ConfigurationCompat.getLocales(LocalConfiguration.current)[0] ?: Locale.ROOT
                 val note = buildAnnotatedString {

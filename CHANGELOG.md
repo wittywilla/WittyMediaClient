@@ -5,6 +5,30 @@ What changed in WittyMediaClient, newest first. What changed before it had a rep
 
 ## Unreleased
 
+- **WittyPlay's Shelves on every Apple device.** A games library opens on Shelves, as the website's: Where you left off, the other games in
+  progress, then a shelf for each console and the shelves the server picks, with every game A to Z at the foot. Games stand in their console's
+  kind of case, as their cartridge, card or disc, or as spines in their covers' colours with letter dividers, as each device remembers; a game
+  in progress has a ribbon. Press a game to pull it out, again to play it. On Apple TV the focused game rises into a preview at the top, and
+  Play/Pause plays it. A console's page is its collection, and a game's page has its picture drifting behind, Resume, Where you left off, its
+  moments and how it plays, or why it can't play here. iPhone, iPad and Apple Vision Pro open these instead of the website's game pages.
+- **Games over WebRTC on every Apple device, and Apple TV now needs tvOS 17.** Where the server has its second stream, the Apple
+  player connects over WebRTC first (LiveKit's build of libwebrtc), with the stream's WebSocket behind it, and plays Opus sound;
+  every rumble motor, motion, lights and up to eight players pass through. tvOS 17 runs on every Apple TV HD and 4K.
+- **iPhone, iPad and Apple Vision Pro play the server's games in the same player as Apple TV.** With no controller connected, the account's touch
+  controls from the server are drawn over the game as the website draws them, in the layout saved for this device, upright or sideways; on a DS or
+  3DS a finger on the picture is the stylus. Controllers work as on Apple TV.
+- **Android: games stream over WebRTC first where the server has version 2 of its game stream.** Late frames are dropped rather than
+  waited for, so a game keeps up on a poor network. The WebSocket takes over if WebRTC hasn't connected in 5 seconds or shown a
+  picture in 8.
+- **Android: an APK for each kind of processor, and a universal one.** WebRTC's library is 7 to 16 MB for each, so a device need only
+  download its own: the README's Android section says which to install. The universal APK works anywhere, at 51 MB to 64-bit ARM's 16.
+- **Android: the server's games play in the app, on phones, tablets and Android TV.** The server runs every game and streams it; the app shows the picture
+  (H.264 through the device's own decoder, drawn as soon as it's decoded, or a picture a frame where the server has no encoder), plays the sound and sends the
+  controls. Controllers play by the console's layout with the account's own profile over it, up to four at once, plugged in or out while playing, with rumble.
+  A keyboard plays too. Phones and tablets show the account's touch controls from the server, and the DS's touch screen works with a finger. On a TV the remote
+  is for the menus. Around the player: the games library in couch mode, a game's page with Play or Resume, save states and other versions, and the game menu
+  (save, load, quick save and load, controllers, Press Start and Select, reset, save and quit). A game the server can't play says why, in the server's words.
+  Going to the background pauses the game and comes back to it; saves are the server's, so a game carries on from the same place on any device.
 - **Apple TV plays the server's games.** A games library opens as the website's couch mode: covers at the top with one at the front, tinted by its
   colour, then Continue playing, the consoles, the shelves and every game. A game's page has Play or Resume, Start over, a favourite, where you left off,
   its save states and how it plays. The game plays on the server, as it does for the website, and streams to the Apple TV, which decodes it in hardware and
@@ -49,6 +73,12 @@ What changed in WittyMediaClient, newest first. What changed before it had a rep
 - **Desktop on a Mac:** the window has the system's red, yellow and green buttons at the left of the title bar, rather than Windows-style ones
   at the right, and the title sits in the middle. A double-click on the bar does what System Settings say. There's a Mac menu bar, so
   Command-Q, copy and paste work, with Help and Change server in it. Windows, Linux, FreeBSD and TV mode are as they were.
+- **Desktop: the connect screen follows the newer design.** It's WittyMediaClient until a server is added. A server
+  found on the network shows only its address, "Found on your network" and a plain server icon, and says nothing about
+  itself until it's added; one that's also saved is listed once, under Used before, with its own name. Once a server has
+  proved who it is, its own logo shows on its screens and in the list, kept with it so it's there before it answers. On a
+  TV the lockup is larger, every button is a pill, a focused field shows only the focus ring, and a focused number key
+  fills instead of taking a ring.
 - **Desktop: the connect screen looks like the other apps' sign-in.** The glow at the top, the WittyMediaServer mark and name,
   servers as cards with "Last used", a field whose label rises onto its outline, six code boxes over a number pad, and a
   plain warning for a server that has changed. A new server can also be signed in from a phone: the screen shows a code and

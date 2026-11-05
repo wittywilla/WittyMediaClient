@@ -67,6 +67,9 @@ import com.wittywilla.wittymediaclient.net.problemWords
 import com.wittywilla.wittymediaclient.player.PlayerScreen
 import com.wittywilla.wittymediaclient.player.Start
 import com.wittywilla.wittymediaclient.player.placeOn
+import com.wittywilla.wittymediaclient.tv.TvLogos
+import com.wittywilla.wittymediaclient.tv.TvReminderAlert
+import com.wittywilla.wittymediaclient.tv.TvReminders
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.launch
 import kotlinx.serialization.SerializationException
@@ -84,6 +87,12 @@ sealed interface Route {
     data object Home : Route { override val key = "home" }
     data object Search : Route { override val key = "search" }
     data object Profile : Route { override val key = "profile" }
+    // A TV's own tabs, beside Home, Search and You: see TvTabs.kt.
+    data object Libraries : Route { override val key = "libraries" }
+    data object Games : Route { override val key = "games" }
+    data object LiveTv : Route { override val key = "live-tv" }
+    // A library added to a TV's top menu, as a tab of its own.
+    data class Pinned(val library: com.wittywilla.wittymediaclient.net.Library) : Route { override val key = "pinned-${library.id}" }
     data object Notices : Route { override val key = "notices" }
     data object Logs : Route { override val key = "logs" }
     // With something chosen, as the website's /library/3?genre=Drama: from a title's genre, tag or service.
@@ -110,7 +119,7 @@ sealed interface Route {
     // The app's own screens leave room for the mini player. A film, a server's page and signing in don't have it.
     val hasMiniPlayer: Boolean
         get() = when (this) {
-            Home, Search, Profile, Notices, Logs, is Library, is Show, is Item, is Album, is Artist, is You -> true
+            Home, Search, Profile, Libraries, Games, Notices, Logs, is Library, is Pinned, is Show, is Item, is Album, is Artist, is You -> true
             else -> false
         }
 }
@@ -129,10 +138,15 @@ class Nav(val app: WittyApp, private val s: Map<String, String>) {
     // Whether this server has a guide to offer.
     var hasGuide by mutableStateOf(false)
 
-    // A remote's Guide button, from anywhere that's signed in.
+    // A remote's Guide button, from anywhere that's signed in. A TV has WittyTV's own guide; elsewhere it's the page.
     fun openGuide() {
+        if (!hasGuide || app.api.token.isEmpty()) return
+        if (app.isTv) {
+            if (current != Route.LiveTv && (current as? TvRoute)?.screen != TvScreen.Guide) push(TvRoute(TvScreen.Guide))
+            return
+        }
         val onPage = current as? Route.Page
-        if (hasGuide && app.api.token.isNotEmpty() && onPage?.path != GUIDE_PATH) push(Route.Page(GUIDE_PATH))
+        if (onPage?.path != GUIDE_PATH) push(Route.Page(GUIDE_PATH))
     }
 
     // The server the sign-in screens talk to. Its key waits here for a token to be
@@ -179,7 +193,7 @@ class Nav(val app: WittyApp, private val s: Map<String, String>) {
         }
         menu = list
         serverVersion = runCatching { api.status().version }.getOrDefault("")
-        legal = runCatching { api.legalNotices() }.getOrNull()
+        legal = runCatching { api.legalNoticesAndLink() }.getOrNull()
     }
 
     // A place in the menus opens as a page of its own, with nothing to go back to: Home is below it.
@@ -225,6 +239,22 @@ class Nav(val app: WittyApp, private val s: Map<String, String>) {
         video?.close()
         video = null
         if (current is Route.Player) playInstead(id) else push(Route.Player(id, false))
+    }
+
+    // The libraries added to a TV's top menu (docs/APP-DESIGN.md, On a TV), for whoever is signed in here.
+    var topMenu by mutableStateOf<List<Long>>(emptyList())
+        private set
+
+    fun loadTopMenu() {
+        val base = server?.url ?: return
+        topMenu = app.store.topMenu(base, me?.name.orEmpty())
+    }
+
+    // Adds a library to the top menu, or takes it out again.
+    fun toggleTopMenu(library: com.wittywilla.wittymediaclient.net.Library) {
+        val base = server?.url ?: return
+        topMenu = if (library.id in topMenu) topMenu - library.id else topMenu + library.id
+        app.store.keepTopMenu(base, me?.name.orEmpty(), topMenu)
     }
 
     // This device's theme for the server: "" for the server's own, "auto", or a theme's id.
@@ -319,6 +349,8 @@ class Nav(val app: WittyApp, private val s: Map<String, String>) {
     fun focusFor(key: String) = focusMemory.getOrPut(key) { FocusMemory() }
 
     private fun forgetScreens() {
+        TvLogos.forget()
+        TvReminders.forget()
         shown.clear()
         focusMemory.clear()
         libraryTypes.clear()
@@ -331,10 +363,13 @@ class Nav(val app: WittyApp, private val s: Map<String, String>) {
     // This app's own screens for what it has them for, and the server's page for all the rest.
     fun open(library: com.wittywilla.wittymediaclient.net.Library) = push(libraryRoute(library))
 
-    // A library's own page: the app's for films, shows, discs and listening, the website's for every other kind.
-    fun libraryRoute(library: com.wittywilla.wittymediaclient.net.Library): Route = if (library.hasOwnScreen) Route.Library(library) else Route.Page(library.pagePath(), library.name)
+    // A library's own page: WittyPlay's for a games library, the app's for films, shows, discs and listening, and the
+    // website's for every other kind. The strip, the drawer, Home's tiles and See all all come through here.
+    fun libraryRoute(library: com.wittywilla.wittymediaclient.net.Library): Route =
+        gamesRouteFor(library) ?: if (library.hasOwnScreen) Route.Library(library) else Route.Page(library.pagePath(), library.name)
     fun open(item: com.wittywilla.wittymediaclient.net.Item) = push(
         when {
+            gamesRouteFor(item) != null -> gamesRouteFor(item)!!
             item.isTrack -> Route.Album(item.libraryId, item.album, item.albumArtist.ifEmpty { item.artist })
             // A disc has the app's own page on a phone or tablet, with Insert; its player is the website's.
             item.hasOwnScreen || (item.isDisc && !app.isTv) -> Route.Item(item.id)
@@ -393,7 +428,7 @@ class Nav(val app: WittyApp, private val s: Map<String, String>) {
     }
 
     // Back from the middle of the app goes up a level, and from a tab goes to Home.
-    val backStaysInApp: Boolean get() = stack.size > 1 || current == Route.Search || current == Route.Profile
+    val backStaysInApp: Boolean get() = stack.size > 1 || current in TABS_BESIDE_HOME
 
     fun back() {
         if (stack.size > 1) pop() else if (backStaysInApp) reset(Route.Home)
@@ -712,6 +747,10 @@ fun AppRoot(app: WittyApp) {
                         Route.Home -> Shell(nav) { HomeScreen(nav, strings) }
                         Route.Search -> Shell(nav) { if (LocalMetrics.current.tv) SearchScreen(nav, strings) else PhoneSearch(nav, strings) }
                         Route.Profile -> Shell(nav) { YouScreen(nav, strings) }
+                        Route.Libraries -> Shell(nav) { LibrariesScreen(nav, strings) }
+                        Route.Games -> Shell(nav) { GamesTabScreen(nav, strings) }
+                        Route.LiveTv -> Shell(nav) { LiveTvScreen(nav, strings) }
+                        is Route.Pinned -> Shell(nav) { PinnedLibraryScreen(nav, strings, route.library) }
                         Route.Notices -> NoticesScreen(nav)
                         Route.Logs -> LogsScreen(nav)
                         is Route.Library -> PageShell(nav) {
@@ -735,6 +774,8 @@ fun AppRoot(app: WittyApp) {
                         is Route.You -> YouSettingScreen(nav, strings, route.screen)
                         is Route.Help -> ServerPageScreen(nav, route, route.path, keptToGames = false, public = true)
                         is Route.OnPhone -> OnPhoneScreen(nav, strings, route.title, route.path)
+                        is GamesRoute -> GamesRouteScreen(nav, route)
+                        is TvRoute -> TvRouteScreen(nav, route)
                     }
                 }
             }
@@ -753,6 +794,8 @@ fun AppRoot(app: WittyApp) {
         } else {
             showing()
         }
+        // A WittyTV reminder comes up on whatever's showing, once someone is signed in.
+        if (metrics.tv && route.signedIn) TvReminderAlert(nav)
     }
 }
 

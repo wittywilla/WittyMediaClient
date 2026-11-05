@@ -86,6 +86,12 @@ fun nintendoKey(keyCode: Int): Int? = when (keyCode) {
 const val APP_BACK_PATH = "/.wittymedia-app-back"
 const val OFFER_APP_BACK = "document.documentElement.dataset.appBack='$APP_BACK_PATH'"
 
+// The same for Up: a page that can't go up any further on itself (from its topmost control, never from a dialog, a
+// menu or the full player) loads this address, which never loads, and the app moves focus up to a TV's top bar.
+// Offered only on a page shown inside a TV's tab. Servers without it ignore the attribute (WittyMediaServer #306).
+const val APP_UP_PATH = "/.wittymedia-app-up"
+const val OFFER_APP_UP = "document.documentElement.dataset.appUp='$APP_UP_PATH'"
+
 // Whether the page has been shown a controller yet.
 const val ASK_SEES_PAD = "(function(){try{return Array.from(navigator.getGamepads()).some(Boolean)}catch(e){return false}})()"
 

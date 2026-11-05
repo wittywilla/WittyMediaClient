@@ -243,28 +243,104 @@ data class Home(
     val libraries: List<Library> = emptyList(),
 )
 
+// One programme in the guide. Times are seconds since 1970, as the server sends them.
 @Serializable
 data class GuideProgramme(
     val start: Long = 0,
     val end: Long = 0,
+    // `show`, `filler`, `slate`, `broadcast` or `none`. A slate is the channel's own "back soon".
+    val kind: String? = null,
     val title: String = "",
+    val sub: String? = null,
+    val desc: String? = null,
+    val genre: String? = null,
+    val rating: String? = null,
+    val year: Int? = null,
+    // What in the library it plays, for a library channel.
     val itemId: Long? = null,
-)
+    val showId: Long? = null,
+    val season: Int? = null,
+    val episode: Int? = null,
+) {
+    fun isOn(now: Long) = start <= now && now < end
+}
 
+// Whether a channel is encrypted, in the server's words: every client shows the same.
+@Serializable
+data class GuideSecurity(val state: String = "", val label: String = "", val detail: String = "")
+
+// The same station another way, for one that can't be watched as it is.
+@Serializable
+data class GuideAlternative(val key: String = "", val number: String = "", val name: String = "")
+
+// The name a channel's logo goes by in the logo service.
+@Serializable
+data class GuideBrand(val kind: String = "", val name: String = "")
+
+// One channel from GET /guide. Channels and tuners aren't items, so they don't go through /playback.
 @Serializable
 data class GuideChannel(
     val key: String = "",
+    // `library` or `tuner`. A library channel is off air between its programmes.
+    val kind: String? = null,
     val number: String = "",
     val name: String = "",
-    // "library" for a channel the server makes from a library, which is off air between its programmes.
-    val kind: String = "",
+    val group: String? = null,
+    val radio: Boolean? = null,
+    val hd: Boolean? = null,
+    val atsc3: Boolean? = null,
     val encrypted: String = "", // why it can't be tuned: this server never decrypts a broadcast
+    // Whether Record is offered: the server's word alone, and missing means no. Only tuner channels the profile may
+    // record ever have it; no app works it out for itself (docs/APP-DESIGN.md, On a TV).
+    val canRecord: Boolean? = null,
+    val noRecord: String? = null,
+    val security: GuideSecurity? = null,
+    val alternative: GuideAlternative? = null,
+    val notices: List<String>? = null,
+    val description: String? = null,
+    val categories: List<String>? = null,
+    // The channel's own colour.
+    val accent: String? = null,
     val favourite: Boolean = false,
+    val brand: GuideBrand? = null,
+    // The owner's picture for it, as an address on the server. Not every channel has one.
+    val logo: String? = null,
     val programmes: List<GuideProgramme> = emptyList(),
+) {
+    val canTune: Boolean get() = encrypted.isEmpty()
+}
+
+// A page of the guide. The look the server's owner starts people on comes with it: `layout` and `skin` are from before
+// there were themes. How many channels there are with what was asked, where this page starts, and the groups.
+@Serializable
+data class Guide(
+    val channels: List<GuideChannel> = emptyList(),
+    val theme: String? = null,
+    val layout: String? = null,
+    val skin: String? = null,
+    val total: Int? = null,
+    val offset: Int? = null,
+    val groups: List<String>? = null,
 )
 
+// What GET /tv/{key}/tune answers: the stream, what's on and next, and what the server says about the channel.
 @Serializable
-data class Guide(val channels: List<GuideChannel> = emptyList())
+data class Tuned(
+    val url: String? = null,
+    val streamUrl: String? = null,
+    val key: String? = null,
+    val number: String? = null,
+    val name: String? = null,
+    val logo: String? = null,
+    val accent: String? = null,
+    val now: GuideProgramme? = null,
+    val next: GuideProgramme? = null,
+    // What a library channel is really playing, when that isn't the programme (a bumper, say).
+    val playing: GuideProgramme? = null,
+    val notices: List<String>? = null,
+    val alternative: GuideAlternative? = null,
+    val security: GuideSecurity? = null,
+)
 
 // What GET /update says, for administrators: only what Home's notice of a newer server uses.
 @Serializable

@@ -112,15 +112,16 @@ Running this on a bare FreeBSD found that the app showed no text at all, as Elec
 
 ## Android's processors
 
-One APK carries all four. Checked by opening a real one built from this branch, with `android/scripts/check-abis.sh` and `aapt2`:
+An APK for each of the four, and a universal one with all of them. Checked by opening real ones built from this branch, with
+`android/scripts/check-abis.sh`, `aapt2` and `zipalign`:
 
 | | |
 |---|---|
-| Native libraries | One: `libandroidx.graphics.path.so`, from Jetpack Compose, in all four |
-| `native-code` as Android reads it | `arm64-v8a`, `armeabi-v7a`, `x86`, `x86_64` |
+| Native libraries | Two: `libjingle_peerconnection_so.so`, libwebrtc's, and `libandroidx.graphics.path.so`, from Jetpack Compose. Each processor's APK has them for that processor only, and the universal one for all four |
+| `native-code` as Android reads it | One processor in each processor's APK; `arm64-v8a`, `armeabi-v7a`, `x86`, `x86_64` in the universal one |
 | Lowest Android | 6.0, API 23 |
-| 16 KB memory pages | Aligned, by `zipalign -c -P 16` |
-| Size | About 3 MB |
+| 16 KB memory pages | Every APK aligned, by `zipalign -c -P 16`. The 64-bit libraries are built for 16 KB pages; libwebrtc's 32-bit ones are built for 4 KB, which is all 32-bit Android uses |
+| Size | `armeabi-v7a` 10.5 MB, `arm64-v8a` 15.8 MB, `x86` 16.3 MB, `x86_64` 19.7 MB, universal 51.4 MB. Without WebRTC each was 3.7 MB |
 
 **Why Android 6 is the lowest claim.** Media3, Activity, Core and Lifecycle, 23 libraries in all, need API 23 and won't build below it, so it's a
 hard floor. Android's own lint reads every call against that version, and CI now runs it. It found the player's network watcher calling something from
@@ -229,7 +230,7 @@ books and comics in the test media. **Ran** on the desktop is the real app under
 | Tuners, recordings | Page opens. No tuner here | The same | The same | Tuner channels listed, written. Recordings **not available** | Page, written |
 | Home videos | Page opens | Page opens | Page opens | Written | Written |
 | Collections | Page opens, none made | Page opens | Page opens | **Not available**: their titles still appear in libraries | Page, written |
-| Games in the page | Page opens. **No game played**: no core installed in the test server | The same | The same | **Own screens and player**: the library as couch mode, a game's page, and the server's stream in a native player with controllers, profiles, the game menu and the server's saves. Simulator, through a stand-in, as the local server's runner can't start a game on this Mac: see [WITTYPLAY-STREAMING.md](WITTYPLAY-STREAMING.md) | Page, written |
+| Games in the page | Page opens. **No game played**: no core installed in the test server | The same | The same | **Own screens and player**: the library as couch mode, a game's page, and the server's stream in a native player with controllers, profiles, the game menu and the server's saves. Played on the simulator against the local server: NES, Super Nintendo, Game Boy and DS, every button checked; see [WITTYPLAY-STREAMING.md](WITTYPLAY-STREAMING.md) | **The same player as Apple TV's**, with the account's touch controls when no controller is connected; Vision Pro the same in a window. The library and game's page are the page for now. Built for all three; touch checked in tests, not yet on a device |
 | Games on someone's own PC | See [below](#games-on-someones-own-pc) | See below | See below | See below | See below |
 | Settings: libraries, profiles, modules, backup, logs and the rest | Ran: every page opened with no errors | Page opens | Page opens | **Not available**: use a phone or computer | Page, written |
 | Uploading from the device | Written: it opens the system's picker, not run here so as not to open a window | Written | Emulator: the picker opens, and Back returns to the page. No file sent | No | Written, the system's own |
@@ -498,6 +499,8 @@ checked package, no `file://` privileges):
   key, and trusting that key rather than a later one.
 - Starting with a remembered server, another key at it, a server that has gone, a damaged state file and a bad
   certificate, which also proves that listening to `certificate-error` doesn't accept one.
+- The app's name until a server is added, found servers showing only their address, a saved server listed once with
+  its own name, and the server's logo fetched once it has proved itself, kept with it and not fetched again.
 - A code shown on the screen for a phone to approve: refused, then a new code, then approved and signed in, with the
   secret that collects it never reaching the page, and nothing asked once the screen is left.
 - TV mode in a window: the words on the left and the actions on the right, the four-unit focus ring, Back, and with Reduce

@@ -5,7 +5,7 @@ import PackageDescription
 // server's data and the API. It also builds on Linux, so CI can test it anywhere.
 let package = Package(
     name: "WittyKit",
-    platforms: [.iOS(.v16), .tvOS(.v16), .macOS(.v13), .visionOS(.v1)],
+    platforms: [.iOS(.v16), .tvOS(.v17), .macOS(.v13), .visionOS(.v1)],
     products: [.library(name: "WittyKit", targets: ["WittyKit"])],
     targets: [
         .target(name: "WittyKit"),
