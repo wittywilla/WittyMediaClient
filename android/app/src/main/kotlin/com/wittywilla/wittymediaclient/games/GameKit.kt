@@ -42,8 +42,9 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.graphics.vector.PathParser
 import androidx.compose.ui.input.InputMode
 import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalInputModeManager
+import androidx.compose.ui.platform.LocalWindowInfo
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
@@ -111,7 +112,15 @@ private val TvLook = GameLook(
 fun gameLook(): GameLook {
     val metrics = LocalMetrics.current
     if (metrics.tv) return TvLook
-    return if (LocalConfiguration.current.screenWidthDp >= 600) TabletLook else PhoneLook
+    return if (windowDp().first >= 600) TabletLook else PhoneLook
+}
+
+// The space the app has, in dp: the window's, which a split screen or a freeform window makes smaller than the display.
+@Composable
+fun windowDp(): Pair<Float, Float> {
+    val size = LocalWindowInfo.current.containerSize
+    val density = LocalDensity.current.density
+    return size.width / density to size.height / density
 }
 
 // Colours by role, from the theme.

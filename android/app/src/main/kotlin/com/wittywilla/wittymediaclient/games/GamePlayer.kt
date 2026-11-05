@@ -57,7 +57,6 @@ import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalView
@@ -265,7 +264,7 @@ private fun Loading(play: GamePlay, touchScreen: Boolean, onCancel: () -> Unit) 
     val cancel = remember { FocusRequester() }
     LaunchedEffect(Unit) { runCatching { cancel.requestFocus() } }
     val game = play.item
-    val portrait = LocalConfiguration.current.screenHeightDp > LocalConfiguration.current.screenWidthDp
+    val portrait = windowDp().let { it.second > it.first }
     Box(Modifier.fillMaxSize().background(GameColours.background).windowInsetsPadding(WindowInsets.safeDrawing).padding(look.gutter)) {
         val cover = @Composable { m: Modifier ->
             if (game != null && game.hasPoster) GamePicture(play.api.posterUrl(game, 480), game.title, m.clip(RoundedCornerShape(look.radius)))
@@ -394,10 +393,9 @@ private fun GameMenuSheet(play: GamePlay, page: GameMenu, touchScreen: Boolean, 
     val look = gameLook()
     val first = remember(page) { FocusRequester() }
     LaunchedEffect(page) { runCatching { first.requestFocus() } }
-    val config = LocalConfiguration.current
     val columns = when {
         look.tv -> 4
-        config.screenWidthDp >= 600 -> 3
+        windowDp().first >= 600 -> 3
         else -> 2
     }
     Box(

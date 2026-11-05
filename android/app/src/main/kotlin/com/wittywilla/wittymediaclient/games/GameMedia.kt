@@ -6,7 +6,6 @@ import android.graphics.Paint
 import android.graphics.Rect
 import android.media.AudioAttributes
 import android.media.AudioFormat
-import android.media.AudioManager
 import android.media.AudioTrack
 import android.media.MediaCodec
 import android.media.MediaCodecInfo
@@ -306,7 +305,6 @@ class GameSound(latencySeconds: Double) {
                 .setAudioFormat(AudioFormat.Builder().setEncoding(AudioFormat.ENCODING_PCM_16BIT).setSampleRate(at).setChannelMask(AudioFormat.CHANNEL_OUT_STEREO).build())
                 .setBufferSizeInBytes(bytes)
                 .setTransferMode(AudioTrack.MODE_STREAM)
-                .setSessionId(AudioManager.AUDIO_SESSION_ID_GENERATE)
             if (Build.VERSION.SDK_INT >= 26) builder.setPerformanceMode(AudioTrack.PERFORMANCE_MODE_LOW_LATENCY)
             builder.build()
         }.getOrNull()

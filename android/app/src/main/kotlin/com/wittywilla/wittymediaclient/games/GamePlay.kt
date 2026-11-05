@@ -4,7 +4,9 @@ import android.content.Context
 import android.os.Handler
 import android.os.Looper
 import android.view.Surface
+import androidx.core.content.edit
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableDoubleStateOf
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
@@ -78,7 +80,7 @@ class GamePlay(private val app: WittyApp, val gameId: Long, private var start: G
         private set
 
     // The picture's shape and turn, as the game says and changes them.
-    var aspect by mutableStateOf(4.0 / 3.0)
+    var aspect by mutableDoubleStateOf(4.0 / 3.0)
         private set
     var frameSize by mutableStateOf(256 to 240)
         private set
@@ -123,6 +125,7 @@ class GamePlay(private val app: WittyApp, val gameId: Long, private var start: G
     private var stopped = false
     private var toastSerial = 0
     private var began = false
+    private var starting: Job? = null
 
     val deviceId: String by lazy { deviceIdFor(app) }
 
@@ -136,7 +139,7 @@ class GamePlay(private val app: WittyApp, val gameId: Long, private var start: G
         input.onNotice = ::say
         input.onShortcut = ::shortcut
         input.loadProfile = { key -> controls?.console?.let { console -> api.resolvePad(key, console, gameId) } }
-        scope.launch { startGame() }
+        starting = scope.launch { startGame() }
     }
 
     private suspend fun startGame() {
@@ -208,7 +211,7 @@ class GamePlay(private val app: WittyApp, val gameId: Long, private var start: G
         if (session != null) start = GameStart(resume = true, safeMode = safeMode)
         else if (safeMode) start = start.copy(safeMode = true)
         session = null
-        scope.launch { startGame() }
+        starting = scope.launch { startGame() }
     }
 
     // MARK: the connection
@@ -394,7 +397,7 @@ class GamePlay(private val app: WittyApp, val gameId: Long, private var start: G
     fun appeared() {
         if (!away) return
         away = false
-        sound.hold(menu != null)
+        sound.hold(false)
         val sid = session?.id ?: return
         if (stopped || problem != null) return
         scope.launch {
@@ -425,13 +428,11 @@ class GamePlay(private val app: WittyApp, val gameId: Long, private var start: G
         if (problem != null || saving) return
         menu = page
         input.setEnabled(false)
-        sound.hold(true)
         if (page == GameMenu.Save || page == GameMenu.Load) loadSaves()
     }
 
     fun closeMenu() {
         menu = null
-        sound.hold(away)
         if (!away) input.setEnabled(true)
     }
 
@@ -581,6 +582,7 @@ class GamePlay(private val app: WittyApp, val gameId: Long, private var start: G
         menu = null
         saving = true
         stopped = true
+        starting?.cancel()
         input.stop()
         closeSocket()
         sound.hold(true)
@@ -602,6 +604,7 @@ class GamePlay(private val app: WittyApp, val gameId: Long, private var start: G
 
     // Leaving the screen for good, any way at all: nothing is left running, and the server still saves.
     fun close() {
+        starting?.cancel()
         input.stop()
         closeSocket()
         video.close()
@@ -621,7 +624,7 @@ class GamePlay(private val app: WittyApp, val gameId: Long, private var start: G
             val prefs = context.getSharedPreferences("wittyplay", Context.MODE_PRIVATE)
             prefs.getString("device", null)?.let { return it }
             val made = "android-" + UUID.randomUUID().toString().replace("-", "").take(16)
-            prefs.edit().putString("device", made).apply()
+            prefs.edit { putString("device", made) }
             return made
         }
 
@@ -629,7 +632,7 @@ class GamePlay(private val app: WittyApp, val gameId: Long, private var start: G
         fun touchShown(context: Context): Boolean = context.getSharedPreferences("wittyplay", Context.MODE_PRIVATE).getBoolean("touch", true)
 
         fun setTouchShown(context: Context, on: Boolean) {
-            context.getSharedPreferences("wittyplay", Context.MODE_PRIVATE).edit().putBoolean("touch", on).apply()
+            context.getSharedPreferences("wittyplay", Context.MODE_PRIVATE).edit { putBoolean("touch", on) }
         }
     }
 }

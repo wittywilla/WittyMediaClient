@@ -56,7 +56,6 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
@@ -432,8 +431,8 @@ private fun Hero(nav: GamesNav, api: GamesApi, list: List<GameItem>, consoles: M
     val c = consoles[game.console]
     val ready = c?.ready ?: true
     val resume = game.id in resumable
-    val config = LocalConfiguration.current
-    val flowH: Dp = if (look.tv) 208.dp else min(config.screenWidthDp * 0.62f, config.screenHeightDp * 0.38f).dp
+    val (windowW, windowH) = windowDp()
+    val flowH: Dp = if (look.tv) 208.dp else min(windowW * 0.62f, windowH * 0.38f).dp
     val density = LocalDensity.current
     val front = remember { FocusRequester() }
     var flowFocused by remember { mutableStateOf(false) }
