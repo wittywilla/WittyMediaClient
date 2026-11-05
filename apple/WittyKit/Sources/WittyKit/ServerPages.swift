@@ -75,11 +75,36 @@ public extension Item {
 public struct GuideProgramme: Decodable, Equatable {
     public let start: Int64
     public let end: Int64
+    /// `show`, `filler`, `slate`, `broadcast` or `none`. A slate is the channel's own "back soon".
+    public let kind: String?
     public let title: String
     public let sub: String?
     public let desc: String?
+    public let genre: String?
     public let rating: String?
     public let year: Int?
+    /// What in the library it plays, for a library channel.
+    public let itemId: Int64?
+    public let showId: Int64?
+    public let season: Int?
+    public let episode: Int?
+
+    public init(start: Int64, end: Int64, kind: String? = nil, title: String, sub: String? = nil, desc: String? = nil, genre: String? = nil,
+                rating: String? = nil, year: Int? = nil, itemId: Int64? = nil, showId: Int64? = nil, season: Int? = nil, episode: Int? = nil) {
+        self.start = start
+        self.end = end
+        self.kind = kind
+        self.title = title
+        self.sub = sub
+        self.desc = desc
+        self.genre = genre
+        self.rating = rating
+        self.year = year
+        self.itemId = itemId
+        self.showId = showId
+        self.season = season
+        self.episode = episode
+    }
 
     /// How far through it is at this moment, from 0 to 1.
     public func fraction(at now: Int64) -> Double {
@@ -91,22 +116,62 @@ public struct GuideProgramme: Decodable, Equatable {
     public func minutesLeft(at now: Int64) -> Int {
         max(1, Int((end - now + 59) / 60))
     }
+
+    public func isOn(at now: Int64) -> Bool { start <= now && now < end }
+}
+
+/// Whether a channel is encrypted, in the server's words: every client shows the same.
+public struct GuideSecurity: Decodable, Equatable {
+    /// `clear`, `encrypted` or `unknown`.
+    public let state: String
+    public let label: String
+    public let detail: String
+}
+
+/// The same station another way, for one that can't be watched as it is.
+public struct GuideAlternative: Decodable, Equatable {
+    public let key: String
+    public let number: String
+    public let name: String
+}
+
+/// The name a channel's logo goes by in the logo service.
+public struct GuideBrand: Decodable, Equatable {
+    public let kind: String
+    public let name: String
 }
 
 /// One channel from GET /guide. Channels and tuners aren't items, so they don't go through /playback.
 public struct GuideChannel: Decodable, Identifiable, Equatable {
     public let key: String
+    /// `library` or `tuner`.
+    public let kind: String?
     public let number: String?
     public let name: String
+    public let group: String?
     public let radio: Bool?
+    public let hd: Bool?
+    public let atsc3: Bool?
     /// Why it can't be tuned. This server never decrypts a broadcast.
     public let encrypted: String?
+    public let canRecord: Bool?
+    public let noRecord: String?
+    public let security: GuideSecurity?
+    public let alternative: GuideAlternative?
+    public let notices: [String]?
+    public let description: String?
+    public let categories: [String]?
+    /// The channel's own colour.
+    public let accent: String?
+    public var favourite: Bool?
+    public let brand: GuideBrand?
     /// The owner's picture for it, as an address on the server. Not every channel has one.
     public let logo: String?
     public let programmes: [GuideProgramme]?
 
     public var id: String { key }
     public var canTune: Bool { (encrypted ?? "").isEmpty }
+    public var isTuner: Bool { kind == "tuner" }
     public var label: String { [number, name].compactMap { $0 }.filter { !$0.isEmpty }.joined(separator: "  ") }
 
     public func on(at now: Int64) -> GuideProgramme? {
@@ -115,6 +180,13 @@ public struct GuideChannel: Decodable, Identifiable, Equatable {
 
     public func next(after now: Int64) -> GuideProgramme? {
         programmes?.filter { $0.start > now }.min { $0.start < $1.start }
+    }
+
+    /// The same channel marked a favourite or not, as the guide shows it at once.
+    public func with(favourite: Bool) -> GuideChannel {
+        var copy = self
+        copy.favourite = favourite
+        return copy
     }
 }
 
@@ -136,10 +208,32 @@ public struct Guide: Decodable, Equatable {
     public let theme: String?
     public let layout: String?
     public let skin: String?
+    /// How many channels there are with what was asked, and where this page of them starts.
+    public let total: Int?
+    public let offset: Int?
+    /// The channel groups there are, for the guide's filters.
+    public let groups: [String]?
 }
 
 /// What GET /tv/{key}/tune answers. AVPlayer always needs `streamUrl`, as it can't set headers.
 public struct Tuned: Decodable, Equatable {
     public let url: String?
     public let streamUrl: String?
+    public let key: String?
+    public let number: String?
+    public let name: String?
+    public let logo: String?
+    public let accent: String?
+    /// What's on and what's next, which the banner shows.
+    public let now: GuideProgramme?
+    public let next: GuideProgramme?
+    /// What a library channel is really playing, when that isn't the programme (a bumper, say).
+    public let playing: GuideProgramme?
+    public let notices: [String]?
+    public let alternative: GuideAlternative?
+    public let security: GuideSecurity?
+    /// Where the channel is in what's on, and the server's clock then, for counting progress.
+    public let positionSec: Double?
+    public let serverTime: Double?
+    public let countProgress: Bool?
 }
