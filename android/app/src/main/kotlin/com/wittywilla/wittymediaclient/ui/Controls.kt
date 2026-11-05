@@ -15,10 +15,11 @@ import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.CornerBasedShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -54,6 +55,7 @@ import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.graphics.drawOutline
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.drawscope.translate
@@ -169,12 +171,19 @@ fun Pressable(
     }
     val dim = (if (pressed) pressAlpha else 1f) * (if (enabled) 1f else DISABLED_ALPHA)
     val ringColour = MaterialTheme.colorScheme.onBackground
+    // On a TV the ring has room kept for it round the thing, and sits right against it, as Apple TV draws
+    // it: so a focused button and its neighbours never move, and both TVs measure the same.
+    val tvRoom = metrics.tv && ring
     Box(
         modifier
             // Above its neighbours, so they don't cover its ring.
             .zIndex(if (showsFocus) 1f else 0f)
             .graphicsLayer { scaleX = grow; scaleY = grow; alpha = dim }
-            .then(if (ring && showsFocus) Modifier.ringOutside(shape, ringColour, metrics.focusRing, metrics.focusRing) else Modifier)
+            .then(if (tvRoom) Modifier.padding(metrics.focusRing) else Modifier)
+            .then(
+                if (ring && showsFocus) Modifier.ringOutside(shape, ringColour, if (tvRoom) 0.dp else metrics.focusRing, metrics.focusRing)
+                else Modifier,
+            )
             .focusRequester(requester)
             .onFocusChanged {
                 focused = it.isFocused
@@ -228,20 +237,28 @@ fun WittyButton(
         ButtonKind.Destructive -> scheme.error
     }
     val style = MaterialTheme.typography.label.let { if (kind == ButtonKind.Quiet) it.copy(fontWeight = FontWeight.SemiBold) else it }
+    // On a TV every button is a pill as tall as the system's text field, 66 units (a quiet one 56), with 32
+    // inside: docs/APP-DESIGN.md, Buttons.
     val sideRoom = when {
-        kind == ButtonKind.Quiet -> metrics.u(8)
+        kind == ButtonKind.Quiet -> metrics.u(if (metrics.tv) 16 else 8)
+        metrics.tv -> metrics.u(32)
         pill -> metrics.u(20)
         else -> metrics.u(16)
     }
+    val height = when {
+        metrics.tv -> metrics.u(if (kind == ButtonKind.Quiet) 56 else 66)
+        tall -> 52.dp
+        else -> metrics.minTarget
+    }
     Pressable(
         { if (!busy) onClick() }, modifier,
-        shape = if (pill) Radius.FULL else LocalMetrics.current.corner(10), fill = fill,
+        shape = if (pill || metrics.tv) Radius.FULL else LocalMetrics.current.corner(10), fill = fill,
         label = if (busy) text else null, state = if (busy) LocalWords.current["connecting"] else null,
         focusKey = focusKey, requestFocus = requestFocus, takeFocus = takeFocus, focusRequester = focusRequester, enabled = enabled,
     ) {
         Box(
             Modifier
-                .defaultMinSize(minHeight = if (tall && !metrics.tv) 52.dp else metrics.minTarget)
+                .defaultMinSize(minHeight = height)
                 .padding(horizontal = sideRoom, vertical = metrics.u(8)),
             contentAlignment = Alignment.Center,
         ) {
@@ -250,10 +267,10 @@ fun WittyButton(
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(metrics.u(8)),
             ) {
-                if (icon != null) Icon(icon, contentDescription = null, tint = ink, modifier = Modifier.size(metrics.u(20)))
+                if (icon != null) Icon(icon, contentDescription = null, tint = ink, modifier = Modifier.size(metrics.u(if (metrics.tv) 30 else 20)))
                 Text(text, color = ink, style = style, textAlign = TextAlign.Center)
             }
-            if (busy) Spinner(ink, metrics.u(20))
+            if (busy) Spinner(ink, metrics.u(if (metrics.tv) 30 else 20))
         }
     }
 }
@@ -324,7 +341,7 @@ fun WittyField(
     val limited: (String) -> Unit = { onChange(it.take(maxLength)) }
     Column(modifier.fillMaxWidth().graphicsLayer { translationX = shaking.value * density }) {
         if (metrics.tv) {
-            TvTextField(value, limited, label, icon, secret, keyboardOptions, keyboardActions, trailing, isError, enabled, fieldModifier)
+            TvTextField(value, limited, label, secret, keyboardOptions, keyboardActions, isError, enabled, fieldModifier)
         } else {
             OutlinedTextField(
                 value = value,
@@ -369,56 +386,46 @@ fun WittyField(
     }
 }
 
-// A TV's field, drawn here at the page's 56 units: Material's keeps to 56 dp, which is twice that on a
-// TV. The same look: the label inside until there are words or focus, then on the border. Focus also
-// has the TV's ring, but doesn't grow, as a field fills its column.
+// A TV's field, as Apple TV's: its label above it, then a pill as tall as the buttons, 66 units, with room kept
+// round it for the focus ring. Focused, it shows only that ring; its own outline stays as it was, and nothing
+// sits between the two (docs/APP-DESIGN.md, On a TV). No icon or show/hide in it, as the TVs' own fields have none.
 @Composable
 private fun TvTextField(
     value: String,
     onChange: (String) -> Unit,
     label: String,
-    icon: ImageVector?,
     secret: Boolean,
     keyboardOptions: KeyboardOptions,
     keyboardActions: KeyboardActions,
-    trailing: (@Composable () -> Unit)?,
     isError: Boolean,
     enabled: Boolean,
     modifier: Modifier = Modifier,
 ) {
     val scheme = MaterialTheme.colorScheme
-    val extra = LocalExtraColours.current
     val metrics = LocalMetrics.current
     val interaction = remember { MutableInteractionSource() }
     val focused by interaction.collectIsFocusedAsState()
-    val raised = focused || value.isNotEmpty()
-    val quiet = scheme.onSurfaceVariant
     val body = MaterialTheme.typography.body
-    val caption = MaterialTheme.typography.caption
-    val half = with(LocalDensity.current) { (caption.lineHeight.toDp() / 2) }
-    Box(Modifier.fillMaxWidth().padding(top = half)) {
-        Row(
+    Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(metrics.u(8))) {
+        Text(
+            label, color = if (isError) scheme.error else scheme.onSurfaceVariant, style = MaterialTheme.typography.secondary, maxLines = 1,
+            modifier = Modifier.padding(start = metrics.u(4)),
+        )
+        Box(
             Modifier
                 .fillMaxWidth()
-                .height(metrics.u(56))
-                .then(if (focused) Modifier.ringOutside(LocalMetrics.current.corner(10), scheme.onBackground, metrics.focusRing, metrics.focusRing) else Modifier)
-                .border(
-                    if (focused || isError) 2.dp else 1.dp,
-                    when {
-                        isError -> scheme.error
-                        focused -> scheme.primary
-                        else -> scheme.outline
-                    },
-                    LocalMetrics.current.corner(10),
-                )
-                .padding(start = metrics.u(16), end = metrics.u(4)),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(metrics.u(12)),
+                .padding(metrics.focusRing)
+                .then(if (focused) Modifier.ringOutside(Radius.FULL, scheme.onBackground, 0.dp, metrics.focusRing) else Modifier)
+                .height(metrics.u(66))
+                .clip(Radius.FULL)
+                .background(scheme.surfaceVariant)
+                .border(if (isError) 2.dp else 1.dp, if (isError) scheme.error else scheme.outline, Radius.FULL)
+                .padding(horizontal = metrics.u(24)),
+            contentAlignment = Alignment.CenterStart,
         ) {
-            if (icon != null) Icon(icon, contentDescription = null, tint = quiet, modifier = Modifier.size(metrics.u(20)))
             BasicTextField(
                 value, onChange,
-                modifier = Modifier.weight(1f).then(modifier).semantics { contentDescription = label },
+                modifier = Modifier.fillMaxWidth().then(modifier).semantics { contentDescription = label },
                 enabled = enabled,
                 textStyle = body.copy(color = if (enabled) scheme.onBackground else scheme.onSurfaceVariant),
                 singleLine = true,
@@ -427,28 +434,6 @@ private fun TvTextField(
                 keyboardOptions = keyboardOptions,
                 keyboardActions = keyboardActions,
                 interactionSource = interaction,
-                decorationBox = { inner ->
-                    Box(contentAlignment = Alignment.CenterStart) {
-                        if (!raised) Text(label, color = quiet, style = body, maxLines = 1)
-                        inner()
-                    }
-                },
-            )
-            trailing?.invoke()
-        }
-        if (raised) {
-            Text(
-                label, color = when {
-                    isError -> scheme.error
-                    focused -> extra.accentText
-                    else -> quiet
-                },
-                style = caption, maxLines = 1,
-                modifier = Modifier
-                    .padding(start = metrics.u(12))
-                    .offset(y = -half)
-                    .background(scheme.background)
-                    .padding(horizontal = metrics.u(4)),
             )
         }
     }
@@ -536,8 +521,10 @@ fun avatarShape(size: Dp, circle: Boolean): Shape = if (circle) CircleShape else
 private const val INITIAL_SHARE = 0.43f
 private const val AVATAR_RADIUS = 0.22f
 
-// docs/APP-DESIGN.md, "Profile tile". Pressed or focused, the avatar lifts 3 and gains the web's two
-// rings, `background` then `text`, and the name brightens. A TV grows it as well.
+// docs/APP-DESIGN.md, "Profile tile", as Apple TV and iOS draw it. Pressed or focused, only the avatar reacts:
+// it lifts (3, or 6 units and 1.06 larger on a TV, from its bottom edge) and gains the web's two rings,
+// `background` then `text`, concentric with it; the badge moves with it and the name brightens. Every tile keeps
+// the badge's room under the avatar, so names line up with or without one.
 @Composable
 fun ProfileTile(
     profile: Profile,
@@ -546,8 +533,6 @@ fun ProfileTile(
     modifier: Modifier = Modifier,
     requestFocus: Boolean = false,
     focusKey: String? = null,
-    // Room under the avatar for a badge, so the names in a row line up when any tile has one.
-    badgeRoom: Boolean = false,
 ) {
     val scheme = MaterialTheme.colorScheme
     val metrics = LocalMetrics.current
@@ -565,45 +550,40 @@ fun ProfileTile(
         if (badge.isNotEmpty()) add("$badge profile")
     }.joinToString(", ")
     Pressable(
-        onClick, modifier.width(avatarSize), shape = LocalMetrics.current.corner(10), label = spoken, focusKey = focusKey, requestFocus = requestFocus,
+        onClick, modifier, shape = metrics.corner(10), label = spoken, focusKey = focusKey, requestFocus = requestFocus,
         pressScale = 1f, pressAlpha = 1f, ring = false, grows = false, clip = false,
     ) { active ->
-        // A phone: lift 3, rings 3 and 3. A TV: lift 6 units and grow 1.06, rings 4 and 4 units.
         val gap = if (metrics.tv) metrics.focusRing else 3.dp
         val lift = if (metrics.tv) metrics.u(6) else 3.dp
-        val grow = if (active && metrics.tv && !reduce) metrics.focusScale else 1f
-        Column(Modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally) {
-            // Only the avatar reacts, and the badge moves with it; the names keep their size.
+        val grow = if (active && metrics.tv && !reduce) 1.06f else 1f
+        Column(Modifier.padding(metrics.u(8)), horizontalAlignment = Alignment.CenterHorizontally) {
             Box(
-                Modifier.graphicsLayer {
-                    translationY = if (active && !reduce) -lift.toPx() else 0f
-                    scaleX = grow
-                    scaleY = grow
-                },
+                Modifier
+                    .graphicsLayer {
+                        transformOrigin = TransformOrigin(0.5f, 1f)
+                        translationY = if (active && !reduce) -lift.toPx() else 0f
+                        scaleX = grow
+                        scaleY = grow
+                    }
+                    .padding(bottom = metrics.u(6)),
                 contentAlignment = Alignment.BottomCenter,
             ) {
                 Avatar(
                     shown, avatarSize,
-                    Modifier
-                        .then(
-                            if (active) {
-                                Modifier
-                                    .ringOutside(avatarShape(avatarSize, false), scheme.background, 0.dp, gap)
-                                    .ringOutside(avatarShape(avatarSize, false), scheme.onBackground, gap, gap)
-                            } else {
-                                Modifier
-                            },
-                        ),
+                    if (active) {
+                        Modifier
+                            .ringOutside(avatarShape(avatarSize, false), scheme.background, 0.dp, gap)
+                            .ringOutside(avatarShape(avatarSize, false), scheme.onBackground, gap, gap)
+                    } else {
+                        Modifier
+                    },
                 )
                 if (badge.isNotEmpty()) {
                     Text(
-                        badge, color = scheme.onBackground, style = MaterialTheme.typography.caption,
+                        badge, color = scheme.onBackground, style = MaterialTheme.typography.caption.copy(fontWeight = FontWeight.SemiBold),
                         modifier = Modifier
-                            // Half over the avatar's lower edge.
-                            .layout { measurable, constraints ->
-                                val p = measurable.measure(constraints)
-                                layout(p.width, p.height) { p.place(0, p.height / 2) }
-                            }
+                            // Its foot 10 below the avatar's, so it sits over the lower edge.
+                            .offset(y = metrics.u(10))
                             .clip(Radius.FULL)
                             .background(scheme.background)
                             .border1(scheme.outline)
@@ -611,22 +591,23 @@ fun ProfileTile(
                     )
                 }
             }
-            Spacer(Modifier.height(metrics.u(if (badgeRoom || badge.isNotEmpty()) 20 else 10)))
-            Text(
-                shown, color = if (active) scheme.onBackground else scheme.onSurfaceVariant,
-                style = MaterialTheme.typography.label.copy(fontWeight = FontWeight.SemiBold),
-                maxLines = 1, overflow = TextOverflow.Ellipsis, textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth(),
-            )
-            if (showsUsername(profile.displayName, profile.name)) {
+            Spacer(Modifier.height(metrics.u(8)))
+            Column(Modifier.widthIn(max = avatarSize + metrics.u(32)), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(metrics.u(2))) {
                 Text(
-                    "@${profile.name}", color = scheme.onSurfaceVariant, style = MaterialTheme.typography.secondary,
-                    maxLines = 1, overflow = TextOverflow.Ellipsis, textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth(),
+                    shown, color = if (active) scheme.onBackground else scheme.onSurfaceVariant,
+                    style = MaterialTheme.typography.label.copy(fontWeight = FontWeight.SemiBold),
+                    maxLines = 1, overflow = TextOverflow.Ellipsis, textAlign = TextAlign.Center,
                 )
+                if (showsUsername(profile.displayName, profile.name)) {
+                    Text(
+                        "@${profile.name}", color = LocalExtraColours.current.hint, style = MaterialTheme.typography.secondary,
+                        maxLines = 1, overflow = TextOverflow.Ellipsis, textAlign = TextAlign.Center,
+                    )
+                }
             }
         }
     }
 }
-
 
 private fun Modifier.border1(colour: Color) = this.then(
     Modifier.drawWithContent {
@@ -635,7 +616,6 @@ private fun Modifier.border1(colour: Color) = this.then(
     },
 )
 
-fun hasBadge(profile: Profile) = profile.kind == "kids" || profile.kind == "guest"
 
 // One row of a grouped list.
 data class GroupRow(

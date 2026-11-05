@@ -26,6 +26,7 @@ import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.drawscope.scale
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
@@ -68,20 +69,21 @@ fun BrandMark(size: Dp, modifier: Modifier = Modifier) {
     }
 }
 
-// The server's own logo in the mark's square, or the mark until it arrives or if it can't be had.
+// The server's own logo in the mark's square, or the mark until it arrives or if it can't be had. `logo` is
+// anything Coil reads: the server's address for it, or the copy kept on this device.
 @Composable
-fun ServerMark(size: Dp, logoUrl: String, modifier: Modifier = Modifier) {
-    if (logoUrl.isEmpty()) {
+fun ServerMark(size: Dp, logo: Any?, modifier: Modifier = Modifier) {
+    if (logo == null || logo == "") {
         BrandMark(size, modifier)
         return
     }
-    var failed by remember(logoUrl) { mutableStateOf(false) }
-    var shown by remember(logoUrl) { mutableStateOf(false) }
+    var failed by remember(logo) { mutableStateOf(false) }
+    var shown by remember(logo) { mutableStateOf(false) }
     Box(modifier.size(size).clip(markShape(size))) {
         if (failed || !shown) BrandMark(size)
         if (!failed) {
             AsyncImage(
-                model = logoUrl, contentDescription = null, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize(),
+                model = logo, contentDescription = null, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize(),
                 onState = {
                     shown = it is AsyncImagePainter.State.Success
                     failed = it is AsyncImagePainter.State.Error
@@ -91,40 +93,49 @@ fun ServerMark(size: Dp, logoUrl: String, modifier: Modifier = Modifier) {
     }
 }
 
-// "WittyMediaServer" with Media in the accent, or the server's own name in plain words.
+// "WittyMediaClient" for the app itself, or a server's: "WittyMediaServer" with Media in the accent, or the
+// server's own name in plain words. A TV reads it from across the room: 48 bold, the size of Display's
+// neighbour, as Apple TV draws it.
 @Composable
-fun Wordmark(brandName: String, modifier: Modifier = Modifier) {
-    val style = MaterialTheme.typography.headline.copy(fontWeight = FontWeight.Bold)
+fun Wordmark(brandName: String, modifier: Modifier = Modifier, app: Boolean = false) {
+    val metrics = LocalMetrics.current
+    val style = if (metrics.tv) {
+        MaterialTheme.typography.headline.copy(fontSize = with(LocalDensity.current) { metrics.u(48).toSp() }, fontWeight = FontWeight.Bold)
+    } else {
+        MaterialTheme.typography.headline.copy(fontWeight = FontWeight.Bold)
+    }
     val ink = MaterialTheme.colorScheme.onBackground
-    if (brandName.isNotEmpty()) {
+    if (!app && brandName.isNotEmpty()) {
         Text(brandName, color = ink, style = style, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = modifier)
         return
     }
     val accent = LocalExtraColours.current.accentText
-    val words = remember(accent, ink) {
+    val last = if (app) "Client" else "Server"
+    val words = remember(accent, ink, last) {
         buildAnnotatedString {
             withStyle(SpanStyle(color = ink)) { append("Witty") }
             withStyle(SpanStyle(color = accent)) { append("Media") }
-            withStyle(SpanStyle(color = ink)) { append("Server") }
+            withStyle(SpanStyle(color = ink)) { append(last) }
         }
     }
     Text(words, style = style, maxLines = 1, modifier = modifier)
 }
 
-// Mark then wordmark, 10 apart: 32 on a phone, 48 units on a TV. Heard as the server's name.
+// Mark then wordmark: 32 and 10 apart on a phone, 72 and 20 apart on a TV. The app's own (WittyMediaClient)
+// before a server is added; that server's on its own screens. Heard as the name.
 @Composable
-fun Lockup(brandName: String, logoUrl: String, modifier: Modifier = Modifier) {
+fun Lockup(brandName: String, logo: Any?, modifier: Modifier = Modifier, app: Boolean = false) {
     val metrics = LocalMetrics.current
     Row(
         modifier.semantics(mergeDescendants = true) {
-            contentDescription = brandName.ifEmpty { "WittyMediaServer" }
+            contentDescription = if (app) "WittyMediaClient" else brandName.ifEmpty { "WittyMediaServer" }
             heading()
         },
         verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(metrics.u(10)),
+        horizontalArrangement = Arrangement.spacedBy(metrics.u(if (metrics.tv) 20 else 10)),
     ) {
-        ServerMark(metrics.u(if (metrics.tv) 48 else 32), logoUrl)
-        Wordmark(brandName)
+        ServerMark(metrics.u(if (metrics.tv) 72 else 32), if (app) null else logo)
+        Wordmark(brandName, app = app)
     }
 }
 

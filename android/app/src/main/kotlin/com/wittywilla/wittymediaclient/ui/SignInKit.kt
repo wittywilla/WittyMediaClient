@@ -54,7 +54,9 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
@@ -104,39 +106,65 @@ fun BackArrow(onBack: () -> Unit, modifier: Modifier = Modifier) {
     }
 }
 
-// A TV: the words on the left half, the actions on the right half, both centred up and down, inside
-// the 90-unit gutter. The glow sits behind the words. The remote's Back goes back.
+// A TV, as Apple TV lays it out: the words on the left half, the actions on the right half, 64 apart, each
+// centred up and down, inside the safe area and its 90-unit gutter (so 170 in from each side). The glow is
+// behind the whole screen. The remote's Back goes back.
 @Composable
 fun TvSignInPage(onBack: (() -> Unit)? = null, words: @Composable ColumnScope.() -> Unit, actions: @Composable ColumnScope.() -> Unit) {
     val metrics = LocalMetrics.current
     val accent = MaterialTheme.colorScheme.primary
     BackHandler(enabled = onBack != null) { onBack?.invoke() }
-    Row(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) {
-        Box(Modifier.weight(1f).fillMaxHeight().signInGlow(accent), contentAlignment = Alignment.CenterStart) {
-            Column(
-                Modifier.padding(start = metrics.gutter, end = metrics.u(32), top = metrics.edge, bottom = metrics.edge),
-                verticalArrangement = Arrangement.spacedBy(metrics.u(20)),
-                content = words,
-            )
-        }
+    Row(
+        Modifier
+            .fillMaxSize()
+            .background(MaterialTheme.colorScheme.background)
+            .signInGlow(accent)
+            .padding(horizontal = metrics.gutter + metrics.tvSafeSides, vertical = metrics.edge + metrics.tvSafeEnds),
+        horizontalArrangement = Arrangement.spacedBy(metrics.u(64)),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(metrics.u(20)), content = words)
         Box(Modifier.weight(1f).fillMaxHeight(), contentAlignment = Alignment.CenterStart) {
-            Column(
-                // Room for a focused control to grow and show its ring without being cut off.
-                Modifier.verticalScroll(rememberScrollState()).padding(start = metrics.u(48), end = metrics.gutter, top = metrics.edge, bottom = metrics.edge),
-                verticalArrangement = Arrangement.spacedBy(metrics.u(16)),
-                content = actions,
-            )
+            Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(metrics.u(16)), content = actions)
         }
     }
 }
 
-// The right shape for the device: one column, or side by side on a TV.
+// One centred column on a TV, for a screen about one person, so their face stays where Who's watching had it:
+// the words, then 32 below, the actions 640 units wide.
 @Composable
-fun SignInLayout(onBack: (() -> Unit)? = null, words: @Composable ColumnScope.() -> Unit, actions: @Composable ColumnScope.() -> Unit) {
-    if (LocalMetrics.current.tv) {
-        TvSignInPage(onBack, words, actions)
-    } else {
-        SignInPage(onBack) {
+fun TvCentredPage(onBack: (() -> Unit)? = null, words: @Composable ColumnScope.() -> Unit, actions: @Composable ColumnScope.() -> Unit) {
+    val metrics = LocalMetrics.current
+    val accent = MaterialTheme.colorScheme.primary
+    BackHandler(enabled = onBack != null) { onBack?.invoke() }
+    Box(
+        Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background).signInGlow(accent),
+        contentAlignment = Alignment.Center,
+    ) {
+        Column(
+            Modifier.padding(horizontal = metrics.gutter + metrics.tvSafeSides, vertical = metrics.edge + metrics.tvSafeEnds),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(metrics.u(32)),
+        ) {
+            Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(metrics.u(20)), content = words)
+            Column(Modifier.width(metrics.u(640)), verticalArrangement = Arrangement.spacedBy(metrics.u(16)), content = actions)
+        }
+    }
+}
+
+// The right shape for the device: one column, or side by side on a TV, or one centred column on a TV when `centred`.
+@Composable
+fun SignInLayout(
+    onBack: (() -> Unit)? = null,
+    centred: Boolean = false,
+    words: @Composable ColumnScope.() -> Unit,
+    actions: @Composable ColumnScope.() -> Unit,
+) {
+    val metrics = LocalMetrics.current
+    when {
+        metrics.tv && centred -> TvCentredPage(onBack, words, actions)
+        metrics.tv -> TvSignInPage(onBack, words, actions)
+        else -> SignInPage(onBack) {
             words()
             actions()
         }
@@ -145,30 +173,37 @@ fun SignInLayout(onBack: (() -> Unit)? = null, words: @Composable ColumnScope.()
 
 // A screen's heading and what it's about: centred in a column, to the left on a TV.
 @Composable
-fun SignInHeading(title: String, modifier: Modifier = Modifier, detail: String = "", display: Boolean = false) {
+fun SignInHeading(title: String, modifier: Modifier = Modifier, detail: String = "", display: Boolean = false, centred: Boolean = false) {
     val metrics = LocalMetrics.current
     val scheme = MaterialTheme.colorScheme
-    val align = if (metrics.tv) TextAlign.Start else TextAlign.Center
+    // Centred in a column; to the left on a TV, unless the whole screen is centred, as Who's watching is.
+    val middle = centred || !metrics.tv
+    val align = if (middle) TextAlign.Center else TextAlign.Start
     Column(
         modifier.fillMaxWidth(),
-        horizontalAlignment = if (metrics.tv) Alignment.Start else Alignment.CenterHorizontally,
+        horizontalAlignment = if (middle) Alignment.CenterHorizontally else Alignment.Start,
         verticalArrangement = Arrangement.spacedBy(metrics.u(8)),
     ) {
-        Text(
-            title, color = scheme.onBackground, textAlign = align,
-            style = if (display) MaterialTheme.typography.display else MaterialTheme.typography.title,
-            modifier = Modifier.semantics { heading() },
-        )
+        if (title.isNotEmpty()) {
+            Text(
+                title, color = scheme.onBackground, textAlign = align,
+                style = if (display) MaterialTheme.typography.display else MaterialTheme.typography.title,
+                modifier = Modifier.semantics { heading() },
+            )
+        }
         if (detail.isNotEmpty()) Text(detail, color = scheme.onSurfaceVariant, style = MaterialTheme.typography.body, textAlign = align)
     }
 }
 
-// Above a group of things, such as the servers found.
+// Above a group of things, such as the servers found: small capitals in `textSecondary`, as Apple's apps head a list.
 @Composable
 fun SectionLabel(text: String, modifier: Modifier = Modifier, searching: Boolean = false) {
     val metrics = LocalMetrics.current
     Row(modifier.fillMaxWidth().semantics(mergeDescendants = true) { heading() }, verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(metrics.u(8))) {
-        Text(text, color = MaterialTheme.colorScheme.onBackground, style = MaterialTheme.typography.section)
+        Text(
+            text.uppercase(), color = MaterialTheme.colorScheme.onSurfaceVariant,
+            style = MaterialTheme.typography.caption.copy(fontWeight = FontWeight.SemiBold, letterSpacing = with(LocalDensity.current) { metrics.u(0.6f).toSp() }),
+        )
         if (searching) PulsingDot()
     }
 }
@@ -185,7 +220,7 @@ private fun PulsingDot() {
     }
     Box(
         Modifier
-            .size(metrics.u(8))
+            .size(metrics.u(7))
             .graphicsLayer { alpha = pulse?.value ?: 1f }
             .clip(CircleShape)
             .background(MaterialTheme.colorScheme.primary),
@@ -194,15 +229,17 @@ private fun PulsingDot() {
 
 private const val PULSE_MS = 900
 
-// docs/APP-DESIGN.md, "Server card": its mark, name and address, and a chevron that turns into a
-// spinner while connecting. The one used last says so.
+// docs/APP-DESIGN.md, "Server card", as Apple's apps draw it. A saved server shows its own logo and name over
+// its address; one only found shows the plain server icon and its address over "Found on your network", as a
+// server says nothing about itself until it's added. A chevron turns into a spinner while connecting.
 @Composable
 fun ServerCard(
     name: String,
-    url: String,
+    detail: String,
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
-    logoUrl: String = "",
+    saved: Boolean = true,
+    logo: Any? = null,
     lastUsed: Boolean = false,
     connecting: Boolean = false,
     requestFocus: Boolean = false,
@@ -211,9 +248,11 @@ fun ServerCard(
     val scheme = MaterialTheme.colorScheme
     val metrics = LocalMetrics.current
     val words = LocalWords.current
-    val spoken = listOfNotNull(name, url, if (lastUsed) words["lastUsed"] else null).joinToString(", ")
+    val hint = LocalExtraColours.current.hint
+    val mark = metrics.u(if (metrics.tv) 56 else 40)
+    val spoken = listOfNotNull(name, detail, if (lastUsed) words["lastUsed"] else null).joinToString(", ")
     Pressable(
-        onClick, modifier.fillMaxWidth(), shape = LocalMetrics.current.corner(14), fill = scheme.surfaceVariant, label = spoken,
+        onClick, modifier.fillMaxWidth(), shape = metrics.corner(14), fill = scheme.surfaceVariant, label = spoken,
         state = if (connecting) words["connecting"] else null, requestFocus = requestFocus, focusKey = focusKey, pressScale = CARD_PRESS,
     ) {
         Row(
@@ -221,33 +260,46 @@ fun ServerCard(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(metrics.u(12)),
         ) {
-            ServerMark(metrics.u(40), logoUrl)
+            if (saved) {
+                ServerMark(mark, logo)
+            } else {
+                Box(Modifier.size(mark).clip(markShape(mark)).background(scheme.outline), contentAlignment = Alignment.Center) {
+                    Icon(Symbols.Server, contentDescription = null, tint = scheme.onSurfaceVariant, modifier = Modifier.size(mark * 0.6f))
+                }
+            }
             Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(metrics.u(2))) {
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(metrics.u(8))) {
-                    Text(name, color = scheme.onSurface, style = MaterialTheme.typography.label.copy(fontWeight = androidx.compose.ui.text.font.FontWeight.SemiBold), maxLines = 1, modifier = Modifier.weight(1f, fill = false))
+                    Text(
+                        name, color = scheme.onSurface, style = MaterialTheme.typography.label.copy(fontWeight = FontWeight.SemiBold),
+                        maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false),
+                    )
                     if (lastUsed) Tag(words["lastUsed"].orEmpty())
                 }
-                Text(url, color = scheme.onSurfaceVariant, style = MaterialTheme.typography.secondary, maxLines = 1)
+                Text(detail, color = scheme.onSurfaceVariant, style = MaterialTheme.typography.secondary, maxLines = 1, overflow = TextOverflow.Ellipsis)
             }
-            if (connecting) Spinner(LocalExtraColours.current.hint, metrics.u(20))
-            else Icon(Symbols.Next, contentDescription = null, tint = LocalExtraColours.current.hint, modifier = Modifier.size(metrics.u(24)))
+            if (connecting) Spinner(hint, metrics.u(if (metrics.tv) 30 else 20))
+            else Icon(Symbols.Next, contentDescription = null, tint = hint, modifier = Modifier.size(metrics.u(if (metrics.tv) 44 else 24)))
         }
     }
 }
 
 private const val CARD_PRESS = 0.98f
 
-// A small panel pill: which server a code goes to.
+// Which server a code or a sign-in goes to: its mark and name in a quiet pill. Large enough to read from
+// across the room on a TV: a 40 logo and the Section size.
 @Composable
-fun ServerPill(name: String, logoUrl: String, modifier: Modifier = Modifier) {
+fun ServerPill(name: String, logo: Any?, modifier: Modifier = Modifier) {
     val metrics = LocalMetrics.current
     Row(
-        modifier.clip(Radius.FULL).background(MaterialTheme.colorScheme.surface).padding(start = metrics.u(6), end = metrics.u(14), top = metrics.u(6), bottom = metrics.u(6)),
+        modifier.clip(Radius.FULL).background(MaterialTheme.colorScheme.surface).padding(start = metrics.u(4), end = metrics.u(12), top = metrics.u(4), bottom = metrics.u(4)),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(metrics.u(8)),
     ) {
-        ServerMark(metrics.u(24), logoUrl)
-        Text(name, color = MaterialTheme.colorScheme.onSurface, style = MaterialTheme.typography.label, maxLines = 1)
+        ServerMark(metrics.u(if (metrics.tv) 40 else 24), logo)
+        Text(
+            name, color = MaterialTheme.colorScheme.onSurface, maxLines = 1,
+            style = if (metrics.tv) MaterialTheme.typography.section.copy(fontWeight = FontWeight.Normal) else MaterialTheme.typography.label,
+        )
     }
 }
 
@@ -293,17 +345,15 @@ fun CodeBoxes(digits: String, checking: Boolean, wrongCount: Int, modifier: Modi
     ) {
         for (place in 0 until CODE_LENGTH) {
             val next = place == digits.length && !checking
-            val edge = when {
-                checking || next -> scheme.primary
-                else -> androidx.compose.ui.graphics.Color.Transparent
-            }
+            // Each box has a hairline; the next to fill has the accent, 2 wide, and while checking they all do.
+            val edge = if (checking || next) scheme.primary else scheme.outline
             Box(
                 Modifier
                     .width(metrics.u(if (metrics.tv) 88 else 48))
                     .height(metrics.u(if (metrics.tv) 100 else 56))
                     .clip(LocalMetrics.current.corner(10))
                     .background(scheme.surfaceVariant)
-                    .border(outline, edge, LocalMetrics.current.corner(10)),
+                    .border(if (next) outline else 1.dp, edge, LocalMetrics.current.corner(10)),
                 contentAlignment = Alignment.Center,
             ) {
                 val digit = digits.getOrNull(place)
@@ -372,7 +422,7 @@ private fun PadKey(key: Int, keys: List<FocusRequester>, requestFocus: Boolean, 
             Modifier.fillMaxWidth().height(metrics.u(if (metrics.tv) 96 else 64)).background(if (lit) scheme.onBackground else scheme.surfaceVariant),
             contentAlignment = Alignment.Center,
         ) {
-            if (delete) Icon(Symbols.DeleteDigit, contentDescription = null, tint = ink, modifier = Modifier.size(metrics.u(26)))
+            if (delete) Icon(Symbols.DeleteDigit, contentDescription = null, tint = if (lit) ink else scheme.onSurfaceVariant, modifier = Modifier.size(metrics.u(if (metrics.tv) 52 else 26)))
             else Text(PAD_KEYS[key], color = ink, style = MaterialTheme.typography.headline)
         }
     }
@@ -405,10 +455,11 @@ fun QrCard(text: String, caption: String, modifier: Modifier = Modifier, size: I
 // The legal note at the bottom of the connect screens.
 @Composable
 fun LegalNote(text: String, modifier: Modifier = Modifier) {
-    val tv = LocalMetrics.current.tv
+    val metrics = LocalMetrics.current
     Text(
-        text, color = LocalExtraColours.current.hint, style = MaterialTheme.typography.caption,
-        textAlign = if (tv) TextAlign.Start else TextAlign.Center, modifier = modifier.fillMaxWidth().widthIn(max = COLUMN_MOST),
+        text, color = LocalExtraColours.current.hint, style = MaterialTheme.typography.caption.copy(fontWeight = FontWeight.Normal),
+        textAlign = if (metrics.tv) TextAlign.Start else TextAlign.Center,
+        modifier = modifier.fillMaxWidth().then(if (metrics.tv) Modifier else Modifier.widthIn(max = COLUMN_MOST)).padding(top = metrics.u(8)),
     )
 }
 

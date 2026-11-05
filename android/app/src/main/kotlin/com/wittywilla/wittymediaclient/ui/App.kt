@@ -35,6 +35,7 @@ import androidx.core.graphics.toColorInt
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LifecycleEventEffect
 import com.wittywilla.wittymediaclient.WittyApp
+import com.wittywilla.wittymediaclient.data.LogoCache
 import com.wittywilla.wittymediaclient.data.SavedServer
 import com.wittywilla.wittymediaclient.diag.ClientLog
 import com.wittywilla.wittymediaclient.net.Api
@@ -152,6 +153,13 @@ class Nav(val app: WittyApp, private val s: Map<String, String>) {
     private fun showBrand(base: String, status: ServerStatus) {
         brandName = status.brandName
         brandLogo = brandLogoUrl(base, status.brandLogo)
+    }
+
+    // A server whose identity has been checked: keep its name and logo with it, the picture on the device.
+    private fun keepBrand(opened: SavedServer, status: ServerStatus): SavedServer {
+        val named = opened.copy(name = status.brandName.ifEmpty { opened.name.ifEmpty { "WittyMediaServer" } }, brandLogo = status.brandLogo)
+        if (status.brandLogo.isNotEmpty()) app.scope.launch { LogoCache.keep(app, named.url, status.brandLogo) }
+        return named
     }
 
     private fun forgetBrand() {
@@ -280,6 +288,10 @@ class Nav(val app: WittyApp, private val s: Map<String, String>) {
         val status = app.api.status()
         themeId = status.theme
         showBrand(opening.url, status)
+        keepBrand(opening, status).let {
+            server = it
+            app.store.remember(it)
+        }
         me = status.user
         reset(if (status.user != null) Route.Home else Route.SignIn())
         null
@@ -323,6 +335,7 @@ class Nav(val app: WittyApp, private val s: Map<String, String>) {
                     val status = app.api.status()
                     themeId = status.theme
                     showBrand(checked.url, status)
+                    server = keepBrand(checked, status)
                     reset(Route.SignIn())
                 } catch (_: Exception) {
                     reset(Route.Connect(s["errLost"].orEmpty()))
@@ -349,7 +362,7 @@ class Nav(val app: WittyApp, private val s: Map<String, String>) {
     // decides what comes next. Answers words to show if that's nowhere.
     suspend fun arrive(url: String, status: ServerStatus): String? {
         val proof = identify(url, app.store.recent)
-        val checked = proof.savedAs(url, status.brandName.ifEmpty { status.name })
+        val checked = proof.savedAs(url, status.brandName.ifEmpty { status.name }).copy(brandLogo = status.brandLogo)
         val sameServerAsToken = app.store.server == url || app.store.find(app.store.server)?.publicKey == proof.publicKey
         val step = Identity.nextStep(proof.state, sameServerAsToken && tokenFits(proof))
         if (step != NextStep.Refuse && step != NextStep.Lost) {
@@ -360,8 +373,8 @@ class Nav(val app: WittyApp, private val s: Map<String, String>) {
             NextStep.Warn -> { push(Route.Mismatch(checked)); null }
             NextStep.Refuse -> s["identityBad"].orEmpty()
             NextStep.Lost -> s["errUnreachable"].orEmpty()
-            NextStep.AskCode -> { push(Route.Code(checked)); null }
-            NextStep.SignIn -> { signInTo(checked); null }
+            NextStep.AskCode -> { push(Route.Code(keepBrand(checked, status))); null }
+            NextStep.SignIn -> { signInTo(keepBrand(checked, status)); null }
             NextStep.Open -> openWithToken(checked)
         }
     }

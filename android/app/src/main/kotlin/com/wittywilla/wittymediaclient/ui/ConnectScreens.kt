@@ -2,6 +2,12 @@ package com.wittywilla.wittymediaclient.ui
 
 import android.view.KeyEvent
 import androidx.compose.foundation.background
+import androidx.compose.ui.text.withStyle
+import androidx.compose.ui.text.buildAnnotatedString
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.draw.clip
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -54,10 +60,12 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.contentType
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
+import com.wittywilla.wittymediaclient.data.LogoCache
 import com.wittywilla.wittymediaclient.data.SavedServer
 import com.wittywilla.wittymediaclient.net.Address
 import com.wittywilla.wittymediaclient.net.ApiError
@@ -69,6 +77,7 @@ import com.wittywilla.wittymediaclient.net.ServerFinder
 import com.wittywilla.wittymediaclient.net.probeServer
 import com.wittywilla.wittymediaclient.net.problemWords
 import kotlinx.coroutines.CancellationException
+import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import java.io.IOException
@@ -174,9 +183,10 @@ fun ConnectScreen(nav: Nav, s: Map<String, String>, message: String) {
 
     val tv = LocalMetrics.current.tv
     val last = recent.firstOrNull()
-    fun isLast(server: FoundServer) = last != null && (last.url == server.url || (last.serverId.isNotEmpty() && last.serverId == server.id))
-    val others = recent.filter { r -> found.none { it.url == r.url || it.id == r.serverId } }
-    val nothing = found.isEmpty() && others.isEmpty()
+    // A found server that's also saved shows only under Used before, with its own name and logo.
+    val foundOnly = found.filter { f -> recent.none { it.url == f.url || (it.serverId.isNotEmpty() && it.serverId == f.id) } }
+    val nothing = found.isEmpty() && recent.isEmpty()
+    val metrics = LocalMetrics.current
     // The first server found takes focus, until the person has moved themselves.
     val noticeMoves = Modifier.onPreviewKeyEvent {
         if (it.type == KeyEventType.KeyDown && it.key.nativeKeyCode in ARROWS) moved = true
@@ -184,52 +194,58 @@ fun ConnectScreen(nav: Nav, s: Map<String, String>, message: String) {
     }
     SignInLayout(
         words = {
-            Lockup(nav.brandName, nav.brandLogo)
+            Lockup("", null, app = true)
             SignInHeading(s["findTitle"].orEmpty(), detail = s["findSubtitle"].orEmpty(), display = true)
-            if (tv) LegalNote(s["legalConnect"].orEmpty())
+            Problem(problem, Modifier.fillMaxWidth())
         },
         actions = {
-            Column(noticeMoves.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(LocalMetrics.current.u(24))) {
-                Problem(problem)
-                Column(verticalArrangement = Arrangement.spacedBy(LocalMetrics.current.u(if (tv) 16 else 8))) {
-                    SectionLabel(s["foundServers"].orEmpty(), searching = !cantSearch)
-                    found.forEachIndexed { i, server ->
-                        key(server.id) {
+            Column(noticeMoves.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(metrics.u(12))) {
+                SectionLabel(s["foundServers"].orEmpty(), searching = !cantSearch && !searchedLong)
+                if (found.isEmpty()) {
+                    when {
+                        cantSearch -> Note(s["findNotSupported"].orEmpty())
+                        searchedLong -> Note(s["findNone"].orEmpty())
+                        else -> Note(s["findSearching"].orEmpty(), busy = true)
+                    }
+                }
+                // Only where it is: a server says nothing about itself until it's added.
+                foundOnly.forEachIndexed { i, server ->
+                    key(server.id) {
+                        ServerCard(
+                            hostAndPort(server.url), s["foundOnNetwork"].orEmpty(), { connect(server.url) }, saved = false,
+                            connecting = connecting == server.url, requestFocus = i == 0 && !moved, focusKey = "found-${server.id}",
+                        )
+                    }
+                }
+                if (recent.isNotEmpty()) {
+                    SectionLabel(s["recentServers"].orEmpty(), Modifier.padding(top = metrics.u(8)))
+                    recent.forEachIndexed { i, server ->
+                        key(server.url) {
                             ServerCard(
-                                server.name, server.url, { connect(server.url) }, lastUsed = isLast(server), connecting = connecting == server.url,
-                                requestFocus = i == 0 && !moved, focusKey = "found-${server.id}",
+                                server.name.ifEmpty { "WittyMediaServer" }, server.url, { connect(server.url) },
+                                logo = LogoCache.file(context, server.url, server.brandLogo), lastUsed = server.url == last?.url,
+                                connecting = connecting == server.url, requestFocus = foundOnly.isEmpty() && found.isNotEmpty() && i == 0 && !moved,
+                                focusKey = "recent-${server.url}",
                             )
                         }
                     }
-                    if (found.isEmpty()) {
-                        when {
-                            cantSearch -> Note(s["findNotSupported"].orEmpty())
-                            searchedLong -> Note(s["findNone"].orEmpty())
-                            else -> Note(s["findSearching"].orEmpty(), busy = true)
-                        }
-                    }
                 }
-                if (others.isNotEmpty()) {
-                    Column(verticalArrangement = Arrangement.spacedBy(LocalMetrics.current.u(if (tv) 16 else 8))) {
-                        SectionLabel(s["recentServers"].orEmpty())
-                        others.forEachIndexed { i, server ->
-                            key(server.url) {
-                                ServerCard(
-                                    server.name, server.url, { connect(server.url) }, lastUsed = server.url == last?.url, connecting = connecting == server.url,
-                                    requestFocus = found.isEmpty() && i == 0 && !moved, focusKey = "recent-${server.url}",
-                                )
-                            }
-                        }
-                    }
-                }
-                WittyButton(
-                    s["enterAddress"].orEmpty(), { showForm = true; problem = "" }, Modifier.fillMaxWidth(),
-                    kind = if (nothing) ButtonKind.Primary else ButtonKind.Secondary, tall = true, requestFocus = nothing, focusKey = "enter-address",
-                )
-                if (!tv) LegalNote(s["legalConnect"].orEmpty())
             }
+            WittyButton(
+                s["enterAddress"].orEmpty(), { showForm = true; problem = "" }, Modifier.fillMaxWidth().padding(top = metrics.u(8)),
+                kind = if (nothing) ButtonKind.Primary else ButtonKind.Secondary, icon = Symbols.Address, tall = true,
+                requestFocus = found.isEmpty(), focusKey = "enter-address",
+            )
+            LegalNote(s["legalConnect"].orEmpty())
         },
     )
+}
+
+// Where a found server is: its host and port, which is all it's called until it's added.
+fun hostAndPort(url: String): String {
+    val parsed = url.toHttpUrlOrNull() ?: return url
+    val usual = (parsed.scheme == "http" && parsed.port == 80) || (parsed.scheme == "https" && parsed.port == 443)
+    return if (usual) parsed.host else "${parsed.host}:${parsed.port}"
 }
 
 // 2. Enter your server's address.
@@ -245,14 +261,12 @@ private fun AddressScreen(
     onBack: () -> Unit,
 ) {
     val field = remember { FocusRequester() }
-    val tv = LocalMetrics.current.tv
     LaunchedEffect(Unit) { runCatching { field.requestFocus() } }
     SignInLayout(
         onBack,
         words = {
-            Lockup(nav.brandName, nav.brandLogo)
+            Lockup("", null, app = true)
             SignInHeading(s["addressTitle"].orEmpty(), detail = s["addressHint"].orEmpty())
-            if (tv) LegalNote(s["legalConnect"].orEmpty())
         },
         actions = {
             WittyField(
@@ -261,7 +275,7 @@ private fun AddressScreen(
             )
             Problem(problem, Modifier.fillMaxWidth())
             WittyButton(s["connect"].orEmpty(), onSubmit, Modifier.fillMaxWidth(), kind = ButtonKind.Primary, busy = busy, tall = true)
-            if (!tv) LegalNote(s["legalConnect"].orEmpty())
+            LegalNote(s["legalConnect"].orEmpty())
         },
     )
 }
@@ -336,22 +350,29 @@ fun CodeScreen(nav: Nav, s: Map<String, String>, server: SavedServer) {
         SignInLayout(
             nav::pop,
             words = {
-                Lockup(nav.brandName, nav.brandLogo)
-                SignInHeading(s["codeTitle"].orEmpty())
+                SignInHeading(s["codeTitle"].orEmpty(), detail = s["codeHint"].orEmpty())
                 // Several servers can look alike in the list: this says which one the code goes to.
-                ServerPill(server.name, nav.brandLogo, if (metrics.tv) Modifier else Modifier.align(Alignment.CenterHorizontally))
-                Text(s["codeHint"].orEmpty(), color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.body, textAlign = if (metrics.tv) TextAlign.Start else TextAlign.Center)
+                ServerPill(server.name.ifEmpty { "WittyMediaServer" }, nav.brandLogo, if (metrics.tv) Modifier else Modifier.align(Alignment.CenterHorizontally))
                 CodeBoxes(entry.digits, entry.busy, wrong, if (metrics.tv) Modifier else Modifier.align(Alignment.CenterHorizontally))
-                Problem(problem, Modifier.fillMaxWidth())
-                if (metrics.tv) Fingerprint(s, server.fingerprint)
+                // Room is kept for the message, or the keys would move under a finger as it comes and goes.
+                Box(Modifier.heightIn(min = metrics.u(24))) {
+                    if (entry.busy) {
+                        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(metrics.u(8))) {
+                            Spinner(MaterialTheme.colorScheme.onSurfaceVariant, metrics.u(if (metrics.tv) 30 else 16))
+                            Text(s["connecting"].orEmpty(), color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.secondary)
+                        }
+                    } else {
+                        Problem(problem, Modifier.fillMaxWidth())
+                    }
+                }
             },
             actions = {
                 NumberPad(::press, ::erase, Modifier.fillMaxWidth(), firstFocus = true)
-                QuietLinks {
+                QuietLinks(stacked = true) {
                     WittyButton(s["usePassword"].orEmpty(), { nav.signInTo(server, SignInWay.Password) }, kind = ButtonKind.Quiet)
                     WittyButton(s["showCodeInstead"].orEmpty(), { nav.signInTo(server, SignInWay.ShownCode) }, kind = ButtonKind.Quiet)
                 }
-                if (!metrics.tv) Fingerprint(s, server.fingerprint)
+                Fingerprint(s, server.fingerprint)
             },
         )
     }
@@ -360,36 +381,46 @@ fun CodeScreen(nav: Nav, s: Map<String, String>, server: SavedServer) {
 @Composable
 private fun Fingerprint(s: Map<String, String>, fingerprint: String) {
     if (fingerprint.isEmpty()) return
+    val caption = MaterialTheme.typography.caption.copy(fontWeight = FontWeight.Normal)
     Text(
-        "${s["fingerprintLabel"]}: $fingerprint", color = LocalExtraColours.current.hint, style = MaterialTheme.typography.caption,
+        buildAnnotatedString {
+            append("${s["fingerprintLabel"]}: ")
+            withStyle(SpanStyle(fontFamily = FontFamily.Monospace)) { append(fingerprint) }
+        },
+        color = LocalExtraColours.current.hint, style = caption,
         textAlign = if (LocalMetrics.current.tv) TextAlign.Start else TextAlign.Center, modifier = Modifier.fillMaxWidth(),
     )
 }
 
-// Quiet buttons on one line where they fit, centred in a column, to the left on a TV.
+// Quiet buttons side by side where they fit and wrapping where they don't, centred in a column, to the left on
+// a TV. `stacked`: further apart, one under the other when they don't both fit, as the code screen's are.
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
-private fun QuietLinks(content: @Composable () -> Unit) {
-    val tv = LocalMetrics.current.tv
-    // Far enough apart for a focused one's ring to clear the next.
+private fun QuietLinks(stacked: Boolean = false, content: @Composable () -> Unit) {
+    val metrics = LocalMetrics.current
     FlowRow(
         Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.spacedBy(LocalMetrics.current.u(if (tv) 24 else 8), if (tv) Alignment.Start else Alignment.CenterHorizontally),
-        verticalArrangement = Arrangement.spacedBy(LocalMetrics.current.u(8)),
+        horizontalArrangement = Arrangement.spacedBy(metrics.u(if (stacked) 24 else 8), if (metrics.tv) Alignment.Start else Alignment.CenterHorizontally),
+        verticalArrangement = Arrangement.spacedBy(metrics.u(if (stacked) 0 else 8)),
     ) { content() }
 }
 
-// The server's name with Change server beside it, at the bottom of the screens that start signing in.
+// This server as itself at the foot of the screens that start signing in: its logo and name (larger on a TV,
+// to read from the sofa), with Change server beside them.
 @Composable
-private fun ServerFooter(nav: Nav, s: Map<String, String>) {
-    val tv = LocalMetrics.current.tv
-    val name = nav.server?.name ?: nav.brandName
+private fun ServerFooter(nav: Nav, s: Map<String, String>, centred: Boolean = !LocalMetrics.current.tv) {
+    val metrics = LocalMetrics.current
+    val name = nav.brandName.ifEmpty { nav.server?.name.orEmpty() }.ifEmpty { "WittyMediaServer" }
     Row(
         Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.spacedBy(LocalMetrics.current.u(if (tv) 16 else 8), if (tv) Alignment.Start else Alignment.CenterHorizontally),
+        horizontalArrangement = Arrangement.spacedBy(metrics.u(4), if (centred) Alignment.CenterHorizontally else Alignment.Start),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        if (!name.isNullOrEmpty()) Text(name, color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.secondary, maxLines = 1)
+        ServerMark(metrics.u(if (metrics.tv) 32 else 20), nav.brandLogo, Modifier.padding(end = metrics.u(4)))
+        Text(
+            name, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1,
+            style = if (metrics.tv) MaterialTheme.typography.label.copy(fontWeight = FontWeight.Normal) else MaterialTheme.typography.secondary,
+        )
         WittyButton(s["changeServer"].orEmpty(), nav::changeServer, kind = ButtonKind.Quiet, focusKey = "change-server")
     }
 }
@@ -405,13 +436,23 @@ private fun PairScreen(nav: Nav, s: Map<String, String>, onBack: () -> Unit, onU
     var scan by remember { mutableStateOf("") }
     var problem by remember { mutableStateOf("") }
     var waiting by remember { mutableStateOf(false) }
+    // The server has given this device a lot of codes lately: a password is the way in for now.
+    var limited by remember { mutableStateOf(false) }
 
     LaunchedEffect(round) {
         code = ""
         problem = ""
         waiting = false
+        limited = false
         try {
-            val start = nav.app.api.pairStart(nav.app.deviceName, nav.app.platformName)
+            val start = try {
+                nav.app.api.pairStart(nav.app.deviceName, nav.app.platformName)
+            } catch (e: ApiError) {
+                if (e.status != 429) throw e
+                limited = true
+                problem = s["pairBusy"].orEmpty()
+                return@LaunchedEffect
+            }
             code = start.code
             approveAt = nav.app.api.mediaUrl(start.approvePath)
             scan = start.approveUrl.ifEmpty { start.approvePath }.let { nav.app.api.mediaUrl(it) }
@@ -449,41 +490,50 @@ private fun PairScreen(nav: Nav, s: Map<String, String>, onBack: () -> Unit, onU
     }
 
     val ended = code.isEmpty() && problem.isNotEmpty()
-    val spacing = with(LocalDensity.current) { metrics.u(8).toSp() }
+    val spacing = with(LocalDensity.current) { metrics.u(if (metrics.tv) 16 else 8).toSp() }
+    val codeSize = with(LocalDensity.current) { metrics.u(if (metrics.tv) 72 else 40).toSp() }
     SignInLayout(
         onBack,
         words = {
             Lockup(nav.brandName, nav.brandLogo)
             SignInHeading(s["pairTitle"].orEmpty(), detail = if (code.isNotEmpty()) s["pairHint"].orEmpty() else "")
+            val place = if (metrics.tv) Modifier else Modifier.align(Alignment.CenterHorizontally)
             if (code.isNotEmpty()) {
-                SelectionContainer(if (metrics.tv) Modifier else Modifier.align(Alignment.CenterHorizontally)) {
-                    Text(approveAt, color = LocalExtraColours.current.accentText, style = MaterialTheme.typography.label)
+                SelectionContainer(place) {
+                    Text(approveAt, color = LocalExtraColours.current.accentText, style = MaterialTheme.typography.label, textAlign = if (metrics.tv) TextAlign.Start else TextAlign.Center)
                 }
-                PanelCard {
-                    Text(
-                        code, color = MaterialTheme.colorScheme.onSurface, textAlign = TextAlign.Center,
-                        style = MaterialTheme.typography.display.copy(fontFamily = FontFamily.Monospace, letterSpacing = spacing),
-                        modifier = Modifier.fillMaxWidth().semantics { contentDescription = code.toList().joinToString(" ") },
-                    )
-                }
-                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(metrics.u(10)), modifier = if (metrics.tv) Modifier else Modifier.align(Alignment.CenterHorizontally)) {
-                    Spinner(MaterialTheme.colorScheme.onSurfaceVariant, metrics.u(16))
+                Text(
+                    code, color = MaterialTheme.colorScheme.onSurface,
+                    style = TextStyle(fontFamily = FontFamily.Monospace, fontWeight = FontWeight.Bold, fontSize = codeSize, letterSpacing = spacing),
+                    modifier = place
+                        .clip(metrics.corner(14))
+                        .background(MaterialTheme.colorScheme.surface)
+                        .padding(horizontal = metrics.u(24), vertical = metrics.u(12))
+                        .semantics { contentDescription = code.toList().joinToString(" ") },
+                )
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(metrics.u(8)), modifier = place) {
+                    Spinner(MaterialTheme.colorScheme.onSurfaceVariant, metrics.u(if (metrics.tv) 30 else 16))
                     Text(if (waiting) s["errLost"].orEmpty() else s["pairWaiting"].orEmpty(), color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.secondary)
                 }
             } else if (!ended) {
-                Spinner(MaterialTheme.colorScheme.onSurfaceVariant, metrics.u(24), if (metrics.tv) Modifier else Modifier.align(Alignment.CenterHorizontally))
+                Box(place.heightIn(min = metrics.u(80)), contentAlignment = Alignment.Center) {
+                    Spinner(MaterialTheme.colorScheme.onSurfaceVariant, metrics.u(if (metrics.tv) 40 else 24))
+                }
             }
             Problem(problem, Modifier.fillMaxWidth())
         },
         actions = {
             if (code.isNotEmpty() && scan.isNotEmpty()) QrCard(scan, s["pairScan"].orEmpty(), if (metrics.tv) Modifier else Modifier.align(Alignment.CenterHorizontally))
-            if (ended) WittyButton(s["pairNew"].orEmpty(), { round++ }, Modifier.fillMaxWidth(), kind = ButtonKind.Primary, tall = true, takeFocus = true, focusKey = "pair-new")
+            if (ended) {
+                if (limited) WittyButton(s["usePassword"].orEmpty(), onUsePassword, Modifier.fillMaxWidth(), kind = ButtonKind.Primary, tall = true, takeFocus = true, focusKey = "pair-password")
+                else WittyButton(s["pairNew"].orEmpty(), { round++ }, Modifier.fillMaxWidth(), kind = ButtonKind.Primary, tall = true, takeFocus = true, focusKey = "pair-new")
+            }
             QuietLinks {
                 val server = nav.server
                 if (server != null && server.publicKey.isNotEmpty()) {
-                    WittyButton(s["codeTitle"].orEmpty(), { nav.push(Route.Code(server)) }, kind = ButtonKind.Quiet, requestFocus = !ended, focusKey = "typed-code")
+                    WittyButton(s["codeTitle"].orEmpty(), { nav.push(Route.Code(server)) }, kind = ButtonKind.Quiet, focusKey = "typed-code")
                 }
-                WittyButton(s["usePassword"].orEmpty(), onUsePassword, kind = ButtonKind.Quiet, requestFocus = !ended && server?.publicKey.isNullOrEmpty(), focusKey = "use-password")
+                if (!limited) WittyButton(s["usePassword"].orEmpty(), onUsePassword, kind = ButtonKind.Quiet, requestFocus = code.isNotEmpty(), focusKey = "use-password")
                 WittyButton(s["changeServer"].orEmpty(), nav::changeServer, kind = ButtonKind.Quiet, focusKey = "change-server")
             }
         },
@@ -678,29 +728,35 @@ private fun WhoStep(
             else -> 104
         },
     )
-    val badges = profiles.any(::hasBadge)
     val tiles: @Composable () -> Unit = {
         profiles.forEachIndexed { i, p ->
-            key(p.id) { ProfileTile(p, size, { if (!busy) onPick(p) }, requestFocus = i == 0, focusKey = "profile-${p.id}", badgeRoom = badges) }
+            key(p.id) { ProfileTile(p, size, { if (!busy) onPick(p) }, requestFocus = i == 0, focusKey = "profile-${p.id}") }
         }
     }
+    // Wrapping rather than scrolling, so nothing clips a lifted, ringed avatar.
+    val grid: @Composable () -> Unit = {
+        FlowRow(
+            Modifier.fillMaxWidth().remoteRow(),
+            horizontalArrangement = Arrangement.spacedBy(metrics.u(if (metrics.tv) 48 else 24), Alignment.CenterHorizontally),
+            verticalArrangement = Arrangement.spacedBy(metrics.u(28)),
+            maxItemsInEachRow = if (metrics.tv || metrics.tablet) Int.MAX_VALUE else 2,
+        ) { tiles() }
+    }
     if (metrics.tv) {
+        // Everything centred, as on Apple TV: the lockup, the title, the faces, the other ways in in one row,
+        // then this server.
         val accent = MaterialTheme.colorScheme.primary
         Box(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background).signInGlow(accent), contentAlignment = Alignment.Center) {
             Column(
-                Modifier.padding(horizontal = metrics.gutter, vertical = metrics.edge),
+                Modifier.padding(horizontal = metrics.gutter + metrics.tvSafeSides),
                 horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.spacedBy(metrics.u(32)),
+                verticalArrangement = Arrangement.spacedBy(metrics.u(40)),
             ) {
                 Lockup(nav.brandName, nav.brandLogo)
-                Text(s["whoTitle"].orEmpty(), color = MaterialTheme.colorScheme.onBackground, style = MaterialTheme.typography.display, modifier = Modifier.semantics { heading() })
-                // 24 units of room inside the scroll, so a lifted, grown, ringed avatar is never cut off.
-                Row(
-                    Modifier.horizontalScroll(rememberScrollState()).padding(metrics.u(24)).remoteRow(),
-                    horizontalArrangement = Arrangement.spacedBy(metrics.u(48)),
-                ) { tiles() }
-                Problem(problem)
-                Row(horizontalArrangement = Arrangement.spacedBy(metrics.u(24))) {
+                SignInHeading(s["whoTitle"].orEmpty(), display = true, centred = true)
+                if (problem.isNotEmpty()) Problem(problem, centred = true)
+                grid()
+                Row(Modifier.remoteRow(), horizontalArrangement = Arrangement.spacedBy(metrics.u(24))) {
                     WittyButton(s["otherAccount"].orEmpty(), onOtherAccount, kind = ButtonKind.Quiet, focusKey = "other-account")
                     WittyButton(s["useCode"].orEmpty(), onUseCode, kind = ButtonKind.Quiet, focusKey = "use-code")
                     val server = nav.server
@@ -708,11 +764,7 @@ private fun WhoStep(
                         WittyButton(s["codeTitle"].orEmpty(), { nav.push(Route.Code(server)) }, kind = ButtonKind.Quiet, focusKey = "typed-code")
                     }
                 }
-                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(metrics.u(16))) {
-                    val name = nav.server?.name ?: nav.brandName
-                    if (name.isNotEmpty()) Text(name, color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.secondary, maxLines = 1)
-                    WittyButton(s["changeServer"].orEmpty(), nav::changeServer, kind = ButtonKind.Quiet, focusKey = "change-server")
-                }
+                ServerFooter(nav, s, centred = true)
             }
         }
         return
@@ -721,12 +773,7 @@ private fun WhoStep(
         Lockup(nav.brandName, nav.brandLogo)
         SignInHeading(s["whoTitle"].orEmpty(), display = true)
         Gap(8)
-        FlowRow(
-            Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(metrics.u(24), Alignment.CenterHorizontally),
-            verticalArrangement = Arrangement.spacedBy(metrics.u(28)),
-            maxItemsInEachRow = if (metrics.tablet) Int.MAX_VALUE else 2,
-        ) { tiles() }
+        grid()
         Gap(8)
         Problem(problem, Modifier.fillMaxWidth())
         CodeLinks(nav, s, onUseCode, onOtherAccount)
@@ -756,14 +803,12 @@ private fun PasswordStep(
     val firstLook = LocalFocusMemory.current.last == null
     LaunchedEffect(who.id) { if (firstLook) runCatching { field.requestFocus() } }
     LaunchedEffect(wrongPasswords) { if (wrongPasswords > 0) runCatching { field.requestFocus() } }
+    // One centred column on every device, TVs included: the face with its names centred under it, then the way in.
     SignInLayout(
-        onBack,
+        onBack, centred = true,
         words = {
-            val centre = if (metrics.tv) Modifier else Modifier.align(Alignment.CenterHorizontally)
-            // The face and its names are one group, the names centred under it: in the middle on a phone,
-            // at the start of the words on a TV.
-            FaceWithNames(who, metrics.u(if (metrics.tv) 200 else 120), centre)
-            Text(s["passwordHint"].orEmpty(), color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.body, modifier = centre)
+            FaceWithNames(who, metrics.u(if (metrics.tv) 200 else 120), Modifier.align(Alignment.CenterHorizontally))
+            SignInHeading("", detail = s["passwordHint"].orEmpty(), centred = true)
         },
         actions = {
             WittyField(
@@ -772,7 +817,7 @@ private fun PasswordStep(
             )
             Problem(problem, Modifier.fillMaxWidth())
             WittyButton(s["signIn"].orEmpty(), onSubmit, Modifier.fillMaxWidth(), kind = ButtonKind.Primary, busy = busy, tall = true)
-            ForgotPassword(nav, s, if (metrics.tv) Modifier else Modifier.align(Alignment.CenterHorizontally))
+            ForgotPassword(nav, s, Modifier.align(Alignment.CenterHorizontally))
         },
     )
 }
@@ -780,11 +825,11 @@ private fun PasswordStep(
 // docs/APP-DESIGN.md, Avatar 5: wherever a face shows with its names, they're centred under it.
 @Composable
 fun FaceWithNames(who: Profile, size: androidx.compose.ui.unit.Dp, modifier: Modifier = Modifier) {
+    val metrics = LocalMetrics.current
     val shown = avatarName(who.displayName, who.name)
-    Column(modifier.width(IntrinsicSize.Max).widthIn(min = size), horizontalAlignment = Alignment.CenterHorizontally) {
-        Avatar(shown, size)
-        Spacer(Modifier.height(LocalMetrics.current.u(12)))
-        Text(shown, color = MaterialTheme.colorScheme.onBackground, style = MaterialTheme.typography.headline, textAlign = TextAlign.Center)
+    Column(modifier.width(IntrinsicSize.Max).widthIn(min = size), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(metrics.u(8))) {
+        Avatar(shown, size, Modifier.padding(bottom = metrics.u(if (metrics.tv) 8 else 0)))
+        Text(shown, color = MaterialTheme.colorScheme.onBackground, style = MaterialTheme.typography.headline, textAlign = TextAlign.Center, maxLines = 1)
         if (showsUsername(who.displayName, who.name)) {
             Text("@${who.name}", color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.secondary, textAlign = TextAlign.Center)
         }

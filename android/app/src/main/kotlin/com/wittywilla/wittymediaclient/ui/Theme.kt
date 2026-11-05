@@ -115,12 +115,17 @@ fun Metrics.corner(radius: Int) = RoundedCornerShape(u(radius))
 val PhoneMetrics = Metrics(tv = false, gutter = Space.S4, edge = Space.S2, cardWidth = 124.dp, minTarget = 44.dp)
 val TabletMetrics = PhoneMetrics.copy(gutter = Space.S8, cardWidth = 148.dp, tablet = true)
 
-// A TV may crop its picture's edge, so the margins are wide: Apple TV's safe area, 90 units.
-// Focus is a 4-unit ring 4 units out, and 1.06 larger.
+// A TV may crop its picture's edge, so the margins are wide: 90 units, as Apple TV's. Focus is a 4-unit
+// ring round the thing and 1.05 larger, as Apple TV draws it.
 val TvMetrics = Metrics(
-    tv = true, gutter = 45.dp, edge = 27.dp, cardWidth = 168.dp, minTarget = 24.dp,
-    focusRing = 2.dp, focusScale = 1.06f, unit = 0.5f,
+    tv = true, gutter = 45.dp, edge = 30.dp, cardWidth = 168.dp, minTarget = 24.dp,
+    focusRing = 2.dp, focusScale = 1.05f, unit = 0.5f,
 )
+
+// Apple TV keeps everything inside the picture's safe area, 80 units in from the sides and 60 from the top
+// and bottom, and a sign-in screen's margins sit inside that: so its words start 170 units from the edge.
+val Metrics.tvSafeSides get() = u(80)
+val Metrics.tvSafeEnds get() = u(60)
 
 val LocalMetrics = compositionLocalOf { PhoneMetrics }
 
@@ -137,14 +142,19 @@ val LocalReduceMotion = compositionLocalOf { false }
 private class TypeSizes(
     val display: Float, val title: Float, val headline: Float, val section: Float,
     val body: Float, val label: Float, val secondary: Float, val caption: Float, val scale: Float,
+    val lineHeight: Float,
 )
 
-private val PhoneType = TypeSizes(30f, 24f, 20f, 17f, 15f, 15f, 13f, 12f, scale = 1f)
-private val TvType = TypeSizes(48f, 38f, 30f, 26f, 24f, 24f, 20f, 18f, scale = 0.5f)
+private val PhoneType = TypeSizes(30f, 24f, 20f, 17f, 15f, 15f, 13f, 12f, scale = 1f, lineHeight = 1.45f)
+
+// A TV uses the sizes Apple TV draws with, so the two TVs look the same (docs/APP-DESIGN.md, On a TV): tvOS's own
+// text styles, in TV units. Display is tvOS's Title 1 (76), a page's heading Title 2 (57), the profile name Title 3
+// (48), above a row Headline (38), words and buttons 29, captions 25. Lines as tall as San Francisco's.
+private val TvType = TypeSizes(76f, 57f, 48f, 38f, 29f, 29f, 29f, 25f, scale = 0.5f, lineHeight = 1.2f)
 
 private fun typeScale(t: TypeSizes, sans: TextStyle = TextStyle.Default): Typography {
     fun sp(size: Float) = (size * t.scale).sp
-    fun lines(size: Float) = (size * t.scale * LINE_HEIGHT).sp
+    fun lines(size: Float) = (size * t.scale * t.lineHeight).sp
     return Typography(
         displayLarge = sans.copy(fontSize = sp(t.display * 1.6f), fontWeight = FontWeight.Bold),
         displayMedium = sans.copy(fontSize = sp(t.display * 1.27f), fontWeight = FontWeight.Bold),
@@ -152,19 +162,18 @@ private fun typeScale(t: TypeSizes, sans: TextStyle = TextStyle.Default): Typogr
         headlineLarge = sans.copy(fontSize = sp(t.display), fontWeight = FontWeight.SemiBold),
         headlineMedium = sans.copy(fontSize = sp(t.title), lineHeight = lines(t.title), fontWeight = FontWeight.SemiBold),
         headlineSmall = sans.copy(fontSize = sp(t.headline), lineHeight = lines(t.headline), fontWeight = FontWeight.SemiBold),
-        titleLarge = sans.copy(fontSize = sp(t.headline), fontWeight = FontWeight.SemiBold),
-        titleMedium = sans.copy(fontSize = sp(t.section), fontWeight = FontWeight.SemiBold),
-        titleSmall = sans.copy(fontSize = sp(t.label - 1), fontWeight = FontWeight.Medium),
+        titleLarge = sans.copy(fontSize = sp(t.headline), lineHeight = lines(t.headline), fontWeight = FontWeight.SemiBold),
+        titleMedium = sans.copy(fontSize = sp(t.section), lineHeight = lines(t.section), fontWeight = FontWeight.SemiBold),
+        titleSmall = sans.copy(fontSize = sp(t.label - 1), lineHeight = lines(t.label - 1), fontWeight = FontWeight.Medium),
         bodyLarge = sans.copy(fontSize = sp(t.body), lineHeight = lines(t.body)),
         bodyMedium = sans.copy(fontSize = sp(t.secondary), lineHeight = lines(t.secondary)),
         bodySmall = sans.copy(fontSize = sp(t.caption), lineHeight = lines(t.caption)),
-        labelLarge = sans.copy(fontSize = sp(t.label), fontWeight = FontWeight.Medium),
-        labelMedium = sans.copy(fontSize = sp(t.secondary), fontWeight = FontWeight.Medium),
+        labelLarge = sans.copy(fontSize = sp(t.label), lineHeight = lines(t.label), fontWeight = FontWeight.Medium),
+        labelMedium = sans.copy(fontSize = sp(t.secondary), lineHeight = lines(t.secondary), fontWeight = FontWeight.Medium),
         labelSmall = sans.copy(fontSize = sp(t.caption), lineHeight = lines(t.caption), fontWeight = FontWeight.Medium),
     )
 }
 
-private const val LINE_HEIGHT = 1.45f
 
 // The page's names for the type, so screens say which one they mean.
 val Typography.display get() = displaySmall

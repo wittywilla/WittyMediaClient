@@ -24,6 +24,9 @@ data class SavedServer(
     val serverId: String = "",
     val publicKey: String = "",
     val fingerprint: String = "",
+    // The version of the server's own logo when it was last opened, or empty for the app's mark. The picture is
+    // kept on the device by LogoCache, so the list of servers shows it without asking any of them.
+    val brandLogo: String = "",
 )
 
 // The sign-in, and the key of the server it belongs to. They're sealed together, so changing the
