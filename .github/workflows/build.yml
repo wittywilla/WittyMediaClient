@@ -1,0 +1,328 @@
+# Builds every WittyMediaClient app on every push and pull request, and keeps what it built for a week.
+#
+# Nothing here is signed with a real certificate, notarized, or published. No secrets are read.
+#
+# The iOS and tvOS results are "AltStore-style" IPAs. An .ipa is only a zip whose top folder is
+# Payload/<App>.app. AltStore, SideStore and Sideloadly take an unsigned IPA like that and sign it
+# themselves on install, with the user's own Apple ID, so no provisioning profile, _CodeSignature or
+# SwiftSupport folder needs to be in it. The archive is made with code signing switched off and the
+# Payload is zipped by hand: xcodebuild -exportArchive isn't used, because it insists on signing.
+#
+# What the release workflow signs and publishes is the owner's job: docs/OWNER-STEPS.md.
+name: build
+
+on:
+  push:
+    branches: [v0.8.0-alpha, master, main]
+  pull_request:
+  workflow_dispatch:
+
+permissions: {}
+
+# A newer commit on a pull request replaces that pull request's older runs, queued or running. Every
+# other run (a push to a branch, one started by hand) has a group of its own and always finishes.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event_name == 'pull_request' && format('pr-{0}', github.event.pull_request.number) || github.run_id }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+env:
+  NODE_VERSION: 22
+  JAVA_VERSION: 17
+  GRADLE_VERSION: 9.8.2
+  XCODEGEN_VERSION: 2.46.0
+  SWIFT_VERSION: '6.1'
+
+jobs:
+  # The shared assets (connect screen, wording) and the desktop unit tests. sync-shared.mjs only writes
+  # into desktop/connect, which each package script regenerates itself, so nothing is uploaded from here.
+  shared:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+      - name: Install
+        working-directory: desktop
+        run: npm ci --ignore-scripts --no-audit --no-fund
+      - name: Sync the shared assets
+        working-directory: desktop
+        run: npm run sync
+      - name: Unit tests
+        working-directory: desktop
+        run: npm test
+
+  # Electron, packaged by electron-builder into installers for each system. Unsigned everywhere: on macOS
+  # package.json sets identity "-", which is ad-hoc signing and needs no certificate; publish is null.
+  desktop:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { os: ubuntu-latest, script: 'package:linux', artifact: linux }
+          - { os: windows-latest, script: 'package:win', artifact: windows }
+          - { os: macos-latest, script: 'package:mac', artifact: macos }
+    runs-on: ${{ matrix.os }}
+    permissions:
+      contents: read
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+      - name: The tools that make the .rpm and .pacman
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y rpm libarchive-tools
+      - name: Install
+        working-directory: desktop
+        run: npm ci --ignore-scripts --no-audit --no-fund
+      - name: Sync the shared assets
+        working-directory: desktop
+        run: npm run sync
+      - name: Package (unsigned)
+        working-directory: desktop
+        env:
+          # No certificate lookup on macOS or Windows; CSC_LINK and CSC_KEY_PASSWORD are deliberately unset.
+          CSC_IDENTITY_AUTO_DISCOVERY: 'false'
+        run: npm run ${{ matrix.script }}
+      - name: What was built
+        run: ls -la desktop/out
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: client-desktop-${{ matrix.artifact }}
+          path: |
+            desktop/out/*.exe
+            desktop/out/*.msi
+            desktop/out/*.AppImage
+            desktop/out/*.deb
+            desktop/out/*.rpm
+            desktop/out/*.pacman
+            desktop/out/*.dmg
+            desktop/out/*.zip
+          if-no-files-found: error
+          retention-days: 7
+
+  # There is no gradlew wrapper script in android/ (only gradle/wrapper/gradle-wrapper.properties), so
+  # Gradle comes from setup-gradle at the version the wrapper properties name, as ci.yml does.
+  # "sideload" is release speed signed with the throwaway debug key, so it installs on a device.
+  # "release" has no signingConfig and no key is available here, so it comes out as *-release-unsigned.apk.
+  android:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-java@b843ebf9b913146b38da2eaa7aeddf76074ae1ad # v6.1.0
+        with:
+          distribution: temurin
+          java-version: ${{ env.JAVA_VERSION }}
+      - uses: android-actions/setup-android@be39fa834029ff78f1a44aa3bb0819b8fc2bd8fd # v4.0.4
+      - uses: gradle/actions/setup-gradle@7296c772c13d12d9871528814b51fb2143c138ef # v6.4.1
+        with:
+          gradle-version: ${{ env.GRADLE_VERSION }}
+      - name: Unit tests
+        working-directory: android
+        run: gradle --no-daemon :app:testDebugUnitTest
+      - name: Build the sideload and (unsigned) release APKs
+        working-directory: android
+        run: gradle --no-daemon :app:assembleSideload :app:assembleRelease
+      - name: Native code for all four processors
+        working-directory: android
+        run: sh scripts/check-abis.sh app/build/outputs/apk/sideload
+      - name: What was built
+        run: find android/app/build/outputs/apk -name '*.apk' -exec ls -la {} +
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: client-android
+          path: android/app/build/outputs/apk/**/*.apk
+          if-no-files-found: error
+          retention-days: 7
+
+  # WittyKit, the Swift package the Apple apps share, builds and tests on Linux: its platform-only
+  # imports (Network, CryptoKit, FoundationNetworking) are all behind #if canImport.
+  wittykit-linux:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: swift-actions/setup-swift@7ca6abe6b3b0e8b5421b88be48feee39cbf52c6a # v2.4.0
+        with:
+          swift-version: ${{ env.SWIFT_VERSION }}
+      - name: Swift version
+        run: swift --version
+      - name: Build
+        working-directory: apple/WittyKit
+        run: swift build
+      - name: Test
+        working-directory: apple/WittyKit
+        run: swift test
+
+  # iPhone/iPad and Apple TV, archived with signing off and packed into AltStore-style IPAs (see the top of
+  # this file). The tvOS one is the sideload artifact for an Apple TV; AltStore itself installs only to
+  # iOS/iPadOS, so on tvOS it needs a tool that can sign and install there (Xcode, or a developer account).
+  apple:
+    runs-on: macos-latest
+    timeout-minutes: 60
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Version
+        id: version
+        run: |
+          if [[ "$GITHUB_REF_TYPE" == tag ]]; then version="${GITHUB_REF_NAME#v}"; else version="dev-${GITHUB_SHA::8}"; fi
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          echo "Building $version"
+      - name: Xcode version
+        run: xcodebuild -version
+      - name: Install XcodeGen
+        run: |
+          curl -fsSL -o "$RUNNER_TEMP/xcodegen.zip" "https://github.com/yonaskolb/XcodeGen/releases/download/$XCODEGEN_VERSION/xcodegen.zip"
+          unzip -q "$RUNNER_TEMP/xcodegen.zip" -d "$RUNNER_TEMP/xcodegen"
+          echo "$RUNNER_TEMP/xcodegen/xcodegen/bin" >> "$GITHUB_PATH"
+      - name: Generate the Xcode project
+        working-directory: apple
+        run: xcodegen generate
+      - name: Resolve Swift packages
+        working-directory: apple
+        run: xcodebuild -resolvePackageDependencies -project WittyMedia.xcodeproj -scheme WittyMedia-iOS -skipPackagePluginValidation -skipMacroValidation
+      # project.yml leaves DEVELOPMENT_TEAM empty and sets no CODE_SIGN_STYLE, so these overrides are enough for
+      # an unsigned archive. -allowProvisioningUpdates is deliberately absent: it would try to sign.
+      - name: Archive for iOS (unsigned)
+        working-directory: apple
+        run: |
+          set -o pipefail
+          xcodebuild archive \
+            -project WittyMedia.xcodeproj -scheme WittyMedia-iOS -configuration Release \
+            -destination 'generic/platform=iOS' -archivePath build/WittyMedia-iOS.xcarchive \
+            -skipPackagePluginValidation -skipMacroValidation \
+            CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY="" \
+            PROVISIONING_PROFILE_SPECIFIER="" DEVELOPMENT_TEAM="" \
+            -quiet 2>&1 | tee "$RUNNER_TEMP/archive-ios.log"
+      - name: Archive for tvOS (unsigned, with the Top Shelf extension)
+        working-directory: apple
+        run: |
+          set -o pipefail
+          xcodebuild archive \
+            -project WittyMedia.xcodeproj -scheme WittyMedia-tvOS -configuration Release \
+            -destination 'generic/platform=tvOS' -archivePath build/WittyMedia-tvOS.xcarchive \
+            -skipPackagePluginValidation -skipMacroValidation \
+            CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY="" \
+            PROVISIONING_PROFILE_SPECIFIER="" DEVELOPMENT_TEAM="" \
+            -quiet 2>&1 | tee "$RUNNER_TEMP/archive-tvos.log"
+      # The IPA is Payload/<App>.app zipped, nothing else. The app's folder name comes from the archive
+      # (XcodeGen's PRODUCT_NAME is the target name), so find is used rather than assuming it.
+      - name: Pack the AltStore-style IPAs
+        working-directory: apple
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          set -euo pipefail
+          pack() { # archive, output ipa
+            local app
+            app=$(find "$1/Products/Applications" -maxdepth 1 -name '*.app' | head -1)
+            [ -n "$app" ] || { echo "::error::No .app in $1"; exit 1; }
+            rm -rf build/ipa && mkdir -p build/ipa/Payload
+            cp -R "$app" build/ipa/Payload/
+            # Anything a signer would have left behind: a profile that isn't the user's would make AltStore refuse it.
+            find build/ipa/Payload -name 'embedded.mobileprovision' -delete
+            (cd build/ipa && zip -qry "../$2" Payload)
+            rm -rf build/ipa
+            echo "Packed $(basename "$app") into build/$2"
+          }
+          pack build/WittyMedia-iOS.xcarchive "WittyMediaClient-$VERSION-ios-altstore.ipa"
+          pack build/WittyMedia-tvOS.xcarchive "WittyMediaClient-$VERSION-tvos-altstore.ipa"
+      - name: Check the IPAs
+        working-directory: apple/build
+        run: |
+          set -euo pipefail
+          for ipa in *.ipa; do
+            echo "== $ipa"
+            unzip -l "$ipa" | grep -E 'Payload/[^/]+\.app/Info\.plist$' || { echo "::error::$ipa has no Payload/*.app/Info.plist"; exit 1; }
+            rm -rf check && mkdir check
+            unzip -q "$ipa" -d check 'Payload/*.app/Info.plist'
+            plist=$(find check/Payload -maxdepth 2 -name Info.plist | head -1)
+            plutil -p "$plist" | tee "$RUNNER_TEMP/$ipa.plist.txt"
+            grep -q '"CFBundleIdentifier" => "com.wittywilla.wittymediaclient"' "$RUNNER_TEMP/$ipa.plist.txt" || { echo "::error::$ipa: wrong CFBundleIdentifier"; exit 1; }
+            grep -q '"MinimumOSVersion"' "$RUNNER_TEMP/$ipa.plist.txt" || { echo "::error::$ipa: no MinimumOSVersion"; exit 1; }
+            rm -rf check
+          done
+          case "$(unzip -l WittyMediaClient-*-tvos-altstore.ipa)" in
+            *PlugIns/*.appex*) echo "tvOS IPA carries its Top Shelf extension" ;;
+            *) echo "::warning::tvOS IPA has no PlugIns/*.appex: the Top Shelf extension isn't embedded" ;;
+          esac
+          ls -la ./*.ipa
+      - name: Zip the archives
+        working-directory: apple/build
+        run: |
+          for a in *.xcarchive; do zip -qry "${a%.xcarchive}.xcarchive.zip" "$a"; done
+          ls -la ./*.xcarchive.zip
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: client-apple-ipa
+          path: apple/build/*.ipa
+          if-no-files-found: error
+          retention-days: 7
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: client-apple-archives
+          path: apple/build/*.xcarchive.zip
+          if-no-files-found: warn
+          retention-days: 7
+      - name: Keep the build logs on failure
+        if: failure()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: client-apple-logs
+          path: ${{ runner.temp }}/archive-*.log
+          if-no-files-found: ignore
+          retention-days: 7
+
+  summary:
+    needs: [shared, desktop, android, wittykit-linux, apple]
+    if: always()
+    runs-on: ubuntu-latest
+    permissions: {}
+    env:
+      R_SHARED: ${{ needs.shared.result }}
+      R_DESKTOP: ${{ needs.desktop.result }}
+      R_ANDROID: ${{ needs.android.result }}
+      R_WITTYKIT: ${{ needs.wittykit-linux.result }}
+      R_APPLE: ${{ needs.apple.result }}
+    steps:
+      - name: Results
+        run: |
+          {
+            echo "## build"
+            echo
+            echo "| Job | Result |"
+            echo "|---|---|"
+            echo "| shared (sync + unit tests) | $R_SHARED |"
+            echo "| desktop (Linux, Windows, macOS) | $R_DESKTOP |"
+            echo "| android (sideload + unsigned release APKs) | $R_ANDROID |"
+            echo "| wittykit-linux (swift build + test) | $R_WITTYKIT |"
+            echo "| apple (iOS + tvOS unsigned AltStore IPAs) | $R_APPLE |"
+            echo
+            echo "Nothing is signed with a real certificate, notarized, or published. Artifacts are kept for 7 days."
+          } >> "$GITHUB_STEP_SUMMARY"
+          failed=0
+          for r in "$R_SHARED" "$R_DESKTOP" "$R_ANDROID" "$R_WITTYKIT" "$R_APPLE"; do
+            case "$r" in failure|cancelled) failed=1 ;; esac
+          done
+          [ "$failed" -eq 0 ] || { echo "::error::A build job failed or was cancelled"; exit 1; }
