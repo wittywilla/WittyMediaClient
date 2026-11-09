@@ -6,7 +6,7 @@
   "description": "Watch and listen from your WittyMediaServer",
   "author": "WittyWilla",
   "homepage": "https://github.com/wittywilla/WittyMediaClient",
-  "license": "Apache-2.0",
+  "license": "GPL-3.0-or-later",
   "main": "main.js",
   "private": true,
   "scripts": {

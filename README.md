@@ -185,7 +185,7 @@ The apps themselves need a Mac and XcodeGen: see [what the owner needs to do](do
 
 ## Licence
 
-Apache-2.0: see [LICENSE](LICENSE) and [NOTICE](NOTICE). Any redistribution must keep the NOTICE attribution.
+GNU GPL v3.0 (or later): see [LICENSE](LICENSE) and [NOTICE](NOTICE). If you redistribute it or build on it, please keep the NOTICE attribution.
 
 Third-party parts, by the app that ships them, are listed in full in [NOTICE](NOTICE):
 

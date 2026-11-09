@@ -2,10 +2,11 @@ WittyMediaClient
 Copyright 2026 WittyWilla and contributors
 Made for WittyMediaServer: https://github.com/wittywilla/WittyMediaServer
 
-Licensed under the Apache License, Version 2.0. Any redistribution must
-reproduce these notices in a NOTICE file, in documentation, or in an "About"
-display. WittyMediaClient collects no telemetry and contacts nothing except
-the server its user chooses.
+Licensed under the GNU General Public License v3.0 or (at your option) any
+later version: see LICENSE. If you redistribute it or build on it, please keep
+these notices in a NOTICE file, in documentation, or in an "About" display.
+WittyMediaClient collects no telemetry and contacts nothing except the server
+its user chooses.
 
 Third-party components, by the app that ships them:
 
