@@ -377,7 +377,7 @@ extension AppModel {
         let server = proof.saved(url: home, name: shown.isEmpty ? (known?.name ?? "WittyMediaServer") : shown, brandLogo: known?.brandLogo ?? "")
         defaults.removeObject(forKey: awayOffKey(server))
         keepAway(PeerInfo(serverID: serverID, hints: hints, port: peers.route.current?.port ?? 0), for: server)
-        recent = SavedServer.remember(server, in: recent)
+        remember(server)
         signIn(to: server)
         guard !answer.code.isEmpty else { return nil }
         do {

@@ -45,7 +45,8 @@ test('what can\'t be used in the file is dropped, so the app still starts', () =
   const entry = { url: 'http://10.0.0.2:9797', name: 'Home', serverId: 'abc', publicKey: 'key', fingerprint: 'AB-CD' }
   assert.deepStrictEqual(clean({ recent: [entry] }), { recent: [entry] })
   assert.deepStrictEqual(clean({ recent: [{ url: entry.url, name: 7, publicKey: { a: 1 }, extra: 'x' }] }), { recent: [{ url: entry.url }] })
-  assert.strictEqual(clean({ recent: Array.from({ length: 50 }, () => entry) }).recent.length, MAX_RECENT)
+  assert.strictEqual(clean({ recent: Array.from({ length: 50 }, (_x, i) => ({ url: `http://10.0.1.${i}:9797` })) }).recent.length, MAX_RECENT)
+  assert.strictEqual(clean({ recent: Array.from({ length: 50 }, () => entry) }).recent.length, 1, 'the same server fifty times is one server')
   assert.deepStrictEqual(clean({ window: { width: 800, height: 600, x: 'y' } }), { window: { width: 800, height: 600 } })
   for (const window of [{ width: '800', height: 600 }, { width: 800 }, { width: -1, height: 600 }, { width: 1e9, height: 600 }, { width: 1.5, height: 600 }]) {
     assert.deepStrictEqual(clean({ window }), {}, JSON.stringify(window))

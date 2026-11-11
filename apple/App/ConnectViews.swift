@@ -30,6 +30,7 @@ struct ConnectView: View {
         case recent(String)
         case enterAddress
         case joinAway
+        case manage
     }
 
     @EnvironmentObject private var model: AppModel
@@ -41,6 +42,7 @@ struct ConnectView: View {
     @State private var connectingTo = ""
     @State private var showForm = false
     @State private var showJoin = false
+    @State private var showManage = false
     @State private var found: [FoundServer] = []
     @State private var finder: ServerFinder?
     @State private var searchedLong = false
@@ -123,6 +125,19 @@ struct ConnectView: View {
         DispatchQueue.main.async { spot = .joinAway }
     }
 
+    private func closeManage() {
+        showManage = false
+        let any = !model.recent.isEmpty
+        DispatchQueue.main.async { spot = any ? .manage : .enterAddress }
+    }
+
+    /// A remembered server was removed: focus goes to the next card, else the one before, else Enter an address.
+    private func removed(_ server: SavedServer, from list: [SavedServer]) {
+        let next: Spot = ServerBook.focusAfter(removing: server.url, in: list.map(\.url)).map { .recent($0) } ?? .enterAddress
+        // On a TV the question that was asked first is still leaving the screen.
+        DispatchQueue.main.asyncAfter(deadline: .now() + (metrics.tv ? 0.35 : 0)) { spot = next }
+    }
+
     /// The first server found takes focus, until the person has moved themselves. The
     /// row only exists after this update, so the focus has to wait for the next one.
     private func show(_ servers: [FoundServer]) {
@@ -165,10 +180,12 @@ struct ConnectView: View {
                     .focused($spot, equals: .found(server.id))
             }
             if !others.isEmpty {
-                SearchingCaption(words: say("recentServers")).padding(.top, Tokens.Space.s2)
-                ForEach(others) { server in
+                RememberedServers(servers: others, removed: { removed($0, from: others) }) { server in
+                    // Found on the network at another address than the one remembered: that is where it is now.
+                    let at = ServerBook.address(of: server, found: found)
                     ServerCard(saved: server, url: server.url, lastUsed: server.url == model.lastUsedURL,
-                               connecting: connectingTo == server.url) { Task { await connect(server.url) } }
+                               connecting: connectingTo == at, reached: ServerWords.reached(server),
+                               stale: ServerBook.isStale(server, now: ServerBook.now())) { Task { await connect(at) } }
                         .focused($spot, equals: .recent(server.url))
                 }
             }
@@ -194,6 +211,17 @@ struct ConnectView: View {
             .action(.quiet, wide: true)
             .focused($spot, equals: .joinAway)
         }
+        // Somewhere to remove servers that needs no gesture to find.
+        if !others.isEmpty {
+            Button {
+                showManage = true
+                error = ""
+            } label: {
+                Label(say("manageServers"), systemImage: "slider.horizontal.3")
+            }
+            .action(.quiet, wide: true)
+            .focused($spot, equals: .manage)
+        }
         LegalNote()
     }
 
@@ -216,7 +244,9 @@ struct ConnectView: View {
         // Every added server is listed as itself; one also found on the network isn't listed twice.
         let others = uniqued(model.recent)
         Group {
-            if showJoin {
+            if showManage {
+                ManageServersPanel(back: closeManage)
+            } else if showJoin {
                 JoinAwayPanel(back: closeJoin)
             } else if showForm {
                 SignInLayout(back: closeForm) { addressWords } actions: { addressActions }
@@ -225,9 +255,10 @@ struct ConnectView: View {
                 SignInLayout { findWords } actions: { findActions(others) }
             }
         }
+        .serverUndo()
         .focusRoot(scope)
         .onChange(of: spot) { focusChanged($0) }
-        .onRemoteBack(showJoin ? { closeJoin() } : showForm ? { closeForm() } : nil)
+        .onRemoteBack(showManage ? { closeManage() } : showJoin ? { closeJoin() } : showForm ? { closeForm() } : nil)
         .onAppear {
             if error.isEmpty { error = initialMessage }
             #if DEBUG
@@ -362,6 +393,9 @@ struct MismatchView: View {
         model.stage = .connect(message: "")
     }
 
+    /// The remembered servers this one answered in place of.
+    private var clashes: [SavedServer] { ServerBook.clashes(with: server, in: model.recent) }
+
     var body: some View {
         SignInLayout {
             Image(systemName: "exclamationmark.triangle.fill")
@@ -371,6 +405,12 @@ struct MismatchView: View {
                 .background(Circle().fill(palette.danger.opacity(0.16)))
                 .accessibilityHidden(true)
             SignInHeading(title: say("identityTitle"), detail: say("identityHint"))
+            if !clashes.isEmpty {
+                Secondary(say("reinstalledHint"))
+                    #if !os(tvOS)
+                    .multilineTextAlignment(.center)
+                    #endif
+            }
             VStack(alignment: .leading, spacing: Tokens.Space.s1) {
                 Text(server.url).font(.wmLabel).foregroundStyle(palette.text)
                 Text("\(say("fingerprintLabel")): \(server.fingerprint)").font(.wmSecondary.monospaced()).foregroundStyle(palette.textSecondary)
@@ -381,6 +421,14 @@ struct MismatchView: View {
         } actions: {
             if !problem.isEmpty { ProblemLine(problem) }
             Button(say("back"), action: back).action(.primary, wide: true, tall: true).focused($onSafeChoice)
+            // A reinstalled server: the old one is forgotten, and this one can then be added as new.
+            if !clashes.isEmpty {
+                Button(say("removeOldOne")) {
+                    model.forgetServers(clashes)
+                    model.stage = .connect(message: say("removedOldOne"))
+                }
+                .action(.secondary, wide: true, tall: true)
+            }
             Button {
                 guard !busy else { return }
                 busy = true

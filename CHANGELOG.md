@@ -36,6 +36,21 @@ What changed in WittyMediaClient, newest first. What changed before it had a rep
   TV the home screen gets a channel and Watch Next entries from the server's shelf. The server's 57 conformance fixtures run as a unit
   test. Run on an emulator as a phone in full and as a TV in part; not as a tablet, and never on a real device:
   [PLATFORMS.md](docs/PLATFORMS.md#server-driven-pages-on-android) says exactly what was seen.
+- **Removing servers a device remembers, in every app.** A server that had gone, moved or been reinstalled used to stay under
+  "Used before" for good: nothing could take it off the list. Now each remembered server can be removed, and with it everything the app
+  kept for it and nothing of any other server: its address, the proof of who it is, the sign-in (the server is told to end that session,
+  if it can be reached within three seconds), its theme choice and other settings kept for it, its logo and cached data, and its
+  peer-to-peer way from away, with this device taken off the server's list. Nothing on the server itself is deleted.
+  *Desktop:* a bin beside each server (shown on hover and focus), Delete or Backspace on it, or its right-click menu; "Removed … Undo"
+  for eight seconds, and only then is anything deleted or the server told. *Android phone and tablet, iPhone and iPad:* swipe, long-press
+  or Edit, with Undo for six seconds. *Android TV and Apple TV:* hold Select (or Menu on Android TV) on a server, or open **Manage
+  servers** under the list. On the phone and TV apps **Manage servers** is also under **You → On this device → Servers on this device**.
+  **Remove all servers** and **Remove servers not reached for…** (30 days, 90 days, 6 months, 1 year) say exactly which servers will go
+  and ask first; nothing is ever removed by itself. Each server says when it was last reached, and one not reached for 90 days is marked.
+- **One server is one entry.** A remembered server is told by the ID and key it proved, not by its address: one that changes address, or
+  is found on the network and also typed in, updates its entry instead of adding a second, and what was kept for it moves with it. A
+  list that already has a server twice is merged the first time this version starts. A server reinstalled with a new identity is a
+  different server to the app: the warning says so and offers **Remove the old server**.
 - **Desktop: reaching your server from away, with nothing set up on its router.** With a server that has peer-to-peer connections on
   (WittyMediaServer 0.8.0-alpha, **Settings → Remote Access**), the app pairs itself while it's at home and signed in, and when it later
   can't find the server at its address it connects peer to peer by itself, still signed in. The title bar says how: direct, or through a

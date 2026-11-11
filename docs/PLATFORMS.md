@@ -727,3 +727,19 @@ added, and the cause is unknown. It could be the test or the screen.
   own check is the only thing refusing public plain HTTP there.
 - The desktop app is about 357 MB unpacked and uses Chromium's memory, so it is not the low-end
   option. On a weak PC, a browser uses less.
+
+## Removing remembered servers: what was run
+
+Each app has one operation that forgets a server (`desktop/servers.js`, `android/.../data/ForgetServer.kt`,
+`apple/WittyKit/Sources/WittyKit/ForgetServer.swift`), and every way of removing one calls it.
+
+| | What was run | Not run |
+|---|---|---|
+| Desktop | Unit tests of the rules (`test/servers.test.js`), and the real app on macOS against stand-in servers (`npm run test:app`, the `forget` run): a duplicated list merged, Delete with Undo, the bin, the right-click menu, the old-servers question, Remove all, the cookie and the session on the server going only once Undo has | Windows, Linux and FreeBSD; a server with peer-to-peer on; a TV (the bin is reached with the arrows there, but that was not driven) |
+| Android phone | Unit tests (`ServerRulesTest`), and an emulator against two real servers: swipe and Undo, the long-press menu, Edit, Manage servers, Remove all, an old duplicated list merged on start | TalkBack by ear, a tablet, a keyboard or gamepad |
+| Android TV | An emulator against two real servers: hold OK and Menu, focus after removing, Manage servers from the list and from You | A real TV |
+| iPhone | WittyKit tests (`ServerBookTests`, `ForgetServerTests`) and `apple/scripts/forget-check.sh ios` in a simulator against two real servers | iPad, VoiceOver by ear, peer-to-peer, a server with a logo |
+| Apple TV | `apple/scripts/forget-check.sh tvos` in a simulator | A real Apple TV, a game controller |
+
+A server whose last time isn't known (remembered by a version before this one) is never picked by "Remove servers not
+reached for…" on desktop and Android; the Apple apps count it from the first run of this version.

@@ -546,3 +546,18 @@ main.compact { padding-top: var(--sp-6); padding-bottom: var(--sp-6); }
   /* The brand, and a code a camera has to read, keep their own colours. */
   .mark, .qr-card { forced-color-adjust: none; }
 }
+
+/* Removing remembered servers: a bin beside each one, shown when the row is pointed at or has
+   focus (always on a TV and on touch, where there is no pointing), and the word that it went. */
+.list .row { display: flex; align-items: center; }
+.list .row > button.server { flex: 1; min-width: 0; }
+.list .row > button.remove { flex: none; margin: 0 0 0 var(--sp-1); padding: var(--sp-2); color: var(--fg-2); opacity: 0; }
+.list .row:hover > button.remove, .list .row:focus-within > button.remove, .tv .list .row > button.remove { opacity: 1; }
+@media (hover: none) { .list .row > button.remove { opacity: 1; } }
+.list .row > button.remove:hover, .list .row > button.remove:focus-visible { color: var(--danger); }
+.list .row > button.remove .icon { margin: 0; }
+.pill.stale { color: var(--fg-2); }
+.links.manage { margin-top: var(--sp-3); }
+.toast { display: flex; align-items: center; justify-content: space-between; margin-bottom: var(--sp-3); padding: var(--sp-2) var(--sp-2) var(--sp-2) var(--sp-4); border-radius: var(--r-lg); background: var(--bg-3); color: var(--fg); }
+.toast button.undo { flex: none; margin: 0 0 0 var(--sp-3); color: var(--accent-text); font-weight: 600; }
+@media (forced-colors: active) { .toast { border: 1px solid ButtonText; } .list .row > button.remove { opacity: 1; } }

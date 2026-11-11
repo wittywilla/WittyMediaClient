@@ -318,13 +318,14 @@ fun YouSettingScreen(nav: Nav, s: Map<String, String>, screen: YouNative) {
         YouNative.TopMenu -> TopMenuScreen(nav, s)
         YouNative.Licences -> NoticesScreen(nav)
         YouNative.Log -> LogsScreen(nav)
+        YouNative.Servers -> ManageServersScreen(nav, s)
     }
 }
 
 // A setting's screen: Back, its title and what it's about, then what to change. A phone has one
 // column (at most 640 wide); a TV the words on the left third and the rest on the right.
 @Composable
-private fun SettingsPage(
+internal fun SettingsPage(
     nav: Nav,
     title: String,
     detail: String = "",
@@ -893,13 +894,14 @@ private const val ACTIVE_MS = 5 * 60 * 1000L
 
 // Are you sure: the safe answer has focus.
 @Composable
-private fun Confirm(question: String, yes: String, no: String, onYes: () -> Unit, onNo: () -> Unit) {
+internal fun Confirm(question: String, yes: String, no: String, onYes: () -> Unit, onNo: () -> Unit, title: String = "") {
     AlertDialog(
         onDismissRequest = onNo,
         containerColor = MaterialTheme.colorScheme.surface,
+        title = if (title.isEmpty()) null else { { DialogTitle(title) } },
         text = { Text(question, color = MaterialTheme.colorScheme.onSurface, style = MaterialTheme.typography.body) },
         confirmButton = { WittyButton(yes, onYes, kind = ButtonKind.Destructive) },
-        dismissButton = { WittyButton(no, onNo, requestFocus = true) },
+        dismissButton = { WittyButton(no, onNo, requestFocus = true, takeFocus = title.isNotEmpty()) },
     )
 }
 

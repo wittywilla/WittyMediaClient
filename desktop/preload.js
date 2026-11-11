@@ -60,6 +60,15 @@ if (location.protocol === 'wittymedia-app:') {
     },
     probe: (url) => ipcRenderer.invoke('probe', url),
     recent: () => ipcRenderer.invoke('recent'),
+    // Removing remembered servers: by address, with a few seconds in which it can be taken back.
+    forget: (urls) => ipcRenderer.invoke('forget', urls),
+    forgetUndo: () => ipcRenderer.invoke('forget-undo'),
+    forgetFinish: () => ipcRenderer.invoke('forget-finish'),
+    serverMenu: (url, at) => ipcRenderer.send('server-menu', url, at),
+    onForgetAsk: (ask) => {
+      ipcRenderer.removeAllListeners('forget-ask')
+      ipcRenderer.on('forget-ask', (_e, url) => ask(url))
+    },
     open: (server) => ipcRenderer.invoke('open-server', server),
     redeem: (url, code) => ipcRenderer.invoke('redeem', url, code),
     // A code shown here for a phone to approve. The secret that collects the sign-in stays in the app.

@@ -110,14 +110,11 @@ struct ServerLogo: View {
 /// The owner's logo for each added server, kept on the device by its version, so the server list shows it at once
 /// and a server that can't be reached still looks like itself.
 enum LogoCache {
-    private static var folder: URL? {
+    static var folder: URL? {
         FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask).first?.appendingPathComponent("logos", isDirectory: true)
     }
 
-    private static func key(_ server: String) -> String {
-        Data(server.utf8).base64EncodedString()
-            .replacingOccurrences(of: "/", with: "_").replacingOccurrences(of: "+", with: "-").replacingOccurrences(of: "=", with: "")
-    }
+    private static func key(_ server: String) -> String { ServerKeys.logoName(server) }
 
     private static func file(server: String, version: String) -> URL? {
         let safe = version.filter { $0.isASCII && ($0.isLetter || $0.isNumber) }
@@ -461,6 +458,9 @@ struct ServerCard: View {
     let url: String
     var lastUsed = false
     var connecting = false
+    /// For an added server: when it was last reached, and whether that was long ago.
+    var reached = ""
+    var stale = false
     let action: () -> Void
 
     /// What a found server is called here: where it is, host and port.
@@ -474,7 +474,19 @@ struct ServerCard: View {
         return saved.name.isEmpty ? "WittyMediaServer" : saved.name
     }
 
-    private var detail: String { saved == nil ? say("foundOnNetwork") : PeerInfo.isPlaceholder(url) ? say("awayOnly") : url }
+    private var place: String { saved == nil ? say("foundOnNetwork") : PeerInfo.isPlaceholder(url) ? say("awayOnly") : url }
+
+    /// On a TV the time shares the address's line, so a list of servers is no taller than it was.
+    private var detail: String { metrics.tv && !reached.isEmpty ? "\(place) · \(reached)" : place }
+
+    private func pill(_ words: String) -> some View {
+        Text(words)
+            .font(.caption2.weight(.semibold))
+            .foregroundStyle(palette.textSecondary)
+            .padding(.horizontal, 6)
+            .padding(.vertical, 2)
+            .background(Capsule().fill(palette.border))
+    }
 
     var body: some View {
         let mark: CGFloat = metrics.tv ? 56 : 40
@@ -493,16 +505,13 @@ struct ServerCard: View {
                 VStack(alignment: .leading, spacing: 2) {
                     HStack(spacing: Tokens.Space.s2) {
                         Text(name).font(.wmLabel.weight(.semibold)).foregroundStyle(palette.text).lineLimit(1)
-                        if lastUsed {
-                            Text(say("lastUsed"))
-                                .font(.caption2.weight(.semibold))
-                                .foregroundStyle(palette.textSecondary)
-                                .padding(.horizontal, 6)
-                                .padding(.vertical, 2)
-                                .background(Capsule().fill(palette.border))
-                        }
+                        if lastUsed { pill(say("lastUsed")) }
+                        if stale { pill(say("staleServer")) }
                     }
                     Text(detail).font(.wmSecondary).foregroundStyle(palette.textSecondary).lineLimit(1)
+                    if !metrics.tv && !reached.isEmpty {
+                        Text(reached).font(.wmSecondary).foregroundStyle(palette.textHint).lineLimit(1)
+                    }
                 }
                 Spacer(minLength: 0)
                 if connecting {
@@ -515,7 +524,8 @@ struct ServerCard: View {
             .frame(maxWidth: .infinity, alignment: .leading)
         }
         .buttonStyle(SurfaceStyle(fill: palette.card, radius: Tokens.Radius.lg))
-        .accessibilityLabel(lastUsed ? "\(name), \(detail), \(say("lastUsed"))" : "\(name), \(detail)")
+        .accessibilityLabel(([name, place, reached] + (lastUsed ? [say("lastUsed")] : []) + (stale ? [say("staleServer")] : []))
+            .filter { !$0.isEmpty }.joined(separator: ", "))
     }
 }
 

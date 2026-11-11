@@ -38,9 +38,12 @@ import androidx.core.graphics.ColorUtils
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LifecycleEventEffect
 import com.wittywilla.wittymediaclient.WittyApp
+import com.wittywilla.wittymediaclient.data.ForgetServer
+import com.wittywilla.wittymediaclient.data.Forgotten
 import com.wittywilla.wittymediaclient.data.LogoCache
 import com.wittywilla.wittymediaclient.data.TvHome
 import com.wittywilla.wittymediaclient.net.TvHomePlan
+import com.wittywilla.wittymediaclient.data.entryFor
 import com.wittywilla.wittymediaclient.data.SavedServer
 import com.wittywilla.wittymediaclient.diag.ClientLog
 import com.wittywilla.wittymediaclient.net.Api
@@ -590,7 +593,10 @@ class Nav(val app: WittyApp, private val s: Map<String, String>) {
 
     // A server whose identity has been checked: keep its name and logo with it, the picture on the device.
     private fun keepBrand(opened: SavedServer, status: ServerStatus): SavedServer {
-        val named = opened.copy(name = status.brandName.ifEmpty { opened.name.ifEmpty { "WittyMediaServer" } }, brandLogo = status.brandLogo)
+        val named = opened.copy(
+            name = status.brandName.ifEmpty { opened.name.ifEmpty { "WittyMediaServer" } }, brandLogo = status.brandLogo,
+            lastSeen = System.currentTimeMillis(),
+        )
         if (status.brandLogo.isNotEmpty()) app.scope.launch { LogoCache.keep(app, named.url, status.brandLogo) }
         return named
     }
@@ -725,7 +731,9 @@ class Nav(val app: WittyApp, private val s: Map<String, String>) {
     }
 
     // Opens a server with a token that was kept with its key.
-    private suspend fun openWithToken(opening: SavedServer): String? = try {
+    private suspend fun openWithToken(checked: SavedServer): String? = try {
+        // It has just proved who it is: that's when it was last reached, whatever happens next.
+        val opening = checked.copy(lastSeen = System.currentTimeMillis())
         app.store.remember(opening)
         openServer(opening, app.store.token)
         val status = app.api.status()
@@ -756,6 +764,8 @@ class Nav(val app: WittyApp, private val s: Map<String, String>) {
     // What the last run was using, if it still is who it was. Its token goes
     // nowhere until then.
     suspend fun startUp() {
+        // A list from an older version, or one with leftovers, is put right before anything reads it.
+        app.store.tidy()
         val url = app.store.server
         if (url.isEmpty()) { reset(Route.Connect()); return }
         var saved = app.store.find(url) ?: SavedServer(url, "WittyMediaServer")
@@ -768,6 +778,7 @@ class Nav(val app: WittyApp, private val s: Map<String, String>) {
             }
         }
         val checked = proof.savedAs(saved.url, saved.name)
+        if (proof.state == IdentityState.Same) app.store.reached(checked, System.currentTimeMillis())
         when (Identity.stepAtStart(proof.state, tokenFits(proof))) {
             NextStep.Warn -> warn(checked)
             NextStep.Refuse -> reset(Route.Connect(s["identityBad"].orEmpty()))
@@ -806,7 +817,11 @@ class Nav(val app: WittyApp, private val s: Map<String, String>) {
     // Someone chose this server, and it says it's a WittyMediaServer. Its identity
     // decides what comes next. Answers words to show if that's nowhere.
     suspend fun arrive(url: String, status: ServerStatus): String? {
+        // Whatever was just removed is gone for good before anything is opened.
+        finishForget()
         val proof = identify(url, app.store.recent)
+        // A remembered server that proved its key: its entry follows it to this address, and was reached now.
+        if (proof.state == IdentityState.Same) app.store.reached(proof.savedAs(url, ""), System.currentTimeMillis())
         val checked = proof.savedAs(url, status.brandName.ifEmpty { status.name }).copy(brandLogo = status.brandLogo)
         val sameServerAsToken = app.store.server == url || app.store.find(app.store.server)?.publicKey == proof.publicKey
         val step = Identity.nextStep(proof.state, sameServerAsToken && tokenFits(proof))
@@ -834,7 +849,7 @@ class Nav(val app: WittyApp, private val s: Map<String, String>) {
             proof.publicKey != shown.publicKey -> { replace(Route.Mismatch(proof.savedAs(shown.url, shown.name))); null }
             else -> {
                 app.store.forgetToken()
-                app.store.remember(shown)
+                app.store.remember(shown.copy(lastSeen = System.currentTimeMillis()))
                 forgetScreens()
                 reset(Route.Connect())
                 push(Route.Code(shown))
@@ -877,7 +892,7 @@ class Nav(val app: WittyApp, private val s: Map<String, String>) {
     }
 
     fun signedIn(token: String, user: User? = null) {
-        val kept = server ?: SavedServer(app.api.base, "WittyMediaServer")
+        val kept = (server ?: SavedServer(app.api.base, "WittyMediaServer")).copy(lastSeen = System.currentTimeMillis())
         me = user
         if (!app.store.signedIn(kept, token)) notice = s["notKept"].orEmpty()
         app.api = Api(kept.url, token)
@@ -926,6 +941,42 @@ class Nav(val app: WittyApp, private val s: Map<String, String>) {
         app.api = Api("", "")
         forgetScreens()
         reset(Route.Connect())
+    }
+
+    // Something to say on the list of servers that isn't a problem, such as what was just removed.
+    var pickerNotice by mutableStateOf("")
+
+    // A server removed a moment ago that Undo can still bring back.
+    var pendingForget by mutableStateOf<Forgotten?>(null)
+        private set
+
+    // Whether this is the server the app is using now.
+    fun uses(target: SavedServer): Boolean = server?.let { entryFor(listOf(it), target) != null } == true
+
+    // Removes a server from this device: every screen that offers it comes through here, and ForgetServer does
+    // the work. The one in use is signed out of first, and the app goes back to the list of servers. With `undoable`
+    // the removal can be taken back until finishForget; the server is told to end the sign-in only after that.
+    fun forgetServer(target: SavedServer, undoable: Boolean) {
+        finishForget()
+        val inUse = uses(target)
+        if (inUse) changeServer()
+        val gone = ForgetServer.forget(app, target)
+        if (undoable && !inUse) pendingForget = gone else ForgetServer.finish(app, gone)
+    }
+
+    // Undo. Answers the server that came back, or null when the time for it had passed.
+    fun undoForget(): SavedServer? {
+        val gone = pendingForget ?: return null
+        pendingForget = null
+        ForgetServer.undo(app, gone)
+        return gone.server
+    }
+
+    // Undo is no longer offered: the time is up, the screen was left, or the app went to the background.
+    fun finishForget() {
+        val gone = pendingForget ?: return
+        pendingForget = null
+        ForgetServer.finish(app, gone)
     }
 
     // A sign-in the server no longer accepts means signing in again.
@@ -992,6 +1043,7 @@ fun AppRoot(app: WittyApp) {
         }
         LifecycleEventEffect(Lifecycle.Event.ON_STOP) {
             nav.syncTvHome()
+            nav.finishForget()
             app.listening.disappeared()
             // A film stops when the app is left, with its place kept.
             nav.video?.backgrounded()

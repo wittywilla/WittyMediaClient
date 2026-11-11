@@ -3,6 +3,7 @@
 package com.wittywilla.wittymediaclient.data
 
 import android.content.Context
+import android.content.SharedPreferences
 import android.security.keystore.KeyGenParameterSpec
 import android.security.keystore.KeyProperties
 import android.util.Base64
@@ -29,6 +30,9 @@ data class SavedServer(
     // The version of the server's own logo when it was last opened, or empty for the app's mark. The picture is
     // kept on the device by LogoCache, so the list of servers shows it without asking any of them.
     val brandLogo: String = "",
+    // When this server last proved who it is to this device, in milliseconds since 1970. 0: not known, as it was
+    // remembered before the app kept this.
+    val lastSeen: Long = 0,
 )
 
 // The sign-in, and the key of the server it belongs to. They're sealed together, so changing the
@@ -36,17 +40,13 @@ data class SavedServer(
 @Serializable
 data class SignIn(val token: String, val pin: String = "")
 
-private const val MAX_RECENT = 8
-
-// The most recent first, once per address and once per server.
-fun rememberServer(recent: List<SavedServer>, server: SavedServer): List<SavedServer> {
-    val others = recent.filter { it.url != server.url && (server.serverId.isEmpty() || it.serverId != server.serverId) }
-    return (listOf(server) + others).take(MAX_RECENT)
-}
+// What was taken out of the settings when a server was removed, held in memory so that Undo can put it back.
+class TakenOut(val settings: Map<String, String>, val current: String, val sealedSignIn: String?)
 
 // Which server this device uses and its sign-in. The token is encrypted with a
 // key held by Android's Keystore, and app backups are off (see the manifest).
 class SessionStore(context: Context) {
+    private val app = context.applicationContext
     private val prefs = context.getSharedPreferences("session", Context.MODE_PRIVATE)
 
     var server: String
@@ -58,6 +58,9 @@ class SessionStore(context: Context) {
             .getOrNull()?.takeIf { it.token.isNotEmpty() }
 
     val token: String get() = signIn?.token.orEmpty()
+
+    // Whether a sign-in is stored at all, readable or not.
+    val hasSignIn: Boolean get() = prefs.contains(KEY_TOKEN)
 
     fun forgetToken() {
         prefs.edit().remove(KEY_TOKEN).apply()
@@ -95,18 +98,112 @@ class SessionStore(context: Context) {
         set(v) = prefs.edit().putString(KEY_RECENT, json.encodeToString(v)).apply()
 
     fun remember(server: SavedServer) {
-        recent = rememberServer(recent, server)
+        val edit = prefs.edit()
+        remembering(edit, recent, rememberServer(recent, server))
+        edit.apply()
+    }
+
+    // A remembered server has just proved itself, perhaps somewhere new: its entry takes the address and the time,
+    // and what was kept for it follows. Nothing happens for a server that isn't remembered.
+    fun reached(server: SavedServer, now: Long) {
+        val before = recent
+        val after = reachedServer(before, server, now) ?: return
+        if (after == before) return
+        val edit = prefs.edit()
+        remembering(edit, before, after)
+        edit.apply()
     }
 
     fun find(url: String): SavedServer? = recent.find { it.url == url }
+
+    // Writes the list, and takes what each server kept along: to its new address when it moved, and away when the
+    // server is no longer in the list. All in the one write the caller applies.
+    private fun remembering(edit: SharedPreferences.Editor, before: List<SavedServer>, after: List<SavedServer>) {
+        edit.putString(KEY_RECENT, json.encodeToString(after))
+        val names = prefs.all.keys.toSet()
+        for (step in dataSteps(before, after)) {
+            when (step) {
+                is DataStep.Wipe -> {
+                    ServerKeys.of(names, step.url).forEach { edit.remove(it) }
+                    LogoCache.forget(app, step.url)
+                }
+                is DataStep.Move -> move(edit, names, step.from, step.to)
+            }
+        }
+    }
+
+    private fun move(edit: SharedPreferences.Editor, names: Set<String>, from: String, to: String) {
+        for (name in ServerKeys.of(names, from)) {
+            val there = ServerKeys.movedTo(name, from, to)
+            // What the server already has under its new address stays.
+            if (there !in names) prefs.getString(name, null)?.let { edit.putString(there, it) }
+            edit.remove(name)
+        }
+        if (server == from) edit.putString(KEY_SERVER, to)
+        LogoCache.move(app, from, to)
+    }
+
+    // Once, as the app starts: a list from an older version is made one entry per server, what each kept is
+    // brought along, and what was left behind under addresses no remembered server has is deleted. Doing it
+    // again changes nothing.
+    fun tidy() {
+        val stored = recent
+        val merged = mergeServers(stored, server)
+        val edit = prefs.edit()
+        var names = prefs.all.keys.toSet()
+        if (merged.servers != stored) {
+            edit.putString(KEY_RECENT, json.encodeToString(merged.servers))
+            ClientLog.info("app", "The list of servers was tidied: ${stored.size} became ${merged.servers.size}")
+        }
+        var current = server
+        for ((from, to) in merged.moved) {
+            move(edit, names, from, to)
+            if (current == from) current = to
+            names = names.filterNot { ServerKeys.owns(from, it) }.toSet() + ServerKeys.of(names, from).map { ServerKeys.movedTo(it, from, to) }
+        }
+        val urls = merged.servers.map { it.url } + current
+        ServerKeys.orphans(names, urls).forEach { edit.remove(it) }
+        edit.apply()
+        LogoCache.keepOnly(app, urls)
+    }
+
+    // Removing a server: its entry, the settings kept for it, and the address in use and the sign-in when they're
+    // its own, in one write. What comes back is what Undo needs.
+    fun takeOut(plan: ForgetPlan): TakenOut {
+        val taken = TakenOut(
+            settings = plan.removeKeys.mapNotNull { key -> prefs.getString(key, null)?.let { key to it } }.toMap(),
+            current = if (plan.wasCurrent) server else "",
+            sealedSignIn = if (plan.forgetSignIn) prefs.getString(KEY_TOKEN, null) else null,
+        )
+        val edit = prefs.edit().putString(KEY_RECENT, json.encodeToString(plan.recent))
+        plan.removeKeys.forEach { edit.remove(it) }
+        if (plan.wasCurrent) edit.putString(KEY_SERVER, "")
+        if (plan.forgetSignIn) edit.remove(KEY_TOKEN)
+        edit.apply()
+        return taken
+    }
+
+    // Undo: back as it was, unless another server has been signed in to since, whose sign-in then stays.
+    fun putBack(plan: ForgetPlan, taken: TakenOut) {
+        val edit = prefs.edit().putString(KEY_RECENT, json.encodeToString(putBack(recent, plan)))
+        taken.settings.forEach { (key, value) -> edit.putString(key, value) }
+        if (server.isEmpty() && !prefs.contains(KEY_TOKEN)) {
+            if (taken.current.isNotEmpty()) edit.putString(KEY_SERVER, taken.current)
+            if (taken.sealedSignIn != null) edit.putString(KEY_TOKEN, taken.sealedSignIn)
+        }
+        edit.apply()
+    }
+
+    // Every name in the settings file, for working out which belong to a server.
+    val names: Set<String> get() = prefs.all.keys.toSet()
 
     // The address, the key it proved and the token are kept together, in one write. False means
     // this device couldn't seal it, so it lasts only until the app closes.
     fun signedIn(server: SavedServer, token: String): Boolean {
         val sealed = encrypt(json.encodeToString(SignIn(token, server.publicKey)))
         val edit = prefs.edit()
-            .putString(KEY_SERVER, server.url)
-            .putString(KEY_RECENT, json.encodeToString(rememberServer(recent, server)))
+        remembering(edit, recent, rememberServer(recent, server))
+        edit.putString(KEY_SERVER, server.url)
         if (sealed == null) edit.remove(KEY_TOKEN) else edit.putString(KEY_TOKEN, sealed)
         edit.apply()
         return sealed != null
@@ -154,9 +251,9 @@ class SessionStore(context: Context) {
         const val KEY_SERVER = "server"
         const val KEY_TOKEN = "signin"
         const val KEY_RECENT = "recent"
-        const val KEY_THEME = "theme:"
-        const val KEY_TOP_MENU = "topMenu:"
-        const val KEY_TOKENS = "tokens:"
+        const val KEY_THEME = ServerKeys.THEME
+        const val KEY_TOP_MENU = ServerKeys.TOP_MENU
+        const val KEY_TOKENS = ServerKeys.TOKENS
         const val KEYSTORE = "AndroidKeyStore"
         const val ALIAS = "wittymediaclient-session"
         const val TRANSFORM = "AES/GCM/NoPadding"

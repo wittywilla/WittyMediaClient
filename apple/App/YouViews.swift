@@ -109,6 +109,7 @@ struct YouView: View {
             if PeerLibrary.available {
                 row(.away, "dot.radiowaves.left.and.right", RowTint.account, "rowAway", value: model.awayRowValue)
             }
+            row(.servers, "server.rack", RowTint.quiet, "rowServers", value: "\(model.recent.count)")
         }
         if isAdmin {
             ListGroup(title: say("groupServer")) {

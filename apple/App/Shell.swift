@@ -209,6 +209,7 @@ private struct TabRoot: View {
                     case .signInTv: SignInTvView().plainNavigation()
                     case .theme: ThemeView().plainNavigation()
                     case .away: AwayView().plainNavigation()
+                    case .servers: ManageServersView().plainNavigation()
                     #if os(tvOS)
                     case .topMenu: TopMenuView().plainNavigation()
                     #else

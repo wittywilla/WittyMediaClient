@@ -31,6 +31,7 @@ const { startDiscovery } = require('./discover.js')
 const moonlight = require('./moonlight.js')
 const { createClientLog } = require('./clientlog.js')
 const state = require('./state.js')
+const servers = require('./servers.js')
 const tv = require('./tv.js')
 const playback = require('./playback.js')
 const mac = require('./mac.js')
@@ -493,6 +494,7 @@ function learnSoon() {
 // which puts this device on its list, and signs in with the code that comes back.
 async function joinByInvite(link) {
   pairing = null
+  await finishForgetting()
   const invite = p2p.parseInvite(link)
   if (!invite) return { error: 'invite' }
   const opened = await openTunnel({ id: invite.serverId, hints: invite.hints })
@@ -535,7 +537,7 @@ async function joinByInvite(link) {
   }
   saved = state.remember(saved, {
     url, name: guards.cleanName(answer.serverName || invite.name || (pinned && pinned.name)),
-    serverId: identity.serverId, publicKey: identity.publicKey, fingerprint: identity.fingerprint, p2p: info,
+    serverId: identity.serverId, publicKey: identity.publicKey, fingerprint: identity.fingerprint, p2p: info, lastSeen: Date.now(),
   })
   saveState()
   showServer(mine.origin)
@@ -561,6 +563,7 @@ async function forgetP2P(to) {
 // does next, a code it was showing for someone to approve no longer counts.
 async function probe(url) {
   pairing = null
+  await finishForgetting() // a server removed a moment ago and chosen again starts from nothing
   const found = await check(url)
   if (found.error) return { error: found.error }
   const { identity } = found
@@ -569,8 +572,14 @@ async function probe(url) {
   shown = { url: found.url, state: identity.state, publicKey: identity.publicKey || '', logo }
   return {
     ok: true, url: found.url, version: found.version, name: found.name, setupRequired: found.setupRequired,
-    logo: logo ? logo.data : '', identity: { state: identity.state, fingerprint: identity.fingerprint || '' },
+    logo: logo ? logo.data : '', identity: { state: identity.state, fingerprint: identity.fingerprint || '', old: identity.state === 'different' ? oldEntryFor(found.url, identity) : '' },
   }
+}
+
+// The remembered server that this one, with another key, is answering in place of.
+function oldEntryFor(url, identity) {
+  const old = (saved.recent || []).find((s) => s.url === url) || (saved.recent || []).find((s) => s.serverId && s.serverId === identity.serverId)
+  return old ? old.url : ''
 }
 
 // A server's own logo, fetched here because the connect page loads no pictures from anywhere,
@@ -626,9 +635,135 @@ async function dropUnfitSignIn(url, identity, at = url) {
   }
 }
 
-function rememberServer(url, name, identity, logo) {
-  saved = state.remember(saved, { url, name, serverId: identity.serverId, publicKey: identity.publicKey, fingerprint: identity.fingerprint, logo })
+// The server has just proved who it is: that is when it was last reached. One that proves a key
+// remembered at another address is the same server, moved: its entry follows it, its sign-in
+// comes along, and nothing is left behind at the old address.
+async function rememberServer(url, name, identity, logo) {
+  const now = { url, serverId: identity.serverId, publicKey: identity.publicKey }
+  const moved = (saved.recent || []).filter((s) => s.url !== url && servers.sameServer(s, now))
+  saved = state.remember(saved, { url, name, serverId: identity.serverId, publicKey: identity.publicKey, fingerprint: identity.fingerprint, logo, lastSeen: Date.now() })
   saveState()
+  for (const old of moved) {
+    try {
+      if (old.publicKey && old.publicKey === identity.publicKey) await carrySignIn(old.url, url)
+      await clearOrigin(old.url, !(saved.recent || []).some((s) => new URL(s.url).hostname === new URL(old.url).hostname))
+      log.info('app', 'A remembered server answered at a new address, and its entry moved with it', { where: url })
+    } catch (err) {
+      log.noteError('warn', 'app', 'What was kept for a server\'s old address could not be cleared', err, { where: old.url })
+    }
+  }
+}
+
+// ---------------------------------------------------------------- forgetting servers
+
+// How long a removal can be taken back. Until then nothing but the list has changed.
+const UNDO_MS = 8000
+let undoable = null // { taken, timer }: the removal that Undo would put back
+let finishing = Promise.resolve()
+
+// Everything the browser session holds for one address: storage, service workers and cache, and
+// its cookies, unless another remembered server on the same machine shares them (servers.js).
+const STORAGES = ['filesystem', 'indexdb', 'localstorage', 'shadercache', 'websql', 'serviceworkers', 'cachestorage']
+const DATA_TYPES = ['cache', 'cacheStorage', 'fileSystems', 'indexedDB', 'localStorage', 'serviceWorkers', 'webSQL', 'backgroundFetch']
+async function clearOrigin(origin, cookies = true) {
+  const ses = session.defaultSession
+  if (cookies) for (const cookie of await ses.cookies.get({ url: origin })) await ses.cookies.remove(origin, cookie.name)
+  await ses.clearStorageData({ origin, storages: STORAGES })
+  // The HTTP cache for that address too, where this Electron can clear it for one address.
+  if (typeof ses.clearData === 'function') await ses.clearData({ origins: [origin], dataTypes: DATA_TYPES }).catch(() => {})
+}
+
+const forgetDeps = {
+  p2pOrigin: p2p.originFor,
+  clearOrigin,
+  tokenAt: async (origin) => {
+    const [kept] = await session.defaultSession.cookies.get({ url: origin, name: SESSION_COOKIE })
+    return kept ? kept.value : ''
+  },
+  signOut: async (origin, token) => {
+    const res = await fetchJson(origin + API + '/logout', {
+      method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` }, body: '{}', signal: AbortSignal.timeout(servers.SIGN_OUT_TIMEOUT_MS),
+    })
+    res.body?.cancel().catch(() => {})
+  },
+  revokeDevice: async (origin, token) => {
+    const key = p2p.loadKey(keyFile(), safeStorage)
+    if (!key) return
+    const res = await fetchJson(`${origin}${API}/p2p/devices/${encodeURIComponent(key.deviceId)}`, {
+      method: 'DELETE', headers: { Authorization: `Bearer ${token}` }, signal: AbortSignal.timeout(servers.SIGN_OUT_TIMEOUT_MS),
+    })
+    res.body?.cancel().catch(() => {})
+  },
+  closeTunnel: (id) => { if (tunnel && tunnel.id === id) closeTunnel() },
+  forgetDeviceKey: () => p2p.forgetKey(keyFile()),
+}
+
+// Takes servers off the list. What is kept for them goes when the time to undo is over, when
+// anything is connected to, or the next time the app starts, whichever is first.
+function forgetServers(urls) {
+  const wanted = (Array.isArray(urls) ? urls : []).filter((u) => typeof u === 'string').slice(0, state.MAX_RECENT)
+  finishForgetting() // an earlier removal can no longer be undone
+  const { state: next, taken } = servers.takeOut(saved, wanted)
+  if (!taken.length) return { ok: true, removed: [] }
+  saved = next
+  saveState()
+  log.info('app', `${taken.length === 1 ? 'A server was' : `${taken.length} servers were`} removed from this computer`)
+  undoable = { taken, timer: setTimeout(finishForgetting, UNDO_MS) }
+  return { ok: true, removed: taken.map((t) => t.entry.url), undoMs: UNDO_MS }
+}
+
+function undoForget() {
+  if (!undoable) return { ok: false }
+  clearTimeout(undoable.timer)
+  saved = servers.putBack(saved, undoable.taken)
+  undoable = null
+  saveState()
+  return { ok: true }
+}
+
+// One at a time, each after the last, and answers when nothing is left waiting.
+function finishForgetting() {
+  if (undoable) clearTimeout(undoable.timer)
+  undoable = null
+  // Only what is waiting now: a removal made after this one keeps its own time to be undone.
+  const batch = [...(saved.forgetting || [])]
+  finishing = finishing.then(async () => {
+    for (const entry of batch) {
+      if (!(saved.forgetting || []).includes(entry)) continue
+      try {
+        const done = await servers.forget(entry, saved.recent, forgetDeps)
+        if (done.failed.length) log.warn('app', 'Some of what was kept for a removed server could not be cleared', { where: entry.url })
+      } catch (err) {
+        log.noteError('warn', 'app', 'A removed server could not be forgotten completely', err, { where: entry.url })
+      }
+      const left = (saved.forgetting || []).filter((s) => s !== entry)
+      if (left.length) saved.forgetting = left
+      else delete saved.forgetting
+      saveState()
+    }
+  })
+  return finishing
+}
+
+// A list that had one server twice was made one entry each when it was read: what was kept for
+// the addresses that went has no entry to belong to any more.
+async function clearMergedAway() {
+  for (const url of saved.merged || []) {
+    if ((saved.recent || []).some((s) => servers.originsOf(s, p2p.originFor).includes(url))) continue
+    await clearOrigin(url, !(saved.recent || []).some((s) => new URL(s.url).hostname === new URL(url).hostname)).catch((err) => log.noteError('warn', 'app', 'What was kept for a duplicate entry could not be cleared', err, { where: url }))
+  }
+  if ((saved.merged || []).length) {
+    log.info('app', `The list of servers had the same server more than once: ${saved.merged.length} duplicate entries were merged`)
+    saveState()
+  }
+}
+
+const dayOf = (s, now) => servers.daysSince(s, now)
+function recentForPage() {
+  const now = Date.now()
+  return (saved.recent || []).map((s) => ({
+    url: s.url, name: s.name, logo: s.logo ? s.logo.data : '', id: s.serverId || '', days: dayOf(s, now), stale: servers.isStale(s, now),
+  }))
 }
 
 // Goes to a server someone chose, without a code: they sign in on its own page.
@@ -642,7 +777,7 @@ async function openServer(request) {
     log.noteError('warn', 'app', 'An old sign-in could not be forgotten', err, { where: found.url })
     return { error: 'identity' }
   }
-  rememberServer(found.url, found.name, found.identity, shownLogo(found.url))
+  await rememberServer(found.url, found.name, found.identity, shownLogo(found.url))
   showServer(found.at)
   return { ok: true }
 }
@@ -684,7 +819,7 @@ async function keepSignIn(found, token) {
     log.noteError('error', 'app', 'The sign-in could not be kept', err, { where: found.url })
     return { error: 'unreachable' }
   }
-  rememberServer(found.url, found.name, found.identity, shownLogo(found.url))
+  await rememberServer(found.url, found.name, found.identity, shownLogo(found.url))
   showServer(found.at)
   return { ok: true }
 }
@@ -769,6 +904,8 @@ async function leaveServer() {
 
 // What the last run was using, if it still is who it was.
 async function startUp() {
+  await clearMergedAway()
+  await finishForgetting() // removals the last run didn't get to finish
   const url = saved.server && (p2p.isP2POrigin(saved.server) || !normalizeAddress(saved.server).error) ? saved.server : ''
   if (!url) return showConnect()
   const entry = entryFor(url)
@@ -796,7 +933,7 @@ async function startUp() {
   await dropUnfitSignIn(url, identity)
   if (identity.state !== 'none') {
     const known = (saved.recent || []).find((s) => s.url === url)
-    rememberServer(url, known ? known.name : 'WittyMediaServer', identity)
+    await rememberServer(url, known ? known.name : 'WittyMediaServer', identity)
   }
   return showServer(at)
 }
@@ -970,7 +1107,21 @@ function createWindow() {
 }
 
 ipcMain.handle('probe', (e, url) => (fromConnect(e) ? probe(String(url)) : { error: 'invalid' }))
-ipcMain.handle('recent', (e) => (fromConnect(e) ? (saved.recent || []).map(({ url, name, logo }) => ({ url, name, logo: logo ? logo.data : '' })) : []))
+ipcMain.handle('recent', (e) => (fromConnect(e) ? recentForPage() : []))
+ipcMain.handle('forget', (e, urls) => (fromConnect(e) ? forgetServers(urls) : { ok: false }))
+ipcMain.handle('forget-undo', (e) => (fromConnect(e) ? undoForget() : { ok: false }))
+// The undo on screen has gone, or the person said yes to a question that had no undo.
+ipcMain.handle('forget-finish', async (e) => { if (fromConnect(e)) await finishForgetting(); return { ok: true } })
+// Right-click on a remembered server. The page does the removing, as it does for its own button.
+ipcMain.on('server-menu', (e, url, at) => {
+  if (!fromConnect(e) || !entryFor(String(url))) return
+  const page = e.sender
+  const { width, height } = win.getContentBounds()
+  const point = guards.menuPoint(at, width, height)
+  Menu.buildFromTemplate([
+    { label: 'Remove this server', click: () => { if (!page.isDestroyed()) page.send('forget-ask', String(url)) } },
+  ]).popup({ window: win, ...(point.x === undefined ? {} : { x: point.x, y: point.y + (bar.getVisible() ? TITLE_BAR : 0) }) })
+})
 ipcMain.handle('redeem', (e, url, code) => (fromConnect(e) ? redeem(String(url), String(code)) : { error: 'invalid' }))
 ipcMain.handle('open-server', (e, request) => (fromConnect(e) ? openServer(request) : { error: 'invalid' }))
 ipcMain.handle('pair-start', (e, url) => (fromConnect(e) ? pairStart(String(url)) : { error: 'invalid' }))

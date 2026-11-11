@@ -428,6 +428,14 @@ back gesture or a top-left arrow on Android.
    `findNone`; where the device can't search, `findNotSupported`.
 5. Section `recentServers` ("Used before") and its cards, the last used first, each with that server's own logo and
    name (see Brand) over its address. A found server that's also saved shows only under Used before.
+   A saved server is told by the ID it proved, not its address. Under its name: when it was last reached
+   (`lastReachedToday`, `lastReachedDays`…), and a `staleServer` pill after 90 days. Each can be removed in one
+   action: swipe, long-press or `editServers` on a phone or tablet; hold Select on a TV; a bin, Delete or the
+   right-click menu on a desktop. A phone, tablet or desktop removes at once and offers `undo` for a few seconds; a
+   TV asks first (`removeConfirmTitle`). Focus then goes to the next card, else the one before, else Enter an address.
+   Under the cards, Quiet: `manageServers` (the desktop has `removeOldServers` and `removeAllServers` there
+   directly). Removing never happens by itself, and a removed server that is still on the network shows under
+   On your network again, as any server never used.
 6. `enterAddress` ("Enter an address"): Primary when nothing has been found or used, Secondary otherwise.
 7. The legal note, `legalConnect`, in Caption, `textHint`, centred, at the bottom.
 
