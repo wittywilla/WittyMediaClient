@@ -16,6 +16,8 @@ import XCTest
 ///                         servers' "Remove all" on an iPhone; the card's menu, where focus goes, and
 ///                         Manage servers on an Apple TV
 ///   testAnOldList         a list from an older version, with one server in it twice: it shows once
+///   testAChangedServer    the first server's address is remembered with another key, as after a
+///                         reinstall: the warning explains, and "Remove the old server" forgets it
 ///
 /// What the script hands over, as TEST_RUNNER_ variables: CHECK_A and CHECK_B (the two servers'
 /// addresses) and CHECK_USER and CHECK_PASSWORD (an account on both).
@@ -99,15 +101,26 @@ final class ForgetCheck: XCTestCase {
     /// A server's row in Manage servers.
     private func row(_ address: String) -> XCUIElement { app.buttons["server." + address] }
 
+    /// Whatever can be pressed and has these words: a button, or a line of a menu.
     private func labelled(_ words: String) -> [XCUIElement] {
-        app.buttons.matching(NSPredicate(format: "label == %@", words)).allElementsBoundByIndex
+        let named = NSPredicate(format: "label == %@", words)
+        let buttons = app.buttons.matching(named).allElementsBoundByIndex
+        return buttons.isEmpty ? app.descendants(matching: .any).matching(named).allElementsBoundByIndex : buttons
     }
 
     #if os(tvOS)
-    /// Moves the remote's focus until it is on the thing, down and then up.
-    private func focus(_ what: String, _ on: () -> Bool) async throws {
-        for direction in [XCUIRemote.Button.down, .up] {
-            for _ in 0..<14 {
+    /// The remote's focus is somewhere: on a server found on the network if there is one, as the list
+    /// of servers starts, and otherwise on Enter an address.
+    private func focusIsSomewhere() -> Bool {
+        app.descendants(matching: .any).matching(NSPredicate(format: "hasFocus == true")).count > 0
+    }
+    #endif
+
+    #if os(tvOS)
+    /// Moves the remote's focus until it is on the thing: down and then up a page, or across a question.
+    private func focus(_ what: String, across: Bool = false, _ on: () -> Bool) async throws {
+        for direction in across ? [XCUIRemote.Button.right, .left, .down, .up] : [XCUIRemote.Button.down, .up] {
+            for _ in 0..<(across ? 3 : 14) {
                 if on() { return }
                 XCUIRemote.shared.press(direction)
                 try await pause(0.35)
@@ -152,11 +165,12 @@ final class ForgetCheck: XCTestCase {
 
     /// Answers a question the app asked, with the button that has these words. The page under the
     /// question can have a button of the same words: the question's is the one that can be pressed.
-    private func answer(_ words: String) async throws {
+    /// `only` for a menu of one line, which has the remote's focus as it opens.
+    private func answer(_ words: String, only: Bool = false) async throws {
         _ = try await until("the question's \"\(words)\"", seconds: 15) { self.labelled(words).isEmpty ? nil : true }
         try await pause(0.8)
         #if os(tvOS)
-        try await focus("\"\(words)\" in the question") { self.labelled(words).contains { $0.hasFocus } }
+        if !only { try await focus("\"\(words)\" in the question", across: true) { self.labelled(words).contains { $0.hasFocus } } }
         XCUIRemote.shared.press(.select)
         #else
         let found = labelled(words)
@@ -265,12 +279,16 @@ final class ForgetCheck: XCTestCase {
         XCTAssertTrue(enter.waitForExistence(timeout: 20), "the app didn't go back to the list of servers")
         #if os(tvOS)
         try await pause(1.5)
-        XCTAssertTrue(enter.hasFocus, "focus isn't on Enter an address")
+        XCTAssertTrue(focusIsSomewhere(), "focus is nowhere")
+        if app.buttons.matching(NSPredicate(format: "label CONTAINS %@", "Found on your network")).count == 0 {
+            XCTAssertTrue(enter.hasFocus, "focus isn't on Enter an address")
+        }
         #endif
         XCTAssertFalse(card(b).exists, "\(b) is still under Used before")
         XCTAssertFalse(app.buttons["Manage servers"].exists, "Manage servers is offered with nothing to manage")
         _ = try await until("the server ending the app's sign-in") { try await self.appSignIns(b, token: me.token).isDisjoint(with: before) ? true : nil }
         picture("in-use-removed")
+        try await pause(3)
         app.terminate()
     }
 
@@ -287,7 +305,7 @@ final class ForgetCheck: XCTestCase {
         // The card's menu, which asks first; then focus goes to the card that is left.
         try await focus(card(a), "the card of \(a)")
         XCUIRemote.shared.press(.select, forDuration: 1.5)
-        try await answer("Remove this server")
+        try await answer("Remove this server", only: true)
         picture("list-asked")
         try await answer("Remove")
         _ = try await until("\(a) leaving the list") { self.card(a).exists ? nil : true }
@@ -303,6 +321,7 @@ final class ForgetCheck: XCTestCase {
         XCTAssertTrue(enter.waitForExistence(timeout: 10), "the app didn't go back to the list of servers")
         try await pause(1.5)
         XCTAssertTrue(enter.hasFocus, "with nothing left, focus isn't on Enter an address")
+        XCTAssertFalse(app.buttons["Manage servers"].exists, "Manage servers is offered with nothing to manage")
         XCTAssertFalse(card(b).exists, "\(b) is still listed")
         #else
         let undo = app.buttons["undoRemove"]
@@ -328,7 +347,7 @@ final class ForgetCheck: XCTestCase {
         card(b).press(forDuration: 1.2)
         try await pause(0.5)
         picture("menu")
-        try await answer("Remove this server")
+        try await answer("Remove this server", only: true)
         _ = try await until("\(b) leaving by its menu") { self.card(b).exists ? nil : true }
         XCTAssertTrue(undo.waitForExistence(timeout: 5), "no Undo was offered")
         undo.tap()
@@ -347,6 +366,8 @@ final class ForgetCheck: XCTestCase {
         XCTAssertFalse(app.buttons["Manage servers"].exists, "Manage servers is offered with nothing to manage")
         #endif
         picture("list-empty")
+        // Long enough for what was removed to be written down, and for the servers to be told.
+        try await pause(5)
         app.terminate()
     }
 
@@ -362,7 +383,33 @@ final class ForgetCheck: XCTestCase {
         XCTAssertTrue(card("http://10.255.0.9:9797").label.contains("Not reached lately"), "a server last reached long ago isn't marked: \(card("http://10.255.0.9:9797").label)")
         picture("old-list")
         // Long enough for the list to be written down.
-        try await pause(2)
+        try await pause(3)
+        app.terminate()
+    }
+
+    /// The script has written a list with the first server's address in it under another key. Choosing
+    /// it shows the warning, with the safe choice first; removing the old server leaves the address
+    /// free to be added as new.
+    func testAChangedServer() async throws {
+        let a = try given("CHECK_A")
+        app.launchArguments = ["-WittyCheckPicker", "1"]
+        app.launch()
+        try await press(card(a), "the card of \(a)")
+        XCTAssertTrue(app.staticTexts["This isn't the server you used before"].waitForExistence(timeout: 30), "no warning about a server that changed")
+        XCTAssertTrue(app.staticTexts.matching(NSPredicate(format: "label BEGINSWITH %@", "If your server was reinstalled")).firstMatch.exists, "the warning doesn't explain a reinstall")
+        #if os(tvOS)
+        try await pause(1)
+        XCTAssertTrue(app.buttons["Back"].firstMatch.hasFocus, "the safe choice doesn't have focus")
+        #endif
+        picture("changed")
+        try await press(app.buttons["Remove the old server"], "Remove the old server")
+        XCTAssertTrue(app.buttons["Enter an address"].waitForExistence(timeout: 20), "the app didn't go back to the list of servers")
+        XCTAssertTrue(app.staticTexts.matching(NSPredicate(format: "label BEGINSWITH %@", "The old server was removed")).firstMatch.waitForExistence(timeout: 5)
+                      || app.descendants(matching: .any).matching(NSPredicate(format: "label CONTAINS %@", "The old server was removed")).count > 0,
+                      "nothing says the old server was removed")
+        XCTAssertFalse(card(a).exists, "the old server is still under Used before")
+        picture("changed-removed")
+        try await pause(3)
         app.terminate()
     }
 }

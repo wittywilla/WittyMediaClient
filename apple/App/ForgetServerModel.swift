@@ -252,7 +252,9 @@ extension AppModel {
         let usingWay = leaving.using.map(ServerKeys.peerKey)
         for key in plan.keys where !(key == usingWay && PeerLibrary.available) { defaults.removeObject(forKey: key) }
         objectWillChange.send()
-        ClientLog.shared.info("servers", plan.removed.count == 1 ? "A server was removed from this device" : "\(plan.removed.count) servers were removed from this device")
+        ClientLog.shared.info("servers", "Removed from this device: \(plan.removed.count) server\(plan.removed.count == 1 ? "" : "s"), with \(plan.keys.count) of the settings kept here")
+        // Written down now: a removal shouldn't come back because the app was closed a moment later.
+        defaults.synchronize()
 
         if undoable, leaving.using == nil, plan.removed.count == 1, let server = plan.removed.first {
             let kept = leaving
@@ -289,6 +291,7 @@ extension AppModel {
             if plan.hosts.contains(domain.hasPrefix(".") ? String(domain.dropFirst()) : domain) { jar.deleteCookie(cookie) }
         }
         sweep()
+        defaults.synchronize()
         let others = plan.removed.filter { $0.url != leaving.using?.url }
         Task {
             for server in others {
