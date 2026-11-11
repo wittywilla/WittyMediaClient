@@ -47,6 +47,8 @@ if (scenario === 'tv') {
 // A Mac's title bar leaves the window's buttons and Help to the system.
 const MAC = process.platform === 'darwin'
 const PORT = 20000 + (process.pid % 30000)
+// On another name, as cookies are kept by a machine's name and not by its port.
+const OTHER_URL = `http://localhost:${PORT + 1}`
 const SEEDS = {
   same: (url, key) => ({ server: url, recent: [{ url, name: 'Remembered', publicKey: key, serverId: SERVER_ID }] }),
   other: (url) => ({ server: url, recent: [{ url, name: 'Remembered', publicKey: rawKey(newKeys()), serverId: SERVER_ID }] }),
@@ -54,6 +56,12 @@ const SEEDS = {
   // Valid JSON, and none of it usable: this used to stop the app from starting.
   damaged: () => ({ server: 7, window: { width: 'wide', height: null }, recent: [null, 7, { url: 'javascript:alert(1)' }] }),
   certificate: (url) => ({ server: url.replace('http:', 'https:'), recent: [] }),
+  // Two servers, one of them listed twice as a version before this one could leave it, and nothing in use.
+  forget: (url, key) => ({ server: '', recent: [
+    { url, name: 'Kept home', publicKey: key, serverId: SERVER_ID, lastSeen: Date.now() },
+    { url: OTHER_URL, name: 'Shed', lastSeen: Date.now() - 200 * 86400000 },
+    { url: 'http://127.0.0.1:9', name: 'Kept home, before it moved', publicKey: key, serverId: SERVER_ID },
+  ] }),
 }
 
 // ---------------------------------------------------------------- what can't be real here
@@ -723,6 +731,105 @@ async function run() {
   listener.close()
 }
 
+// Removing remembered servers: one, with Undo; the old ones; all of them. What is checked is what
+// is left on this computer and what the servers were told.
+async function forgetting(url) {
+  await app.whenReady()
+  await onConnect()
+  await onHeading(S.findTitle)
+  const names = () => inPage(`Array.from(document.querySelectorAll('.server .name')).map((n) => n.textContent)`)
+  const cookieAt = (at, value) => session.defaultSession.cookies.set({ url: at, name: 'wms_token', value, httpOnly: true })
+  const kept = async (at) => (await signInCookies(at)).map((c) => c.value)
+
+  await step('a list with one server twice is one entry each, and says when each was reached', async () => {
+    assert.deepStrictEqual(await names(), ['Kept home', 'Shed'])
+    assert.deepStrictEqual(stateFile().recent.map((s) => s.url), [url, OTHER_URL])
+    const text = await pageText()
+    assert.ok(text.includes(S.lastReachedToday) && text.includes(S.lastReachedDays.replace('{days}', '200')) && text.includes(S.staleServer), text)
+    assert.strictEqual(await inPage(`document.querySelector('[data-remove="${OTHER_URL}"]').getAttribute('aria-label')`), 'Remove Shed')
+    await shot('list-remove')
+  })
+
+  await cookieAt(url, 'a'.repeat(48))
+  await cookieAt(OTHER_URL, 'b'.repeat(48))
+
+  await step('Delete on a server removes it, says so, and puts focus on the one beside it', async () => {
+    await inPage(`document.querySelector('.server[data-url="${OTHER_URL}"]').focus()`)
+    await key('Delete')
+    await until('the row to go', async () => (await names()).length === 1)
+    assert.ok((await pageText()).includes('Removed Shed.'))
+    assert.strictEqual(await inPage('document.activeElement.dataset.url'), url)
+    assert.deepStrictEqual(stateFile().recent.map((s) => s.url), [url])
+    assert.deepStrictEqual(stateFile().forgetting.map((s) => s.url), [OTHER_URL])
+    assert.deepStrictEqual(await kept(OTHER_URL), ['b'.repeat(48)], 'nothing is deleted while it can be undone')
+    assert.deepStrictEqual(stand.loggedOut, [])
+    await shot('list-removed')
+  })
+
+  await step('Undo puts it back where it was, still signed in, and the server heard nothing', async () => {
+    await clickText(S.undo)
+    await until('the row to come back', async () => (await names()).length === 2)
+    assert.deepStrictEqual(await names(), ['Kept home', 'Shed'])
+    assert.strictEqual(await inPage('document.activeElement.dataset.url'), OTHER_URL)
+    assert.strictEqual(stateFile().forgetting, undefined)
+    assert.deepStrictEqual(await kept(OTHER_URL), ['b'.repeat(48)])
+    assert.deepStrictEqual(stand.loggedOut, [])
+  })
+
+  await step('a right-click on a remembered server offers to remove it', async () => {
+    const before = menus.length
+    await inPage(`document.querySelector('.server[data-url="${OTHER_URL}"]').dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true, clientX: 40, clientY: 40 }))`)
+    await until('the menu', () => menus.length === before + 1)
+    assert.deepStrictEqual(menus[menus.length - 1].labels, ['Remove this server'])
+  })
+
+  await step('servers not reached for a while are named before anything goes, and Escape keeps them', async () => {
+    await clickText(S.removeOldServers)
+    await onHeading(S.removeOldTitle)
+    await clickText(S.staleDays365)
+    await until('the answer', async () => (await pageText()).includes(S.removeOldNone))
+    await clickText(S.staleDays90)
+    await onHeading(S.removeOldConfirmTitle)
+    const text = await pageText()
+    assert.ok(text.includes('Shed') && !text.includes('Kept home'), text)
+    assert.strictEqual(await focused(), S.cancel, 'the safe answer has focus')
+    await shot('remove-old')
+    await key('Escape')
+    await onHeading(S.findTitle)
+    assert.strictEqual((await names()).length, 2)
+  })
+
+  await step('its button removes it; once Undo has gone its sign-in is ended there and everything kept for it is cleared', async () => {
+    await inPage(`document.querySelector('[data-remove="${OTHER_URL}"]').click()`)
+    await until('the row to go', async () => (await names()).length === 1)
+    await until('the sign-out', () => stand.loggedOut.length === 1, 15000)
+    assert.strictEqual(stand.loggedOut[0], `Bearer ${'b'.repeat(48)}`)
+    await until('its cookie to go', async () => (await kept(OTHER_URL)).length === 0)
+    await until('the list of what is waiting to empty', () => stateFile().forgetting === undefined)
+    assert.deepStrictEqual(await kept(url), ['a'.repeat(48)], 'the other server is still signed in')
+    assert.deepStrictEqual(stateFile().recent.map((s) => s.name), ['Kept home'])
+    await until('the undo to go', async () => !(await pageText()).includes(S.undo))
+  })
+
+  await step('Remove all asks first, with what will go, and then nothing is left', async () => {
+    await clickText(S.removeAllServers)
+    await onHeading(S.removeAllTitle)
+    assert.ok((await pageText()).includes('Kept home'))
+    assert.strictEqual(await focused(), S.cancel)
+    await shot('remove-all')
+    await inPage(`document.querySelector('button.destructive').click()`)
+    await onHeading(S.findTitle)
+    await until('an empty list', async () => (await names()).length === 0)
+    assert.strictEqual(await focused(), S.enterAddress, 'focus is somewhere a key can move from')
+    await inPage('window.wittyClient.forgetFinish()')
+    await until('the sign-out', () => stand.loggedOut.length === 2)
+    assert.deepStrictEqual(await kept(url), [])
+    const left = stateFile()
+    assert.deepStrictEqual([left.recent, left.server, left.forgetting], [[], '', undefined])
+    noCrash()
+  })
+}
+
 async function standIn() {
   const listener = http.createServer(answerRequest)
   await new Promise((resolve) => listener.listen(0, '127.0.0.1', resolve))
@@ -870,8 +977,9 @@ function start() {
   } else if (scenario !== 'lost') {
     http.createServer(answerRequest).listen(PORT, '127.0.0.1')
   }
+  if (scenario === 'forget') http.createServer(answerRequest).listen(PORT + 1)
   require('../../main.js')
-  return seeded(url)
+  return scenario === 'forget' ? forgetting(url) : seeded(url)
 }
 
 start().then(() => 0, (err) => {

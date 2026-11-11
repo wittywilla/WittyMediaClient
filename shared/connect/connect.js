@@ -62,6 +62,12 @@
   let connecting = '' // the server whose card shows a spinner while it's asked
   let screen = 0 // which screen this is, so an answer that arrives late can tell it has been left
   const ENTER_ADDRESS = 'enter-address'
+  let toast = null // what was just removed, to say so on the list with a way to take it back
+  const canForget = typeof bridge.forget === 'function'
+  // The words with their {gaps} filled in.
+  const fill = (words, values) => String(words || '').replace(/\{(\w+)\}/g, (all, key) => (values[key] === undefined ? all : String(values[key])))
+  const nameOf = (s) => s.name || hostOf(s.url)
+  const STALE_CHOICES = [[30, 'staleDays30'], [90, 'staleDays90'], [180, 'staleDays180'], [365, 'staleDays365']]
 
   // Roles and aria-* are attributes: as properties, older browsers ignore them.
   function el(tag, props, ...kids) {
@@ -90,6 +96,7 @@
     erase: ['M9 5h10.5A1.5 1.5 0 0 1 21 6.5v11a1.5 1.5 0 0 1-1.5 1.5H9l-6.5-7z', 'M12 9.5l5 5', 'M17 9.5l-5 5'],
     rack: ['M4.5 4.5h15a1.5 1.5 0 0 1 1.5 1.5v3.5a1.5 1.5 0 0 1-1.5 1.5h-15A1.5 1.5 0 0 1 3 9.5V6a1.5 1.5 0 0 1 1.5-1.5z',
       'M4.5 13h15a1.5 1.5 0 0 1 1.5 1.5V18a1.5 1.5 0 0 1-1.5 1.5h-15A1.5 1.5 0 0 1 3 18v-3.5A1.5 1.5 0 0 1 4.5 13z', 'M7 7.75h.01', 'M7 16.25h.01'],
+    bin: ['M4.5 7h15', 'M9.5 7V5a1 1 0 0 1 1-1h3a1 1 0 0 1 1 1v2', 'M6.5 7l.8 11.6a1.5 1.5 0 0 0 1.5 1.4h6.4a1.5 1.5 0 0 0 1.5-1.4L17.5 7', 'M10 11v5.5', 'M14 11v5.5'],
     warning: ['M12 2.6c.6 0 1.1.3 1.4.8l9 15.8c.6 1.1-.2 2.4-1.4 2.4H3c-1.2 0-2-1.3-1.4-2.4l9-15.8c.3-.5.8-.8 1.4-.8zM10.9 8.5v6h2.2v-6zm0 8v2.2h2.2v-2.2z'],
   }
   const icon = (name, className) => svg('svg', { viewBox: '0 0 24 24', class: `icon ${name} ${className || ''}`, 'aria-hidden': 'true' },
@@ -215,15 +222,112 @@
   function serverCard(s, opts) {
     const o = opts || {}
     const picture = o.found ? el('span', { className: 'glyph' }, icon('rack')) : serverMark(s.logo)
-    const words = o.found ? [hostOf(s.url), S.foundOnNetwork] : [s.name || hostOf(s.url), s.name ? hostOf(s.url) : '']
+    // A remembered server also says when it was last reached, so an old one can be told from one in use.
+    const reached = o.found || !canForget ? '' : reachedWords(s)
+    const where = [s.name ? hostOf(s.url) : '', reached].filter(Boolean).join(' · ')
+    const words = o.found ? [hostOf(s.url), S.foundOnNetwork] : [s.name || hostOf(s.url), where]
     const card = el('button', { type: 'button', className: 'server', onclick: () => { listFocus = s.url; choose(s.url, '', card) } },
       picture, el('span', { className: 'who' }, el('span', { className: 'name', textContent: words[0] }), el('span', { className: 'where', textContent: words[1] })))
     if (o.lastUsed) card.appendChild(el('span', { className: 'pill', textContent: S.lastUsed }))
+    else if (s.stale && !o.found) card.appendChild(el('span', { className: 'pill stale', textContent: S.staleServer }))
     card.appendChild(icon('next', 'chevron'))
     card.appendChild(spinner())
     card.dataset.url = s.url
     if (s.url === connecting) busyCard(card)
     return card
+  }
+
+  function reachedWords(s) {
+    if (typeof s.days !== 'number') return S.lastReachedUnknown
+    if (s.days === 0) return S.lastReachedToday
+    return s.days === 1 ? S.lastReachedYesterday : fill(S.lastReachedDays, { days: s.days })
+  }
+
+  // A remembered server with its remove button beside it. Delete or Backspace on the card does the
+  // same, and so does its right-click menu.
+  function recentRow(s, opts, remove) {
+    const card = serverCard(s, opts)
+    if (!canForget) return card
+    const bin = button('', () => remove(s), { kind: 'quiet', icon: 'bin', className: 'remove', label: fill(S.removeServerNamed, { name: nameOf(s) }) })
+    bin.title = S.removeServer
+    bin.dataset.remove = s.url
+    card.setAttribute('aria-keyshortcuts', 'Delete')
+    card.addEventListener('keydown', (e) => {
+      if (e.ctrlKey || e.altKey || e.metaKey || (e.key !== 'Delete' && e.key !== 'Backspace')) return
+      e.preventDefault()
+      remove(s)
+    })
+    card.addEventListener('contextmenu', (e) => {
+      e.preventDefault()
+      if (bridge.serverMenu) bridge.serverMenu(s.url, { x: Math.round(e.clientX), y: Math.round(e.clientY) })
+      else remove(s)
+    })
+    return el('div', { className: 'row' }, card, bin)
+  }
+
+  // Takes servers off this device. The app holds on to what it kept for them for a few seconds, so
+  // Undo puts everything back; after that it is gone, and the server is told the sign-in is over.
+  async function forgetNow(list, all, focusAfter) {
+    let r
+    try { r = await bridge.forget(list.map((s) => s.url)) } catch (e) { r = { ok: false } }
+    if (!r || !r.ok || !r.removed.length) return listScreen()
+    const words = list.length === 1 ? fill(S.removedServer, { name: nameOf(list[0]) }) : fill(S.removedCount, { count: r.removed.length })
+    toast = { words, back: list[0].url, undoMs: r.undoMs || 8000, names: list.map(nameOf).join(', ') }
+    // Somewhere sensible for the keyboard and a remote: the next server, the one before, or the address button.
+    const left = all.filter((s) => !list.includes(s))
+    const at = all.indexOf(list[0])
+    const neighbour = all.slice(at + 1).find((s) => left.includes(s)) || all.slice(0, at).reverse().find((s) => left.includes(s))
+    listFocus = focusAfter || (neighbour ? neighbour.url : ENTER_ADDRESS)
+    return listScreen()
+  }
+
+  function toastNode() {
+    const mine = toast
+    toast = null
+    const node = el('div', { className: 'toast', role: 'status' }, el('span', { textContent: mine.words }))
+    const timer = setTimeout(() => { if (node.parentNode) node.parentNode.removeChild(node) }, mine.undoMs)
+    node.appendChild(button(S.undo, async () => {
+      clearTimeout(timer)
+      let r
+      try { r = await bridge.forgetUndo() } catch (e) { r = { ok: false } }
+      listFocus = mine.back
+      await listScreen()
+      if (r && r.ok) announcer.textContent = fill(S.removeUndone, { name: mine.names })
+    }, { kind: 'quiet', className: 'undo' }))
+    return node
+  }
+
+  // Yes or no, with the safe answer first and focused.
+  function confirmScreen(title, body, yes, onYes) {
+    show({
+      escape: () => listScreen(),
+      className: 'warning',
+      words: [el('h1', { textContent: title }), el('p', { className: 'lead', textContent: body })],
+      actions: [button(S.cancel, () => listScreen(), { kind: 'primary' }), button(yes, onYes, { kind: 'destructive' })],
+    })
+  }
+
+  const namesOf = (list) => list.map(nameOf).join(', ')
+
+  function removeAllScreen(recent) {
+    confirmScreen(S.removeAllTitle, fill(S.removeAllBody, { count: recent.length, names: namesOf(recent) }), S.removeAllServers, () => forgetNow(recent, recent))
+  }
+
+  // Which servers haven't been reached for a while: the person chooses how long, sees which those
+  // are, and only then says yes. One whose last time isn't known is never chosen on a guess.
+  function removeOldScreen(recent) {
+    const said = el('p', { className: 'lead', role: 'status' })
+    const choices = STALE_CHOICES.map(([days, key]) => button(S[key], () => {
+      const old = recent.filter((s) => typeof s.days === 'number' && s.days >= days)
+      if (!old.length) { said.textContent = S.removeOldNone; return }
+      confirmScreen(S.removeOldConfirmTitle, fill(S.removeOldConfirmBody, { period: S[key], count: old.length, names: namesOf(old) }), S.remove, () => forgetNow(old, recent))
+    }))
+    show({
+      back: () => listScreen(),
+      words: [el('h1', { textContent: S.removeOldTitle }), el('p', { className: 'lead', textContent: S.removeOldHint }), said],
+      actions: choices,
+      focus: choices[0],
+    })
   }
 
   function busyCard(card) {
@@ -246,11 +350,16 @@
     listAvailable = bridge.supportsDiscovery || recent.length > 0
     if (!listAvailable) return addressScreen(message)
     connecting = ''
+    knownIds = {}
+    for (const s of recent) if (s.id) knownIds[s.url] = s.id
 
     const lastUsed = recent.length ? recent[0].url : ''
     const foundList = el('div', { className: 'list' })
-    const recentList = el('div', { className: 'list' }, ...recent.map((s) => serverCard(s, { lastUsed: s.url === lastUsed })))
-    const saved = recent.map((s) => s.url)
+    const removeOne = (s) => forgetNow([s], recent)
+    const recentList = el('div', { className: 'list' }, ...recent.map((s) => recentRow(s, { lastUsed: s.url === lastUsed }, removeOne)))
+    if (bridge.onForgetAsk) bridge.onForgetAsk((url) => { const s = recent.find((r) => r.url === url); if (s && renderFound) removeOne(s) })
+    // Found now and used before is one server, listed once: told by who it is, not only by where.
+    const isSaved = (f) => recent.some((s) => s.url === f.url || (s.id && s.id === f.id))
     const recentHeading = el('h2', { textContent: S.recentServers })
     const status = el('p', { role: 'status', textContent: S.findSearching })
     const searching = el('div', { className: 'note' }, spinner(), status)
@@ -262,8 +371,14 @@
     } else {
       actions.push(el('div', { className: 'note' }, el('p', { textContent: S.findNotSupported })))
     }
+    if (toast) actions.push(toastNode())
     if (recent.length) {
       actions.push(recentHeading, recentList)
+      if (canForget) {
+        actions.push(el('div', { className: 'links manage', role: 'group', 'aria-label': S.manageServers },
+          button(S.removeOldServers, () => { listFocus = ENTER_ADDRESS; removeOldScreen(recent) }, { kind: 'quiet' }),
+          button(S.removeAllServers, () => { listFocus = ENTER_ADDRESS; removeAllScreen(recent) }, { kind: 'quiet' })))
+      }
     }
     // The main action until there's a server to choose.
     const enterAddress = button(S.enterAddress, () => { listFocus = ENTER_ADDRESS; addressScreen() }, { icon: 'link', kind: recent.length ? 'secondary' : 'primary', className: 'enter' })
@@ -281,7 +396,7 @@
       const focusedIndex = Array.from(foundList.children).indexOf(document.activeElement)
       foundList.textContent = ''
       // A server that's found and also saved is listed once, under Used before, with its own name.
-      for (const s of found) if (!saved.includes(s.url)) foundList.appendChild(serverCard(s, { found: true }))
+      for (const s of found) if (!isSaved(s)) foundList.appendChild(serverCard(s, { found: true }))
       const stillLooking = Date.now() - startedAt <= NONE_AFTER_MS
       // Shown before it speaks, or a screen reader may not hear it.
       searching.className = found.length ? 'note gone' : stillLooking ? 'note searching' : 'note'
@@ -292,7 +407,7 @@
       else if (hadFocus) {
         // The focused server went away. Without this, a remote has nothing to move from: its
         // remembered row if it has one, the next server, or the first thing left.
-        const remembered = Array.from(recentList.children).find((b) => b.dataset.url === focusedUrl)
+        const remembered = Array.from(recentList.querySelectorAll('.server')).find((b) => b.dataset.url === focusedUrl)
         const neighbour = foundList.children[Math.min(focusedIndex, foundList.children.length - 1)]
         const fallback = remembered || neighbour || app.querySelector('.actions button:not([hidden])')
         if (fallback) fallback.focus()
@@ -380,11 +495,25 @@
     } else {
       turn = waitScreen()
     }
-    const server = await ask(url)
+    let server = await ask(url)
     if (turn !== screen) return undefined
+    // Not where it was, but on the network now under the same ID: asked there instead. It still has
+    // to prove it is the same server, and then its entry moves with it.
+    const moved = server.error === 'unreachable' && card ? movedTo(url) : ''
+    if (moved) {
+      server = await ask(moved)
+      if (turn !== screen) return undefined
+    }
     connecting = ''
     if (server.error) return addressScreen(ERRORS[server.error], url)
     return next(server, message)
+  }
+
+  let knownIds = {} // each remembered address's server ID, as the list last had them
+  function movedTo(url) {
+    const id = knownIds[url]
+    const now = id && found.find((f) => f.id === id && f.url !== url)
+    return now ? now.url : ''
   }
 
   // What this server needs before it can be opened.
@@ -410,10 +539,18 @@
 
   function identityScreen(server, message) {
     const said = problem(message || '')
+    // A reinstalled server is a different server to this app: the old one can go, and this one is added as new.
+    const old = canForget && server.identity && server.identity.old
+    const removeOld = async () => {
+      try { await bridge.forget([old]); await bridge.forgetFinish() } catch (e) { /* the list says what is left */ }
+      listFocus = ''
+      listScreen(S.removedOldOne)
+    }
     show({
       escape: () => listScreen(),
       className: 'warning',
-      words: [el('div', { className: 'badge' }, icon('warning')), el('h1', { textContent: S.identityTitle }), el('p', { className: 'lead', textContent: S.identityHint })],
+      words: [el('div', { className: 'badge' }, icon('warning')), el('h1', { textContent: S.identityTitle }), el('p', { className: 'lead', textContent: S.identityHint })]
+        .concat(old ? [el('p', { className: 'lead', textContent: S.reinstalledHint })] : []),
       actions: [
         el('div', { className: 'facts' },
           el('p', { className: 'where', textContent: server.url }),
@@ -422,7 +559,7 @@
         said.node,
         button(S.back, () => listScreen(), { kind: 'primary' }),
         button(S.identityTrust, () => enter({ url: server.url, name: server.name, trust: true }), { kind: 'destructive' }),
-      ],
+      ].concat(old ? [button(S.removeOldOne, removeOld)] : []),
     })
   }
 

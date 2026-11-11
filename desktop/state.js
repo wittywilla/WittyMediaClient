@@ -6,6 +6,7 @@
 const fs = require('fs')
 const { normalizeAddress } = require('./connect/address.js')
 const { isP2POrigin, cleanInfo } = require('./p2p.js')
+const { merge, sameServer } = require('./servers.js')
 
 const MAX_RECENT = 8
 const MIN_WINDOW = 100
@@ -30,6 +31,8 @@ function cleanEntry(entry) {
   // How to reach it from away: its connection ID, and where it was last found.
   const p2p = cleanInfo(entry.p2p)
   if (p2p) out.p2p = p2p
+  // When it was last reached, in milliseconds. Left out by a version that didn't keep it.
+  if (Number.isSafeInteger(entry.lastSeen) && entry.lastSeen > 0) out.lastSeen = entry.lastSeen
   return out
 }
 
@@ -49,7 +52,19 @@ function clean(s) {
   const out = {}
   if (!s || typeof s !== 'object' || Array.isArray(s)) return out
   if (s.server === '' || isServerUrl(s.server)) out.server = s.server
-  if (Array.isArray(s.recent)) out.recent = s.recent.map(cleanEntry).filter(Boolean).slice(0, MAX_RECENT)
+  // One entry for each server: a list written before servers were told apart by who they are can
+  // have the same one twice, at two addresses. `merged` says which addresses went, for main.js to
+  // clear what was kept for them; it is never written to the file.
+  if (Array.isArray(s.recent)) {
+    const tidy = merge(s.recent.map(cleanEntry).filter(Boolean))
+    out.recent = tidy.list.slice(0, MAX_RECENT)
+    if (tidy.gone.length) Object.defineProperty(out, 'merged', { value: tidy.gone, enumerable: false })
+  }
+  // Servers taken off the list whose data hasn't been cleared yet: finished the next time the app starts.
+  if (Array.isArray(s.forgetting)) {
+    const waiting = s.forgetting.map(cleanEntry).filter(Boolean).slice(0, MAX_RECENT * 2)
+    if (waiting.length) out.forgetting = waiting
+  }
   if (s.window && windowSide(s.window.width) && windowSide(s.window.height)) out.window = { width: s.window.width, height: s.window.height }
   return out
 }
@@ -91,13 +106,15 @@ function save(file, state) {
 function remember(state, server) {
   const entry = { url: server.url, name: server.name }
   for (const key of ['serverId', 'publicKey', 'fingerprint']) if (server[key]) entry[key] = server[key]
-  const before = (state.recent || []).find((s) => s.url === server.url)
+  const before = (state.recent || []).find((s) => s.url === server.url) || (state.recent || []).find((s) => sameServer(s, server))
+  if (Number.isSafeInteger(server.lastSeen) && server.lastSeen > 0) entry.lastSeen = server.lastSeen
+  else if (before && before.lastSeen) entry.lastSeen = before.lastSeen
   const logo = cleanLogo(server.logo === undefined ? before && before.logo : server.logo)
   if (logo) entry.logo = logo
   // The way to reach it from away stays with it, unless this says otherwise (null forgets it).
   const p2p = cleanInfo(server.p2p === undefined ? before && before.p2p : server.p2p)
   if (p2p) entry.p2p = p2p
-  const others = (state.recent || []).filter((s) => s.url !== server.url && (!server.serverId || s.serverId !== server.serverId))
+  const others = (state.recent || []).filter((s) => !sameServer(s, server))
   return { ...state, server: server.url, recent: [entry, ...others].slice(0, MAX_RECENT) }
 }
 
