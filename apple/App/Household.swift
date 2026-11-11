@@ -249,6 +249,45 @@ extension AppModel {
     }
 }
 
+#if DEBUG
+extension AppModel {
+    private static var openedForTests = false
+
+    /// For the UI tests and for checking a screen on a simulator, in debug builds only: `-WMCOpen profiles`
+    /// opens that page of You once the app is signed in. Also `switch`, `signInTv`, `addProfile`, `parentPin`,
+    /// `myPicture`, `profile:<id>`, `look:<id>`, `secret:<id>`, `report:<id>`, `limits:<id>:<page>` and
+    /// `player:<item id>`.
+    func openForTests() {
+        guard stage == .browsing, !AppModel.openedForTests, let wanted = UserDefaults.standard.string(forKey: "WMCOpen") else { return }
+        AppModel.openedForTests = true
+        let parts = wanted.split(separator: ":").map(String.init)
+        let id = parts.count > 1 ? Int64(parts[1]) ?? 0 : 0
+        if parts.first == "player" {
+            tab = .home
+            paths[.home] = [.player(id, startOver: true)]
+            return
+        }
+        let route: Route?
+        switch parts.first {
+        case "profiles": route = .family(.profiles)
+        case "addProfile": route = .family(.addProfile)
+        case "parentPin": route = .family(.parentPin)
+        case "myPicture": route = .family(.myPicture)
+        case "signInTv": route = .signInTv
+        case "profile": route = .family(.profile(id))
+        case "look": route = .family(.look(id))
+        case "secret": route = .family(.secret(id))
+        case "report": route = .family(.report(id))
+        case "limits": route = .family(.limits(id, parts.count > 2 ? LimitsPage(rawValue: parts[2]) ?? .see : .see))
+        default: route = nil
+        }
+        tab = .profile
+        if let route { paths[.profile] = [route] }
+        if parts.first == "switch" { household.startSwitch(self) }
+    }
+}
+#endif
+
 extension View {
     /// `onChange` as each system wants it written: the one-value form is the only one before iOS 17 and is
     /// deprecated on tvOS 17, which this app starts at.
@@ -288,6 +327,9 @@ struct ScreenTimeGuard: ViewModifier {
             .animation(.easeOut(duration: Tokens.Motion.appear), value: household.notice)
             .task(id: signedIn) {
                 if model.stage == .browsing { await household.use(model.client, offered: model.has("parental-controls")) }
+                #if DEBUG
+                model.openForTests()
+                #endif
             }
             // The bars and You read the limits through the model, so they redraw when the limits arrive.
             .onReceive(household.objectWillChange) { _ in model.objectWillChange.send() }
