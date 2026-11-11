@@ -28,6 +28,7 @@ import android.view.MotionEvent
 import com.wittywilla.wittymediaclient.games.GameInputHub
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
+import com.wittywilla.wittymediaclient.data.TvHome
 import com.wittywilla.wittymediaclient.player.OPEN_NOW_PLAYING
 import com.wittywilla.wittymediaclient.net.NINTENDO_VENDOR
 import com.wittywilla.wittymediaclient.net.nintendoKey
@@ -57,6 +58,8 @@ class MainActivity : ComponentActivity() {
     // Tapping the notification or a TV's card. It can only ask for the player's own screen.
     private fun noticeTap(intent: Intent?) {
         if (intent?.action == OPEN_NOW_PLAYING) (application as WittyApp).listening.wantsScreen = true
+        // A card on an Android TV's home screen: the title it is for. AppRoot opens it once someone is signed in.
+        if (intent?.action == TvHome.OPEN_ROUTE) intent.getStringExtra(TvHome.EXTRA_ROUTE)?.let { (application as WittyApp).wantedRoute = it }
     }
 
     // Before any screen, a web view included: it would keep this for a page that has no use for it.

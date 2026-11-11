@@ -39,10 +39,22 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LifecycleEventEffect
 import com.wittywilla.wittymediaclient.WittyApp
 import com.wittywilla.wittymediaclient.data.LogoCache
+import com.wittywilla.wittymediaclient.data.TvHome
+import com.wittywilla.wittymediaclient.net.TvHomePlan
 import com.wittywilla.wittymediaclient.data.SavedServer
 import com.wittywilla.wittymediaclient.diag.ClientLog
 import com.wittywilla.wittymediaclient.net.Api
 import com.wittywilla.wittymediaclient.net.ApiError
+import com.wittywilla.wittymediaclient.net.SduiClient
+import com.wittywilla.wittymediaclient.net.SduiDevice
+import com.wittywilla.wittymediaclient.net.SduiFileStore
+import com.wittywilla.wittymediaclient.net.SduiNavItem
+import com.wittywilla.wittymediaclient.net.SduiNavigation
+import com.wittywilla.wittymediaclient.net.SduiRouter
+import com.wittywilla.wittymediaclient.net.SduiTarget
+import com.wittywilla.wittymediaclient.net.isRigGame
+import com.wittywilla.wittymediaclient.net.sduiAvailable
+import com.wittywilla.wittymediaclient.tv.watchChannel
 import com.wittywilla.wittymediaclient.net.Identity
 import com.wittywilla.wittymediaclient.net.IdentityState
 import com.wittywilla.wittymediaclient.net.NextStep
@@ -118,11 +130,18 @@ sealed interface Route {
     data class Album(val library: Long, val album: String, val artist: String) : Route { override val key = "album-$library-$artist-$album" }
     data class Artist(val library: Long, val name: String) : Route { override val key = "artist-$library-$name" }
     data object NowPlaying : Route { override val key = "now-playing" }
+    // One of the server's own pages, drawn by the app (docs/PLATFORMS.md, Server-driven pages): asked for as
+    // pages/{page} with these parameters. Home, Search, a library and a title keep their own routes above.
+    data class Sdui(val page: String, val params: Map<String, String> = emptyMap(), val title: String = "") : Route {
+        override val key = "sdui-$page" + params.entries.sortedBy { it.key }.joinToString("") { "&${it.key}=${it.value}" }
+    }
+    // A title's page as the app itself draws it, for what a server-driven page hands back to the app: a shared PC's game.
+    data class OwnItem(val id: Long) : Route { override val key = "own-item-$id" }
 
     // The app's own screens leave room for the mini player. A film, a server's page and signing in don't have it.
     val hasMiniPlayer: Boolean
         get() = when (this) {
-            Home, Search, Profile, Libraries, Games, Notices, Logs, is Library, is Pinned, is Show, is Item, is Album, is Artist, is You -> true
+            Home, Search, Profile, Libraries, Games, Notices, Logs, is Library, is Pinned, is Show, is Item, is Album, is Artist, is You, is Sdui, is OwnItem -> true
             else -> false
         }
 }
@@ -170,8 +189,38 @@ class Nav(val app: WittyApp, private val s: Map<String, String>) {
     var me by mutableStateOf<User?>(null)
 
     // The website's menus: the library strip and the Menu drawer. Loaded once for each sign-in.
-    var menu by mutableStateOf<List<MenuEntry>>(emptyList())
-        private set
+    // The app's own list, for a server without a menu of its own.
+    private var ownMenu by mutableStateOf<List<MenuEntry>>(emptyList())
+
+    // With the server's menu (GET /sdui/navigation): its entries that sit behind More, then what only this app adds
+    // (Game PCs, add-ons' pages). Settings is the app's own You, which the bar already has, so it isn't listed twice.
+    val menu: List<MenuEntry>
+        get() {
+            val served = sduiNav ?: return ownMenu
+            val bar = sduiBar.mapTo(HashSet()) { it.second.key }
+            val seen = HashSet<String>()
+            // Whatever the bar has no room for, and what sits behind More, in the server's order.
+            val rest = served.items.mapNotNull { entry ->
+                val route = routeOf(entry) ?: return@mapNotNull null
+                if (route.key in bar || !seen.add(route.key)) null else MenuEntry("nav:" + entry.id, entry.label, sduiIcon(entry.icon), route)
+            }
+            return rest + ownMenu.filter { it.key == "couch" || it.key.startsWith("m:") }
+        }
+
+    // The floating bar's own places on a phone or tablet, from the server's menu: its primary entries and the ones
+    // pinned to its end, each with where it leads. The bar has five cells, one of them Menu when anything is left
+    // over, and You keeps its place at the end; the rest are along the top by name, and in the drawer.
+    val sduiBar: List<Pair<SduiNavItem, Route>>
+        get() {
+            val served = sduiNav ?: return emptyList()
+            val all = served.items.mapNotNull { entry -> routeOf(entry)?.let { entry to it } }.distinctBy { it.second.key }
+            val wanted = all.filter { it.first.placement == "primary" || it.first.placement == "end" }
+            val extras = ownMenu.any { it.key == "couch" || it.key.startsWith("m:") }
+            if (wanted.size <= BAR_CELLS && wanted.size == all.size && !extras) return wanted
+            val you = wanted.firstOrNull { it.second == Route.Profile }
+            val others = wanted.filter { it !== you }
+            return others.take(if (you != null) BAR_CELLS - 2 else BAR_CELLS - 1) + listOfNotNull(you)
+        }
 
     // Every library this person can see, as the menus were made from: what a music library's Music videos needs.
     var libraries by mutableStateOf<List<com.wittywilla.wittymediaclient.net.Library>>(emptyList())
@@ -194,7 +243,7 @@ class Nav(val app: WittyApp, private val s: Map<String, String>) {
         runCatching { api.modulePages() }.getOrDefault(emptyList()).filter { it.second.where == "main" }.forEach { (module, page) ->
             list += MenuEntry("m:$module:${page.id}", page.title, if (page.icon == "chart") WebIcons.Chart else WebIcons.Plug, Route.Page("/m/$module/${page.id}", page.title))
         }
-        menu = list
+        ownMenu = list
         serverVersion = runCatching { api.status().version }.getOrDefault("")
         legal = runCatching { api.legalNoticesAndLink() }.getOrNull()
     }
@@ -278,11 +327,226 @@ class Nav(val app: WittyApp, private val s: Map<String, String>) {
     var customTheme by mutableStateOf<ThemeMakerInput?>(null)
         private set
 
+    // What this server says it has (/capabilities features): every newer feature is offered only when its name is
+    // here, so the app still works against an older server. Empty until read, which hides them.
+    var features by mutableStateOf<Set<String>>(emptySet())
+        private set
+
+    // Whether the list has been asked for yet: until then Home waits, so it isn't drawn one way and then the other.
+    var featuresRead by mutableStateOf(false)
+        private set
+
+    fun has(feature: String) = feature in features
+
+    // MARK: the server's own pages (ui/Sdui*.kt, net/Sdui*.kt)
+
+    // A server that has them draws Home, the libraries, titles, search and the rest; any other keeps the app's own.
+    val sduiOn: Boolean get() = sduiAvailable(features)
+
+    // What this device is, as every request for a page says: set by AppRoot, and again when the window changes.
+    var sduiDevice by mutableStateOf<SduiDevice?>(null)
+
+    // The catalogue's routes, read once for each sign-in; the app's own copy until then.
+    var sduiRouter by mutableStateOf(SduiRouter())
+        private set
+
+    // The main menu as the server has it for this profile and device. Null until read, and on a server without it.
+    var sduiNav by mutableStateOf<SduiNavigation?>(null)
+        private set
+
+    private var sduiMade: SduiClient? = null
+    private var sduiMadeFor: Pair<Api, SduiDevice>? = null
+    private var sduiReadFor: SduiClient? = null
+
+    // Pages are kept on the device for each sign-in, so the next start draws at once and a server out of reach still
+    // shows them; they go with the sign-in.
+    private val sduiFolder: java.io.File get() = java.io.File(app.cacheDir, "sdui")
+
+    val sdui: SduiClient?
+        get() {
+            val device = sduiDevice ?: return null
+            val api = app.api
+            if (!sduiOn || api.token.isEmpty()) return null
+            if (sduiMadeFor?.first !== api || sduiMadeFor?.second != device) {
+                val who = java.security.MessageDigest.getInstance("SHA-256").digest((api.base + "|" + api.token).toByteArray()).joinToString("") { "%02x".format(it) }.take(24)
+                sduiMade = SduiClient(api.sdui, device, SduiFileStore(java.io.File(sduiFolder, who)))
+                sduiMadeFor = api to device
+            }
+            return sduiMade
+        }
+
+    // The menu and the routes, for the shells. What was kept shows first; the server's answer follows.
+    suspend fun loadSdui() {
+        val client = sdui ?: return
+        if (sduiReadFor === client) return
+        sduiReadFor = client
+        if (sduiNav == null) client.keptNavigation()?.let { sduiNav = it }
+        runCatching { client.navigation() }.onSuccess { if (sdui === client) sduiNav = it.value }.onFailure { handleExpired(it) }
+        runCatching { client.catalog() }.onSuccess { if (sdui === client) sduiRouter = SduiRouter(it.routes, it.commands) }
+    }
+
+    // After the profile rearranged its menu, or a page changed what is in it.
+    suspend fun reloadSduiNav() {
+        val client = sdui ?: return
+        runCatching { client.navigation() }.onSuccess { if (sdui === client) sduiNav = it.value }
+    }
+
+    // A title chosen on an Android TV's home screen: its page, or playing it, over Home. Only those two are taken.
+    fun openFromHomeScreen(route: String) {
+        if (!TvHomePlan.openable(route) || app.api.token.isEmpty()) return
+        reset(Route.Home)
+        go(sduiRouter.resolve(route))
+    }
+
+    // An Android TV's home screen follows what the profile is watching: written when the app is left, and when signed in.
+    fun syncTvHome() {
+        val client = sdui ?: return
+        if (!app.isTv || !has("sdui-topshelf")) return
+        app.scope.launch { TvHome.sync(app, client) }
+    }
+
+    private fun forgetSdui() {
+        TvHome.clear(app)
+        sduiMade = null
+        sduiMadeFor = null
+        sduiReadFor = null
+        sduiNav = null
+        sduiRouter = SduiRouter()
+        val folder = sduiFolder
+        app.scope.launch(kotlinx.coroutines.Dispatchers.IO) { runCatching { folder.deleteRecursively() } }
+    }
+
+    // The route for a place the server names, where it is one of the app's screens or pages; null for what is done
+    // rather than opened (playing something).
+    fun routeOf(target: SduiTarget): Route? = when (target) {
+        is SduiTarget.Page -> when (target.page) {
+            "home" -> Route.Home
+            "detail" -> {
+                val p = target.params
+                val item = p["item"]?.toLongOrNull()
+                val show = p["show"]?.removePrefix("show-")?.toLongOrNull()
+                val library = p["library"]?.toLongOrNull()
+                when {
+                    item != null -> Route.Item(item)
+                    show != null && p["item"] == null -> Route.Show(show, p["season"]?.toIntOrNull())
+                    library != null && p["album"] != null -> Route.Album(library, p["album"].orEmpty(), p["artist"].orEmpty())
+                    else -> Route.Sdui(target.page, p)
+                }
+            }
+            "library" -> libraries.firstOrNull { it.id == target.params["library"]?.toLongOrNull() }
+                ?.let { Route.Library(it, target.params - "library") } ?: Route.Sdui(target.page, target.params)
+            else -> Route.Sdui(target.page, target.params)
+        }
+        is SduiTarget.Native -> {
+            val item = target.params["item"].orEmpty()
+            // What the app has no screen of its own for is the server's page for the title, which has it: a QR card on a TV.
+            fun serverPage(title: String): Route? {
+                val path = when {
+                    item.startsWith("show-") -> "/show/" + item.removePrefix("show-")
+                    item.toLongOrNull() != null -> "/item/$item"
+                    else -> return null
+                }
+                return if (app.isTv) Route.OnPhone(title, path) else Route.Page(path, title)
+            }
+            when (target.screen) {
+                "settings" -> target.params["section"]?.takeIf { it.isNotEmpty() }?.let {
+                    if (app.isTv) Route.OnPhone("Settings", "/settings/$it") else Route.Page("/settings/$it", "Settings")
+                } ?: Route.Profile
+                "profiles" -> Route.Profile
+                "guide" -> when {
+                    app.isTv && target.route.startsWith("/tv/recordings") -> TvRoute(TvScreen.Recordings)
+                    app.isTv -> TvRoute(TvScreen.Guide)
+                    target.route.startsWith("/tv/recordings") -> Route.Page("/tv/recordings")
+                    else -> Route.Page(GUIDE_PATH)
+                }
+                "livePlayer" -> target.params["key"]?.let { if (app.isTv) TvRoute(TvScreen.Channel(it)) else Route.Page("/tv/watch/$it") }
+                "reader" -> item.toLongOrNull()?.let { Route.Page("/read/$it") }
+                "nowPlaying" -> if (app.listening.now != null) Route.NowPlaying else null
+                "pair" -> if (app.isTv) null else Route.You(YouNative.SignInTv)
+                "collections" -> Route.Sdui("collections")
+                "download" -> serverPage("Download")
+                "share" -> serverPage("Share")
+                "playOn" -> serverPage("Play on…")
+                "watchParty" -> serverPage("Watch party")
+                "downloads" -> if (app.isTv) null else Route.Page("/downloads", "Downloads")
+                "remote" -> if (app.isTv) null else Route.Page("/remote", "Remote")
+                else -> null
+            }
+        }
+        is SduiTarget.Unknown -> {
+            // The one place the app has a screen for that the table doesn't list: an artist. Anything else is the server's page.
+            val path = target.route.substringBefore('?')
+            val query = SduiRouter.parseQuery(target.route.substringAfter('?', ""))
+            val library = path.removePrefix("/artist/").toLongOrNull()
+            if (path.startsWith("/artist/") && library != null && query["name"] != null) Route.Artist(library, query["name"].orEmpty())
+            else if (target.route.startsWith("/")) Route.Page(target.route) else null
+        }
+    }
+
+    // Opens a place the server names: one of its pages, one of the app's screens, or something played.
+    fun go(target: SduiTarget) {
+        if (target is SduiTarget.Native) {
+            val item = target.params["item"].orEmpty()
+            when (target.screen) {
+                "player" -> { playById(item, resume = true); return }
+                "game" -> { item.toLongOrNull()?.let { openGame(it) }; return }
+                "livePlayer" -> if (app.isTv) { target.params["key"]?.let { watchChannel(it) }; return }
+            }
+        }
+        val route = routeOf(target) ?: return
+        when {
+            route == Route.Home -> reset(Route.Home)
+            route == current -> Unit
+            else -> push(route)
+        }
+    }
+
+    // Play, as a page asks for it: the item is read, and what kind of thing it is decides how it plays, as everywhere else.
+    fun playById(id: String, resume: Boolean) {
+        val number = id.toLongOrNull() ?: return
+        app.scope.launch {
+            try {
+                val item = app.api.item(number)
+                if (!resume && item.hasOwnScreen && !item.isTrack && !item.isRigGame) push(Route.Player(item.id, true)) else play(item)
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                if (!handleExpired(e)) notice = problemWords(e, s["errLost"].orEmpty())
+            }
+        }
+    }
+
+    // A game's own page: WittyPlay's for one the server plays, the app's for a shared PC's.
+    private fun openGame(id: Long) {
+        app.scope.launch {
+            val item = runCatching { app.api.item(id) }.getOrNull()
+            push(if (item?.isRigGame == true) Route.OwnItem(id) else GamesRoute(GamesScreen.Game(id)))
+        }
+    }
+
+    // The menu entry's place. Home and Search keep their own routes, so everything that goes "home" still does.
+    fun routeOf(entry: SduiNavItem): Route? = when (entry.kind) {
+        "page" -> when {
+            entry.page == "home" -> Route.Home
+            entry.page == "search" && entry.params.isEmpty() -> Route.Search
+            app.isTv && entry.page == "libraries" && entry.params.isEmpty() -> Route.Libraries
+            app.isTv && entry.page == "livetv" && entry.params.isEmpty() -> Route.LiveTv
+            else -> routeOf(SduiTarget.Page(entry.page, entry.params, entry.route)).let { if (it is Route.Sdui) it.copy(title = entry.label) else it }
+        }
+        "native" -> routeOf(SduiTarget.Native(entry.screen, emptyMap(), entry.route))
+        else -> if (entry.route.isNotEmpty()) routeOf(sduiRouter.resolve(entry.route)) else null
+    }
+
     // Reads the list, then the themes in use. Quiet on failure: the built-ins and what was kept stand in.
     fun loadThemes(signedIn: Boolean) {
         val base = server?.url ?: return
         val api = app.api
         app.scope.launch {
+            val caps = runCatching { api.capabilities() }.getOrNull()
+            if (server?.url == base) {
+                if (caps != null) features = caps.features.toSet()
+                featuresRead = true
+            }
             runCatching { api.themes() }.getOrNull()?.let { if (server?.url == base) themeList = it }
             wantTheme(themeId)
             if (themeChoice.isNotEmpty() && themeChoice != AUTO_THEME) wantTheme(themeChoice)
@@ -312,6 +576,8 @@ class Nav(val app: WittyApp, private val s: Map<String, String>) {
     }
 
     private fun forgetThemes() {
+        features = emptySet()
+        featuresRead = false
         themeList = null
         themes.clear()
         customTheme = null
@@ -352,6 +618,7 @@ class Nav(val app: WittyApp, private val s: Map<String, String>) {
     fun focusFor(key: String) = focusMemory.getOrPut(key) { FocusMemory() }
 
     private fun forgetScreens() {
+        forgetSdui()
         TvLogos.forget()
         TvReminders.forget()
         shown.clear()
@@ -431,7 +698,7 @@ class Nav(val app: WittyApp, private val s: Map<String, String>) {
     }
 
     // Back from the middle of the app goes up a level, and from a tab goes to Home.
-    val backStaysInApp: Boolean get() = stack.size > 1 || current in TABS_BESIDE_HOME
+    val backStaysInApp: Boolean get() = stack.size > 1 || current in TABS_BESIDE_HOME || current is Route.Sdui
 
     fun back() {
         if (stack.size > 1) pop() else if (backStaysInApp) reset(Route.Home)
@@ -724,12 +991,29 @@ fun AppRoot(app: WittyApp) {
             app.listening.appeared()
         }
         LifecycleEventEffect(Lifecycle.Event.ON_STOP) {
+            nav.syncTvHome()
             app.listening.disappeared()
             // A film stops when the app is left, with its place kept.
             nav.video?.backgrounded()
         }
         BackHandler(enabled = nav.backStaysInApp) { nav.back() }
         val route = nav.current
+        val sdui = nav.sduiOn
+        // What this device is, for the server's pages: the window, the language, what it can draw. A new window size
+        // makes a new one, and the pages ask again.
+        val config = LocalConfiguration.current
+        val device = remember(config.screenWidthDp, config.screenHeightDp, config.smallestScreenWidthDp, androidx.core.os.ConfigurationCompat.getLocales(config).toLanguageTags(), reduceMotion) { sduiDeviceFor(app, config, reduceMotion) }
+        LaunchedEffect(device) { nav.sduiDevice = device }
+        // An Android TV's home screen, once the server's pages can be asked for; and a title chosen there, once signed in.
+        val pages = nav.sdui
+        LaunchedEffect(pages) { if (pages != null) nav.syncTvHome() }
+        val wanted = app.wantedRoute
+        LaunchedEffect(wanted, route.signedIn, nav.featuresRead) {
+            if (wanted != null && route.signedIn && nav.featuresRead) {
+                app.wantedRoute = null
+                nav.openFromHomeScreen(wanted)
+            }
+        }
         // Once the app's own screens are up, whichever way it started.
         val hasQueue = app.listening.now != null
         LaunchedEffect(app.listening.wantsScreen, route.hasMiniPlayer, hasQueue) {
@@ -748,27 +1032,73 @@ fun AppRoot(app: WittyApp) {
                         is Route.Mismatch -> MismatchScreen(nav, strings, route.server)
                         is Route.SignIn -> SignInScreen(nav, strings, route.way)
                         // A new Home for each server connection, so the first screen after signing in is drawn fresh.
-                        Route.Home -> key(app.api) { Shell(nav) { HomeScreen(nav, strings) } }
-                        Route.Search -> Shell(nav) { if (LocalMetrics.current.tv) SearchScreen(nav, strings) else PhoneSearch(nav, strings) }
-                        Route.Profile -> Shell(nav) { YouScreen(nav, strings) }
-                        Route.Libraries -> Shell(nav) { LibrariesScreen(nav, strings) }
-                        Route.Games -> Shell(nav) { GamesTabScreen(nav, strings) }
-                        Route.LiveTv -> Shell(nav) { LiveTvScreen(nav, strings) }
-                        is Route.Pinned -> Shell(nav) { PinnedLibraryScreen(nav, strings, route.library) }
-                        Route.Notices -> NoticesScreen(nav)
-                        Route.Logs -> LogsScreen(nav)
-                        is Route.Library -> PageShell(nav) {
-                            val tv = LocalMetrics.current.tv
-                            when {
-                                route.library.isListening && tv -> ListeningLibraryScreen(nav, strings, route.library)
-                                route.library.isListening -> PhoneMusicLibrary(nav, route.library, route.chosen)
-                                tv -> LibraryScreen(nav, strings, route.library)
-                                else -> PhoneLibrary(nav, route.library, route.chosen)
+                        // A server with pages of its own (docs/PLATFORMS.md, Server-driven pages) draws these; the
+                        // app's own screens are for a server without them. Which it is isn't known until the
+                        // server's features have been read.
+                        Route.Home -> key(app.api) {
+                            Shell(nav) {
+                                when {
+                                    !nav.featuresRead -> Loading()
+                                    sdui -> SduiPageScreen(nav, "home", emptyMap(), top = true)
+                                    else -> HomeScreen(nav, strings)
+                                }
                             }
                         }
-                        is Route.Show -> PageShell(nav) { if (LocalMetrics.current.tv) ShowScreen(nav, strings, route.id) else PhoneShow(nav, strings, route.id, route.season) }
-                        is Route.Item -> PageShell(nav) { if (LocalMetrics.current.tv) ItemScreen(nav, strings, route.id) else PhoneItem(nav, strings, route.id) }
-                        is Route.Album -> PageShell(nav) { if (LocalMetrics.current.tv) AlbumScreen(nav, strings, route) else PhoneAlbum(nav, route) }
+                        Route.Search -> Shell(nav) {
+                            when {
+                                sdui -> SduiPageScreen(nav, "search", emptyMap(), top = true)
+                                LocalMetrics.current.tv -> SearchScreen(nav, strings)
+                                else -> PhoneSearch(nav, strings)
+                            }
+                        }
+                        Route.Profile -> Shell(nav) { YouScreen(nav, strings) }
+                        Route.Libraries -> Shell(nav) { if (sdui) SduiPageScreen(nav, "libraries", emptyMap(), top = true) else LibrariesScreen(nav, strings) }
+                        Route.Games -> Shell(nav) { GamesTabScreen(nav, strings) }
+                        Route.LiveTv -> Shell(nav) { if (sdui) SduiPageScreen(nav, "livetv", emptyMap(), top = true) else LiveTvScreen(nav, strings) }
+                        is Route.Pinned -> Shell(nav) {
+                            if (sdui) SduiPageScreen(nav, "library", mapOf("library" to route.library.id.toString()), top = true)
+                            else PinnedLibraryScreen(nav, strings, route.library)
+                        }
+                        is Route.Sdui -> if (nav.stack.size == 1) Shell(nav) { SduiPageScreen(nav, route.page, route.params, top = true, title = route.title) }
+                            else PageShell(nav) { SduiPageScreen(nav, route.page, route.params, title = route.title) }
+                        is Route.OwnItem -> PageShell(nav) { if (LocalMetrics.current.tv) ItemScreen(nav, strings, route.id) else PhoneItem(nav, strings, route.id) }
+                        Route.Notices -> NoticesScreen(nav)
+                        Route.Logs -> LogsScreen(nav)
+                        is Route.Library -> {
+                            val body = @Composable {
+                                val tv = LocalMetrics.current.tv
+                                when {
+                                    sdui -> SduiPageScreen(nav, "library", mapOf("library" to route.library.id.toString()) + route.chosen, top = nav.stack.size == 1, title = route.library.name)
+                                    route.library.isListening && tv -> ListeningLibraryScreen(nav, strings, route.library)
+                                    route.library.isListening -> PhoneMusicLibrary(nav, route.library, route.chosen)
+                                    tv -> LibraryScreen(nav, strings, route.library)
+                                    else -> PhoneLibrary(nav, route.library, route.chosen)
+                                }
+                            }
+                            // A library that is a tab of its own (the server's menu put it in the bar) sits under the bar.
+                            if (sdui && nav.stack.size == 1) Shell(nav, body) else PageShell(nav, body)
+                        }
+                        is Route.Show -> PageShell(nav) {
+                            when {
+                                sdui -> SduiPageScreen(nav, "detail", mapOf("show" to route.id.toString()) + (route.season?.let { mapOf("season" to it.toString()) } ?: emptyMap()))
+                                LocalMetrics.current.tv -> ShowScreen(nav, strings, route.id)
+                                else -> PhoneShow(nav, strings, route.id, route.season)
+                            }
+                        }
+                        is Route.Item -> PageShell(nav) {
+                            when {
+                                sdui -> SduiPageScreen(nav, "detail", mapOf("item" to route.id.toString()))
+                                LocalMetrics.current.tv -> ItemScreen(nav, strings, route.id)
+                                else -> PhoneItem(nav, strings, route.id)
+                            }
+                        }
+                        is Route.Album -> PageShell(nav) {
+                            when {
+                                sdui -> SduiPageScreen(nav, "detail", mapOf("library" to route.library.toString(), "album" to route.album, "artist" to route.artist))
+                                LocalMetrics.current.tv -> AlbumScreen(nav, strings, route)
+                                else -> PhoneAlbum(nav, route)
+                            }
+                        }
                         is Route.Artist -> PageShell(nav) { if (LocalMetrics.current.tv) ArtistScreen(nav, strings, route.library, route.name) else PhoneArtist(nav, route.library, route.name) }
                         Route.NowPlaying -> if (LocalMetrics.current.tv) NowPlayingScreen(nav) else WebNowPlaying(nav)
                         is Route.Player -> if (LocalMetrics.current.tv) PlayerScreen(nav, route.id, route.startOver) else VideoPlayerScreen(nav, route)
@@ -788,7 +1118,7 @@ fun AppRoot(app: WittyApp) {
         // own strip along the bottom, which also takes care of the system's bar.
         // On a phone or tablet every page in the website's shell has the shell's own mini bar.
         val tabs = !metrics.tv && (route == Route.Home || route == Route.Search || route == Route.Profile || route is Route.Library ||
-            route is Route.Show || route is Route.Item || route is Route.Album || route is Route.Artist)
+            route is Route.Show || route is Route.Item || route is Route.Album || route is Route.Artist || route is Route.Sdui || route is Route.OwnItem)
         if (hasQueue && route.hasMiniPlayer && !tabs) {
             Column(Modifier.fillMaxSize()) {
                 Box(Modifier.weight(1f).consumeWindowInsets(WindowInsets.navigationBars)) { showing() }
@@ -804,6 +1134,7 @@ fun AppRoot(app: WittyApp) {
 }
 
 private const val TABLET_WIDTH_DP = 600
+private const val BAR_CELLS = 5
 const val AUTO_THEME = "auto"
 private const val LIGHT_THEME = "light"
 private const val NAV_VEIL_ALPHA = 0xB3

@@ -89,6 +89,25 @@ dependencies {
     implementation("com.google.zxing:core:3.5.4")
     // WittyPlay's stream, version 2: WebRTC first (the server's docs/GAMING-STREAM.md). libwebrtc decodes with MediaCodec.
     implementation("io.github.webrtc-sdk:android:144.7559.15")
+    // An Android TV's home screen: the app's own channel and the Watch Next row (data/TvHome.kt).
+    implementation("androidx.tvprovider:tvprovider:1.0.0")
 
     testImplementation("junit:junit:4.13.2")
+}
+
+// The server's SDUI conformance fixtures (its pkg/sdui/conformance/fixtures, 3 MB of JSON) are read where they are,
+// not copied here: from -PsduiFixtures=<folder> or WMS_SDUI_FIXTURES, else from a server checkout beside this
+// repository, else from .server in this one, as the build machines have it. Without them the conformance test is
+// skipped, unless -PsduiFixturesRequired says that is a failure.
+val sduiFixtures: File? = (
+    listOfNotNull(providers.gradleProperty("sduiFixtures").orNull, providers.environmentVariable("WMS_SDUI_FIXTURES").orNull).map { rootDir.resolve(it) } +
+        listOf("../../WittyMediaServer", "../../../WittyMediaServer", "../.server").map { rootDir.resolve("$it/pkg/sdui/conformance/fixtures") }
+    ).firstOrNull { it.resolve("index.json").isFile }
+
+tasks.withType<Test>().configureEach {
+    sduiFixtures?.let {
+        systemProperty("sdui.fixtures", it.canonicalPath)
+        inputs.dir(it).withPropertyName("sduiFixtures").withPathSensitivity(PathSensitivity.RELATIVE)
+    }
+    if (providers.gradleProperty("sduiFixturesRequired").isPresent) systemProperty("sdui.fixtures.required", "1")
 }

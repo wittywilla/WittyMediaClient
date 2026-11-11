@@ -18,9 +18,21 @@ Desktop (Windows, macOS, Linux, FreeBSD)
     tree, with its own licence files in /usr/local/share/licenses. The DejaVu
     fonts come the same way, as Electron brings none there.
   electron-builder        MIT           build tool only, not shipped
+  wittyconnect            AGPL-3.0-or-later   https://github.com/wittywilla/WittyMediaServer
+    The helper that reaches a server from away, peer to peer. It is a separate
+    program, not part of this app's own code: it is built from WittyMediaServer's
+    source (cmd/wittyconnect), ships beside the app, and the app starts it and
+    talks to it over a pipe. Its source is that repository, at the version the
+    package was built from. It is built on go-libp2p (MIT, Copyright (c) 2014
+    Juan Batiz-Benet and the libp2p contributors), quic-go (MIT) and about a
+    hundred other libraries under the MIT, BSD, ISC, Apache-2.0 and MPL-2.0
+    licences. Every one is listed, with each licence's full text, in
+    THIRD-PARTY-NOTICES.wittyconnect.txt, which ships beside the helper.
+    Not in the FreeBSD package yet.
 
 Android
-  AndroidX: Activity, Core, Lifecycle       Apache-2.0
+  AndroidX: Activity, Core, Lifecycle,
+    TvProvider                              Apache-2.0
   Jetpack Compose                           Apache-2.0
   AndroidX Media3 (ExoPlayer, HLS, Session, UI)  Apache-2.0
   ZXing core                                Apache-2.0
@@ -46,6 +58,14 @@ Apple (Apple TV, iPhone, iPad, Apple Vision Pro, Mac)
     with WebRTC's source.
   Otherwise only Apple's own system frameworks ship in the app.
   XcodeGen                 MIT              build tool only, not shipped
+  Wittyconnect (not shipped yet)  AGPL-3.0-or-later
+    The same peer-to-peer connector as a library, built from WittyMediaServer's
+    source with gomobile (BSD-3-Clause, build tool only). WittyKit has the Swift
+    that would use it (PeerConnect.swift), compiled only where the framework is
+    added; no released app links it. An app that does must ship the
+    THIRD-PARTY-NOTICES.txt its build writes, and say that it contains
+    AGPL-3.0-or-later code alongside this app's GPL-3.0-or-later code, which
+    both licences allow (section 13 of each).
 
 Checked so far: the desktop dependency tree was read from its installed package
 files, and everything in it is under a permissive licence. Nothing from it

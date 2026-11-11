@@ -121,7 +121,10 @@ fun TvShell(nav: Nav, content: @Composable () -> Unit) {
         }
     }
     val current = nav.current
-    val onTab = nav.stack.size == 1 && (current in FIXED_TABS || current == Route.Profile || current is Route.Pinned)
+    val onTab = nav.stack.size == 1 && (current in FIXED_TABS || current == Route.Profile || current is Route.Pinned || current is Route.Sdui || current is Route.Library)
+    // The server's own menu, where it has one: the bar is made from it.
+    val pages = nav.sdui
+    LaunchedEffect(pages) { nav.loadSdui() }
     BackHandler(enabled = onTab && !(bar.inBar && current == Route.Home)) {
         if (!bar.inBar) {
             bar.focusPill()
@@ -177,8 +180,16 @@ private fun TvTopBar(nav: Nav, bar: TvBar, libraries: List<Library>) {
     var viewport by remember { mutableIntStateOf(0) }
     val icons = listOf(Symbols.Home, Symbols.Libraries, Symbols.Games, Symbols.LiveTv, Symbols.Search)
     val names = listOf("homeTab", "librariesTab", "gamesTab", "liveTvTab", "searchTab")
-    val left = FIXED_TABS.mapIndexed { i, route -> TvTab(route, words[names[i]].orEmpty(), icons[i]) } +
-        libraries.filter { it.id in nav.topMenu }.map { TvTab(Route.Pinned(it), it.name, it.barSymbol) }
+    // With the server's menu (GET /sdui/navigation), its entries in its order: the primary ones and those behind More
+    // along the left, as a TV has no drawer. You and Settings are the app's own You, which keeps the right edge. The
+    // libraries this device added to the top menu follow, as before.
+    val served = nav.sduiNav
+    val fixed = if (served == null) FIXED_TABS.mapIndexed { i, route -> TvTab(route, words[names[i]].orEmpty(), icons[i]) }
+    else served.items.mapNotNull { entry ->
+        val route = nav.routeOf(entry)?.takeIf { it != Route.Profile && isTvTab(it) } ?: return@mapNotNull null
+        TvTab(route, entry.label, tvBarIcon(entry.icon))
+    }.distinctBy { it.route.key }
+    val left = fixed + libraries.filter { it.id in nav.topMenu }.map { TvTab(Route.Pinned(it), it.name, it.barSymbol) }.filter { pinned -> fixed.none { (it.route as? Route.Library)?.library?.id == (pinned.route as Route.Pinned).library.id } }
     Row(
         Modifier
             .fillMaxWidth()
@@ -220,6 +231,30 @@ private fun TvTopBar(nav: Nav, bar: TvBar, libraries: List<Library>) {
             Modifier.padding(vertical = ring).padding(start = metrics.u(32) - ring, end = metrics.gutter - ring),
         )
     }
+}
+
+// What can be a tab of its own under the bar: the app's tabs and the server's pages. Anything else in the server's
+// menu (a guide of its own, a page the server draws) isn't a tab on a TV, and is reached from the pages instead.
+private fun isTvTab(route: Route): Boolean = route in FIXED_TABS || route is Route.Sdui || route is Route.Library
+
+// The bar's icons are Material Symbols in outline; the server names its own.
+private fun tvBarIcon(name: String): ImageVector = when (name) {
+    "home" -> Symbols.Home
+    "search" -> Symbols.Search
+    "live", "guide", "tv" -> Symbols.LiveTv
+    "library", "folder" -> Symbols.Libraries
+    "game" -> Symbols.Games
+    "collection", "list" -> Symbols.Collections
+    "movie", "video" -> Symbols.Movie
+    "show" -> Symbols.Tv
+    "music", "album" -> Symbols.Music
+    "photo" -> Symbols.Photo
+    "book", "comic" -> Symbols.Book
+    "audiobook" -> Symbols.Headphones
+    "podcast", "mic" -> Symbols.Mic
+    "radio" -> Symbols.Radio
+    "star" -> Symbols.Star
+    else -> sduiIcon(name)
 }
 
 // Fades what's drawn out over its last `width`, towards its end.

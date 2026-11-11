@@ -16,6 +16,17 @@ What changed in WittyMediaClient, newest first. What changed before it had a rep
   conformance fixtures (`swift test`; `apple/scripts/sync-sdui-fixtures.sh` fetches them where the server's repository isn't beside this one).
   Seen briefly in the iOS 27 and tvOS 27 simulators against a real server; [PLATFORMS.md](docs/PLATFORMS.md#server-driven-pages-on-apple) says
   exactly what was and wasn't.
+- **Android: the server's own pages, on phones, tablets and Android TV.** With WittyMediaServer 0.8.0-alpha (features `sdui-pages`,
+  `sdui-catalog`, `sdui-navigation`, `sdui-personal`), Home, Search, every library, a film's, show's, episode's, album's and collection's
+  page, Live TV, Collections, Libraries and any page an administrator makes are the server's pages (its `docs/SDUI.md`), drawn by the app
+  with its own widgets, and the menus (the floating bar, the strip and drawer; a TV's top bar) are made from the server's. Re-ordering
+  Home or adding a page on the server shows in the app with no update. **Customize** on a page moves, hides and pins its sections and
+  sets spacing, card sizes and the tab it opens on, for the profile, saved on the server. Pages are kept on the device, so they open at
+  once and still show with the server out of reach. You and its settings are the app's own, unchanged; an artist's page, the players, the
+  guide, the readers and games stay the app's own screens. Against an older server the app's own screens are used as before. On Android
+  TV the home screen gets a channel and Watch Next entries from the server's shelf. The server's 57 conformance fixtures run as a unit
+  test. Run on an emulator as a phone in full and as a TV in part; not as a tablet, and never on a real device:
+  [PLATFORMS.md](docs/PLATFORMS.md#server-driven-pages-on-android) says exactly what was seen.
 - **Desktop: reaching your server from away, with nothing set up on its router.** With a server that has peer-to-peer connections on
   (WittyMediaServer 0.8.0-alpha, **Settings → Remote Access**), the app pairs itself while it's at home and signed in, and when it later
   can't find the server at its address it connects peer to peer by itself, still signed in. The title bar says how: direct, or through a

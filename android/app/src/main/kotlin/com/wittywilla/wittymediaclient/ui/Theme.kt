@@ -257,9 +257,29 @@ fun WittyTheme(theme: AppTheme, metrics: Metrics, reduceMotion: Boolean, words: 
     val type = remember(metrics.tv) { typeScale(if (metrics.tv) TvType else PhoneType) }
     CompositionLocalProvider(
         LocalMetrics provides metrics.copy(themeRadius = theme.radius.toFloat()), LocalExtraColours provides extra,
-        LocalReduceMotion provides reduceMotion, LocalWords provides words,
+        LocalReduceMotion provides reduceMotion, LocalWords provides words, LocalAppTheme provides theme,
     ) {
         MaterialTheme(colorScheme = scheme, typography = type, content = content)
+    }
+}
+
+// The theme in force, for a part of a page that draws with some of its colours changed (a server page's theme scope).
+val LocalAppTheme = compositionLocalOf<AppTheme?> { null }
+
+// Part of a screen in another set of colours: the same type and sizes, the colours `theme` has. Nothing fades in:
+// it is how that part is drawn from the start.
+@Composable
+fun ThemeScope(theme: AppTheme, content: @Composable () -> Unit) {
+    fun c(colour: ThemeColour) = Color(colour.argb)
+    val base = MaterialTheme.colorScheme
+    val scheme = base.copy(
+        primary = c(theme.accent), onPrimary = c(theme.onAccent), background = c(theme.background), onBackground = c(theme.text),
+        surface = c(theme.panel), onSurface = c(theme.text), surfaceVariant = c(theme.card), onSurfaceVariant = c(theme.textSecondary),
+        outline = c(theme.border), outlineVariant = c(theme.control), error = c(theme.danger),
+    )
+    val extra = ExtraColours(c(theme.textHint), c(theme.accentText), c(theme.ok), c(theme.raised), c(theme.control), c(theme.warn), c(theme.accentPressed), c(theme.scrim))
+    CompositionLocalProvider(LocalExtraColours provides extra, LocalAppTheme provides theme) {
+        MaterialTheme(colorScheme = scheme, typography = MaterialTheme.typography, content = content)
     }
 }
 

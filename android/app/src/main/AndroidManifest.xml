@@ -10,6 +10,8 @@
     <uses-permission android:name="android.permission.WAKE_LOCK" />
     <!-- A game's rumble, on the controller that plays it. -->
     <uses-permission android:name="android.permission.VIBRATE" />
+    <!-- An Android TV's home screen: the app's own channel and its entries in Watch Next (data/TvHome.kt). -->
+    <uses-permission android:name="com.android.providers.tv.permission.WRITE_EPG_DATA" />
     <!-- A controller is enough to play a game: nobody needs a touch screen or a gamepad to install the app. -->
     <uses-feature android:name="android.hardware.gamepad" android:required="false" />
 
@@ -23,6 +25,11 @@
          other apps unless they're named here. -->
     <queries>
         <package android:name="com.limelight" />
+        <!-- The TV's home screen, which is lent the pictures of what the app puts on it. -->
+        <intent>
+            <action android:name="android.intent.action.MAIN" />
+            <category android:name="android.intent.category.HOME" />
+        </intent>
     </queries>
 
     <!-- allowBackup=false stops cloud backup. dataExtractionRules also stops the device-to-device
@@ -40,7 +47,9 @@
         android:supportsRtl="true"
         android:theme="@style/AppTheme">
 
-        <!-- No links lead in, so no other app or web page can open a screen here by address. An
+        <!-- No links lead in, so no web page can open a screen here by address. A card the app put on a TV's
+             home screen names this activity outright and says which title to open (data/TvHome.kt): only a
+             title's page or playing a title is taken from it, on the server already signed in to. An
              empty task affinity keeps another app from placing itself in this app's task. -->
         <activity
             android:name=".MainActivity"
