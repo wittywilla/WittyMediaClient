@@ -12,15 +12,29 @@ public struct APIError: LocalizedError {
     public let location: String?
     /// Signing in needs the code from an authenticator app, or the one given was wrong.
     public let twoFactor: Bool
+    /// The refusal's name for programs (`code`, or `reason` on the pairing routes): "screen-time", "wrong-pin".
+    /// Empty when the server gave none.
+    public let code: String
+    /// The whole answer, for the refusals that carry more than words (`screenTime`, `room`, `triesLeft`).
+    public let body: Data
+    /// How long the server asked this app to wait, from `Retry-After`, in seconds. 0 when it didn't say.
+    public let retryAfter: Int
     public var errorDescription: String? { message }
     public var isExpiredSignIn: Bool { status == 401 }
 
-    public init(status: Int, message: String, location: String? = nil, twoFactor: Bool = false) {
+    public init(status: Int, message: String, location: String? = nil, twoFactor: Bool = false, code: String = "",
+                body: Data = Data(), retryAfter: Int = 0) {
         self.status = status
         self.message = message
         self.location = location
         self.twoFactor = twoFactor
+        self.code = code
+        self.body = body
+        self.retryAfter = retryAfter
     }
+
+    /// The refusal's own JSON read as something, for the few that carry a whole object beside the words.
+    public func decoded<T: Decodable>(_ type: T.Type) -> T? { try? JSONDecoder().decode(T.self, from: body) }
 }
 
 /// How much of an answer this app will read. A server that hasn't proved itself gets very little,
@@ -129,7 +143,7 @@ public final class WittyClient: @unchecked Sendable {
 
     public let base: String
     public let token: String
-    private let apiPath = "/api/v1" // the contract: docs/CLIENT-API.md
+    let apiPath = "/api/v1" // the contract: docs/CLIENT-API.md
     private let session: URLSession
     private let sessionGuard = SessionGuard()
     private let answerLimit: Int
@@ -182,6 +196,32 @@ public final class WittyClient: @unchecked Sendable {
 
     /// `wait` is how long to wait for the answer, for the few routes that take minutes on purpose.
     func call(_ method: String, _ path: String, body: Data? = nil, wait: TimeInterval? = nil) async throws -> Data {
+        try await send(method, path, body: body, wait: wait).data
+    }
+
+    /// One answer with its headers, for the routes that are asked again with an `ETag`. A 304 is an answer
+    /// here and not a failure: `status` says which it was, and `data` is then empty.
+    public struct Answer: Sendable {
+        public let status: Int
+        public let data: Data
+        public let headers: [String: String]
+
+        public init(status: Int, data: Data, headers: [String: String]) {
+            self.status = status
+            self.data = data
+            self.headers = headers
+        }
+
+        /// A header by name, whatever case the server wrote it in.
+        public func header(_ name: String) -> String? {
+            let wanted = name.lowercased()
+            return headers.first { $0.key.lowercased() == wanted }?.value
+        }
+    }
+
+    /// The request every other one is made of. `headers` go beside the sign-in, never in its place.
+    func send(_ method: String, _ path: String, body: Data? = nil, headers: [String: String] = [:],
+              wait: TimeInterval? = nil) async throws -> Answer {
         guard let url = URL(string: base + apiPath + path) else {
             throw APIError(status: 0, message: "That server address can't be used.")
         }
@@ -190,6 +230,7 @@ public final class WittyClient: @unchecked Sendable {
         request.httpMethod = method
         request.httpBody = body
         if body != nil { request.setValue("application/json", forHTTPHeaderField: "Content-Type") }
+        for (name, value) in headers { request.setValue(value, forHTTPHeaderField: name) }
         for (name, value) in authHeaders { request.setValue(value, forHTTPHeaderField: name) }
         let place = "\(method) \(path.split(separator: "?").first.map(String.init) ?? path)"
         let data: Data
@@ -206,19 +247,28 @@ public final class WittyClient: @unchecked Sendable {
         guard let http = response as? HTTPURLResponse else {
             throw APIError(status: 0, message: "The server sent an answer that can't be read.")
         }
-        guard (200..<300).contains(http.statusCode) else {
+        var said: [String: String] = [:]
+        for (name, value) in http.allHeaderFields {
+            if let name = name as? String, let value = value as? String { said[name] = value }
+        }
+        guard (200..<300).contains(http.statusCode) || (http.statusCode == 304 && headers["If-None-Match"] != nil) else {
             struct Failure: Decodable {
                 let error: String?
                 let twoFactor: Bool?
+                let code: String?
+                let reason: String?
+                let retryAfterSec: Int?
             }
             let failure = try? decoder.decode(Failure.self, from: data)
-            let said = failure?.error.map { PlainWords.clean($0) } ?? ""
-            let message = said.isEmpty ? "The server answered with an error (\(http.statusCode))." : said
+            let words = failure?.error.map { PlainWords.clean($0) } ?? ""
+            let message = words.isEmpty ? "The server answered with an error (\(http.statusCode))." : words
             reportFailure(place, method: method, status: http.statusCode, message: message, request: http.value(forHTTPHeaderField: "X-Request-Id") ?? "")
+            let wait = failure?.retryAfterSec ?? Int(http.value(forHTTPHeaderField: "Retry-After") ?? "") ?? 0
             throw APIError(status: http.statusCode, message: message, location: http.value(forHTTPHeaderField: "Location"),
-                           twoFactor: failure?.twoFactor == true)
+                           twoFactor: failure?.twoFactor == true,
+                           code: PlainWords.clean(failure?.code ?? failure?.reason ?? "", limit: 40), body: data, retryAfter: max(0, wait))
         }
-        return data
+        return Answer(status: http.statusCode, data: data, headers: said)
     }
 
     /// Only for a signed-in connection: an address being tried has its own words on
@@ -241,8 +291,18 @@ public final class WittyClient: @unchecked Sendable {
         return (response as? HTTPURLResponse)?.statusCode ?? 0
     }
 
-    private func get<T: Decodable>(_ path: String) async throws -> T {
+    func get<T: Decodable>(_ path: String) async throws -> T {
         try decoder.decode(T.self, from: try await call("GET", path))
+    }
+
+    /// A request with a JSON body whose answer is read as something.
+    func ask<T: Decodable, B: Encodable>(_ method: String, _ path: String, _ body: B) async throws -> T {
+        try decoder.decode(T.self, from: try await call(method, path, body: try JSONEncoder().encode(body)))
+    }
+
+    /// A request with a JSON body whose answer doesn't matter beyond its being a yes.
+    func tell<B: Encodable>(_ method: String, _ path: String, _ body: B) async throws {
+        _ = try await call(method, path, body: try JSONEncoder().encode(body))
     }
 
     public func capabilities() async throws -> Capabilities { try await get("/capabilities") }
@@ -275,7 +335,7 @@ public final class WittyClient: @unchecked Sendable {
     }
 
     /// A plain list, which a Go nil sends as null.
-    private func list<T: Decodable>(_ path: String) async throws -> [T] {
+    func list<T: Decodable>(_ path: String) async throws -> [T] {
         try decoder.decode([T]?.self, from: try await call("GET", path)) ?? []
     }
 

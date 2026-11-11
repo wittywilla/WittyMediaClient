@@ -218,6 +218,22 @@ final class AppModel: ObservableObject {
     @Published var video: PlaybackModel?
     /// Something worth saying that isn't a failure of the screen in front of the person.
     @Published var notice = ""
+    /// What this server can do, by the names in its `/capabilities`. Everything newer than the app's first
+    /// version is offered only when its name is here, so an older server just doesn't show it.
+    @Published private(set) var features: Set<String> = []
+
+    func has(_ feature: String) -> Bool { features.contains(feature) }
+
+    /// Asked for whenever a server is opened, signed in or not: signing in has newer ways too.
+    private func learnFeatures() {
+        let asking = client
+        guard !asking.base.isEmpty else { return }
+        Task {
+            guard let caps = try? await asking.capabilities(), client.base == asking.base else { return }
+            let found = Set(caps.features ?? [])
+            if found != features { features = found }
+        }
+    }
 
     // Published, so the screens that get it from the environment never see the one before it.
     @Published private(set) var client = WittyClient(base: "") {
@@ -465,6 +481,9 @@ final class AppModel: ObservableObject {
     func start() async {
         guard !started else { return }
         started = true
+        #if DEBUG
+        if await startForTests() { return }
+        #endif
         let url = server
         guard !url.isEmpty else { stage = .connect(message: ""); return }
         var saved = recent.first { $0.url == url } ?? SavedServer(url: url, name: "WittyMediaServer")
@@ -494,6 +513,36 @@ final class AppModel: ObservableObject {
             }
         }
     }
+
+    #if DEBUG
+    /// For the UI tests and for checking a screen on a simulator, in debug builds only:
+    /// `-WMCServer http://localhost:9000 -WMCUser name -WMCPassword word` opens that server and signs in,
+    /// with nothing kept from the run before. The address must be this machine's own.
+    private func startForTests() async -> Bool {
+        let given = UserDefaults.standard
+        guard let url = given.string(forKey: "WMCServer"), let host = URL(string: url)?.host,
+              ["localhost", "127.0.0.1", "::1"].contains(host) else { return false }
+        Keychain.clear()
+        let opening = SavedServer(url: url, name: "WittyMediaServer")
+        openServer(opening)
+        guard let status = try? await client.status() else {
+            stage = .connect(message: say("errLost"))
+            return true
+        }
+        learn(status)
+        guard let name = given.string(forKey: "WMCUser") else {
+            stage = .signIn(.usual)
+            return true
+        }
+        do {
+            let result = try await client.login(name: name, password: given.string(forKey: "WMCPassword") ?? "", device: deviceName)
+            signedIn(token: result.token, user: result.user)
+        } catch {
+            stage = .signIn(.usual)
+        }
+        return true
+    }
+    #endif
 
     /// Coming back to an app left running counts as starting it. Nothing answering is
     /// left to the screens, as the network is often still waking up.
@@ -665,6 +714,7 @@ final class AppModel: ObservableObject {
         server = ""
         client = WittyClient(base: "")
         themeId = nil
+        features = []
         themeChoice = ""
         themeList = nil
         customTheme = nil
@@ -679,6 +729,7 @@ final class AppModel: ObservableObject {
         serverVersion = status.version ?? ""
         serverUpdate = status.update ?? ""
         themeId = status.theme
+        learnFeatures()
         themeChoice = defaults.string(forKey: "theme." + client.base) ?? ""
         refreshTheme()
         brandName = PlainWords.clean(status.brandName ?? "", limit: 60)
