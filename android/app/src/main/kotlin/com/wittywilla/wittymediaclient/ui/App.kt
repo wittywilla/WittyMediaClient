@@ -278,11 +278,19 @@ class Nav(val app: WittyApp, private val s: Map<String, String>) {
     var customTheme by mutableStateOf<ThemeMakerInput?>(null)
         private set
 
+    // What this server says it has (/capabilities features): every newer feature is offered only when its name is
+    // here, so the app still works against an older server. Empty until read, which hides them.
+    var features by mutableStateOf<Set<String>>(emptySet())
+        private set
+
+    fun has(feature: String) = feature in features
+
     // Reads the list, then the themes in use. Quiet on failure: the built-ins and what was kept stand in.
     fun loadThemes(signedIn: Boolean) {
         val base = server?.url ?: return
         val api = app.api
         app.scope.launch {
+            runCatching { api.capabilities() }.getOrNull()?.let { if (server?.url == base) features = it.features.toSet() }
             runCatching { api.themes() }.getOrNull()?.let { if (server?.url == base) themeList = it }
             wantTheme(themeId)
             if (themeChoice.isNotEmpty() && themeChoice != AUTO_THEME) wantTheme(themeChoice)
@@ -312,6 +320,7 @@ class Nav(val app: WittyApp, private val s: Map<String, String>) {
     }
 
     private fun forgetThemes() {
+        features = emptySet()
         themeList = null
         themes.clear()
         customTheme = null
