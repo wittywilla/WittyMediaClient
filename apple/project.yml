@@ -67,6 +67,8 @@ targets:
   WittyMedia-tvOS:
     templates: [App]
     platform: tvOS
+    scheme:
+      testTargets: [WittyMedia-tvOS-UITests]
     dependencies:
       - target: WittyMedia-TopShelf
     info:
@@ -117,6 +119,8 @@ targets:
     templates: [App]
     platform: iOS
     supportedDestinations: [iOS, visionOS]
+    scheme:
+      testTargets: [WittyMedia-iOS-UITests]
     sources:
       # The launch screen's colour: the default theme's background, so opening the app doesn't flash white.
       - path: Launch
@@ -139,3 +143,32 @@ targets:
         # No app icon has been made yet; without this the asset catalog above would ask for one.
         ASSETCATALOG_COMPILER_APPICON_NAME: ""
         INFOPLIST_KEY_UISupportedInterfaceOrientations: "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight"
+
+  # The apps driven as a person would, on a simulator, against a server the tests are told about: see
+  # apple/UITests/Support.swift. They sign nothing, and skip themselves when no server is named.
+  WittyMedia-iOS-UITests:
+    type: bundle.ui-testing
+    platform: iOS
+    sources:
+      - path: UITests
+    dependencies:
+      - target: WittyMedia-iOS
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.wittywilla.wittymediaclient.uitests
+        GENERATE_INFOPLIST_FILE: "YES"
+        TEST_TARGET_NAME: WittyMedia-iOS
+        TARGETED_DEVICE_FAMILY: "1,2"
+  WittyMedia-tvOS-UITests:
+    type: bundle.ui-testing
+    platform: tvOS
+    sources:
+      - path: UITests
+    dependencies:
+      - target: WittyMedia-tvOS
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.wittywilla.wittymediaclient.uitests
+        GENERATE_INFOPLIST_FILE: "YES"
+        TEST_TARGET_NAME: WittyMedia-tvOS
+        TARGETED_DEVICE_FAMILY: "3"
