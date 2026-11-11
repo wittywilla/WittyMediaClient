@@ -329,7 +329,8 @@ class ListeningKeeper(
     // gain is after its graph's analyser.
     private fun applyVolume() {
         val sound = app.listening.sound
-        val volume = if (sound.muted) 0f else sound.volume.toFloat()
+        // Karaoke playing a song's separated parts (KaraokeStems): this player carries on as the clock, unheard.
+        val volume = if (sound.muted || app.listening.stems.playing) 0f else sound.volume.toFloat()
         player.volume = (volume * crossfade.mainShare).toFloat()
         crossfade.levelTail(volume)
     }

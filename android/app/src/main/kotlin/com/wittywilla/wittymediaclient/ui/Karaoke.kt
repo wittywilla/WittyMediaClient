@@ -73,6 +73,17 @@ import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
 import com.wittywilla.wittymediaclient.net.lineIndex
+import androidx.compose.foundation.focusable
+import androidx.compose.foundation.layout.width
+import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.ui.input.key.key
+import androidx.compose.ui.input.key.onPreviewKeyEvent
+import androidx.compose.ui.input.key.type
+import com.wittywilla.wittymediaclient.player.KaraokeAnswer
+import com.wittywilla.wittymediaclient.player.KaraokeMix
+import com.wittywilla.wittymediaclient.player.KaraokeWords
 import com.wittywilla.wittymediaclient.player.SoundShaping
 import kotlinx.coroutines.delay
 
@@ -93,6 +104,17 @@ internal fun KaraokeScreen(nav: Nav, words: LyricsWords, title: String, artist: 
     val inset = with(LocalDensity.current) { WindowInsets.navigationBars.getBottom(this).toDp() }
     val sound = listening.sound
     BackHandler(onBack = close)
+    // A server that separates a song into its parts (`karaoke-auto`) is asked for them once, here; the parts take
+    // the place of the voice's three settings below once they play. Any other server: as it always was.
+    val auto = nav.has("karaoke-auto")
+    val stems = listening.stems
+    val profile = nav.me?.id ?: 0
+    DisposableEffect(auto, profile) {
+        if (auto) stems.open(profile)
+        onDispose { if (auto) stems.close() }
+    }
+    val parts = if (auto && stems.playing) stems.answer else null
+    var more by remember { mutableStateOf(false) }
     // Coming back, the voice and key are as they were: this was for the song, not for good. The screen too.
     val activity = androidx.activity.compose.LocalActivity.current
     var filled by remember { mutableStateOf(false) }
@@ -220,6 +242,8 @@ internal fun KaraokeScreen(nav: Nav, words: LyricsWords, title: String, artist: 
                     }
                 }
             }
+            // Each part's own level, Reset, and which version is playing.
+            if (parts != null && more) StemLevels(parts, stems, compact)
             // The controls (`.kar-bar`): wrapping, in the middle, 8 apart.
             FlowRow(
                 Modifier.fillMaxWidth().padding(horizontal = (screenW * 0.03f).coerceIn(12f, 40f).dp, vertical = 8.dp),
@@ -232,8 +256,20 @@ internal fun KaraokeScreen(nav: Nav, words: LyricsWords, title: String, artist: 
                 }
                 NpRound(WebIcons.Next, "Next line", 52.dp, 20.dp) { goLine(1) }
                 if (!compact) Box(Modifier.padding(horizontal = 4.dp).size(1.dp, 34.dp).background(Np.line))
-                // The singer's voice: on, lower, lowest.
-                Row(Modifier.clip(RoundedCornerShape(50)).background(Np.chip).padding(3.dp).semantics { contentDescription = "Singer's voice" }, horizontalArrangement = Arrangement.spacedBy(2.dp)) {
+                // The singer's voice: a level of its own where the song's parts are playing, with Sing to silence
+                // it in one press; or else on, lower, lowest.
+                if (parts != null) {
+                    val level = KaraokeMix.vocals(parts, stems.controls.levels)
+                    Row(
+                        Modifier.clip(RoundedCornerShape(50)).background(Np.chip).padding(start = 16.dp, end = 12.dp, top = 3.dp, bottom = 3.dp).heightIn(min = 46.dp),
+                        verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    ) {
+                        Text("Vocals", color = Color.White, fontSize = if (compact) 13.sp else 15.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.clearAndSetSemantics { })
+                        KarSlider(if (stems.controls.sing) 0.0 else level, "Vocals", Modifier.width(if (compact) 150.dp else 220.dp), stems::setVocals)
+                    }
+                    NpChip("Sing", on = stems.controls.sing, label = if (stems.controls.sing) "Sing: the voice is off" else "Sing: turn the voice off", onClick = stems::toggleSing)
+                    NpChip("More", on = more, label = if (more) "Hide each part's level" else "Each part's level") { more = !more }
+                } else Row(Modifier.clip(RoundedCornerShape(50)).background(Np.chip).padding(3.dp).semantics { contentDescription = "Singer's voice" }, horizontalArrangement = Arrangement.spacedBy(2.dp)) {
                     com.wittywilla.wittymediaclient.ui.Karaoke.VOCALS.forEach { (cut, name) ->
                         val on = sound.vocalCut == cut
                         Pressable({ listening.setSound { it.copy(vocalCut = cut) } }, Modifier.heightIn(min = 46.dp), shape = RoundedCornerShape(50), fill = if (on) Color.White else Color.Transparent, label = name, selected = on, ring = false) {
@@ -246,11 +282,75 @@ internal fun KaraokeScreen(nav: Nav, words: LyricsWords, title: String, artist: 
                 Stepper(com.wittywilla.wittymediaclient.ui.Karaoke.keyWords(sound.keyShift), compact, "Key", "Lower key", sound.keyShift > -6, { setKey(sound.keyShift - 1) }, "Raise key", sound.keyShift < 6) { setKey(sound.keyShift + 1) }
                 Stepper(com.wittywilla.wittymediaclient.ui.Karaoke.timingWords(offset), compact, "Timing of the words", "Words sooner", true, { words.setOffset(offset - 100) }, "Words later", true) { words.setOffset(offset + 100) }
             }
-            val note = com.wittywilla.wittymediaclient.ui.Karaoke.note(mono, sound.vocalCut, sound.keyShift, lines.isNotEmpty(), now?.words?.isNotEmpty() == true)
+            // On a server that makes the parts, what's happening with them is always said: being made, why not, or
+            // that the normal track is playing.
+            val told = if (auto) KaraokeWords.status(stems.state, stems.playing) else ""
+            val note = told.ifEmpty { com.wittywilla.wittymediaclient.ui.Karaoke.note(mono, sound.vocalCut, sound.keyShift, lines.isNotEmpty(), now?.words?.isNotEmpty() == true) }
             Text(
                 note.ifEmpty { " " }, color = Np.fg2, fontSize = 13.sp, textAlign = TextAlign.Center,
                 modifier = Modifier.fillMaxWidth().heightIn(min = 18.dp).padding(start = 16.dp, end = 16.dp, bottom = maxOf(10.dp, inset)),
             )
+        }
+    }
+}
+
+// A level from nothing to all of it, in the website's range on black. With a remote or a keyboard it takes focus,
+// shown by a white edge, and left and right move it 5% at a time.
+@Composable
+private fun KarSlider(level: Double, label: String, modifier: Modifier = Modifier, change: (Double) -> Unit) {
+    var focused by remember { mutableStateOf(false) }
+    val percent = Math.round(level * 100).toDouble()
+    Box(
+        modifier
+            .onFocusChanged { focused = it.isFocused }
+            .onPreviewKeyEvent {
+                val up = it.key == Key.DirectionRight
+                if (it.type == KeyEventType.KeyDown && (up || it.key == Key.DirectionLeft)) {
+                    change(KaraokeMix.nudge(level, up))
+                    true
+                } else false
+            }
+            .focusable()
+            .border(2.dp, if (focused) Color.White else Color.Transparent, RoundedCornerShape(50))
+            .padding(horizontal = 8.dp),
+    ) {
+        NpSlider(percent, 0.0, 100.0, 1.0, label, "${percent.toInt()}%", true, Modifier.fillMaxWidth()) { change(it / 100) }
+    }
+}
+
+// "More" (`.kar-more`): a level for each part there is, by its name, or Vocals and Music for the quick version;
+// Reset, back to what the server set; and which version is playing, with how far a better one has got.
+@Composable
+private fun StemLevels(answer: KaraokeAnswer, stems: com.wittywilla.wittymediaclient.player.KaraokeStems, compact: Boolean) {
+    val controls = stems.controls
+    Box(Modifier.fillMaxWidth().padding(horizontal = 12.dp), contentAlignment = Alignment.Center) {
+        Column(
+            Modifier.widthIn(max = 520.dp).fillMaxWidth().clip(RoundedCornerShape(18.dp)).background(Np.chip).padding(horizontal = 16.dp, vertical = 10.dp)
+                .heightIn(max = (LocalConfiguration.current.screenHeightDp * 0.42f).dp).verticalScroll(rememberScrollState())
+                .semantics { contentDescription = "Each part's level" },
+            verticalArrangement = Arrangement.spacedBy(2.dp),
+        ) {
+            KaraokeMix.sliders(answer).forEach { slider ->
+                val level = KaraokeMix.level(answer, controls.levels, slider.id)
+                val silenced = controls.sing && KaraokeMix.isVocals(answer, slider.id)
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text(slider.label, color = Color.White, fontSize = if (compact) 13.sp else 14.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.width(if (compact) 76.dp else 96.dp).clearAndSetSemantics { })
+                    KarSlider(if (silenced) 0.0 else level, slider.label, Modifier.weight(1f)) { stems.setLevel(slider.id, it) }
+                    Text(
+                        "${Math.round((if (silenced) 0.0 else level) * 100)}%", color = Np.fg2, fontSize = 13.sp, textAlign = TextAlign.End,
+                        style = TextStyle(fontFeatureSettings = "tnum"), modifier = Modifier.width(44.dp).clearAndSetSemantics { },
+                    )
+                }
+            }
+            Row(Modifier.fillMaxWidth().padding(top = 6.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                NpChip("Reset", small = true, label = "Reset every level", onClick = stems::reset)
+                Column(Modifier.weight(1f)) {
+                    val quality = KaraokeWords.quality(answer)
+                    if (quality.isNotEmpty()) Text(quality, color = Np.fg2, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
+                    val better = KaraokeWords.improving(answer)
+                    if (better.isNotEmpty()) Text(better, color = Np.fg2, fontSize = 13.sp, modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite })
+                }
+            }
         }
     }
 }
