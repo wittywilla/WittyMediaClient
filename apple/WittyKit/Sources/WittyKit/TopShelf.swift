@@ -13,13 +13,21 @@ public struct ShelfEntry: Codable, Equatable, Identifiable {
     /// A file name in the shared folder, or nil for no picture.
     public let poster: String?
     public let link: String
+    /// From a server-driven shelf: `poster`, `wide` or `square`, the link that plays it, and how far through it is.
+    public var shape: String?
+    public var play: String?
+    public var progress: Double?
 
-    public init(id: String, title: String, subtitle: String, poster: String?, link: String) {
+    public init(id: String, title: String, subtitle: String, poster: String?, link: String, shape: String? = nil,
+                play: String? = nil, progress: Double? = nil) {
         self.id = id
         self.title = title
         self.subtitle = subtitle
         self.poster = poster
         self.link = link
+        self.shape = shape
+        self.play = play
+        self.progress = progress
     }
 }
 
@@ -38,6 +46,8 @@ public struct Shelf: Codable, Equatable {
     public static let fileName = "top-shelf.json"
     public static let posterFolder = "shelf-posters"
     public static let maxEntries = 12
+    /// A server-driven shelf has at most 4 sections of 10.
+    public static let maxSections = 4
     private static let maxFileBytes = 256 * 1024
 
     public var sections: [ShelfSection]
@@ -87,11 +97,15 @@ public struct Shelf: Codable, Equatable {
               size.intValue <= maxFileBytes,
               let data = try? Data(contentsOf: file),
               let shelf = try? JSONDecoder().decode(Shelf.self, from: data) else { return Shelf() }
-        let sections = shelf.sections.prefix(2).compactMap { section -> ShelfSection? in
+        let sections = shelf.sections.prefix(maxSections).compactMap { section -> ShelfSection? in
             let entries = section.entries.prefix(maxEntries).compactMap { entry -> ShelfEntry? in
                 guard let url = URL(string: entry.link), DeepLink.parse(url) != nil, !entry.title.isEmpty else { return nil }
                 let poster = entry.poster.flatMap { isPosterName($0) ? $0 : nil }
-                return ShelfEntry(id: entry.id, title: PlainWords.clean(entry.title, limit: 120), subtitle: PlainWords.clean(entry.subtitle, limit: 60), poster: poster, link: entry.link)
+                let play = entry.play.flatMap { text in URL(string: text).flatMap(DeepLink.parse) == nil ? nil : text }
+                let shape = entry.shape.flatMap { ["poster", "wide", "square"].contains($0) ? $0 : nil }
+                let progress = entry.progress.flatMap { $0.isFinite && $0 > 0 && $0 <= 1 ? $0 : nil }
+                return ShelfEntry(id: String(entry.id.prefix(64)), title: PlainWords.clean(entry.title, limit: 120), subtitle: PlainWords.clean(entry.subtitle, limit: 60),
+                                  poster: poster, link: entry.link, shape: shape, play: play, progress: progress)
             }
             return entries.isEmpty ? nil : ShelfSection(title: PlainWords.clean(section.title, limit: 60), entries: entries)
         }
@@ -100,7 +114,7 @@ public struct Shelf: Codable, Equatable {
 
     /// A plain name in one folder: no path can be made from it.
     public static func isPosterName(_ name: String) -> Bool {
-        name.range(of: "^[is][0-9]{1,18}\\.jpg\\z", options: .regularExpression) != nil
+        name.range(of: "^[ist][0-9]{1,20}\\.jpg\\z", options: .regularExpression) != nil
     }
 
     /// Signing out takes the titles and pictures with it.

@@ -127,6 +127,8 @@ enum Route: Hashable {
     case gameLibrary(Library, console: String?)
     case game(Int64)
     case playGame(Int64, GameStart)
+    /// A server-driven page: see SDUI/SDUICenter.swift.
+    case sdui(SDUIPlace)
 }
 
 /// A page a module adds to the menus, with the module it belongs to.
@@ -220,6 +222,28 @@ final class AppModel: ObservableObject {
     @Published var video: PlaybackModel?
     /// Something worth saying that isn't a failure of the screen in front of the person.
     @Published var notice = ""
+    /// What this server can do, by the names in its `/capabilities`. Everything newer than the app's first
+    /// version is offered only when its name is here, so an older server just doesn't show it.
+    @Published private(set) var features: Set<String> = []
+    /// Whether this server has been asked what it can do yet, and has answered or failed to.
+    @Published private(set) var featuresKnown = false
+
+    func has(_ feature: String) -> Bool { features.contains(feature) }
+
+    /// Asked for whenever a server is opened, signed in or not: signing in has newer ways too.
+    private func learnFeatures() {
+        let asking = client
+        guard !asking.base.isEmpty else { return }
+        Task {
+            let caps = try? await asking.capabilities()
+            guard client.base == asking.base else { return }
+            if let caps {
+                let found = Set(caps.features ?? [])
+                if found != features { features = found }
+            }
+            featuresKnown = true
+        }
+    }
 
     // Published, so the screens that get it from the environment never see the one before it.
     @Published private(set) var client = WittyClient(base: "") {
@@ -478,6 +502,9 @@ final class AppModel: ObservableObject {
     func start() async {
         guard !started else { return }
         started = true
+        #if DEBUG
+        if await startForTests() { return }
+        #endif
         let url = server
         guard !url.isEmpty else {
             stage = .connect(message: "")
@@ -528,6 +555,36 @@ final class AppModel: ObservableObject {
             }
         }
     }
+
+    #if DEBUG
+    /// For the UI tests and for checking a screen on a simulator, in debug builds only:
+    /// `-WMCServer http://localhost:9000 -WMCUser name -WMCPassword word` opens that server and signs in,
+    /// with nothing kept from the run before. The address must be this machine's own.
+    private func startForTests() async -> Bool {
+        let given = UserDefaults.standard
+        guard let url = given.string(forKey: "WMCServer"), let host = URL(string: url)?.host,
+              ["localhost", "127.0.0.1", "::1"].contains(host) else { return false }
+        Keychain.clear()
+        let opening = SavedServer(url: url, name: "WittyMediaServer")
+        openServer(opening)
+        guard let status = try? await client.status() else {
+            stage = .connect(message: say("errLost"))
+            return true
+        }
+        learn(status)
+        guard let name = given.string(forKey: "WMCUser") else {
+            stage = .signIn(.usual)
+            return true
+        }
+        do {
+            let result = try await client.login(name: name, password: given.string(forKey: "WMCPassword") ?? "", device: deviceName)
+            signedIn(token: result.token, user: result.user)
+        } catch {
+            stage = .signIn(.usual)
+        }
+        return true
+    }
+    #endif
 
     /// Coming back to an app left running counts as starting it. Nothing answering is
     /// left to the screens, as the network is often still waking up.
@@ -720,6 +777,8 @@ final class AppModel: ObservableObject {
         server = ""
         client = WittyClient(base: "")
         themeId = nil
+        features = []
+        featuresKnown = false
         themeChoice = ""
         themeList = nil
         customTheme = nil
@@ -734,6 +793,7 @@ final class AppModel: ObservableObject {
         serverVersion = status.version ?? ""
         serverUpdate = status.update ?? ""
         themeId = status.theme
+        learnFeatures()
         themeChoice = defaults.string(forKey: "theme." + client.base) ?? ""
         refreshTheme()
         brandName = PlainWords.clean(status.brandName ?? "", limit: 60)
@@ -893,6 +953,11 @@ final class AppModel: ObservableObject {
         if stage == .browsing { openWaitingLink() }
     }
 
+    #if DEBUG
+    /// `-WMCOpen` is followed once a run.
+    private var openedForTests = false
+    #endif
+
     private func openWaitingLink() {
         #if DEBUG
         // For checking a game on the simulator: `-WittyPlayOpenGame <id>` at launch opens its page
@@ -918,12 +983,21 @@ final class AppModel: ObservableObject {
             return
         }
         #endif
+        #if DEBUG
+        // For the UI tests and for checking a page on a simulator: `-WMCOpen /library/3` at launch opens that
+        // route as a link from outside would, once someone is signed in.
+        if !openedForTests, waitingLink == nil, let route = UserDefaults.standard.string(forKey: "WMCOpen"), DeepLink.isOpenable(route) {
+            openedForTests = true
+            waitingLink = .route(route)
+        }
+        #endif
         guard let link = waitingLink else { return }
         waitingLink = nil
         tab = .home
         switch link {
         case .item(let id): paths[.home] = [.item(id)]
         case .show(let id): paths[.home] = [.show(id)]
+        case .route(let route): openFromOutside(route: route)
         }
     }
 }

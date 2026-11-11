@@ -5,6 +5,17 @@ What changed in WittyMediaClient, newest first. What changed before it had a rep
 
 ## Unreleased
 
+- **Apple: Home, Search, libraries and title pages are the server's own pages, on a server that has them.** With WittyMediaServer 0.8.0-alpha
+  (features `sdui-pages`, `sdui-catalog`, `sdui-navigation` and `sdui-personal`), the iPhone, iPad and Apple TV apps draw the pages the server
+  describes ([SDUI.md](https://github.com/wittywilla/WittyMediaServer/blob/master/docs/SDUI.md)) with their own SwiftUI views: all 25 components
+  and 14 card styles, laid out from the page's own device profile, coloured from the theme and its scopes. The top menu on Apple TV and the bar,
+  strip and Menu on iPhone and iPad are built from the server's navigation, so re-ordering Home, adding a page or moving a menu entry on the
+  server reaches the apps with no update. **Customise** on a page reorders, hides and pins its sections and sets spacing, card sizes and the tab
+  that opens first, where the page allows it. Apple TV's Top Shelf is filled from the server's own Top Shelf document. Settings is unchanged: it
+  is the You screen, as before. Against an older server every screen is the hand-built one it was. WittyKit passes all 57 of the server's
+  conformance fixtures (`swift test`; `apple/scripts/sync-sdui-fixtures.sh` fetches them where the server's repository isn't beside this one).
+  Seen briefly in the iOS 27 and tvOS 27 simulators against a real server; [PLATFORMS.md](docs/PLATFORMS.md#server-driven-pages-on-apple) says
+  exactly what was and wasn't.
 - **Desktop: reaching your server from away, with nothing set up on its router.** With a server that has peer-to-peer connections on
   (WittyMediaServer 0.8.0-alpha, **Settings → Remote Access**), the app pairs itself while it's at home and signed in, and when it later
   can't find the server at its address it connects peer to peer by itself, still signed in. The title bar says how: direct, or through a

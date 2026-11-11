@@ -11,6 +11,8 @@ enum AppTab: Identifiable, Hashable {
     case home, libraries, games, guide, search, profile
     /// A library this person added to Apple TV's top menu, as a tab of its own.
     case library(Int64)
+    /// An entry of the server's own menu, by its ID: see SDUI/SDUICenter.swift.
+    case sdui(String)
 
     var id: String {
         switch self {
@@ -21,6 +23,7 @@ enum AppTab: Identifiable, Hashable {
         case .search: return "search"
         case .profile: return "profile"
         case .library(let id): return "library\(id)"
+        case .sdui(let id): return "sdui-\(id)"
         }
     }
 
@@ -43,7 +46,7 @@ enum AppTab: Identifiable, Hashable {
         #endif
         case .search: return say("searchTab")
         case .profile: return say("youTab")
-        case .library: return ""
+        case .library, .sdui: return ""
         }
     }
 
@@ -56,6 +59,7 @@ enum AppTab: Identifiable, Hashable {
         case .search: return "magnifyingglass"
         case .profile: return "person"
         case .library: return "books.vertical"
+        case .sdui: return "square"
         }
     }
 
@@ -70,30 +74,44 @@ enum AppTab: Identifiable, Hashable {
         case .games: return "gamecontroller.fill"
         case .guide: return "tv.fill"
         case .profile: return "person.fill"
-        case .search, .library: return icon
+        case .search, .library, .sdui: return icon
         }
     }
 }
 
 struct BrowseShell: View {
+    @EnvironmentObject private var model: AppModel
+    /// The server's own pages and menu, where it has them: see SDUI/SDUICenter.swift.
+    @StateObject private var center = SDUICenter()
+
     var body: some View {
-        #if os(tvOS)
-        TopTabs().nowPlayingCover()
-        #else
-        PillShell().nowPlayingCover()
-        #endif
+        Group {
+            #if os(tvOS)
+            TopTabs().nowPlayingCover()
+            #else
+            PillShell().nowPlayingCover()
+            #endif
+        }
+        .modifier(SDUIShell(center: center))
+        .environmentObject(center)
     }
 }
 
 /// One tab's stack of screens. Every route opens from here, whichever tab it's in.
 private struct TabRoot: View {
     @EnvironmentObject private var model: AppModel
+    @EnvironmentObject private var center: SDUICenter
     let tab: AppTab
     /// Apple TV: Back on a tab's first screen goes up to the bar.
     var toBar: (() -> Void)?
 
     @ViewBuilder private var first: some View {
         switch tab {
+        // Home and Search are the server's own pages where it has them, and this app's where it doesn't.
+        case .home where center.mode == .on: SDUIPageScreen(place: .home, chrome: .tabRoot)
+        case .search where center.mode == .on: SDUIPageScreen(place: SDUIPlace(page: "search", route: "/search"), chrome: .tabRoot)
+        case .home where center.mode == .unknown, .search where center.mode == .unknown: LoadingView()
+        case .sdui(let id): SDUIEntryRoot(id: id)
         case .home: HomeView()
         #if os(iOS) || os(visionOS)
         // The website's other top pages have the strip too.
@@ -134,6 +152,17 @@ private struct TabRoot: View {
                 .onRemoteBack(toBar)
                 .navigationDestination(for: Route.self) { route in
                     switch route {
+                    case .sdui(let place): SDUIPageScreen(place: place).id(place)
+                    // A server with its own pages shows them for a library, a title, a show and an album, wherever
+                    // in the app they were opened from: one page of each, never two.
+                    case .library(let library) where center.enabled:
+                        SDUIPageScreen(place: SDUIPlace(page: "library", params: ["library": String(library.id)], route: "/library/\(library.id)")).id(library.id)
+                    case .show(let id) where center.enabled:
+                        SDUIPageScreen(place: SDUIPlace(page: "detail", params: ["show": String(id)], route: "/show/\(id)"))
+                    case .item(let id) where center.enabled:
+                        SDUIPageScreen(place: SDUIPlace(page: "detail", params: ["item": String(id)], route: "/item/\(id)"))
+                    case .listeningAlbum(let library, let album, let artist) where center.enabled:
+                        SDUIPageScreen(place: SDUIPlace(page: "detail", params: ["library": String(library), "album": album, "artist": artist]))
                     case .library(let library):
                         #if os(tvOS)
                         LibraryScreen(library: library).plainNavigation()
@@ -266,6 +295,7 @@ struct LibraryScreen: View {
 /// model. (The system's tab view keeps room for its own bar above every tab, even with the bar hidden.)
 private struct TopTabs: View {
     @EnvironmentObject private var model: AppModel
+    @EnvironmentObject private var center: SDUICenter
     @Environment(\.palette) private var palette
     @Environment(\.resetFocus) private var resetFocus
     @FocusState private var bar: AppTab?
@@ -290,11 +320,20 @@ private struct TopTabs: View {
         // Home's first look comes after the bar, which has focus meanwhile as the only thing there. Once,
         // if nobody has moved it, it goes on to Home's main action.
         .onChange(of: model.libraries) { _ in
-            guard !settled else { return }
+            // A server's own Home says when its first look has arrived: see below.
+            guard !settled, !center.enabled else { return }
             settled = true
             // A moment for Home's first look to be drawn, so its main action is there to take focus.
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
                 if bar == .home { resetFocus(in: root) }
+            }
+        }
+        // The same for a server's own Home, whose first look arrives by itself.
+        .sduiOnChange(of: center.settles) { _ in
+            guard !settled else { return }
+            settled = true
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+                if bar != nil { resetFocus(in: root) }
             }
         }
         // A WittyTV reminder comes up on whatever's showing.
@@ -306,6 +345,7 @@ private struct TopTabs: View {
 /// The Menu's drawer is over all of it, the bar included.
 private struct PillShell: View {
     @EnvironmentObject private var model: AppModel
+    @EnvironmentObject private var center: SDUICenter
     @Environment(\.palette) private var palette
     /// The room the clock and the home indicator take.
     @State private var insets = EdgeInsets()
@@ -317,7 +357,7 @@ private struct PillShell: View {
         // 8 above the home indicator's room, as the website's bar (shell.css: bottom 8 + the safe area).
         let lift = typing ? 0 : Tokens.Space.s2
         TabView(selection: $model.tab) {
-            ForEach(AppTab.phoneTabs) { tab in
+            ForEach(center.enabled ? center.phoneTabs : AppTab.phoneTabs) { tab in
                 TabRoot(tab: tab)
                     .safeAreaInset(edge: .bottom, spacing: 0) {
                         // The mini player sits above the bar.

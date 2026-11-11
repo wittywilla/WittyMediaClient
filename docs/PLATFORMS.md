@@ -381,6 +381,49 @@ Nor the network dropping and coming back, a film pausing the music, signing out 
 - **One track after another, not gapless:** the next track is asked for when the last one ends.
 - **Sound in the server's page,** behind More, is a separate player, as on Android.
 
+### Server-driven pages on Apple
+
+On a server with `sdui-pages`, `sdui-catalog`, `sdui-navigation` and `sdui-personal` (WittyMediaServer 0.8.0-alpha), the Apple apps draw the
+server's own pages (its `docs/SDUI.md`) in place of their hand-built Home, Search, library, title, show and album screens, and build their menus
+from `GET /sdui/navigation`. The logic is in `apple/WittyKit/Sources/WittyKit/SDUI` (models, the screen model the views draw from, the patch
+protocol, the router driven by the catalogue's routes, the ETag cache on disk, Customise, theme scopes); the views are in `apple/App/SDUI`.
+Against a server without those features nothing changes.
+
+**Run:** `swift test` in `apple/WittyKit` on macOS 27: all 57 of the server's conformance fixtures (56 pages laid out, 1 not-found case), every
+`expected.more` page of items, patches, the router, focus, Customise, the cache and the requests against a stand-in server. The fixtures are read
+from the server's repository beside this one, from `WMS_SDUI_FIXTURES`, or from the copy `apple/scripts/sync-sdui-fixtures.sh` makes; **with none
+of those the conformance tests skip themselves**, which is what a CI job without the server's source does today. Both apps build for the
+simulator with no new warnings.
+
+**Seen, once each, on 2026-11-11** in the tvOS 27 and iOS 27 simulators against a real 0.8.0-alpha server with films, shows, anime, music and
+audiobooks (no books, photos or games libraries: their modules weren't installed; no Live TV channels). The Mac was heavily loaded, so this was a
+look, not a walkthrough.
+
+| Page | Apple TV | iPhone | iPad |
+|---|---|---|---|
+| Home, with the menu from the server | Seen: top menu, spotlight, rows; focus moved hero to row to row with the remote | Seen: bar, strip, spotlight, library tiles, rows | Not seen |
+| A library | Not seen | Not seen | Seen: the films library opened at launch, with its filter bar, a four-column grid, the bar and the strip |
+| Title, show and season, album, collection | Unit-tested only | Unit-tested only | Unit-tested only |
+| Search, Collections, Libraries, Live TV, Music | Unit-tested only | Unit-tested only | Unit-tested only |
+| Photos, Books, Games | Unit-tested only: no such library on the test server | The same | The same |
+| Customise | Compiled, never opened | Compiled, never opened | Compiled, never opened |
+| Top Shelf | Not seen: the simulator build is unsigned, so it has no App Group | | |
+| A customised server (preset Home, a page of one's own, re-ordered menu) | Not tried | Not tried | Not tried |
+| A Kids profile, screen time over | Not tried | Not tried | Not tried |
+
+**How each thing is done, and its limits:**
+
+- **Settings is the You screen.** The menu's You and Settings entries both open it, and a bar draws one of them.
+- **The app's own screens** stay for what the server calls native: the player, the guide (Apple TV's grid; on iPhone and iPad the server's guide
+  page, as before), a game's page and player, and on iPhone and iPad the server's pages for the reader, downloads, the remote, download, play on
+  and watch party. Apple TV has none of those last ones, so their buttons aren't drawn there. Share is the system's share sheet.
+- **An artist's page** isn't a server-driven page (the server's routes have none) and stays hand-built.
+- **The Top Shelf's extension still never asks the server itself**, as it has no sign-in: the app asks `GET /sdui/topshelf` and writes the
+  file the extension reads, with links that show and play each title. Sideloaded without the App Group, the shelf is empty, as before.
+- **Starting with no network** still stops at the connect screen. The page kept on disk is shown when the server stops answering while the app
+  is open.
+- The UI tests in `apple/UITests/SDUITests.swift` compile and have never been run.
+
 ## Controllers
 
 The app has to let a controller through, and what each button then does is the same on every client: D-pad or left stick to move, the confirm button to choose, the back button to go back.

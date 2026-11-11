@@ -16,6 +16,7 @@ import WittyKit
 /// system does.
 struct TvTopBar: View {
     @EnvironmentObject private var model: AppModel
+    @EnvironmentObject private var center: SDUICenter
     @Environment(\.metrics) private var metrics
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     var focus: FocusState<AppTab?>.Binding
@@ -42,6 +43,22 @@ struct TvTopBar: View {
     /// The libraries added to the top menu, in the server's order.
     private var added: [Library] { model.libraries.filter { model.topMenu.contains($0.id) } }
 
+    /// The row's pills. From the server's own menu where it has one: its entries in its order, then any libraries
+    /// this person added to the top menu that the server's menu doesn't already have there. Otherwise the app's own.
+    private var row: [(tab: AppTab, name: String, symbol: String)] {
+        guard center.enabled else {
+            return AppTab.tvTabs.map { ($0, $0.title, $0.icon) } + added.map { (AppTab.library($0.id), $0.name, $0.barSymbol) }
+        }
+        var pills = center.topMenuEntries.map { entry -> (tab: AppTab, name: String, symbol: String) in
+            (center.tab(for: entry), PlainWords.clean(entry.label, limit: 40), SDUIIcon.symbol(entry.icon, or: "square"))
+        }
+        let routes = Set(center.topMenuEntries.compactMap(\.route))
+        for library in added where !routes.contains("/library/\(library.id)") {
+            pills.append((AppTab.library(library.id), library.name, library.barSymbol))
+        }
+        return pills
+    }
+
     private func pill(_ tab: AppTab, _ name: String, _ symbol: String) -> some View {
         TvTabPill(name: name, symbol: symbol, user: tab == .profile ? model.user : nil, chosen: model.tab == tab) { choose(tab) }
             .focused(focus, equals: tab)
@@ -55,8 +72,7 @@ struct TvTopBar: View {
             ScrollViewReader { scroller in
                 ScrollView(.horizontal, showsIndicators: false) {
                     HStack(spacing: Tokens.Space.s4 - ring * 2) {
-                        ForEach(AppTab.tvTabs) { pill($0, $0.title, $0.icon).id($0) }
-                        ForEach(added) { pill(.library($0.id), $0.name, $0.barSymbol).id(AppTab.library($0.id)) }
+                        ForEach(row, id: \.tab) { pill($0.tab, $0.name, $0.symbol).id($0.tab) }
                     }
                     .padding(.leading, metrics.gutter - ring)
                     // Room for the last pill to come clear of the fade.

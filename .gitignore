@@ -21,3 +21,4 @@ apple/build/
 *.bundle
 desktop/bin/
 apple/Frameworks/
+apple/WittyKit/Tests/WittyKitTests/Fixtures/sdui/

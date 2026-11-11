@@ -72,6 +72,7 @@ private struct StripSolidity: ViewModifier {
 struct LibraryStrip: View {
     static let height: CGFloat = 52
     @EnvironmentObject private var model: AppModel
+    @EnvironmentObject private var center: SDUICenter
     @Environment(\.palette) private var palette
     @Environment(\.metrics) private var metrics
     /// The library whose page this is, if any.
@@ -90,7 +91,8 @@ struct LibraryStrip: View {
     }
 
     var body: some View {
-        let places = model.stripPlaces
+        // The pages behind Menu in the server's own menu, where it has one.
+        let places = center.enabled ? center.stripPlaces : model.stripPlaces
         HStack(spacing: Tokens.Space.s2) {
             if places.isEmpty {
                 BrandLockup().padding(.leading, metrics.gutter)
@@ -101,7 +103,7 @@ struct LibraryStrip: View {
                         HStack(spacing: Tokens.Space.s5) {
                             ForEach(places) { place in
                                 let here = isCurrent(place)
-                                Button { model.open(place) } label: {
+                                Button { center.enabled ? center.open(place, model: model) : model.open(place) } label: {
                                     Text(place.label)
                                         .font(.system(size: 15, weight: .bold))
                                         .foregroundStyle(here ? palette.text : palette.textSecondary)
@@ -323,6 +325,7 @@ extension UINavigationController: @retroactive UIGestureRecognizerDelegate {
 /// chosen one has `accent` at 14% behind it and its icon in `accentText`; the others are `textSecondary`.
 struct FloatingBar: View {
     @EnvironmentObject private var model: AppModel
+    @EnvironmentObject private var center: SDUICenter
     @Environment(\.palette) private var palette
 
     private func press(_ tab: AppTab) {
@@ -392,8 +395,18 @@ struct FloatingBar: View {
         let name: String = model.user?.shownName ?? ""
         let you: String = name.isEmpty ? AppTab.profile.title : AppTab.profile.title + ", " + name
         HStack(spacing: 0) {
-            ForEach(shownTabs, id: \.self) { (tab: AppTab) in
-                slot(tab.title, chosen: marked(tab), action: { press(tab) }) { barIcon(tab.barIcon) }
+            if center.enabled {
+                // The server's own menu: its entries for the bar, in its order.
+                ForEach(center.barEntries) { entry in
+                    let tab = center.tab(for: entry)
+                    slot(PlainWords.clean(entry.label, limit: 40), chosen: marked(tab), action: { press(tab) }) {
+                        barIcon(SDUIIcon.symbol(entry.icon, or: "square") + (marked(tab) && entry.icon == "home" ? ".fill" : ""))
+                    }
+                }
+            } else {
+                ForEach(shownTabs, id: \.self) { (tab: AppTab) in
+                    slot(tab.title, chosen: marked(tab), action: { press(tab) }) { barIcon(tab.barIcon) }
+                }
             }
             slot("Menu", chosen: false, action: { model.menuOpen = true }) { barIcon("line.3.horizontal") }
             slot(you, chosen: marked(.profile), action: { press(.profile) }) { profileIcon(name) }
@@ -403,7 +416,8 @@ struct FloatingBar: View {
         .background(Capsule().fill(palette.card))
         .overlay(Capsule().strokeBorder(palette.text.opacity(0.2), lineWidth: 1))
         .shadow(color: .black.opacity(0.45), radius: 15, y: 10)
-        .frame(maxWidth: 416)
+        // A tablet's bar holds more of the server's menu than a phone's.
+        .frame(maxWidth: center.enabled && center.barEntries.count > 4 ? 640 : 416)
         .padding(.horizontal, Tokens.Space.s4)
         .frame(maxWidth: .infinity)
     }
@@ -427,6 +441,7 @@ private struct BarPressStyle: ButtonStyle {
 /// the rest; tapping it closes the drawer, at once, as the website's does.
 struct MenuDrawer: View {
     @EnvironmentObject private var model: AppModel
+    @EnvironmentObject private var center: SDUICenter
     @Environment(\.palette) private var palette
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
@@ -434,6 +449,7 @@ struct MenuDrawer: View {
 
     /// The place whose page is on top of Home's stack, if it's one of the menu's.
     private var currentId: String? {
+        if center.enabled, case .sdui(let place)? = model.paths[.home]?.last { return center.items.first { $0.route == place.route }?.id }
         switch model.paths[.home]?.last {
         case .library(let library)?: return "lib:\(library.id)"
         case .page(let path)?: return model.navPlaces.first { $0.path == path }?.id
@@ -446,7 +462,7 @@ struct MenuDrawer: View {
         let here = place.id == currentId && model.tab == .home
         return Button {
             close()
-            model.open(place)
+            if center.enabled { center.open(place, model: model) } else { model.open(place) }
         } label: {
             HStack(spacing: Tokens.Space.s3) {
                 Image(systemName: symbol(place))
@@ -468,6 +484,7 @@ struct MenuDrawer: View {
     }
 
     private func symbol(_ place: NavPlace) -> String {
+        if let kind = place.kind, kind.hasPrefix("sdui:") { return SDUIIcon.symbol(String(kind.dropFirst(5)), or: "folder") }
         switch place.id {
         case "collections": return "books.vertical"
         case "couch": return "gamecontroller"
@@ -485,8 +502,9 @@ struct MenuDrawer: View {
     }
 
     private var panel: some View {
-        let places = model.navPlaces.filter { $0.id != "home" && $0.id != "tv" }
-        let grouped = model.navPrefs.grouped == true
+        // Behind Menu in the server's own menu, where it has one; otherwise this app's.
+        let places = center.enabled ? center.navPlaces(center.moreEntries) : model.navPlaces.filter { $0.id != "home" && $0.id != "tv" }
+        let grouped = !center.enabled && model.navPrefs.grouped == true
         let firstLibrary = places.firstIndex { $0.libraryId != nil }
         let version = VersionTag.parts(model.serverVersion)
         return VStack(alignment: .leading, spacing: 0) {
@@ -498,12 +516,12 @@ struct MenuDrawer: View {
                     ForEach(Array(places.enumerated()), id: \.element.id) { at, place in
                         if grouped, let group = NavPlaces.group(place, model.navPrefs), at == places.firstIndex(where: { NavPlaces.group($0, model.navPrefs) == group }) {
                             caption(group)
-                        } else if !grouped, at == firstLibrary {
+                        } else if !grouped, !center.enabled, at == firstLibrary {
                             caption("Libraries")
                         }
                         row(place)
                     }
-                    if model.libraries.isEmpty {
+                    if model.libraries.isEmpty, !center.enabled {
                         Text("No libraries yet").font(.system(size: 13)).foregroundStyle(palette.textHint)
                             .padding(.horizontal, Tokens.Space.s3).padding(.vertical, Tokens.Space.s1)
                     }
