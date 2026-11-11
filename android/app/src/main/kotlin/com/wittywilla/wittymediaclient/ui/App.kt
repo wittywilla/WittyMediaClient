@@ -694,8 +694,6 @@ class Nav(val app: WittyApp, private val s: Map<String, String>) {
         val inUse = uses(target)
         if (inUse) changeServer()
         val gone = ForgetServer.forget(app, target)
-        // Focus kept for the list of servers may be on its card, which is no longer there.
-        focusMemory.remove(Route.Connect().key)
         if (undoable && !inUse) pendingForget = gone else ForgetServer.finish(app, gone)
     }
 

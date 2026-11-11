@@ -51,7 +51,7 @@ private fun joined(winner: SavedServer, loser: SavedServer): SavedServer {
 // A tidied list, and the addresses whose kept things now belong under another address (from, to), in order.
 data class Merged(val servers: List<SavedServer>, val moved: List<Pair<String, String>> = emptyList())
 
-private fun mergeOnce(stored: List<SavedServer>): Merged {
+private fun mergeOnce(stored: List<SavedServer>, current: String): Merged {
     val out = mutableListOf<SavedServer>()
     val moved = mutableListOf<Pair<String, String>>()
     for (entry in stored) {
@@ -64,9 +64,11 @@ private fun mergeOnce(stored: List<SavedServer>): Merged {
             changed = false
             val i = out.indexOfFirst { sameIdentity(it, merged) || (it.url == merged.url && !differentServer(it, merged)) }
             if (i >= 0) {
-                // The list is the most recent first, so the one already in it wins a tie.
+                // On a tie the address in use wins; else the one already in the list, which is the most recent first.
                 val earlier = out.removeAt(i)
-                val (winner, loser) = if (merged.lastSeen > earlier.lastSeen) merged to earlier else earlier to merged
+                val later = merged.lastSeen > earlier.lastSeen ||
+                    (merged.lastSeen == earlier.lastSeen && merged.url == current && earlier.url != current)
+                val (winner, loser) = if (later) merged to earlier else earlier to merged
                 if (loser.url != winner.url) moved += loser.url to winner.url
                 merged = joined(winner, loser)
                 at = if (at < 0) i else minOf(at, i)
@@ -87,11 +89,12 @@ private fun mergeOnce(stored: List<SavedServer>): Merged {
 
 // A stored list with each server in it once. Entries that are the same machine (by ID or key, whatever the address)
 // or share an address become one: the most recently reached wins, and what it lacks is filled in from the others.
-// Doing it again changes nothing.
-fun mergeServers(stored: List<SavedServer>): Merged {
+// When neither is known to be more recent, the one at `current`, the address the app last used, wins. Doing it
+// again changes nothing.
+fun mergeServers(stored: List<SavedServer>, current: String = ""): Merged {
     var now = Merged(stored)
     while (true) {
-        val next = mergeOnce(now.servers)
+        val next = mergeOnce(now.servers, current)
         if (next.servers == now.servers) return Merged(next.servers, now.moved)
         now = Merged(next.servers, now.moved + next.moved)
     }

@@ -148,7 +148,7 @@ class SessionStore(context: Context) {
     // again changes nothing.
     fun tidy() {
         val stored = recent
-        val merged = mergeServers(stored)
+        val merged = mergeServers(stored, server)
         val edit = prefs.edit()
         var names = prefs.all.keys.toSet()
         if (merged.servers != stored) {

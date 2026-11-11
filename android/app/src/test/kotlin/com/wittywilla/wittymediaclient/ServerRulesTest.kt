@@ -125,6 +125,11 @@ class ServerRulesTest {
         val merged = mergeServers(old)
         assertEquals(listOf(c, b), merged.servers.map { it.url })
         assertEquals("AAAA-AAAA-AAAA", merged.servers[0].fingerprint)
+        // Neither is known to be the more recent: the address the app is using is the one that's kept.
+        val inUse = mergeServers(old, current = a)
+        assertEquals(listOf(a, b), inUse.servers.map { it.url })
+        assertEquals(listOf(c to a), inUse.moved)
+        assertEquals(inUse.servers, mergeServers(inUse.servers, current = a).servers)
         // And what's written back is read the same.
         assertEquals(merged.servers, json.decodeFromString<List<SavedServer>>(json.encodeToString(merged.servers)))
     }
