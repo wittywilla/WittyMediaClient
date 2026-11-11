@@ -125,6 +125,8 @@ enum Route: Hashable {
     case gameLibrary(Library, console: String?)
     case game(Int64)
     case playGame(Int64, GameStart)
+    /// A server-driven page: see SDUI/SDUICenter.swift.
+    case sdui(SDUIPlace)
 }
 
 /// A page a module adds to the menus, with the module it belongs to.
@@ -221,6 +223,8 @@ final class AppModel: ObservableObject {
     /// What this server can do, by the names in its `/capabilities`. Everything newer than the app's first
     /// version is offered only when its name is here, so an older server just doesn't show it.
     @Published private(set) var features: Set<String> = []
+    /// Whether this server has been asked what it can do yet, and has answered or failed to.
+    @Published private(set) var featuresKnown = false
 
     func has(_ feature: String) -> Bool { features.contains(feature) }
 
@@ -229,9 +233,13 @@ final class AppModel: ObservableObject {
         let asking = client
         guard !asking.base.isEmpty else { return }
         Task {
-            guard let caps = try? await asking.capabilities(), client.base == asking.base else { return }
-            let found = Set(caps.features ?? [])
-            if found != features { features = found }
+            let caps = try? await asking.capabilities()
+            guard client.base == asking.base else { return }
+            if let caps {
+                let found = Set(caps.features ?? [])
+                if found != features { features = found }
+            }
+            featuresKnown = true
         }
     }
 
@@ -715,6 +723,7 @@ final class AppModel: ObservableObject {
         client = WittyClient(base: "")
         themeId = nil
         features = []
+        featuresKnown = false
         themeChoice = ""
         themeList = nil
         customTheme = nil
@@ -912,6 +921,7 @@ final class AppModel: ObservableObject {
         switch link {
         case .item(let id): paths[.home] = [.item(id)]
         case .show(let id): paths[.home] = [.show(id)]
+        case .route(let route): openFromOutside(route: route)
         }
     }
 }

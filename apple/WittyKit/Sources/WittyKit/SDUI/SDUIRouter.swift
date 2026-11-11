@@ -52,8 +52,11 @@ public struct SDUIRouter: Equatable, Sendable {
                 return .page(page, params: params)
             }
             if let native = rule.native {
-                // An app's own screen gets everything the route named: the item to play, the channel's key.
-                return .native(native, params: found.merging(params) { _, new in new })
+                // An app's own screen gets everything the route named: the item to play, the channel's key, and
+                // the route itself, for a screen that shows more than one place (the guide and its recordings).
+                var all = found.merging(params) { _, new in new }
+                all["route"] = path
+                return .native(native, params: all)
             }
         }
         return .none

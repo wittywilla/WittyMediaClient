@@ -36,8 +36,15 @@ final class ContentProvider: TVTopShelfContentProvider {
                 guard let link = URL(string: entry.link) else { return nil }
                 let item = TVTopShelfSectionedItem(identifier: entry.id)
                 item.title = entry.subtitle.isEmpty ? entry.title : "\(entry.title) · \(entry.subtitle)"
-                item.imageShape = .poster
+                // A server-driven shelf says each picture's shape, and what plays it and how far through it is.
+                switch entry.shape {
+                case "wide": item.imageShape = .hdtv
+                case "square": item.imageShape = .square
+                default: item.imageShape = .poster
+                }
                 item.displayAction = TVTopShelfAction(url: link)
+                if let play = entry.play.flatMap({ URL(string: $0) }) { item.playAction = TVTopShelfAction(url: play) }
+                if let progress = entry.progress { item.playbackProgress = progress }
                 if let poster = entry.poster {
                     let file = posters.appendingPathComponent(poster)
                     if FileManager.default.fileExists(atPath: file.path) { item.setImageURL(file, for: [.screenScale1x, .screenScale2x]) }

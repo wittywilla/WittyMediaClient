@@ -114,10 +114,11 @@ final class SDUITests: XCTestCase {
         XCTAssertEqual(router.resolve(route: "/collections"), .page("collections", params: [:]))
         XCTAssertEqual(router.resolve(route: "/search?q=exam"), .page("search", params: ["q": "exam"]))
         XCTAssertEqual(router.resolve(route: "/page/family-night"), .page("family-night", params: [:]))
-        XCTAssertEqual(router.resolve(route: "/settings/playback"), .native("settings", params: ["section": "playback"]))
-        XCTAssertEqual(router.resolve(route: "/tv/watch/bbc.one"), .native("livePlayer", params: ["key": "bbc.one"]))
-        XCTAssertEqual(router.resolve(route: "/watch/12"), .native("player", params: ["item": "12"]))
-        XCTAssertEqual(router.resolve(route: "/you"), .native("profiles", params: [:]))
+        XCTAssertEqual(router.resolve(route: "/settings/playback"), .native("settings", params: ["section": "playback", "route": "/settings/playback"]))
+        XCTAssertEqual(router.resolve(route: "/tv/watch/bbc.one"), .native("livePlayer", params: ["key": "bbc.one", "route": "/tv/watch/bbc.one"]))
+        XCTAssertEqual(router.resolve(route: "/watch/12"), .native("player", params: ["item": "12", "route": "/watch/12"]))
+        XCTAssertEqual(router.resolve(route: "/you"), .native("profiles", params: ["route": "/you"]))
+        XCTAssertEqual(router.resolve(route: "/tv/recordings"), .native("guide", params: ["route": "/tv/recordings"]))
         for bad in ["", "item/3", "//evil.example/x", "/nowhere", "/item/3/extra", "/page/../etc", "https://example.com/"] {
             XCTAssertEqual(router.resolve(route: bad), SDUIDestination.none, bad)
         }
@@ -242,6 +243,18 @@ final class SDUITests: XCTestCase {
         XCTAssertEqual(more.root.find("recent-2")?.kids.map(\.id), ["recent-2:1", "recent-2:2", "recent-2:3"])
         XCTAssertNil(more.root.find("recent-2")?.properties["more"])
         XCTAssertFalse(SDUIScreen(document: more).root.find("recent-2")?.hasMore ?? true)
+
+        // Asked for again, the page keeps what was fetched for it where it still fits.
+        let again = document.keepingLoaded(from: more)
+        XCTAssertEqual(again.root.find("recent-2")?.kids.count, 3, "a row that arrives waiting keeps the cards it had")
+        XCTAssertNil(again.root.find("recent-2")?.state)
+        XCTAssertEqual(SDUIFocusPlan(root: again.root).groups["recent-2"]?.count, 3)
+        let paged = document.applying(SDUISectionItems(items: [SDUINode(type: "Card", id: "jump:5")], next: "/api/v1/sdui/pages/home/sections/jump/items?cursor=3"), to: "jump")
+        XCTAssertEqual(document.keepingLoaded(from: paged).root.find("jump")?.kids.map(\.id), ["jump:3", "jump:4", "jump:5"])
+        XCTAssertEqual(document.keepingLoaded(from: paged).root.find("jump")?.properties.fields("more")?.text("url"), "/api/v1/sdui/pages/home/sections/jump/items?cursor=3")
+        var reordered = paged
+        reordered.root.change(at: [1]) { $0.children?.reverse() }
+        XCTAssertEqual(document.keepingLoaded(from: reordered), document, "a row that no longer starts the same is the server's own")
 
         let gone = document.applying(SDUISectionItems(state: "empty"), to: "recent-2")
         XCTAssertNil(gone.root.find("recent-2"))

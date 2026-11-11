@@ -23,6 +23,11 @@ public struct SDUIOption: Equatable, Identifiable, Sendable {
     public var value: String
     public var label: String
     public var id: String { value }
+
+    public init(value: String, label: String) {
+        self.value = value
+        self.label = label
+    }
 }
 
 /// One control of a `FilterBar`: the sort, or a filter with what's chosen now ("" for any).

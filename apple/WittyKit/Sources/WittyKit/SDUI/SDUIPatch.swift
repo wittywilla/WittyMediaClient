@@ -254,3 +254,35 @@ public extension SDUIDocument {
     /// A node's own ETag-free identity for the cache: the page it is and what it was opened with.
     var cacheName: String { page.id + "?" + (page.params ?? [:]).sorted { $0.key < $1.key }.map { "\($0.key)=\($0.value)" }.joined(separator: "&") }
 }
+
+public extension SDUIDocument {
+    /// A page asked for again, with what the app had fetched for the one before kept where it still fits: a
+    /// row that arrives waiting for its items keeps the ones it had, and a row or grid that had been paged
+    /// further keeps its later pages when it still starts with the same cards. Nothing else is carried over:
+    /// what the server sent wins.
+    func keepingLoaded(from old: SDUIDocument) -> SDUIDocument {
+        guard old.page.id == page.id else { return self }
+        var out = self
+        func visit(_ node: SDUINode, _ path: [Int]) {
+            if ["Shelf", "Grid", "List", "SeasonList", "TrackList"].contains(node.type), let before = old.root.find(node.id), before.type == node.type {
+                let had = before.kids.map(\.id), has = node.kids.map(\.id)
+                let filledBefore = before.state == nil && !had.isEmpty
+                if node.state == "deferred", filledBefore {
+                    out.root.change(at: path) { $0 = before }
+                } else if node.state == nil, filledBefore, had.count > has.count, !has.isEmpty, Array(had.prefix(has.count)) == has,
+                          node.properties["more"] != nil {
+                    out.root.change(at: path) { target in
+                        // The first page is the server's own, as it is now; the later ones are the ones fetched before.
+                        target.children = node.kids + before.kids.dropFirst(has.count)
+                        target.props?["more"] = before.properties["more"]
+                    }
+                }
+                return
+            }
+            for (index, child) in node.kids.enumerated() { visit(child, path + [index]) }
+        }
+        visit(root, [])
+        if out != self { out.renumberFocus() }
+        return out
+    }
+}
