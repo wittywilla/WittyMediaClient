@@ -5,6 +5,15 @@ What changed in WittyMediaClient, newest first. What changed before it had a rep
 
 ## Unreleased
 
+- **Karaoke from a song's separate parts, on Android and Apple.** On a server with `karaoke-auto` (WittyMediaServer 0.8.0-alpha), opening
+  karaoke on a song asks the server once, and the server makes a karaoke version by itself: a quick one in seconds, and a properly separated one
+  behind it when its owner has a separator installed. The apps play the parts in place of the song, in step to the sample (Android: decoded and
+  mixed into one output; Apple: one audio engine, every part started on the same clock tick), with one **Vocals** slider, a **Sing** button that
+  takes the singer out and puts them back, and **More**: a slider for each part, **Reset**, and whether it's the **Quick version** or
+  **Separated**, with **Preparing a better version…** while the better one is made, which then takes over without a press. Levels are remembered
+  for each profile. Lyrics, seeking and pausing follow the song as before. If the parts can't be played the normal track plays and the screen
+  says why; on an older server karaoke is as it was. On Apple TV it's in Now Playing, behind **Karaoke**. On Apple, the parts play at normal
+  speed only. Checked on screen on an Android phone emulator only; see [PLATFORMS.md](docs/PLATFORMS.md).
 - **Apple: Home, Search, libraries and title pages are the server's own pages, on a server that has them.** With WittyMediaServer 0.8.0-alpha
   (features `sdui-pages`, `sdui-catalog`, `sdui-navigation` and `sdui-personal`), the iPhone, iPad and Apple TV apps draw the pages the server
   describes ([SDUI.md](https://github.com/wittywilla/WittyMediaServer/blob/master/docs/SDUI.md)) with their own SwiftUI views: all 25 components
