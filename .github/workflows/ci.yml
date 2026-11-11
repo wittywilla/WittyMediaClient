@@ -174,6 +174,18 @@ jobs:
           curl -fsSL -o "$RUNNER_TEMP/xcodegen.zip" https://github.com/yonaskolb/XcodeGen/releases/download/2.46.0/xcodegen.zip
           unzip -q "$RUNNER_TEMP/xcodegen.zip" -d "$RUNNER_TEMP/xcodegen"
           echo "$RUNNER_TEMP/xcodegen/xcodegen/bin" >> "$GITHUB_PATH"
+      # Wittyconnect, which reaches a server from away, is built from the server's source: the apps build
+      # without it when that isn't to be had, and then can't connect from away. Before the project is
+      # generated, which picks up the notices file written beside the library.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+          repository: wittywilla/WittyMediaServer
+          path: .server
+      - name: Build Wittyconnect from the server's source
+        env:
+          WITTYMEDIASERVER_SRC: .server
+        run: bash apple/scripts/build-wittyconnect.sh --if-available
       - name: Generate the Xcode project
         working-directory: apple
         run: xcodegen generate

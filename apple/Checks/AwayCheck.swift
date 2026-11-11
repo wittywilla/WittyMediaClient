@@ -8,6 +8,7 @@ import XCTest
 ///
 ///   testHome   a code shown on the TV is approved, as from a phone; the app then puts this device
 ///              on the server's list by itself
+///   testInvite a device that never met the server takes an invite link in, and is signed in by it
 ///   testJoinFromAway   (only with P2P_CHECK_PUBLIC=1) a TV that has never met the server shows a code,
 ///              which is typed into the server; the two find each other through the public address book
 ///   testAway   the home address no longer answers: the app has to find the server peer to peer,
@@ -174,14 +175,60 @@ final class AwayCheck: XCTestCase {
         _ = try await until("the connection coming back with the app", seconds: 60) { () -> Bool? in
             (try await self.tvDevice())?["connected"] as? Bool == true ? true : nil
         }
+        #if os(tvOS)
         let afterWaking = try await place(item) ?? first
         let onward = try await until("the film carrying on after coming back", seconds: 90) { () -> Double? in
             guard let now = try await self.place(item), now >= afterWaking + 4 else { return nil }
             return now
         }
         print("AwayCheck: after leaving the screen and coming back, played on to \(onward) seconds")
+        #else
+        // A phone pauses a film when the app leaves the screen, and leaves it paused. What can be seen
+        // is the app asking the server things again, over the same sign-in.
+        let lastSeen = away["lastSeen"] as? Int ?? 0
+        let again = try await until("the app asking the server again after coming back", seconds: 90) { () -> Int? in
+            guard let now = try await self.tvSession(), let seen = now["lastSeen"] as? Int, seen > lastSeen,
+                  (now["via"] as? String)?.hasPrefix("p2p") == true else { return nil }
+            return seen
+        }
+        print("AwayCheck: after leaving the screen and coming back, the app was heard from again, peer to peer (\(again - lastSeen) seconds on)")
+        #endif
         picture("away-after-waking")
         app.terminate()
+    }
+
+    /// An invite link made on the server, taken in where the address goes: the app finds the server
+    /// by it, shows it the invite, and signs in with the code that comes back.
+    func testInvite() async throws {
+        let before = try await forgetDevices()
+        let made = try await ask("POST", "/api/v1/p2p/invite", body: [:])
+        let link = try XCTUnwrap((made.1 as? [String: Any])?["link"] as? String, "the server made no invite: \(made)")
+        app.launchArguments = ["-WittyCheckInvite", link]
+        app.launch()
+        let device = try await until("the device on the server's list, by invite", seconds: 120) { () -> [String: Any]? in
+            try await self.list("/api/v1/p2p/devices").first { ($0["platform"] as? String) == Self.platform && ($0["how"] as? String) == "invite" }
+        }
+        let session = try await until("the device signed in over the connection", seconds: 120) { try await self.newSession(since: before) }
+        XCTAssertEqual(session["where"] as? String, "internet")
+        print("AwayCheck: joined by an invite link; the device is \(device["path"] ?? device["lastPath"] ?? ""), the sign-in \(session["via"] ?? "")")
+        picture("invite-signed-in")
+        app.terminate()
+    }
+
+    /// Whatever the runs before left on the server is taken off its list, and its sign-ins noted, so
+    /// that what is found afterwards can only have come from what the run itself did.
+    private func forgetDevices() async throws -> Set<String> {
+        for old in try await list("/api/v1/p2p/devices") {
+            if let id = old["id"] as? String { _ = try await ask("DELETE", "/api/v1/p2p/devices/\(id)") }
+        }
+        return Set(try await list("/api/v1/sessions").compactMap { $0["id"] as? String })
+    }
+
+    private func newSession(since before: Set<String>) async throws -> [String: Any]? {
+        try await list("/api/v1/sessions").first { now in
+            guard let id = now["id"] as? String else { return false }
+            return !before.contains(id) && (now["via"] as? String)?.hasPrefix("p2p") == true
+        }
     }
 
     /// A TV that has never met its server: it shows a code, the code is typed into the server, and
@@ -191,12 +238,7 @@ final class AwayCheck: XCTestCase {
         guard ProcessInfo.processInfo.environment["CHECK_PUBLIC"] == "1" else {
             throw XCTSkip("joining by a code needs the public address book: run the script with P2P_CHECK_PUBLIC=1")
         }
-        // Whatever the runs before this left on the server is taken off its list, and its sign-ins
-        // noted, so that what is found afterwards can only have come from the code.
-        for old in try await list("/api/v1/p2p/devices") {
-            if let id = old["id"] as? String { _ = try await ask("DELETE", "/api/v1/p2p/devices/\(id)") }
-        }
-        let before = Set(try await list("/api/v1/sessions").compactMap { $0["id"] as? String })
+        let before = try await forgetDevices()
         app.launchArguments = ["-WittyCheckJoin", "1"]
         app.launch()
         let shown = app.staticTexts["joinCode"]
@@ -209,17 +251,39 @@ final class AwayCheck: XCTestCase {
         let device = try await until("the Apple TV on the server's list, having found it by the code", seconds: 300) { () -> [String: Any]? in
             try await self.list("/api/v1/p2p/devices").first { ($0["platform"] as? String) == Self.platform && ($0["how"] as? String) == "invite" }
         }
-        let session = try await until("the Apple TV signed in over the connection", seconds: 120) { () -> [String: Any]? in
-            try await self.list("/api/v1/sessions").first { now in
-                guard let id = now["id"] as? String else { return false }
-                return !before.contains(id) && (now["via"] as? String)?.hasPrefix("p2p") == true
-            }
-        }
+        let session = try await until("the Apple TV signed in over the connection", seconds: 120) { try await self.newSession(since: before) }
         XCTAssertEqual(session["where"] as? String, "internet")
         print("AwayCheck: joined by the code \(code.prefix(2))…; the device is \(device["path"] ?? device["lastPath"] ?? ""), the sign-in \(session["via"] ?? "")")
         picture("join-signed-in")
         app.terminate()
     }
+
+    /// You, From away, as it looks from away. Run after testAway with the server up; the remote is
+    /// worked as a person would, so it isn't one of the script's steps: a changed menu would fail it.
+    #if os(tvOS)
+    func testLooksAtFromAway() async throws {
+        guard ProcessInfo.processInfo.environment["CHECK_LOOK"] == "1" else { throw XCTSkip("only when asked: CHECK_LOOK=1") }
+        app.launch()
+        let remote = XCUIRemote.shared
+        // The top menu's own name for whoever is signed in; the check's account is "owner".
+        let you = app.descendants(matching: .any).matching(NSPredicate(format: "label CONTAINS[c] 'owner'")).firstMatch
+        XCTAssertTrue(you.waitForExistence(timeout: 60), "nobody is signed in")
+        remote.press(.up)
+        for _ in 0..<8 where !you.hasFocus { remote.press(.right) }
+        remote.press(.select)
+        try await Task.sleep(nanoseconds: 2_000_000_000)
+        picture("you")
+        let row = app.descendants(matching: .any).matching(NSPredicate(format: "label CONTAINS 'From away'")).firstMatch
+        XCTAssertTrue(row.waitForExistence(timeout: 20), "You has no From away row")
+        for _ in 0..<30 where !row.hasFocus { remote.press(.down) }
+        picture("you-from-away-row")
+        XCTAssertTrue(row.label.contains("Peer to peer"), "the row doesn't say how the server is reached: \(row.label)")
+        remote.press(.select)
+        let stop = app.descendants(matching: .any).matching(NSPredicate(format: "label CONTAINS 'Stop connecting from away'")).firstMatch
+        XCTAssertTrue(stop.waitForExistence(timeout: 20), "From away didn't open")
+        picture("from-away")
+    }
+    #endif
 
     /// Where the owner has got to in the film, in seconds, as the server keeps it.
     private func place(_ item: String) async throws -> Double? {

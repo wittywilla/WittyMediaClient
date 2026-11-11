@@ -54,15 +54,21 @@ targetTemplates:
       # What Profile's Licences page shows: every third-party part and its licence.
       - path: ../NOTICE
         buildPhase: resources
-      # The same for what is inside Wittyconnect, written beside it when it is built.
-      - path: Frameworks/THIRD-PARTY-NOTICES.wittyconnect.txt
-        buildPhase: resources
-        optional: true
     dependencies:
       - package: WittyKit
       - package: LiveKitWebRTC
       # Go's own name lookups, inside Wittyconnect, use the system's resolver.
       - sdk: libresolv.tbd
+    # The same Licences page shows what is inside Wittyconnect, from the file written beside the library when
+    # it is built. Copied by hand, as it is only there when the library is.
+    postBuildScripts:
+      - name: Wittyconnect's notices
+        basedOnDependencyAnalysis: false
+        script: |
+          notices="${SRCROOT}/Frameworks/THIRD-PARTY-NOTICES.wittyconnect.txt"
+          if [ -f "$notices" ]; then
+            cp "$notices" "${TARGET_BUILD_DIR}/${UNLOCALIZED_RESOURCES_FOLDER_PATH}/"
+          fi
     info:
       path: Generated/Info-${target_name}.plist
       properties:

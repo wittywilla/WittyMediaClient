@@ -21,6 +21,10 @@ say "$(xcodebuild -version | tr '\n' ' ')on macOS $(sw_vers -productVersion)"
 
 if (cd WittyKit && swift test) >"$LOGS/wittykit-tests.log" 2>&1; then say "ok    WittyKit's tests"; else say "FAIL  WittyKit's tests: see wittykit-tests.log"; fi
 
+# The library that reaches a server from away, when Go and the server's source are here to build it from.
+if [ ! -d Frameworks/Wittyconnect.xcframework ]; then bash scripts/build-wittyconnect.sh --if-available >"$LOGS/wittyconnect.log" 2>&1 || true; fi
+if [ -d Frameworks/Wittyconnect.xcframework ]; then say "ok    Wittyconnect is built: the apps can reach a server from away"; else say "note  no Wittyconnect: the apps are built without reaching a server from away (see wittyconnect.log)"; fi
+
 if ! xcodegen generate >"$LOGS/xcodegen.log" 2>&1; then
   say "FAIL  generating the Xcode project: see xcodegen.log"
   exit 1

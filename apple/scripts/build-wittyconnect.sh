@@ -16,6 +16,9 @@
 #
 # Without the library the apps still build, and simply can't connect from away.
 set -euo pipefail
+# Wherever it was given from, before this moves to apple/.
+given_source="${WITTYMEDIASERVER_SRC:-}"
+[ -z "$given_source" ] || given_source="$(cd "$given_source" 2>/dev/null && pwd || echo "$given_source")"
 cd "$(dirname "$0")/.."
 
 lenient=0
@@ -30,13 +33,17 @@ give() {
 }
 
 source=""
-for place in "${WITTYMEDIASERVER_SRC:-}" "../../WittyMediaServer"; do
+for place in "$given_source" "../../WittyMediaServer"; do
   if [ -n "$place" ] && [ -f "$place/scripts/build-wittyconnect-mobile.sh" ] && [ -f "$place/pkg/wittyconnect/mobile/mobile.go" ]; then
     source="$(cd "$place" && pwd)"
     break
   fi
 done
 [ -n "$source" ] || give "WittyMediaServer's source wasn't found. Set WITTYMEDIASERVER_SRC to a checkout that has pkg/wittyconnect/mobile."
+# A checkout from before the library had what these apps call, or before it was built for Apple TV.
+if ! grep -q 'func StartJoin' "$source/pkg/wittyconnect/mobile/mobile.go" || ! grep -q 'tvos' "$source/scripts/build-wittyconnect-mobile.sh"; then
+  give "The WittyMediaServer checkout at $source is too old for these apps: it needs 0.8.0-alpha's pkg/wittyconnect, with Apple TV in its build script."
+fi
 command -v go >/dev/null 2>&1 || give "Go isn't installed, and the library is written in Go."
 command -v xcodebuild >/dev/null 2>&1 || give "Xcode isn't installed."
 

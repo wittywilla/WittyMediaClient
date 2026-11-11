@@ -9,6 +9,8 @@
 #   away      the server's home address is taken away: the app finds the server peer to peer, is
 #             still signed in, and plays a film through the connection, which the server counts
 #             as from the internet; the app leaves the screen and comes back, and the film goes on
+#   invite    the app as new: an invite link made on the server is taken in where the address goes,
+#             and the device is put on the server's list and signed in by it
 #
 # For a Mac with Xcode, XcodeGen, Go and ffmpeg, and a checkout of WittyMediaServer (the folder in
 # WITTYMEDIASERVER_SRC, or a WittyMediaServer folder beside this repository). Nothing is signed with
@@ -23,8 +25,12 @@
 # It adds a third part, which nothing else can check: a device that has never met the server shows
 # a code, the code is typed into the server, and the two find each other through the address book.
 # The router is never asked for anything either way. P2P_CHECK_DEVICE names another simulator.
+# P2P_CHECK_LOOK=1 also opens You, From away, on the Apple TV with the remote, for its picture.
 # Everything it writes goes in apple/build/p2p-check, and the app's own log is copied there.
 set -euo pipefail
+# Wherever it was given from, before this moves to apple/.
+given_source="${WITTYMEDIASERVER_SRC:-}"
+[ -z "$given_source" ] || given_source="$(cd "$given_source" 2>/dev/null && pwd || echo "$given_source")"
 cd "$(dirname "$0")/.."
 APPLE="$PWD"
 WORK="$APPLE/build/p2p-check"
@@ -40,7 +46,7 @@ for tool in xcodebuild xcodegen go ffmpeg python3 curl; do
   command -v "$tool" >/dev/null 2>&1 || { echo "$tool isn't installed, and this check needs it." >&2; exit 2; }
 done
 source=""
-for place in "${WITTYMEDIASERVER_SRC:-}" "../../WittyMediaServer"; do
+for place in "$given_source" "../../WittyMediaServer"; do
   if [ -n "$place" ] && [ -f "$place/cmd/wittymediaserver/main.go" ]; then source="$(cd "$place" && pwd)"; break; fi
 done
 [ -n "$source" ] || { echo "WittyMediaServer's source wasn't found. Set WITTYMEDIASERVER_SRC to a checkout of it." >&2; exit 2; }
@@ -170,6 +176,8 @@ run() { # what xcodebuild does, log name, then anything else for it
     xcodebuild "$what" -project WittyMedia.xcodeproj -scheme "$scheme" -destination "platform=$system,id=$device" \
     -derivedDataPath DerivedData/p2p-check -resultBundlePath "$WORK/$log.xcresult" -collect-test-diagnostics never \
     CODE_SIGN_IDENTITY=- DEVELOPMENT_TEAM="" "$@" >"$WORK/$log.log" 2>&1 || return 1
+  # The pictures the check took of the screen, where this Xcode can get them out: something to look at.
+  [ "$what" != test-without-building ] || xcrun xcresulttool export attachments --path "$WORK/$log.xcresult" --output-path "$WORK/pictures-$log" >/dev/null 2>&1 || true
   # A run that found nothing to run is not a pass.
   [ "$what" != test-without-building ] || grep -q "Executed 1 test, with 0 failures" "$WORK/$log.log"
 }
@@ -190,18 +198,43 @@ forward_pid=""
 for _ in $(seq 1 20); do curl -fsS -m 1 "$home/api/health" >/dev/null 2>&1 || break; sleep 0.25; done
 if run test-without-building away -only-testing:"$scheme/AwayCheck/testAway"; then
   grep -h '^AwayCheck: ' "$WORK/away.log" | sed 's/^AwayCheck: /      /' | tee -a "$WORK/report.txt" || true
-  say "ok    away: the $kind finds the server peer to peer, still signed in, and plays the film through it, before and after leaving the screen"
+  say "ok    away: the $kind finds the server peer to peer, still signed in, and plays the film through it; it leaves the screen and comes back, and the connection is there again"
 else
   grep -E 'error: |XCTAssert|failed' "$WORK/away.log" | sort -u | head -20
   say "FAIL  away: see away.log"
   exit 1
 fi
+# You, From away, with the remote worked as a person would: only when asked, and never a failure of the
+# check, since a menu that has moved would trip it. P2P_CHECK_LOOK=1, Apple TV only.
+if [ "${P2P_CHECK_LOOK:-}" = 1 ] && [ "$kind" = "Apple TV" ]; then
+  if TEST_RUNNER_CHECK_LOOK=1 run test-without-building look -only-testing:"$scheme/AwayCheck/testLooksAtFromAway"; then
+    say "ok    You, From away, says how the server is reached: pictures in pictures-look"
+  else
+    say "note  You, From away, wasn't reached with the remote: see look.log"
+  fi
+fi
+# A device that has never met this server, with an invite link made on it: the app as new again. The
+# link names addresses on this machine's network, so with no network there is nothing in it to find.
+if [ "$lan" != 127.0.0.1 ]; then
+  xcrun simctl uninstall "$device" "$BUNDLE" 2>/dev/null || true
+  if run test-without-building invite -only-testing:"$scheme/AwayCheck/testInvite"; then
+    grep -h '^AwayCheck: ' "$WORK/invite.log" | sed 's/^AwayCheck: /      /' | tee -a "$WORK/report.txt" || true
+    say "ok    an invite: a device that never met the server (the $kind) takes an invite link in, and is put on the list and signed in by it"
+  else
+    grep -E 'error: |XCTAssert|failed' "$WORK/invite.log" | sort -u | head -20
+    say "FAIL  an invite link: see invite.log"
+    exit 1
+  fi
+else
+  say "note  the invite link wasn't tried: this machine has no network address to put in one"
+fi
+
 if [ "$public" = true ]; then
   # A device that has never met this server: the app as new again, and the server found by a code.
   xcrun simctl uninstall "$device" "$BUNDLE" 2>/dev/null || true
   if run test-without-building join -only-testing:"$scheme/AwayCheck/testJoinFromAway"; then
     grep -h '^AwayCheck: ' "$WORK/join.log" | sed 's/^AwayCheck: /      /' | tee -a "$WORK/report.txt" || true
-    say "ok    joining: a $kind that never met the server shows a code, and typing it into the server brings the two together and signs it in"
+    say "ok    joining: a device that never met the server (the $kind) shows a code, and typing it into the server brings the two together and signs it in"
   else
     grep -E 'error: |XCTAssert|failed' "$WORK/join.log" | sort -u | head -20
     say "FAIL  joining by a code: see join.log"

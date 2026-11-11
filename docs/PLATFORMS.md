@@ -209,10 +209,60 @@ the AGPL-3.0-or-later; each app has to get it its own way.
 | **Desktop**, Windows and Linux | **Compiled.** The helper cross-compiles and the app's own tests pass. Never started there |
 | **Desktop**, FreeBSD | **Not started.** The package doesn't carry the helper |
 | **Desktop packages** | **Compiled.** `package.json` copies `bin/<system>-<processor>/wittyconnect` into the package, and the `package:*` scripts build it first when the server's source and Go are at hand (`WITTYMEDIASERVER_SRC`). An unpacked macOS app was made (`electron-builder --mac --arm64 --dir`): the helper and its notices are in `Contents/Resources`, signed with the app, and it runs. No installer has been made with it, and no Windows or Linux package |
-| **Apple** (iPhone, iPad, Mac) | **Compiled, not wired in.** `scripts/build-wittyconnect-mobile.sh apple` in the server's repository builds `Wittyconnect.xcframework` (iOS, the simulator, macOS; about 30 MB a slice before linking). `PeerConnect.swift` in WittyKit reads invites and the connector's state, with tests, and its `PeerConnector` type-checks against the framework. What remains: add the framework to `project.yml`; keep the device key in the Keychain; in `AppModel`, enrol after sign-in (`GET` and `POST /api/v1/p2p/devices`) and keep the server's ID and addresses; when the server's address doesn't answer, start a `PeerConnector` and point `WittyClient` at its `baseURL` with the secret header, and AVPlayer at it with the secret cookie; call `networkChanged()` from `NWPathMonitor`; show `state.words`; allow `http://127.0.0.1` in App Transport Security (`NSAllowsLocalNetworking`); an invite field on the connect screen |
-| **Apple TV** | **Not started.** gomobile has no tvOS target, so the library would have to be built another way |
+| **Apple TV** | **Simulator.** `apple/scripts/p2p-check.sh` runs the real app with the real library against a real server: a code shown on the TV is approved, and the app puts the device on the server's list by itself; with the home address taken away the app finds the server peer to peer, still signed in, and plays a film through the connection, which the server counts as from the internet; it leaves the screen and comes back, and the film goes on; and a TV that never met the server joins by a code it shows. **Never on a real Apple TV**, and never across two routers: [below](#on-apple-tv-iphone-and-ipad) |
+| **iPhone, iPad** | **Simulator**, iPhone. The same code and the same check (`p2p-check.sh ios`): paired at home, found peer to peer with the home address gone, a film played through the connection, and the app heard from again over it after leaving the screen (a phone pauses a film when its app leaves the screen). **Not looked at:** the server's own pages in the web view from away, music carrying on with the screen off, an iPad. Never on a real one |
+| **Apple Vision Pro** | **Not there.** The library has no visionOS build, so the app builds without the feature and is as it was |
 | **Android** | **Not started.** The same script builds `wittyconnect.aar` with the NDK (not tried: this machine has none). What remains is what the Apple row lists, in Kotlin: the `.aar` in `app/libs`, the key in the Keystore, OkHttp and Media3 pointed at `http://127.0.0.1:<port>` with the secret header, `127.0.0.1` allowed in `network_security.xml`, `NetworkCallback` for network changes. On Android 11 and later Go can't list network cards the usual way, which the library is expected to cope with and hasn't been seen to |
 | **A web browser** | **Can't.** A page can't open the connections this needs. From away it takes an app |
+
+### On Apple TV, iPhone and iPad
+
+**The library.** Wittyconnect is Go, built from the server's source by `bash apple/scripts/build-wittyconnect.sh` (it needs Go, Xcode and
+a checkout of WittyMediaServer: the folder in `WITTYMEDIASERVER_SRC`, or one beside this repository) into `apple/Frameworks`, which isn't
+committed. Go's own tool for this, gomobile, has no Apple TV target; SagerNet's fork of it has, and that is what the server's script
+uses, pinned and kept in the server checkout's `.tools` folder. The result is one `.xcframework` with a slice each for Apple TV, iPhone
+and iPad and their simulators. It is a static library: it is linked into the app, nothing is embedded beside it, and so there is nothing
+extra for a sideloading tool to sign, and no entitlement is asked for. The Xcode project finds it by path, so a checkout that hasn't
+built it still builds the apps, without the feature (`PeerLibrary.available` is false, and nothing about it shows). The Top Shelf
+extension doesn't link it.
+
+**How the app uses it.** `PeerManager` in WittyKit chooses the way, as the desktop app does: the server's own address first, proved by its
+key; peer to peer when that doesn't answer and this device is on the server's list; home again by itself when the address answers
+(asked every 45 seconds while away, and at once when the library says it is on the server's network). Every `WittyClient` shares one
+route, so requests, pictures and the players follow a change of way without being made again. From away the server is at
+`http://127.0.0.1:<port>` on the device, which answers only with a secret that is new each time the library starts: the app's own
+requests carry it in a header, and the video player and the web view get it as a cookie for that address. Plain `http` to that address
+is allowed by `NSAllowsLocalNetworking`, which the apps already had; nothing new is asked of the person. The server counts all of it
+as from the internet, whatever the address.
+
+| | |
+|---|---|
+| **Off the screen** | Apple TV stops an app that is off the screen and takes its sockets. The app ends the connection itself as it leaves (`scenePhase`), and starts it again on coming back, on the same port, so the film that was playing finds its address still there; the player asks again and carries on. An iPhone keeps the connection while sound or a film is playing, and looks at it again on coming back |
+| **Memory** | The Go part is told to keep to 48 MB on Apple TV and 64 MB on iPhone and iPad, collects sooner than Go does by itself, and gives back what it can when the system warns. The node is the server's "app" kind: at most 24 connections, 48 MB by libp2p's own count. Measured in the Apple TV 4K simulator (a debug build, the app's node with the address book, relays and hole punching on): the whole app was 33 MB at the connect screen with no connection; 50 MB signed in from away on Home, level over five and a half minutes (53 MB at most), of which the Go part was 17 to 18 MB; and 98 MB playing a film through the connection, of which the Go part was 19 MB and most of the rest was the simulator decoding video in software. So the connection costs about 15 to 20 MB. At rest it used under 1% of one processor core. A simulator has the Mac's memory and is never ended for using it: what an Apple TV HD, with 2 GB, makes of this is not known |
+| **Size** | From unsigned release archives, with and without the library: the Apple TV app goes from 22.3 MB to 46.1 MB installed, and its IPA from 10.1 MB to 19.4 MB; the iPhone and iPad app from 20.7 MB to 44.5 MB, and its IPA from 9.5 MB to 18.7 MB. About 24 MB more installed and 9 MB more to download, nearly all of it the Go library (libp2p, QUIC and the Go runtime) |
+| **The key** | This device's key is in the Keychain (`peer-key`, this device only, never in iCloud), not in a file tvOS may clear. One key for the device, kept through signing out; taken away with the last server that knew it. What isn't secret (the server's ID and last addresses) is in the app's settings |
+| **Leaving** | **You → From away → Stop connecting from away** takes this device off the server's list and forgets how to reach it, and the app stops adding the device by itself until **Connect from away again** is pressed there. **Change server** takes it off the list too, without that choice: choosing the server again adds it again. An owner can remove the device from the server's Remote Access page at any time, which cuts it off at once |
+| **A device never at home** | The connect screen's address box takes an invite link (`wittymedia://p2p/…`), typed or pasted (on Apple TV, from an iPhone's keyboard). **Join from away** is for a TV with nobody to paste anything: it shows a code of eight letters and digits, someone signed in types it into the server's Remote Access page, and the two find each other through the public address book. Needs a server with `p2p-join` and its address book on |
+
+**What the check doesn't show, and only a real Apple TV can.** No Apple TV was to hand, and a simulator is this Mac: it has the Mac's
+memory, the Mac's network and no router between it and the server. On a real one, try these, in this order:
+
+1. **It installs and starts.** Sideload the `-tvos.ipa` (built with the library: the build log says "Wittyconnect for Apple TV") and open
+   it. A library the system refuses would stop the app at launch.
+2. **At home:** sign in with a code shown on the TV. Within a minute the TV is under **Devices that may connect** on the server's
+   Remote Access page, and **You → From away** on the TV says **Ready**.
+3. **Away:** put the TV on another network (a phone's hotspot will do) and open the app. It should say how it is connected under
+   **You → From away** within half a minute or so, and play. This is the first time the connection crosses two real routers: if it says
+   it found the server but couldn't connect directly, that is hole punching failing on one of them, not the app.
+4. **Play a whole film**, and watch for the app being closed by the system part-way (it would start again at the Home screen): that
+   would be memory. An Apple TV HD, with 2 GB, is the one to try.
+5. **Press Home during a film, wait a minute, come back.** It should carry on within a few seconds. Then the same after an hour in
+   sleep.
+6. **Restart the Apple TV** and open the app while still away: it should still be signed in and connect, which shows the key and the
+   sign-in survived in the Keychain. (A sideloaded app that was re-signed with another Apple ID gets a new keychain, and starts again.)
+7. **Join from away** on a TV that has never met the server, with the server's address book on: type the code into the Remote Access
+   page. Expect a minute or two.
+8. **Back home**, it should go back to the server's own address by itself within a minute: **You → From away** says **At home**.
 
 ## Features
 

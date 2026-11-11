@@ -19,7 +19,7 @@ extension AppModel {
     /// What You's row says: the way from away while it's in use, otherwise whether there is one.
     var awayRowValue: String {
         if way.isAway { return way.words }
-        return awayReady ? say("awayReady") : say("awayNotSetUp")
+        return awayReady ? say("awayReady") : awayOff ? say("off") : say("awayNotSetUp")
     }
 }
 
@@ -35,11 +35,18 @@ struct AwayView: View {
 
     var body: some View {
         SettingsScreen(title: say("rowAway"), detail: say("awayHint")) {
-            ListGroup(title: "", footer: model.awayReady ? say("awayReadyHint") : say("awaySetUpHint")) {
-                RowLabel(icon: model.way.isAway ? "dot.radiowaves.left.and.right" : "house", tint: "#0e7c6f", title: say("awayNow"),
-                         value: model.wayWords.isEmpty ? say("awayNoWay") : model.wayWords, detail: problem, chevron: false)
+            ListGroup(title: "", footer: model.awayReady ? say("awayReadyHint") : model.awayOff ? say("awayOffHint") : say("awaySetUpHint")) {
+                // A row to press: it looks again at how the server can be reached. It also gives a remote
+                // somewhere to land on a screen that may have nothing else to press.
+                Button {
+                    Task { await model.peers.settle() }
+                } label: {
+                    RowLabel(icon: model.way.isAway ? "dot.radiowaves.left.and.right" : "house", tint: "#0e7c6f", title: say("awayNow"),
+                             value: model.wayWords.isEmpty ? say("awayNoWay") : model.wayWords, detail: problem, chevron: false)
+                }
+                .rowStyle()
                 RowLabel(icon: "arrow.triangle.branch", tint: "#3e5bd0", title: say("rowAway"),
-                         value: model.awayReady ? say("awayReady") : say("awayNotSetUp"), chevron: false)
+                         value: model.awayReady ? say("awayReady") : model.awayOff ? say("off") : say("awayNotSetUp"), chevron: false)
                 if model.awayReady, !model.awayDeviceID.isEmpty {
                     // The end of the name the server's own list shows for this device.
                     RowLabel(icon: "key", tint: "#5d6474", title: say("awayDevice"), value: "…" + model.awayDeviceID.suffix(8), chevron: false)
@@ -50,6 +57,19 @@ struct AwayView: View {
                     BusyText(say("awayStop"), busy: busy)
                 }
                 .action(.destructive, wide: true, tall: true)
+                .padding(.top, Tokens.Space.s2)
+            } else if model.awayOff {
+                Button {
+                    guard !busy else { return }
+                    busy = true
+                    Task {
+                        await model.startAway()
+                        busy = false
+                    }
+                } label: {
+                    BusyText(say("awayStart"), busy: busy)
+                }
+                .action(.secondary, wide: true, tall: true)
                 .padding(.top, Tokens.Space.s2)
             }
         }

@@ -698,10 +698,18 @@ final class AppModel: ObservableObject {
 
     func changeServer() {
         // Leaving a server takes this device off its list for connections from away, as on the desktop.
-        if let leaving = current {
+        if let leaving = current, !client.token.isEmpty {
             endSession { [weak self] old in
                 await self?.forgetAway(on: old, server: leaving)
                 if self?.peers.current?.home == leaving.url { self?.peers.close() }
+            }
+        } else if let leaving = current {
+            // Nobody is signed in, so the server can't be told; this device forgets its side all the same.
+            let old = client
+            endSession()
+            Task {
+                await forgetAway(on: old, server: leaving)
+                if peers.current?.home == leaving.url { peers.close() }
             }
         } else {
             endSession()

@@ -532,6 +532,7 @@ A single column, gutter 16, at most 640 wide and centred on a tablet; it scrolls
 | | `rowGameSettings` Game settings | `gamecontroller` / `sports_esports`, `#7f46b8` | | `/settings/games` | with a games library |
 | | `rowControllers` Controllers | `dpad` / `gamepad`, `#3e5bd0` | | `/controllers` | with a games library |
 | `groupDevice` | `rowTheme` Theme | `paintpalette` / `palette`, `#0e7c6f` | the theme's name | Theme (native) | everyone |
+| | `rowAway` From away | `dot.radiowaves.left.and.right` / `settings_input_antenna`, `#0a6fb8` | how the server is reached from away while it is (`Peer to peer · direct`), otherwise `awayReady` or `awayNotSetUp` | From away (native) | where the app has the connecting library |
 | `groupServer` | `rowLibraries` Libraries | `books.vertical` / `video_library`, `#5d6474` | | `/settings/libraries` | admins |
 | | `rowMetadata` Metadata and artwork | `photo.on.rectangle` / `image_search` | | `/settings/metadata` | admins |
 | | `rowFixMatches` Fix matches | `wand.and.stars` / `auto_fix_high` | | `/fix-matches` | admins |
@@ -621,6 +622,21 @@ Back; Title `rowTheme`; Body `themeHint` ("Only on this device. The server's own
 list: `themeAutomatic` (light or dark with the device), `themeServer` (the server's choice, named), then each theme in
 `shared/data/themes.json` with a 28 swatch (its background, a card stripe and an accent dot) and a check on the
 chosen one. Choosing applies at once, with a 200 ms cross-fade. Kept per server on the device.
+
+### From away
+
+Back; Title `rowAway`; Body `awayHint`. One grouped list of rows that open nothing (no chevron): `awayNow` with how
+the server is being reached (pressing it looks again) (`awayAtHomeNow`, or the connection's own words, a relay always said; a problem under it
+in Secondary), `rowAway` with `awayReady` or `awayNotSetUp`, and, when ready, `awayDevice` with the end of the name the
+server's list shows for this device. Under the list, in Secondary: `awayReadyHint`, or `awaySetUpHint` (how to get
+there), or `awayOffHint`. When ready, a Destructive `awayStop`, wide, which asks first (`awayStopConfirm`) and takes
+this device off the server's list, for good: the app doesn't add it again until Secondary `awayStart`, which takes
+`awayStop`'s place, is pressed. The server card on You says the way under its address while it is from away, and `awayOnly` in
+place of an address for a server only ever reached that way. `docs/PLATFORMS.md`, From away, peer to peer.
+
+The connect screen has a Quiet `joinAway` under Enter an address: a sign-in page with `joinAwayTitle`,
+`joinAwayHint`, the code in Display monospaced in a `panel` card (as the code a TV shows at home), a spinner with
+`joinAwayWaiting`, and Back. A code that ran out gives a Problem line and Primary `pairNew`.
 
 ### On a tablet and a TV
 

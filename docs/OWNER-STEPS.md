@@ -128,13 +128,18 @@ bash WittyMediaClient/apple/scripts/check-on-mac.sh
 1. Install **Xcode** from the Mac App Store (free), and open it once.
 2. In Terminal, install the tool that creates the Xcode project: `brew install xcodegen`. This needs
    [Homebrew](https://brew.sh).
-3. In the `apple` folder, run `xcodegen generate`, then open
+3. To reach your server from away, peer to peer, build the library that does it, with Go installed (`brew install go`) and a checkout
+   of WittyMediaServer beside this repository: `bash apple/scripts/build-wittyconnect.sh`. Without it the apps build and work at home.
+4. In the `apple` folder, run `xcodegen generate`, then open
    `WittyMedia.xcodeproj`.
-4. In Xcode's settings, under **Accounts**, add your Apple ID.
-5. Choose a target such as **WittyMedia-tvOS**. Under **Signing & Capabilities**, pick your team.
-6. Pair your device. For Apple TV: on the TV, go to Settings, Remotes and Devices, Remote App and Devices.
+5. In Xcode's settings, under **Accounts**, add your Apple ID.
+6. Choose a target such as **WittyMedia-tvOS**. Under **Signing & Capabilities**, pick your team.
+7. Pair your device. For Apple TV: on the TV, go to Settings, Remotes and Devices, Remote App and Devices.
    In Xcode, open Window, Devices and Simulators.
-7. Choose the device at the top of the window and press Run.
+8. Choose the device at the top of the window and press Run.
+
+**On an Apple TV, try reaching your server from away.** No Apple TV was to hand when that was built, so everything about it has only been
+seen in a simulator: [PLATFORMS.md](PLATFORMS.md#on-apple-tv-iphone-and-ipad) lists what to try, in order, and what each would show.
 
 A free Apple ID should be enough to run your own builds, but they expire after about a week. The first
 launch asks permission to find devices on your network, and should be allowed.

@@ -14,9 +14,20 @@ What changed in WittyMediaClient, newest first. What changed before it had a rep
   network (`test/app/p2p-real.js`); not yet across two routers, and not on Windows or Linux. Packages get the helper only when they're
   built with the server's source at hand (`npm run build:connect`); without it the app says the helper is missing. Not in the FreeBSD
   package yet.
-- **Apple: the Swift for peer-to-peer connections is written, not wired in.** `PeerConnect` in WittyKit reads invites and the
-  connector's state, and `PeerConnector` wraps the Go library where the framework is added to the app. No screen uses it yet. Android
-  has nothing yet. `docs/PLATFORMS.md` says what remains.
+- **Apple TV, iPhone and iPad: reaching your server from away, with nothing set up on its router.** With a server that has peer-to-peer
+  connections on (WittyMediaServer 0.8.0-alpha), the app puts itself on the server's list while it's at home and signed in, and when it
+  later can't find the server at its address it connects peer to peer by itself, still signed in: everything it asks, every picture,
+  the video and music players and the server's own pages go through the connection. **You → From away** says how the server is being
+  reached (at home, direct, or through a relay) and takes this device off the list; **Change server** does that too. The app ends the
+  connection when it leaves the screen and starts it again when it comes back, and what was playing carries on. The device's key is in
+  the Keychain. A device that was never at home pastes an invite link where the address goes, or, for a TV, chooses **Join from away**:
+  it shows a code to type into the server's Remote Access page (needs a server with `p2p-join`). The connecting is done by Wittyconnect,
+  a Go library built from the server's source (AGPL-3.0-or-later) and linked into the app: `apple/scripts/build-wittyconnect.sh` builds
+  it, for Apple TV as well, with a gomobile that has the tvOS targets. Without it the apps build and work as before. Not on Apple Vision
+  Pro. Run for real in the Apple TV and iPhone simulators against a real server (`apple/scripts/p2p-check.sh`): paired at home, the home
+  address taken away, a film played through the connection, the app off the screen and back; and, on Apple TV, joined by a code through
+  the public address book. It adds about 24 MB to the installed app. **Never on a real Apple TV or iPhone**, and never across two
+  routers: `docs/PLATFORMS.md` lists what to try on one.
 - **A Flatpak and a Snap of the desktop app.** Each release has `wittymediaclient-<version>-linux-amd64.flatpak` and `.snap`, made by `electron-builder`
   from the same configuration as the other Linux packages (`npm run package:flatpak`, `npm run package:snap`). The Flatpak runs on the freedesktop
   runtime with Flathub's Electron base, and can reach the network, sound, the screen, controllers and Downloads; the Snap is a strictly confined

@@ -301,7 +301,7 @@
   "awayNotSetUp": "Not set up",
   "awayDevice": "This device",
   "awayStop": "Stop connecting from away",
-  "awayStopConfirm": "This device comes off your server's list. It adds itself again the next time it is at home and signed in.",
+  "awayStopConfirm": "This device comes off your server's list and stops adding itself to it. You can turn it back on here.",
   "awayReadyHint": "This device is on your server's list. Away from home it finds the server by itself, and you stay signed in. A connection through a relay is always said to be one.",
   "awaySetUpHint": "Turn on peer-to-peer connections on your server, under Remote Access. This device adds itself to the list the next time it is at home and signed in.",
   "awayOnly": "Reached from away",
@@ -313,5 +313,7 @@
   "joinAwayWaiting": "Waiting for your server…",
   "joinAwayFinding": "Found your server. Connecting…",
   "joinAwayExpired": "Nobody typed that code in before it ran out. Get a new one.",
-  "joinAwayRefused": "Your server didn't accept that code. Get a new one."
+  "joinAwayRefused": "Your server didn't accept that code. Get a new one.",
+  "awayStart": "Connect from away again",
+  "awayOffHint": "Turned off on this device. It isn't on your server's list, and doesn't add itself to it."
 }

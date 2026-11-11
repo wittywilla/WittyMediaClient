@@ -142,6 +142,16 @@ extension AppModel {
         objectWillChange.send()
     }
 
+    /// "Stop connecting from away" is this device's own choice for this server, and stays until it
+    /// is taken back: otherwise the app would put the device on the list again the next time it
+    /// was at home.
+    private func awayOffKey(_ server: SavedServer) -> String { "peer.off." + (server.serverId.isEmpty ? server.url : server.serverId) }
+
+    func awayIsOff(for server: SavedServer) -> Bool { defaults.bool(forKey: awayOffKey(server)) }
+
+    /// Whether the person turned it off for the server in use.
+    var awayOff: Bool { current.map(awayIsOff(for:)) ?? false }
+
     /// This device's key, made the first time it is wanted. Nil if it can't be kept: a key that
     /// would be gone next time is no use to a server's list.
     private func deviceKey() -> String? {
@@ -214,7 +224,7 @@ extension AppModel {
     /// so, and keeps what is needed to find it again. This is how a device that was set up at
     /// home works when it leaves, with nothing done by hand.
     func learnAway() async {
-        guard PeerLibrary.available, stage == .browsing, !client.token.isEmpty, let server = current else { return }
+        guard PeerLibrary.available, stage == .browsing, !client.token.isEmpty, let server = current, !awayIsOff(for: server) else { return }
         let asking = client
         // An older server has no such thing, and isn't asked.
         guard let caps = try? await asking.capabilities(), caps.has(WittyClient.peerFeature),
@@ -288,8 +298,17 @@ extension AppModel {
     func stopAway() async {
         guard let server = current else { return }
         let wasAway = way.isAway
+        defaults.set(true, forKey: awayOffKey(server))
         await forgetAway(on: client, server: server)
         if wasAway { stage = .connect(message: say("errLost")) }
+    }
+
+    /// Taking that back: the device goes on the list again now, if the server can be asked.
+    func startAway() async {
+        guard let server = current else { return }
+        defaults.removeObject(forKey: awayOffKey(server))
+        objectWillChange.send()
+        await learnAway()
     }
 
     // MARK: An invite
@@ -356,6 +375,7 @@ extension AppModel {
         }
         let shown = PlainWords.clean(answer.serverName.isEmpty ? name : answer.serverName, limit: 80)
         let server = proof.saved(url: home, name: shown.isEmpty ? (known?.name ?? "WittyMediaServer") : shown, brandLogo: known?.brandLogo ?? "")
+        defaults.removeObject(forKey: awayOffKey(server))
         keepAway(PeerInfo(serverID: serverID, hints: hints, port: peers.route.current?.port ?? 0), for: server)
         recent = SavedServer.remember(server, in: recent)
         signIn(to: server)
@@ -377,9 +397,14 @@ extension AppModel {
     /// with nobody there to work a remote: `-WittyCheckServer <address>` at launch, with no server
     /// chosen yet, chooses that one and asks for a code shown on this screen, which the check
     /// approves as a phone would. `-WittyCheckPlay <item>` plays that item once someone is signed
-    /// in (see `openWaitingLink`), and `-WittyCheckJoin 1` opens Join from away (see `ConnectView`).
-    /// None of them is in a release build.
+    /// in (see `openWaitingLink`), `-WittyCheckJoin 1` opens Join from away (see `ConnectView`), and
+    /// `-WittyCheckInvite <link>` takes an invite link. None of them is in a release build.
     func connectForCheck() async {
+        // `-WittyCheckInvite <link>`: an invite link, as if it had been pasted where the address goes.
+        if let link = UserDefaults.standard.string(forKey: "WittyCheckInvite"), let invite = PeerConnect.invite(from: link) {
+            if let problem = await join(invite) { ClientLog.shared.warn("p2p", "The invite didn't work: \(problem)") }
+            return
+        }
         guard let address = UserDefaults.standard.string(forKey: "WittyCheckServer"), case .ok(let url) = Address.normalize(address),
               case .found(let status) = await WittyClient.probe(url) else { return }
         _ = await arrive(url: url, status: status)
