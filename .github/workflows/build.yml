@@ -2,11 +2,19 @@
 #
 # Nothing here is signed with a real certificate, notarized, or published. No secrets are read.
 #
+#   Windows, macOS, Linux (AppImage), Debian (.deb), Fedora (.rpm), Arch (.pacman)   desktop
+#   Flatpak, Snap                                                                    desktop-sandboxed
+#   FreeBSD                                                                          desktop-freebsd
+#   Plasma Bigscreen                    the Linux packages: desktop checks the launcher entry it lists
+#   Android phones and Android TV       android: the same APKs serve both
+#   iPhone and iPad, Apple TV           apple
+#
 # The iOS and tvOS results are "AltStore-style" IPAs. An .ipa is only a zip whose top folder is
 # Payload/<App>.app. AltStore, SideStore and Sideloadly take an unsigned IPA like that and sign it
 # themselves on install, with the user's own Apple ID, so no provisioning profile, _CodeSignature or
 # SwiftSupport folder needs to be in it. The archive is made with code signing switched off and the
 # Payload is zipped by hand: xcodebuild -exportArchive isn't used, because it insists on signing.
+# apple/scripts/package-ipas.sh does it, here and in the release.
 #
 # What the release workflow signs and publishes is the owner's job: docs/OWNER-STEPS.md.
 name: build
@@ -96,6 +104,10 @@ jobs:
         run: npm run ${{ matrix.script }}
       - name: What was built
         run: ls -la desktop/out
+      # Plasma Bigscreen has no package of its own: it lists the Linux one, which opens as a TV app there.
+      - name: Plasma Bigscreen lists the package's launcher entry
+        if: runner.os == 'Linux'
+        run: bash scripts/test/bigscreen-entry.sh desktop/out/wittymediaclient-*-linux-amd64.deb
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: client-desktop-${{ matrix.artifact }}
@@ -111,10 +123,126 @@ jobs:
           if-no-files-found: error
           retention-days: 7
 
+  # The same app as a Flatpak and as a Snap, each made by electron-builder from the configuration in
+  # desktop/package.json (its flatpak and snapcraft sections), so they hold what the other packages hold.
+  # They are jobs of their own because each needs its own tools, and so one failing leaves the others.
+  #
+  # Flatpak: flatpak-builder puts the app on Flathub's Electron base (which brings zypak, so Chromium's
+  # sandbox works inside Flatpak's), against the freedesktop runtime. The result is a one-file bundle.
+  # Snap: snapcraft builds a core24 snap in an LXD container. It is strictly confined; Chromium's own
+  # sandbox is off inside it, as the Snap Store only lets browsers keep theirs.
+  desktop-sandboxed:
+    strategy:
+      fail-fast: false
+      matrix:
+        format: [flatpak, snap]
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+      - name: Install
+        working-directory: desktop
+        run: npm ci --ignore-scripts --no-audit --no-fund
+      # The runtime, SDK and base named in desktop/package.json's flatpak section, from Flathub, for this
+      # user only. electron-builder would fetch them itself, but only from a remote that is already set up.
+      - name: The tools that make the Flatpak
+        if: matrix.format == 'flatpak'
+        run: |
+          sudo apt-get update && sudo apt-get install -y flatpak flatpak-builder elfutils
+          flatpak remote-add --user --if-not-exists flathub https://dl.flathub.org/repo/flathub.flatpakrepo
+          version=$(node -p "require('./desktop/package.json').build.flatpak.runtimeVersion")
+          base=$(node -p "require('./desktop/package.json').build.flatpak.baseVersion")
+          flatpak install --user --noninteractive -y flathub \
+            "org.freedesktop.Platform//$version" "org.freedesktop.Sdk//$version" "org.electronjs.Electron2.BaseApp//$base"
+      # Docker's firewall rules on the runner stop LXD's containers reaching the network, hence FORWARD.
+      - name: The tools that make the Snap
+        if: matrix.format == 'snap'
+        run: |
+          sudo snap install snapcraft --classic
+          sudo snap install lxd || sudo snap refresh lxd
+          sudo lxd init --auto
+          sudo iptables -P FORWARD ACCEPT
+          sudo usermod --append --groups lxd "$USER"
+      # sg runs the Snap's build with the lxd group this shell was only just given.
+      - name: Package (unsigned)
+        working-directory: desktop
+        env:
+          DEBUG: ${{ matrix.format == 'flatpak' && '@malept/flatpak-bundler' || '' }}
+        run: |
+          if [ "${{ matrix.format }}" = snap ]; then
+            sg lxd -c "npm run package:snap"
+          else
+            npm run package:flatpak
+          fi
+      - name: What was built
+        run: |
+          ls -la desktop/out
+          file=$(ls desktop/out/wittymediaclient-*-linux-amd64.${{ matrix.format }})
+          if [ "${{ matrix.format }}" = snap ]; then
+            unsquashfs -d "$RUNNER_TEMP/snap" "$file" meta >/dev/null
+            cat "$RUNNER_TEMP/snap/meta/snap.yaml"
+            cat "$RUNNER_TEMP"/snap/meta/gui/*.desktop
+          else
+            flatpak install --user --noninteractive -y --bundle "$file"
+            flatpak info --show-permissions com.wittywilla.wittymediaclient
+            cat ~/.local/share/flatpak/exports/share/applications/com.wittywilla.wittymediaclient.desktop
+          fi
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: client-desktop-${{ matrix.format }}
+          path: desktop/out/*.${{ matrix.format }}
+          if-no-files-found: error
+          retention-days: 7
+
+  # Electron publishes nothing for FreeBSD, so this builds the package there, in a virtual machine on
+  # GitHub's Linux runner, as ci.yml and the release do. The package holds only the app: docs/PORTING.md.
+  desktop-freebsd:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Package on FreeBSD
+        uses: vmactions/freebsd-vm@c46abacb49f09938ca4e1702d15d836285d694cc # v1.5.9
+        with:
+          release: '15.1'
+          usesh: true
+          # A FreeBSD release installs from the quarterly packages, and so does this: the image
+          # comes set to latest, whose Electron for amd64 can be missing for weeks while it builds.
+          # On FreeBSD 15 the packages are FreeBSD-ports; FreeBSD is the base system.
+          prepare: |
+            mkdir -p /usr/local/etc/pkg/repos
+            echo 'FreeBSD-ports: { url: "pkg+https://pkg.FreeBSD.org/${ABI}/quarterly", mirror_type: "srv" }' > /usr/local/etc/pkg/repos/FreeBSD-ports.conf
+            pkg update -f
+            pkg install -y node22 npm-node22
+          run: |
+            set -e
+            cd desktop
+            npm ci --ignore-scripts --no-audit --no-fund
+            npm run package:freebsd
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: client-desktop-freebsd
+          path: desktop/out/*.pkg
+          if-no-files-found: error
+          retention-days: 7
+
   # There is no gradlew wrapper script in android/ (only gradle/wrapper/gradle-wrapper.properties), so
   # Gradle comes from setup-gradle at the version the wrapper properties name, as ci.yml does.
   # "sideload" is release speed signed with the throwaway debug key, so it installs on a device.
   # "release" has no signingConfig and no key is available here, so it comes out as *-release-unsigned.apk.
+  # Phones, tablets and Android TV install the same APKs: the one activity is in both the phone launcher
+  # and the TV one (LEANBACK_LAUNCHER), with a banner, and neither a touch screen nor leanback is required.
+  # There are five of each kind: one for each processor and a universal one.
   android:
     runs-on: ubuntu-latest
     permissions:
@@ -172,8 +300,9 @@ jobs:
         run: swift test
 
   # iPhone/iPad and Apple TV, archived with signing off and packed into AltStore-style IPAs (see the top of
-  # this file). The tvOS one is the sideload artifact for an Apple TV; AltStore itself installs only to
-  # iOS/iPadOS, so on tvOS it needs a tool that can sign and install there (Xcode, or a developer account).
+  # this file). The iOS one is a single file for iPhone and iPad. The tvOS one is the sideload artifact for
+  # an Apple TV; AltStore itself installs only to iOS/iPadOS, so on tvOS it needs a tool that can sign and
+  # install there (Xcode, or a developer account), and it isn't in the AltStore source.
   apple:
     runs-on: macos-latest
     timeout-minutes: 60
@@ -202,72 +331,23 @@ jobs:
       - name: Resolve Swift packages
         working-directory: apple
         run: xcodebuild -resolvePackageDependencies -project WittyMedia.xcodeproj -scheme WittyMedia-iOS -skipPackagePluginValidation -skipMacroValidation
-      # project.yml leaves DEVELOPMENT_TEAM empty and sets no CODE_SIGN_STYLE, so these overrides are enough for
-      # an unsigned archive. -allowProvisioningUpdates is deliberately absent: it would try to sign.
-      - name: Archive for iOS (unsigned)
-        working-directory: apple
-        run: |
-          set -o pipefail
-          xcodebuild archive \
-            -project WittyMedia.xcodeproj -scheme WittyMedia-iOS -configuration Release \
-            -destination 'generic/platform=iOS' -archivePath build/WittyMedia-iOS.xcarchive \
-            -skipPackagePluginValidation -skipMacroValidation \
-            CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY="" \
-            PROVISIONING_PROFILE_SPECIFIER="" DEVELOPMENT_TEAM="" \
-            -quiet 2>&1 | tee "$RUNNER_TEMP/archive-ios.log"
-      - name: Archive for tvOS (unsigned, with the Top Shelf extension)
-        working-directory: apple
-        run: |
-          set -o pipefail
-          xcodebuild archive \
-            -project WittyMedia.xcodeproj -scheme WittyMedia-tvOS -configuration Release \
-            -destination 'generic/platform=tvOS' -archivePath build/WittyMedia-tvOS.xcarchive \
-            -skipPackagePluginValidation -skipMacroValidation \
-            CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY="" \
-            PROVISIONING_PROFILE_SPECIFIER="" DEVELOPMENT_TEAM="" \
-            -quiet 2>&1 | tee "$RUNNER_TEMP/archive-tvos.log"
-      # The IPA is Payload/<App>.app zipped, nothing else. The app's folder name comes from the archive
-      # (XcodeGen's PRODUCT_NAME is the target name), so find is used rather than assuming it.
-      - name: Pack the AltStore-style IPAs
-        working-directory: apple
+      # Archives both apps with signing off, packs each as Payload/<App>.app, and checks the files: one
+      # IPA for iPhone and iPad together, one for Apple TV with its Top Shelf extension.
+      - name: Archive and pack the AltStore-style IPAs
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+        run: bash apple/scripts/package-ipas.sh "$VERSION" "$RUNNER_TEMP"
+      # The release publishes this as apps.json. Here it only proves the script on a real build: its
+      # download address points at a release that doesn't exist.
+      - name: Write the AltStore source
         env:
           VERSION: ${{ steps.version.outputs.version }}
         run: |
-          set -euo pipefail
-          pack() { # archive, output ipa
-            local app
-            app=$(find "$1/Products/Applications" -maxdepth 1 -name '*.app' | head -1)
-            [ -n "$app" ] || { echo "::error::No .app in $1"; exit 1; }
-            rm -rf build/ipa && mkdir -p build/ipa/Payload
-            cp -R "$app" build/ipa/Payload/
-            # Anything a signer would have left behind: a profile that isn't the user's would make AltStore refuse it.
-            find build/ipa/Payload -name 'embedded.mobileprovision' -delete
-            (cd build/ipa && zip -qry "../$2" Payload)
-            rm -rf build/ipa
-            echo "Packed $(basename "$app") into build/$2"
-          }
-          pack build/WittyMedia-iOS.xcarchive "WittyMediaClient-$VERSION-ios-altstore.ipa"
-          pack build/WittyMedia-tvOS.xcarchive "WittyMediaClient-$VERSION-tvos-altstore.ipa"
-      - name: Check the IPAs
-        working-directory: apple/build
-        run: |
-          set -euo pipefail
-          for ipa in *.ipa; do
-            echo "== $ipa"
-            unzip -l "$ipa" | grep -E 'Payload/[^/]+\.app/Info\.plist$' || { echo "::error::$ipa has no Payload/*.app/Info.plist"; exit 1; }
-            rm -rf check && mkdir check
-            unzip -q "$ipa" -d check 'Payload/*.app/Info.plist'
-            plist=$(find check/Payload -maxdepth 2 -name Info.plist | head -1)
-            plutil -p "$plist" | tee "$RUNNER_TEMP/$ipa.plist.txt"
-            grep -q '"CFBundleIdentifier" => "com.wittywilla.wittymediaclient"' "$RUNNER_TEMP/$ipa.plist.txt" || { echo "::error::$ipa: wrong CFBundleIdentifier"; exit 1; }
-            grep -q '"MinimumOSVersion"' "$RUNNER_TEMP/$ipa.plist.txt" || { echo "::error::$ipa: no MinimumOSVersion"; exit 1; }
-            rm -rf check
-          done
-          case "$(unzip -l WittyMediaClient-*-tvos-altstore.ipa)" in
-            *PlugIns/*.appex*) echo "tvOS IPA carries its Top Shelf extension" ;;
-            *) echo "::warning::tvOS IPA has no PlugIns/*.appex: the Top Shelf extension isn't embedded" ;;
-          esac
-          ls -la ./*.ipa
+          node scripts/altstore-source.mjs \
+            --ipa "apple/build/wittymediaclient-$VERSION-ios.ipa" --tag "v$VERSION" \
+            --info apple/build/ios-Info.json --entitlements apple/build/ios-entitlements.json \
+            --project apple/project.yml --out apple/build/apps.json
+          cat apple/build/apps.json
       - name: Zip the archives
         working-directory: apple/build
         run: |
@@ -276,7 +356,9 @@ jobs:
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: client-apple-ipa
-          path: apple/build/*.ipa
+          path: |
+            apple/build/*.ipa
+            apple/build/apps.json
           if-no-files-found: error
           retention-days: 7
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
@@ -295,13 +377,15 @@ jobs:
           retention-days: 7
 
   summary:
-    needs: [shared, desktop, android, wittykit-linux, apple]
+    needs: [shared, desktop, desktop-sandboxed, desktop-freebsd, android, wittykit-linux, apple]
     if: always()
     runs-on: ubuntu-latest
     permissions: {}
     env:
       R_SHARED: ${{ needs.shared.result }}
       R_DESKTOP: ${{ needs.desktop.result }}
+      R_SANDBOXED: ${{ needs.desktop-sandboxed.result }}
+      R_FREEBSD: ${{ needs.desktop-freebsd.result }}
       R_ANDROID: ${{ needs.android.result }}
       R_WITTYKIT: ${{ needs.wittykit-linux.result }}
       R_APPLE: ${{ needs.apple.result }}
@@ -314,15 +398,17 @@ jobs:
             echo "| Job | Result |"
             echo "|---|---|"
             echo "| shared (sync + unit tests) | $R_SHARED |"
-            echo "| desktop (Linux, Windows, macOS) | $R_DESKTOP |"
-            echo "| android (sideload + unsigned release APKs) | $R_ANDROID |"
+            echo "| desktop (Windows, macOS, AppImage, .deb, .rpm, .pacman; Plasma Bigscreen's launcher entry) | $R_DESKTOP |"
+            echo "| desktop-sandboxed (Flatpak, Snap) | $R_SANDBOXED |"
+            echo "| desktop-freebsd (.pkg) | $R_FREEBSD |"
+            echo "| android (sideload + unsigned release APKs, for phones and Android TV alike) | $R_ANDROID |"
             echo "| wittykit-linux (swift build + test) | $R_WITTYKIT |"
-            echo "| apple (iOS + tvOS unsigned AltStore IPAs) | $R_APPLE |"
+            echo "| apple (iPhone and iPad IPA, Apple TV IPA, AltStore source) | $R_APPLE |"
             echo
             echo "Nothing is signed with a real certificate, notarized, or published. Artifacts are kept for 7 days."
           } >> "$GITHUB_STEP_SUMMARY"
           failed=0
-          for r in "$R_SHARED" "$R_DESKTOP" "$R_ANDROID" "$R_WITTYKIT" "$R_APPLE"; do
+          for r in "$R_SHARED" "$R_DESKTOP" "$R_SANDBOXED" "$R_FREEBSD" "$R_ANDROID" "$R_WITTYKIT" "$R_APPLE"; do
             case "$r" in failure|cancelled) failed=1 ;; esac
           done
           [ "$failed" -eq 0 ] || { echo "::error::A build job failed or was cancelled"; exit 1; }

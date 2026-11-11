@@ -13,8 +13,10 @@ file in it. The builds aren't code-signed yet, so Windows and macOS warn about t
 | Fedora and relatives | `wittymediaclient-<version>-linux-amd64.rpm` | A package |
 | Arch and relatives | `wittymediaclient-<version>-linux-amd64.pacman` | A package |
 | Any other Linux | `wittymediaclient-<version>-linux-amd64.AppImage` | One file that runs as it is |
+| Linux with Flatpak | `wittymediaclient-<version>-linux-amd64.flatpak` | A Flatpak bundle, in Flatpak's sandbox |
+| Ubuntu and other Linux with snapd | `wittymediaclient-<version>-linux-amd64.snap` | A Snap, strictly confined |
 | FreeBSD, amd64 | `wittymediaclient-<version>-freebsd-amd64.pkg` | A package, which brings in FreeBSD's own Electron |
-| KDE Plasma Bigscreen | The `.deb`, `.rpm` or `.pacman` for its distribution | The same package: it opens as a TV app there |
+| KDE Plasma Bigscreen | The `.deb`, `.rpm` or `.pacman` for its distribution, or the `.flatpak` | The same package: it opens as a TV app there |
 
 The Mac `.zip` files hold the same app as the `.dmg`, for people who prefer them.
 
@@ -123,10 +125,34 @@ sudo pacman -R wittymediaclient
 
 **AppImage:** make it executable and run it. To remove it, delete the file, then run the same command.
 
+**Flatpak:** the file is a bundle, not a Flathub listing, so it needs Flathub set up for the runtime it runs on, and it doesn't update by itself.
+
+```bash
+flatpak remote-add --if-not-exists flathub https://dl.flathub.org/repo/flathub.flatpakrepo
+flatpak install ./wittymediaclient-<version>-linux-amd64.flatpak
+flatpak uninstall --delete-data com.wittywilla.wittymediaclient
+```
+
+It runs in Flatpak's sandbox: it can reach the network, sound, the screen, controllers and your Downloads folder, and nothing else of yours.
+Its settings are in `~/.var/app/com.wittywilla.wittymediaclient`, which `--delete-data` removes. Moonlight, a separate app, can't be started from inside it.
+
+**Snap:** the file isn't from the Snap Store, so snapd has to be told to trust it, and it doesn't update by itself.
+
+```bash
+sudo snap install --dangerous ./wittymediaclient-<version>-linux-amd64.snap
+sudo snap connect wittymediaclient:joystick    # for a game controller
+sudo snap remove --purge wittymediaclient
+```
+
+It's strictly confined. Its settings are in `~/snap/wittymediaclient`, which removing it takes away. Moonlight can't be started from inside it.
+
+**Neither the Flatpak nor the Snap has been installed or run by anyone yet:** they are built on GitHub and nothing more. Use a `.deb` or `.rpm` where you can.
+
 ## KDE Plasma Bigscreen
 
 Install the package for your distribution, as above. There's nothing else to set up: the launcher lists it, and in a Bigscreen session it opens as a TV app by
-itself, across the whole screen with no title bar, and works with arrows, Enter and Back. An AppImage doesn't add itself to any launcher, so use a package.
+itself, across the whole screen with no title bar, and works with arrows, Enter and Back. An AppImage doesn't add itself to any launcher, so use a package
+or the Flatpak. The session tells the app it's on a TV, and a Flatpak passes that on, so the Flatpak opens the same way.
 
 **Remove it** with the package manager, as above. Bigscreen has no uninstall screen of its own. What it leaves is the same as on Linux, and that command needs
 a keyboard, or KDE Connect from a phone.

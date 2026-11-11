@@ -72,14 +72,16 @@ A report that fails is dropped. Repeats are grouped with a count, and nothing is
 | Fedora and relatives | `wittymediaclient-<version>-linux-amd64.rpm` |
 | Arch and relatives | `wittymediaclient-<version>-linux-amd64.pacman` |
 | Any other Linux | `wittymediaclient-<version>-linux-amd64.AppImage` |
+| Linux with Flatpak | `wittymediaclient-<version>-linux-amd64.flatpak` |
+| Ubuntu and other Linux with snapd | `wittymediaclient-<version>-linux-amd64.snap` |
 | FreeBSD, amd64 | `wittymediaclient-<version>-freebsd-amd64.pkg` |
-| KDE Plasma Bigscreen | The `.deb`, `.rpm` or `.pacman` for its distribution |
+| KDE Plasma Bigscreen | The `.deb`, `.rpm` or `.pacman` for its distribution, or the `.flatpak` |
 
 They aren't code-signed yet, so Windows and macOS warn about them. Each upgrades in place and removes cleanly, down to your settings if you ask: [Installing and removing](docs/INSTALLING.md) has the steps and every folder involved.
 
 The FreeBSD package holds only the app, under a megabyte, and uses the system's Electron from the ports tree, which `pkg` installs with it. See [porting](docs/PORTING.md#freebsd).
 
-**On a TV with Plasma Bigscreen,** the Linux app opens as a TV app by itself: the whole screen, no title bar, the server's big screen mode, and everything reachable with arrows, Enter and Back. Install a `.deb`, `.rpm` or `.pacman` so it appears in the launcher, as an AppImage doesn't add itself to any. Anywhere else, `wittymediaclient --tv` asks for the same, and `--no-tv` turns it off inside Bigscreen. Back at the top of the app opens a small menu with Change server and Quit.
+**On a TV with Plasma Bigscreen,** the Linux app opens as a TV app by itself: the whole screen, no title bar, the server's big screen mode, and everything reachable with arrows, Enter and Back. Install a `.deb`, `.rpm`, `.pacman` or the `.flatpak` so it appears in the launcher, as an AppImage doesn't add itself to any. Anywhere else, `wittymediaclient --tv` asks for the same, and `--no-tv` turns it off inside Bigscreen. Back at the top of the app opens a small menu with Change server and Quit.
 
 **Android.** Each release has a sideload APK for each kind of processor, `wittymediaclient-<version>-android-<processor>.apk`, and a universal one with all four. Phones and TVs use the same ones:
 
@@ -99,7 +101,11 @@ adb shell getprop ro.product.cpu.abilist
 
 A device refuses an APK it can't run when installing it, and nothing changes. All five have the same version, so any one can replace another. They're signed with a throwaway key and are for testing, so they can't update to a store version without uninstalling first. There's no store listing yet.
 
-**iPhone, iPad, Apple TV, Apple Vision Pro.** There's nothing to download yet. They need a Mac to build.
+**iPhone and iPad.** Each release has `wittymediaclient-<version>-ios.ipa`, one file for both. It's unsigned, for [AltStore](https://altstore.io), [SideStore](https://sidestore.io) or Sideloadly, which sign it with your own Apple ID as they install it. The release's `apps.json` is a source for AltStore and SideStore: add its address there and the app is listed, with its updates. With a free Apple ID an app has to be refreshed every 7 days, which those stores do for you. The app has no icon of its own yet, and has never run on a real iPhone or iPad.
+
+**Apple TV.** Each release has `wittymediaclient-<version>-tvos.ipa`, unsigned as well. AltStore and SideStore don't install to an Apple TV, so it needs a tool that signs and installs there: Sideloadly, or Xcode on a Mac. Its Top Shelf stays empty unless the signer gives the app and its extension the same App Group: [the owner's steps](docs/OWNER-STEPS.md#step-3-try-apple-needs-a-mac).
+
+**Apple Vision Pro.** There's nothing to download yet. It needs a Mac to build.
 
 ## What it needs
 

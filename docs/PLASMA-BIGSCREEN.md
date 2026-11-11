@@ -127,13 +127,19 @@ What each thing sends, and what it does. Rows marked **web** are the server's TV
 ## Packaging
 
 - **Phase 1** is the desktop app's packages as they are: `.deb`, `.rpm` and `.pacman` (`npm run package:linux`), which
-  add the launcher entry Bigscreen lists. An AppImage works but adds no entry.
+  add the launcher entry Bigscreen lists. An AppImage works but adds no entry. The entry needs nothing of Bigscreen's own,
+  and carries no `--tv`: the app reads the session.
 - **Phase 2:** CMake with KDE's Extra CMake Modules, a desktop file (`Categories=AudioVideo;Video;Player;TV;`, the
   same `wittymediaclient` icon), and packages for the same three: CPack or each distribution's own spec, PKGBUILD and
   `debian/` folder. Its dependencies: Qt 6 (Base, Declarative, Network), Kirigami, KDNSSD, MpvQt and libmpv, FFmpeg's
   libraries, SDL3, PipeWire.
-- **Flatpak, later**, for both: on Flathub against KDE's runtime (`org.kde.Platform`), with the network, PipeWire, the
-  GPU and `--device=all` for controllers. Not before the packages above have run on a real TV ([PORTING.md](PORTING.md#plasma-bigscreen)).
+- **Flatpak:** Phase 1 has one from 0.8.0, a bundle on each release (`npm run package:flatpak`), on the freedesktop runtime with Flathub's
+  Electron base, with the network, sound, the GPU and `--device=all` for controllers. It has never been run. A Snap is made the same way. For
+  Phase 2, later: on Flathub against KDE's runtime (`org.kde.Platform`), with the same permissions and PipeWire. Listing either on Flathub
+  waits until the packages above have run on a real TV ([PORTING.md](PORTING.md#plasma-bigscreen)).
+- **What CI does for Bigscreen:** there's no Bigscreen package to build. Every build and release checks that the `.deb`'s launcher entry is one
+  Bigscreen's home screen lists (`scripts/test/bigscreen-entry.sh`), and `desktop/test/tv.test.js` checks that the session's `PLASMA_PLATFORM`
+  turns the TV interface on.
 
 ## The Linux desktop
 

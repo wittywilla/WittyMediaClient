@@ -139,6 +139,22 @@ bash WittyMediaClient/apple/scripts/check-on-mac.sh
 A free Apple ID should be enough to run your own builds, but they expire after about a week. The first
 launch asks permission to find devices on your network, and should be allowed.
 
+**Without a Mac: AltStore and SideStore.** Every build on GitHub (the `build` workflow's `client-apple-ipa`) and every release has two unsigned
+IPAs, made by `apple/scripts/package-ipas.sh`. Neither has been installed on a device.
+
+- `wittymediaclient-<version>-ios.ipa` is one file for iPhone and iPad. Open it in AltStore, SideStore or Sideloadly, which sign it with your
+  own Apple ID. A free Apple ID is enough: the iOS app asks for no entitlement at all, only permission to use the local network. Free
+  sign-ins last 7 days, allow three sideloaded apps on a device, and ten new app identifiers a week.
+- The release's `apps.json` is the AltStore source (`scripts/altstore-source.mjs` writes it from the built app). Its address on a release is
+  `https://github.com/wittywilla/WittyMediaClient/releases/download/<tag>/apps.json`, which changes with every release, so a source added
+  from it never sees the next one. GitHub's `releases/latest/download/apps.json` stays the same but skips pre-releases, 0.8.0-alpha among them.
+  **To decide:** somewhere with one fixed address for it, such as GitHub Pages.
+- `wittymediaclient-<version>-tvos.ipa` is for Apple TV, which AltStore and SideStore can't install to: use Sideloadly or Xcode. It holds two
+  things to sign, the app and its Top Shelf extension, so it uses two of a free Apple ID's app identifiers. An unsigned file carries no
+  entitlements, so the signer has to add the App Group below to both for the Top Shelf to fill, and a tool that makes a group of its own
+  for each Apple ID gives one the code doesn't name. Either way the app works, with an empty Top Shelf.
+- The iOS app has no icon yet, so it installs with a blank one. The source shows the desktop app's icon.
+
 **The Top Shelf on Apple TV needs one more thing.** The app and its Top Shelf share a folder through an App
 Group, `group.com.wittywilla.wittymediaclient`, which belongs to your signing team:
 
@@ -237,4 +253,4 @@ Both have run in virtual machines here, so this is the part that hasn't: [PLATFO
 
 **A FreeBSD desktop:** `sudo pkg install ./wittymediaclient-*.pkg`, then start WittyMediaClient from your desktop's menu. Does it play with sound? Then try `wittymediaclient --uninstall`.
 
-**To list it in FreeBSD's own packages,** someone would need to submit a port, and to list it on Flathub, someone would need to make and submit a Flatpak. Neither needs doing first.
+**To list it in FreeBSD's own packages,** someone would need to submit a port, and to list it on Flathub, someone would need to submit the Flatpak there (each release has one as a file, never yet run). The Snap Store is the same: the release's `.snap` installs only with `--dangerous` until someone registers the name and uploads it. None of these needs doing first.

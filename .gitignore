@@ -17,4 +17,5 @@ go.work.sum
 .dev-modules
 desktop/out-upgrade/
 apple/build-logs/
+apple/build/
 *.bundle

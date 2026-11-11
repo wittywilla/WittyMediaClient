@@ -1,6 +1,17 @@
-# A version tag builds the desktop apps for each system and the Android sideload APKs, one for each processor and a
-# universal one, and publishes them with a checksum list. The apps aren't installed through a server, so this holds no
-# module key. Signing them for each platform is a step for its owner: docs/OWNER-STEPS.md.
+# A version tag builds every app and publishes them with a checksum list:
+#
+#   Windows, macOS, Linux (AppImage), Debian (.deb), Fedora (.rpm), Arch (.pacman)   desktop
+#   Flatpak, Snap                                                                    desktop-sandboxed
+#   FreeBSD                                                                          desktop-freebsd
+#   Plasma Bigscreen                    the Linux packages, which open as a TV app there
+#   Android phones and Android TV       android: the same sideload APKs serve both, one for each
+#                                       processor and a universal one
+#   iPhone and iPad, Apple TV           apple: unsigned IPAs for AltStore, SideStore and Sideloadly,
+#                                       and apps.json, the source AltStore and SideStore read
+#
+# The apps aren't installed through a server, so this holds no module key, and it reads no secrets:
+# nothing is signed with a real certificate. Signing for each platform is a step for its owner:
+# docs/OWNER-STEPS.md.
 name: release
 on:
   push:
@@ -45,6 +56,10 @@ jobs:
           npm ci --ignore-scripts --no-audit --no-fund
           npm test
           npm run sync && npx electron-builder ${{ matrix.target }}
+      # Plasma Bigscreen has no package of its own: it lists the Linux one, which opens as a TV app there.
+      - name: Plasma Bigscreen lists the package's launcher entry
+        if: runner.os == 'Linux'
+        run: bash scripts/test/bigscreen-entry.sh desktop/out/wittymediaclient-*-linux-amd64.deb
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
         with:
           name: desktop-${{ matrix.os }}
@@ -56,6 +71,63 @@ jobs:
             desktop/out/*.pacman
             desktop/out/*.dmg
             desktop/out/*.zip
+          if-no-files-found: error
+
+  # The same app as a Flatpak and as a Snap, as build.yml makes them on every push: see the notes there.
+  desktop-sandboxed:
+    strategy:
+      fail-fast: false
+      matrix:
+        format: [flatpak, snap]
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
+        with:
+          node-version: 22
+      - name: The tag must match the version
+        run: |
+          want="$(sed -n 's/.*"version": *"\([^"]*\)".*/\1/p' desktop/package.json | head -1)"
+          [ "v$want" = "$GITHUB_REF_NAME" ] || { echo "desktop/package.json says $want, and the tag is $GITHUB_REF_NAME"; exit 1; }
+      - name: Install
+        working-directory: desktop
+        run: npm ci --ignore-scripts --no-audit --no-fund
+      - name: The tools that make the Flatpak
+        if: matrix.format == 'flatpak'
+        run: |
+          sudo apt-get update && sudo apt-get install -y flatpak flatpak-builder elfutils
+          flatpak remote-add --user --if-not-exists flathub https://dl.flathub.org/repo/flathub.flatpakrepo
+          version=$(node -p "require('./desktop/package.json').build.flatpak.runtimeVersion")
+          base=$(node -p "require('./desktop/package.json').build.flatpak.baseVersion")
+          flatpak install --user --noninteractive -y flathub \
+            "org.freedesktop.Platform//$version" "org.freedesktop.Sdk//$version" "org.electronjs.Electron2.BaseApp//$base"
+      - name: The tools that make the Snap
+        if: matrix.format == 'snap'
+        run: |
+          sudo snap install snapcraft --classic
+          sudo snap install lxd || sudo snap refresh lxd
+          sudo lxd init --auto
+          sudo iptables -P FORWARD ACCEPT
+          sudo usermod --append --groups lxd "$USER"
+      - name: Package
+        working-directory: desktop
+        env:
+          DEBUG: ${{ matrix.format == 'flatpak' && '@malept/flatpak-bundler' || '' }}
+        run: |
+          if [ "${{ matrix.format }}" = snap ]; then
+            sg lxd -c "npm run package:snap"
+          else
+            npm run package:flatpak
+          fi
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
+        with:
+          name: desktop-${{ matrix.format }}
+          path: desktop/out/*.${{ matrix.format }}
           if-no-files-found: error
 
   desktop-freebsd:
@@ -125,9 +197,69 @@ jobs:
           path: android/app/build/outputs/apk/sideload/wittymediaclient-*.apk
           if-no-files-found: error
 
+  # iPhone and iPad in one IPA, Apple TV in another, both unsigned: AltStore, SideStore or Sideloadly signs
+  # on install with the user's own Apple ID. apps.json is the AltStore source for the iOS one, written from
+  # the built app and checked against apple/project.yml. Apple TV isn't in it: neither store installs there.
+  apple:
+    runs-on: macos-latest
+    timeout-minutes: 60
+    permissions:
+      contents: read
+    env:
+      XCODEGEN_VERSION: 2.46.0
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+      # An app's version is numbers only, so 0.8.0-alpha is 0.8.0 inside the app. AltStore refuses an
+      # app whose version isn't the one its source names, and the source takes it from the built app.
+      - name: The tag must match the version
+        run: |
+          want="$(sed -n 's/^ *MARKETING_VERSION: *"\{0,1\}\([^"]*\)"\{0,1\} *$/\1/p' apple/project.yml | head -1)"
+          tag="${GITHUB_REF_NAME#v}"
+          [ "$want" = "${tag%%-*}" ] || { echo "apple/project.yml says $want, and the tag is $GITHUB_REF_NAME"; exit 1; }
+      - name: Install XcodeGen
+        run: |
+          curl -fsSL -o "$RUNNER_TEMP/xcodegen.zip" "https://github.com/yonaskolb/XcodeGen/releases/download/$XCODEGEN_VERSION/xcodegen.zip"
+          unzip -q "$RUNNER_TEMP/xcodegen.zip" -d "$RUNNER_TEMP/xcodegen"
+          echo "$RUNNER_TEMP/xcodegen/xcodegen/bin" >> "$GITHUB_PATH"
+      - name: Generate the Xcode project
+        working-directory: apple
+        run: xcodegen generate
+      - name: Test the shared package
+        working-directory: apple/WittyKit
+        run: swift test
+      - name: Resolve Swift packages
+        working-directory: apple
+        run: xcodebuild -resolvePackageDependencies -project WittyMedia.xcodeproj -scheme WittyMedia-iOS -skipPackagePluginValidation -skipMacroValidation
+      - name: Archive and pack the IPAs
+        run: bash apple/scripts/package-ipas.sh "${GITHUB_REF_NAME#v}" "$RUNNER_TEMP"
+      - name: Write the AltStore source
+        run: |
+          node scripts/altstore-source.mjs \
+            --ipa "apple/build/wittymediaclient-${GITHUB_REF_NAME#v}-ios.ipa" --tag "$GITHUB_REF_NAME" \
+            --info apple/build/ios-Info.json --entitlements apple/build/ios-entitlements.json \
+            --project apple/project.yml --out apple/build/apps.json
+          cat apple/build/apps.json
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
+        with:
+          name: apple
+          path: |
+            apple/build/*.ipa
+            apple/build/apps.json
+          if-no-files-found: error
+      - name: Keep the build logs on failure
+        if: failure()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
+        with:
+          name: apple-logs
+          path: ${{ runner.temp }}/archive-*.log
+          if-no-files-found: ignore
+          retention-days: 7
+
   # Publishing runs no project code at all.
   publish:
-    needs: [desktop, desktop-freebsd, android]
+    needs: [desktop, desktop-sandboxed, desktop-freebsd, android, apple]
     runs-on: ubuntu-latest
     permissions:
       contents: write

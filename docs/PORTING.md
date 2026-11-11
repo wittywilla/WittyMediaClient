@@ -146,8 +146,11 @@ a page. At the top of the app it opens the menu instead. The list of what counts
 
 **The interface is the server's own TV mode** (it was its big screen mode until WittyMediaServer [#297](https://github.com/wittywilla/WittyMediaServer/pull/297)). The app adds `?tv=1` to the address, which is the same mode a TV browser gets. There's no second interface to keep up. What comes next for Bigscreen, a native Kirigami app included, and how to build and test it: [PLASMA-BIGSCREEN.md](PLASMA-BIGSCREEN.md).
 
-**Packages:** `.deb`, `.rpm` and `.pacman` add the entry a launcher needs. An AppImage doesn't. **There's no Flatpak**, on purpose for now: Bigscreen's own distributions use
-their package managers, and one that hasn't been seen working isn't worth offering. Flathub is the place to add it when someone wants it.
+**Packages:** `.deb`, `.rpm` and `.pacman` add the entry a launcher needs, and CI checks it on every build (`scripts/test/bigscreen-entry.sh`): a visible
+application that doesn't run in a terminal, in the video categories and not in Game, with no `--tv` in it, since the session decides. An AppImage adds no entry.
+**There's a Flatpak and a Snap** from 0.8.0, made by `electron-builder` from the same configuration (`npm run package:flatpak`, `package:snap`). The Flatpak is a
+bundle on the release, not a Flathub listing; its sandbox has `--device=all`, for controllers. Neither has been run, in Bigscreen or anywhere. Bigscreen's own
+distributions use their package managers, so those packages stay the ones to use.
 
 **For Bigscreen's packagers:** on Fedora 44, `plasma-bigscreen` alone stops at an error screen, as the launcher needs `plasma-nm`, and displays need `kscreen`.
 

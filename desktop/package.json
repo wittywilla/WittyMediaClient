@@ -16,6 +16,8 @@
     "test:app": "npm run sync && node test/app/all.js",
     "package:win": "npm run sync && electron-builder --win",
     "package:linux": "npm run sync && electron-builder --linux",
+    "package:flatpak": "npm run sync && electron-builder --linux flatpak --x64",
+    "package:snap": "npm run sync && electron-builder --linux snap --x64",
     "package:mac": "npm run sync && electron-builder --mac",
     "test:real": "npm run sync && electron test/app/real-server.js",
     "package:freebsd": "npm run sync && node build/freebsd/package.mjs"
@@ -268,6 +270,43 @@
         "util-linux-libs",
         "libsecret"
       ]
+    },
+    "flatpak": {
+      "artifactName": "wittymediaclient-${version}-linux-amd64.${ext}",
+      "runtime": "org.freedesktop.Platform",
+      "runtimeVersion": "25.08",
+      "sdk": "org.freedesktop.Sdk",
+      "base": "org.electronjs.Electron2.BaseApp",
+      "baseVersion": "25.08",
+      "finishArgs": [
+        "--socket=wayland",
+        "--socket=fallback-x11",
+        "--share=ipc",
+        "--share=network",
+        "--socket=pulseaudio",
+        "--device=all",
+        "--filesystem=xdg-download",
+        "--talk-name=org.freedesktop.Notifications",
+        "--talk-name=org.freedesktop.secrets",
+        "--talk-name=org.freedesktop.ScreenSaver",
+        "--talk-name=org.freedesktop.PowerManagement",
+        "--talk-name=org.gnome.SessionManager",
+        "--own-name=org.mpris.MediaPlayer2.chromium.*"
+      ]
+    },
+    "snapcraft": {
+      "base": "core24",
+      "artifactName": "wittymediaclient-${version}-linux-amd64.${ext}",
+      "core24": {
+        "useLXD": true,
+        "summary": "Watch and listen from your WittyMediaServer",
+        "plugs": [
+          "default",
+          "browser-support",
+          "network-bind",
+          "joystick"
+        ]
+      }
     },
     "asar": true
   },

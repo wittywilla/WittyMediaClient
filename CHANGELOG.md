@@ -5,6 +5,21 @@ What changed in WittyMediaClient, newest first. What changed before it had a rep
 
 ## Unreleased
 
+- **A Flatpak and a Snap of the desktop app.** Each release has `wittymediaclient-<version>-linux-amd64.flatpak` and `.snap`, made by `electron-builder`
+  from the same configuration as the other Linux packages (`npm run package:flatpak`, `npm run package:snap`). The Flatpak runs on the freedesktop
+  runtime with Flathub's Electron base, and can reach the network, sound, the screen, controllers and Downloads; the Snap is a strictly confined
+  core24 one. They're files on the release, not store listings, and neither has been installed or run yet: [INSTALLING.md](docs/INSTALLING.md#linux).
+- **iPhone, iPad and Apple TV apps on every release, for AltStore and SideStore.** `wittymediaclient-<version>-ios.ipa` is one unsigned file for iPhone
+  and iPad, and `-tvos.ipa` is Apple TV's, with its Top Shelf extension. A sideloading tool signs them with your own Apple ID. `apps.json` on the
+  release is the AltStore source for the iOS app, written by `scripts/altstore-source.mjs` from the built app: its bundle identifier, version, lowest
+  iOS, size and what it asks permission for. `apple/scripts/package-ipas.sh` makes the IPAs and checks each is a `Payload/<App>.app` zip for the right
+  devices, with nothing of a signer's left in it. Never installed on a device.
+- **Plasma Bigscreen: the launcher entry is checked on every build.** Bigscreen lists the Linux package as it is, and
+  `scripts/test/bigscreen-entry.sh` fails the build if the `.deb`'s entry stops being one its home screen shows. The Flatpak is another way to
+  install it there. `docs/PLASMA-BIGSCREEN.md` says what CI does for it.
+- **CI builds every platform.** The `build` workflow now also makes the Flatpak, the Snap and the FreeBSD package, and the `release` workflow
+  publishes them, the IPAs and the AltStore source along with the installers and APKs it already did.
+
 ## 0.4.1
 
 - Android phones and tablets look like the website, and the first screen after signing in is drawn in the current design on every app.
