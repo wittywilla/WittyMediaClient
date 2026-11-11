@@ -12,7 +12,7 @@
 #   list      the list of servers: a swipe and Undo, Edit, the card's menu, Manage servers and Remove all
 #             (the card's menu, where the remote's focus goes, and Manage servers on Apple TV)
 #   old list  a list as an older version kept it, with one server in it twice: it becomes one entry, and
-#             what was kept under the address that went follows it
+#             what was kept under the address that went follows it; then "Remove servers not reached for…"
 #   changed   a remembered address answering with another key: the warning, and "Remove the old server"
 #
 # For a Mac with Xcode, XcodeGen and Go, and a checkout of WittyMediaServer (the folder in
@@ -193,13 +193,13 @@ kept "on disk, nothing of either server is left" "servers=" "none=$a" "none=$b" 
 old=http://10.255.0.1:9797; new=http://10.255.0.2:9797; shed=http://10.255.0.9:9797; stray=http://10.255.0.77:9797
 prefs keep "recent=[{\"url\":\"$new\",\"name\":\"Home\",\"serverId\":\"home\",\"publicKey\":\"S0VZ\"},{\"url\":\"$old\",\"name\":\"Home\",\"serverId\":\"home\",\"publicKey\":\"S0VZ\",\"brandLogo\":\"v1\"},{\"url\":\"$shed\",\"name\":\"Shed\",\"serverId\":\"shed\",\"daysAgo\":100}]" \
   "theme.$old=\"paper\"" "topMenu.$old.owner=[4]" "theme.$shed=\"light\"" "theme.$stray=\"oled\"" "topMenu.$stray.owner=[9]"
-part testAnOldList old-list "a list from an older version shows a server that was in it twice once, with no time made up, and marks one not reached lately"
-kept "on disk, the two entries are one, what was kept under its old address followed it, and what nothing owned is gone" \
-  "servers=$new,$shed" "has=theme.$new" "has=topMenu.$new.owner" "none=$old" "none=$stray" "has=theme.$shed"
+part testAnOldList old-list "a list from an older version shows a server that was in it twice once, with no time made up, and Manage servers removes the one not reached for 90 days after naming it"
+kept "on disk, the two entries are one, what was kept under its old address followed it, and what nothing owned or was removed is gone" \
+  "servers=$new" "has=theme.$new" "has=topMenu.$new.owner" "none=$old" "none=$stray" "none=$shed"
 
 # The first server's address, remembered with another key: what a reinstall looks like.
 prefs keep "recent=[{\"url\":\"$a\",\"name\":\"Before\",\"serverId\":\"before\",\"publicKey\":\"AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=\",\"fingerprint\":\"0000-0000-0000\"},{\"url\":\"$shed\",\"name\":\"Shed\",\"serverId\":\"shed\"}]" \
-  "theme.$a=\"midnight\""
+  "theme.$a=\"midnight\"" "theme.$shed=\"light\""
 part testAChangedServer changed "a remembered address answering with another key shows the warning, explains a reinstall, and Remove the old server forgets it"
 kept "on disk, the old server and what was kept for it are gone, and the other is as it was" "servers=$shed" "none=$a" "has=theme.$shed"
 

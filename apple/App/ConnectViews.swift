@@ -405,7 +405,12 @@ struct MismatchView: View {
                 .background(Circle().fill(palette.danger.opacity(0.16)))
                 .accessibilityHidden(true)
             SignInHeading(title: say("identityTitle"), detail: say("identityHint"))
-            if !clashes.isEmpty { Secondary(say("reinstalledHint")) }
+            if !clashes.isEmpty {
+                Secondary(say("reinstalledHint"))
+                    #if !os(tvOS)
+                    .multilineTextAlignment(.center)
+                    #endif
+            }
             VStack(alignment: .leading, spacing: Tokens.Space.s1) {
                 Text(server.url).font(.wmLabel).foregroundStyle(palette.text)
                 Text("\(say("fingerprintLabel")): \(server.fingerprint)").font(.wmSecondary.monospaced()).foregroundStyle(palette.textSecondary)

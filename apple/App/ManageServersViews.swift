@@ -299,15 +299,18 @@ struct ManageServersList: View {
 
     @ViewBuilder private func row(_ server: SavedServer) -> some View {
         let stale = ServerBook.isStale(server, now: ServerBook.now())
-        let detail = "\(ServerWords.address(server)) · \(ServerWords.reached(server))"
-        let badge = model.isInUse(server) ? say("groupThisServer") : stale ? say("staleServer") : ""
+        let mark = model.isInUse(server) ? say("groupThisServer") : stale ? say("staleServer") : ""
+        // A TV has the width for one line and a pill. A phone has two lines, the mark leading the second.
+        let detail = metrics.tv ? "\(ServerWords.address(server)) · \(ServerWords.reached(server))"
+            : ServerWords.address(server) + "\n" + [mark, ServerWords.reached(server)].filter { !$0.isEmpty }.joined(separator: " · ")
+        let badge = metrics.tv ? mark : ""
         Button { remove(server) } label: {
             RowLabel(icon: "server.rack", tint: "#0a6fb8", title: ServerWords.name(server), value: say("remove"), detail: detail,
                      badge: badge, chevron: false)
         }
         .rowStyle()
         .focused($focus, equals: server.url)
-        .accessibilityLabel(([ServerWords.name(server), detail, badge].filter { !$0.isEmpty }).joined(separator: ", "))
+        .accessibilityLabel(([ServerWords.name(server), detail.replacingOccurrences(of: "\n", with: ", "), badge].filter { !$0.isEmpty }).joined(separator: ", "))
         .accessibilityHint(ServerWords.removeNamed(server))
         .accessibilityIdentifier("server." + server.url)
     }
