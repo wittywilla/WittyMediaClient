@@ -211,7 +211,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           persist-credentials: false
-      # An app's version is numbers only, so 0.8.0-alpha is 0.8.0 inside the app. AltStore refuses an
+      # An app's version is numbers only, so 0.5.0-beta is 0.5.0 inside the app. AltStore refuses an
       # app whose version isn't the one its source names, and the source takes it from the built app.
       - name: The tag must match the version
         run: |

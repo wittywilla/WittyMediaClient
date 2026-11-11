@@ -133,7 +133,7 @@ What each thing sends, and what it does. Rows marked **web** are the server's TV
   same `wittymediaclient` icon), and packages for the same three: CPack or each distribution's own spec, PKGBUILD and
   `debian/` folder. Its dependencies: Qt 6 (Base, Declarative, Network), Kirigami, KDNSSD, MpvQt and libmpv, FFmpeg's
   libraries, SDL3, PipeWire.
-- **Flatpak:** Phase 1 has one from 0.8.0, a bundle on each release (`npm run package:flatpak`), on the freedesktop runtime with Flathub's
+- **Flatpak:** Phase 1 has one from 0.5.0, a bundle on each release (`npm run package:flatpak`), on the freedesktop runtime with Flathub's
   Electron base, with the network, sound, the GPU and `--device=all` for controllers. It has never been run. A Snap is made the same way. For
   Phase 2, later: on Flathub against KDE's runtime (`org.kde.Platform`), with the same permissions and PipeWire. Listing either on Flathub
   waits until the packages above have run on a real TV ([PORTING.md](PORTING.md#plasma-bigscreen)).

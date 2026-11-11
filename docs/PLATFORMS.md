@@ -94,7 +94,7 @@ Running this on a bare FreeBSD found that the app showed no text at all, as Elec
 - Hardware video decoding. All of this was software, on a machine with plenty of power to spare.
 - A real FreeBSD desktop. X11 was bare, with one small window manager. Wayland on FreeBSD hasn't been tried.
 - Video on FreeBSD 14.4, which only got as far as the connect screen. Video on an installed `.deb` or `.pacman`.
-- The Flatpak and the Snap. CI builds both from 0.8.0, and neither has been installed or run: see [PORTING.md](PORTING.md#plasma-bigscreen).
+- The Flatpak and the Snap. CI builds both from 0.5.0, and neither has been installed or run: see [PORTING.md](PORTING.md#plasma-bigscreen).
 - CI's FreeBSD job. Its commands ran by hand in the VM, but the job itself needs a push to run.
 
 **Known limits:**

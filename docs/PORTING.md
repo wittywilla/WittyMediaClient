@@ -148,7 +148,7 @@ a page. At the top of the app it opens the menu instead. The list of what counts
 
 **Packages:** `.deb`, `.rpm` and `.pacman` add the entry a launcher needs, and CI checks it on every build (`scripts/test/bigscreen-entry.sh`): a visible
 application that doesn't run in a terminal, in the video categories and not in Game, with no `--tv` in it, since the session decides. An AppImage adds no entry.
-**There's a Flatpak and a Snap** from 0.8.0, made by `electron-builder` from the same configuration (`npm run package:flatpak`, `package:snap`). The Flatpak is a
+**There's a Flatpak and a Snap** from 0.5.0, made by `electron-builder` from the same configuration (`npm run package:flatpak`, `package:snap`). The Flatpak is a
 bundle on the release, not a Flathub listing; its sandbox has `--device=all`, for controllers. Neither has been run, in Bigscreen or anywhere. Bigscreen's own
 distributions use their package managers, so those packages stay the ones to use.
 

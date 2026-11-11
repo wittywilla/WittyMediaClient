@@ -4,7 +4,7 @@
 // Writes the AltStore source (apps.json) for a release: the file someone adds to AltStore or SideStore
 // to install the iPhone and iPad app and be offered its updates.
 //
-//   node scripts/altstore-source.mjs --ipa out/wittymediaclient-0.8.0-ios.ipa --tag v0.8.0 \
+//   node scripts/altstore-source.mjs --ipa out/wittymediaclient-0.5.0-ios.ipa --tag v0.5.0 \
 //     --info Info.json [--entitlements entitlements.json] [--project apple/project.yml] \
 //     [--repo wittywilla/WittyMediaClient] [--date 2026-11-11T00:00:00Z] [--notes "..."] \
 //     [--previous apps.json] [--out apps.json]

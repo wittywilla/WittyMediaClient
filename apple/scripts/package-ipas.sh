@@ -23,7 +23,7 @@
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
-VERSION=${1:?Give the version for the file names, as in: package-ipas.sh 0.8.0-alpha}
+VERSION=${1:?Give the version for the file names, as in: package-ipas.sh 0.5.0}
 LOGS=${2:-$PWD/build-logs}
 BUNDLE=com.wittywilla.wittymediaclient
 OUT=$PWD/build

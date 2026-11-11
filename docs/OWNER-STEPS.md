@@ -147,7 +147,7 @@ IPAs, made by `apple/scripts/package-ipas.sh`. Neither has been installed on a d
   sign-ins last 7 days, allow three sideloaded apps on a device, and ten new app identifiers a week.
 - The release's `apps.json` is the AltStore source (`scripts/altstore-source.mjs` writes it from the built app). Its address on a release is
   `https://github.com/wittywilla/WittyMediaClient/releases/download/<tag>/apps.json`, which changes with every release, so a source added
-  from it never sees the next one. GitHub's `releases/latest/download/apps.json` stays the same but skips pre-releases, 0.8.0-alpha among them.
+  from it never sees the next one. GitHub's `releases/latest/download/apps.json` stays the same but skips pre-releases.
   **To decide:** somewhere with one fixed address for it, such as GitHub Pages.
 - `wittymediaclient-<version>-tvos.ipa` is for Apple TV, which AltStore and SideStore can't install to: use Sideloadly or Xcode. It holds two
   things to sign, the app and its Top Shelf extension, so it uses two of a free Apple ID's app identifiers. An unsigned file carries no
