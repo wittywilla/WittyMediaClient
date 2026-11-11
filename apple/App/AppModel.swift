@@ -898,6 +898,11 @@ final class AppModel: ObservableObject {
         if stage == .browsing { openWaitingLink() }
     }
 
+    #if DEBUG
+    /// `-WMCOpen` is followed once a run.
+    private var openedForTests = false
+    #endif
+
     private func openWaitingLink() {
         #if DEBUG
         // For checking a game on the simulator: `-WittyPlayOpenGame <id>` at launch opens its page
@@ -913,6 +918,14 @@ final class AppModel: ObservableObject {
         if game > 0, paths[.home]?.isEmpty ?? true {
             paths[.home] = [.game(Int64(game))]
             return
+        }
+        #endif
+        #if DEBUG
+        // For the UI tests and for checking a page on a simulator: `-WMCOpen /library/3` at launch opens that
+        // route as a link from outside would, once someone is signed in.
+        if !openedForTests, waitingLink == nil, let route = UserDefaults.standard.string(forKey: "WMCOpen"), DeepLink.isOpenable(route) {
+            openedForTests = true
+            waitingLink = .route(route)
         }
         #endif
         guard let link = waitingLink else { return }

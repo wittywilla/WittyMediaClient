@@ -100,7 +100,10 @@ struct SDUICardView: View {
                     }
                     picture
                 }
-                words
+                // On Apple TV the words sit on the card's own plate, a little in from its edge.
+                VStack(alignment: isCircle ? .center : .leading, spacing: layout.sp("xs")) { words }
+                    .padding(.horizontal, layout.isTV ? 10 : 0)
+                    .padding(.bottom, layout.isTV && !card.text.isEmpty ? 10 : 0)
             }
             .frame(width: fills ? nil : frameWidth, alignment: .leading)
             .frame(maxWidth: fills ? .infinity : nil, alignment: isCircle ? .center : .leading)

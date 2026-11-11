@@ -87,6 +87,8 @@ struct SDUIPageScreen: View {
         case .ready:
             if let screen = store.screen {
                 SDUIPageBody(screen: screen, offline: store.offline, customise: canCustomise(screen) ? { customising = true } : nil)
+                    .accessibilityElement(children: .contain)
+                    .accessibilityLabel(screen.root.label)
                     .accessibilityIdentifier("sdui.page." + screen.document.page.id)
             }
         }

@@ -319,7 +319,8 @@ private struct TopTabs: View {
         // Home's first look comes after the bar, which has focus meanwhile as the only thing there. Once,
         // if nobody has moved it, it goes on to Home's main action.
         .onChange(of: model.libraries) { _ in
-            guard !settled else { return }
+            // A server's own Home says when its first look has arrived: see below.
+            guard !settled, !center.enabled else { return }
             settled = true
             // A moment for Home's first look to be drawn, so its main action is there to take focus.
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
