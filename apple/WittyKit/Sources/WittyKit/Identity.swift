@@ -26,10 +26,13 @@ public struct SavedServer: Codable, Identifiable, Equatable {
     /// The version of the owner's logo for this server (`/api/status` → `brandLogo`), learned once it was added;
     /// empty for none. The picture itself is kept on the device by the app.
     public let brandLogo: String
+    /// When this server last proved who it is and was opened, in milliseconds since 1970. 0 is not known:
+    /// it was remembered before the app kept this. See ServerBook.swift.
+    public var lastSeen: Int64 = 0
     public var id: String { url }
 
     private enum CodingKeys: String, CodingKey {
-        case url, name, serverId, publicKey, fingerprint, brandLogo
+        case url, name, serverId, publicKey, fingerprint, brandLogo, lastSeen
     }
 
     public init(url: String, name: String, serverId: String = "", publicKey: String = "", fingerprint: String = "",
@@ -45,8 +48,10 @@ public struct SavedServer: Codable, Identifiable, Equatable {
     /// The same server with what it now says it's called and looks like.
     public func with(name newName: String, brandLogo logo: String) -> SavedServer {
         let shown = newName.trimmingCharacters(in: .whitespaces)
-        return SavedServer(url: url, name: shown.isEmpty ? name : shown, serverId: serverId, publicKey: publicKey,
-                           fingerprint: fingerprint, brandLogo: logo)
+        var same = SavedServer(url: url, name: shown.isEmpty ? name : shown, serverId: serverId, publicKey: publicKey,
+                               fingerprint: fingerprint, brandLogo: logo)
+        same.lastSeen = lastSeen
+        return same
     }
 
     /// Servers saved before keys were pinned have none of the last three.
@@ -58,11 +63,14 @@ public struct SavedServer: Codable, Identifiable, Equatable {
         publicKey = try values.decodeIfPresent(String.self, forKey: .publicKey) ?? ""
         fingerprint = try values.decodeIfPresent(String.self, forKey: .fingerprint) ?? ""
         brandLogo = try values.decodeIfPresent(String.self, forKey: .brandLogo) ?? ""
+        lastSeen = try values.decodeIfPresent(Int64.self, forKey: .lastSeen) ?? 0
     }
 
     public func moved(to newURL: String) -> SavedServer {
-        SavedServer(url: newURL, name: name, serverId: serverId, publicKey: publicKey, fingerprint: fingerprint,
-                    brandLogo: brandLogo)
+        var same = SavedServer(url: newURL, name: name, serverId: serverId, publicKey: publicKey, fingerprint: fingerprint,
+                               brandLogo: brandLogo)
+        same.lastSeen = lastSeen
+        return same
     }
 
     /// The most recent first, once per address and once per server.
