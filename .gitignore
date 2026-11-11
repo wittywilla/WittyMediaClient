@@ -20,3 +20,4 @@ apple/build-logs/
 apple/build/
 *.bundle
 desktop/bin/
+apple/WittyKit/Tests/WittyKitTests/Fixtures/sdui/
