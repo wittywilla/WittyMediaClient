@@ -6,7 +6,7 @@ package com.wittywilla.wittymediaclient.ui
 // Apart from the screen, so it can be tested without one. Rows the server would refuse are left out,
 // not greyed.
 
-enum class YouNative { Names, Password, TwoStep, Devices, SignInTv, Theme, TopMenu, Licences, Log }
+enum class YouNative { Names, Password, TwoStep, Devices, SignInTv, Theme, TopMenu, Licences, Log, Profiles }
 
 sealed interface YouOpens {
     data class Native(val screen: YouNative) : YouOpens
@@ -28,6 +28,10 @@ data class YouWho(
     // The server offers two-step sign-in to this profile.
     val twoStepAvailable: Boolean,
     val onTv: Boolean,
+    // The server has parental controls this app can show itself: Profiles is then the app's own screen.
+    val nativeProfiles: Boolean = false,
+    // What this profile's limits turn off (GET /me/limits): rows for those aren't offered.
+    val off: Set<String> = emptySet(),
 )
 
 private const val QUIET = "#5d6474"
@@ -49,7 +53,8 @@ fun youGroups(who: YouWho): List<YouGroup> {
     // A TV is what gets signed in, so it doesn't sign in TVs.
     val household = listOfNotNull(
         if (who.adult && !who.onTv) native("rowSignInTv", "tv", "#bd2f85", YouNative.SignInTv) else null,
-        if (who.adult) page("rowProfiles", "family_restroom", "#b8500d", "/settings/users") else null,
+        if (who.adult && who.nativeProfiles) native("rowProfiles", "family_restroom", "#b8500d", YouNative.Profiles) else null,
+        if (who.adult && !who.nativeProfiles) page("rowProfiles", "family_restroom", "#b8500d", "/settings/users") else null,
     )
     if (household.isNotEmpty()) groups += YouGroup("groupHousehold", household)
     groups += YouGroup(
@@ -57,10 +62,10 @@ fun youGroups(who: YouWho): List<YouGroup> {
         listOfNotNull(
             page("rowYourYear", "auto_awesome", "#c9302f", "/review"),
             page("rowCollections", "library_books", "#0e7c6f", "/collections"),
-            page("rowShareLinks", "link", "#0a6fb8", "/settings/sharing"),
+            if ("sharing" !in who.off) page("rowShareLinks", "link", "#0a6fb8", "/settings/sharing") else null,
             page("rowActivity", "monitoring", "#99690a", "/settings/activity"),
-            if (who.hasGames) page("rowGameSettings", "sports_esports", "#7f46b8", "/settings/games") else null,
-            if (who.hasGames) page("rowControllers", "gamepad", "#3e5bd0", "/controllers") else null,
+            if (who.hasGames && "games" !in who.off) page("rowGameSettings", "sports_esports", "#7f46b8", "/settings/games") else null,
+            if (who.hasGames && "games" !in who.off) page("rowControllers", "gamepad", "#3e5bd0", "/controllers") else null,
         ),
     )
     groups += YouGroup(

@@ -177,7 +177,7 @@ private fun TvTopBar(nav: Nav, bar: TvBar, libraries: List<Library>) {
     var viewport by remember { mutableIntStateOf(0) }
     val icons = listOf(Symbols.Home, Symbols.Libraries, Symbols.Games, Symbols.LiveTv, Symbols.Search)
     val names = listOf("homeTab", "librariesTab", "gamesTab", "liveTvTab", "searchTab")
-    val left = FIXED_TABS.mapIndexed { i, route -> TvTab(route, words[names[i]].orEmpty(), icons[i]) } +
+    val left = FIXED_TABS.mapIndexed { i, route -> TvTab(route, words[names[i]].orEmpty(), icons[i]) }.filter { profileOffers(it.route) } +
         libraries.filter { it.id in nav.topMenu }.map { TvTab(Route.Pinned(it), it.name, it.barSymbol) }
     Row(
         Modifier
@@ -271,7 +271,7 @@ private fun TvTabPill(nav: Nav, tab: TvTab, requester: FocusRequester, modifier:
                 Icon(tab.icon, contentDescription = null, tint = ink, modifier = Modifier.size(metrics.u(BAR_ICON)))
                 Text(tab.title, color = ink, style = MaterialTheme.typography.label, maxLines = 1)
             } else {
-                Avatar(person.ifEmpty { "?" }, metrics.u(28))
+                ProfileFace(person.ifEmpty { "?" }, nav.me?.avatar, metrics.u(28))
                 Text(person.ifEmpty { tab.title }, color = ink, style = MaterialTheme.typography.label, maxLines = 1)
             }
         }

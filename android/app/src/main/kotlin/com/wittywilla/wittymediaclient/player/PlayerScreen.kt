@@ -206,6 +206,7 @@ fun PlayerScreen(nav: Nav, id: Long, startOver: Boolean) {
 
     // Decided here rather than in the listener: the listener only hears what the player says.
     fun onFailure(e: PlaybackException) {
+        if (ScreenTimeWatch.playbackFailed(e)) return // this profile's time is up: the notice says so
         val code = (e.cause as? HttpDataSource.InvalidResponseCodeException)?.responseCode
         val recovery = recoveryFor(e.errorCode, code)
         val wait = if (recovery == Recovery.GiveUp || (recovery == Recovery.Convert && ask.convert)) null else budget.next()

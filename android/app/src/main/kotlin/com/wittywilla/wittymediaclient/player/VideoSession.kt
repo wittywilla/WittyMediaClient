@@ -337,6 +337,7 @@ class VideoSession(private val nav: Nav, val id: Long, private val startAt: Doub
     }
 
     private fun onFailure(e: PlaybackException) {
+        if (ScreenTimeWatch.playbackFailed(e)) return // this profile's time is up: the notice says so
         val code = (e.cause as? HttpDataSource.InvalidResponseCodeException)?.responseCode
         val recovery = recoveryFor(e.errorCode, code)
         // A decode failure is asked for again once as a conversion, from the same place.

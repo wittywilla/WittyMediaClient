@@ -646,7 +646,10 @@ fun SignInScreen(nav: Nav, s: Map<String, String>, way: SignInWay) {
     val memory = nav.focusFor("signin-step-" + if (secondStep) "two-factor" else step.name)
     CompositionLocalProvider(LocalFocusMemory provides memory) {
         when {
-            step == Step.Pair -> PairScreen(nav, s, onBack = { back(pairFrom ?: Step.Usual) }) { back(pairFrom ?: Step.Usual) }
+            // With a QR code and a PIN where the server has them; the code alone on an older one.
+            step == Step.Pair -> PairWithQr(nav, s, onBack = { back(pairFrom ?: Step.Usual) }, onUsePassword = { back(pairFrom ?: Step.Usual) }) {
+                PairScreen(nav, s, onBack = { back(pairFrom ?: Step.Usual) }) { back(pairFrom ?: Step.Usual) }
+            }
             list == null -> Screen { Loading() }
             secondStep -> TwoFactorStep(
                 nav, s, chosen, code,
@@ -828,7 +831,7 @@ fun FaceWithNames(who: Profile, size: androidx.compose.ui.unit.Dp, modifier: Mod
     val metrics = LocalMetrics.current
     val shown = avatarName(who.displayName, who.name)
     Column(modifier.width(IntrinsicSize.Max).widthIn(min = size), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(metrics.u(8))) {
-        Avatar(shown, size, Modifier.padding(bottom = metrics.u(if (metrics.tv) 8 else 0)))
+        ProfileFace(shown, who.avatar, size, Modifier.padding(bottom = metrics.u(if (metrics.tv) 8 else 0)))
         Text(shown, color = MaterialTheme.colorScheme.onBackground, style = MaterialTheme.typography.headline, textAlign = TextAlign.Center, maxLines = 1)
         if (showsUsername(who.displayName, who.name)) {
             Text("@${who.name}", color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.secondary, textAlign = TextAlign.Center)
@@ -930,7 +933,7 @@ private fun TwoFactorStep(
             onBack,
             words = {
                 val centre = if (metrics.tv) Modifier else Modifier.align(Alignment.CenterHorizontally)
-                if (who != null) Avatar(avatarName(who.displayName, who.name), metrics.u(if (metrics.tv) 200 else 120), centre)
+                if (who != null) ProfileFace(avatarName(who.displayName, who.name), who.avatar, metrics.u(if (metrics.tv) 200 else 120), centre)
                 else Lockup(nav.brandName, nav.brandLogo, centre)
                 if (useRecovery) {
                     SignInHeading(s["recoveryTitle"].orEmpty(), detail = s["recoveryHint"].orEmpty())

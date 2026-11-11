@@ -393,6 +393,7 @@ class ListeningKeeper(
 
     // The same rules as a film: docs/CLIENT-API.md, "What a TV app must build itself".
     override fun onPlayerError(e: PlaybackException) {
+        if (ScreenTimeWatch.playbackFailed(e)) return // this profile's time is up: the notice says so
         val status = (e.cause as? HttpDataSource.InvalidResponseCodeException)?.responseCode
         val id = player.currentMediaItem?.mediaId?.toLongOrNull()
         val recovery = recoveryFor(e.errorCode, status)

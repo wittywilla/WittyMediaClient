@@ -156,6 +156,8 @@ fun YouScreen(nav: Nav, s: Map<String, String>) {
         hasGames = hasGames,
         twoStepAvailable = twoStep?.available == true,
         onTv = metrics.tv,
+        nativeProfiles = nav.has(com.wittywilla.wittymediaclient.net.FEATURE_PARENTAL),
+        off = com.wittywilla.wittymediaclient.player.ScreenTimeWatch.limits?.features?.filterValues { !it }?.keys.orEmpty(),
     )
     fun open(row: YouRow) {
         val title = s[row.key].orEmpty()
@@ -164,6 +166,7 @@ fun YouScreen(nav: Nav, s: Map<String, String>) {
                 is YouOpens.Native -> when (opens.screen) {
                     YouNative.Licences -> Route.Notices
                     YouNative.Log -> Route.Logs
+                    YouNative.Profiles -> HouseholdRoute(HouseholdScreen.Profiles)
                     else -> Route.You(opens.screen)
                 }
                 is YouOpens.Page -> if (nav.app.isTv) Route.OnPhone(title, opens.path) else Route.Page(opens.path, title)
@@ -253,7 +256,7 @@ private fun YouHeader(nav: Nav, s: Map<String, String>, me: User?, admin: Boolea
     )
     val shown = me?.let { avatarName(it.displayName, it.name) }.orEmpty()
     Column(modifier.widthIn(max = metrics.u(if (metrics.tv) 520 else 400)), horizontalAlignment = Alignment.CenterHorizontally) {
-        Avatar(shown.ifEmpty { "?" }, size)
+        ProfileFace(shown.ifEmpty { "?" }, me?.avatar, size)
         Spacer(Modifier.height(metrics.u(12)))
         Text(shown, color = scheme.onBackground, style = MaterialTheme.typography.title, textAlign = TextAlign.Center, modifier = Modifier.semantics { heading() })
         // The username always shows here: this is the account.
@@ -265,7 +268,7 @@ private fun YouHeader(nav: Nav, s: Map<String, String>, me: User?, admin: Boolea
         }
         Spacer(Modifier.height(metrics.u(16)))
         // Ends this sign-in and opens Who's watching.
-        WittyButton(s["switchProfile"].orEmpty(), nav::signOut, icon = Symbols.Group, requestFocus = metrics.tv, focusKey = "switch-profile")
+        WittyButton(s["switchProfile"].orEmpty(), { switchProfile(nav) }, icon = Symbols.Group, requestFocus = metrics.tv, focusKey = "switch-profile")
         if (showSignOut) {
             Spacer(Modifier.height(metrics.u(16)))
             WittyButton(s["signOut"].orEmpty(), nav::signOut, kind = ButtonKind.Destructive, icon = Symbols.SignOut, focusKey = "sign-out")
@@ -313,7 +316,8 @@ fun YouSettingScreen(nav: Nav, s: Map<String, String>, screen: YouNative) {
         YouNative.Password -> PasswordScreen(nav, s)
         YouNative.TwoStep -> TwoStepScreen(nav, s)
         YouNative.Devices -> DevicesScreen(nav, s)
-        YouNative.SignInTv -> SignInTvScreen(nav, s)
+        YouNative.SignInTv -> if (nav.has(com.wittywilla.wittymediaclient.net.PAIR_QR_FEATURE)) ApproveDeviceScreen(nav, s) else SignInTvScreen(nav, s)
+        YouNative.Profiles -> ProfilesScreen(nav, s)
         YouNative.Theme -> ThemeScreen(nav, s)
         YouNative.TopMenu -> TopMenuScreen(nav, s)
         YouNative.Licences -> NoticesScreen(nav)
@@ -324,7 +328,7 @@ fun YouSettingScreen(nav: Nav, s: Map<String, String>, screen: YouNative) {
 // A setting's screen: Back, its title and what it's about, then what to change. A phone has one
 // column (at most 640 wide); a TV the words on the left third and the rest on the right.
 @Composable
-private fun SettingsPage(
+internal fun SettingsPage(
     nav: Nav,
     title: String,
     detail: String = "",
@@ -381,7 +385,7 @@ private fun SettingsPage(
 
 // Something that worked, in `ok`, with a check.
 @Composable
-private fun Done(text: String, modifier: Modifier = Modifier) {
+internal fun Done(text: String, modifier: Modifier = Modifier) {
     if (text.isEmpty()) return
     val ok = LocalExtraColours.current.ok
     Row(modifier, verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(LocalMetrics.current.u(8))) {
@@ -405,7 +409,10 @@ private fun NamesScreen(nav: Nav, s: Map<String, String>) {
     var problem by remember { mutableStateOf("") }
     var saved by remember { mutableStateOf(false) }
     // A Kids or Guest profile's names are the adults' to change; it may still choose which shows.
-    val adult = me.isAdmin || me.kind == "adult"
+    val limits = com.wittywilla.wittymediaclient.player.ScreenTimeWatch.limits
+    val adult = com.wittywilla.wittymediaclient.net.Managing.ownUsername(me.isAdmin, me.kind, limits)
+    // The profile name and picture: an adult's own unless their limits say otherwise, and a Kids or Guest profile's when given it.
+    val ownLook = if (limits == null) me.isAdmin || me.kind == "adult" else com.wittywilla.wittymediaclient.net.Managing.ownLook(me.isAdmin, limits)
     fun save() {
         if (busy) return
         if (adult && username.isBlank()) {
@@ -413,7 +420,7 @@ private fun NamesScreen(nav: Nav, s: Map<String, String>) {
             return
         }
         val change = ProfileUpdate(
-            displayName = displayName.trim().takeIf { adult && it != me.displayName },
+            displayName = displayName.trim().takeIf { ownLook && it != me.displayName },
             username = username.trim().takeIf { adult && it != me.name },
             showUsername = showUsername.takeIf { it != me.showUsername },
         )
@@ -436,11 +443,14 @@ private fun NamesScreen(nav: Nav, s: Map<String, String>) {
     }
     SettingsPage(nav, s["rowNames"].orEmpty()) {
         // It follows the profile name as it's typed, so its colour can be seen changing.
-        Avatar(avatarName(displayName.trim(), username.trim()).ifEmpty { "?" }, metrics.u(64), if (metrics.tv) Modifier else Modifier.align(Alignment.CenterHorizontally))
+        ProfileFace(avatarName(displayName.trim(), username.trim()).ifEmpty { "?" }, me.avatar, metrics.u(64), if (metrics.tv) Modifier else Modifier.align(Alignment.CenterHorizontally))
+        if (ownLook && nav.has(com.wittywilla.wittymediaclient.net.FEATURE_AVATARS)) {
+            GroupedList("", listOf(GroupRow(s["changePicture"].orEmpty(), onClick = { nav.push(HouseholdRoute(HouseholdScreen.Look(me.id))) }, icon = Symbols.Person, tint = Color(0xFF0A6FB8), focusKey = "change-picture")))
+        }
         Column(verticalArrangement = Arrangement.spacedBy(metrics.u(6))) {
             WittyField(
                 displayName, { displayName = it; saved = false; problem = "" }, s["profileNameLabel"].orEmpty(), icon = Symbols.Badge,
-                imeAction = ImeAction.Next, maxLength = 60, enabled = adult,
+                imeAction = ImeAction.Next, maxLength = 60, enabled = ownLook,
             )
             Hint(if (displayName.isBlank()) s["profileNameEmptyHint"].orEmpty() else s["profileNameHint"].orEmpty())
         }
@@ -470,7 +480,7 @@ private fun NamesScreen(nav: Nav, s: Map<String, String>) {
 private const val SAVED_MS = 2000L
 
 @Composable
-private fun Hint(text: String) {
+internal fun Hint(text: String) {
     if (text.isEmpty()) return
     Text(
         text, color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.secondary,
@@ -480,7 +490,7 @@ private fun Hint(text: String) {
 
 // A switch that only shows: its row is what's pressed, so a remote reaches it as one thing.
 @Composable
-private fun Toggle(on: Boolean) {
+internal fun Toggle(on: Boolean) {
     val scheme = MaterialTheme.colorScheme
     Switch(
         checked = on, onCheckedChange = null,
@@ -1039,7 +1049,7 @@ private fun SignInTvScreen(nav: Nav, s: Map<String, String>) {
 
 // A TV's code: eight boxes, four, a dash, four, over a capitals keyboard. The server's own letters only.
 @Composable
-private fun TvCodeEntry(code: String, checking: Boolean, wrong: Int, modifier: Modifier = Modifier, onCode: (String) -> Unit) {
+internal fun TvCodeEntry(code: String, checking: Boolean, wrong: Int, modifier: Modifier = Modifier, onCode: (String) -> Unit) {
     val metrics = LocalMetrics.current
     val scheme = MaterialTheme.colorScheme
     val field = remember { FocusRequester() }

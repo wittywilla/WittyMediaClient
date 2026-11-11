@@ -570,8 +570,8 @@ fun ProfileTile(
                     .padding(bottom = metrics.u(6)),
                 contentAlignment = Alignment.BottomCenter,
             ) {
-                Avatar(
-                    shown, avatarSize,
+                ProfileFace(
+                    shown, profile.avatar, avatarSize,
                     if (active) {
                         Modifier
                             .ringOutside(avatarShape(avatarSize, false), scheme.background, 0.dp, gap)

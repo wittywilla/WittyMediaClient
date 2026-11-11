@@ -78,6 +78,7 @@ class Api(val base: String, val token: String, private val quick: Boolean = fals
             val same = server != null && req.url.host == server.host && req.url.port == server.port && req.url.scheme == server.scheme
             chain.proceed(if (same && token.isNotEmpty()) req.newBuilder().header("Authorization", "Bearer $token").build() else req)
         })
+        .addInterceptor(ScreenTimeTap) // screen time left and parental refusals, heard in one place
         .build()
 
     private fun errorText(status: Int, text: String) =
