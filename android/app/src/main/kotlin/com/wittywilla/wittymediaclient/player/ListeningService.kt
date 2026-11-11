@@ -77,7 +77,7 @@ class ListeningService : MediaSessionService() {
         val resolver = TrackResolver(app)
         val shaper = SoundShaper()
         SoundShaping.heard = shaper
-        val player = ExoPlayer.Builder(this, ShapedRenderers(this, shaper).setEnableDecoderFallback(true))
+        val player = ExoPlayer.Builder(this, ShapedRenderers(this, shaper, StemMixer()).setEnableDecoderFallback(true))
             .setMediaSourceFactory(TrackSources(resolver))
             .setAudioAttributes(soundFor(false), true)
             .setHandleAudioBecomingNoisy(true)
@@ -117,6 +117,7 @@ class ListeningService : MediaSessionService() {
     override fun onDestroy() {
         (application as WittyApp).listening.serviceRunning = false
         SoundShaping.heard = null
+        StemMixing.stop()
         keeper?.release()
         keeper = null
         session?.run {
@@ -159,9 +160,10 @@ class ListeningService : MediaSessionService() {
 
 // The usual renderers, with the sound going through the shaper on its way out (SoundShaper.kt).
 @OptIn(UnstableApi::class)
-class ShapedRenderers(context: android.content.Context, private val shaper: SoundShaper) : DefaultRenderersFactory(context) {
+// The main player also has the stems mixer first (StemMixer.kt), so a karaoke mix is shaped as any song is.
+class ShapedRenderers(context: android.content.Context, private val shaper: SoundShaper, private val mixer: StemMixer? = null) : DefaultRenderersFactory(context) {
     override fun buildAudioSink(context: android.content.Context, enableFloatOutput: Boolean, enableAudioTrackPlaybackParams: Boolean): AudioSink =
-        DefaultAudioSink.Builder(context).setAudioProcessors(arrayOf(shaper)).build()
+        DefaultAudioSink.Builder(context).setAudioProcessors(listOfNotNull(mixer, shaper).toTypedArray()).build()
 }
 
 // A cover from the server, with the sign-in, for the lock screen and the notification.

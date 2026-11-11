@@ -84,7 +84,8 @@ class Crossfade(
         val item = player.currentMediaItem ?: return
         val music = item.mediaMetadata.extras?.getBoolean(EXTRA_KEEPS_PLACE) != true
         val next = player.nextMediaItemIndex
-        if (!music || sound.crossfade <= 0 || player.repeatMode == Player.REPEAT_MODE_ONE || app.listening.sleepAfterThis || next == C.INDEX_UNSET || fading != null) {
+        // Not while a song's parts are being mixed either: the end of the song would cross on the other player, as it is.
+        if (!music || sound.crossfade <= 0 || player.repeatMode == Player.REPEAT_MODE_ONE || app.listening.sleepAfterThis || next == C.INDEX_UNSET || fading != null || StemMixing.active) {
             dropReady()
             return
         }

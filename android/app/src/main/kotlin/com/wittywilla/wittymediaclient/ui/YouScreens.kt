@@ -318,13 +318,14 @@ fun YouSettingScreen(nav: Nav, s: Map<String, String>, screen: YouNative) {
         YouNative.TopMenu -> TopMenuScreen(nav, s)
         YouNative.Licences -> NoticesScreen(nav)
         YouNative.Log -> LogsScreen(nav)
+        YouNative.PlayingHere -> PlayingHereScreen(nav, s)
     }
 }
 
 // A setting's screen: Back, its title and what it's about, then what to change. A phone has one
 // column (at most 640 wide); a TV the words on the left third and the rest on the right.
 @Composable
-private fun SettingsPage(
+internal fun SettingsPage(
     nav: Nav,
     title: String,
     detail: String = "",
@@ -470,7 +471,7 @@ private fun NamesScreen(nav: Nav, s: Map<String, String>) {
 private const val SAVED_MS = 2000L
 
 @Composable
-private fun Hint(text: String) {
+internal fun Hint(text: String) {
     if (text.isEmpty()) return
     Text(
         text, color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.secondary,
@@ -480,7 +481,7 @@ private fun Hint(text: String) {
 
 // A switch that only shows: its row is what's pressed, so a remote reaches it as one thing.
 @Composable
-private fun Toggle(on: Boolean) {
+internal fun Toggle(on: Boolean) {
     val scheme = MaterialTheme.colorScheme
     Switch(
         checked = on, onCheckedChange = null,

@@ -1501,6 +1501,8 @@ private fun AlbumPage(nav: Nav, route: Route.Album) {
     val allLiked = list.isNotEmpty() && list.all { listening.liked[it.id] == true }
     val width = LocalConfiguration.current.screenWidthDp.toFloat()
     Box(Modifier.fillMaxSize()) {
+        // The album's canvas, faint across the top and scrolling away with the page, when it has one (CanvasLoop.kt).
+        CanvasBanner(nav, list.firstOrNull()?.id ?: 0L) { if (state.firstVisibleItemIndex == 0) state.firstVisibleItemScrollOffset else null }
         CompositionLocalProvider(LocalSay provides say) {
             LazyColumn(
                 Modifier.fillMaxSize().artGlow(colour, anchor, LocalConfiguration.current.screenHeightDp), state = state,

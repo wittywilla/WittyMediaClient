@@ -39,6 +39,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusDirection
 import androidx.compose.ui.focus.focusProperties
@@ -259,6 +260,8 @@ fun NowPlayingScreen(nav: Nav) {
     LaunchedEffect(now == null) { if (now == null) nav.closeNowPlaying() }
     val about = now?.mediaMetadata
     val onClear = { listening.stop(); nav.closeNowPlaying() }
+    // The song's separate parts and their mixer, where the server has them (StemPanel.kt).
+    val stems = rememberStems(nav)
 
     @Composable
     fun Art(modifier: Modifier) {
@@ -278,6 +281,8 @@ fun NowPlayingScreen(nav: Nav) {
     }
 
     Screen {
+        // The song's canvas, faint behind everything, when it has one and this device may play it (CanvasLoop.kt).
+        CanvasBackdrop(nav, now?.mediaId?.toLongOrNull() ?: 0L, Modifier.fillMaxSize().alpha(0.35f))
         if (wide) {
             Row(
                 Modifier.fillMaxSize().safeDrawingPadding().padding(horizontal = metrics.gutter, vertical = if (metrics.tv) metrics.edge else Space.S4),
@@ -289,6 +294,7 @@ fun NowPlayingScreen(nav: Nav) {
                         Box(Modifier.weight(1f)) { Words(center = false) }
                     }
                     Controls(listening)
+                    TvStemsButton(stems)
                 }
                 // The list keeps what's playing in view, unless someone is rearranging it.
                 val queueScroll = rememberLazyListState()
@@ -326,6 +332,7 @@ fun NowPlayingScreen(nav: Nav) {
                 queueList(listening, editing, { editing = !editing }, onClear)
             }
         }
+        TvStemsDialog(stems)
     }
 }
 

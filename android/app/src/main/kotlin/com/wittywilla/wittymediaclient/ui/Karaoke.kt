@@ -93,6 +93,8 @@ internal fun KaraokeScreen(nav: Nav, words: LyricsWords, title: String, artist: 
     val inset = with(LocalDensity.current) { WindowInsets.navigationBars.getBottom(this).toDp() }
     val sound = listening.sound
     BackHandler(onBack = close)
+    // The song's separate parts, where the server has them: the real thing that "voice lower" guesses at (StemPanel.kt).
+    val stems = rememberStems(nav)
     // Coming back, the voice and key are as they were: this was for the song, not for good. The screen too.
     val activity = androidx.activity.compose.LocalActivity.current
     var filled by remember { mutableStateOf(false) }
@@ -232,8 +234,9 @@ internal fun KaraokeScreen(nav: Nav, words: LyricsWords, title: String, artist: 
                 }
                 NpRound(WebIcons.Next, "Next line", 52.dp, 20.dp) { goLine(1) }
                 if (!compact) Box(Modifier.padding(horizontal = 4.dp).size(1.dp, 34.dp).background(Np.line))
-                // The singer's voice: on, lower, lowest.
-                Row(Modifier.clip(RoundedCornerShape(50)).background(Np.chip).padding(3.dp).semantics { contentDescription = "Singer's voice" }, horizontalArrangement = Arrangement.spacedBy(2.dp)) {
+                StemsChip(stems)
+                // The singer's voice: on, lower, lowest. With the parts being mixed, their own faders do this.
+                if (!stems.mixing) Row(Modifier.clip(RoundedCornerShape(50)).background(Np.chip).padding(3.dp).semantics { contentDescription = "Singer's voice" }, horizontalArrangement = Arrangement.spacedBy(2.dp)) {
                     com.wittywilla.wittymediaclient.ui.Karaoke.VOCALS.forEach { (cut, name) ->
                         val on = sound.vocalCut == cut
                         Pressable({ listening.setSound { it.copy(vocalCut = cut) } }, Modifier.heightIn(min = 46.dp), shape = RoundedCornerShape(50), fill = if (on) Color.White else Color.Transparent, label = name, selected = on, ring = false) {
@@ -252,6 +255,7 @@ internal fun KaraokeScreen(nav: Nav, words: LyricsWords, title: String, artist: 
                 modifier = Modifier.fillMaxWidth().heightIn(min = 18.dp).padding(start = 16.dp, end = 16.dp, bottom = maxOf(10.dp, inset)),
             )
         }
+        StemsPanel(stems)
     }
 }
 

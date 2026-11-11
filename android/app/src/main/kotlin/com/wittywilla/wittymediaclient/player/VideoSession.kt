@@ -31,10 +31,12 @@ import androidx.media3.exoplayer.util.EventLogger
 import androidx.media3.session.MediaSession
 import com.wittywilla.wittymediaclient.diag.ClientLog
 import com.wittywilla.wittymediaclient.net.ApiError
+import com.wittywilla.wittymediaclient.net.ExtrasFeature
 import com.wittywilla.wittymediaclient.net.Item
 import com.wittywilla.wittymediaclient.net.Playback
 import com.wittywilla.wittymediaclient.net.PlaybackRequest
 import com.wittywilla.wittymediaclient.net.Show
+import com.wittywilla.wittymediaclient.net.SkipRange
 import com.wittywilla.wittymediaclient.ui.Nav
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
@@ -132,6 +134,9 @@ class VideoSession(private val nav: Nav, val id: Long, private val startAt: Doub
         private set
     val notes = mutableStateListOf<String>()
 
+    // What can be skipped now, from every source the server marks, and skipping by itself where chosen (SkipTracker.kt).
+    val skipping = SkipTracker()
+
     // Bumped by play and pause, which bring the controls back as on the website.
     var activity by mutableStateOf(0)
         private set
@@ -186,7 +191,20 @@ class VideoSession(private val nav: Nav, val id: Long, private val startAt: Doub
         scope.launch { snapshotFlow { ask }.collectLatest { open(it) } }
         scope.launch { tick() }
         scope.launch { snapshotFlow { countdown }.collectLatest { left -> runCountdown(left) } }
+        scope.launch {
+            skipping.run(
+                app, id, { nav.has(ExtrasFeature.MARKERS) }, { introFallback() }, { filmSec }, { durationSec }, { playing && problem.isEmpty() }, { nextId },
+                seek = ::seekFilm, playNext = { if (!mini) nav.playVideoInstead(it) }, said = { note(it) },
+            )
+        }
     }
+
+    // The intro an older server sends with the stream or the item, for when it marks nothing else.
+    private fun introFallback(): SkipRange? =
+        stream?.intro?.let { SkipRange(it.startSec, it.endSec) } ?: item?.introEnd?.let { SkipRange(item?.introStart ?: 0.0, it) }
+
+    // From where Watch next is due: the last half minute, or the start of credits that run to the end.
+    private val nextFromSec: Double get() = skipping.upNextFromSec ?: (durationSec - WATCH_NEXT_BEFORE_END_SEC)
 
     private suspend fun tick() {
         while (true) {
@@ -198,7 +216,7 @@ class VideoSession(private val nav: Nav, val id: Long, private val startAt: Doub
             if (player.isPlaying) budget.played(TICK_MS / 1000.0)
             ended = player.playbackState == Player.STATE_ENDED
             // Seeking back out of the last 30 seconds hides the card again; the next one is kept.
-            val due = durationSec > 0 && (filmSec >= durationSec - WATCH_NEXT_BEFORE_END_SEC || ended)
+            val due = durationSec > 0 && (filmSec >= nextFromSec || ended)
             if (due && !nextAsked) loadNext()
             note?.let { if (!it.lost && System.nanoTime() - it.at > NOTE_MS * 1_000_000) note = null }
         }
@@ -206,7 +224,7 @@ class VideoSession(private val nav: Nav, val id: Long, private val startAt: Doub
 
     // Shown while it's due, loaded, not dismissed and not in the mini player.
     val watchNextShown: Boolean
-        get() = next != null && !dismissed && !mini && durationSec > 0 && (filmSec >= durationSec - WATCH_NEXT_BEFORE_END_SEC || ended)
+        get() = next != null && !dismissed && !mini && durationSec > 0 && (filmSec >= nextFromSec || ended)
 
     private fun loadNext() {
         nextAsked = true
