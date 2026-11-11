@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+// Copyright (C) 2026 WittyWilla and contributors
 import Foundation
 
 // The website's music videos, as rules the phone and tablet apps share: a music library's Music videos tab and its

@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+// Copyright (C) 2026 WittyWilla and contributors
 // The app's own log: a small file on this computer, and errors reported to the
 // server this app is connected to, which is the only place they ever go. Nothing
 // in here may throw, block the window or cause more errors of its own: a report

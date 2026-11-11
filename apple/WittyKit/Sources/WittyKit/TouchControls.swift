@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+// Copyright (C) 2026 WittyWilla and contributors
 import Foundation
 
 // The account's touch controls, drawn over a game on a phone or tablet with no controller, as

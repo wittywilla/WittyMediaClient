@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+// Copyright (C) 2026 WittyWilla and contributors
 // What a reading can check of the FreeBSD package and the Linux entry, on any system.
 const test = require('node:test')
 const assert = require('node:assert')

@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+// Copyright (C) 2026 WittyWilla and contributors
 // The app's decisions about what a page or the network may do, kept apart from
 // Electron so each can be tested on its own. Nothing here touches a window.
 const MAX_ANSWER_BYTES = 64 * 1024 // far more than any answer the app reads before signing in

@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+// Copyright (C) 2026 WittyWilla and contributors
 import Foundation
 
 // WittyTV's themes on Apple TV, which can't show the server's guide page. The choice follows the

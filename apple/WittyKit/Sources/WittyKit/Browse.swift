@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+// Copyright (C) 2026 WittyWilla and contributors
 import Foundation
 
 // A film or TV library's page, as the server's own website builds it (web/src/pages/library/VideoLibrary.tsx and

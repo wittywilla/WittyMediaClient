@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+// Copyright (C) 2026 WittyWilla and contributors
 import Foundation
 
 // The programme guide's grid, as web/src/pages/tv/GuidePage.tsx in the server's repository builds it:

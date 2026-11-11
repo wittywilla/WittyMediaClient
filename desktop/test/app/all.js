@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+// Copyright (C) 2026 WittyWilla and contributors
 // Runs each of the real-app tests in its own Electron, one after the other: see run.js.
 const { spawnSync } = require('node:child_process')
 const path = require('node:path')

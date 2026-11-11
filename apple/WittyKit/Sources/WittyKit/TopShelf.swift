@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+// Copyright (C) 2026 WittyWilla and contributors
 import Foundation
 
 // What the Apple TV's Top Shelf shows. The app writes it to the App Group folder it shares with

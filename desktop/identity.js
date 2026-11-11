@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+// Copyright (C) 2026 WittyWilla and contributors
 // Checks that an address is answered by the server we think it is: it has to
 // sign a fresh random value with its Ed25519 key (docs/CLIENT-API.md, "Server identity").
 const crypto = require('crypto')

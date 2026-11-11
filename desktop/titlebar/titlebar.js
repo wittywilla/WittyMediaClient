@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+// Copyright (C) 2026 WittyWilla and contributors
 const win = window.wittyBar
 const change = document.getElementById('change')
 const help = document.getElementById('help')

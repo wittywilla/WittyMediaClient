@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+// Copyright (C) 2026 WittyWilla and contributors
 import Foundation
 
 // The website's video player, as rules the phone and tablet apps share: web/src/player/Controls.tsx, speed.ts,

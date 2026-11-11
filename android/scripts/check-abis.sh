@@ -1,4 +1,6 @@
 #!/bin/sh
+# SPDX-License-Identifier: GPL-3.0-or-later
+# Copyright (C) 2026 WittyWilla and contributors
 # Says which processors each APK carries native code for, and fails if a library is missing for one it's meant for.
 # A device with no matching library is refused at install or crashes when the library is first used, and nothing
 # else would catch a dependency that drops one.

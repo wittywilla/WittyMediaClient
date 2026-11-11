@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+# SPDX-License-Identifier: GPL-3.0-or-later
+# Copyright (C) 2026 WittyWilla and contributors
 # The first check of the Apple apps, for a Mac with Xcode. It signs nothing and installs nothing on a
 # real device. It runs WittyKit's tests, builds for Apple TV, iPhone and iPad, then opens each in a
 # simulator and takes a picture. Everything it finds goes in apple/build-logs, to send back.

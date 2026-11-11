@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+// Copyright (C) 2026 WittyWilla and contributors
 // Hands a game over to the Moonlight app, if someone has installed it. Moonlight is a
 // separate program under GPL-3.0: this only starts it, and nothing of it is copied, linked
 // or bundled. A server's page asks for this and a page could be hostile, so what it asks is

@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+// Copyright (C) 2026 WittyWilla and contributors
 // Whether this copy of the app is running on a TV, and what that changes. Plain rules, with
 // nothing from Electron, so they can be tested without a window.
 

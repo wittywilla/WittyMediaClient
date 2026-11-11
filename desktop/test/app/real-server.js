@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+// Copyright (C) 2026 WittyWilla and contributors
 // Runs the real app against a real WittyMediaServer, with key presses alone, and plays a video.
 // For platforms only reachable in a virtual machine or on a device, so nothing here assumes much:
 //

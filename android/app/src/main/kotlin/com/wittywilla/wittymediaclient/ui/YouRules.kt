@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+// Copyright (C) 2026 WittyWilla and contributors
 package com.wittywilla.wittymediaclient.ui
 
 // docs/APP-DESIGN.md, "You and settings": which rows the You tab has, for whom, and what each opens.

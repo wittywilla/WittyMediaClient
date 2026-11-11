@@ -1,4 +1,6 @@
 #!/usr/bin/env node
+// SPDX-License-Identifier: GPL-3.0-or-later
+// Copyright (C) 2026 WittyWilla and contributors
 // Looks inside the running app through Chromium's debugging port, which the test started it with.
 // Checks that it really opened: its windows, what they show, and that a page can't reach the app.
 //

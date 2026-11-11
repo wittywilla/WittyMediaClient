@@ -1,4 +1,6 @@
 #!/bin/sh
+# SPDX-License-Identifier: GPL-3.0-or-later
+# Copyright (C) 2026 WittyWilla and contributors
 # Starts WittyMediaClient in the system's Electron. The one it was built for comes first. The ports
 # tree retires each Electron within months, so if that one has gone, the newest there is takes over.
 #

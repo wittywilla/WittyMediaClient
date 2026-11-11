@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+// Copyright (C) 2026 WittyWilla and contributors
 // The QR encoder. Every version and mask it makes was read back by a phone-grade decoder (the
 // system's own on a Mac) while it was written; these hold it to what was read then, and check
 // the parts of a symbol any reader looks for first.

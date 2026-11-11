@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+// Copyright (C) 2026 WittyWilla and contributors
 // Finds WittyMediaServers on the local network: mDNS first, with the server's
 // small UDP question as an extra (docs/CLIENT-API.md, "Finding a server").
 // Everything here comes from the network and is treated as untrusted: being

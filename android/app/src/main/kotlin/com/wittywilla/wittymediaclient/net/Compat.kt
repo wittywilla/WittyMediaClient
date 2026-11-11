@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+// Copyright (C) 2026 WittyWilla and contributors
 package com.wittywilla.wittymediaclient.net
 
 // Which app works with which server: docs/CLIENT-API.md in the server's repository, "Which app

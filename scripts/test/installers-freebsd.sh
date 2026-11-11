@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+# SPDX-License-Identifier: GPL-3.0-or-later
+# Copyright (C) 2026 WittyWilla and contributors
 # Proves the FreeBSD package for real, in a throwaway FreeBSD virtual machine. From a bare system:
 # install, with only what the package declares; the app opened on a virtual screen as an ordinary
 # person. Then, with Electron kept: install, upgrade, the uninstaller's questions, removal, and a

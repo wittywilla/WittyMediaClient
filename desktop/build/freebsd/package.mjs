@@ -1,4 +1,6 @@
 #!/usr/bin/env node
+// SPDX-License-Identifier: GPL-3.0-or-later
+// Copyright (C) 2026 WittyWilla and contributors
 // Builds WittyMediaClient for FreeBSD: `npm run package:freebsd`, on FreeBSD.
 //
 // Electron publishes nothing for FreeBSD, and electron-builder has no way to make a package

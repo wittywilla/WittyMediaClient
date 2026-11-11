@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+# SPDX-License-Identifier: GPL-3.0-or-later
+# Copyright (C) 2026 WittyWilla and contributors
 # Runs the Mac uninstaller's logic against a stand-in home folder. It doesn't need a Mac, and it
 # isn't one: this says nothing about the Finder, Gatekeeper or the system's own commands.
 #

@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+// Copyright (C) 2026 WittyWilla and contributors
 import Foundation
 
 // Every theme the server has, in the apps: docs/APP-DESIGN.md, Themes. A theme comes as data, the CSS

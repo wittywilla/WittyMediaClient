@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+// Copyright (C) 2026 WittyWilla and contributors
 import Foundation
 
 // Shelves: the games home (docs/WITTYPLAY-EXPERIENCE.md). Each console is a shelf, and its games

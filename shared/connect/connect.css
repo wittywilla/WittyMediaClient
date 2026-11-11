@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: GPL-3.0-or-later */
+/* Copyright (C) 2026 WittyWilla and contributors */
 /* The connect screen, drawn as docs/APP-DESIGN.md draws the sign-in screens, with the server's
    design tokens under the same names (its docs/DESIGN.md and web/src/styles.css), in the default
    theme's colours (shared/data/themes.json; a test holds them equal). The page opens before any

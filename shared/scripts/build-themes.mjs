@@ -1,4 +1,6 @@
 #!/usr/bin/env node
+// SPDX-License-Identifier: GPL-3.0-or-later
+// Copyright (C) 2026 WittyWilla and contributors
 // Turns the server's theme folders into plain data for clients that can't use
 // CSS. Run with --check in CI to fail when themes.json is out of date.
 import { readFileSync, readdirSync, writeFileSync, existsSync } from 'node:fs'

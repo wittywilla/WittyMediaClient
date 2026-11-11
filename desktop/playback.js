@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+// Copyright (C) 2026 WittyWilla and contributors
 // Whether the server's page should be kept running as if it were in front: while it plays, so a
 // hidden, minimised or covered window never slows or stops what's playing. Plain rules, with nothing
 // from Electron, so they can be tested without a window; main.js does what they decide.

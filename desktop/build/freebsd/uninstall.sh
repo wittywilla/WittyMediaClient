@@ -1,4 +1,6 @@
 #!/bin/sh
+# SPDX-License-Identifier: GPL-3.0-or-later
+# Copyright (C) 2026 WittyWilla and contributors
 # Removes WittyMediaClient from FreeBSD: `wittymediaclient --uninstall`. It says what it found, asks
 # about the program and about your own data separately, removes only what's the app's, and says
 # what's left. Your servers and what's on them are never touched. Add --dry-run to only see the list.

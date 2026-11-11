@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+// Copyright (C) 2026 WittyWilla and contributors
 import Foundation
 
 /// The one thing that can come from outside the app: `wittymedia://item/123`, from the Top Shelf.

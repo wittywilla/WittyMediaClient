@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+// Copyright (C) 2026 WittyWilla and contributors
 // Runs on what's about to be packed. Two jobs:
 //  - On Windows, lists every file an install holds, so that the uninstaller removes those and
 //    nothing else: anything someone else put in the folder stays. build/installer.nsh reads it.

@@ -1,4 +1,6 @@
 // swift-tools-version:5.9
+// SPDX-License-Identifier: GPL-3.0-or-later
+// Copyright (C) 2026 WittyWilla and contributors
 import PackageDescription
 
 // What the Apple apps share that doesn't depend on any screen: addresses, the

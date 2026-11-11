@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+// Copyright (C) 2026 WittyWilla and contributors
 // The connect screen: choose a server found on the network or type an address,
 // then prove it with a security code, or show a code to approve from a phone. It works
 // from a TV remote, a keyboard or a mouse. Platforms that can do more than a web page (the

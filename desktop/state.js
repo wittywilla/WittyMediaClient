@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+// Copyright (C) 2026 WittyWilla and contributors
 // What the app remembers between runs: the current server, recent servers with
 // the identity key each one proved, and the window size. No passwords or
 // tokens: the sign-in stays in the browser session, as it does in a browser.

@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+// Copyright (C) 2026 WittyWilla and contributors
 // Works with arrows, OK and Back alone. Up and down go round the list, and Back closes it.
 (function () {
   const close = () => window.wittyBar.menu('close')

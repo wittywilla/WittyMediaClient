@@ -1,4 +1,6 @@
 #!/usr/bin/env node
+// SPDX-License-Identifier: GPL-3.0-or-later
+// Copyright (C) 2026 WittyWilla and contributors
 // Copies the shared connect screen into the desktop app and turns the shared
 // wording into a script, because a page on the app's own scheme can't fetch JSON.
 import { cpSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'

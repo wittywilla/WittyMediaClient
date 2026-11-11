@@ -1,4 +1,6 @@
 #!/bin/bash
+# SPDX-License-Identifier: GPL-3.0-or-later
+# Copyright (C) 2026 WittyWilla and contributors
 # Runs after the package's files are gone, for .deb and .rpm alike. The arguments differ:
 #   .deb  remove, purge, upgrade, failed-upgrade, abort-install, abort-upgrade, disappear
 #   .rpm  0 when it's being removed, 1 when another version is replacing it

@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: GPL-3.0-or-later */
+/* Copyright (C) 2026 WittyWilla and contributors */
 /* The app's own title bar. Colours are replaced by the server's theme. */
 :root { --bg: #0f1115; --fg: #e8eaf0; --border: transparent; --dur-2: 150ms; }
 html, body { height: 100%; margin: 0; overflow: hidden; }

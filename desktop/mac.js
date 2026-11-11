@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+// Copyright (C) 2026 WittyWilla and contributors
 // What is different on a Mac: the system draws the window's buttons and has the menu bar.
 // Plain rules, with nothing from Electron, so they can be tested without a window.
 

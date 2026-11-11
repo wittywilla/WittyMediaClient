@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+// Copyright (C) 2026 WittyWilla and contributors
 // Turns what someone typed into a server address, or says why it can't be one.
 // The rules and their test cases are shared by every client: see
 // shared/data/connection-cases.json. Loaded as a plain script and by Node's tests.

@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+// Copyright (C) 2026 WittyWilla and contributors
 // Nothing real is started here: every program is a stand-in.
 const test = require('node:test')
 const assert = require('node:assert')

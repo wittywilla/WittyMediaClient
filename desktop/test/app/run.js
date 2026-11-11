@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+// Copyright (C) 2026 WittyWilla and contributors
 // Runs the real app, in Electron, against a stand-in server on 127.0.0.1, and checks what
 // only the running thing can show: the screens, the keyboard, the sign-in cookie, and what
 // a hostile server's page can and can't do. `npm run test:app`. A window is on screen for a

@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+// Copyright (C) 2026 WittyWilla and contributors
 import Foundation
 
 // The server's second stream (WittyMediaServer docs/GAMING-STREAM.md): one route,

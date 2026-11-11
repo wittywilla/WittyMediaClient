@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+// Copyright (C) 2026 WittyWilla and contributors
 // Things about the app's own pages and how it is packaged that a reading can check.
 const test = require('node:test')
 const assert = require('node:assert')

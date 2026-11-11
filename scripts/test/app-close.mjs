@@ -1,4 +1,6 @@
 #!/usr/bin/env node
+// SPDX-License-Identifier: GPL-3.0-or-later
+// Copyright (C) 2026 WittyWilla and contributors
 // Asks the running app to quit properly, through Chromium's debugging port.
 //
 //   node app-close.mjs <port>

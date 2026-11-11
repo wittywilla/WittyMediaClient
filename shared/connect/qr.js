@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+// Copyright (C) 2026 WittyWilla and contributors
 // A QR code for an address, so a phone can open it: which squares are dark. Byte mode and
 // the middle level of error correction (M), versions 1 to 10, which is up to 213 bytes and far
 // more than an address here needs. Written from the standard (ISO/IEC 18004) because the

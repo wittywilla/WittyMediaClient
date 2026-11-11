@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+// Copyright (C) 2026 WittyWilla and contributors
 #if os(tvOS) || os(iOS) || os(visionOS)
 import AVFoundation
 import CoreMedia

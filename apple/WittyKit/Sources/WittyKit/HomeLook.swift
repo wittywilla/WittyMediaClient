@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+// Copyright (C) 2026 WittyWilla and contributors
 import Foundation
 
 // Home as the server's website builds it (web/src/pages/HomePage.tsx and the parts it uses): its sections and the

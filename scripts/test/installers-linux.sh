@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+# SPDX-License-Identifier: GPL-3.0-or-later
+# Copyright (C) 2026 WittyWilla and contributors
 # Proves the Linux packages for real, in throwaway containers. From a bare system: install, with
 # only what the package declares; every shared library resolved; the app opened on a virtual screen
 # with its sandbox on. Then, with those libraries kept: install, upgrade, remove, purge, and a

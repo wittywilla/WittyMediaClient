@@ -1,4 +1,6 @@
 #!/usr/bin/env node
+// SPDX-License-Identifier: GPL-3.0-or-later
+// Copyright (C) 2026 WittyWilla and contributors
 // Checks the hand-written sample responses in shared/fixtures against a running
 // server, so the native apps' tests can't drift from what servers really send.
 // It compares field names and types, never values, and prints no media titles.
