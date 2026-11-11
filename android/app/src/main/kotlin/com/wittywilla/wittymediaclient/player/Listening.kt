@@ -134,6 +134,9 @@ class Listening(private val app: WittyApp) {
     var sound by mutableStateOf(SoundSettings())
         private set
 
+    // Karaoke from a song's separated parts, where the server makes them (`karaoke-auto`).
+    val stems = KaraokeStems(app, this) { prefs }
+
     init {
         sound = SoundSettings.read(prefs.getString(KEY_SOUND, null))
         barCollapsed = prefs.getBoolean(KEY_COLLAPSED, false)
@@ -150,6 +153,7 @@ class Listening(private val app: WittyApp) {
         shapeSound()
         if (next.keyShift != before.keyShift) controller?.let { it.playbackParameters = PlaybackParameters(it.playbackParameters.speed, pitchFor(next.keyShift)) }
         keeper?.soundChanged(levelingChanged = next.replayGain != before.replayGain)
+        stems.sync()
     }
 
     private fun shapeSound() {
@@ -162,7 +166,10 @@ class Listening(private val app: WittyApp) {
     private val listener = object : Player.Listener {
         override fun onEvents(player: Player, events: Player.Events) {
             read(player)
-            if (events.contains(Player.EVENT_POSITION_DISCONTINUITY)) jumps++
+            if (events.contains(Player.EVENT_POSITION_DISCONTINUITY)) {
+                jumps++
+                stems.jumped()
+            }
             // An empty queue: let go, so that the service can end. The next one starts it again.
             if (player.mediaItemCount == 0 && events.contains(Player.EVENT_TIMELINE_CHANGED)) disappeared()
         }
@@ -179,6 +186,8 @@ class Listening(private val app: WittyApp) {
         pitch = player.playbackParameters.pitch
         canGoNext = player.hasNextMediaItem()
         queue = readQueue(player)
+        stems.songIs(now?.mediaId)
+        stems.sync()
     }
 
     private fun readQueue(player: Player): List<QueueEntry> {
@@ -202,6 +211,7 @@ class Listening(private val app: WittyApp) {
     }
 
     private fun clear() {
+        stems.away()
         now = null
         queue = emptyList()
         isPlaying = false
@@ -210,6 +220,8 @@ class Listening(private val app: WittyApp) {
 
     // Off screen, nothing needs to hear about any of this. The service carries on.
     fun disappeared() {
+        // Nothing here hears the player from now on, so nothing could keep the parts in step with it.
+        stems.away()
         connecting?.let { MediaController.releaseFuture(it) }
         connecting = null
         controller = null

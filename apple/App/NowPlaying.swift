@@ -268,6 +268,7 @@ struct SeekBar: View {
 /// and right stay within a row; on the bar they move it.
 private struct Controls: View {
     @EnvironmentObject private var listening: Listening
+    @EnvironmentObject private var model: AppModel
     @Environment(\.palette) private var palette
 
     private var repeatWords: String {
@@ -321,6 +322,12 @@ private struct Controls: View {
                     .action(pill: true)
                     .remoteSection()
             }
+            #if os(tvOS)
+            // A server that can take a song's voice out: see KaraokeStems.swift.
+            if !books, model.has("karaoke-auto"), let song = listening.now?.item.id {
+                KaraokeStemsRow(stems: listening.stems, song: song)
+            }
+            #endif
         }
     }
 }

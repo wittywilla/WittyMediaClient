@@ -285,6 +285,11 @@ class Api(val base: String, val token: String, private val quick: Boolean = fals
     fun videoThumbUrl(id: Long, width: Int, version: Long) = "$base$API/items/$id/poster?w=$width" + if (version > 0) "&v=$version" else ""
     fun creatorAvatarUrl(id: Long) = "$base$API/creators/$id/art/avatar"
 
+    // A song's separated parts for karaoke (`karaoke-auto`): asked for once when karaoke opens, then watched. The
+    // answers are read by KaraokeAnswer.
+    suspend fun karaokePrepare(id: Long): String = call("POST", "/media/$id/karaoke/prepare", "")
+    suspend fun karaoke(id: Long): String = call("GET", "/media/$id/karaoke")
+
     // The volume correction a song is tagged with, for ReplayGain.
     suspend fun loudness(id: Long): Loudness = get("/music/loudness/$id")
 
