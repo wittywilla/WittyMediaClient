@@ -106,6 +106,9 @@ struct YouView: View {
             #if os(tvOS)
             row(.topMenu, "menubar.rectangle", RowTint.tv, "rowTopMenu", value: model.topMenu.isEmpty ? "" : "\(model.topMenu.count)")
             #endif
+            if PeerLibrary.available {
+                row(.away, "dot.radiowaves.left.and.right", RowTint.account, "rowAway", value: model.awayRowValue)
+            }
         }
         if isAdmin {
             ListGroup(title: say("groupServer")) {
@@ -182,7 +185,10 @@ struct YouView: View {
                     BrandMark(size: 40)
                     VStack(alignment: .leading, spacing: 2) {
                         Text(server.name).font(.wmLabel.weight(.semibold)).foregroundStyle(palette.text).lineLimit(1)
-                        Text(server.url).font(.wmSecondary).foregroundStyle(palette.textSecondary).lineLimit(1)
+                        Text(PeerInfo.isPlaceholder(server.url) ? say("awayOnly") : server.url).font(.wmSecondary).foregroundStyle(palette.textSecondary).lineLimit(1)
+                        if model.way.isAway {
+                            Text(model.way.words).font(.wmSecondary).foregroundStyle(palette.textSecondary).lineLimit(1)
+                        }
                         if !server.fingerprint.isEmpty {
                             (Text("\(say("fingerprintLabel")) ") + Text(server.fingerprint).font(.caption2.monospaced()))
                                 .font(.caption2)

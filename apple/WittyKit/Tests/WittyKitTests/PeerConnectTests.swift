@@ -50,4 +50,35 @@ final class PeerConnectTests: XCTestCase {
         XCTAssertFalse(PeerConnect.isID(server + "x"))
         XCTAssertFalse(PeerConnect.isID(server.replacingOccurrences(of: "K", with: "0")))
     }
+
+    func testTheAnswerToAnInviteOrACodeIsReadWithCare() {
+        let yes = PeerConnect.Enrolment(json: #"{"ok":true,"code":"123456","serverName":"Home\u202e","serverId":"\#(server)","addrs":["/ip4/203.0.113.4/tcp/4100","javascript:alert(1)"]}"#)
+        XCTAssertTrue(yes.ok)
+        XCTAssertEqual(yes.code, "123456")
+        XCTAssertEqual(yes.serverName, "Home")
+        XCTAssertEqual(yes.serverID, server)
+        XCTAssertEqual(yes.addresses, ["/ip4/203.0.113.4/tcp/4100"])
+        // A code that isn't six digits is no code, and an ID that isn't one is no server.
+        let odd = PeerConnect.Enrolment(json: #"{"ok":true,"code":"12345x","serverId":"elsewhere"}"#)
+        XCTAssertEqual(odd.code, "")
+        XCTAssertEqual(odd.serverID, "")
+        let no = PeerConnect.Enrolment(json: #"{"ok":false,"reason":"expired","error":"That invite has expired."}"#)
+        XCTAssertFalse(no.ok)
+        XCTAssertEqual(no.reason, "expired")
+        XCTAssertEqual(no.error, "That invite has expired.")
+        XCTAssertFalse(PeerConnect.Enrolment(json: "rubbish").ok)
+    }
+
+    func testACodeADeviceShowsAndWhatTheLibraryTakesToLookWithIt() throws {
+        XCTAssertTrue(PeerConnect.isJoinCode("K7QM-2XHD"))
+        for bad in ["", "K7QM2XHD", "K7QM-2XH", "k7qm-2xhd", "K7QM-2XHU", "K7QM-2XHD-1", "K7QM 2XHD"] {
+            XCTAssertFalse(PeerConnect.isJoinCode(bad), bad)
+        }
+        let json = PeerConnect.joinConfiguration(key: "k", code: "K7QM-2XHD", name: "Living room", platform: "tvOS")
+        let read = try XCTUnwrap(JSONSerialization.jsonObject(with: Data(json.utf8)) as? [String: Any])
+        XCTAssertEqual(read["key"] as? String, "k")
+        XCTAssertEqual(read["code"] as? String, "K7QM-2XHD")
+        XCTAssertEqual(read["name"] as? String, "Living room")
+        XCTAssertEqual(read["platform"] as? String, "tvOS")
+    }
 }

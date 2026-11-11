@@ -118,6 +118,8 @@ enum Route: Hashable {
     case logs
     /// The person's own account and this device's choices, from You: see YouViews.swift.
     case names, password, twoStep, devices, signInTv, theme
+    /// How this device reaches the server from away: see AwayViews.swift.
+    case away
     /// Apple TV's choice of libraries for the top menu: see YouViews.swift.
     case topMenu
     /// WittyPlay on Apple TV: a games library or one console's games in it, a game's page, and a
@@ -224,11 +226,20 @@ final class AppModel: ObservableObject {
         didSet { ClientLog.shared.use(client) }
     }
 
+    /// How the server is being reached: at home, or from away, peer to peer. AwayModel.swift has
+    /// everything about it; the manager chooses, and every connection made here follows it.
+    @Published var way: PeerManager.Way = .none
+    private(set) lazy var peers: PeerManager = makePeers()
+    var awayWatch: AwayWatch?
+    /// Counts changes of the address on this device, for the one thing that can't follow them
+    /// by itself: a web view, which is made again.
+    @Published var routeStamp = 0
+
     /// The server the sign-in screens talk to. Its key waits here for a token to be
     /// kept with, unless it was already pinned.
     private(set) var current: SavedServer?
 
-    private let defaults = UserDefaults.standard
+    let defaults = UserDefaults.standard
     private var started = false
     private var waitingLink: DeepLink?
 
@@ -395,7 +406,8 @@ final class AppModel: ObservableObject {
     private func openServer(_ opening: SavedServer, token: String = "") {
         current = opening
         server = opening.url
-        client = WittyClient(base: opening.url, token: token)
+        useAway(for: opening)
+        client = connection(to: opening.url, token: token)
     }
 
     /// On to signing in, for a server that has been checked.
@@ -424,7 +436,7 @@ final class AppModel: ObservableObject {
     }
 
     /// Opens a server with a token that was kept with its key. Answers words to show if it can't.
-    private func openWithToken(_ opening: SavedServer) async -> String? {
+    func openWithToken(_ opening: SavedServer) async -> String? {
         recent = SavedServer.remember(opening, in: recent)
         openServer(opening, token: Keychain.token)
         do {
@@ -438,10 +450,11 @@ final class AppModel: ObservableObject {
             user = status.user
             if status.user != nil {
                 stage = .browsing
+                watchWay()
             } else {
                 // The server doesn't know this sign-in any more, so it's no use keeping.
                 Keychain.clear()
-                client = WittyClient(base: opening.url)
+                client = connection(to: opening.url)
                 stage = .signIn(.usual)
             }
             return nil
@@ -456,7 +469,7 @@ final class AppModel: ObservableObject {
 
     /// The key kept with the token decides. A sign-in saved with none is from a server too old
     /// to have a key, and all that's left to go on is what it said then.
-    private func tokenFits(pin: String, proof: ServerProof) -> Bool {
+    func tokenFits(pin: String, proof: ServerProof) -> Bool {
         !Keychain.token.isEmpty && Identity.fits(pin: pin, proof: proof)
     }
 
@@ -466,13 +479,34 @@ final class AppModel: ObservableObject {
         guard !started else { return }
         started = true
         let url = server
-        guard !url.isEmpty else { stage = .connect(message: ""); return }
+        guard !url.isEmpty else {
+            stage = .connect(message: "")
+            #if DEBUG
+            await connectForCheck()
+            #endif
+            return
+        }
         var saved = recent.first { $0.url == url } ?? SavedServer(url: url, name: "WittyMediaServer")
         var proof = await WittyClient.identify(url, saved: [saved])
-        if proof.state == .unreachable, !saved.serverId.isEmpty,
-           let found = await ServerFinder.find(id: saved.serverId, waitSeconds: 6) {
-            saved = saved.moved(to: found.url)
-            proof = await WittyClient.identify(found.url, saved: [saved])
+        if proof.state == .unreachable {
+            // Not where it was. It may have moved on the home network, or this device isn't at home:
+            // the network is searched for it, and meanwhile the other way to it is started, if this
+            // device was put on the server's list while it was at home.
+            let home = saved
+            let away = canReachFromAway(home) ? Task { await reachFromAway(home) } : nil
+            if !saved.serverId.isEmpty, let found = await ServerFinder.find(id: saved.serverId, waitSeconds: 6) {
+                let moved = saved.moved(to: found.url)
+                let there = await WittyClient.identify(found.url, saved: [moved])
+                if there.state != .unreachable {
+                    away?.cancel()
+                    peers.close()
+                    saved = moved
+                    proof = there
+                }
+            }
+            if proof.state == .unreachable, let away, await away.value {
+                proof = await WittyClient.identify(saved.url, saved: [saved], route: routeFor(saved.url))
+            }
         }
         let checked = proof.saved(url: saved.url, name: saved.name, brandLogo: saved.brandLogo)
         switch Identity.stepAtStart(proof.state, tokenFits: tokenFits(pin: Keychain.pin, proof: proof)) {
@@ -499,10 +533,11 @@ final class AppModel: ObservableObject {
     /// left to the screens, as the network is often still waking up.
     func recheck() async {
         guard let using = current, !client.token.isEmpty else { return }
-        let proof = await WittyClient.identify(using.url, saved: [using])
+        let proof = await WittyClient.identify(using.url, saved: [using], route: routeFor(using.url))
         guard proof.state == .different || proof.state == .bad else { return }
         current = nil
         listening.forget()
+        peers.close()
         client = WittyClient(base: "")
         paths = [:]
         stage = proof.state == .bad ? .connect(message: say("identityBad")) : .mismatch(proof.saved(url: using.url, name: using.name, brandLogo: using.brandLogo))
@@ -511,7 +546,7 @@ final class AppModel: ObservableObject {
     /// Someone chose this server, and it says it's a WittyMediaServer. Its identity
     /// decides what comes next. Answers words to show if that's nowhere.
     func arrive(url: String, status: ServerStatus) async -> String? {
-        let proof = await WittyClient.identify(url, saved: recent)
+        let proof = await WittyClient.identify(url, saved: recent, route: routeFor(url))
         let pin = Keychain.pin
         let checked = proof.saved(url: url, name: status.displayName, brandLogo: PlainWords.clean(status.brandLogo ?? "", limit: 64))
         let step = Identity.nextStep(proof.state, tokenFits: !pin.isEmpty && tokenFits(pin: pin, proof: proof))
@@ -565,7 +600,7 @@ final class AppModel: ObservableObject {
     /// key the person was shown: it could have changed since the screen opened. If another key is
     /// answering, nothing is sent and the warning shows the new one. Nil means go ahead.
     private func refuseToSend(to shown: SavedServer) async -> String? {
-        let proof = await WittyClient.identify(shown.url, saved: shown.publicKey.isEmpty ? [] : [shown])
+        let proof = await WittyClient.identify(shown.url, saved: shown.publicKey.isEmpty ? [] : [shown], route: routeFor(shown.url))
         switch Identity.beforeSending(shownKey: shown.publicKey, proof: proof) {
         case .send:
             return nil
@@ -583,7 +618,7 @@ final class AppModel: ObservableObject {
     func redeem(_ to: SavedServer, code: String) async -> String? {
         if let refused = await refuseToSend(to: to) { return refused }
         do {
-            let result = try await WittyClient(base: to.url, quick: true).pairRedeem(code: code, device: deviceName, platform: platformName)
+            let result = try await connection(to: to.url, quick: true).pairRedeem(code: code, device: deviceName, platform: platformName)
             openServer(to)
             signedIn(token: result.token, user: result.user)
             return nil
@@ -629,11 +664,12 @@ final class AppModel: ObservableObject {
         notice = Keychain.save(token: token, pin: kept.publicKey) ? "" : "This device couldn't keep your sign-in, so you'll be asked again next time."
         server = kept.url
         recent = SavedServer.remember(kept, in: recent)
-        client = WittyClient(base: kept.url, token: token)
+        client = connection(to: kept.url, token: token)
         self.user = user
         paths = [:]
         tab = .home
         stage = .browsing
+        watchWay()
         Task { await loadThemes() }
         if user == nil {
             Task { self.user = try? await client.status().user }
@@ -641,12 +677,14 @@ final class AppModel: ObservableObject {
     }
 
     /// The last place listened to is sent before the sign-in ends.
-    private func endSession() {
+    /// `first` is whatever else has to be said to the server while the sign-in still stands.
+    private func endSession(first: (@MainActor (WittyClient) async -> Void)? = nil) {
         let old = client
         let placeSent = listening.forget()
         guard !old.token.isEmpty else { return }
         Task {
             await placeSent?.value
+            await first?(old)
             try? await old.logout()
         }
     }
@@ -654,12 +692,21 @@ final class AppModel: ObservableObject {
     func signOut() {
         endSession()
         forgetSignIn()
-        client = WittyClient(base: client.base)
+        client = connection(to: client.base)
         stage = .signIn(.usual)
     }
 
     func changeServer() {
-        endSession()
+        // Leaving a server takes this device off its list for connections from away, as on the desktop.
+        if let leaving = current {
+            endSession { [weak self] old in
+                await self?.forgetAway(on: old, server: leaving)
+                if self?.peers.current?.home == leaving.url { self?.peers.close() }
+            }
+        } else {
+            endSession()
+            peers.close()
+        }
         forgetSignIn()
         current = nil
         server = ""
@@ -714,7 +761,7 @@ final class AppModel: ObservableObject {
         let problem = Problem.of(error)
         if problem == .expiredSignIn {
             forgetSignIn()
-            client = WittyClient(base: client.base)
+            client = connection(to: client.base)
             stage = .signIn(.usual)
         }
         return plainWords(problem)
@@ -845,6 +892,14 @@ final class AppModel: ObservableObject {
         let play = UserDefaults.standard.integer(forKey: "WittyPlayPlayGame")
         if play > 0, paths[.home]?.isEmpty ?? true {
             paths[.home] = [.playGame(Int64(play), .resume)]
+            return
+        }
+        #endif
+        #if DEBUG
+        // For apple/scripts/p2p-check.sh: `-WittyCheckPlay <id>` plays that item, from its start.
+        let film = UserDefaults.standard.integer(forKey: "WittyCheckPlay")
+        if film > 0, paths[.home]?.isEmpty ?? true {
+            paths[.home] = [.player(Int64(film), startOver: true)]
             return
         }
         #endif

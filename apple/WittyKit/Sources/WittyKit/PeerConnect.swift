@@ -8,13 +8,16 @@ import Foundation
 /// back an address on this device, and loading the server from there is loading it from home.
 /// `docs/P2P.md` in the server's repository is the design.
 ///
-/// What is here without the library: reading an invite, the configuration the library takes,
-/// and the state it reports. `PeerConnector`, further down, is only compiled where the
-/// framework has been added to the app.
+/// What is here needs no library: reading an invite, the configuration the library takes and the
+/// state it reports. PeerRoute.swift is the address requests then go to, and PeerManager.swift
+/// chooses between home and away. The library itself is only known to the app (PeerLibrary.swift
+/// there), so this package still builds and is tested anywhere.
 public enum PeerConnect {
     /// What every request to the local address must carry: this header, or a cookie of this name.
     public static let secretHeader = "X-Witty-Connect"
     public static let secretCookie = "wittyconnect"
+    /// On an answer from the local address itself, not the server: the way from away couldn't get through.
+    public static let errorHeader = "X-Witty-Connect-Error"
 
     /// A server's or a device's connection ID: an Ed25519 key, in the text form libp2p gives it.
     public static func isID(_ text: String) -> Bool {
@@ -60,6 +63,21 @@ public enum PeerConnect {
         return String(decoding: data, as: UTF8.self)
     }
 
+    /// A code as a device with no keyboard shows it, for someone signed in to type into the
+    /// server: eight letters and digits, none that reads as another across a room.
+    public static func isJoinCode(_ text: String) -> Bool {
+        let symbols = Set("0123456789ABCDEFGHJKMNPQRSTVWXYZ")
+        let parts = text.split(separator: "-", omittingEmptySubsequences: false)
+        return parts.count == 2 && parts.allSatisfy { $0.count == 4 && $0.allSatisfy(symbols.contains) }
+    }
+
+    /// What the library takes to look for the server that is told this device's code.
+    public static func joinConfiguration(key: String, code: String, name: String, platform: String) -> String {
+        let body: [String: Any] = ["key": key, "code": code, "name": String(name.prefix(60)), "platform": String(platform.prefix(24))]
+        let data = (try? JSONSerialization.data(withJSONObject: body, options: [.sortedKeys])) ?? Data("{}".utf8)
+        return String(decoding: data, as: UTF8.self)
+    }
+
     /// How the server is being reached right now, as the library reports it.
     public struct State: Equatable, Sendable, Decodable {
         public enum Path: String, Sendable, Decodable { case connecting, offline, local, direct, relayed }
@@ -86,74 +104,37 @@ public enum PeerConnect {
             }
         }
     }
-}
 
-#if canImport(Wittyconnect)
-import Wittyconnect
+    /// The server's answer to an invite. `code` is an ordinary sign-in code, to redeem over the
+    /// new connection like one typed on a TV; the words are the server's own.
+    public struct Enrolment: Equatable, Sendable, Decodable {
+        public var ok = false
+        public var code = ""
+        public var reason = ""
+        public var error = ""
+        public var serverName = ""
+        /// Only in the answer to a code this device showed (`joinConfiguration`): which server
+        /// took it, and where it is. An invite names its server itself.
+        public var serverID = ""
+        public var addresses: [String] = []
 
-/// One connection to one server. Start it, then send requests to `baseURL` with
-/// `PeerConnect.secretHeader: secret` (URLSession), or the cookie (AVPlayer, a web view).
-/// Not yet used by AppModel: see docs/PLATFORMS.md, "From away, peer to peer".
-public final class PeerConnector: NSObject, WittyMobileListenerProtocol, @unchecked Sendable {
-    private let session: WittyMobileSession
-    private let onState: @Sendable (PeerConnect.State) -> Void
+        private enum CodingKeys: String, CodingKey { case ok, code, reason, error, serverName, serverID = "serverId", addresses = "addrs" }
 
-    /// A new key for this device. Keep it in the Keychain: the server knows the device by it.
-    public static func newKey() throws -> String {
-        var error: NSError?
-        let key = WittyMobileNewKey(&error)
-        if let error { throw error }
-        return key
-    }
-
-    /// The public name of a key: what is sent to `POST /api/v1/p2p/devices`.
-    public static func deviceID(of key: String) throws -> String {
-        var error: NSError?
-        let id = WittyMobileDeviceID(key, &error)
-        if let error { throw error }
-        return id
-    }
-
-    public init(key: String, serverID: String, hints: [String], onState: @escaping @Sendable (PeerConnect.State) -> Void) throws {
-        self.onState = onState
-        let relay = Relay()
-        var error: NSError?
-        guard let session = WittyMobileStart(PeerConnect.configuration(key: key, serverID: serverID, hints: hints), relay, &error) else {
-            throw error ?? NSError(domain: "PeerConnect", code: 1)
+        public init(from decoder: Decoder) throws {
+            let values = try decoder.container(keyedBy: CodingKeys.self)
+            ok = (try? values.decodeIfPresent(Bool.self, forKey: .ok)) ?? false
+            let digits = (try? values.decodeIfPresent(String.self, forKey: .code)) ?? ""
+            code = digits.count == 6 && digits.allSatisfy(\.isNumber) ? digits : ""
+            reason = String(((try? values.decodeIfPresent(String.self, forKey: .reason)) ?? "").prefix(40))
+            error = PlainWords.clean((try? values.decodeIfPresent(String.self, forKey: .error)) ?? "", limit: 300)
+            serverName = PlainWords.clean((try? values.decodeIfPresent(String.self, forKey: .serverName)) ?? "", limit: 80)
+            let id = (try? values.decodeIfPresent(String.self, forKey: .serverID)) ?? ""
+            serverID = PeerConnect.isID(id) ? id : ""
+            addresses = PeerConnect.hints((try? values.decodeIfPresent([String].self, forKey: .addresses)) ?? [])
         }
-        self.session = session
-        super.init()
-        relay.to = self
+
+        public init(json: String) {
+            if let read = try? JSONDecoder().decode(Enrolment.self, from: Data(json.utf8)) { self = read }
+        }
     }
-
-    // The library holds its listener strongly; this keeps the connector free to go away.
-    private final class Relay: NSObject, WittyMobileListenerProtocol {
-        weak var to: PeerConnector?
-        func onState(_ state: String?) { to?.onState(state) }
-    }
-
-    public func onState(_ state: String?) { onState(PeerConnect.State(json: state ?? "")) }
-
-    public var baseURL: URL { URL(string: "http://127.0.0.1:\(session.port())")! }
-    public var secret: String { session.secret() }
-    public var state: PeerConnect.State { PeerConnect.State(json: session.state()) }
-    /// The server's addresses as last learnt, to keep as hints for next time.
-    public var knownAddresses: [String] {
-        (try? JSONDecoder().decode([String].self, from: Data(session.knownAddrs().utf8))) ?? []
-    }
-
-    /// Call from NWPathMonitor when the network changes.
-    public func networkChanged() { session.networkChanged() }
-
-    /// Shows the server an invite's secret. Blocks for up to a minute: call it off the main actor.
-    public func enrol(secret: String, deviceName: String, platform: String) throws -> String {
-        var error: NSError?
-        let answer = session.enrol(secret, name: deviceName, platform: platform, error: &error)
-        if let error { throw error }
-        return answer
-    }
-
-    public func close() { session.close() }
-    deinit { session.close() }
 }
-#endif

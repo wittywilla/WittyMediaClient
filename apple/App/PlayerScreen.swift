@@ -254,7 +254,7 @@ final class PlaybackModel: ObservableObject {
     }
 
     private func load(_ url: URL, startAt: Double?) {
-        let next = AVPlayerItem(url: url)
+        let next = AwayCookie.playerItem(url)
         #if !os(macOS)
         addMetadata(to: next)
         #endif

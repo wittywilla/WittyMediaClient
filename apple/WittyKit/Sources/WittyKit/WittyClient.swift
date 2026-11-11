@@ -127,8 +127,12 @@ public final class WittyClient: @unchecked Sendable {
     /// This family's name in `minClientVersions`.
     public static let platform = "apple"
 
+    /// The server's own address: where it is at home, and the name everything kept about it goes under.
     public let base: String
     public let token: String
+    /// The other way to the server, when there is one: see PeerRoute.swift. Shared, so a connection
+    /// made before the way changed follows it.
+    public let route: RouteBox?
     private let apiPath = "/api/v1" // the contract: docs/CLIENT-API.md
     private let session: URLSession
     private let sessionGuard = SessionGuard()
@@ -136,9 +140,10 @@ public final class WittyClient: @unchecked Sendable {
     private let decoder = JSONDecoder()
 
     /// Quick is for questions to an address not yet trusted, which get short waits and small answers.
-    public init(base: String, token: String = "", quick: Bool = false) {
+    public init(base: String, token: String = "", quick: Bool = false, route: RouteBox? = nil) {
         self.base = base
         self.token = token
+        self.route = route
         answerLimit = quick ? AnswerLimit.unproved : AnswerLimit.signedIn
         let config = URLSessionConfiguration.ephemeral
         config.timeoutIntervalForRequest = quick ? 5 : 60 // the first play request probes the file
@@ -163,7 +168,35 @@ public final class WittyClient: @unchecked Sendable {
     /// The headers an API or artwork request to this server needs. Video doesn't
     /// use these: its addresses carry a short-lived stream token instead.
     public var authHeaders: [String: String] {
-        token.isEmpty ? [:] : ["Authorization": "Bearer \(token)"]
+        var headers = token.isEmpty ? [:] : ["Authorization": "Bearer \(token)"]
+        // The address on this device answers nobody without this: see PeerRoute.swift.
+        if let away = route?.current { headers[PeerConnect.secretHeader] = away.secret }
+        return headers
+    }
+
+    /// Where requests go right now: the server's own address, or the one on this device that
+    /// leads to it from away.
+    public var root: String { route?.current?.origin ?? base }
+
+    /// An address this connection made earlier, as it would be made now. The way to the server
+    /// can change while a screen is up; a picture's address shouldn't die with the old way.
+    /// Nil for an address that was never this server's.
+    public func current(_ url: URL) -> URL? {
+        guard let now = URL(string: root) else { return nil }
+        if Origin.same(url, now) { return url }
+        guard let home = URL(string: base), Origin.same(url, home) || PeerRoute.isLocalAddress(url),
+              var parts = URLComponents(url: url, resolvingAgainstBaseURL: false) else { return nil }
+        parts.scheme = now.scheme
+        parts.host = now.host
+        parts.port = now.port
+        return parts.url
+    }
+
+    /// A connection lost, or the way from away saying it can't get through, is worth telling
+    /// whoever chooses the way: it may be time for the other one.
+    private func noteTrouble(_ error: Error) {
+        guard let route, let code = (error as? URLError)?.code, code != .cancelled else { return }
+        route.trouble(code == .notConnectedToInternet ? .offline : .lost)
     }
 
     /// Reads one answer, no further than its limit. Leaving the screen cancels it.
@@ -182,7 +215,7 @@ public final class WittyClient: @unchecked Sendable {
 
     /// `wait` is how long to wait for the answer, for the few routes that take minutes on purpose.
     func call(_ method: String, _ path: String, body: Data? = nil, wait: TimeInterval? = nil) async throws -> Data {
-        guard let url = URL(string: base + apiPath + path) else {
+        guard let url = URL(string: root + apiPath + path) else {
             throw APIError(status: 0, message: "That server address can't be used.")
         }
         var request = URLRequest(url: url)
@@ -201,12 +234,14 @@ public final class WittyClient: @unchecked Sendable {
             if !token.isEmpty, !(error is CancellationError), (error as? URLError)?.code != .cancelled {
                 ClientLog.shared.warn("network", "\(place) failed: \((error as? URLError)?.code.rawValue ?? 0)")
             }
+            noteTrouble(error)
             throw error
         }
         guard let http = response as? HTTPURLResponse else {
             throw APIError(status: 0, message: "The server sent an answer that can't be read.")
         }
         guard (200..<300).contains(http.statusCode) else {
+            if http.statusCode == 502, http.value(forHTTPHeaderField: PeerConnect.errorHeader) != nil { route?.trouble(.lost) }
             struct Failure: Decodable {
                 let error: String?
                 let twoFactor: Bool?
@@ -231,7 +266,7 @@ public final class WittyClient: @unchecked Sendable {
     /// This app's own errors, for the server's log. The answer is all that comes back:
     /// it skips `call`, so a report that fails can't become a report of its own.
     func sendClientLog(_ body: Data) async throws -> Int {
-        guard let url = URL(string: base + apiPath + "/logs/client") else { return 0 }
+        guard let url = URL(string: root + apiPath + "/logs/client") else { return 0 }
         var request = URLRequest(url: url, timeoutInterval: 10)
         request.httpMethod = "POST"
         request.httpBody = body
@@ -318,9 +353,9 @@ public final class WittyClient: @unchecked Sendable {
     /// compress, timed for about a second from the first bytes (docs/CLIENT-API.md, Robust streaming). 0 when it
     /// couldn't be measured.
     public func measureSpeed() async -> Double {
-        guard let url = URL(string: "\(base)\(apiPath)/playback/speedtest?kb=1024") else { return 0 }
+        guard let url = URL(string: "\(root)\(apiPath)/playback/speedtest?kb=1024") else { return 0 }
         var request = URLRequest(url: url, cachePolicy: .reloadIgnoringLocalCacheData, timeoutInterval: 3)
-        if !token.isEmpty { request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization") }
+        for (name, value) in authHeaders { request.setValue(value, forHTTPHeaderField: name) }
         // A session of its own: the shared one's guard looks after the API's answers, which this isn't.
         let config = URLSessionConfiguration.ephemeral
         config.httpCookieStorage = nil
@@ -358,7 +393,7 @@ public final class WittyClient: @unchecked Sendable {
 
     /// One of those as it is: a booklet's PDF.
     public func extraFile(item: Int64, name: String) -> URL? {
-        URL(string: "\(base)\(apiPath)/music/extras/\(item)/file?name=\(name.addingPercentEncoding(withAllowedCharacters: .alphanumerics) ?? name)")
+        URL(string: "\(root)\(apiPath)/music/extras/\(item)/file?name=\(name.addingPercentEncoding(withAllowedCharacters: .alphanumerics) ?? name)")
     }
 
     /// Other versions of a song's words online (an owner's).
@@ -487,7 +522,7 @@ public final class WittyClient: @unchecked Sendable {
     /// A logo's picture: `white`, `dark` or `original` (see `LogoLook.variant`).
     public func logoURL(_ logo: LogoInfo, variant: String) -> URL? {
         guard let id = logo.id else { return nil }
-        return URL(string: "\(base)\(apiPath)/logos/\(id)/image?variant=\(Self.queryValue(variant))&v=\(logo.version ?? 0)")
+        return URL(string: "\(root)\(apiPath)/logos/\(id)/image?variant=\(Self.queryValue(variant))&v=\(logo.version ?? 0)")
     }
 
     public func collections() async throws -> [TitleCollection] { try await list("/collections") }
@@ -575,11 +610,11 @@ public final class WittyClient: @unchecked Sendable {
 
     /// An artist's picture, or a cover of theirs.
     public func artistPhotoURL(library: Int64, name: String) -> URL? {
-        URL(string: "\(base)\(apiPath)/music/artist-photo?library=\(library)&name=\(Self.queryValue(name))")
+        URL(string: "\(root)\(apiPath)/music/artist-photo?library=\(library)&name=\(Self.queryValue(name))")
     }
 
     /// A title's picture by its number, for an album or a playlist cover.
-    public func posterURL(id: Int64) -> URL? { URL(string: "\(base)\(apiPath)/items/\(id)/poster") }
+    public func posterURL(id: Int64) -> URL? { URL(string: "\(root)\(apiPath)/items/\(id)/poster") }
 
     /// A music library's Music videos: the videos of every music video library this person can see, by artist, a
     /// page at a time, each with the song it's tied to. See MusicVideos.swift.
@@ -595,11 +630,11 @@ public final class WittyClient: @unchecked Sendable {
 
     /// A video's picture at a width, as a video tile asks for it.
     public func videoThumbURL(id: Int64, width: Int, version: Int64) -> URL? {
-        URL(string: "\(base)\(apiPath)/items/\(id)/poster?w=\(width)\(version > 0 ? "&v=\(version)" : "")")
+        URL(string: "\(root)\(apiPath)/items/\(id)/poster?w=\(width)\(version > 0 ? "&v=\(version)" : "")")
     }
 
     /// A creator's own picture, beside their videos.
-    public func creatorAvatarURL(id: Int64) -> URL? { URL(string: "\(base)\(apiPath)/creators/\(id)/art/avatar") }
+    public func creatorAvatarURL(id: Int64) -> URL? { URL(string: "\(root)\(apiPath)/creators/\(id)/art/avatar") }
 
     /// The tracks of one album, in order. An empty album or artist means none or unknown: it is still asked for by name.
     public func tracks(library: Int64, album: String, artist: String) async throws -> [Item] {
@@ -908,7 +943,7 @@ public final class WittyClient: @unchecked Sendable {
 
     /// Goes with the sign-in, so only ever to this server.
     public func imageData(_ url: URL) async throws -> Data {
-        guard let server = URL(string: base), Origin.same(url, server) else {
+        guard let url = current(url) else {
             throw APIError(status: 0, message: "No picture.")
         }
         var request = URLRequest(url: url)
@@ -920,30 +955,30 @@ public final class WittyClient: @unchecked Sendable {
         return data
     }
 
-    public func posterURL(_ item: Item) -> URL? { URL(string: "\(base)\(apiPath)/items/\(item.id)/poster?v=\(item.updatedAt ?? 0)") }
+    public func posterURL(_ item: Item) -> URL? { URL(string: "\(root)\(apiPath)/items/\(item.id)/poster?v=\(item.updatedAt ?? 0)") }
     /// An album's or an artist's cover: the poster of the track the server chose for it.
-    public func coverURL(_ item: Int64) -> URL? { URL(string: "\(base)\(apiPath)/items/\(item)/poster") }
-    public func posterURL(_ show: Show) -> URL? { URL(string: "\(base)\(apiPath)/shows/\(show.id)/art/poster?v=\(show.updatedAt ?? 0)") }
-    public func backdropURL(_ item: Item) -> URL? { URL(string: "\(base)\(apiPath)/items/\(item.id)/backdrop?v=\(item.updatedAt ?? 0)") }
-    public func backdropURL(_ show: Show) -> URL? { URL(string: "\(base)\(apiPath)/shows/\(show.id)/art/backdrop?v=\(show.updatedAt ?? 0)") }
+    public func coverURL(_ item: Int64) -> URL? { URL(string: "\(root)\(apiPath)/items/\(item)/poster") }
+    public func posterURL(_ show: Show) -> URL? { URL(string: "\(root)\(apiPath)/shows/\(show.id)/art/poster?v=\(show.updatedAt ?? 0)") }
+    public func backdropURL(_ item: Item) -> URL? { URL(string: "\(root)\(apiPath)/items/\(item.id)/backdrop?v=\(item.updatedAt ?? 0)") }
+    public func backdropURL(_ show: Show) -> URL? { URL(string: "\(root)\(apiPath)/shows/\(show.id)/art/backdrop?v=\(show.updatedAt ?? 0)") }
     /// The picture a category or collection shows: the backdrop of a title in it.
     public func backdropURL(_ art: CategoryArt) -> URL? {
         let path = art.isShow ? "/shows/\(art.id)/art/backdrop" : "/items/\(art.id)/backdrop"
-        return URL(string: "\(base)\(apiPath)\(path)?v=\(art.v ?? 0)")
+        return URL(string: "\(root)\(apiPath)\(path)?v=\(art.v ?? 0)")
     }
 
     /// Addresses in answers start with /api/: the server's address goes in front, nothing else changes.
     /// One that would end up anywhere but this server comes back nil.
-    public func mediaURL(_ path: String) -> URL? { Origin.join(base: base, path: path) }
+    public func mediaURL(_ path: String) -> URL? { Origin.join(base: root, path: path) }
 
     /// The owner's own logo, when `/status` names one; shown before anyone signs in, as on the web.
     public func brandLogoURL(version: String?) -> URL? {
         guard let version, !version.isEmpty else { return nil }
         let escaped = version.addingPercentEncoding(withAllowedCharacters: .alphanumerics) ?? ""
-        return Origin.join(base: base, path: "/api/branding/logo?v=\(escaped)")
+        return Origin.join(base: root, path: "/api/branding/logo?v=\(escaped)")
     }
     /// A photo as it was taken, as big as the file is.
-    public func originalURL(_ item: Int64) -> URL? { URL(string: "\(base)\(apiPath)/items/\(item)/original") }
+    public func originalURL(_ item: Int64) -> URL? { URL(string: "\(root)\(apiPath)/items/\(item)/original") }
 
     // MARK: A title's page, as the website's: see TitlePage.swift
 
@@ -963,7 +998,7 @@ public final class WittyClient: @unchecked Sendable {
     public func listings(_ target: TitleTarget, _ id: Int64) async throws -> TitleListings { try await get("/meta/\(target.rawValue)/\(id)/listings") }
     /// A title's logo, drawn in place of its name where it has one.
     public func titleLogoURL(_ target: TitleTarget, _ id: Int64, version: Int64?) -> URL? {
-        URL(string: "\(base)\(apiPath)/meta/\(target.rawValue)/\(id)/art/logo?v=\(version ?? 0)")
+        URL(string: "\(root)\(apiPath)/meta/\(target.rawValue)/\(id)/art/logo?v=\(version ?? 0)")
     }
     /// A DVD's or a Blu-ray's sections: its feature and scenes, bonus titles and menus, with the names given them.
     public func discView(_ item: Int64) async throws -> DiscView { try await get("/items/\(item)/disc") }
@@ -976,11 +1011,11 @@ public final class WittyClient: @unchecked Sendable {
     /// A picture of a disc's title (scene 0) or one of its scenes, made by the server the first time it's asked for.
     /// `retry` asks again for one that didn't come.
     public func discThumbURL(_ item: Int64, ttn: Int, scene: Int, retry: Int = 0) -> URL? {
-        URL(string: "\(base)\(apiPath)\(DiscPage.thumbPath(item, ttn: ttn, scene: scene))" + (retry > 0 ? "?retry=\(retry)" : ""))
+        URL(string: "\(root)\(apiPath)\(DiscPage.thumbPath(item, ttn: ttn, scene: scene))" + (retry > 0 ? "?retry=\(retry)" : ""))
     }
 
     public func seasonPosterURL(_ show: Show, season: Int) -> URL? {
-        URL(string: "\(base)\(apiPath)/shows/\(show.id)/art/season?n=\(season)&v=\(show.updatedAt ?? 0)")
+        URL(string: "\(root)\(apiPath)/shows/\(show.id)/art/season?n=\(season)&v=\(show.updatedAt ?? 0)")
     }
 
     /// What the logo service has for some studios, networks or streaming services: up to 200 at a time.
@@ -995,7 +1030,7 @@ public final class WittyClient: @unchecked Sendable {
     /// A logo as a PNG: white for a dark page, dark for a light one, or as it was drawn.
     public func logoImageURL(_ logo: LogoAnswer, variant: String) -> URL? {
         guard let id = logo.id else { return nil }
-        return URL(string: "\(base)\(apiPath)/logos/\(id)/image?variant=\(Self.queryValue(variant))&v=\(logo.version ?? 0)")
+        return URL(string: "\(root)\(apiPath)/logos/\(id)/image?variant=\(Self.queryValue(variant))&v=\(logo.version ?? 0)")
     }
 
     public func legalNotices() async throws -> LegalNotices { try await get("/legal/notices") }
@@ -1072,10 +1107,17 @@ public final class WittyClient: @unchecked Sendable {
     /// remember? A new nonce every time, and no token goes with the question. Every path
     /// to sending a token or a code comes through here first, so this is also where a local
     /// name that has started resolving to the internet is stopped.
-    public static func identify(_ url: String, saved: [SavedServer]) async -> ServerProof {
-        guard await Address.plainHTTPStaysLocal(url) else { return ServerProof(state: .bad) }
+    ///
+    /// With a `route` in use the question goes that way, from away, and is judged as the server at
+    /// `url`: the way itself only ever ends at the key it was made for, and this checks that the
+    /// server behind it is still the one remembered at that address.
+    public static func identify(_ url: String, saved: [SavedServer], route: RouteBox? = nil) async -> ServerProof {
+        let away = route?.current != nil
+        if !away {
+            guard await Address.plainHTTPStaysLocal(url) else { return ServerProof(state: .bad) }
+        }
         let nonce = Identity.newNonce()
-        let client = WittyClient(base: url, quick: true)
+        let client = WittyClient(base: url, quick: true, route: away ? route : nil)
         do {
             let answer = try await client.identity(nonce: nonce)
             let state = Identity.judge(answer, nonce: nonce, url: url, saved: saved)

@@ -90,7 +90,9 @@ struct RootView: View {
             if model.themeChoice == "auto" || model.scheme == nil { model.systemScheme = scheme }
         }
         .onChange(of: scenePhase) { phase in
-            if phase == .active { Task { await model.recheck() } }
+            // Off the screen, a connection from away is ended before the system ends it; back on, it starts again.
+            if phase == .active { Task { await model.cameBack() } }
+            if phase == .background { model.leftScreen() }
         }
         #if os(tvOS)
         // Only Apple TV has anything that opens this, the Top Shelf, so only it registers the scheme.

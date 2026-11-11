@@ -128,7 +128,7 @@ final class LiveTv: ObservableObject {
                     return
                 }
                 info = tuned
-                player.replaceCurrentItem(with: AVPlayerItem(url: url))
+                player.replaceCurrentItem(with: AwayCookie.playerItem(url))
                 player.play()
                 return
             } catch let problem as APIError where problem.status == 503 {

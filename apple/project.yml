@@ -30,6 +30,16 @@ settings:
     # LiveKit's WebRTC has no Intel build for the tvOS or visionOS simulators: Apple silicon only there.
     "EXCLUDED_ARCHS[sdk=appletvsimulator*]": x86_64
     "EXCLUDED_ARCHS[sdk=xrsimulator*]": x86_64
+    # Wittyconnect, the library that reaches a server from away (peer to peer): built from the server's
+    # source by scripts/build-wittyconnect.sh into apple/Frameworks, which isn't committed. It is a static
+    # library, so it is linked into the app and nothing is embedded or signed beside it. The app finds it
+    # by this path: where the folder is there (Apple TV, iPhone and iPad, and their simulators) the app
+    # has the feature, and where it isn't (Apple Vision Pro, or a checkout that hasn't built it) the app
+    # builds without. See App/PeerLibrary.swift.
+    "FRAMEWORK_SEARCH_PATHS[sdk=appletvos*]": "$(inherited) $(SRCROOT)/Frameworks/Wittyconnect.xcframework/tvos-arm64"
+    "FRAMEWORK_SEARCH_PATHS[sdk=appletvsimulator*]": "$(inherited) $(SRCROOT)/Frameworks/Wittyconnect.xcframework/tvos-arm64_x86_64-simulator"
+    "FRAMEWORK_SEARCH_PATHS[sdk=iphoneos*]": "$(inherited) $(SRCROOT)/Frameworks/Wittyconnect.xcframework/ios-arm64"
+    "FRAMEWORK_SEARCH_PATHS[sdk=iphonesimulator*]": "$(inherited) $(SRCROOT)/Frameworks/Wittyconnect.xcframework/ios-arm64_x86_64-simulator"
 
 targetTemplates:
   App:
@@ -44,9 +54,15 @@ targetTemplates:
       # What Profile's Licences page shows: every third-party part and its licence.
       - path: ../NOTICE
         buildPhase: resources
+      # The same for what is inside Wittyconnect, written beside it when it is built.
+      - path: Frameworks/THIRD-PARTY-NOTICES.wittyconnect.txt
+        buildPhase: resources
+        optional: true
     dependencies:
       - package: WittyKit
       - package: LiveKitWebRTC
+      # Go's own name lookups, inside Wittyconnect, use the system's resolver.
+      - sdk: libresolv.tbd
     info:
       path: Generated/Info-${target_name}.plist
       properties:
@@ -111,6 +127,35 @@ targets:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.wittywilla.wittymediaclient.topshelf
         TARGETED_DEVICE_FAMILY: "3"
+  # The Apple TV app run in a simulator against a real server, from away: scripts/p2p-check.sh. It isn't
+  # part of the app, and nothing here is built when the app is archived.
+  WittyMedia-tvOS-Checks:
+    type: bundle.ui-testing
+    platform: tvOS
+    sources:
+      - path: Checks
+    dependencies:
+      - target: WittyMedia-tvOS
+    settings:
+      base:
+        GENERATE_INFOPLIST_FILE: "YES"
+        PRODUCT_BUNDLE_IDENTIFIER: com.wittywilla.wittymediaclient.checks
+        TEST_TARGET_NAME: WittyMedia-tvOS
+        TARGETED_DEVICE_FAMILY: "3"
+  # The same check on an iPhone simulator: scripts/p2p-check.sh ios.
+  WittyMedia-iOS-Checks:
+    type: bundle.ui-testing
+    platform: iOS
+    sources:
+      - path: Checks
+    dependencies:
+      - target: WittyMedia-iOS
+    settings:
+      base:
+        GENERATE_INFOPLIST_FILE: "YES"
+        PRODUCT_BUNDLE_IDENTIFIER: com.wittywilla.wittymediaclient.checks
+        TEST_TARGET_NAME: WittyMedia-iOS
+        TARGETED_DEVICE_FAMILY: "1,2"
   # iPhone, iPad and Apple Vision Pro. The headset takes the iPad's way of doing everything: the
   # sidebar, the server's pages in a web view, and picture in picture.
   WittyMedia-iOS:
@@ -139,3 +184,24 @@ targets:
         # No app icon has been made yet; without this the asset catalog above would ask for one.
         ASSETCATALOG_COMPILER_APPICON_NAME: ""
         INFOPLIST_KEY_UISupportedInterfaceOrientations: "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight"
+
+schemes:
+  # Only for scripts/p2p-check.sh. The apps' own schemes are made from their targets.
+  WittyMedia-tvOS-Checks:
+    build:
+      targets:
+        WittyMedia-tvOS: all
+        WittyMedia-tvOS-Checks: [test]
+    test:
+      config: Debug
+      targets:
+        - WittyMedia-tvOS-Checks
+  WittyMedia-iOS-Checks:
+    build:
+      targets:
+        WittyMedia-iOS: all
+        WittyMedia-iOS-Checks: [test]
+    test:
+      config: Debug
+      targets:
+        - WittyMedia-iOS-Checks

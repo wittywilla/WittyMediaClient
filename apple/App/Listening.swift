@@ -512,7 +512,7 @@ final class Listening: ObservableObject {
         Task { [weak self] in
             guard let answer = try? await client.playback(next.item.id, request), answer.decision == "audio-direct",
                   let url = client.mediaURL(answer.url) else { return }
-            let item = AVPlayerItem(url: url)
+            let item = AwayCookie.playerItem(url)
             item.audioTimePitchAlgorithm = .timeDomain
             let found = await SoundEngine.shared.attach(to: item)
             guard let self, run == self.generation, self.preparing == next.id else { return }
@@ -696,7 +696,7 @@ final class Listening: ObservableObject {
     }
 
     private func load(_ url: URL, answer: Playback, startSec: Double, run: Int) async {
-        let next = AVPlayerItem(url: url)
+        let next = AwayCookie.playerItem(url)
         // Speech at a faster speed stays clear with this, and it costs nothing for music.
         next.audioTimePitchAlgorithm = .timeDomain
         #if os(iOS) || os(visionOS)

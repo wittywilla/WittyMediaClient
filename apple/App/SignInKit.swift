@@ -474,7 +474,7 @@ struct ServerCard: View {
         return saved.name.isEmpty ? "WittyMediaServer" : saved.name
     }
 
-    private var detail: String { saved == nil ? say("foundOnNetwork") : url }
+    private var detail: String { saved == nil ? say("foundOnNetwork") : PeerInfo.isPlaceholder(url) ? say("awayOnly") : url }
 
     var body: some View {
         let mark: CGFloat = metrics.tv ? 56 : 40

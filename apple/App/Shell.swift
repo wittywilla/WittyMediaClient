@@ -179,6 +179,7 @@ private struct TabRoot: View {
                     case .devices: DevicesView().plainNavigation()
                     case .signInTv: SignInTvView().plainNavigation()
                     case .theme: ThemeView().plainNavigation()
+                    case .away: AwayView().plainNavigation()
                     #if os(tvOS)
                     case .topMenu: TopMenuView().plainNavigation()
                     #else
@@ -462,7 +463,13 @@ struct NoticesView: View {
               let text = try? String(contentsOf: url, encoding: .utf8) else {
             return ["The licence notes couldn't be read from this copy of the app."]
         }
-        return text.components(separatedBy: "\n\n").map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }.filter { !$0.isEmpty }
+        // Everything inside the library that connects from away, with each licence in full: written when it is built.
+        var all = text
+        if PeerLibrary.available, let more = Bundle.main.url(forResource: "THIRD-PARTY-NOTICES.wittyconnect", withExtension: "txt"),
+           let notices = try? String(contentsOf: more, encoding: .utf8) {
+            all += "\n\n" + notices
+        }
+        return all.components(separatedBy: "\n\n").map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }.filter { !$0.isEmpty }
     }
 
     var body: some View {

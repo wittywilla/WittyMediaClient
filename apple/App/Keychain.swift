@@ -15,6 +15,7 @@ enum Keychain {
     private static let service = "com.wittywilla.wittymediaclient"
     private static let tokenAccount = "session-token"
     private static let pinAccount = "session-pin"
+    private static let peerKeyAccount = "peer-key"
 
     // On a Mac the modern keychain needs a signed app. An unsigned test build falls back to the
     // older file-based one, which works but may ask the person for permission.
@@ -79,13 +80,28 @@ enum Keychain {
         return false
     }
 
-    static func clear() {
-        for account in [tokenAccount, pinAccount] {
+    /// This device's key for connections from away: what a server's list knows it by. It is the
+    /// device's, not a sign-in's, so signing out leaves it and only forgetting it removes it. Here
+    /// and not in a file because an Apple TV may empty an app's files whenever it wants the room.
+    static var peerKey: String { read(peerKeyAccount) }
+
+    static func save(peerKey: String) -> Bool {
+        let status = write(peerKey, peerKeyAccount)
+        if status != errSecSuccess { ClientLog.shared.warn("keychain", "The key for connecting from away couldn't be saved: \(status)") }
+        return status == errSecSuccess
+    }
+
+    static func clearPeerKey() { remove([peerKeyAccount], what: "The key for connecting from away") }
+
+    static func clear() { remove([tokenAccount, pinAccount], what: "The sign-in") }
+
+    private static func remove(_ accounts: [String], what: String) {
+        for account in accounts {
             for modern in kinds {
                 let status = SecItemDelete(query(account, modern: modern) as CFDictionary)
                 // Asking a Mac's modern keychain with no entitlement fails too, and has nothing in it.
                 if status != errSecSuccess, status != errSecItemNotFound, status != errSecMissingEntitlement {
-                    ClientLog.shared.warn("keychain", "The sign-in couldn't be removed: \(status)")
+                    ClientLog.shared.warn("keychain", "\(what) couldn't be removed: \(status)")
                 }
             }
         }

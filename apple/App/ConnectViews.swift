@@ -8,7 +8,7 @@ import WittyKit
 // app draws the same screens from the same page.
 
 /// The legal note every connect screen ends with.
-private struct LegalNote: View {
+struct LegalNote: View {
     @Environment(\.palette) private var palette
     @Environment(\.metrics) private var metrics
 
@@ -29,6 +29,7 @@ struct ConnectView: View {
         case found(String)
         case recent(String)
         case enterAddress
+        case joinAway
     }
 
     @EnvironmentObject private var model: AppModel
@@ -39,6 +40,7 @@ struct ConnectView: View {
     @State private var busy = false
     @State private var connectingTo = ""
     @State private var showForm = false
+    @State private var showJoin = false
     @State private var found: [FoundServer] = []
     @State private var finder: ServerFinder?
     @State private var searchedLong = false
@@ -61,7 +63,12 @@ struct ConnectView: View {
         case .found(let status):
             problem = await model.arrive(url: url, status: status)
         case .failed(let reason):
-            problem = reasonText(reason)
+            // Not there: this device isn't at home. The other way to it, if it has one.
+            if reason == "unreachable", let away = await model.arriveFromAway(url) {
+                problem = away
+            } else {
+                problem = reasonText(reason)
+            }
         case .moved(let safer):
             if !movedOnce {
                 await connect(safer, movedOnce: true)
@@ -78,7 +85,26 @@ struct ConnectView: View {
         }
     }
 
+    /// An invite link from the server's Remote Access page, in place of an address.
+    private func join(_ invite: PeerConnect.Invite) async {
+        guard !busy else { return }
+        busy = true
+        error = ""
+        let problem = await model.join(invite)
+        busy = false
+        if let problem { error = problem }
+    }
+
     private func submit() {
+        let typed = address.trimmingCharacters(in: .whitespacesAndNewlines)
+        if typed.lowercased().hasPrefix("\(DeepLink.scheme)://p2p/") {
+            if let invite = PeerConnect.invite(from: typed) {
+                Task { await join(invite) }
+            } else {
+                error = say("errInvite")
+            }
+            return
+        }
         switch Address.normalize(address) {
         case .ok(let url): Task { await connect(url) }
         case .bad(let reason): error = reasonText(reason)
@@ -90,6 +116,11 @@ struct ConnectView: View {
         error = ""
         // Back puts focus where it was.
         DispatchQueue.main.async { spot = lastSpot ?? .enterAddress }
+    }
+
+    private func closeJoin() {
+        showJoin = false
+        DispatchQueue.main.async { spot = .joinAway }
     }
 
     /// The first server found takes focus, until the person has moved themselves. The
@@ -152,12 +183,24 @@ struct ConnectView: View {
         .focused($spot, equals: .enterAddress)
         .firstFocus(in: scope, when: found.isEmpty)
         .padding(.top, Tokens.Space.s2)
+        // For a device that has never been at home with its server: it shows a code to type in there.
+        if PeerLibrary.available {
+            Button {
+                showJoin = true
+                error = ""
+            } label: {
+                Label(say("joinAway"), systemImage: "dot.radiowaves.left.and.right")
+            }
+            .action(.quiet, wide: true)
+            .focused($spot, equals: .joinAway)
+        }
         LegalNote()
     }
 
     @ViewBuilder private var addressWords: some View {
         BrandLockup(app: true)
         SignInHeading(title: say("addressTitle"), detail: say("addressHint"))
+        if PeerLibrary.available { Secondary(say("inviteHint")) }
     }
 
     @ViewBuilder private var addressActions: some View {
@@ -173,7 +216,9 @@ struct ConnectView: View {
         // Every added server is listed as itself; one also found on the network isn't listed twice.
         let others = uniqued(model.recent)
         Group {
-            if showForm {
+            if showJoin {
+                JoinAwayPanel(back: closeJoin)
+            } else if showForm {
                 SignInLayout(back: closeForm) { addressWords } actions: { addressActions }
                     .task { wantField = true }
             } else {
@@ -182,9 +227,13 @@ struct ConnectView: View {
         }
         .focusRoot(scope)
         .onChange(of: spot) { focusChanged($0) }
-        .onRemoteBack(showForm ? { closeForm() } : nil)
+        .onRemoteBack(showJoin ? { closeJoin() } : showForm ? { closeForm() } : nil)
         .onAppear {
             if error.isEmpty { error = initialMessage }
+            #if DEBUG
+            // For apple/scripts/p2p-check.sh: `-WittyCheckJoin 1` at launch goes straight to Join from away.
+            if PeerLibrary.available, UserDefaults.standard.bool(forKey: "WittyCheckJoin") { showJoin = true }
+            #endif
             // Only looks while this screen is open.
             let looking = ServerFinder(onChange: { show($0) }, onRefused: { refused = true })
             looking.start()
@@ -438,6 +487,7 @@ private struct PairPanel: View {
                     .multilineTextAlignment(metrics.tv ? .leading : .center)
                     .textSelectionIfAvailable()
                 Text(code)
+                    .accessibilityIdentifier("pairCode")
                     .font(.system(size: metrics.tv ? 72 : 40, weight: .bold, design: .monospaced))
                     .kerning(metrics.tv ? 16 : 8)
                     .foregroundStyle(palette.text)

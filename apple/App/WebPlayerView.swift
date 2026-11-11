@@ -179,8 +179,15 @@ private struct WebPlayerPage: UIViewRepresentable {
         properties[HTTPCookiePropertyKey("HttpOnly")] = "TRUE"
         if url.scheme?.lowercased() == "https" { properties[.secure] = "TRUE" }
         if let cookie = HTTPCookie(properties: properties) {
-            config.websiteDataStore.httpCookieStore.setCookie(cookie) { [weak web, url] in
-                web?.load(URLRequest(url: url))
+            let jar = config.websiteDataStore.httpCookieStore
+            jar.setCookie(cookie) { [weak web, url] in
+                // From away the page is at an address on this device, which answers only with its secret.
+                if PeerRoute.isLocalAddress(url),
+                   let secret = HTTPCookieStorage.shared.cookies?.first(where: { $0.name == PeerConnect.secretCookie && $0.domain == "127.0.0.1" }) {
+                    jar.setCookie(secret) { web?.load(URLRequest(url: url)) }
+                } else {
+                    web?.load(URLRequest(url: url))
+                }
             }
         } else {
             DispatchQueue.main.async { onFail() }
@@ -235,7 +242,9 @@ struct WebPlayerView: View {
             if failed || client.token.isEmpty {
                 ProblemView(words: "This page couldn't open. Check the server is on, then try again.", retry: { failed = false }, back: leave)
             } else if let url = client.mediaURL(path) {
-                WebPlayerPage(base: client.base, token: client.token, url: url, keptToGames: keptToGames, theme: model.themeChoice == "custom" ? "" : model.themeChoice, onLeave: leave, onFail: { failed = true }, onSaved: { saved = $0.lastPathComponent }, onPath: entered, onGame: play)
+                WebPlayerPage(base: client.root, token: client.token, url: url, keptToGames: keptToGames, theme: model.themeChoice == "custom" ? "" : model.themeChoice, onLeave: leave, onFail: { failed = true }, onSaved: { saved = $0.lastPathComponent }, onPath: entered, onGame: play)
+                    // The address on this device changed (the app woke, the way changed): the page is opened again there.
+                    .id(model.routeStamp)
                     .ignoresSafeArea(.container, edges: .bottom)
             } else {
                 ProblemView(words: "The server sent an address that can't be used.", back: leave)
