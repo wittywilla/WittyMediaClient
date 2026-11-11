@@ -153,8 +153,12 @@ fun ConnectScreen(nav: Nav, s: Map<String, String>, message: String) {
     var asking by remember { mutableStateOf<SavedServer?>(null) }
     var focusOn by remember { mutableStateOf<String?>(null) }
     val now = remember(recent) { System.currentTimeMillis() }
-    // Focus kept for a card that isn't in the list any more would leave a remote with no focus at all.
-    if (memory.last?.startsWith("recent-") == true && recent.none { "recent-${it.url}" == memory.last }) memory.last = null
+    // Focus kept for a card that isn't in the list any more, or for Edit or Manage servers when the last server
+    // has gone and they with it, would leave a remote with no focus at all.
+    val lost = memory.last?.let { key ->
+        (key.startsWith("recent-") && recent.none { "recent-${it.url}" == key }) || (recent.isEmpty() && (key == "manage-servers" || key == "edit-servers"))
+    } == true
+    if (lost) memory.last = null
     DisposableEffect(Unit) { onDispose { nav.pickerNotice = "" } }
     val appVersion = remember { runCatching { context.packageManager.getPackageInfo(context.packageName, 0).versionName }.getOrNull().orEmpty() }
     var address by rememberSaveable { mutableStateOf("") }
