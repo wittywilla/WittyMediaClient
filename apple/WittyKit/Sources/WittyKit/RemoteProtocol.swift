@@ -397,8 +397,8 @@ public enum RemoteAction: Equatable, Sendable {
     /// Open `queue[index]` and play it; `positionSec` nil means from the account's own resume point.
     case play(queue: [Int64], index: Int, positionSec: Double?, audio: Int?, subtitle: Int?)
     case pause, resume, stop
-    case seek(to: Double)
-    case seek(by: Double)
+    case seekTo(Double)
+    case seekBy(Double)
     case next, previous
     case volume(Double)
     case mute(Bool)
@@ -441,8 +441,8 @@ public enum RemoteAction: Equatable, Sendable {
         case "resume": return .resume
         case "stop": return .stop
         case "seek":
-            if let to = command.positionSec, to.isFinite { return needs("seek", .seek(to: max(0, to))) }
-            if let by = command.bySec, by.isFinite { return needs("seek", .seek(by: by)) }
+            if let to = command.positionSec, to.isFinite { return needs("seek", .seekTo(max(0, to))) }
+            if let by = command.bySec, by.isFinite { return needs("seek", .seekBy(by)) }
             return .refuse("That command doesn't say where to go.")
         case "next": return needs("queue", .next)
         case "previous": return needs("queue", .previous)

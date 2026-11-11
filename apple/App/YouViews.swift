@@ -106,6 +106,7 @@ struct YouView: View {
             #if os(tvOS)
             row(.topMenu, "menubar.rectangle", RowTint.tv, "rowTopMenu", value: model.topMenu.isEmpty ? "" : "\(model.topMenu.count)")
             #endif
+            TogetherRows()
         }
         if isAdmin {
             ListGroup(title: say("groupServer")) {

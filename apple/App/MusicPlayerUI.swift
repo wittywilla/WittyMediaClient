@@ -1179,6 +1179,12 @@ struct PhoneNowPlaying: View {
                 menu = nil
                 panel = panel == .sound ? nil : .sound
             }
+            if model.remote.hasRemote {
+                NPMenuRow(words: "Play on another device", symbol: "tv.and.mediabox") {
+                    menu = nil
+                    model.remote.musicSheet = model.remote.sourcePlayingMusic().map { .playOn($0) }
+                }
+            }
             if let now {
                 let library = now.item.libraryId
                 if music {

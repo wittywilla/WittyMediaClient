@@ -50,8 +50,8 @@ final class RemoteProtocolTests: XCTestCase {
             (#"{"v":1,"type":"pause"}"#, .pause),
             (#"{"v":1,"type":"resume"}"#, .resume),
             (#"{"v":1,"type":"stop"}"#, .stop),
-            (#"{"v":1,"type":"seek","positionSec":754.5}"#, .seek(to: 754.5)),
-            (#"{"v":1,"type":"seek","bySec":-10}"#, .seek(by: -10)),
+            (#"{"v":1,"type":"seek","positionSec":754.5}"#, .seekTo(754.5)),
+            (#"{"v":1,"type":"seek","bySec":-10}"#, .seekBy(-10)),
             (#"{"v":1,"type":"next"}"#, .next),
             (#"{"v":1,"type":"previous"}"#, .previous),
             (#"{"v":1,"type":"volume","level":0.4}"#, .volume(0.4)),
@@ -71,7 +71,7 @@ final class RemoteProtocolTests: XCTestCase {
         let command: RemoteCommand = try decode(#"{"v":1,"id":"c41f","type":"seek","bySec":-10,"sender":{"userName":"Sam"},"sentAt":1794000004200,"newField":{"a":1}}"#)
         XCTAssertEqual(command.id, "c41f")
         XCTAssertEqual(command.sender?.userName, "Sam")
-        XCTAssertEqual(RemoteAction.read(command, abilities: all), .seek(by: -10))
+        XCTAssertEqual(RemoteAction.read(command, abilities: all), .seekBy(-10))
     }
 
     func testAnUnknownCommandIsAnsweredInWordsAndNeverIgnored() throws {
@@ -118,7 +118,7 @@ final class RemoteProtocolTests: XCTestCase {
             XCTAssertLessThanOrEqual(words.count, 200)
         }
         XCTAssertEqual(RemoteAction.read(RemoteCommand("volume", level: 4), abilities: all), .volume(1), "a level is kept between 0 and 1")
-        XCTAssertEqual(RemoteAction.read(RemoteCommand("seek", positionSec: -5), abilities: all), .seek(to: 0))
+        XCTAssertEqual(RemoteAction.read(RemoteCommand("seek", positionSec: -5), abilities: all), .seekTo(0))
     }
 
     func testAQueueIsWalkedAndStopsAtItsEnds() {

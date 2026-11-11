@@ -816,6 +816,7 @@ private struct TvItemView: View {
                     .mainAction()
                     .firstFocus(in: scope)
                 }
+                TitleTogether(item: item)
             }
             .remoteSection()
         } else {

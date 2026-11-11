@@ -43,6 +43,14 @@ final class PlaybackModel: ObservableObject {
     /// While the video floats over other apps, going to the background isn't a reason to pause.
     var inPictureInPicture = false
     var onFinished: (@MainActor (Int64?) -> Void)?
+    /// Another device or a watch party steering this player: see RemoteHub.swift. Nil, it plays by itself.
+    weak var steering: PlaybackSteering?
+    /// Where to start and which tracks, when something other than the person's own resume point decides.
+    var preset: PlaybackPreset?
+    #if os(tvOS)
+    /// More for the system player's bar: Play on another device, and Watch party.
+    var extraMenus: [UIMenuElement] = []
+    #endif
 
     private var clock = PlaybackClock()
     private var retry = RetryBudget()
@@ -121,6 +129,12 @@ final class PlaybackModel: ObservableObject {
         readyItem = nil
         let beginning = startOver && !everStarted
         everStarted = true
+        let given = preset
+        preset = nil
+        if let given {
+            audio = given.audio ?? audio
+            subtitle = given.subtitle ?? subtitle
+        }
         activateAudio()
         watchNetwork()
         watchPlayer()
@@ -134,13 +148,14 @@ final class PlaybackModel: ObservableObject {
             return
         }
         // Left out, startSec lets the server resume where the viewer stopped.
-        await open(startSec: beginning ? 0 : nil)
+        await open(startSec: given?.startSec ?? (beginning ? 0 : nil))
     }
 
     /// Started and not stopped: it can be shown again from the dock.
     var isRunning: Bool { active }
 
     func togglePlay() {
+        if steering?.steerToggle(self) == true { return }
         if player.timeControlStatus == .paused {
             if ended {
                 ended = false
@@ -154,6 +169,7 @@ final class PlaybackModel: ObservableObject {
 
     /// Faster or slower without changing the pitch of voices, and kept when the stream is replaced.
     func setSpeed(_ rate: Float) {
+        if steering?.steerSpeed(self, rate) == true { return }
         clockface.rate = rate
         player.defaultRate = rate
         if player.timeControlStatus != .paused { player.rate = rate }
@@ -370,6 +386,7 @@ final class PlaybackModel: ObservableObject {
     private func finished() {
         guard active, countdown == nil else { return }
         saveFinished()
+        if steering?.steerEnded(self) == true { return }
         guard stream?.nextId != nil else {
             #if os(tvOS)
             onFinished?(nil)
@@ -429,6 +446,7 @@ final class PlaybackModel: ObservableObject {
 
     /// Goes past what a growing stream has so far by opening a new one.
     func seek(toFilm target: Double) {
+        if steering?.steerSeek(self, to: target) == true { return }
         guard let current = stream else { return }
         let known = player.currentItem?.seekableTimeRanges.last?.timeRangeValue.end.seconds
         switch current.seekPlan(toFilm: target, seekableEnd: known) {
@@ -666,6 +684,13 @@ private struct PlayerHost: UIViewControllerRepresentable {
             Task { @MainActor [playback] in playback.inPictureInPicture = false }
         }
         #endif
+
+        #if os(tvOS)
+        /// The remote's scrubbing, which a watch party's host does for everyone and nobody else may.
+        func playerViewController(_ controller: AVPlayerViewController, timeToSeekAfterUserNavigatedFrom old: CMTime, to target: CMTime) -> CMTime {
+            MainActor.assumeIsolated { playback.steering?.steerScrub(playback, from: old, to: target) ?? target }
+        }
+        #endif
     }
 
     func makeCoordinator() -> Coordinator { Coordinator(playback) }
@@ -703,7 +728,7 @@ private struct PlayerHost: UIViewControllerRepresentable {
                 UIAction(title: track.label, state: track.index == stream?.subtitleIndex ? .on : .off) { _ in playback.choose(subtitle: track.index) }
             }))
         }
-        controller.transportBarCustomMenuItems = menus
+        controller.transportBarCustomMenuItems = menus + playback.extraMenus
         var actions: [UIAction] = []
         if playback.introEnd != nil { actions.append(UIAction(title: "Skip intro") { _ in playback.skipIntro() }) }
         if playback.offerNext { actions.append(UIAction(title: "Next episode") { _ in playback.playNext() }) }
@@ -831,10 +856,12 @@ private struct SystemPlayerScreen: View {
             }
         }
         .onChange(of: scenePhase) { playback.sceneChanged($0) }
+        .modifier(PlayerTogether(playback: playback))
         .task {
             // A film stops the music, whether or not the system has said so yet.
             model.listening.pauseForVideo()
             playback.onFinished = { next in moveOn(next) }
+            model.remote.adopt(playback, id: id)
             await playback.start(id: id, client: client, startOver: startOver)
         }
         .onDisappear { playback.stop() }
