@@ -5,6 +5,7 @@
 // tokens: the sign-in stays in the browser session, as it does in a browser.
 const fs = require('fs')
 const { normalizeAddress } = require('./connect/address.js')
+const { isP2POrigin, cleanInfo } = require('./p2p.js')
 
 const MAX_RECENT = 8
 const MIN_WINDOW = 100
@@ -14,7 +15,9 @@ const LIMITS = { name: 80, serverId: 128, publicKey: 64, fingerprint: 32 }
 const LOGO = /^data:image\/(png|jpeg|webp|gif|svg\+xml);base64,[A-Za-z0-9+/]+={0,2}$/
 const MAX_LOGO = 360 * 1024
 
-const isServerUrl = (url) => typeof url === 'string' && normalizeAddress(url).url === url
+// A server is remembered by its address, or, for one only ever reached from away, by the
+// address on this computer that the peer-to-peer helper gives it (p2p.js).
+const isServerUrl = (url) => typeof url === 'string' && (normalizeAddress(url).url === url || isP2POrigin(url))
 
 function cleanEntry(entry) {
   if (!entry || typeof entry !== 'object' || !isServerUrl(entry.url)) return null
@@ -24,6 +27,9 @@ function cleanEntry(entry) {
   }
   const logo = cleanLogo(entry.logo)
   if (logo) out.logo = logo
+  // How to reach it from away: its connection ID, and where it was last found.
+  const p2p = cleanInfo(entry.p2p)
+  if (p2p) out.p2p = p2p
   return out
 }
 
@@ -88,6 +94,9 @@ function remember(state, server) {
   const before = (state.recent || []).find((s) => s.url === server.url)
   const logo = cleanLogo(server.logo === undefined ? before && before.logo : server.logo)
   if (logo) entry.logo = logo
+  // The way to reach it from away stays with it, unless this says otherwise (null forgets it).
+  const p2p = cleanInfo(server.p2p === undefined ? before && before.p2p : server.p2p)
+  if (p2p) entry.p2p = p2p
   const others = (state.recent || []).filter((s) => s.url !== server.url && (!server.serverId || s.serverId !== server.serverId))
   return { ...state, server: server.url, recent: [entry, ...others].slice(0, MAX_RECENT) }
 }

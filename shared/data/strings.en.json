@@ -284,5 +284,12 @@
   "wpChangeDisc": "Change disc",
   "wpMemoryCards": "Memory cards",
   "wpShortcuts": "Shortcuts",
-  "wpButtonHints": "Button hints"
+  "wpButtonHints": "Button hints",
+  "inviteHint": "Away from home? Paste an invite link from your server's Remote Access page here instead.",
+  "inviteConnecting": "Finding your server…",
+  "errInvite": "That invite link isn't right. Ask for a new one from your server's Remote Access page.",
+  "errInviteRefused": "Your server didn't accept that invite. Invites work once and last fifteen minutes: ask for a new one.",
+  "errAwayMissing": "This copy of the app can't connect from away: its connection helper is missing. Reinstall the app.",
+  "errAwayFailed": "Couldn't reach your server from away. It may be off, or peer-to-peer connections may be turned off on it.",
+  "awayConnecting": "Reaching your server from away…"
 }

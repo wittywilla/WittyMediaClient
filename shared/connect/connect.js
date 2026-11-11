@@ -18,6 +18,8 @@
     empty: S.errEmpty, scheme: S.errScheme, credentials: S.errCredentials, invalid: S.errInvalid,
     'public-http': S.errPublicHttp, unreachable: S.errUnreachable, 'not-server': S.errNotServer,
     identity: S.identityBad, certificate: S.errCertificate,
+    // Reaching a server from away, peer to peer (the desktop app; see its p2p.js).
+    invite: S.errInvite, 'invite-refused': S.errInviteRefused, 'p2p-missing': S.errAwayMissing, 'p2p-failed': S.errAwayFailed,
   }
 
   // Without a native bridge: a plain web page on a smart TV.
@@ -195,12 +197,16 @@
   }
 
   // Asking a server can take seconds. This says so, and Back or Cancel leaves it.
-  const waitScreen = () => show({
-    escape: () => listScreen(),
-    className: 'centred',
-    words: [spinner('large'), el('h1', { textContent: S.connecting })],
-    actions: [button(S.cancel, () => listScreen())],
-  })
+  // stop is told when the person gives up waiting.
+  const waitScreen = (text, stop) => {
+    const leave = () => { if (stop) stop(); listScreen() }
+    return show({
+      escape: leave,
+      className: 'centred',
+      words: [spinner('large'), el('h1', { textContent: text || S.connecting })],
+      actions: [button(S.cancel, leave)],
+    })
+  }
 
   const hostOf = (url) => { try { return new URL(url).host } catch (e) { return url } }
 
@@ -320,7 +326,8 @@
     input.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); go.click() } })
     show({
       back: listAvailable ? () => listScreen() : null,
-      words: [el('h1', { textContent: S.addressTitle }), el('p', { id: 'address-hint', className: 'lead', textContent: S.addressHint })],
+      words: [el('h1', { textContent: S.addressTitle }), el('p', { id: 'address-hint', className: 'lead', textContent: S.addressHint })]
+        .concat(bridge.invite ? [el('p', { className: 'lead', textContent: S.inviteHint })] : []),
       actions: [field(input, S.addressLabel, 'link'), error.node, go],
       foot: [legal()],
     })
@@ -332,6 +339,18 @@
 
   async function submit(input, say, go) {
     if (go.classList.contains('busy')) return
+    // An invite link instead of an address: the app that can use one takes it from here.
+    if (bridge.invite && /^\s*wittymedia:\/\/p2p\//i.test(input.value)) {
+      const turn = screen
+      setBusy(go, true, S.inviteConnecting)
+      let joined
+      try { joined = await bridge.invite(input.value) } catch (e) { joined = { error: 'p2p-failed' } }
+      if (turn !== screen || joined.ok) return
+      setBusy(go, false, S.connect)
+      say(joined.message || ERRORS[joined.error] || S.errInvite)
+      input.focus()
+      return
+    }
     const r = self.WittyAddress.normalizeAddress(input.value)
     if (r.error) { say(ERRORS[r.error]); input.focus(); return }
     const turn = screen
@@ -641,5 +660,6 @@
   // Only the app sends this. In a plain web page, a link can't send someone off to look at a server.
   const mismatch = self.wittyClient ? params.get('mismatch') : ''
   if (mismatch) choose(mismatch)
-  else listScreen(params.get('certificate') ? S.errCertificate : params.get('lost') ? S.errLost : '')
+  else if (self.wittyClient && params.get('away')) waitScreen(S.awayConnecting, () => { if (bridge.awayStop) bridge.awayStop() })
+  else listScreen(params.get('certificate') ? S.errCertificate : params.get('lost') ? S.errLost : params.get('away-failed') ? S.errAwayFailed : '')
 })()

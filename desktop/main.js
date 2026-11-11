@@ -20,7 +20,7 @@
 // title bar of the system's. Ours is a local page, which on a Mac has the system's buttons on
 // it. Below it, the content view shows the connect screen and then the server's web UI, which
 // has no access to Node or to the app beyond reporting its theme colours and asking for Moonlight.
-const { app, BaseWindow, Menu, WebContentsView, clipboard, ipcMain, net, powerSaveBlocker, protocol, session, shell, systemPreferences } = require('electron')
+const { app, BaseWindow, Menu, WebContentsView, clipboard, ipcMain, net, powerMonitor, powerSaveBlocker, protocol, safeStorage, session, shell, systemPreferences } = require('electron')
 const fs = require('fs')
 const os = require('os')
 const path = require('path')
@@ -34,12 +34,18 @@ const state = require('./state.js')
 const tv = require('./tv.js')
 const playback = require('./playback.js')
 const mac = require('./mac.js')
+const p2p = require('./p2p.js')
 
 const TITLE_BAR = 32
 const CONNECT_PAGE = guards.CONNECT_PAGE
 const BAR_PAGE = guards.BAR_PAGE
 const TV_MENU_PAGE = guards.TV_MENU_PAGE
 const STATUS_TIMEOUT_MS = 5000
+// From away, the first answer can wait for a direct connection to be made through two routers.
+const AWAY_TIMEOUT_MS = 25000
+const AWAY_CONNECT_MS = 45000
+const LEARN_AFTER_MS = 15 * 1000
+const LEARN_EVERY_MS = 30 * 60 * 1000
 const API = '/api/v1' // the contract: docs/CLIENT-API.md
 const SESSION_COOKIE = 'wms_token'
 const SESSION_DAYS = 90
@@ -63,7 +69,12 @@ let server = '' // the origin the content view may show
 let lastServer = ''
 let stopDiscovery = null
 let shown = null // what the connect screen last showed about a server, to hold it to that
-let pairing = null // a code on show for someone to approve: { url, secret }, and the secret stays here
+let pairing = null // a code on show for someone to approve: { url, at, secret }, and the secret stays here
+// The connection to a server away from home, while there is one: { run, id, origin, port, deviceId }.
+// `origin` is the address on this computer that the helper answers at (p2p.js).
+let tunnel = null
+let awayGivenUp = false // the person stopped waiting for a server to be reached from away
+let learnTimer = null
 
 const OS_NAMES = { win32: 'Windows', linux: 'Linux', darwin: 'macOS', freebsd: 'FreeBSD' }
 const OS_NAME = OS_NAMES[process.platform] || process.platform
@@ -209,6 +220,9 @@ let startedAfresh = false
 
 function showConnect(query) {
   endDiscovery()
+  clearTimeout(learnTimer)
+  clearInterval(learnTimer)
+  sayPath('')
   server = ''
   pairing = null
   startedAfresh = true
@@ -229,23 +243,33 @@ function showServer(url) {
   updateMenu()
   quietly(content.webContents.loadURL(TV ? tv.tenFootAddress(url) : url))
   log.kick()
+  // Reached from away, the title bar says how. Reached directly, the app learns the other way.
+  sayPath(tunnel && server === tunnel.origin ? p2p.pathWords(tunnel.run.state) : '')
+  learnSoon()
 }
 
 function saveState() {
   if (!state.save(stateFile(), saved)) log.warn('app', 'What the app remembers could not be saved')
 }
 
-const fetchJson = (url, options) =>
-  net.fetch(url, { credentials: 'omit', redirect: 'error', signal: AbortSignal.timeout(STATUS_TIMEOUT_MS), ...options })
+// Requests the app itself makes. To the helper's address they carry its secret, as the
+// pages' own requests do by cookie.
+const viaTunnel = (url) => !!tunnel && String(url).startsWith(tunnel.origin + '/')
+const fetchJson = (url, options = {}) => {
+  const away = viaTunnel(url)
+  const headers = away ? { ...(options.headers || {}), [p2p.HEADER]: tunnel.run.secret } : options.headers
+  return net.fetch(url, { credentials: 'omit', redirect: 'error', signal: AbortSignal.timeout(away ? AWAY_TIMEOUT_MS : STATUS_TIMEOUT_MS), ...options, headers })
+}
 
 const postJson = (url, body) =>
   fetchJson(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
 
 // Has the server at this address proved it holds the key we remember for it?
-async function identify(url) {
+// `at` is where to ask, when that isn't the address the server is remembered by.
+async function identify(url, at = url) {
   const nonce = newNonce()
   try {
-    const res = await postJson(url + API + '/identity', { nonce })
+    const res = await postJson(at + API + '/identity', { nonce })
     if (res.status === 404) return { state: judgeMissing(url, saved.recent) }
     if (!res.ok) {
       log.warn('network', `The identity check was answered with ${res.status}`, { where: url })
@@ -265,22 +289,271 @@ async function identify(url) {
 // Asks an address whether it is a WittyMediaServer and who it says it is. In the main
 // process, so no page's security rules decide the answer and no page sees more than the result.
 async function check(url) {
-  const r = normalizeAddress(url)
+  const away = p2p.isP2POrigin(url)
+  const r = away ? { url } : normalizeAddress(url)
   if (r.error) return { error: r.error }
+  let entry = entryFor(r.url)
+  // A connection to some other server has no business staying open.
+  if (tunnel && !(entry && entry.p2p && entry.p2p.id === tunnel.id)) closeTunnel()
+  let at = r.url
+  let first = away ? { error: 'unreachable' } : await statusOf(at)
+  if (first.error === 'unreachable' && entry && entry.p2p) {
+    // Not there: this device isn't at home. The other way to it, if it has one.
+    const via = await reachFromAway(entry)
+    if (via.error) return { error: away ? via.error : 'unreachable' }
+    at = via.origin
+    entry = via.entry
+    first = await statusOf(at)
+  }
+  if (first.error) return { error: first.error }
+  const { data } = first
+  const name = entry && away ? entry.url : r.url
+  return {
+    url: name, at, version: guards.cleanText(data.version, 40), name: guards.cleanName(data.brandName || data.name),
+    brandLogo: guards.logoVersion(data.brandLogo), setupRequired: data.setupRequired === true, identity: await identify(name, at),
+  }
+}
+
+async function statusOf(at) {
   try {
-    const res = await fetchJson(r.url + '/api/status')
+    const res = await fetchJson(at + '/api/status')
     const data = await guards.readJson(res)
     if (!data || data.name !== 'WittyMediaServer') {
-      log.info('network', 'Something answered that is not a WittyMediaServer', { where: r.url })
+      log.info('network', 'Something answered that is not a WittyMediaServer', { where: at })
       return { error: 'not-server' }
     }
-    return {
-      url: r.url, version: guards.cleanText(data.version, 40), name: guards.cleanName(data.brandName || data.name),
-      brandLogo: guards.logoVersion(data.brandLogo), setupRequired: data.setupRequired === true, identity: await identify(r.url),
+    return { data }
+  } catch (err) {
+    log.noteError('warn', 'network', 'A server could not be reached', err, { where: at })
+    return { error: guards.whyFailed(err) }
+  }
+}
+
+// ---------------------------------------------------------------- from away, peer to peer
+
+const keyFile = () => path.join(app.getPath('userData'), 'p2p-key.json')
+const helperProgram = () => p2p.helperPath({ resourcesPath: process.resourcesPath, packaged: INSTALLED })
+const entryFor = (url) => (saved.recent || []).find((s) => s.url === url)
+const sayPath = (words) => { if (bar && !bar.webContents.isDestroyed()) bar.webContents.send('p2p', words) }
+
+// This device's key, made the first time it is wanted.
+async function deviceKey(program) {
+  let key = p2p.loadKey(keyFile(), safeStorage)
+  if (!key) {
+    key = await p2p.makeKey(program)
+    p2p.saveKey(keyFile(), safeStorage, key)
+  }
+  log.addSecret(key.key)
+  return key
+}
+
+function closeTunnel() {
+  if (!tunnel) return
+  const { run, origin } = tunnel
+  tunnel = null
+  run.stop()
+  sayPath('')
+  session.defaultSession.cookies.remove(origin, p2p.COOKIE).catch(() => {})
+}
+
+// What the app keeps about reaching a server from away. null forgets it.
+function keepP2P(url, info) {
+  const entry = entryFor(url)
+  if (!entry) return
+  const clean = info ? p2p.cleanInfo(info) : null
+  if (JSON.stringify(entry.p2p || null) === JSON.stringify(clean)) return
+  if (clean) entry.p2p = clean
+  else delete entry.p2p
+  saveState()
+}
+
+// Starts the helper for a server and waits for its address on this computer.
+async function openTunnel(info) {
+  closeTunnel()
+  const program = helperProgram()
+  if (!program) {
+    log.warn('p2p', 'The connection helper is not installed with this app')
+    return { error: 'p2p-missing' }
+  }
+  let run, ready
+  try {
+    const key = await deviceKey(program)
+    run = new p2p.Tunnel(program, { key: key.key, serverId: info.id, hints: info.hints || [], port: info.port || 0 }, { log: (line) => log.info('p2p', line) })
+    ready = await run.ready
+    log.addSecret(ready.secret)
+    const origin = p2p.originFor(info.id, ready.port)
+    // The secret every request to the helper must carry, where no page's script can read it.
+    await session.defaultSession.cookies.set({ url: origin, name: p2p.COOKIE, value: ready.secret, httpOnly: true, sameSite: 'strict' })
+    tunnel = { run, id: info.id, origin, port: ready.port, deviceId: ready.deviceId }
+  } catch (err) {
+    if (run) run.stop()
+    log.noteError('warn', 'p2p', 'The connection helper could not start', err)
+    return { error: 'p2p-failed' }
+  }
+  const mine = tunnel
+  run.on('state', (s) => { if (tunnel === mine) sayPath(server === mine.origin ? p2p.pathWords(s) : '') })
+  run.on('addrs', (hints) => {
+    if (tunnel !== mine || !hints.length) return
+    const entry = (saved.recent || []).find((s) => s.p2p && s.p2p.id === mine.id)
+    if (entry) keepP2P(entry.url, { ...entry.p2p, hints })
+  })
+  run.on('exit', (code) => {
+    if (tunnel !== mine) return
+    log.warn('p2p', `The connection helper stopped by itself (${code})`)
+    const showing = server === mine.origin
+    closeTunnel()
+    if (showing) showConnect({ lost: '1' })
+  })
+  return { ok: true }
+}
+
+// Reaches a remembered server the other way, and says where on this computer it answers.
+// A server only ever reached like this is remembered by that address, which is renamed
+// here if the port it had last time was taken.
+async function reachFromAway(entry) {
+  if (!(tunnel && tunnel.id === entry.p2p.id)) {
+    const opened = await openTunnel(entry.p2p)
+    if (opened.error) return opened
+  }
+  const mine = tunnel
+  const st = await mine.run.whenConnected(AWAY_CONNECT_MS)
+  if (tunnel !== mine) return { error: 'unreachable' } // given up on meanwhile
+  if (!p2p.connected(st)) {
+    log.warn('p2p', `The server was not reached from away: ${st.error || st.path}`)
+    closeTunnel()
+    return { error: 'p2p-failed' }
+  }
+  if (p2p.isP2POrigin(entry.url) && entry.url !== mine.origin) {
+    if (saved.server === entry.url) saved.server = mine.origin
+    entry.url = mine.origin
+  }
+  keepP2P(entry.url, { ...entry.p2p, port: mine.port })
+  saveState()
+  return { ok: true, origin: mine.origin, entry }
+}
+
+// The same server, reached another way, is the same sign-in. Only ever called once the
+// server at the far end has proved it holds the key remembered for it.
+async function carrySignIn(from, to) {
+  if (from === to) return
+  const jar = session.defaultSession.cookies
+  if ((await jar.get({ url: to, name: SESSION_COOKIE })).length) return
+  const [kept] = await jar.get({ url: from, name: SESSION_COOKIE })
+  if (!kept) return
+  await jar.set({ url: to, name: SESSION_COOKIE, value: kept.value, httpOnly: true, sameSite: 'lax', secure: false, expirationDate: kept.expirationDate || Date.now() / 1000 + SESSION_DAYS * 86400 })
+}
+
+// While a server is on screen and signed in: asks whether it takes connections from away,
+// puts this device on its list if so, and keeps what is needed to find it again. This is
+// how a device that was set up at home works when it leaves, with nothing done by hand.
+async function learnP2P() {
+  const origin = server
+  const program = helperProgram()
+  if (!origin || !program) return
+  const entry = viaTunnel(origin + '/') ? (saved.recent || []).find((s) => s.p2p && s.p2p.id === tunnel.id) : entryFor(origin)
+  if (!entry) return
+  try {
+    const to = await reportTarget()
+    if (!to || to.origin !== origin) return // not signed in yet: asked again later
+    const key = await deviceKey(program)
+    const auth = { Authorization: `Bearer ${to.token}` }
+    const res = await fetchJson(`${origin}${API}/p2p?device=${encodeURIComponent(key.deviceId)}`, { headers: auth })
+    if (res.status === 404) { res.body?.cancel().catch(() => {}); return } // an older server
+    const info = await guards.readJson(res)
+    if (server !== origin) return
+    if (!res.ok || !info || info.enabled !== true || !p2p.validId(info.serverId)) {
+      if (res.ok && info && info.enabled === false && !viaTunnel(origin + '/')) keepP2P(entry.url, null)
+      return
+    }
+    if (info.enrolled !== true) {
+      const added = await fetchJson(`${origin}${API}/p2p/devices`, {
+        method: 'POST', headers: { ...auth, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: key.deviceId, name: deviceName(), platform: OS_NAME }),
+      })
+      added.body?.cancel().catch(() => {})
+      if (!added.ok) { log.info('p2p', `The server did not add this device to its list: ${added.status}`, { where: origin }); return }
+      log.info('p2p', 'This device can now reach its server from away', { where: origin })
+    }
+    keepP2P(entry.url, { id: info.serverId, hints: p2p.cleanHints(info.addrs).filter((a) => !a.startsWith('/ip4/127.') && !a.startsWith('/ip6/::1/')), port: entry.p2p && entry.p2p.port })
+  } catch (err) {
+    log.noteError('info', 'p2p', 'Asking the server about connections from away failed', err, { where: origin })
+  }
+}
+
+function learnSoon() {
+  clearTimeout(learnTimer)
+  clearInterval(learnTimer)
+  learnTimer = setTimeout(() => {
+    learnP2P()
+    learnTimer = setInterval(learnP2P, LEARN_EVERY_MS)
+  }, LEARN_AFTER_MS)
+}
+
+// An invite link, pasted on the connect screen: finds the server, shows it the invite,
+// which puts this device on its list, and signs in with the code that comes back.
+async function joinByInvite(link) {
+  pairing = null
+  const invite = p2p.parseInvite(link)
+  if (!invite) return { error: 'invite' }
+  const opened = await openTunnel({ id: invite.serverId, hints: invite.hints })
+  if (opened.error) return opened
+  const mine = tunnel
+  const st = await mine.run.whenConnected(AWAY_CONNECT_MS + 15000)
+  if (tunnel !== mine) return { error: 'p2p-failed' }
+  if (!p2p.connected(st)) { closeTunnel(); return { error: 'p2p-failed' } }
+  const answer = await mine.run.enrol(invite.secret, deviceName(), OS_NAME)
+  if (tunnel !== mine) return { error: 'p2p-failed' }
+  if (!answer.ok) {
+    log.warn('p2p', `The invite was refused: ${answer.reason || answer.error}`)
+    closeTunnel()
+    return { error: 'invite-refused', message: guards.cleanMessage(answer.error) }
+  }
+  // Who it is, proved: the key it shows now is the one remembered from here on.
+  const known = (saved.recent || []).find((s) => s.p2p && s.p2p.id === invite.serverId)
+  const name = known ? known.url : mine.origin
+  const identity = await identify(name, mine.origin)
+  if (!['new', 'same', 'none'].includes(identity.state)) { closeTunnel(); return { error: 'identity' } }
+  const info = { id: invite.serverId, hints: invite.hints, port: mine.port }
+  const pinned = identity.publicKey && (saved.recent || []).find((s) => s.publicKey === identity.publicKey)
+  const url = pinned ? pinned.url : name
+  try {
+    if (answer.code) {
+      const res = await postJson(mine.origin + API + '/pair/redeem', { code: answer.code, device: deviceName(), platform: OS_NAME })
+      const data = await guards.readJson(res)
+      if (res.ok && data && guards.validToken(data.token)) {
+        log.addSecret(data.token)
+        await session.defaultSession.cookies.set({
+          url: mine.origin, name: SESSION_COOKIE, value: data.token, httpOnly: true, sameSite: 'lax', secure: false,
+          expirationDate: Date.now() / 1000 + SESSION_DAYS * 86400,
+        })
+      } else {
+        log.warn('p2p', `The sign-in code that came with the invite was refused: ${res.status}`) // they sign in by hand
+      }
     }
   } catch (err) {
-    log.noteError('warn', 'network', 'A server could not be reached', err, { where: r.url })
-    return { error: guards.whyFailed(err) }
+    log.noteError('warn', 'p2p', 'Signing in after the invite failed', err)
+  }
+  saved = state.remember(saved, {
+    url, name: guards.cleanName(answer.serverName || invite.name || (pinned && pinned.name)),
+    serverId: identity.serverId, publicKey: identity.publicKey, fingerprint: identity.fingerprint, p2p: info,
+  })
+  saveState()
+  showServer(mine.origin)
+  return { ok: true }
+}
+
+// Takes this device off the server's list, and forgets how to reach it from away.
+async function forgetP2P(to) {
+  const entry = tunnel ? (saved.recent || []).find((s) => s.p2p && s.p2p.id === tunnel.id) : entryFor(server)
+  if (!entry || !entry.p2p) return
+  const key = p2p.loadKey(keyFile(), safeStorage)
+  keepP2P(entry.url, null)
+  if (!to || !key) return
+  try {
+    const res = await fetchJson(`${to.origin}${API}/p2p/devices/${encodeURIComponent(key.deviceId)}`, { method: 'DELETE', headers: { Authorization: `Bearer ${to.token}` } })
+    res.body?.cancel().catch(() => {})
+  } catch (err) {
+    log.noteError('info', 'p2p', 'This device could not be taken off the server\'s list', err)
   }
 }
 
@@ -292,7 +565,7 @@ async function probe(url) {
   if (found.error) return { error: found.error }
   const { identity } = found
   // What a server says about itself only counts once it has proved who it is.
-  const logo = identity.state === 'new' || identity.state === 'same' ? await logoOf(found.url, found.brandLogo) : null
+  const logo = identity.state === 'new' || identity.state === 'same' ? await logoOf(found.url, found.brandLogo, found.at) : null
   shown = { url: found.url, state: identity.state, publicKey: identity.publicKey || '', logo }
   return {
     ok: true, url: found.url, version: found.version, name: found.name, setupRequired: found.setupRequired,
@@ -302,12 +575,12 @@ async function probe(url) {
 
 // A server's own logo, fetched here because the connect page loads no pictures from anywhere,
 // and kept with the saved server by its version, so it's only fetched again when it changes.
-async function logoOf(url, version) {
+async function logoOf(url, version, at = url) {
   if (!version) return null
   const kept = (saved.recent || []).find((s) => s.url === url && s.logo && s.logo.version === version)
   if (kept) return kept.logo
   try {
-    const res = await fetchJson(`${url}/api/branding/logo?v=${encodeURIComponent(version)}`)
+    const res = await fetchJson(`${at}/api/branding/logo?v=${encodeURIComponent(version)}`)
     const type = guards.logoType(res.headers.get('content-type'))
     if (!res.ok || !type) {
       res.body?.cancel().catch(() => {})
@@ -342,8 +615,15 @@ async function forgetSignIn(url) {
   await session.defaultSession.clearStorageData({ origin, storages: ['cookies', 'localstorage'] })
 }
 
-async function dropUnfitSignIn(url, identity) {
-  if (!signInFits(url, identity, saved.recent)) await forgetSignIn(url)
+// `at` is where it is reached, when that isn't the address it is remembered by: a sign-in
+// kept for either goes when it no longer fits, and one that fits is good at both.
+async function dropUnfitSignIn(url, identity, at = url) {
+  if (!signInFits(url, identity, saved.recent)) {
+    await forgetSignIn(url)
+    if (at !== url) await session.defaultSession.cookies.remove(at, SESSION_COOKIE)
+  } else if (at !== url) {
+    await carrySignIn(url, at)
+  }
 }
 
 function rememberServer(url, name, identity, logo) {
@@ -357,13 +637,13 @@ async function openServer(request) {
   const found = await admitted(String(request && request.url), request && request.trust === true)
   if (found.error) return { error: found.error }
   try {
-    await dropUnfitSignIn(found.url, found.identity)
+    await dropUnfitSignIn(found.url, found.identity, found.at)
   } catch (err) {
     log.noteError('warn', 'app', 'An old sign-in could not be forgotten', err, { where: found.url })
     return { error: 'identity' }
   }
   rememberServer(found.url, found.name, found.identity, shownLogo(found.url))
-  showServer(found.url)
+  showServer(found.at)
   return { ok: true }
 }
 
@@ -376,7 +656,7 @@ async function redeem(url, code) {
   if (found.error) return { error: found.error }
   let res, answer
   try {
-    res = await postJson(found.url + API + '/pair/redeem', {
+    res = await postJson(found.at + API + '/pair/redeem', {
       code, device: `${os.hostname()} (WittyMediaClient)`.slice(0, 60), platform: OS_NAME,
     })
     answer = await guards.readJson(res)
@@ -395,17 +675,17 @@ async function redeem(url, code) {
 async function keepSignIn(found, token) {
   log.addSecret(token)
   try {
-    await dropUnfitSignIn(found.url, found.identity)
+    await dropUnfitSignIn(found.url, found.identity, found.at)
     await session.defaultSession.cookies.set({
-      url: found.url, name: SESSION_COOKIE, value: token, httpOnly: true, sameSite: 'lax',
-      secure: found.url.startsWith('https:'), expirationDate: Date.now() / 1000 + SESSION_DAYS * 86400,
+      url: found.at, name: SESSION_COOKIE, value: token, httpOnly: true, sameSite: 'lax',
+      secure: found.at.startsWith('https:'), expirationDate: Date.now() / 1000 + SESSION_DAYS * 86400,
     })
   } catch (err) {
     log.noteError('error', 'app', 'The sign-in could not be kept', err, { where: found.url })
     return { error: 'unreachable' }
   }
   rememberServer(found.url, found.name, found.identity, shownLogo(found.url))
-  showServer(found.url)
+  showServer(found.at)
   return { ok: true }
 }
 
@@ -420,7 +700,7 @@ async function pairStart(url) {
   if (found.error) return { error: found.error }
   let res, answer
   try {
-    res = await postJson(found.url + API + '/pair/start', { device: deviceName(), platform: OS_NAME })
+    res = await postJson(found.at + API + '/pair/start', { device: deviceName(), platform: OS_NAME })
     answer = await guards.readJson(res)
   } catch (err) {
     log.noteError('warn', 'network', 'Asking for a code to show failed', err, { where: found.url })
@@ -431,7 +711,7 @@ async function pairStart(url) {
     log.warn('network', `Asking for a code to show was refused: ${res.status}`, { where: found.url })
     return { message: guards.cleanMessage(data.error) }
   }
-  pairing = { url: found.url, secret: data.deviceSecret }
+  pairing = { url: found.url, at: found.at, secret: data.deviceSecret }
   return {
     ok: true, code: data.code, intervalSec: guards.pollSeconds(data.intervalSec),
     approveAt: guards.serverPage(found.url, data.approvePath, '/pair'),
@@ -445,7 +725,7 @@ async function pairPoll() {
   if (!asked) return { status: 'expired' }
   let res, answer
   try {
-    res = await postJson(asked.url + API + '/pair/poll', { deviceSecret: asked.secret })
+    res = await postJson(asked.at + API + '/pair/poll', { deviceSecret: asked.secret })
     answer = await guards.readJson(res)
   } catch (err) {
     log.noteError('info', 'network', 'Asking whether a code was approved failed', err, { where: asked.url })
@@ -471,11 +751,12 @@ async function pairPoll() {
 async function leaveServer() {
   const to = await reportTarget().catch(() => null)
   const origin = server
+  await forgetP2P(to)
   saved.server = ''
   saveState()
   if (origin) await forgetSignIn(origin).catch((err) => log.noteError('warn', 'app', 'The sign-in could not be forgotten', err, { where: origin }))
   showConnect()
-  if (!to) return
+  if (!to) { closeTunnel(); return }
   try {
     const res = await fetchJson(to.origin + API + '/logout', { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${to.token}` }, body: '{}' })
     res.body?.cancel().catch(() => {})
@@ -483,13 +764,33 @@ async function leaveServer() {
   } catch (err) {
     log.noteError('info', 'network', 'The session on the server could not be ended', err, { where: to.origin })
   }
+  closeTunnel()
 }
 
 // What the last run was using, if it still is who it was.
 async function startUp() {
-  const url = saved.server && !normalizeAddress(saved.server).error ? saved.server : ''
+  const url = saved.server && (p2p.isP2POrigin(saved.server) || !normalizeAddress(saved.server).error) ? saved.server : ''
   if (!url) return showConnect()
-  const identity = await identify(url)
+  const entry = entryFor(url)
+  let at = url
+  let identity = p2p.isP2POrigin(url) ? { state: 'unreachable' } : await identify(url)
+  if (identity.state === 'unreachable' && identity.why !== 'certificate' && entry && entry.p2p) {
+    // Not at home: the other way, with something on screen to say so while it is found.
+    showConnect({ away: '1' })
+    awayGivenUp = false
+    const via = await reachFromAway(entry)
+    if (awayGivenUp) return undefined // they are choosing something else by now
+    if (via.error) return showConnect({ 'away-failed': '1' })
+    at = via.origin
+    identity = await identify(via.entry.url, at)
+    if (tunnel === null || tunnel.origin !== at) return undefined // given up on while it was asked
+    if (identity.state !== 'same' && !(identity.state === 'none' && !via.entry.publicKey)) {
+      closeTunnel()
+      return showConnect(identity.state === 'unreachable' ? { 'away-failed': '1' } : { mismatch: via.entry.url })
+    }
+    await dropUnfitSignIn(via.entry.url, identity, at)
+    return showServer(at)
+  }
   if (identity.state === 'unreachable') return showConnect(identity.why === 'certificate' ? { certificate: '1' } : { lost: '1' })
   if (identity.state === 'different' || identity.state === 'bad') return showConnect({ mismatch: url })
   await dropUnfitSignIn(url, identity)
@@ -497,7 +798,7 @@ async function startUp() {
     const known = (saved.recent || []).find((s) => s.url === url)
     rememberServer(url, known ? known.name : 'WittyMediaServer', identity)
   }
-  return showServer(url)
+  return showServer(at)
 }
 
 function guardContent(wc) {
@@ -675,6 +976,9 @@ ipcMain.handle('open-server', (e, request) => (fromConnect(e) ? openServer(reque
 ipcMain.handle('pair-start', (e, url) => (fromConnect(e) ? pairStart(String(url)) : { error: 'invalid' }))
 ipcMain.handle('pair-poll', (e) => (fromConnect(e) ? pairPoll() : { status: 'expired' }))
 ipcMain.on('pair-stop', (e) => { if (fromConnect(e)) pairing = null })
+ipcMain.handle('p2p-invite', (e, link) => (fromConnect(e) ? joinByInvite(String(link).slice(0, 4096)) : { error: 'invite' }))
+// Giving up on a server being reached from away: whatever comes of it isn't wanted now.
+ipcMain.on('p2p-stop', (e) => { if (fromConnect(e)) { awayGivenUp = true; closeTunnel() } })
 
 ipcMain.on('discover-start', (e) => {
   if (!fromConnect(e)) return
@@ -783,6 +1087,8 @@ else {
       log.warn('network', 'A download was refused', { where: item.getURL().slice(0, 200) })
     })
     createWindow()
+    // Waking up is often waking up somewhere else: a connection from away is looked at again.
+    powerMonitor.on('resume', () => { if (tunnel) tunnel.run.networkChanged() })
     if (MAC) Menu.setApplicationMenu(macMenu())
   }).catch((err) => {
     // There's no window and never will be, and an app with none can't be closed.
@@ -791,6 +1097,6 @@ else {
     app.exit(1)
   })
   app.on('window-all-closed', () => app.quit())
-  app.on('before-quit', () => { log.flush() }) // one last try, which may not finish
+  app.on('before-quit', () => { closeTunnel(); log.flush() }) // one last try, which may not finish
   app.on('will-quit', () => log.drainSync())
 }

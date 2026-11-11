@@ -5,6 +5,18 @@ What changed in WittyMediaClient, newest first. What changed before it had a rep
 
 ## Unreleased
 
+- **Desktop: reaching your server from away, with nothing set up on its router.** With a server that has peer-to-peer connections on
+  (WittyMediaServer 0.8.0-alpha, **Settings → Remote Access**), the app pairs itself while it's at home and signed in, and when it later
+  can't find the server at its address it connects peer to peer by itself, still signed in. The title bar says how: direct, or through a
+  relay. A device that was never at home pastes an invite link where the address goes. The connecting is done by `wittyconnect`, a helper
+  built from the server's source (AGPL-3.0-or-later) that ships beside the app; it gives the app an address on this computer that only
+  the app can use. **Change server** also takes the device off the server's list. Run for real on macOS against a real server, on one
+  network (`test/app/p2p-real.js`); not yet across two routers, and not on Windows or Linux. Packages get the helper only when they're
+  built with the server's source at hand (`npm run build:connect`); without it the app says the helper is missing. Not in the FreeBSD
+  package yet.
+- **Apple: the Swift for peer-to-peer connections is written, not wired in.** `PeerConnect` in WittyKit reads invites and the
+  connector's state, and `PeerConnector` wraps the Go library where the framework is added to the app. No screen uses it yet. Android
+  has nothing yet. `docs/PLATFORMS.md` says what remains.
 - **A Flatpak and a Snap of the desktop app.** Each release has `wittymediaclient-<version>-linux-amd64.flatpak` and `.snap`, made by `electron-builder`
   from the same configuration as the other Linux packages (`npm run package:flatpak`, `npm run package:snap`). The Flatpak runs on the freedesktop
   runtime with Flathub's Electron base, and can reach the network, sound, the screen, controllers and Downloads; the Snap is a strictly confined

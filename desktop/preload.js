@@ -66,6 +66,9 @@ if (location.protocol === 'wittymedia-app:') {
     pairStart: (url) => ipcRenderer.invoke('pair-start', url),
     pairPoll: () => ipcRenderer.invoke('pair-poll'),
     pairStop: () => ipcRenderer.send('pair-stop'),
+    // An invite link to a server away from home, and giving up on reaching one.
+    invite: (link) => ipcRenderer.invoke('p2p-invite', link),
+    awayStop: () => ipcRenderer.send('p2p-stop'),
     openLogs: () => ipcRenderer.send('open-logs'),
     ...(TV ? { tv: true, topBack: () => ipcRenderer.send('tv-back', false) } : {}),
   })

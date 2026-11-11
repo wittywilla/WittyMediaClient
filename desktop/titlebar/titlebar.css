@@ -16,6 +16,9 @@ body {
 }
 .title { flex: 1; min-width: 0; align-self: center; padding: 0 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .tools { display: flex; align-items: stretch; flex: none; }
+/* How a server away from home is being reached: said, not hidden behind a colour. */
+.path { align-self: center; padding: 0 10px; white-space: nowrap; opacity: .75; }
+.path[hidden] { display: none; }
 button {
   -webkit-app-region: no-drag;
   border: 0;

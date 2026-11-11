@@ -197,6 +197,23 @@ Android is the next step. On Android, an `http://` address that redirects to `ht
 server, and needs the `https://` address typed. The Apple apps try the `https://` address when it's the same host, and prove it
 again from the start, without following the redirect.
 
+## From away, peer to peer
+
+A server with peer-to-peer connections on (WittyMediaServer 0.8.0-alpha) can be reached from away with nothing set up on its
+router. The design is `docs/P2P.md` in the server's repository. The connecting is a Go library from the server's source, under
+the AGPL-3.0-or-later; each app has to get it its own way.
+
+| App | Where it stands |
+|---|---|
+| **Desktop**, macOS | **Ran.** `test/app/p2p-real.js` drives the real app with the real helper against a real server: pairing itself at home, then finding the server peer to peer once its address stops answering, still signed in; and joining by invite link. On one network only: never across two routers, never through a relay |
+| **Desktop**, Windows and Linux | **Compiled.** The helper cross-compiles and the app's own tests pass. Never started there |
+| **Desktop**, FreeBSD | **Not started.** The package doesn't carry the helper |
+| **Desktop packages** | **Written.** `package.json` copies `bin/<system>-<processor>/wittyconnect` into the package, and the `package:*` scripts build it first when the server's source and Go are at hand (`WITTYMEDIASERVER_SRC`). No package has been made with it |
+| **Apple** (iPhone, iPad, Mac) | **Compiled, not wired in.** `scripts/build-wittyconnect-mobile.sh apple` in the server's repository builds `Wittyconnect.xcframework` (iOS, the simulator, macOS; about 30 MB a slice before linking). `PeerConnect.swift` in WittyKit reads invites and the connector's state, with tests, and its `PeerConnector` type-checks against the framework. What remains: add the framework to `project.yml`; keep the device key in the Keychain; in `AppModel`, enrol after sign-in (`GET` and `POST /api/v1/p2p/devices`) and keep the server's ID and addresses; when the server's address doesn't answer, start a `PeerConnector` and point `WittyClient` at its `baseURL` with the secret header, and AVPlayer at it with the secret cookie; call `networkChanged()` from `NWPathMonitor`; show `state.words`; allow `http://127.0.0.1` in App Transport Security (`NSAllowsLocalNetworking`); an invite field on the connect screen |
+| **Apple TV** | **Not started.** gomobile has no tvOS target, so the library would have to be built another way |
+| **Android** | **Not started.** The same script builds `wittyconnect.aar` with the NDK (not tried: this machine has none). What remains is what the Apple row lists, in Kotlin: the `.aar` in `app/libs`, the key in the Keystore, OkHttp and Media3 pointed at `http://127.0.0.1:<port>` with the secret header, `127.0.0.1` allowed in `network_security.xml`, `NetworkCallback` for network changes. On Android 11 and later Go can't list network cards the usual way, which the library is expected to cope with and hasn't been seen to |
+| **A web browser** | **Can't.** A page can't open the connections this needs. From away it takes an app |
+
 ## Features
 
 Every client reaches everything the server does, except where this says it can't. Video has the native apps' own screens, and on Android and the Apple apps so do music, audiobooks and

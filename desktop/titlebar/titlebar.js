@@ -48,6 +48,12 @@ win.onServer((url) => {
   change.hidden = !url
   if (had && !url) focusFirst()
 })
+// How a server away from home is being reached: directly, or through a relay.
+const route = document.getElementById('path')
+win.onPath((words) => {
+  route.textContent = typeof words === 'string' ? words.slice(0, 60) : ''
+  route.hidden = !route.textContent
+})
 win.onActive((on) => document.documentElement.classList.toggle('inactive', !on))
 win.onMaximized((on) => {
   maximize.classList.toggle('is-maximized', on)

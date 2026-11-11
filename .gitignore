@@ -19,3 +19,4 @@ desktop/out-upgrade/
 apple/build-logs/
 apple/build/
 *.bundle
+desktop/bin/

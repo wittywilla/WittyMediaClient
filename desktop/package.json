@@ -11,14 +11,16 @@
   "private": true,
   "scripts": {
     "sync": "node scripts/sync-shared.mjs",
+    "build:connect": "node scripts/build-wittyconnect.mjs",
+    "test:p2p": "npm run sync && echo 'see test/app/p2p-real.js for what to set' && electron test/app/p2p-real.js",
     "start": "npm run sync && electron .",
-    "test": "npm run sync && node --test ../shared/connect/address.test.js ../shared/connect/qr.test.js test/state.test.js test/connect.test.js test/guards.test.js test/pages.test.js test/moonlight.test.js test/clientlog.test.js test/tv.test.js test/playback.test.js test/mac.test.js test/freebsd.test.js",
+    "test": "npm run sync && node --test ../shared/connect/address.test.js ../shared/connect/qr.test.js test/state.test.js test/connect.test.js test/guards.test.js test/pages.test.js test/moonlight.test.js test/clientlog.test.js test/tv.test.js test/playback.test.js test/mac.test.js test/freebsd.test.js test/p2p.test.js",
     "test:app": "npm run sync && node test/app/all.js",
-    "package:win": "npm run sync && electron-builder --win",
-    "package:linux": "npm run sync && electron-builder --linux",
-    "package:flatpak": "npm run sync && electron-builder --linux flatpak --x64",
-    "package:snap": "npm run sync && electron-builder --linux snap --x64",
-    "package:mac": "npm run sync && electron-builder --mac",
+    "package:win": "npm run sync && node scripts/build-wittyconnect.mjs win-x64 --if-available && electron-builder --win",
+    "package:linux": "npm run sync && node scripts/build-wittyconnect.mjs linux-x64 --if-available && electron-builder --linux",
+    "package:flatpak": "npm run sync && node scripts/build-wittyconnect.mjs linux-x64 --if-available && electron-builder --linux flatpak --x64",
+    "package:snap": "npm run sync && node scripts/build-wittyconnect.mjs linux-x64 --if-available && electron-builder --linux snap --x64",
+    "package:mac": "npm run sync && node scripts/build-wittyconnect.mjs mac-arm64 --if-available && node scripts/build-wittyconnect.mjs mac-x64 --if-available && electron-builder --mac",
     "test:real": "npm run sync && electron test/app/real-server.js",
     "package:freebsd": "npm run sync && node build/freebsd/package.mjs"
   },
@@ -46,6 +48,7 @@
       "tv.js",
       "playback.js",
       "mac.js",
+      "p2p.js",
       "titlebar/**",
       "connect/**"
     ],
@@ -57,6 +60,15 @@
       {
         "from": "../NOTICE",
         "to": "NOTICE"
+      },
+      {
+        "from": "bin/${os}-${arch}",
+        "to": ".",
+        "filter": [
+          "wittyconnect",
+          "wittyconnect.exe",
+          "THIRD-PARTY-NOTICES.wittyconnect.txt"
+        ]
       }
     ],
     "publish": null,
