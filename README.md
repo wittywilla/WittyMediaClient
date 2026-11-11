@@ -161,7 +161,7 @@ WMC_SERVER=http://192.168.1.20:8096 WMC_USER=me WMC_PASSWORD=... npm run test:re
 
 On FreeBSD, run Electron yourself, as the `electron` npm package has no build for it: `/usr/local/share/electron42/electron test/app/real-server.js --tv`. Set `WMC_APP` to an installed `app.asar` to test that instead of this folder.
 
-In the app, Tab moves around the page. **F6** moves between the page and the title bar, where the arrow keys move along the bar and Escape goes back to the page. **Change server** signs out of the server you're leaving.
+In the app, Tab moves around the page. **F6** moves between the page and the title bar, where the arrow keys move along the bar and Escape goes back to the page. **Change server** signs out of the server you're leaving. On the list of servers, each one under **Used before** has a bin beside it when you point at it or move to it with the keyboard; Delete or Backspace on the server, or a right-click, does the same. It can be undone for a few seconds. After that the app has forgotten the server: its address, your sign-in to it (which the server is told to end) and everything kept for it on this computer. **Remove all servers** and **Remove servers not reached for…** are under the list, and ask first.
 
 On a Mac the window has the system's own red, yellow and green buttons, at the left of the title bar, and the app has a menu bar: Help is there, and Change server is under **Server**. A double-click on the title bar does what System Settings say.
 
