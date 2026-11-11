@@ -101,6 +101,9 @@ jobs:
         if: matrix.format == 'flatpak'
         run: |
           sudo apt-get update && sudo apt-get install -y flatpak flatpak-builder elfutils
+          # flatpak-builder's sandbox needs user namespaces, which Ubuntu 24.04 refuses a program
+          # it has no profile for. This machine is thrown away after the job.
+          sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0 || true
           flatpak remote-add --user --if-not-exists flathub https://dl.flathub.org/repo/flathub.flatpakrepo
           version=$(node -p "require('./desktop/package.json').build.flatpak.runtimeVersion")
           base=$(node -p "require('./desktop/package.json').build.flatpak.baseVersion")
@@ -176,7 +179,7 @@ jobs:
           distribution: temurin
           java-version: 17
       - uses: android-actions/setup-android@be39fa834029ff78f1a44aa3bb0819b8fc2bd8fd # v4.0.4
-      - uses: gradle/actions/setup-gradle@7296c772c13d12d9871528814b51fb2143c138ef # v6.4.1
+      - uses: gradle/actions/setup-gradle@8da46b539cd8fe6ab27ca75128919a18d757604c # v6.4.1
         with:
           gradle-version: 9.8.2
       - name: Test and build

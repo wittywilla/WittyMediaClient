@@ -20,7 +20,8 @@ fail() { echo "FAIL: $*" >&2; exit 1; }
 case "$from" in
   *.deb)
     entry=$(dpkg-deb --fsys-tarfile "$from" | tar -xO --wildcards '*usr/share/applications/*.desktop') || fail "$from has no launcher entry in usr/share/applications"
-    dpkg-deb --fsys-tarfile "$from" | tar -t | grep -Eq '(^|/)usr/share/icons/hicolor/[^/]+/apps/wittymediaclient\.png$' || fail "$from has no wittymediaclient icon for the launcher"
+    # Not grep -q: it stops reading at the match, tar dies writing to it, and pipefail calls that a failure.
+    dpkg-deb --fsys-tarfile "$from" | tar -t | grep -E '(^|/)usr/share/icons/hicolor/[^/]+/apps/wittymediaclient\.png$' >/dev/null || fail "$from has no wittymediaclient icon for the launcher"
     ;;
   *) entry=$(cat "$from") ;;
 esac

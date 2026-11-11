@@ -7,7 +7,7 @@
 #
 #   bash apple/scripts/check-on-mac.sh
 set -u
-cd "$(dirname "$0")/.."
+cd "$(dirname "$0")/.." || exit 1
 LOGS="$PWD/build-logs"
 rm -rf "$LOGS"
 mkdir -p "$LOGS"

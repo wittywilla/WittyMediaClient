@@ -59,6 +59,7 @@ archive() { # scheme, platform, name
 # found and not assumed.
 pack() { # archive name, ipa name
   local app stage
+  [ -d "$OUT/$1.xcarchive/Products/Applications" ] || fail "No $1.xcarchive in apple/build with an app in it: archive first, without SKIP_ARCHIVE"
   app=$(find "$OUT/$1.xcarchive/Products/Applications" -maxdepth 1 -name '*.app' | head -1)
   [ -n "$app" ] || fail "No .app in $1.xcarchive"
   stage=$(mktemp -d)
