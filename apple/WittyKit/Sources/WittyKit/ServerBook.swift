@@ -72,8 +72,9 @@ public enum ServerBook {
         public let list: [SavedServer]
         /// Entries the server took the place of at another address: what was kept for it there goes with it.
         public let moves: [ServerMove]
-        /// Addresses another server was remembered at until this one took them: what was kept there was the other's.
-        public let cleared: [String]
+        /// Other servers this one took the place of, at its address or under its ID with another key: what
+        /// was kept for them isn't this one's.
+        public let replaced: [SavedServer]
         /// Pushed out of the end of the list by the newest.
         public let dropped: [SavedServer]
     }
@@ -85,11 +86,11 @@ public enum ServerBook {
         fresh.lastSeen = max(now, 0)
         var others: [SavedServer] = []
         var movedFrom: [SavedServer] = []
-        var cleared: [String] = []
+        var replaced: [SavedServer] = []
         for old in list {
             guard sameEntry(old, server) else { others.append(old); continue }
             if conflict(old, server) {
-                if old.url == server.url { cleared.append(old.url) }
+                replaced.append(old)
             } else {
                 fresh = fill(fresh, from: old)
                 fresh.lastSeen = max(now, 0)
@@ -97,7 +98,7 @@ public enum ServerBook {
             }
         }
         let all = [fresh] + others
-        return Remembered(list: Array(all.prefix(limit)), moves: movedFrom.map { ServerMove(from: $0, to: fresh) }, cleared: cleared,
+        return Remembered(list: Array(all.prefix(limit)), moves: movedFrom.map { ServerMove(from: $0, to: fresh) }, replaced: replaced,
                           dropped: Array(all.dropFirst(limit)))
     }
 

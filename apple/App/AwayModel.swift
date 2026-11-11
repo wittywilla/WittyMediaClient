@@ -357,7 +357,7 @@ extension AppModel {
         let shown = PlainWords.clean(answer.serverName.isEmpty ? name : answer.serverName, limit: 80)
         let server = proof.saved(url: home, name: shown.isEmpty ? (known?.name ?? "WittyMediaServer") : shown, brandLogo: known?.brandLogo ?? "")
         keepAway(PeerInfo(serverID: serverID, hints: hints, port: peers.route.current?.port ?? 0), for: server)
-        recent = SavedServer.remember(server, in: recent)
+        remember(server)
         signIn(to: server)
         guard !answer.code.isEmpty else { return nil }
         do {

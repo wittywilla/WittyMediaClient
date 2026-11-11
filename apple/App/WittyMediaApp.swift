@@ -50,7 +50,10 @@ struct WittyMediaApp: App {
                 .modifier(MetricsForWidth())
                 .preferredColorScheme(model.scheme)
                 .tint(model.palette.accentText)
-                .task { await model.start() }
+                .task {
+                    model.tidyServers()
+                    await model.start()
+                }
         }
     }
 }

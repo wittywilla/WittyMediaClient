@@ -47,7 +47,7 @@ final class ServerBookTests: XCTestCase {
         XCTAssertEqual(done.list[1], other)
         XCTAssertEqual(done.moves.map(\.from.url), ["http://10.0.0.1:9797"])
         XCTAssertEqual(done.moves.first?.to.url, "http://10.0.0.2:9797")
-        XCTAssertTrue(done.cleared.isEmpty && done.dropped.isEmpty)
+        XCTAssertTrue(done.replaced.isEmpty && done.dropped.isEmpty)
     }
 
     func testTheSameAddressIsUpdatedInPlaceWithNothingMoved() {
@@ -63,14 +63,14 @@ final class ServerBookTests: XCTestCase {
         let old = server("http://10.0.0.1:9797", "Home", logo: "v1")
         let done = ServerBook.remember(server("http://10.0.0.1:9797", "", id: "a", key: "K"), in: [old], now: now)
         XCTAssertEqual(done.list, [server("http://10.0.0.1:9797", "Home", id: "a", key: "K", logo: "v1", seen: now)])
-        XCTAssertTrue(done.cleared.isEmpty, "the same server, as far as anyone knows")
+        XCTAssertTrue(done.replaced.isEmpty, "the same server, as far as anyone knows")
     }
 
     func testAnotherServerTakingAnAddressSharesNothingWithTheOneBefore() {
         let old = server("http://10.0.0.1:9797", "Old", id: "a", key: "K", logo: "v1", seen: 5)
         let done = ServerBook.remember(server("http://10.0.0.1:9797", "New", id: "b", key: "L"), in: [old], now: now)
         XCTAssertEqual(done.list, [server("http://10.0.0.1:9797", "New", id: "b", key: "L", seen: now)])
-        XCTAssertEqual(done.cleared, ["http://10.0.0.1:9797"], "what was kept at that address was the old server's")
+        XCTAssertEqual(done.replaced, [old], "what was kept at that address was the old server's")
         XCTAssertTrue(done.moves.isEmpty)
     }
 

@@ -120,6 +120,8 @@ enum Route: Hashable {
     case names, password, twoStep, devices, signInTv, theme
     /// How this device reaches the server from away: see AwayViews.swift.
     case away
+    /// The servers this device remembers, to remove: see ManageServersViews.swift.
+    case servers
     /// Apple TV's choice of libraries for the top menu: see YouViews.swift.
     case topMenu
     /// WittyPlay on Apple TV: a games library or one console's games in it, a game's page, and a
@@ -437,7 +439,7 @@ final class AppModel: ObservableObject {
 
     /// Opens a server with a token that was kept with its key. Answers words to show if it can't.
     func openWithToken(_ opening: SavedServer) async -> String? {
-        recent = SavedServer.remember(opening, in: recent)
+        remember(opening)
         openServer(opening, token: Keychain.token)
         do {
             // A server can stop working with this app between one run and the next.
@@ -577,7 +579,7 @@ final class AppModel: ObservableObject {
             return say("errUnreachable")
         case .new where proof.publicKey == shown.publicKey:
             forgetSignIn()
-            recent = SavedServer.remember(shown, in: recent)
+            remember(shown)
             stage = .code(shown, fromSignIn: false)
             return nil
         case .new:
@@ -663,7 +665,7 @@ final class AppModel: ObservableObject {
         let kept = current ?? SavedServer(url: client.base, name: "WittyMediaServer")
         notice = Keychain.save(token: token, pin: kept.publicKey) ? "" : "This device couldn't keep your sign-in, so you'll be asked again next time."
         server = kept.url
-        recent = SavedServer.remember(kept, in: recent)
+        remember(kept)
         client = connection(to: kept.url, token: token)
         self.user = user
         paths = [:]
