@@ -406,6 +406,11 @@ final class SyncPlayTests: XCTestCase {
         XCTAssertEqual(SyncCode.clean("K X M 4 T 7 9 9"), "KXM4T7", "no longer than a code is")
         XCTAssertEqual(SyncCode.clean("kx!m"), "KXM")
         XCTAssertEqual(SyncCode.spaced("KXM4T7"), "KXM 4T7")
+        // Apple TV's pad has a key for every letter and digit a code could hold, each once.
+        let keys = SyncCode.padRows.joined()
+        XCTAssertEqual(Set(keys).count, 36)
+        XCTAssertEqual(keys.count, 36)
+        XCTAssertEqual(SyncCode.clean(keys, length: 36), keys)
     }
 
     func testAPartyFromAnEpisodeQueuesTheRestOfItsSeason() throws {

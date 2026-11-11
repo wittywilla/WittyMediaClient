@@ -114,15 +114,29 @@ private struct PartyCodeEntry: View {
 
     var body: some View {
         #if os(tvOS)
-        VStack(spacing: Tokens.Space.s4) {
+        VStack(spacing: Tokens.Space.s5) {
             CodeBoxes(digits: code, count: length, checking: checking, wrongTries: wrongTries)
                 .accessibilityLabel("Code")
-            // The system's keyboard, which the remote types on, opens from this.
-            TextField("Type the code", text: Binding(get: { code }, set: typed))
-                .autocorrectionDisabled()
-                .frame(maxWidth: 520)
-                .onSubmit { if code.count == length { onComplete(code) } }
+                .accessibilityValue(code)
                 .accessibilityIdentifier("party-code")
+            // Letters and numbers under the remote's arrows: quicker than the system's keyboard for six of them.
+            Grid(horizontalSpacing: Tokens.Space.s2, verticalSpacing: Tokens.Space.s2) {
+                ForEach(SyncCode.padRows, id: \.self) { row in
+                    GridRow {
+                        ForEach(Array(row), id: \.self) { letter in
+                            Button { typed(code + String(letter)) } label: {
+                                Text(String(letter)).font(.title3.weight(.semibold)).frame(width: 84, height: 64)
+                            }
+                            .buttonStyle(CodeKeyStyle())
+                            .accessibilityIdentifier("key-\(letter)")
+                        }
+                    }
+                }
+            }
+            .remoteSection()
+            Button { if !code.isEmpty { code.removeLast() } } label: { Label("Delete", systemImage: "delete.left") }
+                .action()
+                .accessibilityIdentifier("key-delete")
         }
         .frame(maxWidth: .infinity)
         #else
@@ -146,6 +160,32 @@ private struct PartyCodeEntry: View {
         #endif
     }
 }
+
+#if os(tvOS)
+/// A key of the code pad: with the remote's highlight it fills, as the number pad's keys do.
+private struct CodeKeyStyle: ButtonStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        KeyBody(label: configuration.label, pressed: configuration.isPressed)
+    }
+
+    private struct KeyBody<Label: View>: View {
+        @Environment(\.palette) private var palette
+        @Environment(\.isFocused) private var focused
+        @Environment(\.accessibilityReduceMotion) private var reduceMotion
+        let label: Label
+        let pressed: Bool
+
+        var body: some View {
+            label
+                .foregroundStyle(focused ? palette.background : palette.text)
+                .background(RoundedRectangle(cornerRadius: Tokens.Radius.md, style: .continuous).fill(focused ? palette.text : palette.card))
+                .scaleEffect(focused && !reduceMotion ? 1.06 : 1)
+                .opacity(pressed ? 0.8 : 1)
+                .animation(reduceMotion ? nil : .easeOut(duration: Tokens.Motion.focus), value: focused)
+        }
+    }
+}
+#endif
 
 struct PartyStartView: View {
     @EnvironmentObject private var model: AppModel

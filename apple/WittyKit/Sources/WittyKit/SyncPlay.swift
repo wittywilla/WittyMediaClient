@@ -371,6 +371,10 @@ public enum SyncCode {
         String(typed.uppercased().filter { $0.isASCII && ($0.isLetter || $0.isNumber) }.prefix(length))
     }
 
+    /// The keys of Apple TV's code pad, a row at a time: every letter and digit, since a code is typed as it's
+    /// read out and the server forgives what its own codes never use.
+    public static let padRows = ["ABCDEFGHI", "JKLMNOPQR", "STUVWXYZ0", "123456789"]
+
     /// As it's shown and read out: in two halves, "KXM 4T7".
     public static func spaced(_ code: String) -> String {
         guard code.count > 3 else { return code }

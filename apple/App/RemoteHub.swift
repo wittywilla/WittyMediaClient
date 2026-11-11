@@ -418,6 +418,11 @@ struct RemoteRoot: ViewModifier {
             .task(id: "\(model.client.base)|\(model.client.token.isEmpty)|\(model.stage == .browsing)|\(model.user?.id ?? 0)|\(model.features.count)") {
                 model.remote.session(model: model, client: model.client, signedIn: model.stage == .browsing && !model.client.token.isEmpty,
                                      features: model.features)
+                #if DEBUG
+                // For the UI tests and for checking a screen on a simulator: `-WMCOpenItem <id>` opens that title's page.
+                let open = UserDefaults.standard.integer(forKey: "WMCOpenItem")
+                if open > 0, model.stage == .browsing, model.paths[.home]?.isEmpty ?? true { model.paths[.home] = [.item(Int64(open))] }
+                #endif
             }
             // Music starting or stopping behind other apps changes whether the channel can be held.
             .onReceive(model.listening.$isPlaying) { _ in
