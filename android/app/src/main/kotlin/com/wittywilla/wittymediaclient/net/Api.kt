@@ -30,7 +30,17 @@ import java.util.concurrent.TimeUnit
 import javax.net.ssl.SSLException
 
 // twoFactor: the password was right, or a code was wrong, and the server wants its authenticator code.
-class ApiError(val status: Int, message: String, val location: String = "", val twoFactor: Boolean = false) : Exception(message)
+// code: the server's word for programs ("screen-time", "feature-off", "offline", "stale"), when the refusal has one.
+// body: the whole refusal, for the few that carry more (screenTime, room), cut to what a refusal can sensibly be.
+class ApiError(
+    val status: Int,
+    message: String,
+    val location: String = "",
+    val twoFactor: Boolean = false,
+    val code: String = "",
+    val body: String = "",
+    val retryAfterSec: Int = 0,
+) : Exception(message)
 
 val json = Json {
     ignoreUnknownKeys = true
@@ -48,7 +58,7 @@ private const val SPEEDTEST_CUTOFF_NS = 1_500_000_000L
 private const val SPEEDTEST_MIN_BYTES = 32L * 1024
 private val shared = OkHttpClient() // connections and threads are reused across servers
 
-private data class Answer(val status: Int, val text: String, val requestId: String, val location: String)
+private data class Answer(val status: Int, val text: String, val requestId: String, val location: String, val retryAfter: Int = 0)
 
 // One connection to one server. The token only ever goes to that server, in a
 // header, so it stays out of URLs and logs. Redirects are never followed. Quick is
@@ -82,7 +92,7 @@ class Api(val base: String, val token: String, private val quick: Boolean = fals
             .build()
         http.newCall(request).execute().use { res ->
             // Cut off at the limit, an answer that's too long can't be read as JSON either.
-            Answer(res.code, res.peekBody(if (quick) QUICK_MAX_BYTES else MAX_BYTES).string(), res.header("X-Request-Id").orEmpty(), res.header("Location").orEmpty())
+            Answer(res.code, res.peekBody(if (quick) QUICK_MAX_BYTES else MAX_BYTES).string(), res.header("X-Request-Id").orEmpty(), res.header("Location").orEmpty(), res.header("Retry-After")?.toIntOrNull() ?: 0)
         }
     }
 
@@ -106,7 +116,10 @@ class Api(val base: String, val token: String, private val quick: Boolean = fals
                 if (answer.status >= 500) ClientLog.error("request", words, request = answer.requestId)
                 else ClientLog.warn("request", words, request = answer.requestId)
             }
-            throw ApiError(answer.status, message, answer.location, twoFactor = asksForCode(answer.status, answer.text))
+            throw ApiError(
+                answer.status, message, answer.location, twoFactor = asksForCode(answer.status, answer.text),
+                code = errorCode(answer.text), body = answer.text.take(MAX_REFUSAL_CHARS), retryAfterSec = answer.retryAfter,
+            )
         }
         return answer.text
     }
@@ -409,6 +422,12 @@ class Api(val base: String, val token: String, private val quick: Boolean = fals
         return base + path
     }
 }
+
+// A refusal's code for programs: {"error": "...", "code": "screen-time"}. Empty when it has none.
+fun errorCode(text: String): String =
+    runCatching { json.parseToJsonElement(text).jsonObject["code"]?.jsonPrimitive?.content }.getOrNull().orEmpty()
+
+private const val MAX_REFUSAL_CHARS = 64 * 1024
 
 // A refused sign-in that asks for the authenticator's code: {"error": "...", "twoFactor": true}.
 fun asksForCode(status: Int, text: String): Boolean =
