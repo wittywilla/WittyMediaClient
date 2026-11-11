@@ -45,6 +45,7 @@ struct PhonePlayerScreen: View {
             let shown = id
             playback.onFinished = { [weak model] next in model?.videoFinished(next: next, from: shown) }
             model.video = playback
+            playback.skips.wanted = model.has(MediaFeature.markers)
             await playback.start(id: id, client: client, startOver: startOver)
         }
     }
@@ -174,8 +175,8 @@ struct VideoPlayerView: View {
                     .accessibilityHidden(true)
                 if clock.waiting && playback.error.isEmpty { PlayerSpinner() }
                 if !playback.error.isEmpty { failure }
-                if let end = playback.introEnd, playback.error.isEmpty {
-                    Button("Skip intro ›") { touched(); playback.seek(toFilm: end) }
+                if playback.error.isEmpty {
+                    SkipButtons(playback: playback, skips: playback.skips, touched: touched)
                         .buttonStyle(SkipIntroStyle())
                         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomTrailing)
                         .padding(.trailing, Tokens.Space.s6)
@@ -849,6 +850,7 @@ private struct ViewSettingsPanel: View {
                     row("Streaming") {
                         PlayerSegments(choices: DeviceStreaming.allCases.map { ($0.words, $0) }, chosen: streaming) { setStreaming($0) }
                     }
+                    SkipGearRows()
                     Text(scope == .item ? "Seek bar, remote and picture: saved for this video on this device."
                                         : "Seek bar, remote and picture: saved for all videos on this device.")
                         .font(.system(size: 12)).foregroundStyle(PlayerInk.hint).padding(.top, Tokens.Space.s3)

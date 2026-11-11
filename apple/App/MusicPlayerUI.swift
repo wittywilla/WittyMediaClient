@@ -568,6 +568,7 @@ struct PhoneNowPlaying: View {
             ZStack(alignment: .top) {
                 Color.black
                 glowLayer(full)
+                CanvasLayer(item: music ? now?.item.id : nil, active: !karaoke, shade: Color.black.opacity(0.5))
                 if vizHere, vizLoaded, viz.viz {
                     VisualizerBackground(style: style, slow: viz.slow, colour: glow, playing: listening.isPlaying)
                 }

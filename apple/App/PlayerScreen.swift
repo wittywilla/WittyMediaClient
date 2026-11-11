@@ -43,6 +43,8 @@ final class PlaybackModel: ObservableObject {
     /// While the video floats over other apps, going to the background isn't a reason to pause.
     var inPictureInPicture = false
     var onFinished: (@MainActor (Int64?) -> Void)?
+    /// Skip recap, intro, adverts and credits, and skipping by itself: see MediaSkips.swift.
+    let skips = SkipDriver()
 
     private var clock = PlaybackClock()
     private var retry = RetryBudget()
@@ -229,6 +231,7 @@ final class PlaybackModel: ObservableObject {
             }
             let before = stream
             stream = answer
+            skips.opened(item: id, stream: answer, client: client)
             ClientLog.shared.session = answer.streamId ?? ""
             error = ""
             if replace || answer.url != before?.url {
@@ -423,6 +426,10 @@ final class PlaybackModel: ObservableObject {
         let intro = stream?.intro
         let skip = intro.flatMap { clock.filmSeconds >= $0.startSec && clock.filmSeconds < $0.endSec - 1 ? $0.endSec : nil }
         if skip != introEnd { introEnd = skip }
+        if let to = skips.tick(film: clock.filmSeconds, duration: stream?.durationSec ?? item?.runtimeSec ?? 0, hasNext: stream?.nextId != nil,
+                               playing: playing, rate: Double(player.rate)) {
+            skips.jump { seek(toFilm: to) }
+        }
         let near = stream?.nextId != nil && clock.nearEnd(duration: stream?.durationSec)
         if near != offerNext { offerNext = near }
     }
@@ -430,6 +437,7 @@ final class PlaybackModel: ObservableObject {
     /// Goes past what a growing stream has so far by opening a new one.
     func seek(toFilm target: Double) {
         guard let current = stream else { return }
+        skips.seeked()
         let known = player.currentItem?.seekableTimeRanges.last?.timeRangeValue.end.seconds
         switch current.seekPlan(toFilm: target, seekableEnd: known) {
         case .inPlayer(let at):
@@ -502,6 +510,7 @@ final class PlaybackModel: ObservableObject {
         // Stops the conversion straight away instead of letting it run on.
         endOnServer(stream?.streamId)
         stream = nil
+        skips.reset()
         introEnd = nil
         offerNext = false
         countdown = nil
@@ -649,6 +658,7 @@ private struct PlayerHost: NSViewRepresentable {
 #else
 private struct PlayerHost: UIViewControllerRepresentable {
     @ObservedObject var playback: PlaybackModel
+    @ObservedObject var skips: SkipDriver
 
     final class Coordinator: NSObject, AVPlayerViewControllerDelegate {
         let playback: PlaybackModel
@@ -688,7 +698,7 @@ private struct PlayerHost: UIViewControllerRepresentable {
         #if os(tvOS)
         // On Apple TV the choices belong in the system player's own bar, where the remote reaches them.
         let stream = playback.stream
-        let shape = "\(stream?.url ?? "")|\(stream?.audioIndex ?? -2)|\(stream?.subtitleIndex ?? -2)|\(playback.introEnd != nil)|\(playback.offerNext)"
+        let shape = "\(stream?.url ?? "")|\(stream?.audioIndex ?? -2)|\(stream?.subtitleIndex ?? -2)|\(skips.shape)|\(playback.offerNext)"
         guard shape != context.coordinator.builtFrom else { return }
         context.coordinator.builtFrom = shape
         var menus: [UIMenuElement] = []
@@ -705,7 +715,7 @@ private struct PlayerHost: UIViewControllerRepresentable {
         }
         controller.transportBarCustomMenuItems = menus
         var actions: [UIAction] = []
-        if playback.introEnd != nil { actions.append(UIAction(title: "Skip intro") { _ in playback.skipIntro() }) }
+        actions += skips.actions(playback)
         if playback.offerNext { actions.append(UIAction(title: "Next episode") { _ in playback.playNext() }) }
         controller.contextualActions = actions
         #endif
@@ -792,7 +802,7 @@ private struct SystemPlayerScreen: View {
             Color.black.ignoresSafeArea()
             if playback.error.isEmpty {
                 // No label of its own: the system's player already speaks for itself and its controls.
-                PlayerHost(playback: playback).ignoresSafeArea()
+                PlayerHost(playback: playback, skips: playback.skips).ignoresSafeArea()
             } else {
                 // The player is always dark, whatever the theme. There's a way out here on any
                 // device: on a TV there would otherwise be nothing to focus at all.
@@ -835,6 +845,7 @@ private struct SystemPlayerScreen: View {
             // A film stops the music, whether or not the system has said so yet.
             model.listening.pauseForVideo()
             playback.onFinished = { next in moveOn(next) }
+            playback.skips.wanted = model.has(MediaFeature.markers)
             await playback.start(id: id, client: client, startOver: startOver)
         }
         .onDisappear { playback.stop() }

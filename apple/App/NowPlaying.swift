@@ -495,6 +495,10 @@ struct NowPlayingView: View {
                 upright
             }
         }
+        .background {
+            // The song's canvas behind everything, under enough of the page's colour to read the words on it.
+            CanvasLayer(item: listening.now.flatMap { $0.keepsPlace ? nil : $0.item.id }, shade: palette.background.opacity(0.6)).ignoresSafeArea()
+        }
         .background(palette.background.ignoresSafeArea())
         // The queue was cleared, from here or from elsewhere.
         .onChange(of: listening.now == nil) { gone in

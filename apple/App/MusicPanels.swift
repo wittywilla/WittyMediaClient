@@ -899,6 +899,7 @@ private struct TapAlongView: View {
 /// Big words that fill in as they're sung, a count-in before each line after a break, the next line waiting below,
 /// the voice turned down and the key moved to suit the singer.
 struct KaraokeView: View {
+    @EnvironmentObject private var model: AppModel
     @EnvironmentObject private var listening: Listening
     @Environment(\.client) private var client
     let item: Item
@@ -935,6 +936,7 @@ struct KaraokeView: View {
                     top(h)
                     stage(h)
                         .frame(maxHeight: .infinity)
+                    KaraokeStemsBar(stems: model.media.stems)
                     controls(compact: compact)
                     Text(note).font(.system(size: 13)).foregroundStyle(NPInk.fg2).multilineTextAlignment(.center)
                         .frame(minHeight: 18)
@@ -1065,6 +1067,7 @@ struct KaraokeView: View {
             .accessibilityLabel(listening.isPlaying ? "Pause" : "Play")
             NPRoundButton(symbol: "forward.end.fill", label: "Next line", size: 52) { goLine(1, from: index) }
             if !compact { NPInk.line.frame(width: 1, height: 34).padding(.horizontal, 4) }
+            KaraokeVoiceChoice(stems: model.media.stems) {
             HStack(spacing: 2) {
                 ForEach(Array(Karaoke.vocals.enumerated()), id: \.offset) { _, choice in
                     let on = listening.sound.vocalCut == choice.0
@@ -1080,6 +1083,7 @@ struct KaraokeView: View {
             .background(Capsule().fill(NPInk.chip))
             .accessibilityElement(children: .contain)
             .accessibilityLabel("Singer's voice")
+            }
             stepper(words: Karaoke.keyWords(listening.sound.keyShift), compact: compact,
                     lower: ("Lower key", listening.sound.keyShift > -6, { setKey(listening.sound.keyShift - 1) }),
                     raise: ("Raise key", listening.sound.keyShift < 6, { setKey(listening.sound.keyShift + 1) }))

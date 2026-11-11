@@ -118,6 +118,8 @@ enum Route: Hashable {
     case logs
     /// The person's own account and this device's choices, from You: see YouViews.swift.
     case names, password, twoStep, devices, signInTv, theme
+    /// Skipping by itself and canvases, on this device: see MediaPages.swift.
+    case mediaExtras
     /// Apple TV's choice of libraries for the top menu: see YouViews.swift.
     case topMenu
     /// WittyPlay on Apple TV: a games library or one console's games in it, a game's page, and a
@@ -198,6 +200,8 @@ final class AppModel: ObservableObject {
     @Published private(set) var topMenu: [Int64] = []
     /// Music, audiobooks and podcasts, which carry on whatever screen is showing.
     let listening = Listening()
+    /// Canvases, karaoke's stems and the rest of the server's media extras: see MediaPages.swift.
+    lazy var media = MediaExtras(listening: listening)
     @Published var libraries: [Library] = []
     /// The phone's Menu: the drawer of libraries from the left.
     @Published var menuOpen = false
@@ -537,6 +541,7 @@ final class AppModel: ObservableObject {
         do {
             let result = try await client.login(name: name, password: given.string(forKey: "WMCPassword") ?? "", device: deviceName)
             signedIn(token: result.token, user: result.user)
+            openForMediaTests()
         } catch {
             stage = .signIn(.usual)
         }

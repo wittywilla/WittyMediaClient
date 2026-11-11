@@ -450,7 +450,14 @@ final class Listening: ObservableObject {
 
     /// How loud a deck is: the volume, times where it is in a crossfade.
     private func level(_ deck: AVPlayer) {
-        deck.volume = Float(sound.muted ? 0 : sound.volume) * (deckFade[ObjectIdentifier(deck)] ?? 1)
+        deck.volume = Float(sound.muted ? 0 : sound.volume) * (deckFade[ObjectIdentifier(deck)] ?? 1) * (deck === player ? stemGain : 1)
+    }
+
+    /// Karaoke's stems (MediaStems.swift) play beside the song: the deck they follow and its stream, and how much of
+    /// the song's own sound is heard under them.
+    var stemsDeck: (player: AVPlayer, stream: Playback?) { (player, stream) }
+    var stemGain: Float = 1 {
+        didSet { if stemGain != oldValue { level(player) } }
     }
 
     /// A song tagged with how loud it is, brought to one level: music only.

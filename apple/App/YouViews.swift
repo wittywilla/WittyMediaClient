@@ -103,6 +103,10 @@ struct YouView: View {
         }
         ListGroup(title: say("groupDevice")) {
             row(.theme, "paintpalette", RowTint.teal, "rowTheme", value: ThemeView.name(of: model.themeChoice, server: model.themeId, list: model.themeList))
+            NavigationLink(value: Route.mediaExtras) {
+                RowLabel(icon: "forward.end", tint: RowTint.gold, title: "Skipping and moving pictures")
+            }
+            .rowStyle()
             #if os(tvOS)
             row(.topMenu, "menubar.rectangle", RowTint.tv, "rowTopMenu", value: model.topMenu.isEmpty ? "" : "\(model.topMenu.count)")
             #endif

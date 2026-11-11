@@ -8,7 +8,7 @@ import Foundation
 // screen. This is the rule for when it plays; MediaCanvas.swift in the app plays it.
 
 /// What `GET /media/{id}/canvas` answers.
-public struct CanvasInfo: Decodable, Equatable {
+public struct CanvasInfo: Decodable, Equatable, Sendable {
     public let available: Bool?
     public let url: String?
     public let mime: String?

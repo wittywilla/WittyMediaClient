@@ -179,6 +179,7 @@ private struct TabRoot: View {
                     case .devices: DevicesView().plainNavigation()
                     case .signInTv: SignInTvView().plainNavigation()
                     case .theme: ThemeView().plainNavigation()
+                    case .mediaExtras: MediaSettingsView().plainNavigation()
                     #if os(tvOS)
                     case .topMenu: TopMenuView().plainNavigation()
                     #else

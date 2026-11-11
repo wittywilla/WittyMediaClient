@@ -152,6 +152,12 @@ public enum StemMix {
         public var backing: Float
         /// The song itself, inside the mix (only in `blend`).
         public var song: Float
+
+        public init(vocals: Float, backing: Float, song: Float) {
+            self.vocals = vocals
+            self.backing = backing
+            self.song = song
+        }
     }
 
     public static func clamp(_ voice: Double) -> Double { voice.isFinite ? min(1, max(0, voice)) : 1 }
