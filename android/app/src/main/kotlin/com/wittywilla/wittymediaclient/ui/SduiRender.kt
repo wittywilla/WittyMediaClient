@@ -1,0 +1,301 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+// Copyright (C) 2026 WittyWilla and contributors
+package com.wittywilla.wittymediaclient.ui
+
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyListScope
+import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Text
+import androidx.compose.material3.pulltorefresh.PullToRefreshBox
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.compositionLocalOf
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.heading
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.dp
+import com.wittywilla.wittymediaclient.net.GUIDE_PATH
+import com.wittywilla.wittymediaclient.net.SduiScreen
+import com.wittywilla.wittymediaclient.net.SduiScreenTime
+import com.wittywilla.wittymediaclient.net.SduiTokens
+import com.wittywilla.wittymediaclient.net.SduiView
+import com.wittywilla.wittymediaclient.net.str
+import com.wittywilla.wittymediaclient.tv.GuideScreen
+import kotlinx.coroutines.delay
+
+// A page drawn: one scrolling column of the page's sections, rows of cards that scroll sideways inside it, a grid
+// that pages as it is scrolled (docs/SDUI.md, Rules for renderers). Everything long is laid out lazily: a section,
+// one row of a grid's cards, one row of a list is each an item of the page's one lazy column.
+
+// The width sections have to themselves, and the room they leave at each side, on this screen.
+class SduiSpan(val content: Dp, val side: Dp)
+
+val LocalSduiSpan = compositionLocalOf { SduiSpan(360.dp, 16.dp) }
+
+// One item of the page's column.
+sealed class SduiRow(val key: String, val kind: String) {
+    // A component drawn whole: a row of cards, a spotlight, a notice.
+    class Block(val view: SduiView, val parent: SduiView?, val first: Boolean) : SduiRow(view.id, view.type)
+
+    // The heading of something whose rows follow as items of their own.
+    class Head(val view: SduiView, val first: Boolean) : SduiRow(view.id, "head-" + view.type)
+
+    // One row of a grid's cards.
+    class Cards(val grid: SduiView, val index: Int, val cards: List<SduiView>, val columns: Int, val nearEnd: Boolean) :
+        SduiRow(grid.id + "~row~" + (cards.firstOrNull()?.id ?: index.toString()), "cards")
+
+    // One row of a list: a list item, a track, or an episode on a phone.
+    class Line(val view: SduiView, val parent: SduiView, val nearEnd: Boolean) : SduiRow(view.id, "line-" + view.type)
+
+    // The app's own view, which takes the rest of the page.
+    class Native(val view: SduiView) : SduiRow(view.id, "native")
+}
+
+object SduiRows {
+    private val LONG = setOf("Grid", "List", "TrackList", "SeasonList", "Tabs", "NativeView")
+    private const val NEAR_END_ROWS = 2
+    private const val NEAR_END_LINES = 6
+
+    // The page's sections as the items of one column. `columns` is how many cards a grid has across on this screen.
+    fun flatten(screen: SduiScreen, tv: Boolean, columns: (SduiView) -> Int): List<SduiRow> {
+        val out = ArrayList<SduiRow>()
+        fun add(view: SduiView, parent: SduiView?) {
+            val first = out.isEmpty()
+            val ready = !view.deferred && !view.failed && !view.empty && view.children.isNotEmpty()
+            when {
+                view.type == "NativeView" && view.props.str("view") == "guide" -> out += SduiRow.Native(view)
+                view.type == "Grid" && ready -> {
+                    out += SduiRow.Head(view, first)
+                    val across = columns(view).coerceAtLeast(1)
+                    val rows = view.children.chunked(across)
+                    rows.forEachIndexed { i, cards -> out += SduiRow.Cards(view, i, cards, across, i >= rows.size - NEAR_END_ROWS) }
+                }
+                (view.type == "List" || view.type == "TrackList" || (view.type == "SeasonList" && !tv)) && ready -> {
+                    out += SduiRow.Head(view, first)
+                    view.children.forEachIndexed { i, child -> out += SduiRow.Line(child, view, i >= view.children.size - NEAR_END_LINES) }
+                }
+                view.type == "Tabs" -> {
+                    out += SduiRow.Block(view, parent, first)
+                    // Only the chosen tab was sent with anything in it.
+                    view.children.forEach { tab -> tab.children.forEach { add(it, tab) } }
+                }
+                (view.type == "Stack" || view.type == "Tab" || view.type == "NativeView") && view.props.str("direction") != "row" && view.children.any { it.type in LONG } ->
+                    view.children.forEach { add(it, view) }
+                else -> out += SduiRow.Block(view, parent, first)
+            }
+        }
+        for (child in screen.root.children) {
+            add(child, screen.root)
+            if (out.lastOrNull() is SduiRow.Native) break
+        }
+        // A lazy column refuses two items with one key; an ID the server repeated is told apart by its place.
+        val seen = HashSet<String>()
+        return out.mapIndexed { i, row -> if (seen.add(row.key)) row else keyed(row, row.key + "~" + i) }
+    }
+
+    private fun keyed(row: SduiRow, key: String): SduiRow = SduiRowAlias(key, row)
+}
+
+// A row under another key, for the rare page that repeats an ID.
+class SduiRowAlias(key: String, val row: SduiRow) : SduiRow(key, row.kind)
+
+private val TALL_FIRST = setOf("Hero", "DetailHeader")
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun SduiPageView(
+    top: Boolean, title: String, offline: Boolean, screenTime: SduiScreenTime?,
+    refreshing: Boolean, onRefresh: () -> Unit, customise: (() -> Unit)?,
+) {
+    val env = LocalSdui.current
+    val screen = env.screen
+    val layout = env.layout
+    BoxWithConstraints(Modifier.fillMaxSize().semantics { contentDescription = title }) {
+        // Content keeps inside the safe area a TV's layout names; elsewhere the page's own margin, one m each side.
+        val side = if (layout.safeArea.left > 0) env.pt(layout.safeArea.left) else env.space("m")
+        val span = SduiSpan(maxWidth - side * 2, side)
+        val points = (span.content.value / env.unit).toInt()
+        val rows = remember(screen, points) {
+            SduiRows.flatten(screen, env.tv) { grid ->
+                val fixed = grid.columns.takeIf { it > 0 } ?: layout.cards[grid.cardStyle]?.columns ?: 0
+                // A TV's grid has the columns its layout says; a window's has as many cards as fit it now.
+                if (env.tv && fixed > 0) fixed else if (grid.cardWidth > 0) layout.columnsFor(points, grid.cardWidth) else fixed.coerceAtLeast(2)
+            }
+        }
+        val tallFirst = rows.firstOrNull()?.let { (it as? SduiRow.Block)?.view?.type in TALL_FIRST } == true
+        // The bar over a phone's page sits on the picture when the page starts with one.
+        if (!env.tv) HeroPage(tallFirst && !offline && screenTime == null)
+        val native = rows.lastOrNull() as? SduiRow.Native
+        val gap = env.pt(layout.sectionGap)
+        val list = rememberLazyListState()
+        if (!env.tv) TracksScroll(list)
+        // A page's own heading: not on a TV, where the top menu says where you are, nor over a picture, nor on Home.
+        val heading = title.takeIf { !env.tv && !tallFirst && screen.document.page.kind != "home" && it.isNotEmpty() }
+        val topRoom = if (env.tv) env.space("s") else if (tallFirst && !offline && screenTime == null) 0.dp else LocalTopRoom.current
+        val bottomRoom = if (env.tv) env.pt(layout.safeArea.bottom) else LocalBottomRoom.current
+        CompositionLocalProvider(LocalSduiSpan provides span) {
+            val content: LazyListScope.() -> Unit = {
+                if (offline) item(key = "~offline", contentType = "note") { SduiPageNote("Can't reach the server. This is how the page last was.", Modifier.padding(horizontal = side).padding(bottom = gap)) }
+                if (screenTime != null) item(key = "~screen-time", contentType = "note") { SduiScreenTimeNote(screenTime, Modifier.padding(horizontal = side).padding(bottom = gap)) }
+                if (heading != null) item(key = "~title", contentType = "title") {
+                    Text(
+                        heading, color = MaterialTheme.colorScheme.onBackground, fontSize = env.size("pageTitle"), fontWeight = FontWeight.Bold,
+                        modifier = Modifier.padding(horizontal = side).padding(top = env.space("xs"), bottom = env.space("m")).semantics { heading() },
+                    )
+                }
+                items(rows.filter { it !is SduiRow.Native }, key = { it.key }, contentType = { it.kind }) { row -> SduiRowView(row, gap) }
+                if (native == null) {
+                    if (layout.truncated) item(key = "~truncated", contentType = "note") { SduiPageNote("This page has more than this device shows at once.", Modifier.padding(horizontal = side).padding(top = gap)) }
+                    if (customise != null) item(key = "~customise", contentType = "customise") {
+                        Box(Modifier.fillMaxWidth().padding(top = gap, bottom = env.space("xs")), contentAlignment = Alignment.Center) {
+                            val words = if (screen.document.page.kind == "home") "Customize home" else "Customize this page"
+                            if (env.tv) WittyButton(words, customise, kind = ButtonKind.Secondary, pill = true, focusKey = "~customise")
+                            else WebButton(words, customise, WebButtonKind.Ghost, small = true)
+                        }
+                    }
+                    if (!env.tv) item(key = "~foot", contentType = "foot") { PageFoot(env.nav) }
+                }
+            }
+            when {
+                native != null -> Column(Modifier.fillMaxSize().padding(top = if (env.tv) 0.dp else topRoom)) {
+                    // What comes before the app's own view keeps its place above it; the view takes the rest.
+                    rows.filter { it !is SduiRow.Native }.forEach { SduiRowView(it, gap) }
+                    Box(Modifier.weight(1f).fillMaxWidth()) { SduiNativeView(native.view) }
+                }
+                env.tv -> LazyColumn(Modifier.fillMaxSize(), state = list, contentPadding = PaddingValues(top = topRoom, bottom = bottomRoom), content = content)
+                else -> PullToRefreshBox(refreshing, onRefresh, Modifier.fillMaxSize()) {
+                    LazyColumn(Modifier.fillMaxSize(), state = list, contentPadding = PaddingValues(top = topRoom, bottom = bottomRoom), content = content)
+                }
+            }
+        }
+    }
+}
+
+// One item of the page's column, with the room above it: the page's gap between sections, a card's between a grid's rows.
+@Composable
+private fun SduiRowView(row: SduiRow, gap: Dp) {
+    val env = LocalSdui.current
+    val span = LocalSduiSpan.current
+    when (row) {
+        is SduiRowAlias -> SduiRowView(row.row, gap)
+        is SduiRow.Block -> Box(Modifier.padding(top = if (row.first) 0.dp else gap)) { SduiScoped(row.view, row.parent) { SduiNode(row.view, row.parent, topLevel = true) } }
+        is SduiRow.Head -> Box(Modifier.padding(top = if (row.first) 0.dp else gap)) { SduiScoped(row.view, null) { SduiLongHead(row.view) } }
+        is SduiRow.Cards -> SduiScoped(row.grid, null) {
+            val between = env.pt(env.layout.cardGap)
+            val width = (span.content - between * (row.columns - 1)) / row.columns
+            if (row.nearEnd && row.grid.hasMore) LaunchedEffect(row.grid.children.size) { env.more(row.grid.id, false) }
+            Row(Modifier.fillMaxWidth().padding(horizontal = span.side).padding(top = if (row.index == 0) 0.dp else between), horizontalArrangement = Arrangement.spacedBy(between)) {
+                row.cards.forEach { card -> SduiCard(card, row.grid, width) }
+            }
+        }
+        is SduiRow.Line -> SduiScoped(row.parent, null) {
+            if (row.nearEnd && row.parent.hasMore) LaunchedEffect(row.parent.children.size) { env.more(row.parent.id, false) }
+            Box(Modifier.padding(horizontal = span.side)) { SduiLine(row.view, row.parent) }
+        }
+        is SduiRow.Native -> SduiNativeView(row.view)
+        else -> Unit
+    }
+}
+
+// A part of the page in its own theme scope's colours: the node's tokens over the page's, unless whatever holds it
+// already drew with the same ones.
+@Composable
+fun SduiScoped(view: SduiView, parent: SduiView?, content: @Composable () -> Unit) {
+    val tokens = view.node.tokens
+    val base = LocalAppTheme.current
+    if (tokens.isEmpty() || base == null || tokens == parent?.node?.tokens) content()
+    else ThemeScope(remember(base, tokens) { SduiTokens.over(base, tokens) }, content)
+}
+
+// The app's own view in a page. The guide is WittyTV's own on a TV, and the server's guide page inside the app on a
+// phone or tablet, as the app has always shown it. A view this app doesn't have is drawn as what the page holds in
+// its place.
+@Composable
+fun SduiNativeView(view: SduiView) {
+    val env = LocalSdui.current
+    when {
+        view.props.str("view") != "guide" -> Column { view.children.forEach { SduiNode(it, view, topLevel = true) } }
+        env.tv -> GuideScreen(env.nav)
+        else -> ServerPageScreen(env.nav, env.nav.current, GUIDE_PATH, keptToGames = false, inShell = true)
+    }
+}
+
+// A line under the top of a page that says something about the page as a whole.
+@Composable
+fun SduiPageNote(words: String, modifier: Modifier = Modifier) {
+    val env = LocalSdui.current
+    Text(
+        words, color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = env.size("caption"),
+        modifier = modifier.fillMaxWidth().clip(RoundedCornerShape(env.pt(10))).background(MaterialTheme.colorScheme.surface).padding(horizontal = env.space("m"), vertical = env.space("s")),
+    )
+}
+
+// Screen time is over (docs/SDUI.md, Profiles with limits): the page still shows, and says why nothing plays and when
+// there is time again.
+@Composable
+private fun SduiScreenTimeNote(time: SduiScreenTime, modifier: Modifier) {
+    val context = androidx.compose.ui.platform.LocalContext.current
+    val again = remember(time.nextAt) {
+        if (time.nextAt <= 0) "" else {
+            val at = java.util.Date(time.nextAt * 1000)
+            val day = if (android.text.format.DateUtils.isToday(at.time)) "" else android.text.format.DateFormat.format("EEEE ", at).toString()
+            " More time from $day" + android.text.format.DateFormat.getTimeFormat(context).format(at) + "."
+        }
+    }
+    SduiPageNote(time.message.ifEmpty { "Screen time is over for now." } + again, modifier)
+}
+
+// A page that couldn't be shown at all: not found, with a way Home; or the reason, with Retry.
+@Composable
+fun SduiTrouble(nav: Nav, words: String, gone: Boolean, retry: () -> Unit) {
+    val tv = LocalMetrics.current.tv
+    Column(
+        Modifier.fillMaxSize().padding(horizontal = Space.S8).padding(top = if (tv) Space.S8 else LocalTopRoom.current + Space.S8),
+        horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(Space.S3),
+    ) {
+        Text(if (gone) "This isn't available" else "Couldn't load this page", color = MaterialTheme.colorScheme.onBackground, style = MaterialTheme.typography.section, modifier = Modifier.semantics { heading() })
+        if (!gone) Text(words, color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.secondary, textAlign = TextAlign.Center)
+        if (gone) WittyButton("Home", { nav.reset(Route.Home) }, kind = ButtonKind.Primary, requestFocus = true, focusKey = "~home")
+        else WittyButton("Try again", retry, kind = ButtonKind.Primary, requestFocus = true, focusKey = "~retry")
+    }
+}
+
+// A page loading for the first time: three rows of grey cards, after a moment, so a quick answer shows nothing first.
+@Composable
+fun SduiSkeleton(top: Boolean) {
+    val metrics = LocalMetrics.current
+    var show by remember { mutableStateOf(false) }
+    LaunchedEffect(Unit) { delay(250); show = true }
+    if (!show) return
+    val card = if (metrics.tv) metrics.u(250) else 120.dp
+    val between = if (metrics.tv) metrics.u(40) else 12.dp
+    val side = if (metrics.tv) metrics.u(80) else 16.dp
+    Column(
+        Modifier.fillMaxSize().padding(start = side, top = if (metrics.tv) metrics.u(20) else LocalTopRoom.current + 8.dp).semantics { contentDescription = "Loading" },
+        verticalArrangement = Arrangement.spacedBy(if (metrics.tv) metrics.u(60) else 24.dp),
+    ) {
+        repeat(3) {
+            Column(verticalArrangement = Arrangement.spacedBy(between)) {
+                Skel(Modifier.size(card * 1.4f, if (metrics.tv) metrics.u(40) else 20.dp))
+                Row(horizontalArrangement = Arrangement.spacedBy(between)) { repeat(8) { Skel(Modifier.size(card, card * 1.5f), 10.dp) } }
+            }
+        }
+    }
+}

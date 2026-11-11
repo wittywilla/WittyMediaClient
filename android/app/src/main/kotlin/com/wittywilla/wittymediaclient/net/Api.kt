@@ -124,6 +124,18 @@ class Api(val base: String, val token: String, private val quick: Boolean = fals
         return answer.text
     }
 
+    // One request for the server's pages (SduiClient): `path` is from the server's root, as the pages give their own
+    // addresses. A 304 and a refusal are answers here, for the client to read.
+    val sdui = SduiTransport { method, path, body, ifNoneMatch ->
+        withContext(Dispatchers.IO) {
+            val request = Request.Builder().url("$base$path").method(method, body?.toRequestBody(JSON_TYPE) ?: if (method == "PUT" || method == "POST") "".toRequestBody(JSON_TYPE) else null)
+            if (ifNoneMatch != null) request.header("If-None-Match", ifNoneMatch)
+            http.newCall(request.build()).execute().use { res ->
+                SduiAnswer(res.code, res.peekBody(MAX_BYTES).string(), res.header("ETag").orEmpty())
+            }
+        }
+    }
+
     private suspend inline fun <reified T> get(path: String): T = json.decodeFromString(call("GET", path))
 
     // A plain list, which a Go nil sends as null.

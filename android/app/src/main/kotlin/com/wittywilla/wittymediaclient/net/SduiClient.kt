@@ -5,8 +5,10 @@ package com.wittywilla.wittymediaclient.net
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
+import java.io.File
 import java.io.IOException
 import java.net.URLEncoder
+import java.security.MessageDigest
 
 // Asking the server for its pages (docs/SDUI.md, "What a client sends" and "HTTP API"): every request says what
 // device this is and what it can draw; every answer is kept with its ETag, so the next ask is a 304 and a server
@@ -96,6 +98,33 @@ class SduiMemoryStore(private val most: Int = 32) : SduiStore {
     @Synchronized override fun write(key: String, value: String) { kept[key] = value }
     @Synchronized override fun clear() = kept.clear()
     val size: Int @Synchronized get() = kept.size
+}
+
+// Kept as files in one folder, a file a key, the oldest thrown out past `most`: what makes a page open at once the
+// next time, and at all with the server out of reach. A folder that can't be written keeps nothing, quietly.
+class SduiFileStore(private val folder: File, private val most: Int = 48) : SduiStore {
+    private fun file(key: String): File {
+        val digest = MessageDigest.getInstance("SHA-256").digest(key.toByteArray())
+        return File(folder, digest.joinToString("") { "%02x".format(it) }.take(40) + ".json")
+    }
+
+    @Synchronized override fun read(key: String): String? = runCatching { file(key).takeIf { it.isFile }?.readText() }.getOrNull()
+
+    @Synchronized override fun write(key: String, value: String) {
+        runCatching {
+            folder.mkdirs()
+            val target = file(key)
+            val draft = File(folder, target.name + ".part")
+            draft.writeText(value)
+            if (!draft.renameTo(target)) { target.delete(); draft.renameTo(target) }
+            val kept = folder.listFiles { f -> f.name.endsWith(".json") }.orEmpty()
+            if (kept.size > most) kept.sortedBy { it.lastModified() }.take(kept.size - most).forEach { it.delete() }
+        }
+    }
+
+    @Synchronized override fun clear() {
+        runCatching { folder.listFiles()?.forEach { it.delete() } }
+    }
 }
 
 // A document with where it came from: fresh from the server, or the last one kept because the server couldn't be reached.

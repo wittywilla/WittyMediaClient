@@ -5,6 +5,7 @@ package com.wittywilla.wittymediaclient.ui
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsFocusedAsState
 import androidx.compose.foundation.interaction.collectIsPressedAsState
@@ -141,6 +142,9 @@ fun Pressable(
     grows: Boolean = true,
     // Off for something that draws outside itself, as a profile tile's lifted, ringed avatar does.
     clip: Boolean = true,
+    // A long press, where there is one: a card's own menu on a touch screen.
+    onLongClick: (() -> Unit)? = null,
+    longClickLabel: String? = null,
     content: @Composable (active: Boolean) -> Unit,
 ) {
     val interaction = remember { MutableInteractionSource() }
@@ -200,7 +204,13 @@ fun Pressable(
             }
             .then(if (clip) Modifier.clip(shape) else Modifier)
             .background(fill, shape)
-            .clickable(interactionSource = interaction, indication = null, role = Role.Button) { if (enabled) onClick() },
+            .then(
+                if (onLongClick == null) Modifier.clickable(interactionSource = interaction, indication = null, role = Role.Button) { if (enabled) onClick() }
+                else Modifier.combinedClickable(
+                    interactionSource = interaction, indication = null, role = Role.Button, onLongClickLabel = longClickLabel,
+                    onLongClick = { if (enabled) onLongClick() }, onClick = { if (enabled) onClick() },
+                ),
+            ),
         contentAlignment = Alignment.Center,
     ) { content(pressed || showsFocus) }
 }

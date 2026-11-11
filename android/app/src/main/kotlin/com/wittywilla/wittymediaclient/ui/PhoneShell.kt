@@ -80,6 +80,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.em
 import androidx.compose.ui.unit.sp
 import com.wittywilla.wittymediaclient.net.GUIDE_PATH
+import com.wittywilla.wittymediaclient.net.SduiNavItem
 
 // docs/APP-DESIGN.md, "The shell", as the server's website draws it at phone width (web/src/shell/, shell.css):
 // a 52-high bar at the top with the library strip (or Back below the top pages), the floating bar of five at the
@@ -140,8 +141,8 @@ fun HeroPage(on: Boolean = true) {
 }
 
 // The website's top pages (TopBar.tsx): Home, the TV guide, Search, You, Settings and every place in the strip.
-private fun isTopPage(route: Route, menu: List<MenuEntry>): Boolean =
-    route == Route.Home || route == Route.Search || route == Route.Profile || menu.any { it.route.key == route.key } ||
+private fun isTopPage(route: Route, menu: List<MenuEntry>, bar: List<Route> = emptyList()): Boolean =
+    route == Route.Home || route == Route.Search || route == Route.Profile || menu.any { it.route.key == route.key } || bar.any { it.key == route.key } ||
         // A library in the strip stays a top page with its choices set (/library/{id}?genre=…), as the website's path does.
         (route is Route.Library && menu.any { (it.route as? Route.Library)?.library?.id == route.library.id }) ||
         (route as? Route.Page)?.path?.substringBefore('?')?.let { it == GUIDE_PATH || it == "/settings" } == true
@@ -156,6 +157,10 @@ fun PhoneShell(nav: Nav, content: @Composable () -> Unit) {
     val over = remember { OverShell() }
     var drawer by remember { mutableStateOf(false) }
     LaunchedEffect(nav.app.api.token) { nav.loadMenu() }
+    // The server's own menu, where it has one: the bar and the strip are made from it.
+    val pages = nav.sdui
+    LaunchedEffect(pages) { nav.loadSdui() }
+    val served = barEntries(nav)
     LaunchedEffect(Unit) { if (nav.me == null) nav.me = runCatching { nav.app.api.status().user }.getOrNull() }
     // The drawer closes on any change of page.
     LaunchedEffect(nav.current.key) { drawer = false }
@@ -167,7 +172,7 @@ fun PhoneShell(nav: Nav, content: @Composable () -> Unit) {
     // .content's bottom padding: 24 + the bar's space (60 + 16 + inset) + 88 while something is docked.
     val bottomRoom = 24.dp + TAB_BAR.dp + 16.dp + inset + if (docked) DOCK_SPACE.dp else 0.dp
     val topRoom = status + TOP_BAR.dp + 8.dp
-    val top = isTopPage(nav.current, nav.menu)
+    val top = isTopPage(nav.current, nav.menu, served?.map { it.second }.orEmpty())
 
     Box(Modifier.fillMaxSize().background(scheme.background)) {
         CompositionLocalProvider(LocalShellScroll provides scroll, LocalBottomRoom provides bottomRoom, LocalTopRoom provides topRoom, LocalOverShell provides over) {
@@ -180,7 +185,8 @@ fun PhoneShell(nav: Nav, content: @Composable () -> Unit) {
         if (video != null) VideoDock(nav, video, aboveBar)
         else if (listening) PhoneMiniBar(nav, Modifier.align(Alignment.BottomCenter).padding(start = 8.dp, end = 8.dp, bottom = aboveBar))
 
-        TabBar(nav, inset, Modifier.align(Alignment.BottomCenter)) { drawer = true }
+        if (served != null) ServedTabBar(nav, served, inset, Modifier.align(Alignment.BottomCenter)) { drawer = true }
+        else TabBar(nav, inset, Modifier.align(Alignment.BottomCenter)) { drawer = true }
         Drawer(nav, drawer, status) { drawer = false }
         over.sheets.forEach { sheet -> key(sheet) { sheet() } }
     }
@@ -341,6 +347,74 @@ private fun TabBar(nav: Nav, inset: Dp, modifier: Modifier, openMenu: () -> Unit
         }
     }
 }
+
+// The bar's own places from the server's menu (GET /sdui/navigation): its primary entries and the ones pinned to its
+// end, each with where it leads. Null on a server without a menu of its own, which keeps the bar above.
+private fun barEntries(nav: Nav): List<Pair<SduiNavItem, Route>>? {
+    val served = nav.sduiNav ?: return null
+    return served.items.filter { it.placement == "primary" || it.placement == "end" }
+        .mapNotNull { entry -> nav.routeOf(entry)?.let { entry to it } }.distinctBy { it.second.key }
+}
+
+// The floating bar, made from the server's menu and drawn as the bar above is: the entries in the server's order, at
+// most five across, with Menu for what sits behind More. Menu goes before You when You is last, so the avatar keeps
+// the far end.
+@Composable
+private fun ServedTabBar(nav: Nav, entries: List<Pair<SduiNavItem, Route>>, inset: Dp, modifier: Modifier, openMenu: () -> Unit) {
+    val scheme = MaterialTheme.colorScheme
+    val accentText = LocalExtraColours.current.accentText
+    val strong = scheme.onBackground.copy(alpha = 0.2f)
+    val current = nav.current
+    val more = nav.menu.isNotEmpty()
+    val shown = entries.take(if (more) BAR_CELLS - 1 else BAR_CELLS)
+    Row(
+        modifier
+            .padding(start = 16.dp, end = 16.dp, bottom = 8.dp + inset)
+            .widthIn(max = 416.dp)
+            .fillMaxWidth()
+            .height(TAB_BAR.dp)
+            .cssShadow(10.dp, 30.dp, Color(0x73000000), 30.dp)
+            .clip(RoundedCornerShape(50))
+            .background(scheme.surfaceVariant)
+            .border(1.dp, strong, RoundedCornerShape(50))
+            .padding(4.dp)
+            .semantics { role = Role.Tab },
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        @Composable
+        fun Cell(label: String, chosen: Boolean, onClick: () -> Unit, inner: @Composable (Color) -> Unit) {
+            Pressable(
+                onClick, Modifier.weight(1f).height(50.dp), shape = RoundedCornerShape(50),
+                fill = if (chosen) scheme.primary.copy(alpha = 0.14f) else Color.Transparent,
+                label = label, state = if (chosen) "Selected" else null, selected = chosen, pressScale = 1f, ring = false,
+            ) {
+                Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { inner(if (chosen) accentText else scheme.onSurfaceVariant) }
+            }
+        }
+        val menuAt = if (!more) -1 else if (shown.lastOrNull()?.second == Route.Profile) shown.lastIndex else shown.size
+        shown.forEachIndexed { at, (entry, route) ->
+            if (at == menuAt) Cell("Menu", false, openMenu) { Icon(WebIcons.Menu, null, tint = it, modifier = Modifier.size(24.dp)) }
+            val chosen = current.key == route.key || (route is Route.Page && (current as? Route.Page)?.path?.startsWith(route.path) == true)
+            val open = {
+                if (!chosen) {
+                    // Home, Search, You and the server's own pages are places of their own; anything else opens over Home.
+                    if (route == Route.Home || route == Route.Search || route == Route.Profile || route is Route.Sdui) nav.reset(route)
+                    else { nav.reset(Route.Home); nav.push(route) }
+                }
+            }
+            if (route == Route.Profile) {
+                val me = nav.me
+                val name = if (me == null) "" else avatarName(me.displayName, me.name)
+                Cell("${entry.label}, $name", chosen, open) { Avatar(name.ifEmpty { "?" }, 32.dp) }
+            } else {
+                Cell(entry.label, chosen, open) { Icon(sduiIcon(entry.icon), null, tint = it, modifier = Modifier.size(24.dp)) }
+            }
+        }
+        if (menuAt == shown.size) Cell("Menu", false, openMenu) { Icon(WebIcons.Menu, null, tint = it, modifier = Modifier.size(24.dp)) }
+    }
+}
+
+private const val BAR_CELLS = 5
 
 // The Menu drawer: 240 wide, panel colour, a hairline at its edge, 12 inside. It slides in over 240 ms and is gone at
 // once on closing; the scrim of black 60% covers everything else. The lockup, LIBRARIES, a row for each, the version.
