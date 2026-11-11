@@ -900,6 +900,7 @@ private struct TapAlongView: View {
 /// the voice turned down and the key moved to suit the singer.
 struct KaraokeView: View {
     @EnvironmentObject private var listening: Listening
+    @EnvironmentObject private var model: AppModel
     @Environment(\.client) private var client
     let item: Item
     let lyrics: Lyrics?
@@ -914,6 +915,9 @@ struct KaraokeView: View {
     private let monoCheck = Timer.publish(every: 1.5, on: .main, in: .common).autoconnect()
 
     private var lines: [LyricLine] { lyrics?.timed ?? [] }
+
+    /// A server that makes a song's separate parts: their sliders take the place of Voice lower once they play.
+    private var auto: Bool { model.has("karaoke-auto") }
 
     private func goLine(_ by: Int, from index: Int) {
         let to = max(0, index + by)
@@ -935,6 +939,11 @@ struct KaraokeView: View {
                     top(h)
                     stage(h)
                         .frame(maxHeight: .infinity)
+                    if auto {
+                        KaraokeStemsControl(stems: listening.stems, ink: StemInk(text: NPInk.fg, quiet: NPInk.fg2, chip: NPInk.chip,
+                                                                                 fill: .white, onFill: .black))
+                            .padding(.horizontal, 16).padding(.top, 4)
+                    }
                     controls(compact: compact)
                     Text(note).font(.system(size: 13)).foregroundStyle(NPInk.fg2).multilineTextAlignment(.center)
                         .frame(minHeight: 18)
@@ -949,7 +958,13 @@ struct KaraokeView: View {
             if let found = SoundEngine.shared.nearlyMono() { mono = found }
         }
         // Coming back, the voice and key are as they were: this was for the song, not for good.
-        .onDisappear { listening.setSound { $0.vocalCut = 0; $0.keyShift = 0 } }
+        .onDisappear {
+            listening.stems.close()
+            listening.setSound { $0.vocalCut = 0; $0.keyShift = 0 }
+        }
+        .task(id: auto) {
+            if auto { listening.stems.open(song: item.id, client: client, profile: String(model.user?.id ?? 0)) }
+        }
         .accessibilityAction(.escape) { close() }
     }
 
@@ -1065,6 +1080,8 @@ struct KaraokeView: View {
             .accessibilityLabel(listening.isPlaying ? "Pause" : "Play")
             NPRoundButton(symbol: "forward.end.fill", label: "Next line", size: 52) { goLine(1, from: index) }
             if !compact { NPInk.line.frame(width: 1, height: 34).padding(.horizontal, 4) }
+            // The parts, once they play, are how the voice is turned down.
+            if !listening.stemsHeard {
             HStack(spacing: 2) {
                 ForEach(Array(Karaoke.vocals.enumerated()), id: \.offset) { _, choice in
                     let on = listening.sound.vocalCut == choice.0
@@ -1080,6 +1097,7 @@ struct KaraokeView: View {
             .background(Capsule().fill(NPInk.chip))
             .accessibilityElement(children: .contain)
             .accessibilityLabel("Singer's voice")
+            }
             stepper(words: Karaoke.keyWords(listening.sound.keyShift), compact: compact,
                     lower: ("Lower key", listening.sound.keyShift > -6, { setKey(listening.sound.keyShift - 1) }),
                     raise: ("Raise key", listening.sound.keyShift < 6, { setKey(listening.sound.keyShift + 1) }))

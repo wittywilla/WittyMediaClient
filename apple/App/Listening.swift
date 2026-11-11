@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (C) 2026 WittyWilla and contributors
 import AVFoundation
+import Combine
 import MediaPlayer
 import Network
 import SwiftUI
@@ -108,6 +109,23 @@ final class Listening: ObservableObject {
     @Published private(set) var sound = SoundStore().load()
     private var loudnessKnown: [Int64: Loudness] = [:]
     private var tap: SoundTap?
+    /// Karaoke from a song's separate parts, on a server that makes them: KaraokeStems.swift.
+    let stems = KaraokeStems()
+    /// The parts are what's heard, so the song itself plays on in silence as their clock.
+    @Published var stemsHeard = false {
+        didSet {
+            guard stemsHeard != oldValue else { return }
+            // The parts take the place of turning the voice down in the song itself: never both.
+            if stemsHeard, sound.vocalCut > 0 { setSound { $0.vocalCut = 0 } }
+            level(player)
+            if let fadingOut { level(fadingOut) }
+        }
+    }
+    private var nowWatch: AnyCancellable?
+    /// Really sounding, not just meant to be: what the parts follow.
+    var trulyPlaying: Bool { placeWhileOpening == nil && player.currentItem != nil && player.timeControlStatus == .playing }
+    /// The app's own volume, for what plays beside the decks.
+    var outputLevel: Float { Float(sound.muted ? 0 : sound.volume) }
     private var queue = ListeningQueue<QueuedTrack>()
     private var serial = 0
     /// The connection this queue started on. Reports go with it, as the app may have moved on.
@@ -148,6 +166,8 @@ final class Listening: ObservableObject {
         watchPlayer()
         watchSession()
         applySound()
+        stems.listening = self
+        nowWatch = $now.dropFirst().sink { [weak self] next in self?.stems.songChanged(next) }
     }
 
     private func watchPlayer() {
@@ -322,6 +342,7 @@ final class Listening: ObservableObject {
                 Task { @MainActor [weak self] in
                     self?.jumps += 1
                     self?.updateNowPlaying()
+                    self?.stems.sync()
                 }
             }
         case .reopen(let at):
@@ -397,6 +418,7 @@ final class Listening: ObservableObject {
         if player.rate > 0 { player.rate = chosen }
         if save { defaults.set(chosen, forKey: Self.bookSpeedKey) }
         updateNowPlaying()
+        stems.sync()
     }
 
     // MARK: Likes
@@ -446,11 +468,12 @@ final class Listening: ObservableObject {
         }
         level(player)
         if let fadingOut { level(fadingOut) }
+        stems.sync()
     }
 
     /// How loud a deck is: the volume, times where it is in a crossfade.
     private func level(_ deck: AVPlayer) {
-        deck.volume = Float(sound.muted ? 0 : sound.volume) * (deckFade[ObjectIdentifier(deck)] ?? 1)
+        deck.volume = stemsHeard ? 0 : Float(sound.muted ? 0 : sound.volume) * (deckFade[ObjectIdentifier(deck)] ?? 1)
     }
 
     /// A song tagged with how loud it is, brought to one level: music only.
@@ -892,6 +915,7 @@ final class Listening: ObservableObject {
         }
         publish()
         updateNowPlaying()
+        stems.sync()
     }
 
     private func tick() {
@@ -899,6 +923,7 @@ final class Listening: ObservableObject {
         let at = positionSec()
         if at.isFinite { lastPlace = at }
         watchEnd()
+        stems.sync()
     }
 
     // MARK: Telling the server
