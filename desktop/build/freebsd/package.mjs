@@ -112,7 +112,7 @@ const manifest = {
   abi,
   prefix: '/usr/local',
   licenselogic: 'single',
-  licenses: ['APACHE20'],
+  licenses: ['GPLv3+'],
   categories: ['multimedia'],
   // Electron doesn't bring a font, and without one a page lays out no text at all.
   deps: { [port]: { origin: `devel/${port}`, version: '*' }, dejavu: { origin: 'x11-fonts/dejavu', version: '*' } },
