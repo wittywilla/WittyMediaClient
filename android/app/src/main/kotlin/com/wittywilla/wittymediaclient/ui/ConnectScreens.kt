@@ -69,6 +69,19 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
 import com.wittywilla.wittymediaclient.data.LogoCache
 import com.wittywilla.wittymediaclient.data.SavedServer
+import com.wittywilla.wittymediaclient.data.addressNow
+import com.wittywilla.wittymediaclient.data.fill
+import com.wittywilla.wittymediaclient.data.focusAfterRemoval
+import com.wittywilla.wittymediaclient.data.isStale
+import com.wittywilla.wittymediaclient.data.oldEntryFor
+import com.wittywilla.wittymediaclient.data.reachedWords
+import com.wittywilla.wittymediaclient.data.shownName
+import androidx.compose.foundation.layout.safeDrawingPadding
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.Icon
+import androidx.compose.runtime.withFrameNanos
+import androidx.compose.ui.semantics.CustomAccessibilityAction
 import com.wittywilla.wittymediaclient.net.Address
 import com.wittywilla.wittymediaclient.net.ApiError
 import com.wittywilla.wittymediaclient.net.FoundServer
@@ -131,7 +144,18 @@ private fun Gap(size: Int) = Spacer(Modifier.height(LocalMetrics.current.u(size)
 fun ConnectScreen(nav: Nav, s: Map<String, String>, message: String) {
     val scope = rememberCoroutineScope()
     val context = LocalContext.current
-    val recent = remember { nav.app.store.recent }
+    var recent by remember { mutableStateOf(nav.app.store.recent) }
+    val memory = LocalFocusMemory.current
+    // Removing remembered servers: Edit's buttons, a card's menu (a phone), the question a TV asks first, and
+    // which card takes focus when the one that had it is gone.
+    var editing by rememberSaveable { mutableStateOf(false) }
+    var menuFor by remember { mutableStateOf<SavedServer?>(null) }
+    var asking by remember { mutableStateOf<SavedServer?>(null) }
+    var focusOn by remember { mutableStateOf<String?>(null) }
+    val now = remember(recent) { System.currentTimeMillis() }
+    // Focus kept for a card that isn't in the list any more would leave a remote with no focus at all.
+    if (memory.last?.startsWith("recent-") == true && recent.none { "recent-${it.url}" == memory.last }) memory.last = null
+    DisposableEffect(Unit) { onDispose { nav.pickerNotice = "" } }
     val appVersion = remember { runCatching { context.packageManager.getPackageInfo(context.packageName, 0).versionName }.getOrNull().orEmpty() }
     var address by rememberSaveable { mutableStateOf("") }
     var problem by rememberSaveable(message) { mutableStateOf(message) }
@@ -157,6 +181,7 @@ fun ConnectScreen(nav: Nav, s: Map<String, String>, message: String) {
         if (connecting != null) return
         connecting = url
         problem = ""
+        nav.pickerNotice = ""
         scope.launch {
             val failed = when (val r = probeServer(url, appVersion)) {
                 is Probe.Found -> nav.arrive(r.url, r.status)
@@ -187,6 +212,23 @@ fun ConnectScreen(nav: Nav, s: Map<String, String>, message: String) {
     val last = recent.firstOrNull()
     // A found server that's also saved shows only under Used before, with its own name and logo.
     val foundOnly = found.filter { f -> recent.none { it.url == f.url || (it.serverId.isNotEmpty() && it.serverId == f.id) } }
+
+    // Off this device at once, with Undo, on a phone or tablet; a TV has asked first. Focus goes to the next
+    // card, else the one before, else Enter an address: never nowhere.
+    fun remove(server: SavedServer) {
+        val cards = foundOnly.map { "found-${it.id}" } + recent.map { "recent-${it.url}" }
+        val next = focusAfterRemoval(cards, "recent-${server.url}") ?: "enter-address"
+        nav.forgetServer(server, undoable = !tv)
+        if (tv) nav.pickerNotice = fill(s["removedServer"], "name" to shownName(server))
+        recent = nav.app.store.recent
+        if (recent.isEmpty()) editing = false
+        memory.last = next
+        scope.launch {
+            focusOn = null
+            withFrameNanos { }
+            focusOn = next
+        }
+    }
     val nothing = found.isEmpty() && recent.isEmpty()
     val metrics = LocalMetrics.current
     // The first server found takes focus, until the person has moved themselves.
@@ -194,11 +236,13 @@ fun ConnectScreen(nav: Nav, s: Map<String, String>, message: String) {
         if (it.type == KeyEventType.KeyDown && it.key.nativeKeyCode in ARROWS) moved = true
         false
     }
+    Box(Modifier.fillMaxSize()) {
     SignInLayout(
         words = {
             Lockup("", null, app = true)
             SignInHeading(s["findTitle"].orEmpty(), detail = s["findSubtitle"].orEmpty(), display = true)
             Problem(problem, Modifier.fillMaxWidth())
+            Notice(nav.pickerNotice)
         },
         actions = {
             Column(noticeMoves.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(metrics.u(12))) {
@@ -216,19 +260,46 @@ fun ConnectScreen(nav: Nav, s: Map<String, String>, message: String) {
                         ServerCard(
                             hostAndPort(server.url), s["foundOnNetwork"].orEmpty(), { connect(server.url) }, saved = false,
                             connecting = connecting == server.url, requestFocus = i == 0 && !moved, focusKey = "found-${server.id}",
+                            takeFocus = focusOn == "found-${server.id}",
                         )
                     }
                 }
                 if (recent.isNotEmpty()) {
-                    SectionLabel(s["recentServers"].orEmpty(), Modifier.padding(top = metrics.u(8)))
+                    Row(Modifier.fillMaxWidth().padding(top = metrics.u(8)), verticalAlignment = Alignment.CenterVertically) {
+                        SectionLabel(s["recentServers"].orEmpty(), Modifier.weight(1f))
+                        // A TV has Manage servers and the card's own long press for this.
+                        if (!tv) WittyButton(s[if (editing) "editServersDone" else "editServers"].orEmpty(), { editing = !editing }, kind = ButtonKind.Quiet, focusKey = "edit-servers")
+                    }
                     recent.forEachIndexed { i, server ->
                         key(server.url) {
-                            ServerCard(
-                                server.name.ifEmpty { "WittyMediaServer" }, server.url, { connect(server.url) },
-                                logo = LogoCache.file(context, server.url, server.brandLogo), lastUsed = server.url == last?.url,
-                                connecting = connecting == server.url, requestFocus = foundOnly.isEmpty() && found.isNotEmpty() && i == 0 && !moved,
-                                focusKey = "recent-${server.url}",
-                            )
+                            val name = shownName(server)
+                            // Where it's announcing itself now, if that's somewhere new. It still has to prove its key there.
+                            val at = addressNow(server, found)
+                            val removeLabel = fill(s["removeServerNamed"], "name" to name)
+                            val card = @Composable {
+                                Box {
+                                    ServerCard(
+                                        name, server.url, { connect(at) },
+                                        logo = LogoCache.file(context, server.url, server.brandLogo), lastUsed = server.url == last?.url,
+                                        connecting = connecting == at, requestFocus = foundOnly.isEmpty() && found.isNotEmpty() && i == 0 && !moved,
+                                        focusKey = "recent-${server.url}",
+                                        reached = reachedWords(s, server.lastSeen, now), stale = isStale(server.lastSeen, now),
+                                        takeFocus = focusOn == "recent-${server.url}",
+                                        onLongClick = { if (tv) asking = server else menuFor = server },
+                                        longClickLabel = if (tv) s["removeServer"] else fill(s["serverOptions"], "name" to name),
+                                        actions = listOf(CustomAccessibilityAction(removeLabel) { if (tv) asking = server else remove(server); true }),
+                                        trailing = if (editing) { { RemoveButton(removeLabel, { remove(server) }) } } else null,
+                                    )
+                                    DropdownMenu(menuFor == server, { menuFor = null }, containerColor = MaterialTheme.colorScheme.surface) {
+                                        DropdownMenuItem(
+                                            text = { Text(s["removeServer"].orEmpty(), color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.label) },
+                                            onClick = { menuFor = null; remove(server) },
+                                            leadingIcon = { Icon(Symbols.Delete, contentDescription = null, tint = MaterialTheme.colorScheme.error) },
+                                        )
+                                    }
+                                }
+                            }
+                            if (tv) card() else SwipeToRemove(s["remove"].orEmpty(), { remove(server) }) { card() }
                         }
                     }
                 }
@@ -236,11 +307,25 @@ fun ConnectScreen(nav: Nav, s: Map<String, String>, message: String) {
             WittyButton(
                 s["enterAddress"].orEmpty(), { showForm = true; problem = "" }, Modifier.fillMaxWidth().padding(top = metrics.u(8)),
                 kind = if (nothing) ButtonKind.Primary else ButtonKind.Secondary, icon = Symbols.Address, tall = true,
-                requestFocus = found.isEmpty(), focusKey = "enter-address",
+                requestFocus = found.isEmpty(), takeFocus = focusOn == "enter-address", focusKey = "enter-address",
             )
+            // Where every remembered server can be removed: one, all, or those not reached for a while.
+            if (recent.isNotEmpty()) {
+                WittyButton(
+                    s["manageServers"].orEmpty(), { nav.push(Route.You(YouNative.Servers)) }, Modifier.fillMaxWidth(),
+                    kind = ButtonKind.Quiet, icon = Symbols.Server, focusKey = "manage-servers",
+                )
+            }
             LegalNote(s["legalConnect"].orEmpty())
         },
     )
+    if (!tv) {
+        UndoRemoval(nav, s, Modifier.align(Alignment.BottomCenter).safeDrawingPadding().padding(metrics.u(16))) { recent = nav.app.store.recent }
+    }
+    }
+    asking?.let { server ->
+        ConfirmRemove(s, server, inUse = false, onYes = { asking = null; remove(server) }, onNo = { asking = null })
+    }
 }
 
 // Where a found server is: its host and port, which is all it's called until it's added.
@@ -290,11 +375,14 @@ fun MismatchScreen(nav: Nav, s: Map<String, String>, server: SavedServer) {
     val metrics = LocalMetrics.current
     var problem by remember { mutableStateOf("") }
     var busy by remember { mutableStateOf(false) }
+    // The server this device remembers here, which this one isn't: after a reinstall, that's the one to remove.
+    val oldOne = remember(server) { oldEntryFor(server, nav.app.store.recent) }
     SignInLayout(
         nav::pop,
         words = {
             WarningBadge(metrics.u(64), if (metrics.tv) Modifier else Modifier.align(Alignment.CenterHorizontally))
             SignInHeading(s["identityTitle"].orEmpty(), detail = s["identityHint"].orEmpty())
+            if (oldOne != null) Note(s["reinstalledHint"].orEmpty())
             PanelCard {
                 Text(server.url, color = MaterialTheme.colorScheme.onSurface, style = MaterialTheme.typography.label)
                 Text(s["fingerprintLabel"].orEmpty(), color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.caption)
@@ -304,6 +392,18 @@ fun MismatchScreen(nav: Nav, s: Map<String, String>, server: SavedServer) {
         actions = {
             Problem(problem, Modifier.fillMaxWidth())
             WittyButton(s["back"].orEmpty(), nav::pop, Modifier.fillMaxWidth(), kind = ButtonKind.Primary, tall = true, requestFocus = true)
+            if (oldOne != null) {
+                WittyButton(
+                    s["removeOldOne"].orEmpty(),
+                    {
+                        // Nothing is trusted by this: the old entry goes, and this one is met as any new server is.
+                        nav.forgetServer(oldOne, undoable = false)
+                        nav.pickerNotice = s["removedOldOne"].orEmpty()
+                        nav.reset(Route.Connect())
+                    },
+                    Modifier.fillMaxWidth(), tall = true, focusKey = "remove-old-one",
+                )
+            }
             WittyButton(
                 s["identityTrust"].orEmpty(),
                 {

@@ -5,6 +5,9 @@ package com.wittywilla.wittymediaclient.ui
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
+import androidx.compose.ui.semantics.CustomAccessibilityAction
+import androidx.compose.ui.semantics.customActions
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsFocusedAsState
 import androidx.compose.foundation.interaction.collectIsPressedAsState
@@ -141,6 +144,11 @@ fun Pressable(
     grows: Boolean = true,
     // Off for something that draws outside itself, as a profile tile's lifted, ringed avatar does.
     clip: Boolean = true,
+    // Holding it down, with a finger or a remote's OK, and what that does, for a screen reader to say.
+    onLongClick: (() -> Unit)? = null,
+    longClickLabel: String? = null,
+    // What else can be done to it, for a screen reader's menu of actions: what a swipe does, for one.
+    actions: List<CustomAccessibilityAction> = emptyList(),
     content: @Composable (active: Boolean) -> Unit,
 ) {
     val interaction = remember { MutableInteractionSource() }
@@ -197,10 +205,17 @@ fun Pressable(
                 if (state != null) stateDescription = state
                 if (selected) this.selected = true
                 if (!enabled) disabled()
+                if (actions.isNotEmpty()) customActions = actions
             }
             .then(if (clip) Modifier.clip(shape) else Modifier)
             .background(fill, shape)
-            .clickable(interactionSource = interaction, indication = null, role = Role.Button) { if (enabled) onClick() },
+            .then(
+                if (onLongClick == null) Modifier.clickable(interactionSource = interaction, indication = null, role = Role.Button) { if (enabled) onClick() }
+                else Modifier.combinedClickable(
+                    interactionSource = interaction, indication = null, role = Role.Button,
+                    onLongClickLabel = longClickLabel, onLongClick = { if (enabled) onLongClick() },
+                ) { if (enabled) onClick() },
+            ),
         contentAlignment = Alignment.Center,
     ) { content(pressed || showsFocus) }
 }
@@ -638,6 +653,8 @@ data class GroupRow(
     val selected: Boolean = false,
     // The screen's first focus on a TV.
     val requestFocus: Boolean = false,
+    // Focus now, whatever had it: the row next to one that was just removed.
+    val takeFocus: Boolean = false,
 )
 
 // docs/APP-DESIGN.md, "Grouped list": for You and settings. A caption above, rows in a panel, hairlines
@@ -725,7 +742,7 @@ private fun GroupRowView(row: GroupRow, modifier: Modifier = Modifier) {
         // The ring goes round the whole row; a row this wide doesn't grow.
         Pressable(
             row.onClick, modifier.fillMaxWidth(), shape = metrics.corner(if (metrics.tv) 14 else 6), focusKey = row.focusKey,
-            pressScale = 1f, grows = false, selected = row.selected, label = null, requestFocus = row.requestFocus,
+            pressScale = 1f, grows = false, selected = row.selected, label = null, requestFocus = row.requestFocus, takeFocus = row.takeFocus,
         ) { body(it) }
     } else {
         Box(modifier.semantics(mergeDescendants = true) {}) { body(false) }

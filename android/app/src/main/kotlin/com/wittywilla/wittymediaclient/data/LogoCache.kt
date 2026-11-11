@@ -31,6 +31,41 @@ object LogoCache {
         return File(folder(context), "${key(server)}-$v").takeIf { it.isFile }
     }
 
+    private fun filesOf(context: Context, server: String): List<File> {
+        val prefix = key(server) + "-"
+        return folder(context).listFiles()?.filter { it.name.startsWith(prefix) }.orEmpty()
+    }
+
+    // A removed server's picture goes with it. What comes back can put it back, for Undo.
+    fun forget(context: Context, server: String): Map<String, ByteArray> {
+        val held = HashMap<String, ByteArray>()
+        for (file in filesOf(context, server)) {
+            runCatching { if (file.length() <= MOST_BYTES) held[file.name] = file.readBytes() }
+            file.delete()
+        }
+        return held
+    }
+
+    fun putBack(context: Context, held: Map<String, ByteArray>) {
+        if (held.isEmpty()) return
+        val dir = folder(context).apply { mkdirs() }
+        held.forEach { (name, bytes) -> runCatching { File(dir, name).writeBytes(bytes) } }
+    }
+
+    // A server that changed address keeps its picture, unless it already has one there.
+    fun move(context: Context, from: String, to: String) {
+        val there = filesOf(context, to).isNotEmpty()
+        for (file in filesOf(context, from)) {
+            if (there || !file.renameTo(File(folder(context), key(to) + file.name.substring(key(from).length)))) file.delete()
+        }
+    }
+
+    // Pictures of servers that aren't remembered any more are deleted.
+    fun keepOnly(context: Context, servers: Collection<String>) {
+        val kept = servers.map { key(it) + "-" }
+        folder(context).listFiles()?.filter { file -> kept.none { file.name.startsWith(it) } }?.forEach { it.delete() }
+    }
+
     // Fetches and keeps it, replacing any older one of the same server. Quiet on failure: the mark stands in.
     suspend fun keep(context: Context, server: String, version: String) = withContext(Dispatchers.IO) {
         val v = safe(version)

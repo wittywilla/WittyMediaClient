@@ -57,6 +57,7 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.semantics.CustomAccessibilityAction
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -247,16 +248,35 @@ fun ServerCard(
     connecting: Boolean = false,
     requestFocus: Boolean = false,
     focusKey: String? = null,
+    // A remembered server: when it was last reached, and whether that's a long time ago.
+    reached: String = "",
+    stale: Boolean = false,
+    // Focus now, whatever had it: the card next to one that was just removed.
+    takeFocus: Boolean = false,
+    // Holding the card down, or a remote's Menu button, and what else a screen reader can do to it.
+    onLongClick: (() -> Unit)? = null,
+    longClickLabel: String? = null,
+    actions: List<CustomAccessibilityAction> = emptyList(),
+    // Instead of the chevron, such as a button that removes it.
+    trailing: (@Composable () -> Unit)? = null,
 ) {
     val scheme = MaterialTheme.colorScheme
     val metrics = LocalMetrics.current
     val words = LocalWords.current
     val hint = LocalExtraColours.current.hint
     val mark = metrics.u(if (metrics.tv) 56 else 40)
-    val spoken = listOfNotNull(name, detail, if (lastUsed) words["lastUsed"] else null).joinToString(", ")
+    val spoken = listOfNotNull(
+        name, detail, reached.ifEmpty { null }, if (stale) words["staleServer"] else null, if (lastUsed) words["lastUsed"] else null,
+    ).joinToString(", ")
+    val menuKey = if (onLongClick == null) Modifier else Modifier.onPreviewKeyEvent {
+        if (it.key.nativeKeyCode != KeyEvent.KEYCODE_MENU) return@onPreviewKeyEvent false
+        if (it.type == KeyEventType.KeyUp) onLongClick()
+        true
+    }
     Pressable(
-        onClick, modifier.fillMaxWidth(), shape = metrics.corner(14), fill = scheme.surfaceVariant, label = spoken,
-        state = if (connecting) words["connecting"] else null, requestFocus = requestFocus, focusKey = focusKey, pressScale = CARD_PRESS,
+        onClick, modifier.fillMaxWidth().then(menuKey), shape = metrics.corner(14), fill = scheme.surfaceVariant, label = spoken,
+        state = if (connecting) words["connecting"] else null, requestFocus = requestFocus, takeFocus = takeFocus, focusKey = focusKey,
+        pressScale = CARD_PRESS, onLongClick = onLongClick, longClickLabel = longClickLabel, actions = actions,
     ) {
         Row(
             Modifier.fillMaxWidth().padding(metrics.u(16)),
@@ -279,8 +299,18 @@ fun ServerCard(
                     if (lastUsed) Tag(words["lastUsed"].orEmpty())
                 }
                 Text(detail, color = scheme.onSurfaceVariant, style = MaterialTheme.typography.secondary, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                if (reached.isNotEmpty()) {
+                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(metrics.u(8))) {
+                        Text(
+                            reached, color = hint, style = MaterialTheme.typography.caption.copy(fontWeight = FontWeight.Normal),
+                            maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false),
+                        )
+                        if (stale) Tag(words["staleServer"].orEmpty())
+                    }
+                }
             }
-            if (connecting) Spinner(hint, metrics.u(if (metrics.tv) 30 else 20))
+            if (trailing != null) trailing()
+            else if (connecting) Spinner(hint, metrics.u(if (metrics.tv) 30 else 20))
             // On a TV, Apple's footnote chevron: 25 tall, its tip 4 inside the padding. Ours has more room
             // round it in its box, so the box is nudged out by that much.
             else if (metrics.tv) Icon(Symbols.Next, contentDescription = null, tint = hint, modifier = Modifier.offset(x = metrics.u(14)).size(metrics.u(52)))

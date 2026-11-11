@@ -286,6 +286,9 @@ object LastChannel {
     fun current(context: Context): String = prefs(context).getString(KEY, "").orEmpty()
     fun before(context: Context): String = prefs(context).getString("$KEY.before", "").orEmpty()
 
+    // A channel is some server's: with no server remembered it's nobody's.
+    fun forget(context: Context) = prefs(context).edit().remove(KEY).remove("$KEY.before").apply()
+
     fun remember(context: Context, channel: String) {
         val was = current(context)
         prefs(context).edit().apply {

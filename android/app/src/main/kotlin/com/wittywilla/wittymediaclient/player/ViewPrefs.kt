@@ -46,6 +46,13 @@ object ViewPrefsStore {
         }.apply()
     }
 
+    // Videos are kept by their number on a server, so when no server is remembered these are nobody's.
+    fun forgetVideos(context: Context) {
+        val edit = prefs(context).edit()
+        prefs(context).all.keys.filter { it.startsWith("item.") }.forEach { edit.remove(it) }
+        edit.apply()
+    }
+
     // auto (the server's choice), standard or robust.
     fun streaming(context: Context): String = prefs(context).getString(STREAMING, "auto") ?: "auto"
     fun setStreaming(context: Context, value: String) = prefs(context).edit().putString(STREAMING, value).apply()
