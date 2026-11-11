@@ -352,7 +352,7 @@ look, not a walkthrough.
 | Page | Apple TV | iPhone | iPad |
 |---|---|---|---|
 | Home, with the menu from the server | Seen: top menu, spotlight, rows; focus moved hero to row to row with the remote | Seen: bar, strip, spotlight, library tiles, rows | Not seen |
-| A library | Not seen | Not seen | Opened at launch; not looked at closely |
+| A library | Not seen | Not seen | Seen: the films library opened at launch, with its filter bar, a four-column grid, the bar and the strip |
 | Title, show and season, album, collection | Unit-tested only | Unit-tested only | Unit-tested only |
 | Search, Collections, Libraries, Live TV, Music | Unit-tested only | Unit-tested only | Unit-tested only |
 | Photos, Books, Games | Unit-tested only: no such library on the test server | The same | The same |
