@@ -55,7 +55,7 @@ struct TvTopBar: View {
             ScrollViewReader { scroller in
                 ScrollView(.horizontal, showsIndicators: false) {
                     HStack(spacing: Tokens.Space.s4 - ring * 2) {
-                        ForEach(AppTab.tvTabs) { pill($0, $0.title, $0.icon).id($0) }
+                        ForEach(model.household.shown(AppTab.tvTabs)) { pill($0, $0.title, $0.icon).id($0) }
                         ForEach(added) { pill(.library($0.id), $0.name, $0.barSymbol).id(AppTab.library($0.id)) }
                     }
                     .padding(.leading, metrics.gutter - ring)
@@ -116,7 +116,7 @@ private struct TvTabPill: View {
         Button(action: action) {
             HStack(spacing: Tokens.Space.s3) {
                 if let user {
-                    AvatarTile(name: user.shownName, size: 28)
+                    AvatarTile(name: user.shownName, size: 28, picture: user.avatar)
                     Text(user.shownName)
                 } else {
                     Image(systemName: symbol).accessibilityHidden(true)

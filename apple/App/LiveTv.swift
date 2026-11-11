@@ -137,6 +137,8 @@ final class LiveTv: ObservableObject {
                 if Task.isCancelled || key != self.key { return }
             } catch {
                 if Task.isCancelled || key != self.key { return }
+                // Screen time is up: with the channel on the whole screen, the time-up screen says so.
+                if Household.caught(error, needsScreen: true) { return }
                 state = .failed((error as? APIError)?.message ?? "This channel can't be played right now.")
                 return
             }

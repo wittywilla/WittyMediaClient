@@ -269,9 +269,17 @@ final class HouseholdTests: XCTestCase {
         XCTAssertEqual(LimitWords.summary(Access(maxAge: 7, liveTv: false, off: ["games"], time: TimeRules(schoolDayMinutes: 60))),
                        "Kids 7+ · 1 hour on school days · no Live TV · 1 thing turned off")
         XCTAssertEqual(Access.tags(from: " scary, , loud ,scary"), ["scary", "loud"])
-        XCTAssertEqual(Access.starting(kind: "kids", maxAge: 7).liveTv, true)
-        XCTAssertEqual(Access.starting(kind: "guest", maxAge: 7).liveTv, false)
-        XCTAssertEqual(Access.starting(kind: "kids", maxAge: 7).allowUnrated, false)
+    }
+
+    func testANewProfileIsGivenOnlyItsStartingLimits() throws {
+        let kids = try object(JSONEncoder().encode(XCTUnwrap(NewProfileLimits(kind: "kids", maxAge: 7))))
+        // Nothing about the switches: naming them would turn on what a new Kids profile starts without.
+        XCTAssertEqual(Set(kids.keys), ["maxAge", "allowUnrated", "liveTv", "libraryChannels", "tunerChannels"])
+        XCTAssertEqual(kids["maxAge"] as? Int, 7)
+        XCTAssertEqual(kids["liveTv"] as? Bool, true)
+        XCTAssertEqual(kids["tunerChannels"] as? Bool, false)
+        XCTAssertEqual(NewProfileLimits(kind: "guest", maxAge: 0)?.liveTv, false)
+        XCTAssertNil(NewProfileLimits(kind: "adult", maxAge: -1))
     }
 
     func testManagedProfilesAndTheirReportAreRead() throws {

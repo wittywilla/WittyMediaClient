@@ -330,6 +330,8 @@ final class PlaybackModel: ObservableObject {
     private func failed(_ problem: Error?, item: ObjectIdentifier) {
         guard active, failedItem != item else { return }
         failedItem = item
+        // The profile's screen time is up: the time-up screen says so and closes this player (Household.swift).
+        if Household.caught(problem) { player.pause(); return }
         let detail = problem.map { problem -> String in
             let found = problem as NSError
             return "\(found.domain) \(found.code): \(found.localizedDescription)"
@@ -356,6 +358,7 @@ final class PlaybackModel: ObservableObject {
     private func show(_ problem: Error) {
         let trouble = Problem.of(problem)
         if trouble == .cancelled { return }
+        if Household.caught(problem) { player.pause(); return }
         // The screen says there's a problem, so nothing should carry on playing behind it.
         player.pause()
         waitingForNetwork = trouble.isConnection

@@ -618,11 +618,6 @@ public struct Access: Codable, Equatable {
         return out
     }
 
-    /// What a new Kids or Guest profile starts with, before anyone opens its limits: the website's own choice.
-    public static func starting(kind: String, maxAge: Int) -> Access {
-        Access(maxAge: maxAge, allowUnrated: false, liveTv: kind == "kids", libraryChannels: kind == "kids", tunerChannels: false)
-    }
-
     /// The JSON to send for a change: only the limits that differ from what the profile had. The server keeps
     /// whatever isn't named, so a limit this app has never heard of is left as it was. Nil when nothing changed.
     public func changes(from old: Access) -> Data? {
@@ -634,6 +629,27 @@ public struct Access: Codable, Equatable {
         for (key, value) in after where before[key] != value { changed[key] = value }
         guard !changed.isEmpty else { return nil }
         return try? encoder.encode(changed)
+    }
+}
+
+/// What a new Kids or Guest profile is given before anyone opens its limits: an age, nothing unrated, and Live
+/// TV from the server's own channels for Kids only. The website starts them the same way. Only these are sent:
+/// naming the switches here would turn on the ones a new profile of its kind starts without.
+public struct NewProfileLimits: Encodable, Equatable {
+    public let maxAge: Int
+    public let allowUnrated: Bool
+    public let liveTv: Bool
+    public let libraryChannels: Bool
+    public let tunerChannels: Bool
+
+    /// Nil for an adult, who starts with no limits.
+    public init?(kind: String, maxAge: Int) {
+        guard kind == "kids" || kind == "guest" else { return nil }
+        self.maxAge = maxAge
+        allowUnrated = false
+        liveTv = kind == "kids"
+        libraryChannels = kind == "kids"
+        tunerChannels = false
     }
 }
 
@@ -838,13 +854,14 @@ extension WittyClient {
     /// The accounts this one may manage: everyone for an administrator, Kids profiles for an adult allowed to.
     public func managedUsers() async throws -> [ManagedUser] { try await list("/users") }
 
-    /// Adds a profile. `access` only for Kids and Guest profiles; the server fills in what isn't sent.
-    public func addProfile(name: String, password: String, kind: String, displayName: String, avatar: String, access: Access?) async throws {
+    /// Adds a profile. A Kids or Guest profile starts with `limits`; the server fills in the rest as it does for
+    /// any new profile of that kind.
+    public func addProfile(name: String, password: String, kind: String, displayName: String, avatar: String, limits: NewProfileLimits?) async throws {
         struct New: Encodable {
             let name: String, password: String, kind: String, displayName: String, avatar: String
-            let access: Access?
+            let access: NewProfileLimits?
         }
-        try await tell("POST", "/users", New(name: name, password: password, kind: kind, displayName: displayName, avatar: avatar, access: access))
+        try await tell("POST", "/users", New(name: name, password: password, kind: kind, displayName: displayName, avatar: avatar, access: limits))
     }
 
     /// Removes a profile this account manages, and its watch history with it. An administrator's needs `current`.

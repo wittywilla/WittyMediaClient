@@ -36,7 +36,7 @@ public struct PairPin: Decodable, Equatable {
 }
 
 /// What a device waiting to be signed in has on its screen, whichever way the server started it.
-public struct PairShown: Equatable {
+public struct PairShown: Equatable, Sendable {
     /// ABCD-EFGH, for typing on the other device.
     public let code: String
     public let deviceSecret: String

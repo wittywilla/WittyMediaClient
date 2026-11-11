@@ -67,7 +67,7 @@ public struct ProfilePicture: Equatable {
 }
 
 /// One step of a drawn shape, in the shape's own units.
-public enum PathStep: Equatable {
+public enum PathStep: Equatable, Sendable {
     case move(x: Double, y: Double)
     case line(x: Double, y: Double)
     case curve(x1: Double, y1: Double, x2: Double, y2: Double, x: Double, y: Double)

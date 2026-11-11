@@ -125,6 +125,8 @@ enum Route: Hashable {
     case gameLibrary(Library, console: String?)
     case game(Int64)
     case playGame(Int64, GameStart)
+    /// Switching profile, and the profiles this account looks after: see Household.swift and ProfileSwitch.swift.
+    case family(FamilyRoute)
 }
 
 /// A page a module adds to the menus, with the module it belongs to.
@@ -198,6 +200,8 @@ final class AppModel: ObservableObject {
     @Published private(set) var topMenu: [Int64] = []
     /// Music, audiobooks and podcasts, which carry on whatever screen is showing.
     let listening = Listening()
+    /// What this profile may do and its screen time: see Household.swift.
+    let household = Household()
     @Published var libraries: [Library] = []
     /// The phone's Menu: the drawer of libraries from the left.
     @Published var menuOpen = false
@@ -423,6 +427,7 @@ final class AppModel: ObservableObject {
 
     private func forgetSignIn() {
         listening.forget()
+        household.forget()
         Keychain.clear()
         TopShelfWriter.clear()
         ArtCache.shared.removeAllObjects()
@@ -667,6 +672,32 @@ final class AppModel: ObservableObject {
             // The server's own 429 words already say how long to wait.
             if error.status == 401 { return .wrong }
             return .failed(error.message)
+        } catch {
+            return .failed(plainWords(Problem.of(error)))
+        }
+    }
+
+    /// Another profile on this device, without signing out first: the server signs it in and ends the sign-in it
+    /// came from in one step, so the new token is kept exactly as a sign-in's is, with the key the server proved.
+    /// Everything of the profile being left goes, as signing out does it. What was playing stops first, so its
+    /// place is saved while its sign-in still counts.
+    func switchProfile(name: String, password: String, code: String = "") async -> SignInOutcome {
+        if let current, let refused = await refuseToSend(to: current) { return .failed(refused) }
+        video?.stop()
+        video = nil
+        await listening.forget()?.value
+        do {
+            let result = try await client.switchProfile(name: name, password: password, code: code, device: deviceName)
+            forgetSignIn()
+            signedIn(token: result.token, user: result.user)
+            return .signedIn
+        } catch let error as APIError {
+            switch SwitchRules.refusal(error, sentCode: !code.isEmpty) {
+            case .needsCode(let wrong): return .needsCode(wrong ? error.message : "")
+            // A wrong password is a 403 here, and the device stays signed in as it was. The server's words say
+            // what was wrong, or how long to wait.
+            case .wait, .refused: return .failed(error.status == 401 ? handle(error) : error.message)
+            }
         } catch {
             return .failed(plainWords(Problem.of(error)))
         }

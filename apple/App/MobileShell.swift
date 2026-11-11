@@ -363,7 +363,7 @@ struct FloatingBar: View {
     private var shownTabs: [AppTab] {
         let hidden: [String] = model.navPrefs.hidden ?? []
         let tabs: [AppTab] = [.home, .guide, .search]
-        return tabs.filter { (tab: AppTab) -> Bool in !hidden.contains(menuKey(tab)) }
+        return model.household.shown(tabs).filter { (tab: AppTab) -> Bool in !hidden.contains(menuKey(tab)) }
     }
 
     private func barIcon(_ symbol: String, size: CGFloat = 20) -> some View {
@@ -382,7 +382,7 @@ struct FloatingBar: View {
 
     @ViewBuilder private func profileIcon(_ name: String) -> some View {
         if model.user != nil {
-            AvatarTile(name: name, size: 32).overlay(alignment: .topTrailing) { updateDot }
+            AvatarTile(name: name, size: 32, picture: model.user?.avatar).overlay(alignment: .topTrailing) { updateDot }
         } else {
             Image(systemName: "person.crop.circle").font(.system(size: 22, weight: .medium))
         }

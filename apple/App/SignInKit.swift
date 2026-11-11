@@ -321,15 +321,26 @@ struct SignInHeading: View {
 struct AvatarTile: View {
     let name: String
     var size: CGFloat
+    /// The picture the profile chose ("star:blue"), drawn in place of the initial: see ProfilePictures.swift.
+    var picture: String?
 
     var body: some View {
         let shape: AnyShape = size <= 36 ? AnyShape(Circle()) : AnyShape(RoundedRectangle(cornerRadius: size * 0.22, style: .continuous))
-        Text(AvatarLook.initial(of: name))
-            .font(.system(size: size * 0.43, weight: .bold))
-            .foregroundStyle(.white)
-            .frame(width: size, height: size)
-            .background(shape.fill(Color(hex: AvatarLook.colour(for: name))))
-            .accessibilityHidden(true)
+        if let chosen = ProfilePicture.parse(picture) {
+            PictureShape(steps: chosen.steps)
+                .fill(Color.white)
+                .frame(width: size * 0.58, height: size * 0.58)
+                .frame(width: size, height: size)
+                .background(shape.fill(Color(hex: chosen.colour)))
+                .accessibilityHidden(true)
+        } else {
+            Text(AvatarLook.initial(of: name))
+                .font(.system(size: size * 0.43, weight: .bold))
+                .foregroundStyle(.white)
+                .frame(width: size, height: size)
+                .background(shape.fill(Color(hex: AvatarLook.colour(for: name))))
+                .accessibilityHidden(true)
+        }
     }
 }
 
@@ -404,7 +415,7 @@ private struct ProfileTileContent: View {
         // outwards grows its corners by as much, so both stay concentric with the avatar's.
         let ring: CGFloat = metrics.tv ? 4 : 3
         VStack(spacing: Tokens.Space.s2) {
-            AvatarTile(name: profile.shownName, size: avatarSize)
+            AvatarTile(name: profile.shownName, size: avatarSize, picture: profile.avatar)
                 .overlay {
                     if active {
                         shape.inset(by: -ring / 2).stroke(palette.background, lineWidth: ring)

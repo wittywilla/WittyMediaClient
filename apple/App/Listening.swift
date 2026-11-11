@@ -809,6 +809,8 @@ final class Listening: ObservableObject {
         let recovery = giveUp ? ListeningRecovery.giveUp : ListeningRules.recovery(for: error)
         let id = track.item.id
         let place = placeWhileOpening ?? lastPlace
+        // The profile's screen time is up: the time-up screen says so, and nothing is tried again behind it.
+        if Household.caught(error) { stopWith("", at: place); return }
         let status = (error as? APIError)?.status
         let wait = recovery == .giveUp || (recovery == .convert && converting.contains(id)) ? nil : budget.next()
         let detail = error.map { found -> String in
