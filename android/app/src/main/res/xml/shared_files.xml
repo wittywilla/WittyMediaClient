@@ -1,5 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- What the app hands another app to open: an album's booklet, fetched into the cache, for a PDF reader. -->
+<!-- What the app hands another app to open: an album's booklet, fetched into the cache, for a PDF reader; and the
+     pictures of the titles it puts on an Android TV's home screen, for the home screen to draw. -->
 <paths>
     <cache-path name="booklets" path="booklets/" />
+    <cache-path name="tvhome" path="tvhome/" />
 </paths>

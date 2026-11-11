@@ -20,6 +20,9 @@ import com.wittywilla.wittymediaclient.diag.ClientLog
 import com.wittywilla.wittymediaclient.diag.ReportTarget
 import com.wittywilla.wittymediaclient.net.Api
 import com.wittywilla.wittymediaclient.player.Listening
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -37,6 +40,9 @@ class WittyApp : Application(), SingletonImageLoader.Factory {
 
     // A debug build only: an item put first in Home's hero, to check a title of one's choosing. See MainActivity.
     var pinnedHero = 0L
+
+    // A title chosen on an Android TV's home screen, waiting for the app's screens to open it (data/TvHome.kt).
+    var wantedRoute by mutableStateOf<String?>(null)
 
     // The controller last used, if the last thing pressed was on one.
     @Volatile

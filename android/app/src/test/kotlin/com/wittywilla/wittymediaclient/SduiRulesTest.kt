@@ -23,7 +23,10 @@ import com.wittywilla.wittymediaclient.net.SduiRouter
 import com.wittywilla.wittymediaclient.net.SduiScreen
 import com.wittywilla.wittymediaclient.net.SduiSectionItems
 import com.wittywilla.wittymediaclient.net.SduiTarget
+import com.wittywilla.wittymediaclient.net.SduiFileStore
 import com.wittywilla.wittymediaclient.net.SduiTokens
+import com.wittywilla.wittymediaclient.net.SduiTopShelf
+import com.wittywilla.wittymediaclient.net.TvHomePlan
 import com.wittywilla.wittymediaclient.net.SduiTransport
 import com.wittywilla.wittymediaclient.net.SduiUnsupported
 import com.wittywilla.wittymediaclient.net.ThemeColour
@@ -500,6 +503,52 @@ class SduiRulesTest {
         assertEquals("a link that is neither a route nor a web page is only its words", "", last.spans.first { it.text == "bad" }.link)
         assertEquals("Friday, 7 o'clock Pick one each. The full list is longer.", SduiMarkdown.plain("## Friday, 7 o'clock\nPick **one** each. The [full list](/collections/12) is *longer*."))
         assertFalse(SduiMarkdown.safeLink("//evil.example"))
+    }
+
+    @Test
+    fun aTvsHomeScreenIsMadeFromTheServersShelf() {
+        val shelf = json.decodeFromString(SduiTopShelf.serializer(), """
+            {"version":1,"style":"sectioned","expiresInSec":600,"sections":[
+              {"title":"Continue watching","items":[
+                {"id":"12","title":"Film 3","shape":"wide","progress":0.4,"image":{"url":"/api/items/12/backdrop?w=908","width":908,"height":512,"aspect":"16/9"},"displayRoute":"/item/12","playRoute":"/watch/12"},
+                {"id":"13","title":"Finished","shape":"wide","progress":1,"displayRoute":"/item/13","playRoute":"/watch/13"},
+                {"id":"14","title":"Can't be played now","shape":"wide","progress":0.5,"displayRoute":"/item/14"}]},
+              {"title":"New in Films","items":[
+                {"id":"12","title":"Film 3 again","shape":"poster","displayRoute":"/item/12"},
+                {"id":"show-6","title":"A show","shape":"poster","displayRoute":"/show/6"},
+                {"id":"x","title":"Somewhere else","shape":"poster","displayRoute":"https://example.org/x"},
+                {"id":"y","title":"Settings","shape":"poster","displayRoute":"/settings/users"}]}]}
+        """.trimIndent())
+        val plan = TvHomePlan.from(shelf)
+        assertEquals("each title once, in the server's order, and only ones that open a title", listOf("12", "13", "14", "show-6"), plan.channel.map { it.id })
+        assertEquals("Watch Next is what was started and can be carried on", listOf("12"), plan.watchNext.map { it.id })
+        assertEquals("a card plays when it can", "/watch/12", plan.channel.first().route)
+        assertEquals("/show/6", plan.channel.last().route)
+        assertEquals("Continue watching", plan.channel.first().row)
+        assertEquals(600, plan.refreshAfterSec)
+        assertTrue(TvHomePlan.openable("/album/5?artist=Sun+Tzu&album=The+Art+of+War"))
+        assertFalse(TvHomePlan.openable("/settings"))
+        assertFalse(TvHomePlan.openable("//evil.example/item/1"))
+        assertFalse(TvHomePlan.openable("/item/1/../../settings"))
+        assertEquals(900, TvHomePlan.from(SduiTopShelf()).refreshAfterSec)
+    }
+
+    @Test
+    fun whatIsKeptOnTheDeviceSurvivesARestartAndIsBounded() {
+        val folder = java.io.File.createTempFile("sdui", "").let { it.delete(); it }
+        try {
+            val store = SduiFileStore(folder, most = 3)
+            assertNull(store.read("a"))
+            store.write("a", "one")
+            assertEquals("one", SduiFileStore(folder, most = 3).read("a"))
+            repeat(6) { store.write("k$it", "v$it") }
+            assertTrue(folder.listFiles()!!.size <= 3)
+            assertEquals("v5", store.read("k5"))
+            store.clear()
+            assertNull(store.read("k5"))
+        } finally {
+            folder.deleteRecursively()
+        }
     }
 
     @Test

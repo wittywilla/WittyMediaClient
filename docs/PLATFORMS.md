@@ -394,6 +394,74 @@ conflict, so that needs thinking through first. Moonlight's code never goes insi
 - Android can't tell that Moonlight doesn't know a PC yet. Moonlight says so itself, and the app has the setup
   steps a button away.
 
+## Server-driven pages on Android
+
+A server with the features `sdui-pages`, `sdui-catalog`, `sdui-navigation` and `sdui-personal` (WittyMediaServer 0.8.0-alpha) describes
+its pages as data, and the Android app draws them (the server's `docs/SDUI.md` is the contract). A server without them gets the app's
+own screens, as before; which it is, is decided once the server's features have been read, and only one of the two is ever drawn.
+
+**What is the server's.** Home, Search, Libraries, a library, the page of a film, show, episode, album or collection, Live TV,
+Collections, Music, Photos, Books, Games and any page of an administrator's own. The floating bar, the strip along the top and the drawer
+(phone and tablet) and the top bar (TV) are made from `GET /sdui/navigation`, drawn as they were.
+
+**What stays the app's.** You and every settings screen (the server's `settings` and `profiles` entries both open You; a
+`/settings/{section}` link opens the server's settings page on a phone and a QR card on a TV, as You's own rows do). The video and music
+players, a live channel, the TV guide (WittyTV's own on a TV; the server's guide page inside the app on a phone or tablet, where the
+page asks for the `guide` view), the readers, WittyPlay and a shared PC's game. An artist's page, as the server has no page for one
+(`/artist/{library}` isn't in its routes). Download, Share, Play on… and Watch party open the server's page for the title (a QR card on a
+TV): the app has no screens of its own for them.
+
+**Where the code is.** `net/Sdui*.kt` is plain Kotlin with JVM tests: the models, the client (device parameters, ETag cache kept on the
+device, diffs), paging and deferred sections, the router from the catalogue's routes, theme tokens, Customise's rules, and
+`SduiScreen`, the laid-out page the composables draw from, which is also what the conformance test describes. `ui/Sdui*.kt` is Compose.
+
+**The conformance kit.** `SduiConformanceTest` reads the server's `pkg/sdui/conformance/fixtures` where they are: from
+`-PsduiFixtures=<folder>` or `WMS_SDUI_FIXTURES`, else a server checkout beside this repository, else `.server` in it (what CI checks
+out). 57 of 57 pass (2 of them are pages that aren't there, which have no document to lay out), and every `more` answer is fed through
+the code that handles a real one. Without the fixtures the test is skipped, unless `-PsduiFixturesRequired` is given, as CI gives it
+when the server's checkout has them.
+
+**How Android TV differs from what the server's TV profile was written for (tvOS).**
+
+- The canvas is 1920 by 1080 points drawn at half a dp a point, as the app's other TV screens are.
+- `deviceClass=4k` is sent only when the app's own surface is 2160 lines or more and the device isn't short of memory. Most Android TVs
+  draw at 1080 on a 4K panel, and a 1 to 2 GB stick can't hold 4K posters.
+- A card's title is drawn at the caption size (the row's own heading is at the title size, as the fixtures pin down): at the title size
+  a 250-point poster fits nine letters. The same on a phone, where it matches the app's cards as they were.
+- A tab is chosen with OK, not as focus passes over it: each choice asks the server for the page again.
+- Android TV brings whatever has focus a third of the way down the screen. The page's column doesn't follow that: the section focus
+  enters goes to the top with its heading. Rows keep Android TV's rule sideways.
+- A header's synopsis has no More on a TV; it is the server's 480 characters cut to four lines.
+- The top bar has no More: entries the server puts behind More are in the bar after the primary ones.
+- On a tablet the bar keeps its five cells; the server's other primary entries are in the strip along the top, by name.
+
+**Android TV's home screen.** With `sdui-topshelf`, the app writes a channel of its own and Watch Next entries (what was started and
+can be carried on) from `GET /sdui/topshelf`, with `androidx.tvprovider`: when someone signs in and each time the app is left, and takes
+them away on signing out. Choosing a card opens the app at the title's page or plays it. The pictures need the sign-in, which the home
+screen hasn't got, so they are fetched into the app's cache and lent to it. Nothing refreshes it while the app isn't running. **Compiled
+only: not once seen on a home screen.**
+
+**What was seen**, on Android's emulator (Android 16) against a real WittyMediaServer 0.8.0-alpha with film, show, anime, music,
+audiobook and podcast libraries:
+
+| Page | Phone | Tablet | Android TV |
+|---|---|---|---|
+| Menus from the server | Ran: bar, strip, drawer | Not run | Ran: the top bar drawn; tabs not opened |
+| Home | Ran: spotlight, tiles, rows, See all, banner | Not run | Ran: spotlight with focus on Play, down into a row and along it |
+| A library (filters and sort, grid) | Ran: shows, a genre chosen | Not run | Not run |
+| A show, a season chosen, an episode | Ran | Not run | Not run |
+| Mark watched, Play | Ran: the page refreshed, the player played | Not run | Not run |
+| Search | Ran: typed, results came | Not run | Not run |
+| Collections | Ran: empty, with its message | Not run | Not run |
+| Live TV | Ran: the server's guide page in the page | Not run | Not run |
+| Customize | Ran: arrows and drag, saved on the server | Not run | Not run |
+| A film, an album, Libraries, Music | Unit tests only | Not run | Not run |
+| Photos, Books, Games | Unit tests only: the test server had no such modules | Not run | Not run |
+
+Not seen at all: a Kids profile, screen time over, a page or menu changed by an administrator while the app runs, a theme scope's
+colours, the server out of reach, TalkBack, a real device or remote. The TV run was cut short: the machine was too busy for the
+emulator, which stopped answering.
+
 ## Android, as of 0.2.1
 
 Run in headless emulators under WSL, with hardware virtualisation and software graphics, against a real server built from

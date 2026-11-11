@@ -350,11 +350,7 @@ private fun TabBar(nav: Nav, inset: Dp, modifier: Modifier, openMenu: () -> Unit
 
 // The bar's own places from the server's menu (GET /sdui/navigation): its primary entries and the ones pinned to its
 // end, each with where it leads. Null on a server without a menu of its own, which keeps the bar above.
-private fun barEntries(nav: Nav): List<Pair<SduiNavItem, Route>>? {
-    val served = nav.sduiNav ?: return null
-    return served.items.filter { it.placement == "primary" || it.placement == "end" }
-        .mapNotNull { entry -> nav.routeOf(entry)?.let { entry to it } }.distinctBy { it.second.key }
-}
+private fun barEntries(nav: Nav): List<Pair<SduiNavItem, Route>>? = if (nav.sduiNav == null) null else nav.sduiBar
 
 // The floating bar, made from the server's menu and drawn as the bar above is: the entries in the server's order, at
 // most five across, with Menu for what sits behind More. Menu goes before You when You is last, so the avatar keeps
@@ -366,7 +362,7 @@ private fun ServedTabBar(nav: Nav, entries: List<Pair<SduiNavItem, Route>>, inse
     val strong = scheme.onBackground.copy(alpha = 0.2f)
     val current = nav.current
     val more = nav.menu.isNotEmpty()
-    val shown = entries.take(if (more) BAR_CELLS - 1 else BAR_CELLS)
+    val shown = entries
     Row(
         modifier
             .padding(start = 16.dp, end = 16.dp, bottom = 8.dp + inset)
@@ -413,8 +409,6 @@ private fun ServedTabBar(nav: Nav, entries: List<Pair<SduiNavItem, Route>>, inse
         if (menuAt == shown.size) Cell("Menu", false, openMenu) { Icon(WebIcons.Menu, null, tint = it, modifier = Modifier.size(24.dp)) }
     }
 }
-
-private const val BAR_CELLS = 5
 
 // The Menu drawer: 240 wide, panel colour, a hairline at its edge, 12 inside. It slides in over 240 ms and is gone at
 // once on closing; the scrim of black 60% covers everything else. The lockup, LIBRARIES, a row for each, the version.

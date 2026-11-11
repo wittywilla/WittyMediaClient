@@ -2,11 +2,14 @@
 // Copyright (C) 2026 WittyWilla and contributors
 package com.wittywilla.wittymediaclient.ui
 
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListScope
-import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.gestures.BringIntoViewSpec
+import androidx.compose.foundation.gestures.LocalBringIntoViewSpec
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -20,12 +23,16 @@ import androidx.compose.runtime.compositionLocalOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.heading
+import androidx.compose.ui.semantics.paneTitle
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -39,6 +46,7 @@ import com.wittywilla.wittymediaclient.net.SduiView
 import com.wittywilla.wittymediaclient.net.str
 import com.wittywilla.wittymediaclient.tv.GuideScreen
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 
 // A page drawn: one scrolling column of the page's sections, rows of cards that scroll sideways inside it, a grid
 // that pages as it is scrolled (docs/SDUI.md, Rules for renderers). Everything long is laid out lazily: a section,
@@ -118,7 +126,7 @@ class SduiRowAlias(key: String, val row: SduiRow) : SduiRow(key, row.kind)
 
 private val TALL_FIRST = setOf("Hero", "DetailHeader")
 
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class)
 @Composable
 fun SduiPageView(
     top: Boolean, title: String, offline: Boolean, screenTime: SduiScreenTime?,
@@ -127,7 +135,7 @@ fun SduiPageView(
     val env = LocalSdui.current
     val screen = env.screen
     val layout = env.layout
-    BoxWithConstraints(Modifier.fillMaxSize().semantics { contentDescription = title }) {
+    BoxWithConstraints(Modifier.fillMaxSize().semantics { paneTitle = title }) {
         // Content keeps inside the safe area a TV's layout names; elsewhere the page's own margin, one m each side.
         val side = if (layout.safeArea.left > 0) env.pt(layout.safeArea.left) else env.space("m")
         val span = SduiSpan(maxWidth - side * 2, side)
@@ -145,6 +153,8 @@ fun SduiPageView(
         val native = rows.lastOrNull() as? SduiRow.Native
         val gap = env.pt(layout.sectionGap)
         val list = rememberLazyListState()
+        val scope = rememberCoroutineScope()
+        val reduce = LocalReduceMotion.current || layout.reducedMotion
         if (!env.tv) TracksScroll(list)
         // A page's own heading: not on a TV, where the top menu says where you are, nor over a picture, nor on Home.
         val heading = title.takeIf { !env.tv && !tallFirst && screen.document.page.kind != "home" && it.isNotEmpty() }
@@ -160,7 +170,29 @@ fun SduiPageView(
                         modifier = Modifier.padding(horizontal = side).padding(top = env.space("xs"), bottom = env.space("m")).semantics { heading() },
                     )
                 }
-                items(rows.filter { it !is SduiRow.Native }, key = { it.key }, contentType = { it.kind }) { row -> SduiRowView(row, gap) }
+                val lead = (if (offline) 1 else 0) + (if (screenTime != null) 1 else 0) + (if (heading != null) 1 else 0)
+                itemsIndexed(rows.filter { it !is SduiRow.Native }, key = { _, row -> row.key }, contentType = { _, row -> row.kind }) { at, row ->
+                    if (!env.tv) SduiRowView(row, gap) else {
+                        // A remote going down the page: the section focus has come into goes to the top of the screen, its
+                        // heading with it. The first one takes the page back to its very top.
+                        var had by remember { mutableStateOf(false) }
+                        Box(
+                            Modifier.onFocusChanged { focus ->
+                                if (focus.hasFocus == had) return@onFocusChanged
+                                had = focus.hasFocus
+                                if (!had) return@onFocusChanged
+                                val inner = row is SduiRow.Line || (row is SduiRow.Cards && row.index > 0)
+                                val peek = if (at == 0) 0 else if (inner) -(list.layoutInfo.viewportSize.height * 3 / 10) else 0
+                                scope.launch {
+                                    // After the system's own small move for what took focus has begun, so this one is the one that stands.
+                                    withFrameNanos { }
+                                    withFrameNanos { }
+                                    if (reduce) list.scrollToItem(if (at == 0) 0 else at + lead, peek) else list.animateScrollToItem(if (at == 0) 0 else at + lead, peek)
+                                }
+                            },
+                        ) { SduiRowView(row, gap) }
+                    }
+                }
                 if (native == null) {
                     if (layout.truncated) item(key = "~truncated", contentType = "note") { SduiPageNote("This page has more than this device shows at once.", Modifier.padding(horizontal = side).padding(top = gap)) }
                     if (customise != null) item(key = "~customise", contentType = "customise") {
@@ -179,11 +211,33 @@ fun SduiPageView(
                     rows.filter { it !is SduiRow.Native }.forEach { SduiRowView(it, gap) }
                     Box(Modifier.weight(1f).fillMaxWidth()) { SduiNativeView(native.view) }
                 }
-                env.tv -> LazyColumn(Modifier.fillMaxSize(), state = list, contentPadding = PaddingValues(top = topRoom, bottom = bottomRoom), content = content)
+                // On a TV the page's column is moved by the rule above, not by Android TV's own of bringing whatever has
+                // focus a third of the way down, which cuts a spotlight's top off. Rows of cards keep the TV's rule sideways.
+                env.tv -> CompositionLocalProvider(LocalSduiRowSpec provides LocalBringIntoViewSpec.current, LocalBringIntoViewSpec provides NearestEdge) {
+                    LazyColumn(Modifier.fillMaxSize(), state = list, contentPadding = PaddingValues(top = topRoom, bottom = bottomRoom), content = content)
+                }
                 else -> PullToRefreshBox(refreshing, onRefresh, Modifier.fillMaxSize()) {
                     LazyColumn(Modifier.fillMaxSize(), state = list, contentPadding = PaddingValues(top = topRoom, bottom = bottomRoom), content = content)
                 }
             }
+        }
+    }
+}
+
+// How a TV's own rule moves a row of cards under focus, kept for the rows inside a page whose column has its own.
+@OptIn(ExperimentalFoundationApi::class)
+val LocalSduiRowSpec = compositionLocalOf<BringIntoViewSpec?> { null }
+
+// Scrolls only as far as it takes to show what has focus, and not at all when it already shows.
+@OptIn(ExperimentalFoundationApi::class)
+private object NearestEdge : BringIntoViewSpec {
+    override fun calculateScrollDistance(offset: Float, size: Float, containerSize: Float): Float {
+        val end = offset + size
+        return when {
+            offset >= 0 && end <= containerSize -> 0f
+            offset < 0 && end > containerSize -> 0f
+            kotlin.math.abs(offset) < kotlin.math.abs(end - containerSize) -> offset
+            else -> end - containerSize
         }
     }
 }

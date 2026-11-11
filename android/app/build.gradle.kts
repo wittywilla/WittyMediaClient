@@ -89,6 +89,8 @@ dependencies {
     implementation("com.google.zxing:core:3.5.4")
     // WittyPlay's stream, version 2: WebRTC first (the server's docs/GAMING-STREAM.md). libwebrtc decodes with MediaCodec.
     implementation("io.github.webrtc-sdk:android:144.7559.15")
+    // An Android TV's home screen: the app's own channel and the Watch Next row (data/TvHome.kt).
+    implementation("androidx.tvprovider:tvprovider:1.0.0")
 
     testImplementation("junit:junit:4.13.2")
 }

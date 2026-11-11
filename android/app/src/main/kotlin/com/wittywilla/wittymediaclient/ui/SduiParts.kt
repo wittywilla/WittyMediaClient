@@ -7,6 +7,7 @@ import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.focusGroup
+import androidx.compose.foundation.gestures.LocalBringIntoViewSpec
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyRow
@@ -25,6 +26,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
@@ -202,6 +204,14 @@ private fun SduiPlaceholderRow(view: SduiView, side: Dp, count: Int) {
 
 // MARK: Shelf and Grid
 
+// A row that scrolls sideways under a remote's focus as Android TV's rows do, whatever the page's column does.
+@OptIn(ExperimentalFoundationApi::class)
+@Composable
+private fun SduiRowScroll(content: @Composable () -> Unit) {
+    val spec = LocalSduiRowSpec.current
+    if (spec == null) content() else CompositionLocalProvider(LocalBringIntoViewSpec provides spec, content = content)
+}
+
 @Composable
 fun SduiShelf(view: SduiView, side: Dp) {
     val env = LocalSdui.current
@@ -223,7 +233,7 @@ fun SduiShelf(view: SduiView, side: Dp) {
                 val nearEnd by remember(view.children.size) { derivedStateOf { (state.layoutInfo.visibleItemsInfo.lastOrNull()?.index ?: 0) >= view.children.size - 4 } }
                 if (view.hasMore && nearEnd) LaunchedEffect(view.children.size) { env.more(view.id, false) }
                 val ring = if (env.tv) LocalMetrics.current.focusRing else 0.dp
-                LazyRow(
+                SduiRowScroll { LazyRow(
                     (if (env.tv) Modifier.remoteRow() else Modifier).fillMaxWidth(), state = state,
                     // A TV's cards keep room for their ring and the little they grow by, so neither is cut off.
                     contentPadding = PaddingValues(start = (edge - ring).coerceAtLeast(0.dp), end = (edge - ring).coerceAtLeast(0.dp), top = if (env.tv) env.pt(12) else 0.dp, bottom = if (env.tv) env.pt(12) else env.space("xs")),
@@ -241,7 +251,7 @@ fun SduiShelf(view: SduiView, side: Dp) {
                             Box(Modifier.size(wide, tall), contentAlignment = Alignment.Center) { Text(words, color = MaterialTheme.colorScheme.onSurface, fontSize = env.size("body"), fontWeight = FontWeight.Medium) }
                         }
                     }
-                }
+                } }
             }
         }
         if (span.side == 0.dp) Unit
@@ -757,8 +767,10 @@ fun SduiSeasons(view: SduiView, side: Dp) {
                 val ring = LocalMetrics.current.focusRing
                 val nearEnd by remember(view.children.size) { derivedStateOf { (state.layoutInfo.visibleItemsInfo.lastOrNull()?.index ?: 0) >= view.children.size - 3 } }
                 if (view.hasMore && nearEnd) LaunchedEffect(view.children.size) { env.more(view.id, false) }
-                LazyRow(Modifier.remoteRow().fillMaxWidth(), state = state, contentPadding = PaddingValues(horizontal = side - ring, vertical = env.pt(12)), horizontalArrangement = Arrangement.spacedBy(env.pt(env.layout.cardGap) - ring * 2)) {
-                    items(view.children, key = { it.id }) { SduiCard(it, view, wide) }
+                SduiRowScroll {
+                    LazyRow(Modifier.remoteRow().fillMaxWidth(), state = state, contentPadding = PaddingValues(horizontal = side - ring, vertical = env.pt(12)), horizontalArrangement = Arrangement.spacedBy(env.pt(env.layout.cardGap) - ring * 2)) {
+                        items(view.children, key = { it.id }) { SduiCard(it, view, wide) }
+                    }
                 }
             }
         }

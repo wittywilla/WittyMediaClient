@@ -19,8 +19,8 @@ private fun icon24(name: String, path: String): ImageVector =
     ImageVector.Builder(name, 24.dp, 24.dp, 24f, 24f).addPath(addPathNodes(path), fill = SolidColor(Color.Black)).build()
 
 object SduiSymbols {
-    val Clock: ImageVector by lazy { icon24("schedule", "M12 2a10 10 0 100 20 10 10 0 000-20zm0 18a8 8 0 110-16 8 8 0 010 16zm.5-13H11v6l5.2 3.2.8-1.3-4.5-2.7z") }
-    val History: ImageVector by lazy { icon24("history", "M13 3a9 9 0 00-9 9H1l3.89 3.89.07.14L9 12H6c0-3.87 3.13-7 7-7s7 3.13 7 7-3.13 7-7 7c-1.93 0-3.68-.79-4.94-2.06l-1.42 1.42A8.954 8.954 0 0013 21a9 9 0 000-18zm-1 5v5l4.28 2.54.72-1.21-3.5-2.08V8H12z") }
+    val Clock: ImageVector by lazy { icon24("schedule", "M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20zm0 18a8 8 0 1 1 0-16 8 8 0 0 1 0 16zm.5-13H11v6l5.2 3.2.8-1.3-4.5-2.7z") }
+    val History: ImageVector by lazy { icon24("history", "M13 3a9 9 0 0 0-9 9H1l3.89 3.89.07.14L9 12H6c0-3.87 3.13-7 7-7s7 3.13 7 7-3.13 7-7 7c-1.93 0-3.68-.79-4.94-2.06l-1.42 1.42A8.954 8.954 0 0 0 13 21a9 9 0 0 0 0-18zm-1 5v5l4.28 2.54.72-1.21-3.5-2.08V8H12z") }
     val Calendar: ImageVector by lazy { icon24("event", "M17 12h-5v5h5v-5zM16 1v2H8V1H6v2H5c-1.11 0-1.99.9-1.99 2L3 19c0 1.1.89 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2h-1V1h-2zm3 18H5V8h14v11z") }
     val Share: ImageVector by lazy { icon24("share", "M18 16.08c-.76 0-1.44.3-1.96.77L8.91 12.7c.05-.23.09-.46.09-.7s-.04-.47-.09-.7l7.05-4.11c.54.5 1.25.81 2.04.81 1.66 0 3-1.34 3-3s-1.34-3-3-3-3 1.34-3 3c0 .24.04.47.09.7L8.04 9.81C7.5 9.31 6.79 9 6 9c-1.66 0-3 1.34-3 3s1.34 3 3 3c.79 0 1.5-.31 2.04-.81l7.12 4.16c-.05.21-.08.43-.08.65 0 1.61 1.31 2.92 2.92 2.92 1.61 0 2.92-1.31 2.92-2.92s-1.31-2.92-2.92-2.92z") }
     val Shuffle: ImageVector by lazy { icon24("shuffle", "M10.59 9.17L5.41 4 4 5.41l5.17 5.17 1.42-1.41zM14.5 4l2.04 2.04L4 18.59 5.41 20 17.96 7.46 20 9.5V4h-5.5zm.33 9.41l-1.41 1.41 3.13 3.13L14.5 20H20v-5.5l-2.04 2.04-3.13-3.13z") }
@@ -110,7 +110,7 @@ fun sduiDeviceFor(app: WittyApp, config: Configuration, reduceMotion: Boolean): 
         // A TV's canvas is the server's own 1920 by 1080; what differs is how many pixels the app really draws.
         deviceClass = if (tv) SduiDevice.tvClass(app.resources.displayMetrics.heightPixels, lowMemory) else "",
         viewport = if (tv) "" else "${config.screenWidthDp}x${config.screenHeightDp}",
-        locale = config.locales[0]?.toLanguageTag().orEmpty(),
+        locale = androidx.core.os.ConfigurationCompat.getLocales(config)[0]?.toLanguageTag().orEmpty(),
         capabilities = buildList {
             if (!tv) add("touch")
             if (reduceMotion) add("reducedMotion")

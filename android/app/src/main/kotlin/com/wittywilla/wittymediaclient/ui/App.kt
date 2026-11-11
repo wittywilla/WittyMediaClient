@@ -39,6 +39,8 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LifecycleEventEffect
 import com.wittywilla.wittymediaclient.WittyApp
 import com.wittywilla.wittymediaclient.data.LogoCache
+import com.wittywilla.wittymediaclient.data.TvHome
+import com.wittywilla.wittymediaclient.net.TvHomePlan
 import com.wittywilla.wittymediaclient.data.SavedServer
 import com.wittywilla.wittymediaclient.diag.ClientLog
 import com.wittywilla.wittymediaclient.net.Api
@@ -195,12 +197,29 @@ class Nav(val app: WittyApp, private val s: Map<String, String>) {
     val menu: List<MenuEntry>
         get() {
             val served = sduiNav ?: return ownMenu
-            val bar = served.items.filter { it.placement != "more" }.mapNotNull { routeOf(it)?.key }.toSet()
-            val more = served.items.filter { it.placement == "more" }.mapNotNull { entry ->
+            val bar = sduiBar.mapTo(HashSet()) { it.second.key }
+            val seen = HashSet<String>()
+            // Whatever the bar has no room for, and what sits behind More, in the server's order.
+            val rest = served.items.mapNotNull { entry ->
                 val route = routeOf(entry) ?: return@mapNotNull null
-                if (route.key in bar) null else MenuEntry("nav:" + entry.id, entry.label, sduiIcon(entry.icon), route)
+                if (route.key in bar || !seen.add(route.key)) null else MenuEntry("nav:" + entry.id, entry.label, sduiIcon(entry.icon), route)
             }
-            return more + ownMenu.filter { it.key == "couch" || it.key.startsWith("m:") }
+            return rest + ownMenu.filter { it.key == "couch" || it.key.startsWith("m:") }
+        }
+
+    // The floating bar's own places on a phone or tablet, from the server's menu: its primary entries and the ones
+    // pinned to its end, each with where it leads. The bar has five cells, one of them Menu when anything is left
+    // over, and You keeps its place at the end; the rest are along the top by name, and in the drawer.
+    val sduiBar: List<Pair<SduiNavItem, Route>>
+        get() {
+            val served = sduiNav ?: return emptyList()
+            val all = served.items.mapNotNull { entry -> routeOf(entry)?.let { entry to it } }.distinctBy { it.second.key }
+            val wanted = all.filter { it.first.placement == "primary" || it.first.placement == "end" }
+            val extras = ownMenu.any { it.key == "couch" || it.key.startsWith("m:") }
+            if (wanted.size <= BAR_CELLS && wanted.size == all.size && !extras) return wanted
+            val you = wanted.firstOrNull { it.second == Route.Profile }
+            val others = wanted.filter { it !== you }
+            return others.take(if (you != null) BAR_CELLS - 2 else BAR_CELLS - 1) + listOfNotNull(you)
         }
 
     // Every library this person can see, as the menus were made from: what a music library's Music videos needs.
@@ -372,7 +391,22 @@ class Nav(val app: WittyApp, private val s: Map<String, String>) {
         runCatching { client.navigation() }.onSuccess { if (sdui === client) sduiNav = it.value }
     }
 
+    // A title chosen on an Android TV's home screen: its page, or playing it, over Home. Only those two are taken.
+    fun openFromHomeScreen(route: String) {
+        if (!TvHomePlan.openable(route) || app.api.token.isEmpty()) return
+        reset(Route.Home)
+        go(sduiRouter.resolve(route))
+    }
+
+    // An Android TV's home screen follows what the profile is watching: written when the app is left, and when signed in.
+    fun syncTvHome() {
+        val client = sdui ?: return
+        if (!app.isTv || !has("sdui-topshelf")) return
+        app.scope.launch { TvHome.sync(app, client) }
+    }
+
     private fun forgetSdui() {
+        TvHome.clear(app)
         sduiMade = null
         sduiMadeFor = null
         sduiReadFor = null
@@ -957,6 +991,7 @@ fun AppRoot(app: WittyApp) {
             app.listening.appeared()
         }
         LifecycleEventEffect(Lifecycle.Event.ON_STOP) {
+            nav.syncTvHome()
             app.listening.disappeared()
             // A film stops when the app is left, with its place kept.
             nav.video?.backgrounded()
@@ -967,8 +1002,18 @@ fun AppRoot(app: WittyApp) {
         // What this device is, for the server's pages: the window, the language, what it can draw. A new window size
         // makes a new one, and the pages ask again.
         val config = LocalConfiguration.current
-        val device = remember(config.screenWidthDp, config.screenHeightDp, config.smallestScreenWidthDp, config.locales, reduceMotion) { sduiDeviceFor(app, config, reduceMotion) }
+        val device = remember(config.screenWidthDp, config.screenHeightDp, config.smallestScreenWidthDp, androidx.core.os.ConfigurationCompat.getLocales(config).toLanguageTags(), reduceMotion) { sduiDeviceFor(app, config, reduceMotion) }
         LaunchedEffect(device) { nav.sduiDevice = device }
+        // An Android TV's home screen, once the server's pages can be asked for; and a title chosen there, once signed in.
+        val pages = nav.sdui
+        LaunchedEffect(pages) { if (pages != null) nav.syncTvHome() }
+        val wanted = app.wantedRoute
+        LaunchedEffect(wanted, route.signedIn, nav.featuresRead) {
+            if (wanted != null && route.signedIn && nav.featuresRead) {
+                app.wantedRoute = null
+                nav.openFromHomeScreen(wanted)
+            }
+        }
         // Once the app's own screens are up, whichever way it started.
         val hasQueue = app.listening.now != null
         LaunchedEffect(app.listening.wantsScreen, route.hasMiniPlayer, hasQueue) {
@@ -1089,6 +1134,7 @@ fun AppRoot(app: WittyApp) {
 }
 
 private const val TABLET_WIDTH_DP = 600
+private const val BAR_CELLS = 5
 const val AUTO_THEME = "auto"
 private const val LIGHT_THEME = "light"
 private const val NAV_VEIL_ALPHA = 0xB3
