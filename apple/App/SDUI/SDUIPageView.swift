@@ -210,6 +210,11 @@ struct SDUIPageBody: View {
                 if offline { SDUIOfflineNote() }
                 if !model.notice.isEmpty { ProblemLine(model.notice).padding(.horizontal, layout.margin) }
                 ForEach(sections) { SDUINodeView(element: $0) }
+                // A disc's own sections (its titles, why this title is the film, versions, episodes) are the app's,
+                // under the server's title page, as the website keeps them.
+                if screen.document.page.kind == "detail", let id = store.params["item"].flatMap({ Int64($0) }) {
+                    SDUIDiscExtras(id: id)
+                }
                 if sections.isEmpty {
                     EmptyMessage(title: "Nothing here yet", detail: "Add a library on the server, or ask whoever runs it.")
                 }
@@ -289,5 +294,37 @@ struct SDUIOfflineNote: View {
             .foregroundStyle(palette.textSecondary)
             .padding(.horizontal, layout.margin)
             .accessibilityIdentifier("sdui.offline")
+    }
+}
+
+/// Under a server-driven title page: the app's own sections for a disc (DiscSections.swift on a phone and a tablet;
+/// why this title is the film on Apple TV). Nothing for anything that isn't a disc.
+private struct SDUIDiscExtras: View {
+    @EnvironmentObject private var model: AppModel
+    @Environment(\.client) private var client
+    @Environment(\.sduiLayout) private var layout
+    @Environment(\.sduiWidth) private var width
+    let id: Int64
+    @State private var found: (item: Item, facts: ItemFacts)?
+
+    var body: some View {
+        Group {
+            if let found, TitleLook.isDisc(found.item) {
+                let page = width > 0 ? width : 400
+                #if os(tvOS)
+                DiscWhy(item: found.item.id, playable: false, top: Tokens.Space.s2)
+                    .moduleScope(found.item.isBluray ? "wittybluray" : "wittydvd")
+                #else
+                DiscSections(item: found.item, disc: found.facts.disc, admin: model.user?.isAdmin == true,
+                             playable: TitleLook.playable(found.item, found.facts), page: page,
+                             column: max(page - layout.margin * 2, 200), say: { model.notice = $0 })
+                    .moduleScope(found.item.isBluray ? "wittybluray" : "wittydvd")
+                #endif
+            }
+        }
+        .padding(.horizontal, layout.margin)
+        .task(id: id) {
+            if let pair = try? await client.itemPage(id) { found = (pair.0, pair.1) }
+        }
     }
 }
