@@ -36,7 +36,7 @@ function windowChanged(before, after) {
 // The menu bar. Electron's roles give the system's own names, keys and items, and the
 // Edit menu is what makes copy, paste and select all work at all. Zooming is for the page,
 // whichever part of the window has the focus, as zooming the title bar would break it.
-function menu({ connected, changeServer, zoom, openLogs, copyDiagnostics }) {
+function menu({ connected, changeServer, manageServers, zoom, openLogs, copyDiagnostics }) {
   return [
     { role: 'appMenu' },
     { role: 'editMenu' },
@@ -52,7 +52,14 @@ function menu({ connected, changeServer, zoom, openLogs, copyDiagnostics }) {
         { role: 'togglefullscreen' },
       ],
     },
-    { label: 'Server', submenu: [{ id: 'change-server', label: 'Change server', enabled: connected, click: changeServer }] },
+    {
+      label: 'Server',
+      submenu: [
+        { id: 'change-server', label: 'Change server', enabled: connected, click: changeServer },
+        // The list of servers this Mac remembers, to remove some, without leaving the one in use.
+        { id: 'manage-servers', label: 'Manage Servers…', click: manageServers },
+      ],
+    },
     { role: 'windowMenu' },
     { role: 'help', submenu: [{ label: 'Open logs folder', click: openLogs }, { label: 'Copy diagnostic info', click: copyDiagnostics }] },
   ]

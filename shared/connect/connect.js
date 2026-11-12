@@ -228,7 +228,8 @@
     const words = o.found ? [hostOf(s.url), S.foundOnNetwork] : [s.name || hostOf(s.url), where]
     const card = el('button', { type: 'button', className: 'server', onclick: () => { listFocus = s.url; choose(s.url, '', card) } },
       picture, el('span', { className: 'who' }, el('span', { className: 'name', textContent: words[0] }), el('span', { className: 'where', textContent: words[1] })))
-    if (o.lastUsed) card.appendChild(el('span', { className: 'pill', textContent: S.lastUsed }))
+    if (managed && s.url === managed && !o.found) card.appendChild(el('span', { className: 'pill', textContent: S.inUse }))
+    else if (o.lastUsed) card.appendChild(el('span', { className: 'pill', textContent: S.lastUsed }))
     else if (s.stale && !o.found) card.appendChild(el('span', { className: 'pill stale', textContent: S.staleServer }))
     card.appendChild(icon('next', 'chevron'))
     card.appendChild(spinner())
@@ -272,7 +273,8 @@
     try { r = await bridge.forget(list.map((s) => s.url)) } catch (e) { r = { ok: false } }
     if (!r || !r.ok || !r.removed.length) return listScreen()
     const words = list.length === 1 ? fill(S.removedServer, { name: nameOf(list[0]) }) : fill(S.removedCount, { count: r.removed.length })
-    toast = { words, back: list[0].url, undoMs: r.undoMs || 8000, names: list.map(nameOf).join(', ') }
+    toast = { words, back: list[0].url, undoMs: r.undoMs || 8000, names: list.map(nameOf).join(', '), count: r.removed.length }
+    if (list.some((s) => s.url === managed)) managed = ''
     // Somewhere sensible for the keyboard and a remote: the next server, the one before, or the address button.
     const left = all.filter((s) => !list.includes(s))
     const at = all.indexOf(list[0])
@@ -291,8 +293,9 @@
       let r
       try { r = await bridge.forgetUndo() } catch (e) { r = { ok: false } }
       listFocus = mine.back
+      await refreshManaged()
       await listScreen()
-      if (r && r.ok) announcer.textContent = fill(S.removeUndone, { name: mine.names })
+      if (r && r.ok) announcer.textContent = mine.count > 1 ? fill(S.removeUndoneMany, { count: mine.count }) : fill(S.removeUndone, { name: mine.names })
     }, { kind: 'quiet', className: 'undo' }))
     return node
   }
@@ -308,9 +311,19 @@
   }
 
   const namesOf = (list) => list.map(nameOf).join(', ')
+  // A removal that takes the server in use says it signs out of it here.
+  const inUseNote = (list, body) => (managed && list.some((s) => s.url === managed) ? `${body} ${S.removeConfirmInUse}` : body)
+
+  // Opened from the menu while a server is in use (Manage servers): which one it is. The list
+  // says so, offers the way back to it, and asks before removing it.
+  let managed = ''
+  async function refreshManaged() {
+    if (!bridge.managing || !params.get('manage')) { managed = ''; return }
+    try { managed = (await bridge.managing()).url || '' } catch (e) { managed = '' }
+  }
 
   function removeAllScreen(recent) {
-    confirmScreen(S.removeAllTitle, fill(S.removeAllBody, { count: recent.length, names: namesOf(recent) }), S.removeAllServers, () => forgetNow(recent, recent))
+    confirmScreen(S.removeAllTitle, inUseNote(recent, fill(S.removeAllBody, { count: recent.length, names: namesOf(recent) })), S.removeAllServers, () => forgetNow(recent, recent))
   }
 
   // Which servers haven't been reached for a while: the person chooses how long, sees which those
@@ -320,7 +333,7 @@
     const choices = STALE_CHOICES.map(([days, key]) => button(S[key], () => {
       const old = recent.filter((s) => typeof s.days === 'number' && s.days >= days)
       if (!old.length) { said.textContent = S.removeOldNone; return }
-      confirmScreen(S.removeOldConfirmTitle, fill(S.removeOldConfirmBody, { period: S[key], count: old.length, names: namesOf(old) }), S.remove, () => forgetNow(old, recent))
+      confirmScreen(S.removeOldConfirmTitle, inUseNote(old, fill(S.removeOldConfirmBody, { period: S[key], count: old.length, names: namesOf(old) })), S.remove, () => forgetNow(old, recent))
     }))
     show({
       back: () => listScreen(),
@@ -355,7 +368,9 @@
 
     const lastUsed = recent.length ? recent[0].url : ''
     const foundList = el('div', { className: 'list' })
-    const removeOne = (s) => forgetNow([s], recent)
+    const removeOne = (s) => (managed && s.url === managed
+      ? confirmScreen(fill(S.removeConfirmTitle, { name: nameOf(s) }), `${fill(S.removeConfirmBody, { name: nameOf(s), address: hostOf(s.url) })} ${S.removeConfirmInUse}`, S.remove, () => forgetNow([s], recent))
+      : forgetNow([s], recent))
     const recentList = el('div', { className: 'list' }, ...recent.map((s) => recentRow(s, { lastUsed: s.url === lastUsed }, removeOne)))
     if (bridge.onForgetAsk) bridge.onForgetAsk((url) => { const s = recent.find((r) => r.url === url); if (s && renderFound) removeOne(s) })
     // Found now and used before is one server, listed once: told by who it is, not only by where.
@@ -366,6 +381,8 @@
     const words = [el('h1', { className: 'display', textContent: S.findTitle }), el('p', { className: 'lead', textContent: S.findSubtitle })]
     if (message) words.push(problem(message).node)
     const actions = []
+    const current = managed ? recent.find((s) => s.url === managed) : null
+    if (current) actions.push(button(fill(S.backToServer, { name: nameOf(current) }), () => bridge.manageBack(), { kind: 'primary', icon: 'back', className: 'manage-back' }))
     if (bridge.supportsDiscovery) {
       actions.push(el('h2', {}, S.foundServers, el('span', { className: 'dot', 'aria-hidden': 'true' })), searching, foundList)
     } else {
@@ -386,7 +403,7 @@
     const foot = []
     if (bridge.openLogs) foot.push(button(S.openLogs, () => bridge.openLogs(), { kind: 'quiet', className: 'small' }))
     foot.push(legal())
-    show({ words, actions, foot })
+    show({ words, actions, foot, escape: current ? () => bridge.manageBack() : undefined })
 
     // Servers come and go while this is on screen: keep focus on the same one,
     // and offer the first one found until the person has moved themselves.
@@ -798,5 +815,6 @@
   const mismatch = self.wittyClient ? params.get('mismatch') : ''
   if (mismatch) choose(mismatch)
   else if (self.wittyClient && params.get('away')) waitScreen(S.awayConnecting, () => { if (bridge.awayStop) bridge.awayStop() })
+  else if (self.wittyClient && params.get('manage')) refreshManaged().then(() => listScreen())
   else listScreen(params.get('certificate') ? S.errCertificate : params.get('lost') ? S.errLost : params.get('away-failed') ? S.errAwayFailed : '')
 })()

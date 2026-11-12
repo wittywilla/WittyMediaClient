@@ -570,7 +570,7 @@ async function run() {
     await step('Help opens under its button', async () => {
       await inBar("document.getElementById('help').click()")
       await until('the menu', () => menus.length === 1)
-      assert.strictEqual(menus[0].labels[0], 'Open logs folder')
+      assert.deepStrictEqual(menus[0].labels.slice(0, 3), ['Manage servers…', undefined, 'Open logs folder'], 'with a server open')
       assert.ok(Number.isInteger(menus[0].options.x) && menus[0].options.y > 0)
     })
   } else {
@@ -579,6 +579,7 @@ async function run() {
       const help = menu.items.find((m) => m.role === 'help')
       assert.deepStrictEqual(help.submenu.items.map((i) => i.label), ['Open logs folder', 'Copy diagnostic info'])
       assert.strictEqual(menu.getMenuItemById('change-server').enabled, true, 'with a server open')
+      assert.ok(menu.getMenuItemById('manage-servers'), 'Manage Servers is in the Server menu')
       assert.ok(menu.items.some((m) => m.role === 'editmenu' || m.role === 'editMenu'), 'or copy and paste do nothing')
       assert.deepStrictEqual(BaseWindow.getAllWindows()[0].getWindowButtonPosition(), { x: 9, y: 9 })
       const zoomIn = menu.items.find((m) => m.label === 'View').submenu.items.find((i) => i.label === 'Zoom In')
@@ -688,6 +689,25 @@ async function run() {
     await inBar("document.getElementById('change').click()")
     await onHeading(S.findTitle)
   })
+
+  if (MAC) {
+    await step('Manage Servers keeps the server in use, marks it, and Back returns to it still signed in', async () => {
+      await clickText('Test home')
+      await until('the server page', () => views().page.getURL().startsWith(url))
+      await until('the page to load', async () => (await heading()) === 'Stand-in server')
+      const cookies = (await signInCookies(url)).length
+      Menu.getApplicationMenu().getMenuItemById('manage-servers').click()
+      await onHeading(S.findTitle)
+      assert.ok((await pageText()).includes(S.inUse), 'the one in use says so')
+      assert.strictEqual(await focused(), S.backToServer.replace('{name}', 'Test home'), 'the way back has focus')
+      assert.strictEqual((await signInCookies(url)).length, cookies, 'still signed in')
+      assert.strictEqual(stateFile().server, url, 'and still the server this app opens')
+      await key('Escape')
+      await until('the server page again', () => views().page.getURL().startsWith(url))
+      await inBar("document.getElementById('change').click()")
+      await onHeading(S.findTitle)
+    })
+  }
 
   await step('another key at a known address gets a warning, and the person decides about that key', async () => {
     const pinned = rawKey(stand.keys)
