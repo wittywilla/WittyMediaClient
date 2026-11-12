@@ -14,9 +14,9 @@ enum class WindowClass { Compact, Medium, Expanded, Large }
 
 object WindowClasses {
     fun of(widthDp: Int): WindowClass = when {
-        widthDp < DesignTokens.Breakpoints.COMPACT -> WindowClass.Compact
-        widthDp < DesignTokens.Breakpoints.MEDIUM -> WindowClass.Medium
-        widthDp < DesignTokens.Breakpoints.EXPANDED -> WindowClass.Expanded
+        widthDp < DesignTokens.Layout.Breakpoints.Compact.max -> WindowClass.Compact
+        widthDp < DesignTokens.Layout.Breakpoints.Medium.max -> WindowClass.Medium
+        widthDp < DesignTokens.Layout.Breakpoints.Expanded.max -> WindowClass.Expanded
         else -> WindowClass.Large
     }
 }

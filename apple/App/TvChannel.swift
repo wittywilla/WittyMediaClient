@@ -7,9 +7,9 @@ import WittyKit
 
 // Watching a channel, as the server's page does it (web/src/pages/tv/TvPlayer.tsx and MiniGuide.tsx),
 // in the account's WittyTV look: the banner that drops in on every change of channel, and the mini
-// guide over the picture. Up and down change channel; Select brings up the mini guide, where up and
-// down move and Select tunes; left and right go back and on in what the server keeps of the channel;
-// Play/Pause pauses; Back closes the mini guide, then goes back to the guide.
+// guide over the picture. Select shows the banner; up and down change channel; left brings up the mini guide,
+// where up and down move and Select tunes; right brings up the Dock (ten seconds back or on in what the server keeps of
+// the channel, audio, subtitles, Look); Play/Pause pauses; Back closes the topmost, then goes back to the guide.
 
 struct ChannelPlayer: View {
     @EnvironmentObject private var model: AppModel
@@ -20,6 +20,8 @@ struct ChannelPlayer: View {
     @State private var key: String
     @State private var banner = true
     @State private var mini = false
+    @State private var dockOpen = false
+    @State private var lookOpen = false
     @State private var lineup: [GuideChannel] = []
     @State private var bannerShown = 0
     @FocusState private var focused: Bool
@@ -46,7 +48,7 @@ struct ChannelPlayer: View {
                           onLive: live.fromStart == nil ? nil : { closeMini(); live.backToLive(); showBanner() })
                     .padding(.horizontal, 77).padding(.bottom, 92)
                     .frame(maxHeight: .infinity, alignment: .bottom)
-            } else if banner {
+            } else if banner, !dockOpen {
                 TimelineView(.periodic(from: .now, by: 5)) { time in
                     ChannelBanner(dress: dress, channel: channel, info: live.key == key ? live.info : nil, behind: live.behind,
                                   now: Int64(time.date.timeIntervalSince1970))
@@ -54,12 +56,16 @@ struct ChannelPlayer: View {
                 .padding(.horizontal, 77).padding(.bottom, 92)
                 .transition(.opacity)
             }
-            if let programme = live.fromStart, !mini {
+            if dockOpen {
+                ChannelDock(dress: dress, live: live, onGuide: toGuide, onLook: { lookOpen = true }, onClose: closeDock)
+                    .frame(maxHeight: .infinity, alignment: .bottom)
+            }
+            if let programme = live.fromStart, !mini, !dockOpen {
                 Text("From the start of \(programme.title) · Select, then Back to live")
                     .font(.wmLabel).foregroundStyle(.white).padding(.horizontal, 16).padding(.vertical, 8)
                     .background(Capsule().fill(.black.opacity(0.6)))
                     .frame(maxHeight: .infinity, alignment: .top).padding(.top, 60)
-            } else if live.behind > 20, !mini {
+            } else if live.behind > 20, !mini, !dockOpen {
                 Text("\(Int((live.behind / 60).rounded())) min behind live · Play/Pause twice for live")
                     .font(.wmLabel).foregroundStyle(.white).padding(.horizontal, 16).padding(.vertical, 8)
                     .background(Capsule().fill(.black.opacity(0.6)))
@@ -67,16 +73,17 @@ struct ChannelPlayer: View {
             }
         }
         // A channel that failed gives the focus to its buttons, which the remote couldn't reach inside a focusable player.
-        .focusable(!mini && !failedHere)
+        .focusable(!mini && !dockOpen && !failedHere)
         .focused($focused)
         // None when it failed, so the arrows move between its buttons.
         .onMoveCommand(perform: failedHere ? nil : { direction in
-            guard !mini else { return }
+            guard !mini, !dockOpen else { return }
             switch direction {
             case .up: step(1)
             case .down: step(-1)
-            case .left: live.seek(by: -10); showBanner()
-            case .right: live.seek(by: 10); showBanner()
+            // Left opens the mini guide and Right the Dock, as in every WittyTV look and on the web.
+            case .left: mini = true
+            case .right: dockOpen = true
             @unknown default: break
             }
         })
@@ -84,8 +91,10 @@ struct ChannelPlayer: View {
             if live.playing { live.pause() } else if live.fromStart == nil, live.behind > 20, bannerShown > 0 { live.goLive() } else { live.resume() }
             showBanner()
         }
-        .onTapGesture { if !mini, !failedHere { mini = true } }
+        // OK shows what's on (the banner); the mini guide is a press to the left.
+        .onTapGesture { if !mini, !dockOpen, !failedHere { showBanner() } }
         .onExitCommand(perform: mini ? { closeMini() } : nil)
+        .sheet(isPresented: $lookOpen) { TvLookPanel() }
         // Over the player, not in it: inside the focusable player its buttons were out of the remote's reach.
         .overlay {
             if case .failed(let why) = live.state, live.key == key { failure(why) }
@@ -202,6 +211,11 @@ struct ChannelPlayer: View {
 
     private func closeMini() {
         mini = false
+        DispatchQueue.main.async { focused = true }
+    }
+
+    private func closeDock() {
+        dockOpen = false
         DispatchQueue.main.async { focused = true }
     }
 

@@ -71,7 +71,7 @@ fun GuideDock(
             .fillMaxWidth()
             .background(p.panel)
             .padding(horizontal = dress.pt(dress.edge - 8), vertical = dress.pt(8))
-            .defaultMinSize(minHeight = dress.pt(com.wittywilla.wittymediaclient.ui.DesignTokens.Tv.DOCK_HEIGHT - 16))
+            .defaultMinSize(minHeight = dress.pt(com.wittywilla.wittymediaclient.ui.DesignTokens.Tv.Dock.height - 16))
             .semantics { contentDescription = "Guide controls" }
             .onPreviewKeyEvent { e ->
                 if (e.type == KeyEventType.KeyDown && e.key.nativeKeyCode == KeyEvent.KEYCODE_DPAD_UP) onUp() else false
@@ -89,7 +89,7 @@ fun GuideDock(
                 Box(
                     Modifier.size(dress.pt(26)).background(p.panel2, RoundedCornerShape(dress.pt(6))),
                     contentAlignment = Alignment.Center,
-                ) { Text(e.key.toString(), style = dress.font(com.wittywilla.wittymediaclient.ui.DesignTokens.Tv.DOCK_HINT_SIZE * 0.6f, W.Bold), color = p.text, maxLines = 1) }
+                ) { Text(e.key.toString(), style = dress.font(com.wittywilla.wittymediaclient.ui.DesignTokens.Tv.Dock.hintSize.toFloat() * 0.6f, W.Bold), color = p.text, maxLines = 1) }
                 Text(if (dress.capitals) e.label.uppercase() else e.label, style = style, color = ink, maxLines = 1)
             }
         }

@@ -97,7 +97,7 @@ private val FIXED_TABS = listOf(Route.Home, Route.Libraries, Route.Games, Route.
 val TABS_BESIDE_HOME = setOf(Route.Libraries, Route.Games, Route.LiveTv, Route.Search, Route.Profile)
 
 // You's avatar with 12 above and below it, the same for every pill.
-private const val PILL_HEIGHT = DesignTokens.Tv.TOP_BAR_PILL
+private const val PILL_HEIGHT = DesignTokens.Tv.TopBar.pill.toInt()
 
 // How far the pills that don't fit fade out, before the space in front of You.
 private const val FADE = 48
@@ -242,7 +242,7 @@ private fun TvTopBar(nav: Nav, bar: TvBar, libraries: List<Library>) {
     Row(
         Modifier
             .fillMaxWidth()
-            .padding(top = metrics.tvSafeEnds + metrics.u(DesignTokens.Tv.TOP_BAR_TOP) - ring * 2, bottom = metrics.u(16) - ring * 2)
+            .padding(top = metrics.tvSafeEnds + metrics.u(DesignTokens.Tv.TopBar.top) - ring * 2, bottom = metrics.u(16) - ring * 2)
             .focusProperties { onEnter = { bar.requester(nav.current).requestFocus() } }
             .onFocusChanged { bar.inBar = it.hasFocus }
             .focusGroup(),

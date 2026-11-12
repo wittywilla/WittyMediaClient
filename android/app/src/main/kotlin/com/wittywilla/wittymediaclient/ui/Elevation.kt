@@ -34,13 +34,20 @@ object Elevation {
 
 @Composable
 fun Modifier.elevated(level: Int, shape: Shape, radius: androidx.compose.ui.unit.Dp = 10.dp): Modifier {
-    val spec = DesignTokens.ELEVATION[level.coerceIn(0, DesignTokens.ELEVATION.lastIndex)]
-    val fill = Elevation.colour(spec.fill)
-    val line = if (spec.line.isEmpty()) Color.Transparent else Elevation.colour(spec.line)
+    val fillName: String; val lineName: String; val shadows: List<Map<String, Double>>
+    when (level.coerceIn(0, 3)) {
+        0 -> { fillName = DesignTokens.Elevation.N0.fill; lineName = DesignTokens.Elevation.N0.line; shadows = DesignTokens.Elevation.N0.shadow }
+        1 -> { fillName = DesignTokens.Elevation.N1.fill; lineName = DesignTokens.Elevation.N1.line; shadows = DesignTokens.Elevation.N1.shadow }
+        2 -> { fillName = DesignTokens.Elevation.N2.fill; lineName = DesignTokens.Elevation.N2.line; shadows = DesignTokens.Elevation.N2.shadow }
+        else -> { fillName = DesignTokens.Elevation.N3.fill; lineName = DesignTokens.Elevation.N3.line; shadows = DesignTokens.Elevation.N3.shadow }
+    }
+    val fill = Elevation.colour(fillName)
+    val noLine = lineName.isEmpty() || lineName == "none"
+    val line = if (noLine) Color.Transparent else Elevation.colour(lineName)
     var m = this
     if (!LocalMetrics.current.tv) {
-        for (s in spec.shadow) m = m.cssShadow(s.y.dp, s.blur.dp, Color.Black.copy(alpha = s.opacity), radius)
+        for (s in shadows) m = m.cssShadow((s["y"] ?: 0.0).toFloat().dp, (s["blur"] ?: 0.0).toFloat().dp, Color.Black.copy(alpha = (s["opacity"] ?: 0.0).toFloat()), radius)
     }
     m = m.background(fill, shape)
-    return if (spec.line.isEmpty()) m else m.border(1.dp, line, shape)
+    return if (noLine) m else m.border(1.dp, line, shape)
 }

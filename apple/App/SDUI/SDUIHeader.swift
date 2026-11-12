@@ -190,6 +190,18 @@ struct SDUIHeroView: View {
             }
             .tabViewStyle(.page(indexDisplayMode: slides.count > 1 ? .always : .never))
             .frame(height: size.height)
+            // A slice of the next slide at the trailing edge (`peek`): there is more to swipe to.
+            .overlay(alignment: .trailing) {
+                if hero.peek > 0, index + 1 < slides.count {
+                    SDUIPicture(picture: slides[index + 1].picture, symbol: "film", shownWidth: size.width)
+                        .frame(width: size.width, height: size.height)
+                        .frame(width: size.width * CGFloat(hero.peek), alignment: .leading)
+                        .clipped()
+                        .overlay(alignment: .leading) { Rectangle().fill(palette.background).frame(width: 2) }
+                        .allowsHitTesting(false)
+                        .accessibilityHidden(true)
+                }
+            }
             // A finger on it holds it where it is.
             .simultaneousGesture(DragGesture(minimumDistance: 4).onChanged { _ in held = true }.onEnded { _ in held = false })
             if let slide = current, !slide.buttons.isEmpty {

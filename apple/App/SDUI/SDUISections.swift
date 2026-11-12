@@ -87,6 +87,7 @@ struct SDUIShelfView: View {
     @EnvironmentObject private var store: SDUIPageStore
     @Environment(\.palette) private var palette
     @Environment(\.sduiLayout) private var layout
+    @Environment(\.sduiWidth) private var pageWidth
     let shelf: SDUIElement
 
     private var cardWidth: CGFloat { CGFloat(shelf.cardWidth > 0 ? shelf.cardWidth : 160) }
@@ -119,21 +120,34 @@ struct SDUIShelfView: View {
         .task(id: shelf.stateName) { await store.fill(shelf, center: center) }
     }
 
+    /// The width a card is drawn at. A row that scrolls shows whole cards and a slice of the next (`peek`, a fraction of a
+    /// card's width, from the page's layout), so the person can see there is more: the cards are the page's own size, nudged to
+    /// the nearest that makes that fit.
+    private var shownWidth: CGFloat {
+        guard shelf.peek > 0, !isChips, pageWidth > 0 else { return cardWidth }
+        let available = Double(pageWidth - layout.margin)
+        let items = shelf.children.count + (!shelf.seeAll.isEmpty && (shelf.seeAllCard || layout.isTV) ? 1 : 0)
+        let whole = TvGeometry.wholeCards(available: available, width: Double(cardWidth), gap: Double(layout.gap))
+        return CGFloat(TvGeometry.peekWidth(available: available, nominal: Double(cardWidth), gap: Double(layout.gap), peek: shelf.peek, hasMore: items > whole))
+    }
+
+    private var shownHeight: CGFloat { cardHeight * shownWidth / max(cardWidth, 1) }
+
     private var row: some View {
         ScrollView(.horizontal, showsIndicators: false) {
             LazyHStack(alignment: .top, spacing: layout.gap) {
                 ForEach(Array(shelf.children.enumerated()), id: \.element.id) { index, card in
-                    SDUICardView(card: card, width: cardWidth, height: cardHeight)
+                    SDUICardView(card: card, width: shownWidth, height: shownHeight)
                         .onAppear {
                             if shelf.hasMore, index >= shelf.children.count - perScreen { Task { await store.more(shelf, center: center) } }
                         }
                 }
                 if store.busy.contains(shelf.id) {
-                    SkeletonShape().frame(width: cardWidth, height: cardHeight)
+                    SkeletonShape().frame(width: shownWidth, height: shownHeight)
                 }
                 // See all as the row's last card where the row says so (always on a TV, where it's how the remote gets there).
                 if !shelf.seeAll.isEmpty, !isChips, shelf.seeAllCard || layout.isTV {
-                    SDUISeeAllCard(width: cardWidth, height: cardHeight, title: shelf.shown("title")) { actor.open(route: shelf.seeAll) }
+                    SDUISeeAllCard(width: shownWidth, height: shownHeight, title: shelf.shown("title")) { actor.open(route: shelf.seeAll) }
                 }
             }
             .padding(.horizontal, layout.margin)

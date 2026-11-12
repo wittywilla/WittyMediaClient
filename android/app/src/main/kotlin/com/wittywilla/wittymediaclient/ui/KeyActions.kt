@@ -98,7 +98,7 @@ fun KeyLegendRow(modifier: Modifier = Modifier, hasDock: Boolean = false) {
 fun KeyHintView(hint: KeyHint) {
     val scheme = MaterialTheme.colorScheme
     val metrics = LocalMetrics.current
-    val size = if (metrics.tv) DesignTokens.Tv.DOCK_HINT_SIZE else 13
+    val size = if (metrics.tv) DesignTokens.Tv.Dock.hintSize.toInt() else 13
     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(metrics.u(if (metrics.tv) 12 else 6))) {
         Box(
             Modifier

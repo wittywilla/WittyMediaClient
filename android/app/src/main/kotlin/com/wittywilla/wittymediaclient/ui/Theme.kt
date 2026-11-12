@@ -150,10 +150,10 @@ val TabletMetrics = PhoneMetrics.copy(gutter = Space.S8, cardWidth = 148.dp, tab
 // ring round the thing, 1.06 larger and lifted 6 units; all of it from the generated tokens (DesignTokens.kt), in
 // TV units of half a dp.
 val TvMetrics = Metrics(
-    tv = true, gutter = (DesignTokens.Tv.GUTTER * 0.5f).dp, edge = 30.dp, cardWidth = 168.dp,
-    minTarget = (DesignTokens.Tv.TARGET_MIN * 0.5f).dp,
-    focusRing = (DesignTokens.Tv.FOCUS_RING * 0.5f).dp, focusScale = DesignTokens.Tv.FOCUS_SCALE,
-    focusLift = (DesignTokens.Tv.FOCUS_LIFT * 0.5f).dp, focusFill = true, unit = 0.5f,
+    tv = true, gutter = (DesignTokens.Tv.gutter.toFloat() * 0.5f).dp, edge = 30.dp, cardWidth = 168.dp,
+    minTarget = (DesignTokens.Tv.Target.min.toFloat() * 0.5f).dp,
+    focusRing = (DesignTokens.Tv.Focus.ring.toFloat() * 0.5f).dp, focusScale = DesignTokens.Tv.Focus.scale.toFloat(),
+    focusLift = (DesignTokens.Tv.Focus.lift.toFloat() * 0.5f).dp, focusFill = true, unit = 0.5f,
 )
 
 // Apple TV keeps everything inside the picture's safe area, 80 units in from the sides and 60 from the top

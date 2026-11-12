@@ -167,7 +167,7 @@ private fun SduiDock(view: SduiView, side: Dp) {
     val foot = if (env.tv) env.pt(env.layout.safeArea.bottom) else 0.dp
     Row(
         Modifier.fillMaxWidth().padding(horizontal = side).padding(bottom = foot).elevated(1, RoundedCornerShape(env.pt(14)), env.pt(14))
-            .defaultMinSize(minHeight = if (env.tv) env.pt(DesignTokens.Tv.DOCK_HEIGHT) else 0.dp)
+            .defaultMinSize(minHeight = if (env.tv) env.pt(DesignTokens.Tv.Dock.height.toFloat()) else 0.dp)
             .padding(horizontal = env.space("m"), vertical = env.space("s")).focusGroup(),
         horizontalArrangement = Arrangement.spacedBy(env.space("m")), verticalAlignment = Alignment.CenterVertically,
     ) {

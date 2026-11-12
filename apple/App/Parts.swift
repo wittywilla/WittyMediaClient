@@ -211,10 +211,11 @@ extension View {
         #endif
     }
 
-    /// Cards on Apple TV lift when focused, which is how focus is shown there.
-    @ViewBuilder func tileStyle() -> some View {
+    /// Cards on Apple TV show focus with the one ring and a lift (TvFocus.swift), not the system's tilt; `ring` is off for a
+    /// label that draws the ring around its own picture.
+    @ViewBuilder func tileStyle(ring: Bool = true, radius: CGFloat = Tokens.Radius.lg) -> some View {
         #if os(tvOS)
-        self.buttonStyle(.card)
+        self.buttonStyle(TvTileStyle(ring: ring, radius: radius))
         #else
         self.buttonStyle(.plain)
         #endif

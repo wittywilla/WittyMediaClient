@@ -84,12 +84,12 @@ class InputRulesTest {
     }
 
     @Test fun `the generated key map names every action the rules know`() {
-        for (kind in listOf(DesignTokens.INPUT_KEYBOARD, DesignTokens.INPUT_GAMEPAD, DesignTokens.INPUT_REMOTE)) {
+        for (kind in listOf(DesignTokens.Input.keyboard, DesignTokens.Input.gamepad, DesignTokens.Input.remote)) {
             for (a in listOf("move", "select", "back", "options", "search", "tabPrev", "tabNext", "pageUp", "pageDown", "top", "dock", "help")) {
                 assertTrue("missing $a", kind.containsKey(a))
             }
         }
-        assertEquals(listOf("X", "HoldA"), DesignTokens.INPUT_GAMEPAD["options"])
+        assertEquals(listOf("X", "HoldA"), DesignTokens.Input.gamepad["options"])
     }
 
     @Test fun `zones move by one press and never wrap`() {
@@ -101,7 +101,7 @@ class InputRulesTest {
         assertEquals(Zone.Dock, Zones.move(Zone.Stage, Heading.Down, true, hasDock = true))
         assertEquals(Zone.Stage, Zones.move(Zone.Dock, Heading.Up, true, true))
         for (h in Heading.values()) assertNull("a layer holds focus", Zones.move(Zone.Layer, h, true, true))
-        assertFalse(DesignTokens.Nav.WRAP)
+        assertFalse(DesignTokens.Nav.wrap)
     }
 
     @Test fun `back unwinds layer, dock, stage, bar, then leaves`() {
@@ -112,7 +112,7 @@ class InputRulesTest {
         assertEquals(BackStep.BarToHome, BackLadder.next(BackState(false, Zone.Bar, false)))
         assertEquals(BackStep.Leave, BackLadder.next(BackState(false, Zone.Bar, true)))
         // The table in the tokens names the same order.
-        assertEquals(listOf("layer", "dock", "stage", "bar", "home", "exit"), DesignTokens.Nav.BACK_LADDER)
+        assertEquals(listOf("layer", "dock", "stage", "bar", "home", "exit"), DesignTokens.Nav.backLadder)
     }
 
     @Test fun `focus memory returns to the last card of a group else the first`() {
@@ -146,14 +146,14 @@ class InputRulesTest {
     }
 
     @Test fun `the generated tv numbers are the contract's`() {
-        assertEquals(4, DesignTokens.Tv.FOCUS_RING)
-        assertEquals(1.06f, DesignTokens.Tv.FOCUS_SCALE, 0f)
-        assertEquals(66, DesignTokens.Tv.TARGET_MIN)
-        assertEquals(90, DesignTokens.Tv.GUTTER)
-        assertEquals(112, DesignTokens.Tv.DOCK_HEIGHT)
-        assertEquals(0.18f, DesignTokens.Tv.SHELF_PEEK, 0f)
+        assertEquals(4.0, DesignTokens.Tv.Focus.ring, 0.0)
+        assertEquals(1.06, DesignTokens.Tv.Focus.scale, 0.0)
+        assertEquals(66.0, DesignTokens.Tv.Target.min, 0.0)
+        assertEquals(90.0, DesignTokens.Tv.gutter, 0.0)
+        assertEquals(112.0, DesignTokens.Tv.Dock.height, 0.0)
+        assertEquals(0.18, DesignTokens.Tv.Shelf.peek, 0.0)
         assertEquals(listOf("compact", "medium", "expanded").size, 3)
-        assertEquals(600, DesignTokens.Breakpoints.COMPACT)
+        assertEquals(600.0, DesignTokens.Layout.Breakpoints.Compact.max, 0.0)
     }
 }
 

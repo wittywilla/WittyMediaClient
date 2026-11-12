@@ -424,7 +424,7 @@ final class AppModel: ObservableObject {
                     if !colors.isEmpty {
                         let tokens = ThemeTokens(id: resolved.look(dark: dark)?.id ?? id, scheme: dark ? "dark" : "light", colors: colors)
                         if let data = try? JSONEncoder().encode(tokens) { self.defaults.set(data, forKey: self.tokensKey(id)) }
-                        self.appTheme = ThemeTranslator.translate(tokens, preview: self.preview(id))
+                        self.appTheme = ThemeTranslator.translate(tokens, preview: self.preview(id)).with(tv: resolved.tvColours(dark: dark))
                         return
                     }
                 }
