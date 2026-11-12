@@ -182,6 +182,11 @@ fun SduiCard(view: SduiView, parent: SduiView?, width: Dp, modifier: Modifier = 
                             Box(Modifier.padding(env.pt(if (env.tv) 24 else 12)).size(env.pt(if (env.tv) 76 else 38)).clip(RoundedCornerShape(env.pt(CARD_RADIUS))).background(scheme.primary.copy(alpha = 0.14f)), contentAlignment = Alignment.Center) {
                                 Icon(sduiIcon(p.str("icon").ifEmpty { p.str("kind") }), null, tint = extra.accentText, modifier = Modifier.size(env.pt(if (env.tv) 40 else 20)))
                             }
+                        } else if (image == null && p.str("kind") == "person") {
+                            // A person without a photo: their initials on the page's third background, as the spec has it.
+                            Box(Modifier.fillMaxSize().background(scheme.surfaceVariant).clearAndSetSemantics { }, contentAlignment = Alignment.Center) {
+                                Text(initials(p.str("title")), color = scheme.onSurfaceVariant, fontSize = env.size("heading"), fontWeight = FontWeight.SemiBold)
+                            }
                         } else {
                             // A channel's logo is fitted inside a plain tile; everything else fills its card.
                             SduiPicture(image, width, aspect, if (image == null && p.str("icon").isNotEmpty()) sduiIcon(p.str("icon")) else sduiKindIcon(p.str("kind")), Modifier.fillMaxSize(), contain = image?.kind == "logo")
@@ -267,3 +272,7 @@ private fun SduiChip(view: SduiView, modifier: Modifier) {
         }
     }
 }
+
+// Up to two initials of a name, for a person without a photo.
+internal fun initials(name: String): String =
+    name.split(' ', '-').filter { it.isNotBlank() }.let { words -> (words.take(1) + words.drop(1).takeLast(1)).joinToString("") { it.take(1).uppercase() } }

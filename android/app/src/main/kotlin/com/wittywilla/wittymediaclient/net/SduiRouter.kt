@@ -121,6 +121,8 @@ class SduiRouter(routes: List<SduiRouteSpec> = DEFAULT_ROUTES, commands: List<Sd
             page("/item/{item}", "detail", "item" to "{item}"),
             page("/show/{show}", "detail", "show" to "{show}"),
             page("/album/{library}", "detail", "album" to "?album", "artist" to "?artist", "library" to "{library}"),
+            // A person's page (catalogue revision 5: cast and crew).
+            page("/person/{person}", "detail", "person" to "{person}"),
             page("/collections/{collection}", "detail", "collection" to "{collection}"),
             page("/collections", "collections"),
             page("/search", "search", "q" to "?q"),
