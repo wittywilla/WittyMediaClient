@@ -123,7 +123,7 @@ class H264Player(
 
                 override fun onError(codec: MediaCodec, e: MediaCodec.CodecException) {
                     if (codec !== this@H264Player.codec) return
-                    ClientLog.warn("games", "The video decoder stopped: ${e.diagnosticInfo}")
+                    ClientLog.warn("game", "The video decoder stopped: ${e.diagnosticInfo}")
                     release()
                     needsKeyframe = true
                     needKeyframe()
@@ -137,7 +137,7 @@ class H264Player(
             size = shape
         } catch (e: Exception) {
             // No picture comes, and the player moves on to a JPEG a frame.
-            if (!failed) ClientLog.warn("games", "No H.264 decoder for ${shape.first}x${shape.second}: ${e.javaClass.simpleName}")
+            if (!failed) ClientLog.warn("game", "No H.264 decoder for ${shape.first}x${shape.second}: ${e.javaClass.simpleName}")
             failed = true
             release()
         }

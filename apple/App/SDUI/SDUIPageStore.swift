@@ -34,6 +34,8 @@ final class SDUIPageStore: ObservableObject {
     private var generation = 0
     private var window: Int?
     private var catalog = SDUICatalog.builtIn
+    /// Node types on this page already noted as unknown: each is noted once, not at every drawing.
+    private var unknownNoted: Set<String> = []
 
     init(place: SDUIPlace) {
         page = place.page
@@ -45,7 +47,12 @@ final class SDUIPageStore: ObservableObject {
 
     private func show(_ document: SDUIDocument) {
         working = document
-        screen = SDUIScreen(document: document, catalog: catalog, window: window)
+        let built = SDUIScreen(document: document, catalog: catalog, window: window)
+        screen = built
+        for type in built.unknownTypes.subtracting(unknownNoted).sorted().prefix(20) {
+            unknownNoted.insert(type)
+            ClientLog.shared.warn("sdui", "A part of type \(type.prefix(60)) isn't known to this app; drawn as a plain column", page: page)
+        }
     }
 
     /// The window's width, which placeholders and a grid's columns follow between breakpoints.
@@ -102,7 +109,13 @@ final class SDUIPageStore: ObservableObject {
     }
 
     private func fail(_ error: Error, center: SDUICenter) {
-        if let refusal = error as? APIError, refusal.status == 404 {
+        let refusal = error as? APIError
+        // A page that isn't there is an answer, not a fault; the rest is noted, the same one at most once a minute.
+        if refusal?.status != 404 {
+            let what = refusal.map { "the server answered \($0.status)" } ?? (error as? URLError).map { "no answer (\($0.code.rawValue))" } ?? String(describing: type(of: error))
+            ClientLog.shared.warnSeldom("sdui", "The page couldn't be \(screen == nil ? "loaded" : "refreshed"): \(what)", page: page)
+        }
+        if let refusal, refusal.status == 404 {
             working = nil
             screen = nil
             phase = .missing

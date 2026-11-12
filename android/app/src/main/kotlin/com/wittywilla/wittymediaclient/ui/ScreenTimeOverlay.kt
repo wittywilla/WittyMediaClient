@@ -175,6 +175,8 @@ private fun TimeUpNotice(nav: Nav, s: Map<String, String>, st: ScreenTime) {
                 val now = if (byPassword) nav.app.api.askParentByPassword(minutes, name.trim(), password) else nav.app.api.askParentByPin(minutes, pin)
                 // Allowed again: the notice goes, and playing works from wherever they were.
                 ScreenTimeWatch.take(now)
+                // The pages on screen still say time is up until they're asked again.
+                nav.pagesStamp++
             } catch (e: CancellationException) {
                 throw e
             } catch (e: ApiError) {

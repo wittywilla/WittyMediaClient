@@ -229,6 +229,8 @@ class GamePlay(
             jpeg.smooth = settings.text("display.scaling", "sharp") == "smooth"
             val started = api.play(gameId, start.resume, start.safeMode)
             session = started
+            // What goes wrong while it plays is filed under the game's session on the server.
+            ClientLog.session = started.id
             if (started.aspect > 0) aspect = started.aspect
             if (started.width > 0 && started.height > 0) frameSize = started.width to started.height
             turns = started.turns
@@ -256,7 +258,7 @@ class GamePlay(
         } catch (e: IOException) {
             problem = GameProblem("The server can't be reached", "Check this device's connection, then try again.")
         } catch (e: Exception) {
-            ClientLog.warn("games", "Starting a game failed: ${e.javaClass.simpleName}")
+            ClientLog.warn("game", "Starting a game failed: ${e.javaClass.simpleName}")
             problem = GameProblem("The game didn't start", "Something went wrong on the way. Try again.")
         }
     }
@@ -290,6 +292,7 @@ class GamePlay(
         lostAt = 0
         if (session != null) start = GameStart(resume = true, safeMode = safeMode)
         else if (safeMode) start = start.copy(safeMode = true)
+        endLogSession()
         session = null
         starting = scope.launch { startGame() }
     }
@@ -315,7 +318,7 @@ class GamePlay(
                 else -> WebSocketV1Transport(api, sid, route.video, receiver)
             }
         } catch (e: Exception) {
-            ClientLog.warn("games", "Couldn't connect over $route: ${e.javaClass.simpleName}")
+            ClientLog.warn("game", "Couldn't connect over $route: ${e.javaClass.simpleName}")
             null
         }
         transport = made
@@ -336,7 +339,7 @@ class GamePlay(
     private fun nextMode() {
         if (routeIndex + 1 < routes.size) {
             routeIndex++
-            ClientLog.warn("games", "No picture over ${routes[routeIndex - 1]}; trying ${routes[routeIndex]}")
+            ClientLog.warn("game", "No picture over ${routes[routeIndex - 1]}; trying ${routes[routeIndex]}")
             connect()
         } else {
             closeTransport()
@@ -724,10 +727,17 @@ class GamePlay(
 
     // MARK: stopping
 
+    // The log's session back to none, unless something else has started since.
+    private fun endLogSession() {
+        val sid = session?.id ?: return
+        if (ClientLog.session == sid) ClientLog.session = ""
+    }
+
     // Save and quit: the answer comes once everything is written, so the next device carries on from here.
     fun quit() {
         if (saving) return
         val sid = session?.id
+        endLogSession()
         menu = null
         saving = true
         stopped = true
@@ -760,6 +770,7 @@ class GamePlay(
         video.close()
         jpeg.close()
         sound.close()
+        endLogSession()
         val sid = session?.id
         if (!stopped && sid != null && direct == null) {
             stopped = true

@@ -515,6 +515,7 @@ fun PhoneItem(nav: Nav, s: Map<String, String>, id: Long) {
                                 .padding(horizontal = 12.dp, vertical = 10.dp),
                         )
                     }
+                    if (disc) DiscWhySection(nav, it.id, playable, Modifier.padding(top = 24.dp))
                     FactsTable(TitleLook.facts(it, facts, admin), column, Modifier.padding(top = 24.dp))
                     attached?.let { a -> TitleExtras(nav, TitleTarget.Item, a, listings, it.libraryId, logos, Modifier.padding(top = 16.dp)) }
                     if (!it.isRigGame) WhereToWatchSection(nav, it.id, Modifier.padding(top = 16.dp))

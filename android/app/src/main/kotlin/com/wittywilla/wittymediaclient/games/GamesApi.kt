@@ -53,7 +53,7 @@ class GamesApi(val api: Api) {
             val text = res.peekBody(MAX_BYTES).string()
             if (res.code !in 200..299) {
                 val words = problemFrom(res.code, text)
-                if (res.code >= 500) ClientLog.error("games", "$method ${path.substringBefore('?')} answered ${res.code}: $words")
+                if (res.code >= 500) ClientLog.error("game", "$method ${path.substringBefore('?')} answered ${res.code}: $words")
                 throw ApiError(res.code, words)
             }
             text

@@ -183,7 +183,7 @@ class WebRtcV2Transport(
 
     private fun lose(why: String, status: Int = 0) {
         if (closed.getAndSet(true)) return
-        ClientLog.warn("games", "WebRTC: $why")
+        ClientLog.warn("game", "WebRTC: $why")
         receiver.lost(status)
     }
 

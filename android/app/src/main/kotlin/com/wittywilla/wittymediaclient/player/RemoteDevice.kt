@@ -95,6 +95,9 @@ class RemoteDeviceHost(private val scope: CoroutineScope, private val api: () ->
         if (id.isNotEmpty() && using.token.isNotEmpty()) runCatching { using.remoteLeave(id) }
     }
 
+    // This device's remote control in the logs, the same id as the server's: "rc-" and its device id.
+    private val logSession: String get() = ClientLog.sessionId("rc-", deviceId)
+
     private suspend fun run(started: Started) {
         val life = DeviceLife(started.limits.reconnectSec)
         if (deviceId.isNotEmpty()) life.announced(deviceId)
@@ -113,7 +116,7 @@ class RemoteDeviceHost(private val scope: CoroutineScope, private val api: () ->
             while (currentCoroutineContext().isActive) {
                 step = when (val now = step) {
                     is LifeStep.Stop -> {
-                        if (now.why == StopReason.TooOld) ClientLog.warn("remote", "This app speaks an older Remote Protocol than the server accepts.")
+                        if (now.why == StopReason.TooOld) ClientLog.warn("remote", "This app speaks an older Remote Protocol than the server accepts.", session = logSession)
                         return
                     }
                     is LifeStep.Announce -> {
@@ -128,8 +131,10 @@ class RemoteDeviceHost(private val scope: CoroutineScope, private val api: () ->
                             deviceId = agreed.deviceId
                             life.announced(agreed.deviceId)
                         } catch (e: ApiError) {
+                            ClientLog.warnSeldom("remote", "Announcing this device for remote control was refused: ${e.status} ${e.code}", session = logSession)
                             life.refused(e.status, e.code, e.retryAfterSec)
                         } catch (e: IOException) {
+                            ClientLog.warnSeldom("remote", "Announcing this device for remote control failed: ${e.javaClass.simpleName}", session = logSession)
                             life.lost(nowMs())
                         }
                     }
@@ -158,9 +163,11 @@ class RemoteDeviceHost(private val scope: CoroutineScope, private val api: () ->
                             life.closed(bye, nowMs())
                         } catch (e: SseRefused) {
                             online = false
+                            ClientLog.warnSeldom("remote", "The remote control channel was refused: ${e.status} ${e.code}", session = logSession)
                             life.refused(e.status, e.code)
                         } catch (e: IOException) {
                             // Nothing heard for a minute, or the network went: the channel is dead.
+                            ClientLog.warnSeldom("remote", "The remote control channel was lost: ${e.javaClass.simpleName}", session = logSession)
                             online = false
                             life.closed(bye, nowMs())
                         }
@@ -182,7 +189,7 @@ class RemoteDeviceHost(private val scope: CoroutineScope, private val api: () ->
         } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {
-            ClientLog.warn("remote", "A ${command.type} command failed: ${e.javaClass.simpleName}")
+            ClientLog.warnSeldom("remote", "A ${command.type.take(40)} command failed: ${e.javaClass.simpleName}", session = logSession)
             "That didn't work on this device."
         }
         ack(command.id, problem)
@@ -192,7 +199,15 @@ class RemoteDeviceHost(private val scope: CoroutineScope, private val api: () ->
     private suspend fun ack(id: String, problem: String?) {
         if (id.isEmpty() || deviceId.isEmpty()) return
         // A 404 `no-command` means it's no longer waiting (it timed out, or the channel reopened): carry on.
-        runCatching { api().remoteAck(deviceId, RemoteWire.ack(id, problem)) }
+        try {
+            api().remoteAck(deviceId, RemoteWire.ack(id, problem))
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: ApiError) {
+            if (e.status != 404) ClientLog.warnSeldom("remote", "A remote command couldn't be answered: ${e.status}", session = logSession)
+        } catch (e: Exception) {
+            ClientLog.warnSeldom("remote", "A remote command couldn't be answered: ${e.javaClass.simpleName}", session = logSession)
+        }
     }
 
     // Something changed that a controller would show. It goes as soon as the server's limit allows, after a moment
@@ -227,7 +242,9 @@ class RemoteDeviceHost(private val scope: CoroutineScope, private val api: () ->
                 if (e.status == 429) {
                     // Nothing is lost: the latest state goes a moment later.
                     heartbeat.refused(nowMs(), e.retryAfterSec)
-                } else if (e.status == 404) {
+                } else if (e.status != 404) {
+                    ClientLog.warnSeldom("remote", "This device's state was refused: ${e.status}", session = logSession)
+                } else {
                     // The server has forgotten this device: announce again.
                     startedWith?.let { s ->
                         loop?.cancel()
@@ -237,8 +254,9 @@ class RemoteDeviceHost(private val scope: CoroutineScope, private val api: () ->
                 }
             } catch (e: CancellationException) {
                 throw e
-            } catch (_: Exception) {
+            } catch (e: Exception) {
                 // The next one says it.
+                ClientLog.warnSeldom("remote", "This device's state couldn't be sent: ${e.javaClass.simpleName}", session = logSession)
             } finally {
                 reporting = false
             }

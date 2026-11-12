@@ -3,6 +3,7 @@
 package com.wittywilla.wittymediaclient
 
 import com.wittywilla.wittymediaclient.diag.ClientEvent
+import com.wittywilla.wittymediaclient.diag.ClientLog
 import com.wittywilla.wittymediaclient.diag.LogFile
 import com.wittywilla.wittymediaclient.diag.Redact
 import com.wittywilla.wittymediaclient.diag.ReportQueue
@@ -44,6 +45,21 @@ class ClientLogTest {
             for (gone in o["gone"]!!.jsonArray) assertFalse("${gone.jsonPrimitive.content} survived in: $out", out.contains(gone.jsonPrimitive.content))
             for (kept in o["kept"]!!.jsonArray) assertTrue("${kept.jsonPrimitive.content} was lost from: $out", out.contains(kept.jsonPrimitive.content))
         }
+    }
+
+    @Test
+    fun aRepeatedWarningIsLetThroughOnceAMinute() {
+        val key = "test-seldom-${System.nanoTime()}"
+        assertTrue(ClientLog.seldom(key, 60_000, now = 1_000))
+        assertFalse(ClientLog.seldom(key, 60_000, now = 30_000))
+        assertTrue(ClientLog.seldom(key, 60_000, now = 61_000))
+    }
+
+    @Test
+    fun sessionIdsAreTheServers() {
+        assertEquals("p2p-ABCDEFGH", ClientLog.sessionId("p2p-", "12345678ABCDEFGH", keepEnd = 8))
+        assertEquals("party-r-9", ClientLog.sessionId("party-", "r/-9"))
+        assertEquals("", ClientLog.sessionId("rc-", ""))
     }
 
     @Test
