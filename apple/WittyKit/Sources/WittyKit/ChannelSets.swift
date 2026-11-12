@@ -134,6 +134,16 @@ public enum ChannelSetRules {
         }
     }
 
+    /// The set before or after this one, in the picker's order, going round at either end: the remote's way of
+    /// changing set without opening the picker. A set that isn't there starts from the first.
+    public static func cycle(_ current: String, in sets: [ChannelSet], by step: Int) -> String? {
+        let ordered = sections(sets).flatMap(\.sets)
+        guard !ordered.isEmpty else { return nil }
+        guard let at = ordered.firstIndex(where: { $0.id == current }) else { return ordered[0].id }
+        let n = ordered.count
+        return ordered[((at + step) % n + n) % n].id
+    }
+
     /// The set to show: the one this device remembers while the server still has it, otherwise all channels.
     public static func chosen(_ remembered: String?, in sets: [ChannelSet]) -> String {
         guard let remembered, !remembered.isEmpty, sets.contains(where: { $0.id == remembered }) else { return all }

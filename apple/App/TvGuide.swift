@@ -194,9 +194,17 @@ struct GuideView: View {
                 HStack(spacing: 16) {
                     if store.hasSets {
                         // Sets have all of the filters below in them, and the account's own besides.
+                        if store.sets.count > 1 {
+                            Button { cycleSet(-1) } label: { Image(systemName: "chevron.left") }
+                                .buttonStyle(TvButtonStyle(dress: dress, kind: .icon, onBar: true)).accessibilityLabel("The set before")
+                        }
                         Button { setsOpen = true } label: { Label(setName + " ▾", systemImage: "list.bullet") }
                             .buttonStyle(TvButtonStyle(dress: dress, kind: .chip, on: true, onBar: true))
                             .accessibilityLabel("Channel set: \(setName)").accessibilityHint("Choose which channels the guide shows")
+                        if store.sets.count > 1 {
+                            Button { cycleSet(1) } label: { Image(systemName: "chevron.right") }
+                                .buttonStyle(TvButtonStyle(dress: dress, kind: .icon, onBar: true)).accessibilityLabel("The set after")
+                        }
                     } else {
                         chip("All", on: all) { store.setFilter(.init()) }
                         if anyFavourite || store.filter.favourites {
@@ -531,6 +539,14 @@ struct GuideView: View {
         device.remember(id, for: GuideDevice.setKey(model: model, client: client))
         store.setFilter(.init(set: id))
         Task { await store.ensure(0); focusCell(row: 0, at: spot.at) }
+    }
+
+    /// The set before or after, from the bar, as the picker would choose it.
+    private func cycleSet(_ step: Int) {
+        let current = store.filter.set.isEmpty ? ChannelSetRules.all : store.filter.set
+        guard let next = ChannelSetRules.cycle(current, in: store.sets, by: step) else { return }
+        chooseSet(next)
+        say(ChannelSetRules.name(of: next, in: store.sets))
     }
 
     /// Only the channels matching some words, in the set on screen; nothing shows them all again.
