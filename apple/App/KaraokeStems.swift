@@ -173,7 +173,7 @@ final class KaraokeStems: ObservableObject {
         guard let listening, let player, let loaded else { return }
         // The parts follow the song's speed and its equaliser and levelling (StemPlayer.swift).
         player.set(gains: StemMix.gains(loaded, levels))
-        player.set(output: listening.outputLevel, key: listening.sound.keyShift, speed: listening.speed)
+        player.set(output: listening.outputLevel, key: listening.sound.keyShift, speed: Double(listening.speed))
         if listening.trulyPlaying {
             let at = listening.positionSec()
             let off = player.position().map { abs($0 - at) }

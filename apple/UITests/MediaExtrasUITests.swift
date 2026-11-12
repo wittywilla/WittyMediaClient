@@ -30,7 +30,7 @@ final class MediaExtrasUITests: XCTestCase {
 
     /// A picture of the screen into the folder the run named, for whoever reads the run afterwards.
     @MainActor
-    private func snap(_ name: String) {
+    private func shot(_ name: String) {
         guard let folder = ProcessInfo.processInfo.environment["WMC_SHOTS"], !folder.isEmpty else { return }
         #if os(tvOS)
         let kind = "tv"
@@ -75,7 +75,7 @@ final class MediaExtrasUITests: XCTestCase {
         let app = try launchApp(extra: ["-WMCOpen", "player:\(item)"] + skipping(#"{}"#))
         let intro = app.buttons["skip-intro"]
         intro.shown(40)
-        snap("skip-intro")
+        shot("skip-intro")
         XCTAssertEqual(intro.label, "Skip intro")
         intro.tap()
         // The controls are shown by the touch: the film is now where the intro ends.
@@ -86,11 +86,11 @@ final class MediaExtrasUITests: XCTestCase {
         XCTAssertFalse(app.buttons["skip-intro"].exists)
         XCTAssertFalse(app.buttons["skip-undo"].exists, "a part skipped by hand has nothing to undo")
         // Twenty seconds on, the adverts.
-        snap("dbg-after-intro")
+        shot("dbg-after-intro")
         let adverts = app.buttons["skip-commercial"]
         adverts.shown(30)
         XCTAssertEqual(adverts.label, "Skip adverts")
-        snap("skip-adverts")
+        shot("skip-adverts")
         adverts.tap()
         let after = try XCTUnwrap(seconds(position.value as? String ?? ""))
         XCTAssertTrue((50...57).contains(after), "after Skip adverts the film is just past 0:50, not at \(after) s")
@@ -102,7 +102,7 @@ final class MediaExtrasUITests: XCTestCase {
         let app = try launchApp(extra: ["-WMCOpen", "player:\(item)"] + skipping(#"{"intro":true}"#))
         let undo = app.buttons["skip-undo"]
         undo.shown(40)
-        snap("skip-undo")
+        shot("skip-undo")
         XCTAssertEqual(undo.label, "Skipped the intro. Undo")
         XCTAssertFalse(app.buttons["skip-intro"].exists, "past the intro there's nothing to skip")
         undo.tap()
@@ -116,7 +116,7 @@ final class MediaExtrasUITests: XCTestCase {
         sleep(4)
         XCTAssertTrue(intro.exists, "the intro plays through after Undo")
         XCTAssertFalse(app.buttons["skip-undo"].exists)
-        snap("skip-after-undo")
+        shot("skip-after-undo")
     }
 
     @MainActor
@@ -148,13 +148,13 @@ final class MediaExtrasUITests: XCTestCase {
         if !gear.exists { app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.3)).tap() }
         gear.shown(5)
         gear.tap()
-        snap("dbg-gear")
+        shot("dbg-gear")
         let choice = app.buttons["gear-skip-intro"]
         reach(choice, in: app)
         XCTAssertEqual(choice.value as? String, "Off")
         choice.tap()
         XCTAssertEqual(choice.value as? String, "On")
-        snap("skip-gear")
+        shot("skip-gear")
     }
     #endif
 
@@ -165,12 +165,12 @@ final class MediaExtrasUITests: XCTestCase {
         let app = try launchApp(extra: ["-WMCOpen", "player:\(item)"] + skipping(#"{}"#))
         let intro = app.buttons["Skip intro"]
         intro.shown(40)
-        snap("skip-intro")
+        shot("skip-intro")
         // The system player gives its contextual action the Select press without it having been moved to.
         XCUIRemote.shared.press(.select)
         XCTAssertTrue(app.buttons["Skip intro"].waitForNonExistence(timeout: 8), "pressed, the intro is behind")
         app.buttons["Skip adverts"].shown(30)
-        snap("skip-adverts")
+        shot("skip-adverts")
     }
 
     @MainActor
@@ -179,7 +179,7 @@ final class MediaExtrasUITests: XCTestCase {
         let app = try launchApp(extra: ["-WMCOpen", "player:\(item)"] + skipping(#"{"intro":true}"#))
         let undo = app.buttons["Skipped the intro · Undo"]
         undo.shown(40)
-        snap("skip-undo")
+        shot("skip-undo")
         XCTAssertFalse(app.buttons["Skip intro"].exists)
         XCUIRemote.shared.press(.select)
         app.buttons["Skip intro"].shown(10)
@@ -205,7 +205,7 @@ final class MediaExtrasUITests: XCTestCase {
         intros.switches.firstMatch.exists ? intros.switches.firstMatch.tap() : intros.tap()
         #endif
         XCTAssertEqual(intros.value as? String, "1")
-        snap("settings")
+        shot("settings")
     }
 
     // MARK: Canvas
@@ -216,7 +216,7 @@ final class MediaExtrasUITests: XCTestCase {
         var app = try launchApp(extra: ["-WMCOpen", "song:\(song)"])
         app.otherElements["canvas-playing"].firstMatch.shown(40)
         sleep(2)
-        snap("canvas-player")
+        shot("canvas-player")
         app.terminate()
         app = try launchApp(extra: ["-WMCOpen", "song:\(song)", "-wms.canvas.off", "YES"])
         #if os(tvOS)
@@ -226,7 +226,7 @@ final class MediaExtrasUITests: XCTestCase {
         #endif
         sleep(4)
         XCTAssertFalse(app.otherElements["canvas-playing"].exists, "switched off, the artwork stays still")
-        snap("canvas-off")
+        shot("canvas-off")
     }
 
     @MainActor
@@ -235,7 +235,7 @@ final class MediaExtrasUITests: XCTestCase {
         let app = try launchApp(extra: ["-WMCOpen", "album:\(album)"])
         app.otherElements["canvas-playing"].firstMatch.shown(40)
         sleep(2)
-        snap("canvas-album")
+        shot("canvas-album")
     }
 
     // MARK: A title's page
@@ -257,7 +257,7 @@ final class MediaExtrasUITests: XCTestCase {
         #else
         XCTAssertFalse(app.buttons["watch-link"].exists, "Apple TV has no browser: the names are what it shows")
         #endif
-        snap("where-to-watch")
+        shot("where-to-watch")
     }
 
     @MainActor
@@ -284,12 +284,12 @@ final class MediaExtrasUITests: XCTestCase {
         app.swipeDown()
         app.swipeDown()
         app.otherElements["canvas-playing"].firstMatch.shown(30)
-        snap("canvas-title")
+        shot("canvas-title")
         reach(remove, in: app)
         remove.tap()
         #else
         app.otherElements["canvas-playing"].firstMatch.shown(30)
-        snap("canvas-title")
+        shot("canvas-title")
         XCUIRemote.shared.press(.right)
         XCUIRemote.shared.press(.select)
         #endif
@@ -315,7 +315,7 @@ final class MediaExtrasUITests: XCTestCase {
         let result = app.staticTexts["media-job-result"].firstMatch
         result.shown(180)
         XCTAssertTrue(result.label.hasPrefix("Found an intro in"), result.label)
-        snap("intros-found")
+        shot("intros-found")
     }
 
     @MainActor
