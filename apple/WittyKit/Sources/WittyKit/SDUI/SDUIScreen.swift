@@ -96,6 +96,10 @@ public struct SDUIElement: Equatable, Identifiable, Sendable {
     public var columns = 0
     public var hasMore = false
     public var seeAll = ""
+    /// See all is the row's last card.
+    public var seeAllCard = false
+    /// The fraction of the next card or slide that shows at the trailing edge; 0 for none.
+    public var peek: Double = 0
     /// The picture asked for, and the icon drawn when there is none.
     public var picture: SDUIImageRef?
     public var poster: SDUIImageRef?
@@ -179,6 +183,8 @@ public struct SDUIScreen: Equatable, Sendable {
                 if let sent = p.whole("columns") { e.columns = layout.gridColumns(cardWidth: e.cardWidth, sent: sent, window: window) }
                 e.hasMore = p.fields("more") != nil && e.state != .deferred && e.state != .error
                 e.seeAll = p.fields("seeAll")?.text("route") ?? ""
+                if !e.seeAll.isEmpty { e.seeAllCard = p.flag("seeAllCard") == true }
+                if node.type == "Shelf", p.flag("peek") != false { e.peek = layout.peek }
                 text("title", p.text("title"))
                 text("subtitle", p.text("subtitle"))
                 text("empty", p.text("emptyText"))
@@ -215,6 +221,7 @@ public struct SDUIScreen: Equatable, Sendable {
                     e.cardWidth = size.whole("width") ?? 0
                     e.cardHeight = size.whole("height") ?? 0
                 }
+                if p.flag("peek") == true { e.peek = layout.peek }
                 if let seconds = p.whole("autoAdvanceSec") { text("autoAdvance", "\(seconds) s") }
             case "Tabs":
                 e.role = "tablist"
@@ -323,6 +330,17 @@ public struct SDUIScreen: Equatable, Sendable {
                 text("text", p.text("text"))
                 text("button", p.text("buttonLabel"))
                 e.icon = p.text("icon")
+            case "Dock":
+                e.role = "toolbar"
+                e.label = p.text("title").isEmpty ? "Options" : p.text("title")
+                e.cards = node.kids.count
+                e.cardHeight = layout.dock?.height ?? 0
+                text("placement", p.text("placement"))
+            case "KeyLegend":
+                e.role = "none"
+                let keys = p.items("entries").compactMap { $0.object?.text("label") }
+                text("keys", keys.joined(separator: " · "))
+                e.textSize = layout.dock?.hintSize ?? 0
             case "Button":
                 e.role = "button"
                 e.label = p.text("label")

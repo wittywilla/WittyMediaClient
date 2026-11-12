@@ -35,6 +35,8 @@ public struct SDUINormalised: Encodable, Equatable, Sendable {
         public var columns: Int?
         public var hasMore: Bool?
         public var seeAll: String?
+        public var seeAllCard: Bool?
+        public var peek: Double?
         public var image: String?
         public var shows: [String]?
         public var progress: Int?
@@ -81,6 +83,8 @@ public extension SDUIElement {
     var buttonWords: [String] {
         if !filters.isEmpty { return filters.map(\.summary) }
         if !seasons.isEmpty { return seasons.map { ($0.selected ? "*" : "") + $0.title } }
+        // A Dock's buttons are its Button children's labels, as written.
+        if type == "Dock" { return children.filter { $0.type == "Button" }.map { $0.props.text("label") } }
         return buttons.map { ($0.primary ? "*" : "") + $0.label }
     }
 
@@ -91,7 +95,7 @@ public extension SDUIElement {
             id: id, type: type, depth: depth, role: role, label: label, state: stateName.isEmpty ? nil : stateName,
             text: text.isEmpty ? nil : text, lines: lines.isEmpty ? nil : lines, textSize: textSize, cards: cards,
             placeholders: placeholders, cardStyle: cardStyle, cardWidth: cardWidth, cardHeight: cardHeight, columns: columns,
-            hasMore: hasMore, seeAll: seeAll, image: pictureWords, shows: shows.isEmpty ? nil : shows, progress: progress,
+            hasMore: hasMore, seeAll: seeAll, seeAllCard: seeAllCard ? true : nil, peek: peek > 0 ? peek : nil, image: pictureWords, shows: shows.isEmpty ? nil : shows, progress: progress,
             buttons: buttonWords.isEmpty ? nil : buttonWords, action: isSlide ? nil : SDUIWords.action(action),
             scope: scope.isEmpty ? nil : scope)
     }

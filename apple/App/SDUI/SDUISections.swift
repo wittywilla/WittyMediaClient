@@ -36,6 +36,14 @@ struct SDUINodeView: View {
         case "SearchBox": SDUISearchBoxView(box: element)
         case "List": SDUIListView(list: element)
         case "ListItem": SDUIListRow(row: element, dense: false)
+        case "Dock": EmptyView()
+        // A key legend outside a Dock: a TV's remote is always in use; touch alone never shows one.
+        case "KeyLegend":
+            #if os(tvOS)
+            SDUIKeyLegend(legend: element).padding(.horizontal, element.depth > 0 ? 0 : 60)
+            #else
+            EmptyView()
+            #endif
         case "NativeView": SDUINativeView(native: element)
         case "Page": SDUIColumn(children: element.children)
         default: SDUIStackView(stack: element)
@@ -92,7 +100,7 @@ struct SDUIShelfView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: layout.sp("s")) {
-            SDUISectionHeading(element: shelf, seeAll: shelf.seeAll.isEmpty ? nil : { actor.open(route: shelf.seeAll) })
+            SDUISectionHeading(element: shelf, seeAll: shelf.seeAll.isEmpty || shelf.seeAllCard ? nil : { actor.open(route: shelf.seeAll) })
             if shelf.state == .error {
                 SDUISectionError(id: shelf.id) { Task { await store.retry(shelf, center: center) } }
             } else if loading {
@@ -123,11 +131,10 @@ struct SDUIShelfView: View {
                 if store.busy.contains(shelf.id) {
                     SkeletonShape().frame(width: cardWidth, height: cardHeight)
                 }
-                #if os(tvOS)
-                if !shelf.seeAll.isEmpty, !isChips {
+                // See all as the row's last card where the row says so (always on a TV, where it's how the remote gets there).
+                if !shelf.seeAll.isEmpty, !isChips, shelf.seeAllCard || layout.isTV {
                     SDUISeeAllCard(width: cardWidth, height: cardHeight, title: shelf.shown("title")) { actor.open(route: shelf.seeAll) }
                 }
-                #endif
             }
             .padding(.horizontal, layout.margin)
             // The room a focused card needs to lift without being cut off.
@@ -162,6 +169,17 @@ struct SDUIGridView: View {
                 cells(placeholders: columns * 2)
             } else if grid.state == .empty || grid.children.isEmpty {
                 Text(grid.shown("empty")).sduiFont("caption").foregroundStyle(palette.textSecondary).padding(.horizontal, layout.margin)
+            } else if store.listed.contains(grid.id) {
+                // The Dock's View: the same titles as a list, a line each with its picture.
+                LazyVStack(spacing: layout.isTV ? layout.sp("xs") : 0) {
+                    ForEach(Array(grid.children.enumerated()), id: \.element.id) { index, card in
+                        SDUIListRow(row: card, dense: false)
+                            .onAppear {
+                                if grid.hasMore, index >= grid.children.count - 6 { Task { await store.more(grid, center: center) } }
+                            }
+                    }
+                }
+                .remoteSection()
             } else {
                 cells(placeholders: store.busy.contains(grid.id) ? columns : 0)
             }

@@ -221,5 +221,33 @@ final class SDUITests: XCTestCase {
         if open.waitForExistence(timeout: 3) { XCUIRemote.shared.press(.select) }
         XCTAssertTrue(named(app, "player").waitForExistence(timeout: 30), "the link didn't open the player")
     }
+    /// A library page's Dock (revision 3): Down from the grid reaches it; View shows the titles as a list and back
+    /// again; Jump to a letter opens the letters. Uses TEST_RUNNER_WMC_TABS_LIBRARY's neighbour, a films library:
+    /// TEST_RUNNER_WMC_DOCK_LIBRARY.
+    @MainActor
+    func testAppleTVDockSwitchesViewAndOpensTheLetters() throws {
+        guard let library = ProcessInfo.processInfo.environment["WMC_DOCK_LIBRARY"] else { throw XCTSkip("Set TEST_RUNNER_WMC_DOCK_LIBRARY.") }
+        let app = try launchApp(extra: ["-WMCOpen", "/library/\(library)"])
+        page(app, startingWith: "library").shown(40)
+        let view = app.descendants(matching: .any).matching(NSPredicate(format: "identifier ENDSWITH %@", ":view")).firstMatch
+        guard view.waitForExistence(timeout: 15) else { throw XCTSkip("That library's page has no Dock.") }
+        let cards = app.descendants(matching: .any).matching(NSPredicate(format: "identifier BEGINSWITH %@", "sdui.card."))
+        XCTAssertGreaterThan(cards.count, 0, "the grid has no cards")
+        let remote = XCUIRemote.shared
+        for _ in 0..<12 where !view.hasFocus {
+            remote.press(focusedId(app).hasPrefix("sdui.dock.") ? .right : .down)
+        }
+        XCTAssertTrue(view.hasFocus, "the remote never reached the Dock's View")
+        remote.press(.select)
+        let end = Date().addingTimeInterval(5)
+        while Date() < end, cards.count > 0 { usleep(250_000) }
+        XCTAssertEqual(cards.count, 0, "View didn't switch the grid to a list")
+        remote.press(.select)
+        XCTAssertTrue(cards.firstMatch.waitForExistence(timeout: 5), "View didn't switch back to the grid")
+        remote.press(.right)
+        remote.press(.select)
+        XCTAssertTrue(app.buttons["M"].waitForExistence(timeout: 5), "Jump to a letter didn't open the letters")
+        remote.press(.menu)
+    }
     #endif
 }

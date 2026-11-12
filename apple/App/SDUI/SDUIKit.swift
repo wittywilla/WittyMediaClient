@@ -99,7 +99,7 @@ private struct SDUIRoleFont: ViewModifier {
 
     static func style(_ role: String) -> UIFont.TextStyle {
         switch role {
-        case "pageTitle": return .title1
+        case "display", "pageTitle": return .title1
         case "heading": return .title2
         case "title": return .headline
         case "caption", "badge": return .caption1
@@ -380,6 +380,7 @@ struct SDUIDraw {
     }
 
     static let defaultRoles: [String: SDUITypeRole] = [
+        "display": SDUITypeRole(family: "display", weight: "heading"),
         "pageTitle": SDUITypeRole(family: "display", weight: "heading"), "heading": SDUITypeRole(family: "display", weight: "heading"),
         "title": SDUITypeRole(family: "body", weight: "strong"), "body": SDUITypeRole(family: "body", weight: "body"),
         "caption": SDUITypeRole(family: "body", weight: "body"), "badge": SDUITypeRole(family: "body", weight: "strong"),

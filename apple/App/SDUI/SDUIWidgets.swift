@@ -114,6 +114,7 @@ struct SDUIFilterBarView: View {
     @Environment(\.sduiFocus) private var focus
     let bar: SDUIElement
     @State private var open: SDUIFilterField?
+    @State private var picking = false
 
     private var anyChosen: Bool { bar.filters.contains { $0.id != "sort" && !$0.value.isEmpty } }
 
@@ -172,6 +173,54 @@ struct SDUIFilterBarView: View {
         .sheet(item: $open) { field in
             SDUIChoiceList(field: field, layout: layout) { set(field, $0) }
         }
+        // A Dock's Sort opens the sort's choices; its Filter, which filter to change, then that one's.
+        .sheet(isPresented: $picking) {
+            SDUIFilterPicker(fields: bar.filters.filter { $0.id != "sort" }) { field in
+                picking = false
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) { open = field }
+            }
+        }
+        .onReceive(store.$control) { request in
+            guard let request, request.target == bar.props.text("target") || bar.props.text("target").isEmpty else { return }
+            switch request.control {
+            case "sort":
+                store.control = nil
+                open = bar.filters.first { $0.id == "sort" }
+            case "filter":
+                store.control = nil
+                let filters = bar.filters.filter { $0.id != "sort" }
+                if filters.count == 1 { open = filters[0] } else if !filters.isEmpty { picking = true }
+            default:
+                break
+            }
+        }
+    }
+}
+
+/// Which filter to change, from a Dock's Filter: each with what it's set to.
+private struct SDUIFilterPicker: View {
+    @Environment(\.palette) private var palette
+    @Environment(\.dismiss) private var dismiss
+    let fields: [SDUIFilterField]
+    let choose: (SDUIFilterField) -> Void
+
+    var body: some View {
+        NavigationStack {
+            List(fields) { field in
+                Button { choose(field) } label: {
+                    HStack {
+                        Text(field.label).foregroundStyle(palette.text)
+                        Spacer()
+                        Text(field.summary.replacingOccurrences(of: field.label + ": ", with: "")).foregroundStyle(palette.textSecondary)
+                    }
+                }
+            }
+            .navigationTitle("Filter")
+            #if !os(tvOS)
+            .toolbar { ToolbarItem(placement: .cancellationAction) { Button("Close") { dismiss() } } }
+            #endif
+        }
+        .presentationDetents([.medium, .large])
     }
 }
 

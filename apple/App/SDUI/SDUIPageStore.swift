@@ -177,6 +177,74 @@ final class SDUIPageStore: ObservableObject {
         if working == nil, let before, case .ready = phase { show(before) }
     }
 
+    // MARK: A Dock's controls (catalogue revision 3)
+
+    /// A control a Dock asked to open: the filter bar's sort or filters, or the letters to jump to, for a grid.
+    struct ControlRequest: Equatable, Identifiable {
+        let control: String
+        let target: String
+        let id = UUID()
+    }
+
+    @Published var control: ControlRequest?
+    /// Grids shown as a list rather than a grid, on this device, kept for the profile.
+    @Published private(set) var listed: Set<String> = []
+    /// A card to bring into view: where a jump to a letter landed.
+    @Published var scrollTo: String?
+
+    private func listKey(_ grid: String, profile: String) -> String { "sdui.view|\(page)|\(grid)|\(profile)" }
+
+    func loadViews(profile: String) {
+        guard let working else { return }
+        var found: Set<String> = []
+        for grid in SDUIPageStore.gridIDs(in: working) where UserDefaults.standard.bool(forKey: listKey(grid, profile: profile)) {
+            found.insert(grid)
+        }
+        if found != listed { listed = found }
+    }
+
+    private static func gridIDs(in document: SDUIDocument) -> [String] {
+        var out: [String] = []
+        func walk(_ node: SDUINode) {
+            if node.type == "Grid" { out.append(node.id) }
+            node.kids.forEach(walk)
+        }
+        walk(document.root)
+        return out
+    }
+
+    /// `control.open`: `sort` and `filter` open the filter bar's choices, `view` switches the grid and a list, `jump`
+    /// asks for a letter.
+    func open(control: String, target: String, profile: String) {
+        if control == "view" {
+            if listed.contains(target) { listed.remove(target) } else { listed.insert(target) }
+            UserDefaults.standard.set(listed.contains(target), forKey: listKey(target, profile: profile))
+            return
+        }
+        self.control = ControlRequest(control: control, target: target)
+    }
+
+    /// Brings the grid to its first title starting with the letter (`#` for anything that isn't a letter), asking for
+    /// more pages until one has arrived, at most 20.
+    func jump(to letter: String, in grid: String, center: SDUICenter) async {
+        func first() -> SDUIElement? {
+            screen?.root.find(grid)?.children.first { card in
+                let title = card.shown("title").isEmpty ? card.title : card.shown("title")
+                guard let start = title.trimmingCharacters(in: .whitespaces).first else { return false }
+                return letter == "#" ? !start.isLetter : String(start).localizedCaseInsensitiveCompare(letter) == .orderedSame
+            }
+        }
+        for _ in 0..<20 {
+            if let found = first() {
+                scrollTo = found.id
+                return
+            }
+            guard let section = screen?.root.find(grid), section.hasMore, !section.moreURL.isEmpty else { break }
+            await fetch(section: grid, url: section.moreURL, center: center)
+        }
+        if let found = first() { scrollTo = found.id }
+    }
+
     // MARK: A section's own items
 
     private func fetch(section: String, url: String, center: SDUICenter) async {
