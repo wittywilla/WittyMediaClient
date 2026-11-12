@@ -91,6 +91,7 @@ class Api(val base: String, val token: String, private val quick: Boolean = fals
             if (away && res.header(PeerRules.ERROR_HEADER) != null) PeerRoute.trouble()
             res
         })
+        .addInterceptor(ScreenTimeTap) // screen time left and parental refusals, heard in one place
         .build()
 
     private fun errorText(status: Int, text: String) =

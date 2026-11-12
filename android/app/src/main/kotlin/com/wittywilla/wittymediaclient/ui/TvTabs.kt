@@ -189,7 +189,7 @@ private fun TvTopBar(nav: Nav, bar: TvBar, libraries: List<Library>) {
         val route = nav.routeOf(entry)?.takeIf { it != Route.Profile && isTvTab(it) } ?: return@mapNotNull null
         TvTab(route, entry.label, tvBarIcon(entry.icon))
     }.distinctBy { it.route.key }
-    val left = fixed + libraries.filter { it.id in nav.topMenu }.map { TvTab(Route.Pinned(it), it.name, it.barSymbol) }.filter { pinned -> fixed.none { (it.route as? Route.Library)?.library?.id == (pinned.route as Route.Pinned).library.id } }
+    val left = fixed.filter { profileOffers(it.route) } + libraries.filter { it.id in nav.topMenu }.map { TvTab(Route.Pinned(it), it.name, it.barSymbol) }.filter { pinned -> fixed.none { (it.route as? Route.Library)?.library?.id == (pinned.route as Route.Pinned).library.id } }
     Row(
         Modifier
             .fillMaxWidth()
@@ -306,7 +306,7 @@ private fun TvTabPill(nav: Nav, tab: TvTab, requester: FocusRequester, modifier:
                 Icon(tab.icon, contentDescription = null, tint = ink, modifier = Modifier.size(metrics.u(BAR_ICON)))
                 Text(tab.title, color = ink, style = MaterialTheme.typography.label, maxLines = 1)
             } else {
-                Avatar(person.ifEmpty { "?" }, metrics.u(28))
+                ProfileFace(person.ifEmpty { "?" }, nav.me?.avatar, metrics.u(28))
                 Text(person.ifEmpty { tab.title }, color = ink, style = MaterialTheme.typography.label, maxLines = 1)
             }
         }

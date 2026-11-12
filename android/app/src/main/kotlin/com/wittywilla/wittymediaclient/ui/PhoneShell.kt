@@ -343,7 +343,7 @@ private fun TabBar(nav: Nav, inset: Dp, modifier: Modifier, openMenu: () -> Unit
         val me = nav.me
         val name = if (me == null) "" else avatarName(me.displayName, me.name)
         Cell("You, $name", current == Route.Profile, { if (current != Route.Profile) nav.reset(Route.Profile) }) {
-            Avatar(name.ifEmpty { "?" }, 32.dp)
+            ProfileFace(name.ifEmpty { "?" }, me?.avatar, 32.dp)
         }
     }
 }

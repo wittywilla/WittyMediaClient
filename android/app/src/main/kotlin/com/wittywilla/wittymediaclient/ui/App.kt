@@ -1285,6 +1285,7 @@ fun AppRoot(app: WittyApp) {
                         is Route.Help -> ServerPageScreen(nav, route, route.path, keptToGames = false, public = true)
                         is Route.OnPhone -> OnPhoneScreen(nav, strings, route.title, route.path)
                         is GamesRoute -> GamesRouteScreen(nav, route)
+                        is HouseholdRoute -> HouseholdRouteScreen(nav, strings, route)
                         is TvRoute -> TvRouteScreen(nav, route)
                     }
                 }
@@ -1306,6 +1307,8 @@ fun AppRoot(app: WittyApp) {
         }
         // A WittyTV reminder comes up on whatever's showing, once someone is signed in.
         if (metrics.tv && route.signedIn) TvReminderAlert(nav)
+        // Screen time and what a profile's limits turn off, over every screen and every player.
+        ProfileGuard(nav, app.api, strings)
     }
 }
 
