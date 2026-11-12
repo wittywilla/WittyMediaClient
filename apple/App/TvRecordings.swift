@@ -87,7 +87,7 @@ struct RecordingsView: View {
             Text(note)
         }
         .sheet(item: $moreInfo) { ask in
-            MoreInfoSheet(channel: ask.channel, start: ask.start, onWatch: { _ in moreInfo = nil }, onFromStart: { _, _ in moreInfo = nil })
+            MoreInfoSheet(channel: ask.channel, start: ask.start, onWatch: { key in moreInfo = nil; model.path.append(.channel(key: key)) }, onFromStart: { _, _ in moreInfo = nil })
         }
         .sheet(item: $changing) { rule in
             RecordOptionsSheet(title: rule.title, series: true, start: rule.options, onSave: { options in
