@@ -79,6 +79,8 @@ struct SDUIPageScreen: View {
             .padding(.top, Tokens.Space.s6)
             .accessibilityElement(children: .ignore)
             .accessibilityLabel("Loading")
+        case .otherRevision:
+            SDUIRevisionMismatch(server: center.otherRevision)
         case .failed(let words):
             ProblemView(words: words, retry: { Task { await store.load(center) } })
         case .missing:

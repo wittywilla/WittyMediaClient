@@ -7,7 +7,7 @@ import XCTest
 /// "Customise", the cache and the requests. Everything here is made up.
 final class SDUITests: XCTestCase {
     static let page = #"""
-    {"version":1,"catalog":4,"futureField":{"x":1},
+    {"version":1,"catalog":5,"futureField":{"x":1},
      "page":{"id":"home","kind":"home","title":"Home","route":"/","params":{"tab":"a","n":3}},
      "layout":{"formFactor":"tv","class":"hd","canvas":{"width":1920,"height":1080},"scale":1,"breakpoint":"large",
        "safeArea":{"top":60,"right":80,"bottom":60,"left":80},"focusEngine":true,"density":"comfortable",
@@ -83,7 +83,7 @@ final class SDUITests: XCTestCase {
     func testTheCatalogueKeepsItsOwnTablesWhereTheServersAreMissing() throws {
         let catalog = try JSONDecoder().decode(SDUICatalog.self, from: Data(#"{"revision":3,"routes":[{"pattern":"/x/{id}","page":"{id}"},7],"components":[{"type":"Page"}]}"#.utf8))
         XCTAssertEqual(catalog.routes.count, 1)
-        XCTAssertEqual(catalog.cardStyles.count, 14)
+        XCTAssertEqual(catalog.cardStyles.count, 18)
         XCTAssertEqual(catalog.cardStyle("photo")?.shows, [])
         XCTAssertNotNil(catalog.command("watched.set"))
     }
@@ -343,11 +343,11 @@ final class SDUITests: XCTestCase {
 
     func testWhatADeviceSaysAboutItself() {
         let hd = SDUIDevice.appleTV(pixelsWide: 1920, reducedMotion: false, views: ["guide"])
-        XCTAssertEqual(SDUIQuery.encode(hd.query), "catalog=4&platform=tvos&formFactor=tv&deviceClass=hd&views=guide")
+        XCTAssertEqual(SDUIQuery.encode(hd.query), "catalog=5&platform=tvos&formFactor=tv&deviceClass=hd&views=guide")
         let uhd = SDUIDevice.appleTV(pixelsWide: 3840, reducedMotion: true, hdr: true, views: [])
-        XCTAssertEqual(SDUIQuery.encode(uhd.query), "catalog=4&platform=tvos&formFactor=tv&deviceClass=4k&capabilities=reducedMotion%2Chdr")
+        XCTAssertEqual(SDUIQuery.encode(uhd.query), "catalog=5&platform=tvos&formFactor=tv&deviceClass=4k&capabilities=reducedMotion%2Chdr")
         let phone = SDUIDevice.touch(pad: false, width: 393, height: 852, reducedMotion: false, locale: "en-GB", views: ["guide"])
-        XCTAssertEqual(SDUIQuery.encode(phone.query), "catalog=4&platform=ios&formFactor=phone&viewport=393x852&views=guide&capabilities=touch&locale=en-GB")
+        XCTAssertEqual(SDUIQuery.encode(phone.query), "catalog=5&platform=ios&formFactor=phone&viewport=393x852&views=guide&capabilities=touch&locale=en-GB")
         // An iPad sharing its screen is still a tablet, with the part of the screen it has.
         let split = SDUIDevice.touch(pad: true, width: 507, height: 1024, reducedMotion: false, views: [])
         let full = SDUIDevice.touch(pad: true, width: 1366, height: 1024, reducedMotion: false, views: [])
@@ -361,16 +361,16 @@ final class SDUITests: XCTestCase {
         var few = phone
         few.components = []
         XCTAssertTrue(SDUIQuery.encode(few.query).contains("components=none"))
-        XCTAssertEqual(SDUIQuery.page(["q": "a b&c", "tab": ""], hd), "q=a%20b%26c&catalog=4&platform=tvos&formFactor=tv&deviceClass=hd&views=guide")
+        XCTAssertEqual(SDUIQuery.page(["q": "a b&c", "tab": ""], hd), "q=a%20b%26c&catalog=5&platform=tvos&formFactor=tv&deviceClass=hd&views=guide")
     }
 
     func testOnlyTheServersOwnAddressesAreAskedFor() {
         let device = SDUIDevice.appleTV(pixelsWide: 1920, reducedMotion: false, views: [])
         XCTAssertEqual(SDUIQuery.path(fromServer: "/api/v1/sdui/pages/home/sections/jump/items?cursor=12", device: device),
-                       "/sdui/pages/home/sections/jump/items?cursor=12&catalog=4&platform=tvos&formFactor=tv&deviceClass=hd")
+                       "/sdui/pages/home/sections/jump/items?cursor=12&catalog=5&platform=tvos&formFactor=tv&deviceClass=hd")
         XCTAssertEqual(SDUIQuery.path(fromServer: "/api/sdui/pages/home/personal", device: nil), "/sdui/pages/home/personal")
         XCTAssertEqual(SDUIQuery.path(fromServer: "/api/v1/sdui/pages/x/sections/y/items?cursor=0&platform=web", device: device),
-                       "/sdui/pages/x/sections/y/items?cursor=0&platform=web&catalog=4&formFactor=tv&deviceClass=hd")
+                       "/sdui/pages/x/sections/y/items?cursor=0&platform=web&catalog=5&formFactor=tv&deviceClass=hd")
         for bad in ["https://example.com/api/v1/sdui/x", "/api/v1/users", "/api/v1/sdui/../users", "//example.com/api/v1/sdui/x", "/api/v1/sdui/x y", ""] {
             XCTAssertNil(SDUIQuery.path(fromServer: bad, device: device), bad)
         }
@@ -492,11 +492,11 @@ final class SDUITests: XCTestCase {
     func testAPageWrittenForAnotherRevisionIsRefusedAndTheCountIsTheServersWords() throws {
         var old = try JSONDecoder().decode(SDUIDocument.self, from: Data(Self.page.utf8))
         XCTAssertTrue(SDUI.accepts(old))
-        old.catalog = 3
+        old.catalog = 4
         XCTAssertFalse(SDUI.accepts(old), "a client built for revision 4 refuses another revision's tree")
         old.catalog = nil
         XCTAssertTrue(SDUI.accepts(old))
-        let bar = #"{"version":1,"catalog":4,"page":{"id":"l","kind":"library","title":"L"},"layout":{"formFactor":"phone"},"root":{"type":"Page","id":"page","children":[{"type":"FilterBar","id":"f","props":{"count":1,"countText":"1 title"}},{"type":"DetailHeader","id":"h","props":{"title":"T","actions":[{"id":"watchLater","label":"In Watch later","icon":"check","pressed":true,"action":{"type":"command","op":"watchLater.remove","item":"5"}}]}}]}}"#
+        let bar = #"{"version":1,"catalog":5,"page":{"id":"l","kind":"library","title":"L"},"layout":{"formFactor":"phone"},"root":{"type":"Page","id":"page","children":[{"type":"FilterBar","id":"f","props":{"count":1,"countText":"1 title"}},{"type":"DetailHeader","id":"h","props":{"title":"T","actions":[{"id":"watchLater","label":"In Watch later","icon":"check","pressed":true,"action":{"type":"command","op":"watchLater.remove","item":"5"}}]}}]}}"#
         let screen = SDUIScreen(document: try JSONDecoder().decode(SDUIDocument.self, from: Data(bar.utf8)))
         XCTAssertEqual(screen.root.find("f")?.shown("count"), "1 title")
         XCTAssertEqual(screen.root.find("h")?.buttons.first?.pressed, true)
@@ -652,7 +652,7 @@ final class SDUITests: XCTestCase {
         XCTAssertFalse(first.offline)
         let second = try await loader.load("home", params: ["tab": "a"], device: device)
         XCTAssertEqual(second.document, first.document, "a 304 is the page that was kept")
-        XCTAssertEqual(server.requests.map(\.path), Array(repeating: "/api/v1/sdui/pages/home?tab=a&catalog=4&platform=tvos&formFactor=tv&deviceClass=hd&views=guide", count: 2))
+        XCTAssertEqual(server.requests.map(\.path), Array(repeating: "/api/v1/sdui/pages/home?tab=a&catalog=5&platform=tvos&formFactor=tv&deviceClass=hd&views=guide", count: 2))
         XCTAssertNotNil(loader.kept("home", params: ["tab": "a"], device: device))
         XCTAssertNil(loader.kept("home", params: ["tab": "b"], device: device))
     }
@@ -710,7 +710,7 @@ final class SDUITests: XCTestCase {
         let first = try await loader.load("home", params: [:], device: device)
         let same = try await loader.refresh("home", params: [:], device: device, current: first)
         XCTAssertEqual(same, first)
-        XCTAssertTrue(server.requests.last?.path.hasPrefix("/api/v1/sdui/pages/home/diff?since=%22e1%22&catalog=4") ?? false, server.requests.last?.path ?? "")
+        XCTAssertTrue(server.requests.last?.path.hasPrefix("/api/v1/sdui/pages/home/diff?since=%22e1%22&catalog=5") ?? false, server.requests.last?.path ?? "")
 
         mode.answer = ##"{"etag":"\"e2\"","since":"\"e1\"","patches":[{"op":"remove","path":"#jump:3"}]}"##
         let patched = try await loader.refresh("home", params: [:], device: device, current: first)
@@ -756,12 +756,12 @@ final class SDUITests: XCTestCase {
         let nothing = try await client.sduiCommand(SDUICatalog.builtIn.command("refresh"), item: "12")
         XCTAssertFalse(nothing)
         XCTAssertEqual(server.requests.map { $0.line.split(separator: " ").prefix(2).joined(separator: " ") }, [
-            "GET /api/v1/sdui/pages/home/sections/jump/items?cursor=2&catalog=4&platform=tvos&formFactor=tv&deviceClass=hd",
-            "GET /api/v1/sdui/navigation?catalog=4&platform=tvos&formFactor=tv&deviceClass=hd",
+            "GET /api/v1/sdui/pages/home/sections/jump/items?cursor=2&catalog=5&platform=tvos&formFactor=tv&deviceClass=hd",
+            "GET /api/v1/sdui/navigation?catalog=5&platform=tvos&formFactor=tv&deviceClass=hd",
             "GET /api/v1/sdui/pages/home/personal",
             "PUT /api/v1/sdui/pages/home/personal",
             "DELETE /api/v1/sdui/navigation/personal",
-            "GET /api/v1/sdui/topshelf?catalog=4&platform=tvos&deviceClass=4k",
+            "GET /api/v1/sdui/topshelf?catalog=5&platform=tvos&deviceClass=4k",
             "GET /api/v1/sdui/catalog",
             "DELETE /api/v1/items/12/progress",
         ])

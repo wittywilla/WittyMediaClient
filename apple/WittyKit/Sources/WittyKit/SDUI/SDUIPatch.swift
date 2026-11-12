@@ -238,7 +238,7 @@ public extension SDUIDocument {
         func number(_ node: inout SDUINode, _ path: [Int], skipOwn: Bool = false) {
             if !skipOwn { own(&node, path) }
             guard var list = node.children else { return }
-            if node.type == "Tabs" {
+            if node.type == "Tabs" || node.type == "CrossBar" {
                 for index in list.indices { own(&list[index], path + [index]) }
                 for index in list.indices { number(&list[index], path + [index], skipOwn: true) }
             } else {

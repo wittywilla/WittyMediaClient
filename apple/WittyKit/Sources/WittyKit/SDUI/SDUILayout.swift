@@ -227,31 +227,54 @@ public struct SDUILayout: Codable, Equatable, Sendable {
 /// `tvSideMenu`), its breadth in points, whether the bar lies over the page until it scrolls, and how wide a TV's side
 /// menu opens while it has focus.
 public struct SDUIShell: Codable, Equatable, Sendable {
-    public var layout: String
+    /// The look (experience) this page is drawn with.
+    public var experience: String
+    /// The menu's style, by the catalogue's `navStyles`: the frame is drawn from this, never from the experience's id.
     public var nav: String
     public var overlay: Bool?
+    /// The menu's breadth in points: a sidebar's or rail's width, a bar's height.
     public var size: Int
+    /// How wide a menu is while open (a TV's side menu with focus, a rail's full menu), and the width of a rail's library drawer.
     public var open: Int?
+    public var drawer: Int?
+    /// Where each region of the shell is and whether it shows: brand, nav, search, profile, clock, dock, legend, hero (the experience's,
+    /// with the administrator's and the person's laid over them by the server).
+    public var placements: [String: Placement]?
 
-    public init(layout: String, nav: String, overlay: Bool? = nil, size: Int, open: Int? = nil) {
-        self.layout = layout
+    public struct Placement: Codable, Equatable, Sendable {
+        public var position: String?
+        public var visible: Bool?
+        /// The hero's style: billboard, banner, carousel or row.
+        public var style: String?
+    }
+
+    /// Whether a region is drawn: shown unless the placements say it is hidden.
+    public func shows(_ region: String) -> Bool { placements?[region]?.visible != false }
+
+    public init(experience: String, nav: String, overlay: Bool? = nil, size: Int, open: Int? = nil, drawer: Int? = nil, placements: [String: Placement]? = nil) {
+        self.experience = experience
         self.nav = nav
         self.overlay = overlay
         self.size = size
         self.open = open
+        self.drawer = drawer
+        self.placements = placements
     }
 
     public init(from decoder: Decoder) throws {
         let box = try decoder.container(keyedBy: CodingKeys.self)
-        layout = (try? box.decodeIfPresent(String.self, forKey: .layout)) ?? ""
+        experience = (try? box.decodeIfPresent(String.self, forKey: .experience)) ?? ""
         nav = (try? box.decodeIfPresent(String.self, forKey: .nav)) ?? ""
         overlay = try? box.decodeIfPresent(Bool.self, forKey: .overlay)
         size = (try? box.decodeIfPresent(Int.self, forKey: .size)) ?? 0
         open = try? box.decodeIfPresent(Int.self, forKey: .open)
+        drawer = try? box.decodeIfPresent(Int.self, forKey: .drawer)
+        placements = try? box.decodeIfPresent([String: Placement].self, forKey: .placements)
     }
 
-    /// The menu styles this app draws. A style it doesn't know is drawn as the device's usual one.
-    public static let navs: Set<String> = ["sidebar", "rail", "bottomTabs", "topTabs", "tvTopMenu", "tvSideMenu"]
+    /// The menu styles of the catalogue's `navStyles` (docs/SDUI.md, Experiences).
+    public static let navs: Set<String> = ["sidebar", "rail", "railDrawer", "bottomTabs", "topTabs", "floatingGlassBar", "cableBar", "bevelBar",
+                                           "teleKeys", "crossbar", "ornamentTabs", "tvTopMenu", "tvSideMenu"]
 }
 
 /// `layout.dock`: `bottom`, a bar `height` points tall at the foot of the screen; or `sheet`, a phone's Options button

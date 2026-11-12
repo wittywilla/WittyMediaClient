@@ -811,7 +811,7 @@ final class AppModel: ObservableObject {
     /// The address, the key it proved and the token are kept together.
     func signedIn(token: String, user: User? = nil) {
         let kept = current ?? SavedServer(url: client.base, name: "WittyMediaServer")
-        notice = Keychain.save(token: token, pin: kept.publicKey) ? "" : "This device couldn't keep your sign-in, so you'll be asked again next time."
+        notice = Keychain.save(token: token, pin: kept.publicKey) ? "" : KeychainWords.notice(status: Keychain.lastFailure)
         server = kept.url
         remember(kept)
         client = connection(to: kept.url, token: token)

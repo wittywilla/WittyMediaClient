@@ -16,6 +16,11 @@ struct SDUINodeView: View {
         switch element.type {
         case "Hero": SDUIHeroView(hero: element)
         case "Shelf": SDUIShelfView(shelf: element)
+        case "Carousel": SDUICarouselView(carousel: element)
+        case "CrossBar": SDUITabsView(tabs: element)
+        case "WidgetGrid": SDUIWidgetGridView(grid: element)
+        case "Widget": SDUIWidgetView(widget: element)
+        case "NumberedRow": SDUINumberedRowView(list: element)
         case "Grid": SDUIGridView(grid: element)
         case "Card": SDUILooseCard(card: element)
         case "Tabs": SDUITabsView(tabs: element)
@@ -36,6 +41,7 @@ struct SDUINodeView: View {
         case "SearchBox": SDUISearchBoxView(box: element)
         case "List": SDUIListView(list: element)
         case "ListItem": SDUIListRow(row: element, dense: false)
+        case "Credits": SDUICreditsView(credits: element)
         case "Dock": EmptyView()
         // A key legend outside a Dock: a TV's remote is always in use; touch alone never shows one.
         case "KeyLegend":

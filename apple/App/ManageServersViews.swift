@@ -63,6 +63,7 @@ extension View {
 struct RememberedServers<Card: View>: View {
     @EnvironmentObject private var model: AppModel
     @Environment(\.palette) private var palette
+    @Environment(\.designSizes) private var sizes
     let servers: [SavedServer]
     /// One has just gone, for focus to move on.
     let removed: (SavedServer) -> Void
@@ -110,9 +111,10 @@ struct RememberedServers<Card: View>: View {
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: Tokens.Space.s3) {
+        VStack(alignment: .leading, spacing: sizes.gap * 0.6) {
             HStack(spacing: Tokens.Space.s2) {
-                SearchingCaption(words: say("recentServers"))
+                Text("Saved").font(.system(size: sizes.body, weight: .heavy)).foregroundStyle(palette.text)
+                    .accessibilityAddTraits(.isHeader)
                 Spacer(minLength: 0)
                 #if !os(tvOS)
                 Button(say(editing ? "editServersDone" : "editServers")) { withAnimation(.easeOut(duration: 0.2)) { editing.toggle() } }
@@ -120,7 +122,7 @@ struct RememberedServers<Card: View>: View {
                     .accessibilityIdentifier("editServers")
                 #endif
             }
-            .padding(.top, Tokens.Space.s2)
+            .padding(.bottom, sizes.gap * 0.4)
             ForEach(servers) { row($0) }
         }
         .confirmRemoval(of: $asking) { server in

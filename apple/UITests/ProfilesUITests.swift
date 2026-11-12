@@ -92,7 +92,7 @@ final class ProfilesUITests: XCTestCase {
         app.staticTexts["screen-time-left"].firstMatch.shown(30)
         snap("time-left")
         let title = app.staticTexts["time-up-title"].firstMatch.shown(150)
-        XCTAssertEqual(title.label, "Screen time is up")
+        XCTAssertEqual(title.label, "That’s all for today")
         snap("time-up")
         // The player has gone: its place was kept, and the profile is back among the pages.
         let state = try await child.send("GET", "/me/screen-time")
