@@ -92,12 +92,21 @@ struct SDUICreditsView: View {
             ScrollView(.horizontal, showsIndicators: false) {
                 LazyHStack(alignment: .top, spacing: layout.isTV ? 40 : layout.sp("m")) {
                     ForEach(part.cards) { card in
-                        Button { actor.perform(card.action) } label: { PersonCard(card: card, side: portrait) }
-                            .personButtonStyle()
-                            .sduiFocusable(card.isFocusable ? focus : nil, card.id)
-                            // A button is one element already; wrapping it in another hides it from a TV's focus.
-                            .accessibilityLabel(card.label)
-                            .accessibilityIdentifier("sdui.card." + card.id)
+                        // A card with no route is a focus stop only where the section says `focusable` (a friend in a lobby).
+                        if card.action != nil || credits.props.flag("focusable") == true {
+                            Button { actor.perform(card.action) } label: { PersonCard(card: card, side: portrait) }
+                                .personButtonStyle()
+                                .sduiFocusable(card.isFocusable ? focus : nil, card.id)
+                                // A button is one element already; wrapping it in another hides it from a TV's focus.
+                                .accessibilityLabel(card.label)
+                                .accessibilityIdentifier("sdui.card." + card.id)
+                        } else {
+                            // With no route the card opens nothing: not a button, and no stop for focus.
+                            PersonCard(card: card, side: portrait)
+                                .accessibilityElement(children: .ignore)
+                                .accessibilityLabel(card.label)
+                                .accessibilityIdentifier("sdui.card." + card.id)
+                        }
                     }
                     if credits.hasMore, part.id == parts.first(where: \.isPeople)?.id {
                         Button(action: askForAll) { ShowAllTile(side: portrait) }
@@ -218,6 +227,17 @@ private struct PersonCard: View {
                 }
             }
             .frame(width: side, height: side)
+            // Presence, by the style's badge tones (catalogue revision 8): ok, warn or muted.
+            .overlay(alignment: .bottomTrailing) {
+                if let tone = SDUIPresence.tone(badges: card.badges) {
+                    Circle()
+                        .fill(tone == .ok ? palette.ok : tone == .warn ? palette.warn : palette.textHint)
+                        .frame(width: side * 0.22, height: side * 0.22)
+                        .overlay(Circle().stroke(palette.background, lineWidth: max(2, side * 0.03)))
+                        .offset(x: -side * 0.04, y: -side * 0.04)
+                        .accessibilityHidden(true)
+                }
+            }
             .overlay(Circle().strokeBorder(palette.tvRing, lineWidth: metrics.focusRing).padding(-metrics.focusRoom)
                 .opacity(focused ? 1 : 0))
             .scaleEffect(focused ? metrics.focusScale : 1)
@@ -227,6 +247,12 @@ private struct PersonCard: View {
             if !card.shown("subtitle").isEmpty {
                 Text(card.shown("subtitle")).sduiFont("caption").foregroundStyle(palette.textSecondary)
                     .lineLimit(2).multilineTextAlignment(.center)
+            }
+            // A badge that isn't a presence (a presence is the dot on the portrait) is shown as words; both are in the label.
+            if let badge = card.badges.first, SDUIPresence.tone(badges: card.badges) == nil {
+                Text(badge).sduiFont("caption", weight: .semibold).foregroundStyle(palette.accentText)
+                    .lineLimit(1)
+                    .accessibilityHidden(true)
             }
         }
         .frame(width: side)

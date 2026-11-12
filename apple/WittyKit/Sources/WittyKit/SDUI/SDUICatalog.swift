@@ -149,7 +149,6 @@ public struct SDUICatalog: Codable, Equatable, Sendable {
             SDUICardStyle("square", shape: "square", aspect: "1/1", shows: ["title", "subtitle"], titleLines: 1, subtitleLines: 1),
             SDUICardStyle("album", shape: "square", aspect: "1/1", shows: ["title", "subtitle"], titleLines: 1, subtitleLines: 1),
             SDUICardStyle("circle", shape: "circle", aspect: "1/1", shows: ["title"], titleLines: 2, subtitleLines: 0),
-            SDUICardStyle("person", shape: "circle", aspect: "1/1", shows: ["title", "subtitle", "badges"], titleLines: 1, subtitleLines: 1),
             SDUICardStyle("book", shape: "poster", aspect: "2/3", shows: ["title", "subtitle", "progress"], titleLines: 2, subtitleLines: 1),
             SDUICardStyle("person", shape: "circle", aspect: "1/1", shows: ["title", "subtitle", "badges"], titleLines: 1, subtitleLines: 1),
             SDUICardStyle("game", shape: "poster", aspect: "3/4", shows: ["title", "subtitle", "badges"], titleLines: 1, subtitleLines: 1),

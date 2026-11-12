@@ -478,9 +478,26 @@ extension WittyClient {
         _ = try await call("POST", "/auth/pair/\(WittyClient.pathPart(scanned.session))/deny", body: Data("{}".utf8))
     }
 
+    /// A peer-to-peer invite (`POST /api/p2p/invite`): a link that lets one device reach this server from anywhere and
+    /// sign in as `userId`, once, for a short time (the server's docs/REMOTE.md). An administrator's own needs their
+    /// password again. The link is a way in: it is shown, shared or drawn as a QR code, never logged or kept.
+    public func peerInvite(userId: Int64, password: String = "", otp: String = "") async throws -> PeerInviteLink {
+        struct Invite: Encodable { let userId: Int64; let password: String?; let otp: String? }
+        return try await ask("POST", "/p2p/invite", Invite(userId: userId, password: password.isEmpty ? nil : password, otp: otp.isEmpty ? nil : otp))
+    }
+
     /// Six digits for a device to type. An administrator's own needs their password again.
     public func pairInvite(userId: Int64, password: String, otp: String = "") async throws -> PairInvite {
         struct Invite: Encodable { let userId: Int64; let password: String?; let otp: String? }
         return try await ask("POST", "/pair/invite", Invite(userId: userId, password: password.isEmpty ? nil : password, otp: otp.isEmpty ? nil : otp))
     }
+}
+
+/// What `POST /api/p2p/invite` answers: the invite link, and how long it lasts.
+public struct PeerInviteLink: Decodable, Equatable, Sendable {
+    public let link: String
+    public let expiresInSec: Int?
+
+    /// How long it lasts, in whole minutes (at least one).
+    public var minutes: Int { max(1, (expiresInSec ?? 900) / 60) }
 }

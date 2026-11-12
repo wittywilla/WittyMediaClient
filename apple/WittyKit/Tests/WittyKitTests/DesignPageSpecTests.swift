@@ -74,3 +74,38 @@ final class DesignPageSpecTests: XCTestCase {
         XCTAssertEqual(again, spec)
     }
 }
+
+final class DesignPageSpecControlTests: XCTestCase {
+    private let json = #"""
+    {"title":"Privacy","form":{"submitLabel":"Save","cancelLabel":"Cancel"},
+     "sections":[{"kind":"rows","rows":[
+       {"title":"Show what I play","control":{"type":"switch","name":"showPlaying","value":true}},
+       {"title":"Who can see me","control":{"type":"select","name":"who","value":"friends",
+          "options":[{"value":"everyone","label":"Everyone"},{"value":"friends","label":"Friends"},{"value":"nobody","label":"Nobody"}]}},
+       {"title":"Status","control":{"type":"field","name":"status","value":"Hi","maxLength":5,"placeholder":"Say something"}},
+       {"title":"Volume","control":{"type":"slider","name":"volume","value":40,"min":0,"max":50,"step":10}},
+       {"title":"Read only","pressable":false}]}]}
+    """#
+
+    func testControlsReadAsTheServerSendsThem() throws {
+        let spec = try JSONDecoder().decode(DesignPageSpec.self, from: Data(json.utf8))
+        let rows = spec.sections[0].rows
+        XCTAssertEqual(rows[0].control?.kind, .switch)
+        XCTAssertEqual(rows[0].control?.shown, "On")
+        XCTAssertEqual(rows[0].control?.flipped, "false")
+        XCTAssertEqual(rows[1].control?.shown, "Friends")
+        XCTAssertEqual(rows[1].control?.option(after: 1), "nobody")
+        XCTAssertEqual(rows[1].control?.option(after: 2), "everyone", "round again at the end")
+        XCTAssertEqual(rows[1].control?.option(after: -1), "everyone")
+        XCTAssertEqual(rows[2].control?.clipped("Hello there"), "Hello")
+        XCTAssertEqual(rows[3].control?.shown, "40")
+        XCTAssertEqual(rows[3].control?.stepped(1), "50")
+        XCTAssertEqual(rows[3].control?.stepped(2), "50", "kept between its ends")
+        XCTAssertEqual(rows[3].control?.stepped(-5), "0")
+        XCTAssertEqual(spec.form?.cancelLabel, "Cancel")
+        XCTAssertEqual(spec.initialValues, ["showPlaying": "true", "who": "friends", "status": "Hi", "volume": "40"])
+        XCTAssertEqual(spec.focusOrder, ["show-what-i-play", "who-can-see-me", "status", "volume"])
+        let again = try JSONDecoder().decode(DesignPageSpec.self, from: JSONEncoder().encode(spec))
+        XCTAssertEqual(again, spec)
+    }
+}
