@@ -14,6 +14,7 @@ public struct SDUINormalised: Encodable, Equatable, Sendable {
         public var contentWidth: Int
         public var sectionGap: Int
         public var scope: String?
+        public var shell: SDUIShell?
     }
 
     public struct Element: Encodable, Equatable, Sendable {
@@ -61,7 +62,7 @@ public extension SDUIScreen {
         return SDUINormalised(
             page: .init(title: document.page.title, formFactor: layout.formFactor, breakpoint: layout.breakpoint,
                         density: layout.density, contentWidth: layout.contentWidth(), sectionGap: layout.sectionGap,
-                        scope: document.theme?.scope),
+                        scope: document.theme?.scope, shell: layout.shell),
             visible: root.flattened.map(\.normalised),
             focus: .init(order: focus.order, default: focus.start, groups: focus.groups.isEmpty ? nil : focus.groups))
     }

@@ -20,6 +20,7 @@ import java.util.concurrent.atomic.AtomicReference
 // count of frames, not a matter of which player started when. The music player itself carries on, unheard, as the
 // clock (KaraokeStems keeps this in step with it). Everything but the thread's own loop is safe to call from the
 // main thread, and none of it waits.
+@androidx.annotation.OptIn(markerClass = [androidx.media3.common.util.UnstableApi::class])
 internal class StemMixer(private val files: List<File>, private val failed: (StemMixer, String) -> Unit) {
     // Where to go, asked for at `atNanos` (System.nanoTime) with the song moving at `speed`, or standing still.
     private class Seek(val us: Long, val atNanos: Long, val moving: Boolean, val speed: Float)
@@ -66,12 +67,15 @@ internal class StemMixer(private val files: List<File>, private val failed: (Ste
         seek.set(Seek(us.coerceAtLeast(0), System.nanoTime(), moving, speed.coerceAtLeast(0.1f)))
     }
 
-    // One part: its file, its decoder, and what's decoded and not yet played (two channels, side by side).
+    // One part: its file, its decoder, and what's decoded and not yet played (two channels, side by side, at the
+    // mixer's rate). A part may be 16-bit, 24-bit, 32-bit or float, of any channel count and any sample rate: each is
+    // folded to two channels and brought to the mixer's rate here.
     private class Stem(file: File) {
         val extractor = MediaExtractor()
         val codec: MediaCodec
         var rate = 0
         private var channels = 0
+        private var encoding = AudioFormat.ENCODING_PCM_16BIT
         private val info = MediaCodec.BufferInfo()
         private var inputDone = false
         var outputDone = false
@@ -80,6 +84,10 @@ internal class StemMixer(private val files: List<File>, private val failed: (Ste
         var count = 0
         private var dropTo = 0L
         private var nextFrame = -1L
+        private var resampler = PcmResampler(1, 1)
+        private var raw = FloatArray(0)
+        private var stereo = FloatArray(0)
+        private var resampled = FloatArray(0)
 
         init {
             extractor.setDataSource(file.path)
@@ -94,16 +102,22 @@ internal class StemMixer(private val files: List<File>, private val failed: (Ste
             codec.start()
         }
 
+        // The rate the mixer plays at, which this part is brought to.
+        fun mixAt(mixRate: Int) {
+            resampler = PcmResampler(rate, mixRate)
+        }
+
         // To just before the place, so that the decoder has run in by the time it gets there; what's before the
-        // place is thrown away by its frame number, which is the same in every part.
-        fun seekTo(us: Long, targetFrame: Long) {
+        // place is thrown away by its frame number at this part's own rate.
+        fun seekTo(us: Long) {
             extractor.seekTo((us - RUN_IN_US).coerceAtLeast(0), MediaExtractor.SEEK_TO_PREVIOUS_SYNC)
             codec.flush()
             inputDone = false
             outputDone = false
             count = 0
-            dropTo = targetFrame
+            dropTo = PcmMix.frameOf(us, rate)
             nextFrame = -1
+            resampler.reset()
         }
 
         // Decodes until this many samples are held, or the part has ended, or a moment has passed.
@@ -129,33 +143,42 @@ internal class StemMixer(private val files: List<File>, private val failed: (Ste
             val at = codec.dequeueOutputBuffer(info, WAIT_US)
             if (at == MediaCodec.INFO_OUTPUT_FORMAT_CHANGED) {
                 val format = codec.outputFormat
-                val encoding = if (format.containsKey(MediaFormat.KEY_PCM_ENCODING)) format.getInteger(MediaFormat.KEY_PCM_ENCODING) else AudioFormat.ENCODING_PCM_16BIT
-                if (encoding != AudioFormat.ENCODING_PCM_16BIT) throw IllegalStateException("a part isn't decoded as 16-bit")
-                if (format.getInteger(MediaFormat.KEY_SAMPLE_RATE) != rate) throw IllegalStateException("a part changed its rate")
+                encoding = if (format.containsKey(MediaFormat.KEY_PCM_ENCODING)) format.getInteger(MediaFormat.KEY_PCM_ENCODING) else AudioFormat.ENCODING_PCM_16BIT
+                if (PcmMix.bytesPer(encoding) == 0) throw IllegalStateException("a part is decoded as encoding $encoding")
                 channels = format.getInteger(MediaFormat.KEY_CHANNEL_COUNT)
+                val now = format.getInteger(MediaFormat.KEY_SAMPLE_RATE)
+                if (now != rate) {
+                    // The container said one rate and the decoder gives another: the decoder is right.
+                    val to = resampler.to
+                    rate = now
+                    resampler = PcmResampler(rate, to)
+                    if (dropTo > 0) dropTo = PcmMix.frameOf(PcmMix.usOf(dropTo, rate), rate)
+                }
                 return
             }
             if (at < 0) return
             if (info.size > 0) {
-                if (channels !in 1..2) throw IllegalStateException("a part has $channels channels")
+                if (channels < 1) throw IllegalStateException("a part has no channels")
                 val buffer = codec.getOutputBuffer(at)!!
                 buffer.position(info.offset).limit(info.offset + info.size)
-                val samples = buffer.order(ByteOrder.nativeOrder()).asShortBuffer()
-                val frames = samples.remaining() / channels
+                buffer.order(ByteOrder.nativeOrder())
+                val frames = info.size / (PcmMix.bytesPer(encoding) * channels)
                 if (nextFrame < 0) nextFrame = PcmMix.frameOf(info.presentationTimeUs, rate)
                 val drop = PcmMix.toDrop(nextFrame, dropTo, frames)
                 nextFrame += frames
                 val keep = frames - drop
                 if (keep > 0) {
-                    if (count + keep * 2 > held.size) held = held.copyOf(maxOf(held.size * 2, count + keep * 2))
-                    samples.position(samples.position() + drop * channels)
-                    if (channels == 2) samples.get(held, count, keep * 2)
-                    else for (f in 0 until keep) {
-                        val s = samples.get()
-                        held[count + f * 2] = s
-                        held[count + f * 2 + 1] = s
-                    }
-                    count += keep * 2
+                    if (raw.size < keep * channels) raw = FloatArray(keep * channels)
+                    if (stereo.size < keep * 2) stereo = FloatArray(keep * 2)
+                    buffer.position(info.offset + drop * channels * PcmMix.bytesPer(encoding))
+                    PcmMix.read(buffer, encoding, raw, keep * channels)
+                    PcmMix.fold(raw, keep, channels, stereo)
+                    val most = resampler.most(keep)
+                    if (resampled.size < most * 2) resampled = FloatArray(most * 2)
+                    val made = resampler.run(stereo, keep, resampled)
+                    if (count + made * 2 > held.size) held = held.copyOf(maxOf(held.size * 2, count + made * 2))
+                    for (i in 0 until made * 2) held[count + i] = PcmMix.toShort(resampled[i])
+                    count += made * 2
                 }
             }
             codec.releaseOutputBuffer(at, false)
@@ -179,18 +202,16 @@ internal class StemMixer(private val files: List<File>, private val failed: (Ste
         var track: AudioTrack? = null
         try {
             files.forEach { stems += Stem(it) }
-            val rate = stems.first().rate
-            if (stems.any { it.rate != rate }) throw IllegalStateException("the parts have different rates")
-            val least = AudioTrack.getMinBufferSize(rate, AudioFormat.CHANNEL_OUT_STEREO, AudioFormat.ENCODING_PCM_16BIT)
-            if (least <= 0) throw IllegalStateException("no output at $rate")
-            // About a tenth of a second held by the output: that's how long a slider takes to be heard.
-            val out = AudioTrack(
-                AudioAttributes.Builder().setUsage(AudioAttributes.USAGE_MEDIA).setContentType(AudioAttributes.CONTENT_TYPE_MUSIC).build(),
-                AudioFormat.Builder().setSampleRate(rate).setChannelMask(AudioFormat.CHANNEL_OUT_STEREO).setEncoding(AudioFormat.ENCODING_PCM_16BIT).build(),
-                maxOf(least, rate / 10 * 4), AudioTrack.MODE_STREAM, AudioManager.AUDIO_SESSION_ID_GENERATE,
-            )
+            // The parts play at the highest rate among them; the others are brought up to it.
+            val rate = stems.maxOf { it.rate }
+            stems.forEach { it.mixAt(rate) }
+            val out = openOutput(rate)
             track = out
-            if (out.state != AudioTrack.STATE_INITIALIZED) throw IllegalStateException("the output didn't open")
+            // The app's own equaliser, its level and the volume leveling, as the music player has them (SoundShaper).
+            val shaper = SoundShaper()
+            shaper.configure(androidx.media3.common.audio.AudioProcessor.AudioFormat(rate, 2, androidx.media3.common.C.ENCODING_PCM_16BIT))
+            shaper.flush()
+            val bytes = java.nio.ByteBuffer.allocateDirect(CHUNK * 4).order(ByteOrder.nativeOrder())
             val mixed = ShortArray(CHUNK * 2)
             val stamp = AudioTimestamp()
             var sounding = false
@@ -210,7 +231,8 @@ internal class StemMixer(private val files: List<File>, private val failed: (Ste
                     var us = to.us
                     if (to.moving) us += ((System.nanoTime() - to.atNanos) / 1000 * to.speed).toLong() + (LEAD_US * to.speed).toLong()
                     val target = PcmMix.frameOf(us, rate)
-                    stems.forEach { it.seekTo(us, target) }
+                    stems.forEach { it.seekTo(us) }
+                    shaper.flush()
                     stems.forEach { it.fill(CHUNK * 2) }
                     if (to.moving) {
                         val due = to.atNanos + ((us - to.us) * 1000 / to.speed).toLong()
@@ -255,11 +277,14 @@ internal class StemMixer(private val files: List<File>, private val failed: (Ste
                     out.play()
                     sounding = true
                 }
-                var done = 0
-                while (done < frames * 2 && !stopped) {
-                    val wrote = out.write(mixed, done, frames * 2 - done, AudioTrack.WRITE_BLOCKING)
+                bytes.clear()
+                bytes.asShortBuffer().put(mixed, 0, frames * 2)
+                bytes.limit(frames * 4)
+                shaper.queueInput(bytes)
+                val shaped = shaper.output
+                while (shaped.hasRemaining() && !stopped) {
+                    val wrote = out.write(shaped, shaped.remaining(), AudioTrack.WRITE_BLOCKING)
                     if (wrote < 0) throw IllegalStateException("the output refused the sound ($wrote)")
-                    done += wrote
                 }
                 written += frames
                 // What's being heard: the output's own word for it where it has one since the last seek, or else
@@ -281,8 +306,31 @@ internal class StemMixer(private val files: List<File>, private val failed: (Ste
         }
     }
 
+    // The output: as little held in it as the device allows, as what it holds is how long a slider takes to be heard.
+    private fun openOutput(rate: Int): AudioTrack {
+        val least = AudioTrack.getMinBufferSize(rate, AudioFormat.CHANNEL_OUT_STEREO, AudioFormat.ENCODING_PCM_16BIT)
+        if (least <= 0) throw IllegalStateException("no output at $rate")
+        val size = maxOf(least, rate / 1000 * HELD_MS * 4)
+        val attributes = AudioAttributes.Builder().setUsage(AudioAttributes.USAGE_MEDIA).setContentType(AudioAttributes.CONTENT_TYPE_MUSIC).build()
+        val format = AudioFormat.Builder().setSampleRate(rate).setChannelMask(AudioFormat.CHANNEL_OUT_STEREO).setEncoding(AudioFormat.ENCODING_PCM_16BIT).build()
+        val out = if (android.os.Build.VERSION.SDK_INT >= 26) {
+            AudioTrack.Builder().setAudioAttributes(attributes).setAudioFormat(format).setBufferSizeInBytes(size)
+                .setTransferMode(AudioTrack.MODE_STREAM).setPerformanceMode(AudioTrack.PERFORMANCE_MODE_LOW_LATENCY).build()
+        } else {
+            AudioTrack(attributes, format, size, AudioTrack.MODE_STREAM, AudioManager.AUDIO_SESSION_ID_GENERATE)
+        }
+        if (out.state != AudioTrack.STATE_INITIALIZED) {
+            out.release()
+            throw IllegalStateException("the output didn't open")
+        }
+        return out
+    }
+
     private companion object {
+        // About two hundredths of a second of sound mixed at a time, and a tenth held by the output: less ran short on
+        // a busy emulator, more is a slider heard late.
         const val CHUNK = 1024
+        const val HELD_MS = 100
         const val WAIT_US = 2000L
         const val MOST_TRIES = 200
         const val RUN_IN_US = 100_000L

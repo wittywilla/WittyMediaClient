@@ -122,6 +122,11 @@ enum Route: Hashable {
     case away
     /// The servers this device remembers, to remove: see ManageServersViews.swift.
     case servers
+    /// Skipping by itself and canvases, on this device: see MediaPages.swift.
+    case mediaExtras
+    /// The server's layout options for this device, and modules' settings: see LayoutModulesSettings.swift.
+    case layout, modules
+    case moduleSettings(String)
     /// Apple TV's choice of libraries for the top menu: see YouViews.swift.
     case topMenu
     /// WittyPlay on Apple TV: a games library or one console's games in it, a game's page, and a
@@ -131,6 +136,8 @@ enum Route: Hashable {
     case playGame(Int64, GameStart)
     /// A server-driven page: see SDUI/SDUICenter.swift.
     case sdui(SDUIPlace)
+    /// Switching profile, and the profiles this account looks after: see Household.swift and ProfileSwitch.swift.
+    case family(FamilyRoute)
 }
 
 /// A page a module adds to the menus, with the module it belongs to.
@@ -204,6 +211,10 @@ final class AppModel: ObservableObject {
     @Published private(set) var topMenu: [Int64] = []
     /// Music, audiobooks and podcasts, which carry on whatever screen is showing.
     let listening = Listening()
+    /// What this profile may do and its screen time: see Household.swift.
+    let household = Household()
+    /// Playing on other devices, being played on from them, and watch parties: see RemoteHub.swift.
+    let remote = RemoteHub()
     @Published var libraries: [Library] = []
     /// The phone's Menu: the drawer of libraries from the left.
     @Published var menuOpen = false
@@ -232,10 +243,17 @@ final class AppModel: ObservableObject {
 
     func has(_ feature: String) -> Bool { features.contains(feature) }
 
-    /// Asked for whenever a server is opened, signed in or not: signing in has newer ways too.
-    private func learnFeatures() {
+    /// The server whose features were last asked for, so opening it and learning its status ask once.
+    private var featuresAsked = ""
+
+    /// Asked for whenever a server is opened, signed in or not: signing in has newer ways too. `again` asks a
+    /// server that was asked already (its status was read again, and it may have been updated since).
+    private func learnFeatures(again: Bool = true) {
         let asking = client
-        guard !asking.base.isEmpty else { return }
+        // A status can arrive before the server is opened (a server just chosen, still to be signed in to):
+        // there is nothing to ask then, and opening it asks.
+        guard !asking.base.isEmpty, again || featuresAsked != asking.base else { return }
+        featuresAsked = asking.base
         Task {
             let caps = try? await asking.capabilities()
             guard client.base == asking.base else { return }
@@ -396,12 +414,18 @@ final class AppModel: ObservableObject {
         let asking = client
         async let list = try? asking.themeList()
         async let made = try? asking.customTheme()
-        let (l, m) = await (list, made)
+        async let modules = has("sdui-modules") ? try? asking.themeModules() : nil
+        let (l, m, scopes) = await (list, made, modules)
         guard client.base == asking.base else { return }
         if let l { themeList = l }
         customTheme = m ?? nil
+        let palettes = scopes?.tokens ?? [:]
+        if palettes != modulePalettes { modulePalettes = palettes }
         refreshTheme()
     }
+
+    /// Each module's colours, for its screens drawn by this app itself: see ThemeModules in WittyKit.
+    @Published private(set) var modulePalettes: [String: [String: String]] = [:]
 
     /// The account as the server has it now, after a change from You.
     func refreshUser() async {
@@ -434,6 +458,14 @@ final class AppModel: ObservableObject {
         server = opening.url
         useAway(for: opening)
         client = connection(to: opening.url, token: token)
+        // What it can do decides whether Home and Search are the server's pages; until it's known they wait.
+        // The status that brought it here may have been read before there was a connection to ask with.
+        learnFeatures(again: false)
+        let theme = defaults.string(forKey: "theme." + client.base) ?? ""
+        if theme != themeChoice {
+            themeChoice = theme
+            refreshTheme()
+        }
     }
 
     /// On to signing in, for a server that has been checked.
@@ -445,6 +477,7 @@ final class AppModel: ObservableObject {
 
     private func forgetSignIn() {
         listening.forget()
+        household.forget()
         Keychain.clear()
         TopShelfWriter.clear()
         ArtCache.shared.removeAllObjects()
@@ -581,6 +614,7 @@ final class AppModel: ObservableObject {
         do {
             let result = try await client.login(name: name, password: given.string(forKey: "WMCPassword") ?? "", device: deviceName)
             signedIn(token: result.token, user: result.user)
+            openForMediaTests()
         } catch {
             stage = .signIn(.usual)
         }
@@ -717,6 +751,32 @@ final class AppModel: ObservableObject {
         }
     }
 
+    /// Another profile on this device, without signing out first: the server signs it in and ends the sign-in it
+    /// came from in one step, so the new token is kept exactly as a sign-in's is, with the key the server proved.
+    /// Everything of the profile being left goes, as signing out does it. What was playing stops first, so its
+    /// place is saved while its sign-in still counts.
+    func switchProfile(name: String, password: String, code: String = "") async -> SignInOutcome {
+        if let current, let refused = await refuseToSend(to: current) { return .failed(refused) }
+        video?.stop()
+        video = nil
+        await listening.forget()?.value
+        do {
+            let result = try await client.switchProfile(name: name, password: password, code: code, device: deviceName)
+            forgetSignIn()
+            signedIn(token: result.token, user: result.user)
+            return .signedIn
+        } catch let error as APIError {
+            switch SwitchRules.refusal(error, sentCode: !code.isEmpty) {
+            case .needsCode(let wrong): return .needsCode(wrong ? error.message : "")
+            // A wrong password is a 403 here, and the device stays signed in as it was. The server's words say
+            // what was wrong, or how long to wait.
+            case .wait, .refused: return .failed(error.status == 401 ? handle(error) : error.message)
+            }
+        } catch {
+            return .failed(plainWords(Problem.of(error)))
+        }
+    }
+
     /// The address, the key it proved and the token are kept together.
     func signedIn(token: String, user: User? = nil) {
         let kept = current ?? SavedServer(url: client.base, name: "WittyMediaServer")
@@ -744,6 +804,7 @@ final class AppModel: ObservableObject {
         Task {
             await placeSent?.value
             await first?(old)
+            await remote.goodbye()
             try? await old.logout()
         }
     }
@@ -781,6 +842,7 @@ final class AppModel: ObservableObject {
         themeId = nil
         features = []
         featuresKnown = false
+        featuresAsked = ""
         themeChoice = ""
         themeList = nil
         customTheme = nil
@@ -792,10 +854,12 @@ final class AppModel: ObservableObject {
 
     /// What a server says about how it looks: its theme, and the owner's name and logo for it.
     private func learn(_ status: ServerStatus) {
+        // A server updated since it was asked may do more now.
+        let updated = serverVersion != (status.version ?? "")
         serverVersion = status.version ?? ""
         serverUpdate = status.update ?? ""
         themeId = status.theme
-        learnFeatures()
+        learnFeatures(again: updated)
         themeChoice = defaults.string(forKey: "theme." + client.base) ?? ""
         refreshTheme()
         brandName = PlainWords.clean(status.brandName ?? "", limit: 60)
@@ -935,6 +999,7 @@ final class AppModel: ObservableObject {
             let following = PlaybackModel()
             following.onFinished = { [weak self] after in self?.videoFinished(next: after, from: then) }
             video = following
+            remote.adopt(following, id: then)
             Task { await following.start(id: then, client: client, startOver: false) }
         }
     }

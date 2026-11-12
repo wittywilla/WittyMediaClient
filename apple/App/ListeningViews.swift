@@ -538,6 +538,7 @@ struct AlbumScreen: View {
     @ViewBuilder private func head(_ tracks: [Item], books: Bool) -> some View {
         let picture = ArtImage(url: tracks.first.flatMap { client.posterURL($0) }, width: cover, placeholder: album)
             .frame(width: cover, height: cover)
+            .overlay { CanvasLayer(item: books ? nil : tracks.first?.id, active: !listening.screenShown) }
             .clipShape(RoundedRectangle(cornerRadius: Tokens.Radius.lg, style: .continuous))
             .accessibilityHidden(true)
         if upright {

@@ -223,8 +223,17 @@ struct TvSignInPage<Words: View, Actions: View>: View {
             HStack(alignment: .center, spacing: Tokens.Space.s16) {
                 VStack(alignment: .leading, spacing: Tokens.Space.s5) { words }
                     .frame(maxWidth: .infinity, alignment: .leading)
-                VStack(alignment: .leading, spacing: Tokens.Space.s4) { actions }
-                    .frame(maxWidth: .infinity, alignment: .leading)
+                // A long list (many servers found on the network) scrolls as the remote moves down it, and stays
+                // centred while it fits; the focus rings may grow past the column's edges.
+                GeometryReader { geo in
+                    ScrollView(.vertical, showsIndicators: false) {
+                        VStack(alignment: .leading, spacing: Tokens.Space.s4) { actions }
+                            .padding(.vertical, Tokens.Space.s4)
+                            .frame(maxWidth: .infinity, minHeight: geo.size.height, alignment: .leading)
+                    }
+                    .unclippedScroll()
+                }
+                .frame(maxWidth: .infinity)
             }
             .padding(.horizontal, metrics.gutter)
             .padding(.vertical, metrics.edge)
@@ -318,15 +327,26 @@ struct SignInHeading: View {
 struct AvatarTile: View {
     let name: String
     var size: CGFloat
+    /// The picture the profile chose ("star:blue"), drawn in place of the initial: see ProfilePictures.swift.
+    var picture: String?
 
     var body: some View {
         let shape: AnyShape = size <= 36 ? AnyShape(Circle()) : AnyShape(RoundedRectangle(cornerRadius: size * 0.22, style: .continuous))
-        Text(AvatarLook.initial(of: name))
-            .font(.system(size: size * 0.43, weight: .bold))
-            .foregroundStyle(.white)
-            .frame(width: size, height: size)
-            .background(shape.fill(Color(hex: AvatarLook.colour(for: name))))
-            .accessibilityHidden(true)
+        if let chosen = ProfilePicture.parse(picture) {
+            PictureShape(steps: chosen.steps)
+                .fill(Color.white)
+                .frame(width: size * 0.58, height: size * 0.58)
+                .frame(width: size, height: size)
+                .background(shape.fill(Color(hex: chosen.colour)))
+                .accessibilityHidden(true)
+        } else {
+            Text(AvatarLook.initial(of: name))
+                .font(.system(size: size * 0.43, weight: .bold))
+                .foregroundStyle(.white)
+                .frame(width: size, height: size)
+                .background(shape.fill(Color(hex: AvatarLook.colour(for: name))))
+                .accessibilityHidden(true)
+        }
     }
 }
 
@@ -401,7 +421,7 @@ private struct ProfileTileContent: View {
         // outwards grows its corners by as much, so both stay concentric with the avatar's.
         let ring: CGFloat = metrics.tv ? 4 : 3
         VStack(spacing: Tokens.Space.s2) {
-            AvatarTile(name: profile.shownName, size: avatarSize)
+            AvatarTile(name: profile.shownName, size: avatarSize, picture: profile.avatar)
                 .overlay {
                     if active {
                         shape.inset(by: -ring / 2).stroke(palette.background, lineWidth: ring)
@@ -744,5 +764,12 @@ struct QRCard: View {
                 .background(RoundedRectangle(cornerRadius: Tokens.Radius.lg, style: .continuous).fill(Color.white))
             Text(caption).font(.caption.weight(.medium)).foregroundStyle(palette.textSecondary)
         }
+    }
+}
+
+extension View {
+    /// Focus rings and lifted cards may grow past a scroll view's edges where the system allows it.
+    @ViewBuilder func unclippedScroll() -> some View {
+        if #available(iOS 17, tvOS 17, visionOS 1, *) { self.scrollClipDisabled() } else { self }
     }
 }

@@ -43,6 +43,16 @@ final class PlaybackModel: ObservableObject {
     /// While the video floats over other apps, going to the background isn't a reason to pause.
     var inPictureInPicture = false
     var onFinished: (@MainActor (Int64?) -> Void)?
+    /// Another device or a watch party steering this player: see RemoteHub.swift. Nil, it plays by itself.
+    weak var steering: PlaybackSteering?
+    /// Where to start and which tracks, when something other than the person's own resume point decides.
+    var preset: PlaybackPreset?
+    #if os(tvOS)
+    /// More for the system player's bar: Play on another device, and Watch party.
+    var extraMenus: [UIMenuElement] = []
+    #endif
+    /// Skip recap, intro, adverts and credits, and skipping by itself: see MediaSkips.swift.
+    let skips = SkipDriver()
 
     private var clock = PlaybackClock()
     private var retry = RetryBudget()
@@ -121,6 +131,12 @@ final class PlaybackModel: ObservableObject {
         readyItem = nil
         let beginning = startOver && !everStarted
         everStarted = true
+        let given = preset
+        preset = nil
+        if let given {
+            audio = given.audio ?? audio
+            subtitle = given.subtitle ?? subtitle
+        }
         activateAudio()
         watchNetwork()
         watchPlayer()
@@ -134,13 +150,14 @@ final class PlaybackModel: ObservableObject {
             return
         }
         // Left out, startSec lets the server resume where the viewer stopped.
-        await open(startSec: beginning ? 0 : nil)
+        await open(startSec: given?.startSec ?? (beginning ? 0 : nil))
     }
 
     /// Started and not stopped: it can be shown again from the dock.
     var isRunning: Bool { active }
 
     func togglePlay() {
+        if steering?.steerToggle(self) == true { return }
         if player.timeControlStatus == .paused {
             if ended {
                 ended = false
@@ -154,6 +171,7 @@ final class PlaybackModel: ObservableObject {
 
     /// Faster or slower without changing the pitch of voices, and kept when the stream is replaced.
     func setSpeed(_ rate: Float) {
+        if steering?.steerSpeed(self, rate) == true { return }
         clockface.rate = rate
         player.defaultRate = rate
         if player.timeControlStatus != .paused { player.rate = rate }
@@ -229,6 +247,7 @@ final class PlaybackModel: ObservableObject {
             }
             let before = stream
             stream = answer
+            skips.opened(item: id, stream: answer, client: client)
             ClientLog.shared.session = answer.streamId ?? ""
             error = ""
             if replace || answer.url != before?.url {
@@ -330,6 +349,8 @@ final class PlaybackModel: ObservableObject {
     private func failed(_ problem: Error?, item: ObjectIdentifier) {
         guard active, failedItem != item else { return }
         failedItem = item
+        // The profile's screen time is up: the time-up screen says so and closes this player (Household.swift).
+        if Household.caught(problem) { player.pause(); return }
         let detail = problem.map { problem -> String in
             let found = problem as NSError
             return "\(found.domain) \(found.code): \(found.localizedDescription)"
@@ -356,6 +377,7 @@ final class PlaybackModel: ObservableObject {
     private func show(_ problem: Error) {
         let trouble = Problem.of(problem)
         if trouble == .cancelled { return }
+        if Household.caught(problem) { player.pause(); return }
         // The screen says there's a problem, so nothing should carry on playing behind it.
         player.pause()
         waitingForNetwork = trouble.isConnection
@@ -370,6 +392,7 @@ final class PlaybackModel: ObservableObject {
     private func finished() {
         guard active, countdown == nil else { return }
         saveFinished()
+        if steering?.steerEnded(self) == true { return }
         guard stream?.nextId != nil else {
             #if os(tvOS)
             onFinished?(nil)
@@ -423,13 +446,19 @@ final class PlaybackModel: ObservableObject {
         let intro = stream?.intro
         let skip = intro.flatMap { clock.filmSeconds >= $0.startSec && clock.filmSeconds < $0.endSec - 1 ? $0.endSec : nil }
         if skip != introEnd { introEnd = skip }
+        if let to = skips.tick(film: clock.filmSeconds, duration: stream?.durationSec ?? item?.runtimeSec ?? 0, hasNext: stream?.nextId != nil,
+                               playing: playing, rate: Double(player.rate)) {
+            skips.jump { seek(toFilm: to) }
+        }
         let near = stream?.nextId != nil && clock.nearEnd(duration: stream?.durationSec)
         if near != offerNext { offerNext = near }
     }
 
     /// Goes past what a growing stream has so far by opening a new one.
     func seek(toFilm target: Double) {
+        if steering?.steerSeek(self, to: target) == true { return }
         guard let current = stream else { return }
+        skips.seeked()
         let known = player.currentItem?.seekableTimeRanges.last?.timeRangeValue.end.seconds
         switch current.seekPlan(toFilm: target, seekableEnd: known) {
         case .inPlayer(let at):
@@ -502,6 +531,7 @@ final class PlaybackModel: ObservableObject {
         // Stops the conversion straight away instead of letting it run on.
         endOnServer(stream?.streamId)
         stream = nil
+        skips.reset()
         introEnd = nil
         offerNext = false
         countdown = nil
@@ -649,6 +679,7 @@ private struct PlayerHost: NSViewRepresentable {
 #else
 private struct PlayerHost: UIViewControllerRepresentable {
     @ObservedObject var playback: PlaybackModel
+    @ObservedObject var skips: SkipDriver
 
     final class Coordinator: NSObject, AVPlayerViewControllerDelegate {
         let playback: PlaybackModel
@@ -664,6 +695,13 @@ private struct PlayerHost: UIViewControllerRepresentable {
 
         func playerViewControllerDidStopPictureInPicture(_ controller: AVPlayerViewController) {
             Task { @MainActor [playback] in playback.inPictureInPicture = false }
+        }
+        #endif
+
+        #if os(tvOS)
+        /// The remote's scrubbing, which a watch party's host does for everyone and nobody else may.
+        func playerViewController(_ controller: AVPlayerViewController, timeToSeekAfterUserNavigatedFrom old: CMTime, to target: CMTime) -> CMTime {
+            MainActor.assumeIsolated { playback.steering?.steerScrub(playback, from: old, to: target) ?? target }
         }
         #endif
     }
@@ -688,7 +726,7 @@ private struct PlayerHost: UIViewControllerRepresentable {
         #if os(tvOS)
         // On Apple TV the choices belong in the system player's own bar, where the remote reaches them.
         let stream = playback.stream
-        let shape = "\(stream?.url ?? "")|\(stream?.audioIndex ?? -2)|\(stream?.subtitleIndex ?? -2)|\(playback.introEnd != nil)|\(playback.offerNext)"
+        let shape = "\(stream?.url ?? "")|\(stream?.audioIndex ?? -2)|\(stream?.subtitleIndex ?? -2)|\(skips.shape)|\(playback.offerNext)"
         guard shape != context.coordinator.builtFrom else { return }
         context.coordinator.builtFrom = shape
         var menus: [UIMenuElement] = []
@@ -703,9 +741,9 @@ private struct PlayerHost: UIViewControllerRepresentable {
                 UIAction(title: track.label, state: track.index == stream?.subtitleIndex ? .on : .off) { _ in playback.choose(subtitle: track.index) }
             }))
         }
-        controller.transportBarCustomMenuItems = menus
+        controller.transportBarCustomMenuItems = menus + playback.extraMenus
         var actions: [UIAction] = []
-        if playback.introEnd != nil { actions.append(UIAction(title: "Skip intro") { _ in playback.skipIntro() }) }
+        actions += skips.actions(playback)
         if playback.offerNext { actions.append(UIAction(title: "Next episode") { _ in playback.playNext() }) }
         controller.contextualActions = actions
         #endif
@@ -792,7 +830,7 @@ private struct SystemPlayerScreen: View {
             Color.black.ignoresSafeArea()
             if playback.error.isEmpty {
                 // No label of its own: the system's player already speaks for itself and its controls.
-                PlayerHost(playback: playback).ignoresSafeArea()
+                PlayerHost(playback: playback, skips: playback.skips).ignoresSafeArea()
             } else {
                 // The player is always dark, whatever the theme. There's a way out here on any
                 // device: on a TV there would otherwise be nothing to focus at all.
@@ -831,10 +869,13 @@ private struct SystemPlayerScreen: View {
             }
         }
         .onChange(of: scenePhase) { playback.sceneChanged($0) }
+        .modifier(PlayerTogether(playback: playback))
         .task {
             // A film stops the music, whether or not the system has said so yet.
             model.listening.pauseForVideo()
             playback.onFinished = { next in moveOn(next) }
+            model.remote.adopt(playback, id: id)
+            playback.skips.wanted = model.has(MediaFeature.markers)
             await playback.start(id: id, client: client, startOver: startOver)
         }
         .onDisappear { playback.stop() }

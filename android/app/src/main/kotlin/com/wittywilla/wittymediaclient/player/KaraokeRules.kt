@@ -282,6 +282,83 @@ object PcmMix {
     // How many frames at the start of a decoded block are before the place being sought, and so thrown away.
     fun toDrop(firstFrame: Long, targetFrame: Long, frames: Int): Int = (targetFrame - firstFrame).coerceIn(0, frames.toLong()).toInt()
 
+    // One decoded block, as stereo floats from -1 to 1. Any channel count: one is put in both sides; three or more are
+    // folded into two the usual way (the centre into both at -3 dB, a 5.1's low-frequency channel left out, the rest
+    // to their side), scaled so the fold can't be louder than the loudest channel.
+    fun fold(input: FloatArray, frames: Int, channels: Int, out: FloatArray) {
+        when (channels) {
+            1 -> for (f in 0 until frames) {
+                out[f * 2] = input[f]
+                out[f * 2 + 1] = input[f]
+            }
+            2 -> System.arraycopy(input, 0, out, 0, frames * 2)
+            else -> {
+                var leftWeight = 1f
+                var rightWeight = 1f
+                val weights = FloatArray(channels) { c ->
+                    when {
+                        c < 2 -> 1f
+                        c == 2 -> CENTRE.also { leftWeight += it; rightWeight += it }
+                        c == 3 && channels >= 6 -> 0f
+                        c % 2 == 0 -> CENTRE.also { leftWeight += it }
+                        else -> CENTRE.also { rightWeight += it }
+                    }
+                }
+                for (f in 0 until frames) {
+                    var l = 0f
+                    var r = 0f
+                    for (c in 0 until channels) {
+                        val v = input[f * channels + c] * weights[c]
+                        when {
+                            c == 0 -> l += v
+                            c == 1 -> r += v
+                            c == 2 -> { l += v; r += v }
+                            c % 2 == 0 -> l += v
+                            else -> r += v
+                        }
+                    }
+                    out[f * 2] = l / leftWeight
+                    out[f * 2 + 1] = r / rightWeight
+                }
+            }
+        }
+    }
+
+    // Bytes in one sample of an output encoding the mixer reads, or 0 for one it doesn't.
+    fun bytesPer(encoding: Int): Int = when (encoding) {
+        android.media.AudioFormat.ENCODING_PCM_16BIT -> 2
+        android.media.AudioFormat.ENCODING_PCM_24BIT_PACKED -> 3
+        android.media.AudioFormat.ENCODING_PCM_32BIT, android.media.AudioFormat.ENCODING_PCM_FLOAT -> 4
+        android.media.AudioFormat.ENCODING_PCM_8BIT -> 1
+        else -> 0
+    }
+
+    // Reads `samples` samples of a decoder's output, from where the buffer is, as floats from -1 to 1. The buffer is in
+    // the device's own byte order.
+    fun read(from: java.nio.ByteBuffer, encoding: Int, out: FloatArray, samples: Int) {
+        when (encoding) {
+            android.media.AudioFormat.ENCODING_PCM_16BIT -> for (i in 0 until samples) out[i] = from.short / 32768f
+            android.media.AudioFormat.ENCODING_PCM_FLOAT -> for (i in 0 until samples) out[i] = from.float
+            android.media.AudioFormat.ENCODING_PCM_32BIT -> for (i in 0 until samples) out[i] = (from.int / 2147483648.0).toFloat()
+            android.media.AudioFormat.ENCODING_PCM_8BIT -> for (i in 0 until samples) out[i] = ((from.get().toInt() and 0xFF) - 128) / 128f
+            android.media.AudioFormat.ENCODING_PCM_24BIT_PACKED -> {
+                val little = from.order() == java.nio.ByteOrder.LITTLE_ENDIAN
+                for (i in 0 until samples) {
+                    val a = from.get().toInt() and 0xFF
+                    val b = from.get().toInt() and 0xFF
+                    val c = from.get().toInt()
+                    val v = if (little) (c shl 16) or (b shl 8) or a else ((a shl 24) shr 8) or (b shl 8) or (c and 0xFF)
+                    out[i] = v / 8388608f
+                }
+            }
+        }
+    }
+
+    // A float sample as 16 bits, held at the top rather than wrapping round.
+    fun toShort(v: Float): Short = Math.round(v * 32767f).coerceIn(Short.MIN_VALUE.toInt(), Short.MAX_VALUE.toInt()).toShort()
+
+    private const val CENTRE = 0.7071f
+
     // Adds the parts, frame for frame, into `out`: 16-bit, with the channels side by side. Each part's level moves in
     // a straight line across the block from `from` to `to`, so a slider doesn't click, and what's too loud is held at
     // the top rather than wrapping round.
@@ -295,5 +372,58 @@ object PcmMix {
                 out[at] = Math.round(sum).coerceIn(Short.MIN_VALUE.toInt(), Short.MAX_VALUE.toInt()).toShort()
             }
         }
+    }
+}
+
+// A part at another sample rate, brought to the mixer's: stereo floats in, stereo floats out, straight lines between
+// samples. Kept across blocks, so a block's edge makes no click; reset after a seek.
+class PcmResampler(private val from: Int, val to: Int) {
+    private val step = from.toDouble() / to
+    // Where the next output sample falls, in input frames from the start of the next block; -1 is the last frame of
+    // the block before.
+    private var at = 0.0
+    private var lastL = 0f
+    private var lastR = 0f
+    private var primed = false
+
+    val same: Boolean get() = from == to
+
+    // Output frames `frames` input frames make at most.
+    fun most(frames: Int): Int = (frames / step).toInt() + 2
+
+    fun reset() {
+        at = 0.0
+        primed = false
+    }
+
+    // Writes the block's samples at the output rate into out from frame 0, and says how many frames that was.
+    fun run(input: FloatArray, frames: Int, out: FloatArray): Int {
+        if (frames <= 0) return 0
+        if (same) {
+            System.arraycopy(input, 0, out, 0, frames * 2)
+            return frames
+        }
+        if (!primed) {
+            // The first block starts on its own first sample.
+            at = 0.0
+            primed = true
+        }
+        var made = 0
+        while (at < frames - 1) {
+            val i = kotlin.math.floor(at).toInt()
+            val part = (at - i).toFloat()
+            val al = if (i < 0) lastL else input[i * 2]
+            val ar = if (i < 0) lastR else input[i * 2 + 1]
+            val bl = input[(i + 1) * 2]
+            val br = input[(i + 1) * 2 + 1]
+            out[made * 2] = al + (bl - al) * part
+            out[made * 2 + 1] = ar + (br - ar) * part
+            made++
+            at += step
+        }
+        at -= frames
+        lastL = input[(frames - 1) * 2]
+        lastR = input[(frames - 1) * 2 + 1]
+        return made
     }
 }

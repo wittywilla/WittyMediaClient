@@ -30,23 +30,38 @@ object ViewPrefsStore {
     private const val STREAMING = "streaming"
 
     private fun prefs(context: Context) = context.getSharedPreferences(FILE, Context.MODE_PRIVATE)
-    private fun itemKey(id: Long) = "item.$id"
+
+    // A video's number is its server's: its own settings are kept under that server's tag. Those kept before this had
+    // no tag, and count as the server in use's until they are saved again.
+    private fun itemKey(context: Context, id: Long): String {
+        val tag = (context.applicationContext as? com.wittywilla.wittymediaclient.WittyApp)?.store?.currentTag.orEmpty()
+        return if (tag.isEmpty()) "item.$id" else "item.$tag.$id"
+    }
+    private fun oldKey(id: Long) = "item.$id"
 
     private fun read(context: Context, key: String): ViewPrefs? =
         prefs(context).getString(key, null)?.let { runCatching { json.decodeFromString<ViewPrefs>(it) }.getOrNull() }
 
     // This video's own, when it has them; otherwise everyone's.
-    fun load(context: Context, id: Long): ViewPrefs = read(context, itemKey(id)) ?: read(context, ALL) ?: ViewPrefs()
-    fun hasOwn(context: Context, id: Long): Boolean = prefs(context).contains(itemKey(id))
+    fun load(context: Context, id: Long): ViewPrefs = read(context, itemKey(context, id)) ?: read(context, oldKey(id)) ?: read(context, ALL) ?: ViewPrefs()
+    fun hasOwn(context: Context, id: Long): Boolean = prefs(context).let { it.contains(itemKey(context, id)) || it.contains(oldKey(id)) }
 
     fun save(context: Context, id: Long, value: ViewPrefs, forThisVideo: Boolean) {
         val text = json.encodeToString(ViewPrefs.serializer(), value)
         prefs(context).edit().apply {
-            if (forThisVideo) putString(itemKey(id), text) else { putString(ALL, text); remove(itemKey(id)) }
+            remove(oldKey(id))
+            if (forThisVideo) putString(itemKey(context, id), text) else { putString(ALL, text); remove(itemKey(context, id)) }
         }.apply()
     }
 
-    // Videos are kept by their number on a server, so when no server is remembered these are nobody's.
+    // One server's videos, when it is removed.
+    fun forgetServer(context: Context, tags: List<String>) {
+        val edit = prefs(context).edit()
+        prefs(context).all.keys.filter { key -> tags.any { key.startsWith("item.$it.") } }.forEach { edit.remove(it) }
+        edit.apply()
+    }
+
+    // When no server is remembered, every video's are nobody's, untagged ones from before included.
     fun forgetVideos(context: Context) {
         val edit = prefs(context).edit()
         prefs(context).all.keys.filter { it.startsWith("item.") }.forEach { edit.remove(it) }

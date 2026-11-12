@@ -6,6 +6,8 @@ plugins {
     id("org.jetbrains.kotlin.plugin.serialization")
 }
 
+val wittyconnect: File? = file("libs/wittyconnect.aar").takeIf { it.isFile && it.length() > 0 }
+
 android {
     namespace = "com.wittywilla.wittymediaclient"
     compileSdk = 37
@@ -36,11 +38,17 @@ android {
     // The theme, wording and test data every client shares.
     sourceSets.getByName("main").assets.directories.add("../../shared/data")
 
+    // Peer to peer: the server's connector library, which android/scripts/build-wittyconnect.sh puts in app/libs.
+    // With it, the bridge that calls it is compiled and its licences go into the app; without it, the bridge that
+    // says it isn't there, and the app builds and runs the same without connecting from away.
+    sourceSets.getByName("main").kotlin.directories.add(if (wittyconnect != null) "src/p2p/kotlin" else "src/nop2p/kotlin")
+    if (wittyconnect != null) sourceSets.getByName("main").assets.directories.add("libs/wittyconnect-notices")
+
     buildTypes {
         getByName("release") {
             isMinifyEnabled = true
             isShrinkResources = true
-            proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"))
+            proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
         }
         // Release speed, signed with the throwaway debug key. For trying the app
         // on a device without a signing key. Debug builds run far slower on a TV stick.
@@ -91,6 +99,8 @@ dependencies {
     implementation("io.github.webrtc-sdk:android:144.7559.15")
     // An Android TV's home screen: the app's own channel and the Watch Next row (data/TvHome.kt).
     implementation("androidx.tvprovider:tvprovider:1.0.0")
+
+    wittyconnect?.let { implementation(files(it)) }
 
     testImplementation("junit:junit:4.13.2")
 }

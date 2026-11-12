@@ -11,6 +11,8 @@ apple/WittyKit/.build/
 apple/Generated/
 apple/DerivedData*/
 android/.kotlin/
+# Built by android/scripts/build-wittyconnect.sh from WittyMediaServer's source.
+android/app/libs/
 go.work
 go.work.sum
 .claude/

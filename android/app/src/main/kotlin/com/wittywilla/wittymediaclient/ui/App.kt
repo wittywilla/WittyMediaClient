@@ -60,6 +60,11 @@ import com.wittywilla.wittymediaclient.net.sduiAvailable
 import com.wittywilla.wittymediaclient.tv.watchChannel
 import com.wittywilla.wittymediaclient.net.Identity
 import com.wittywilla.wittymediaclient.net.IdentityState
+import com.wittywilla.wittymediaclient.net.PeerAnswer
+import com.wittywilla.wittymediaclient.net.PeerInvite
+import com.wittywilla.wittymediaclient.net.PeerRoute
+import com.wittywilla.wittymediaclient.net.PeerRules
+import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import com.wittywilla.wittymediaclient.net.NextStep
 import com.wittywilla.wittymediaclient.net.SendStep
 import com.wittywilla.wittymediaclient.net.ServerProof
@@ -112,6 +117,8 @@ sealed interface Route {
     // A library added to a TV's top menu, as a tab of its own.
     data class Pinned(val library: com.wittywilla.wittymediaclient.net.Library) : Route { override val key = "pinned-${library.id}" }
     data object Notices : Route { override val key = "notices" }
+    // A device that has never been at home with its server shows a code for it (ui/AwayScreens.kt).
+    data object JoinAway : Route { override val key = "join-away" }
     data object Logs : Route { override val key = "logs" }
     // With something chosen, as the website's /library/3?genre=Drama: from a title's genre, tag or service.
     data class Library(val library: com.wittywilla.wittymediaclient.net.Library, val chosen: Map<String, String> = emptyMap()) : Route {
@@ -181,6 +188,11 @@ class Nav(val app: WittyApp, private val s: Map<String, String>) {
 
     // A notice for after signing in, such as the sign-in not being kept on this device.
     var notice by mutableStateOf("")
+
+    init {
+        // Home and away swap while the app is open: requests follow (p2p/PeerManager.kt).
+        app.peers.onMoved = ::movedTo
+    }
 
     // The server's own name and logo for the sign-in screens, once it has been chosen. Empty for the app's own.
     var brandName by mutableStateOf("")
@@ -371,7 +383,8 @@ class Nav(val app: WittyApp, private val s: Map<String, String>) {
             val api = app.api
             if (!sduiOn || api.token.isEmpty()) return null
             if (sduiMadeFor?.first !== api || sduiMadeFor?.second != device) {
-                val who = java.security.MessageDigest.getInstance("SHA-256").digest((api.base + "|" + api.token).toByteArray()).joinToString("") { "%02x".format(it) }.take(24)
+                // By the server's own address, so pages kept at home are the same ones away from it.
+                val who = java.security.MessageDigest.getInstance("SHA-256").digest((app.store.server.ifEmpty { api.base } + "|" + api.token).toByteArray()).joinToString("") { "%02x".format(it) }.take(24)
                 sduiMade = SduiClient(api.sdui, device, SduiFileStore(java.io.File(sduiFolder, who)))
                 sduiMadeFor = api to device
             }
@@ -383,15 +396,19 @@ class Nav(val app: WittyApp, private val s: Map<String, String>) {
         val client = sdui ?: return
         if (sduiReadFor === client) return
         sduiReadFor = client
-        if (sduiNav == null) client.keptNavigation()?.let { sduiNav = it }
-        runCatching { client.navigation() }.onSuccess { if (sdui === client) sduiNav = it.value }.onFailure { handleExpired(it) }
-        runCatching { client.catalog() }.onSuccess { if (sdui === client) sduiRouter = SduiRouter(it.routes, it.commands) }
+        // Reading the kept files and decoding the catalogue (every component, route and command) are off the main
+        // thread: on a slow TV stick they took long enough for the system to end the app.
+        val io = kotlinx.coroutines.Dispatchers.IO
+        if (sduiNav == null) kotlinx.coroutines.withContext(io) { client.keptNavigation() }?.let { sduiNav = it }
+        kotlinx.coroutines.withContext(io) { runCatching { client.navigation() } }.onSuccess { if (sdui === client) sduiNav = it.value }.onFailure { handleExpired(it) }
+        kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Default) { runCatching { client.catalog().let { SduiRouter(it.routes, it.commands) } } }
+            .onSuccess { if (sdui === client) sduiRouter = it }
     }
 
     // After the profile rearranged its menu, or a page changed what is in it.
     suspend fun reloadSduiNav() {
         val client = sdui ?: return
-        runCatching { client.navigation() }.onSuccess { if (sdui === client) sduiNav = it.value }
+        kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) { runCatching { client.navigation() } }.onSuccess { if (sdui === client) sduiNav = it.value }
     }
 
     // A title chosen on an Android TV's home screen: its page, or playing it, over Home. Only those two are taken.
@@ -718,8 +735,108 @@ class Nav(val app: WittyApp, private val s: Map<String, String>) {
         server = opening
         themeChoice = app.store.themeChoice(opening.url)
         app.store.server = opening.url
-        app.api = Api(opening.url, token)
+        app.api = Api(baseFor(opening), token)
         if (token.isNotEmpty()) ClientLog.kick()
+    }
+
+    // Where requests for this server go: the connector's local address while it is reached from away, else its own.
+    private fun baseFor(opening: SavedServer): String {
+        val away = app.peers.awayFor
+        return if (away.isNotEmpty() && PeerRoute.active && app.peers.info(opening)?.serverId == away) PeerRoute.base else opening.url
+    }
+
+    // The connection moved between home and away while the app was open: the same sign-in, at the other address.
+    private fun movedTo(base: String) {
+        if (server == null || app.api.token.isEmpty()) return
+        app.api = Api(base, app.api.token)
+    }
+
+    // At home and signed in: this device goes on the server's list for connecting from away (docs/P2P.md).
+    private fun learnAway() {
+        val opened = server ?: return
+        val api = app.api
+        if (PeerRoute.matches(api.base.toHttpUrlOrNull()?.host, api.base.toHttpUrlOrNull()?.port ?: 0) || api.token.isEmpty()) return
+        app.scope.launch { app.peers.learnAway(api, opened) }
+    }
+
+    fun learnAwayNow() = learnAway()
+
+    // "Stop connecting from away" while reaching the server that way: it can't be reached any more.
+    fun lostFromAway() {
+        server = null
+        app.api = Api("", "")
+        forgetScreens()
+        reset(Route.Connect(s["errLost"].orEmpty()))
+    }
+
+    // An invite link typed or pasted where an address goes. Answers words to show on failure.
+    suspend fun joinInvite(invite: PeerInvite): String? {
+        if (!app.peers.available) return s["errAwayMissing"]
+        val answer = app.peers.join(invite) ?: return s["errAwayFailed"]
+        if (!answer.ok) {
+            app.peers.leave()
+            return s["errInviteRefused"]
+        }
+        return joinedFromAway(answer)
+    }
+
+    // The connector has reached a server that took this device's invite or code: it proves its key, goes in the list
+    // of servers (under its own address if this device knows it, else one for away only), and the sign-in code that
+    // came back is redeemed over the connection. Answers words to show on failure.
+    suspend fun joinedFromAway(answer: PeerAnswer): String? {
+        val proof = identify(PeerRoute.base, app.store.recent)
+        if (proof.state != IdentityState.New && proof.state != IdentityState.Same) {
+            app.peers.leave()
+            return s[if (proof.state == IdentityState.Unreachable) "errAwayFailed" else "identityBad"]
+        }
+        val known = app.store.recent.firstOrNull { it.publicKey.isNotEmpty() && it.publicKey == proof.publicKey }
+        val url = known?.url ?: PeerRules.awayOnlyUrl(answer.serverId)
+        val saved = proof.savedAs(url, known?.name ?: answer.serverName.ifEmpty { "WittyMediaServer" }).copy(lastSeen = System.currentTimeMillis())
+        app.store.remember(saved)
+        app.peers.joined(saved, answer)
+        finishForget()
+        forgetScreens()
+        openServer(saved)
+        if (answer.code.isEmpty()) {
+            reset(Route.SignIn())
+            return null
+        }
+        return try {
+            val result = app.api.pairRedeem(answer.code, app.deviceName, app.platformName)
+            if (result.token.isEmpty()) return s["joinAwayRefused"]
+            signedIn(result.token, result.user)
+            null
+        } catch (e: ApiError) {
+            e.message
+        } catch (_: IOException) {
+            s["errAwayFailed"]
+        } catch (_: SerializationException) {
+            s["errInvalid"]
+        }
+    }
+
+    // The server's own address didn't answer: the connection from away, if this device has one for it. Then the
+    // server proves its key through it, as at home. Answers whether the server was opened that way.
+    suspend fun tryFromAway(saved: SavedServer): Boolean = openFromAway(saved)
+
+    private suspend fun openFromAway(saved: SavedServer): Boolean {
+        if (!app.peers.available || app.peers.info(saved) == null) return false
+        notice = s["awayConnecting"].orEmpty()
+        val reached = app.peers.reach(saved)
+        notice = ""
+        if (!reached) return false
+        val proof = identify(PeerRoute.base, listOf(saved))
+        if (proof.state != IdentityState.Same) {
+            app.peers.leave()
+            return false
+        }
+        if (tokenFits(proof)) return openWithToken(saved) == null
+        // Proved, with no sign-in kept for it: on to signing in, through the connection.
+        app.store.forgetToken()
+        forgetScreens()
+        openServer(saved.copy(lastSeen = System.currentTimeMillis()))
+        reset(Route.SignIn())
+        return true
     }
 
     // On to signing in, for a server that has been checked.
@@ -746,6 +863,7 @@ class Nav(val app: WittyApp, private val s: Map<String, String>) {
         loadThemes(status.user != null)
         me = status.user
         reset(if (status.user != null) Route.Home else Route.SignIn())
+        if (status.user != null) learnAway()
         null
     } catch (_: IOException) {
         s["errLost"].orEmpty()
@@ -782,7 +900,7 @@ class Nav(val app: WittyApp, private val s: Map<String, String>) {
         when (Identity.stepAtStart(proof.state, tokenFits(proof))) {
             NextStep.Warn -> warn(checked)
             NextStep.Refuse -> reset(Route.Connect(s["identityBad"].orEmpty()))
-            NextStep.Lost -> reset(Route.Connect(s["errLost"].orEmpty()))
+            NextStep.Lost -> if (!openFromAway(saved)) reset(Route.Connect(s["errLost"].orEmpty()))
             NextStep.Open -> openWithToken(checked)?.let { reset(Route.Connect(it)) }
             else -> {
                 openServer(checked)
@@ -895,11 +1013,12 @@ class Nav(val app: WittyApp, private val s: Map<String, String>) {
         val kept = (server ?: SavedServer(app.api.base, "WittyMediaServer")).copy(lastSeen = System.currentTimeMillis())
         me = user
         if (!app.store.signedIn(kept, token)) notice = s["notKept"].orEmpty()
-        app.api = Api(kept.url, token)
+        app.api = Api(baseFor(kept), token)
         loadThemes(true)
         ClientLog.kick()
         forgetScreens()
         reset(Route.Home)
+        learnAway()
     }
 
     private fun forgetSignIn() {
@@ -929,6 +1048,7 @@ class Nav(val app: WittyApp, private val s: Map<String, String>) {
     }
 
     fun changeServer() {
+        app.peers.leave()
         endSession()
         server = null
         me = null
@@ -1038,10 +1158,13 @@ fun AppRoot(app: WittyApp) {
             onDispose { app.onGuideKey = null }
         }
         LifecycleEventEffect(Lifecycle.Event.ON_START) {
+            app.peers.appBack()
             scope.launch { nav.recheck() }
             app.listening.appeared()
         }
         LifecycleEventEffect(Lifecycle.Event.ON_STOP) {
+            // Music in the background keeps a connection from away open; a film stops below, and so lets it go.
+            app.peers.appLeft(playing = app.listening.isPlaying)
             nav.syncTvHome()
             nav.finishForget()
             app.listening.disappeared()
@@ -1115,6 +1238,7 @@ fun AppRoot(app: WittyApp) {
                             else PageShell(nav) { SduiPageScreen(nav, route.page, route.params, title = route.title) }
                         is Route.OwnItem -> PageShell(nav) { if (LocalMetrics.current.tv) ItemScreen(nav, strings, route.id) else PhoneItem(nav, strings, route.id) }
                         Route.Notices -> NoticesScreen(nav)
+                        Route.JoinAway -> JoinAwayScreen(nav, strings)
                         Route.Logs -> LogsScreen(nav)
                         is Route.Library -> {
                             val body = @Composable {

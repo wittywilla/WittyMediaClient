@@ -103,6 +103,8 @@ private val ICONS: Map<String, () -> ImageVector> = mapOf(
     "stethoscope" to { Symbols.Stethoscope }, "extension" to { Symbols.Extension }, "backup" to { Symbols.Backup },
     "build" to { Symbols.Build }, "restart_alt" to { Symbols.Restart }, "help" to { Symbols.Help }, "info" to { Symbols.Info },
     "gavel" to { Symbols.Gavel }, "menu_book" to { Symbols.Book }, "receipt_long" to { Symbols.Receipt },
+    // From away: the globe the app already has, for reaching the server from anywhere.
+    "settings_input_antenna" to { Symbols.Globe },
 )
 
 private fun youIcon(name: String): ImageVector = ICONS[name]?.invoke() ?: Symbols.Info
@@ -156,6 +158,7 @@ fun YouScreen(nav: Nav, s: Map<String, String>) {
         hasGames = hasGames,
         twoStepAvailable = twoStep?.available == true,
         onTv = metrics.tv,
+        fromAway = nav.app.peers.available,
     )
     fun open(row: YouRow) {
         val title = s[row.key].orEmpty()
@@ -319,6 +322,7 @@ fun YouSettingScreen(nav: Nav, s: Map<String, String>, screen: YouNative) {
         YouNative.Licences -> NoticesScreen(nav)
         YouNative.Log -> LogsScreen(nav)
         YouNative.Servers -> ManageServersScreen(nav, s)
+        YouNative.Away -> AwayScreen(nav, s)
     }
 }
 

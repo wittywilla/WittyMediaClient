@@ -31,6 +31,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableDoubleStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -259,6 +260,17 @@ fun NowPlayingScreen(nav: Nav) {
     LaunchedEffect(now == null) { if (now == null) nav.closeNowPlaying() }
     val about = now?.mediaMetadata
     val onClear = { listening.stop(); nav.closeNowPlaying() }
+    // Karaoke, from a TV's remote as from a phone's Now Playing: music only.
+    val scope = rememberCoroutineScope()
+    val words = remember { LyricsWords(listening, { nav.app.api }, scope, nav.app.scope) }
+    var karaoke by rememberSaveable { mutableStateOf(false) }
+    val music = now != null && !listening.keepsPlace
+    val trackId = now?.mediaId?.toLongOrNull() ?: 0L
+    LaunchedEffect(trackId, karaoke && music) { words.want(trackId, karaoke && music) }
+    if (karaoke && music) {
+        KaraokeScreen(nav, words, about?.title?.toString().orEmpty(), about?.artist?.toString().orEmpty(), MaterialTheme.colorScheme.primary) { karaoke = false }
+        return
+    }
 
     @Composable
     fun Art(modifier: Modifier) {
@@ -289,6 +301,9 @@ fun NowPlayingScreen(nav: Nav) {
                         Box(Modifier.weight(1f)) { Words(center = false) }
                     }
                     Controls(listening)
+                    if (music && metrics.tv) Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.Center) {
+                        WittyButton("Karaoke", { karaoke = true }, kind = ButtonKind.Secondary, pill = true, focusKey = "np-karaoke")
+                    }
                 }
                 // The list keeps what's playing in view, unless someone is rearranging it.
                 val queueScroll = rememberLazyListState()

@@ -205,9 +205,21 @@ public struct SDUINavCustomise: Equatable, Sendable {
     public var rows: [Row]
     private let before: SDUIPersonal
 
-    /// `shown` is the menu as the server sends it now; what the profile hid isn't in it and is listed after, by ID.
-    public init(shown: [SDUINavItem], stored: SDUIPersonal, names: [String: String] = [:]) {
+    /// `shown` is the menu as the server sends it now. `listed` is the menu's own `personal` (`GET /sdui/navigation`),
+    /// which names every entry the profile could have in its order, hidden ones included: where the server sends it,
+    /// the rows are those, with their names. Otherwise what the profile hid isn't in `shown` and is listed after, by ID.
+    public init(shown: [SDUINavItem], stored: SDUIPersonal, listed: SDUIPersonalInfo? = nil, names: [String: String] = [:]) {
         before = stored
+        if let sections = listed?.sections, !sections.isEmpty {
+            let known = Dictionary(shown.map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first })
+            rows = sections.map { section in
+                let entry = known[section.id]
+                let settings = entry?.isSettings ?? (section.id == "settings")
+                return Row(id: section.id, label: section.title ?? entry?.label ?? names[section.id] ?? section.id, icon: entry?.icon ?? "",
+                           hidden: section.hidden == true && !settings, fixed: settings || section.locked == true)
+            }
+            return
+        }
         var rows = shown.map { Row(id: $0.id, label: $0.label, icon: $0.icon ?? "", hidden: false, fixed: $0.isSettings) }
         for id in stored.hidden ?? [] where !rows.contains(where: { $0.id == id }) {
             rows.append(Row(id: id, label: names[id] ?? id, icon: "", hidden: true, fixed: false))
