@@ -37,6 +37,7 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
@@ -104,8 +105,13 @@ fun SideMenu(nav: Nav, closed: Dp, labels: Boolean, top: Dp, bottom: Dp, modifie
     val reduce = LocalReduceMotion.current
     val width by animateDpAsState(if (open) fullWidth else closed, if (reduce) tween(0) else tween(200), label = "rail")
     val showLabels = labels || open
+    // A rail with a library drawer: choosing a library opens a second column headed by its name, beside the menu.
+    var drawerFor by remember { mutableStateOf<Pair<SduiNavItem, Route>?>(null) }
+    val drawerWide = (shell?.drawer ?: 0) > 0 && (shell?.nav == "railDrawer")
+    fun libraryOf(route: Route) = (route as? Route.Library)?.library ?: (route as? Route.Pinned)?.library
+    Row(modifier.fillMaxHeight()) {
     Column(
-        modifier.width(width).fillMaxHeight().background(scheme.surface).onFocusChanged { inside = it.hasFocus }
+        Modifier.width(width).fillMaxHeight().background(scheme.surface).onFocusChanged { inside = it.hasFocus }
             .drawWithContent { drawContent(); drawRect(line, Offset(size.width - 1.dp.toPx(), 0f), Size(1.dp.toPx(), size.height)) }
             .verticalScroll(rememberScrollState()).padding(top = top + 12.dp, bottom = bottom + 12.dp, start = 8.dp, end = 8.dp)
             .semantics { role = Role.Tab },
@@ -128,7 +134,7 @@ fun SideMenu(nav: Nav, closed: Dp, labels: Boolean, top: Dp, bottom: Dp, modifie
         nav.sduiMenuAll.forEach { (entry, route) ->
             val on = chosen(nav, route)
             Pressable(
-                { nav.openMenuEntry(route) }, Modifier.fillMaxWidth().heightIn(min = if (labels) 44.dp else 56.dp),
+                { if (drawerWide && libraryOf(route) != null) drawerFor = if (drawerFor?.second?.key == route.key) null else entry to route else { drawerFor = null; nav.openMenuEntry(route) } }, Modifier.fillMaxWidth().heightIn(min = if (labels) 44.dp else 56.dp),
                 shape = RoundedCornerShape(10.dp), fill = if (on) scheme.primary.copy(alpha = 0.14f) else Color.Transparent,
                 label = entry.label, state = if (on) "Selected" else null, selected = on, pressScale = 1f, ring = false,
             ) {
@@ -150,6 +156,40 @@ fun SideMenu(nav: Nav, closed: Dp, labels: Boolean, top: Dp, bottom: Dp, modifie
                     Text("Keep menu open", color = scheme.onSurfaceVariant, fontSize = 14.sp)
                     Text(if (pinned) "On" else "Off", color = if (pinned) accentText else scheme.onSurfaceVariant, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
                 }
+            }
+        }
+    }
+    drawerFor?.let { (entry, route) -> LibraryDrawer(nav, entry, route, (shell?.drawer ?: 360).dp, top, bottom) { drawerFor = null } }
+    }
+}
+
+// A rail's library drawer: a second column headed by the library's name (large, with its icon and how many titles it
+// holds), listing what can be opened in it. Back closes it.
+@Composable
+private fun LibraryDrawer(nav: Nav, entry: SduiNavItem, route: Route, width: Dp, top: Dp, bottom: Dp, close: () -> Unit) {
+    val scheme = MaterialTheme.colorScheme
+    val accentText = LocalExtraColours.current.accentText
+    val library = (route as? Route.Library)?.library ?: (route as? Route.Pinned)?.library
+    androidx.activity.compose.BackHandler(onBack = close)
+    Column(
+        Modifier.width(width).fillMaxHeight().background(scheme.background).drawWithContent { drawContent(); drawRect(scheme.outline, Offset(size.width - 1.dp.toPx(), 0f), Size(1.dp.toPx(), size.height)) }
+            .verticalScroll(rememberScrollState()).padding(top = top + 16.dp, bottom = bottom + 16.dp, start = 16.dp, end = 12.dp),
+        verticalArrangement = Arrangement.spacedBy(4.dp),
+    ) {
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp), modifier = Modifier.padding(bottom = 12.dp)) {
+            Icon(sduiIcon(entry.icon), null, tint = accentText, modifier = Modifier.size(32.dp))
+            Column {
+                Text(entry.label, color = scheme.onBackground, fontSize = 22.sp, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.semantics { heading() })
+                if (library != null && library.itemCount > 0) Text("${library.itemCount} items", color = scheme.onSurfaceVariant, fontSize = 13.sp)
+            }
+        }
+        // What the library offers is the library's own page; its sections are the page's rows.
+        Pressable({ close(); nav.openMenuEntry(route) }, Modifier.fillMaxWidth().heightIn(min = 44.dp), shape = RoundedCornerShape(10.dp), label = entry.label, pressScale = 1f) {
+            Text("Open " + entry.label, color = scheme.onBackground, fontSize = 15.sp, fontWeight = FontWeight.Medium, modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp))
+        }
+        nav.sduiMenuAll.filter { it.second.key != route.key && (it.second is Route.Library || it.second is Route.Pinned) }.forEach { (other, otherRoute) ->
+            Pressable({ close(); nav.openMenuEntry(otherRoute) }, Modifier.fillMaxWidth().heightIn(min = 44.dp), shape = RoundedCornerShape(10.dp), label = other.label, pressScale = 1f) {
+                Text(other.label, color = scheme.onSurfaceVariant, fontSize = 15.sp, modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp))
             }
         }
     }
