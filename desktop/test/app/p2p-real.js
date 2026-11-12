@@ -121,7 +121,10 @@ async function run() {
       await typeIntoAddress(SERVER.replace(/^http:\/\//, ''))
       await until('the number pad', () => inPage("!!document.querySelector('.pad')"))
       const me = await signedIn()
-      const invite = await fetch(`${DIRECT}/api/pair/invite`, { method: 'POST', headers: me.headers, body: JSON.stringify({ userId: me.user.id }) })
+      // A code that signs the device in as an administrator takes that administrator's password
+      // again (WMC_OTP too, for an account with two-factor sign-in), as an invite link does.
+      const invite = await fetch(`${DIRECT}/api/pair/invite`, { method: 'POST', headers: me.headers, body: JSON.stringify({ userId: me.user.id, password: PASSWORD, otp: process.env.WMC_OTP || '' }) })
+      assert.ok(invite.ok, `no code: ${invite.status}`)
       for (const digit of String((await invite.json()).code).replace(/\D/g, '')) await press(digit)
       await until('the server page', () => page().getURL().startsWith(SERVER))
     })
