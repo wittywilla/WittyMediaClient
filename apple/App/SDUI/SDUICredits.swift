@@ -4,8 +4,8 @@ import SwiftUI
 import WittyKit
 
 // Cast and crew under a title's header (catalogue revision 5; the server's docs/SDUI.md, Cast and crew, Credits):
-// the cast as a row of round portraits with the part each played, the guest stars the same way, then the crew by
-// department; Show all asks for everyone. Each person opens their own page (`/person/<id>`).
+// the cast as a row of round portraits with the part each played, the guest stars the same way, then the crew as
+// one row of "Job · Name" chips by department; Show all cast and Show all credits ask for everyone. Each person opens their own page (`/person/<id>`).
 
 struct SDUICreditsView: View {
     @EnvironmentObject private var model: AppModel
@@ -46,7 +46,8 @@ struct SDUICreditsView: View {
     }
 
     private var actor: SDUIActor { SDUIActor(model: model, center: center, store: store) }
-    private var showAll: String? { credits.hasMore ? (credits.buttons.first?.label ?? "Show all") : nil }
+
+    private var crew: [Part] { parts.filter { !$0.isPeople } }
 
     var body: some View {
         VStack(alignment: .leading, spacing: layout.sp("m")) {
@@ -57,9 +58,8 @@ struct SDUICreditsView: View {
             case .deferred:
                 SDUIPlaceholderRow(count: 6, width: portrait, height: portrait, circle: true)
             default:
-                ForEach(parts) { part in
-                    if part.isPeople { peopleRow(part) } else { department(part) }
-                }
+                ForEach(parts.filter(\.isPeople)) { part in peopleRow(part) }
+                if !crew.isEmpty { crewRow }
             }
         }
         .accessibilityElement(children: .contain)
@@ -68,35 +68,21 @@ struct SDUICreditsView: View {
         .task(id: credits.stateName) { await store.fill(credits, center: center) }
     }
 
+    private func askForAll() { Task { await store.retry(credits, center: center) } }
+
     private var heading: some View {
-        HStack(alignment: .firstTextBaseline, spacing: layout.sp("s")) {
-            Text(credits.shown("title"))
-                .sduiFont("heading")
-                .foregroundStyle(palette.text)
-                .lineLimit(1)
-                .accessibilityAddTraits(.isHeader)
-            Spacer(minLength: 0)
-            // A TV's Show all is the last card of the cast row, where the remote goes.
-            if let showAll, !layout.isTV {
-                Button { Task { await store.retry(credits, center: center) } } label: {
-                    HStack(spacing: 2) {
-                        Text(showAll)
-                        Image(systemName: "chevron.right").font(.system(size: 11, weight: .semibold))
-                    }
-                    .sduiFont("caption", weight: .medium)
-                    .foregroundStyle(palette.textSecondary)
-                    .frame(minHeight: 44)
-                    .contentShape(Rectangle())
-                }
-                .buttonStyle(.plain)
-                .accessibilityIdentifier("sdui.credits.showAll")
-            }
-        }
-        .padding(.horizontal, layout.margin)
+        Text(credits.shown("title"))
+            .sduiFont("heading")
+            .foregroundStyle(palette.text)
+            .lineLimit(1)
+            .accessibilityAddTraits(.isHeader)
+            .padding(.horizontal, layout.margin)
     }
 
     // MARK: The cast and the guest stars
 
+    /// Round portraits with the part played under each; the first row ends with Show all cast, where the eye and the
+    /// remote go.
     private func peopleRow(_ part: Part) -> some View {
         VStack(alignment: .leading, spacing: layout.sp("xs")) {
             if part.id != "cast" || parts.first?.id != "cast" {
@@ -114,12 +100,15 @@ struct SDUICreditsView: View {
                             .accessibilityAddTraits(.isButton)
                             .accessibilityIdentifier("sdui.card." + card.id)
                     }
-                    if layout.isTV, let showAll, part.id == parts.first(where: \.isPeople)?.id {
-                        Button { Task { await store.retry(credits, center: center) } } label: {
+                    if credits.hasMore, part.id == parts.first(where: \.isPeople)?.id {
+                        Button(action: askForAll) {
                             VStack(spacing: layout.sp("xs")) {
                                 Circle().fill(palette.card).frame(width: portrait, height: portrait)
-                                    .overlay(Image(systemName: "arrow.right").font(.system(size: portrait * 0.25, weight: .semibold)))
-                                Text(showAll).sduiFont("body").foregroundStyle(palette.text)
+                                    .overlay(Image(systemName: "arrow.right")
+                                        .font(.system(size: portrait * 0.25, weight: .semibold))
+                                        .foregroundStyle(palette.text))
+                                Text("Show all cast").sduiFont("body", weight: .medium).foregroundStyle(palette.text)
+                                    .lineLimit(2).multilineTextAlignment(.center)
                             }
                             .frame(width: portrait)
                         }
@@ -139,59 +128,50 @@ struct SDUICreditsView: View {
 
     // MARK: The crew
 
-    @ViewBuilder private func department(_ part: Part) -> some View {
+    /// One Crew row of chips, "Job · Name", department by department in the server's order, ending with Show all
+    /// credits. A row that scrolls sideways on a TV; chips that wrap elsewhere.
+    private var crewRow: some View {
         VStack(alignment: .leading, spacing: layout.sp("xs")) {
-            if !part.label.isEmpty {
-                Text(part.label)
-                    .sduiFont(layout.isTV ? "title" : "caption", weight: .semibold)
-                    .foregroundStyle(layout.isTV ? palette.text : palette.textSecondary)
-                    .accessibilityAddTraits(.isHeader)
-            }
+            Text("Crew").sduiFont("title").foregroundStyle(palette.text).accessibilityAddTraits(.isHeader)
+                .padding(.horizontal, layout.margin)
             #if os(tvOS)
-            // Focusable chips in a row, name and job.
             ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: layout.sp("s")) {
-                    ForEach(part.cards) { card in
-                        Button { actor.perform(card.action) } label: {
-                            HStack(spacing: 10) {
-                                Text(card.shown("title")).foregroundStyle(palette.text)
-                                Text(card.shown("subtitle")).foregroundStyle(palette.textSecondary)
-                            }
-                            .sduiFont("body")
-                            .lineLimit(1)
-                        }
-                        .action(pill: true)
-                        .sduiFocusable(card.isFocusable ? focus : nil, card.id)
-                        .accessibilityLabel(card.label)
-                        .accessibilityIdentifier("sdui.card." + card.id)
-                    }
-                }
-                .padding(.vertical, Tokens.focusRoom)
+                HStack(spacing: layout.sp("s")) { crewChips }
+                    .padding(.horizontal, layout.margin)
+                    .padding(.vertical, Tokens.focusRoom)
             }
             .unclippedScroll()
             .remoteSection()
             #else
-            // "<name>, <job>" lines that wrap, each a link to the person.
-            FlowLayout(spacing: layout.sp("m"), rowSpacing: layout.sp("xs")) {
-                ForEach(part.cards) { card in
-                    Button { actor.perform(card.action) } label: {
-                        (Text(card.shown("title")).foregroundColor(palette.accentText)
-                            + Text(card.shown("subtitle").isEmpty ? "" : ", " + card.shown("subtitle")).foregroundColor(palette.textSecondary))
-                            .sduiFont("body")
-                            .lineLimit(2)
-                            .frame(minHeight: 32)
-                    }
-                    .buttonStyle(.plain)
-                    .accessibilityLabel(card.label)
-                    .accessibilityAddTraits(.isLink)
-                    .accessibilityIdentifier("sdui.card." + card.id)
-                }
-            }
+            FlowLayout(spacing: layout.sp("s"), rowSpacing: layout.sp("s")) { crewChips }
+                .padding(.horizontal, layout.margin)
             #endif
         }
-        .padding(.horizontal, layout.margin)
         .accessibilityElement(children: .contain)
-        .accessibilityLabel(part.label)
+        .accessibilityLabel("Crew")
+    }
+
+    @ViewBuilder private var crewChips: some View {
+        ForEach(crew) { part in
+            ForEach(part.cards) { card in
+                let job = card.shown("subtitle").isEmpty ? part.label : card.shown("subtitle")
+                Button { actor.perform(card.action) } label: {
+                    (Text(job.isEmpty ? "" : job + " · ").foregroundColor(palette.textSecondary)
+                        + Text(card.shown("title")).foregroundColor(palette.text))
+                        .sduiFont("body")
+                        .lineLimit(1)
+                }
+                .action(pill: true)
+                .sduiFocusable(card.isFocusable ? focus : nil, card.id)
+                .accessibilityLabel(card.label)
+                .accessibilityIdentifier("sdui.card." + card.id)
+            }
+        }
+        if credits.hasMore {
+            Button(action: askForAll) { Text("Show all credits").sduiFont("body", weight: .semibold).lineLimit(1) }
+                .action(pill: true)
+                .accessibilityIdentifier("sdui.credits.showAllCrew")
+        }
     }
 }
 
