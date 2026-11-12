@@ -338,21 +338,18 @@ public struct SDUINavigation: Codable, Equatable, Sendable {
     public var personal: SDUIPersonalInfo?
     /// The frame the app draws around its pages: the layout option in force and its menu.
     public var shell: SDUIShell?
-    /// What this profile may choose on this device, for the Layout row in the app's own Settings.
-    public var layouts: SDUILayoutChoice?
 
     public init(items: [SDUINavItem], formFactor: String? = nil, etag: String? = nil, personal: SDUIPersonalInfo? = nil,
-                shell: SDUIShell? = nil, layouts: SDUILayoutChoice? = nil) {
+                shell: SDUIShell? = nil) {
         self.version = SDUI.version
         self.items = items
         self.formFactor = formFactor
         self.etag = etag
         self.personal = personal
         self.shell = shell
-        self.layouts = layouts
     }
 
-    enum CodingKeys: String, CodingKey { case version, formFactor, etag, items, personal, shell, layouts }
+    enum CodingKeys: String, CodingKey { case version, formFactor, etag, items, personal, shell }
 
     public init(from decoder: Decoder) throws {
         let box = try decoder.container(keyedBy: CodingKeys.self)
@@ -362,7 +359,6 @@ public struct SDUINavigation: Codable, Equatable, Sendable {
         items = ((try? box.decodeIfPresent([Loose<SDUINavItem>].self, forKey: .items)) ?? []).compactMap(\.value)
         personal = try? box.decodeIfPresent(SDUIPersonalInfo.self, forKey: .personal)
         shell = try? box.decodeIfPresent(SDUIShell.self, forKey: .shell)
-        layouts = try? box.decodeIfPresent(SDUILayoutChoice.self, forKey: .layouts)
     }
 
     public func placed(_ placement: String) -> [SDUINavItem] { items.filter { ($0.placement ?? "primary") == placement } }
@@ -389,40 +385,3 @@ public struct SDUIImageRef: Equatable, Hashable, Sendable {
     public var ratio: Double { SDUILayout.ratio(aspect) ?? (width > 0 && height > 0 ? Double(width) / Double(height) : 1) }
 }
 
-/// The layout options a profile may choose on this device (`navigation.layouts`, `GET /sdui/layout`'s `choice`).
-/// `chosen` is the profile's own choice for this device; nil means it follows the server's.
-public struct SDUILayoutChoice: Codable, Equatable, Sendable {
-    public struct Option: Codable, Equatable, Identifiable, Sendable {
-        public var value: String
-        public var label: String
-        public var id: String { value }
-
-        public init(value: String, label: String) {
-            self.value = value
-            self.label = label
-        }
-    }
-
-    public var current: String
-    public var chosen: String?
-    public var options: [Option]
-    public var url: String?
-
-    public init(current: String, chosen: String? = nil, options: [Option], url: String? = nil) {
-        self.current = current
-        self.chosen = chosen
-        self.options = options
-        self.url = url
-    }
-
-    public init(from decoder: Decoder) throws {
-        let box = try decoder.container(keyedBy: CodingKeys.self)
-        current = (try? box.decodeIfPresent(String.self, forKey: .current)) ?? "sidebar"
-        chosen = try? box.decodeIfPresent(String.self, forKey: .chosen)
-        options = ((try? box.decodeIfPresent([Loose<Option>].self, forKey: .options)) ?? []).compactMap(\.value)
-        url = try? box.decodeIfPresent(String.self, forKey: .url)
-    }
-
-    /// The label of the layout in force, for the row's value.
-    public var currentLabel: String { options.first { $0.value == current }?.label ?? current }
-}

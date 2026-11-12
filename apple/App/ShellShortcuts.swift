@@ -12,7 +12,7 @@ struct ShellShortcuts: ViewModifier {
     @EnvironmentObject private var model: AppModel
     @EnvironmentObject private var center: SDUICenter
 
-    private var tabs: [AppTab] { center.enabled ? center.phoneTabs : AppTab.phoneTabs }
+    private var tabs: [AppTab] { center.phoneTabs }
 
     private func step(_ by: Int) {
         guard let at = tabs.firstIndex(of: model.tab) else { return }
