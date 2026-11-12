@@ -433,8 +433,14 @@ enum CameraAccess {
 }
 
 /// The camera, looking for a QR code. The first one it reads is handed over and it stops looking.
-private struct ScannerSheet: View {
+struct ScannerSheet: View {
     @Environment(\.dismiss) private var dismiss
+    /// What the camera is looking for, in a few words, for VoiceOver and the line under it.
+    var looking = "a sign-in code"
+    /// What to point it at, under the picture.
+    var hint = "Point the camera at the code on the screen of the device you want to sign in."
+    /// What to do instead when there's no camera.
+    var instead = "The camera couldn’t be started. Type the code the device shows instead."
     let onFound: (String) -> Void
     @State private var failed = false
 
@@ -442,7 +448,7 @@ private struct ScannerSheet: View {
         ZStack(alignment: .bottom) {
             Color.black.ignoresSafeArea()
             if failed {
-                Text("The camera couldn’t be started. Type the code the device shows instead.")
+                Text(instead)
                     .font(.body)
                     .foregroundStyle(.white)
                     .multilineTextAlignment(.center)
@@ -451,10 +457,10 @@ private struct ScannerSheet: View {
             } else {
                 CodeCamera(onFound: onFound, onFailed: { failed = true })
                     .ignoresSafeArea()
-                    .accessibilityLabel("Camera, looking for a sign-in code")
+                    .accessibilityLabel("Camera, looking for \(looking)")
             }
             VStack(spacing: Tokens.Space.s3) {
-                Text("Point the camera at the code on the screen of the device you want to sign in.")
+                Text(hint)
                     .font(.subheadline)
                     .foregroundStyle(.white)
                     .multilineTextAlignment(.center)

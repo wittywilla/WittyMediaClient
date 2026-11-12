@@ -208,6 +208,7 @@ fun YouScreen(nav: Nav, s: Map<String, String>) {
     }
     val list: @Composable ColumnScope.() -> Unit = {
         groups.forEach { (key, rows) -> GroupedList(s[key].orEmpty(), rows) }
+        SettingsSlotRows(nav, "you.games")
         ThisServer(nav, s, showSignOut = !metrics.tv)
         Text(
             "${s["appName"]} $appVersion", color = LocalExtraColours.current.hint, style = MaterialTheme.typography.caption,
