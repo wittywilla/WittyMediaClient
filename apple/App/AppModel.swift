@@ -125,7 +125,7 @@ enum Route: Hashable {
     /// Skipping by itself and canvases, on this device: see MediaPages.swift.
     case mediaExtras
     /// The server's layout options for this device, and modules' settings: see LayoutModulesSettings.swift.
-    case layout, modules
+    case modules
     /// This profile's own colours over the theme: see PersonalColoursView.swift.
     case personalColours
     case moduleSettings(String)
@@ -418,7 +418,7 @@ final class AppModel: ObservableObject {
             if resolving, let resolved = try? await asking.resolvedTheme(), !Task.isCancelled, let self, self.client.base == asking.base {
                 // The theme's own look decides; only the automatic theme follows the device's light or dark setting.
                 let dark = resolved.scheme == "auto" ? systemDark : resolved.scheme != "light"
-                self.themeStyle = ThemeStyle(shape: resolved.shape(dark: dark), type: resolved.typefaces(dark: dark), brand: resolved.brand)
+                self.themeStyle = ThemeStyle(shape: resolved.shape(dark: dark), type: resolved.typefaces(dark: dark), brand: resolved.brand, colors: resolved.colors(dark: dark))
                 if following, self.themeChoice.isEmpty {
                     let colors = resolved.colors(dark: dark)
                     if !colors.isEmpty {

@@ -442,11 +442,9 @@ struct CodeView: View {
 /// the safe choice comes first and has focus, and nothing has been sent to it.
 struct MismatchView: View {
     @EnvironmentObject private var model: AppModel
-    @Environment(\.palette) private var palette
     let server: SavedServer
     @State private var problem = ""
     @State private var busy = false
-    @FocusState private var onSafeChoice: Bool
 
     private func back() {
         model.stage = .connect(message: "")
@@ -455,54 +453,53 @@ struct MismatchView: View {
     /// The remembered servers this one answered in place of.
     private var clashes: [SavedServer] { ServerBook.clashes(with: server, in: model.recent) }
 
-    var body: some View {
-        SignInLayout {
-            Image(systemName: "exclamationmark.triangle.fill")
-                .font(.system(size: 28, weight: .semibold))
-                .foregroundStyle(palette.danger)
-                .frame(width: 64, height: 64)
-                .background(Circle().fill(palette.danger.opacity(0.16)))
-                .accessibilityHidden(true)
-            SignInHeading(title: say("identityTitle"), detail: say("identityHint"))
-            if !clashes.isEmpty {
-                Secondary(say("reinstalledHint"))
-                    #if !os(tvOS)
-                    .multilineTextAlignment(.center)
-                    #endif
-            }
-            VStack(alignment: .leading, spacing: Tokens.Space.s1) {
-                Text(server.url).font(.wmLabel).foregroundStyle(palette.text)
-                Text("\(say("fingerprintLabel")): \(server.fingerprint)").font(.wmSecondary.monospaced()).foregroundStyle(palette.textSecondary)
-            }
-            .padding(Tokens.Space.s4)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .background(RoundedRectangle(cornerRadius: Tokens.Radius.lg, style: .continuous).fill(palette.panel))
-        } actions: {
-            if !problem.isEmpty { ProblemLine(problem) }
-            Button(say("back"), action: back).action(.primary, wide: true, tall: true).focused($onSafeChoice)
-            // A reinstalled server: the old one is forgotten, and this one can then be added as new.
-            if !clashes.isEmpty {
-                Button(say("removeOldOne")) {
-                    model.forgetServers(clashes)
-                    model.stage = .connect(message: say("removedOldOne"))
-                }
-                .action(.secondary, wide: true, tall: true)
-            }
-            Button {
-                guard !busy else { return }
-                busy = true
-                Task {
-                    problem = await model.trust(server) ?? ""
-                    busy = false
-                }
-            } label: {
-                BusyText(say("identityTrust"), busy: busy)
-            }
-            .action(.destructive, wide: true, tall: true)
+    /// The canvas's "Careful" page: the key remembered and the one shown now, side by side.
+    private var spec: DesignPageSpec {
+        var identity: [DesignPageSpec.Row] = []
+        if let old = clashes.first {
+            identity.append(.init(id: "saved", title: "Saved", value: old.fingerprint, detail: old.url, pressable: false))
         }
-        .onRemoteBack(back)
-        .task { onSafeChoice = true }
-        .onAppear { announce(say("identityTitle")) }
+        identity.append(.init(id: "now", title: "Now", value: server.fingerprint, on: true, detail: server.url, pressable: false))
+        var sections: [DesignPageSpec.Section] = [
+            .secR("Identity", identity),
+            .secN("", "Only continue if you reinstalled or restored this server yourself.", true),
+        ]
+        if !problem.isEmpty { sections.append(.secN("", problem, true)) }
+        var actions: [DesignPageSpec.Action] = [.init(id: "back", title: "Go back")]
+        // A reinstalled server: the old one is forgotten, and this one can then be added as new.
+        if !clashes.isEmpty { actions.append(.init(id: "remove-old", title: say("removeOldOne"))) }
+        actions.append(.init(id: "trust", title: "Trust this server", primary: true))
+        var page = DesignPageSpec.mk(
+            "Careful", "This isn’t the server you used before",
+            "The address is the same, but the server’s identity changed. This can happen after a reinstall, or if someone is pretending to be your server.",
+            sections, actions)
+        // Back, and focus, start on the safe choice.
+        page.layer = true
+        page.start = "back"
+        return page
+    }
+
+    private func pressed(_ id: String) {
+        switch id {
+        case "back": back()
+        case "remove-old":
+            model.forgetServers(clashes)
+            model.stage = .connect(message: say("removedOldOne"))
+        case "trust":
+            guard !busy else { return }
+            busy = true
+            Task {
+                problem = await model.trust(server) ?? ""
+                busy = false
+            }
+        default: break
+        }
+    }
+
+    var body: some View {
+        DesignSpecPage(spec: spec, onPress: pressed, onBack: back)
+            .accessibilityIdentifier("identity-mismatch")
+            .onAppear { announce("This isn’t the server you used before") }
     }
 }
 

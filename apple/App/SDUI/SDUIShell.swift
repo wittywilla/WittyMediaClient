@@ -16,12 +16,11 @@ struct SDUIShellSync: ViewModifier {
     }
 
     private func configure() {
-        center.configure(client: model.client, user: model.user?.id ?? 0, features: model.features, known: model.featuresKnown)
+        center.configure(client: model.client, user: model.user?.id ?? 0, features: model.features)
     }
 
     /// What the rest of the app needs that the hand-built Home used to bring: the libraries, and Apple TV's Top Shelf.
     private func supply() async {
-        guard center.enabled else { return }
         let client = model.client
         if let all = try? await client.libraries(), client === model.client {
             let fresh = uniqued(all)
@@ -47,9 +46,9 @@ struct SDUIShellSync: ViewModifier {
             .onAppear(perform: configure)
             .sduiOnChange(of: who) { _ in configure() }
             .sduiOnChange(of: reduceMotion) { _ in center.windowChanged(screenSize) }
-            .task(id: "\(who)|\(center.mode == .on)") { await supply() }
+            .task(id: who) { await supply() }
             .sduiOnChange(of: scenePhase) { phase in
-                guard phase == .active, center.enabled else { return }
+                guard phase == .active else { return }
                 Task {
                     await center.loadMenu()
                     await supply()

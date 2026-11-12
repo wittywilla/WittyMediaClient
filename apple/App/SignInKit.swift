@@ -41,14 +41,34 @@ struct Wordmark: View {
     /// The app's own name rather than a server's.
     var app = false
     var name = ""
-    /// The server's name as its theme draws it (`GET /theme` `brand`): parts, some in the brand's colour.
+    /// The server's name as its theme draws it (`GET /theme` `brand`): parts, each in its own colour.
     var brand: ResolvedTheme.Brand?
+    /// The theme's colour tokens, for a part coloured by token.
+    var colors: [String: String] = [:]
 
-    private func parts(_ brand: ResolvedTheme.Brand) -> Text {
-        let accent = brand.color.flatMap { ThemeColour(hex: $0) }.map { Color(.sRGB, red: $0.red, green: $0.green, blue: $0.blue, opacity: $0.alpha) }
-            ?? palette.accentText
-        return brand.parts.reduce(Text("")) { line, part in
-            line + Text(part.text).foregroundColor(part.accent == true ? accent : palette.text)
+    private func colour(_ c: ThemeColour) -> Color { Color(.sRGB, red: c.red, green: c.green, blue: c.blue, opacity: c.alpha) }
+
+    /// One part in its colour: the theme's text colour or accent, a token, a fixed colour, or a gradient across it. Names of the
+    /// old shape (a part with `accent`) are drawn the same way.
+    @ViewBuilder private func part(_ part: ResolvedTheme.Brand.Part, brand: ResolvedTheme.Brand) -> some View {
+        let accentHex = brand.color.flatMap { ThemeColour(hex: $0) }
+        let themeAccent = accentHex.map(colour) ?? palette.accentText
+        let kind = part.color ?? (part.accent == true ? ResolvedTheme.BrandColour(kind: "accent") : nil)
+        let text = Text(part.text).fontWeight(part.bold == true ? .heavy : nil)
+        if let kind {
+            let base = ThemeColour(hex: "#ffffff") ?? .white
+            let resolved = kind.resolved(colors: colors, fg: base, accent: accentHex ?? base)
+            if kind.kind == "gradient", resolved.stops.count >= 2 {
+                text.foregroundStyle(LinearGradient(colors: resolved.stops.map(colour), startPoint: .leading, endPoint: .trailing))
+            } else if kind.kind == "accent" {
+                text.foregroundColor(themeAccent)
+            } else if kind.kind == "fg" {
+                text.foregroundColor(palette.text)
+            } else {
+                text.foregroundColor(colour(resolved.solid))
+            }
+        } else {
+            text.foregroundColor(palette.text)
         }
     }
 
@@ -56,7 +76,7 @@ struct Wordmark: View {
         let last = app ? "Client" : "Server"
         Group {
             if !app, let brand, !brand.parts.isEmpty {
-                parts(brand)
+                HStack(spacing: 0) { ForEach(Array(brand.parts.enumerated()), id: \.offset) { _, p in part(p, brand: brand) } }
             } else if app || name.isEmpty {
                 Text("Witty").foregroundColor(palette.text)
                     + Text("Media").foregroundColor(palette.accentText)
@@ -83,7 +103,7 @@ struct BrandLockup: View {
     var body: some View {
         HStack(spacing: metrics.tv ? Tokens.Space.s5 : 10) {
             BrandMark(size: metrics.tv ? 72 : 32, logo: app ? nil : model.client.brandLogoURL(version: model.brandLogo), app: app)
-            Wordmark(app: app, name: model.brandName, brand: model.themeStyle?.brand)
+            Wordmark(app: app, name: model.brandName, brand: model.themeStyle?.brand, colors: model.themeStyle?.colors ?? [:])
         }
         .accessibilityElement(children: .combine)
     }
@@ -784,5 +804,34 @@ extension View {
     /// Focus rings and lifted cards may grow past a scroll view's edges where the system allows it.
     @ViewBuilder func unclippedScroll() -> some View {
         if #available(iOS 17, tvOS 17, visionOS 1, *) { self.scrollClipDisabled() } else { self }
+    }
+}
+
+
+/// The server's mark as a square badge with its content centred, never a bare letter: its own logo fitted inside, else the
+/// characters the server says (the first letter, initials, or the owner's one or two), on the name's accent.
+struct BrandBadge: View {
+    @EnvironmentObject private var model: AppModel
+    @Environment(\.palette) private var palette
+    var size: CGFloat = 48
+
+    var body: some View {
+        let shape = RoundedRectangle(cornerRadius: size * 0.28, style: .continuous)
+        let mark = model.themeStyle?.brand?.mark
+        let accent = model.themeStyle?.brand?.color.flatMap { ThemeColour(hex: $0) }
+        let fill = accent.map { Color(.sRGB, red: $0.red, green: $0.green, blue: $0.blue, opacity: 0.18) } ?? palette.accent.opacity(0.18)
+        ZStack {
+            shape.fill(fill)
+            if let url = mark?.imageUrl.flatMap({ model.client.mediaURL($0) }) {
+                ArtImage(url: url, width: size, fit: true, blank: true).padding(size * 0.14)
+            } else {
+                let words = mark?.characters(name: model.brandName) ?? mark.map { _ in "W" } ?? "W"
+                Text(words).font(.system(size: size * (words.count > 1 ? 0.34 : 0.5), weight: .bold, design: .rounded))
+                    .foregroundStyle(accent.map { Color(.sRGB, red: $0.red, green: $0.green, blue: $0.blue, opacity: 1) } ?? palette.accentText)
+                    .minimumScaleFactor(0.5).lineLimit(1)
+            }
+        }
+        .frame(width: size, height: size)
+        .accessibilityHidden(true)
     }
 }

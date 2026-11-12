@@ -249,7 +249,10 @@ struct SignInTvView: View {
         choice.id == model.user?.id ? model.user?.avatar : names[choice.id]?.picture
     }
 
-    // MARK: The screens
+    // MARK: The screens (Design 2, the canvas's "Sign in a TV" page)
+
+    private static let eyebrow = "Sign in a TV"
+    private static let title = "Enter the code on your TV"
 
     @ViewBuilder private var passwordFields: some View {
         OutlinedField(label: "Your password", text: $password, kind: .password, icon: "lock", request: $wantPassword)
@@ -258,123 +261,136 @@ struct SignInTvView: View {
         }
     }
 
-    @ViewBuilder private func card(_ request: PairRequest) -> some View {
-        HStack(spacing: Tokens.Space.s3) {
-            IconTile(symbol: "tv", hex: "#bd2f85")
-            VStack(alignment: .leading, spacing: 2) {
-                Text(request.deviceName).font(.wmLabel.weight(.semibold)).foregroundStyle(palette.text)
-                if !request.facts.isEmpty { Text(request.facts).font(.wmSecondary).foregroundStyle(palette.textSecondary) }
-            }
-            Spacer(minLength: 0)
-        }
-        .padding(Tokens.Space.s4)
-        .background(RoundedRectangle(cornerRadius: Tokens.Radius.lg, style: .continuous).fill(palette.panel))
-        .accessibilityElement(children: .combine)
-        .accessibilityIdentifier("pair-device")
-        SectionTitle(say("signInTvAs"))
-        FlowLayout(spacing: Tokens.Space.s4, rowSpacing: Tokens.Space.s3) {
-            ForEach(request.profiles ?? []) { choice in
-                let picked = chosen == choice.id
-                Button {
-                    chosen = choice.id
-                    passwordAsked = false
-                } label: {
-                    VStack(spacing: Tokens.Space.s2) {
-                        AvatarTile(name: shownName(choice), size: 72, picture: picture(choice))
-                            .overlay {
-                                if picked {
-                                    RoundedRectangle(cornerRadius: 72 * 0.22 + 6, style: .continuous)
-                                        .inset(by: -6)
-                                        .strokeBorder(palette.accent, lineWidth: 3)
-                                }
-                            }
-                        Text(shownName(choice)).font(.wmLabel).foregroundStyle(picked ? palette.text : palette.textSecondary).lineLimit(1)
-                    }
-                    .frame(width: 96)
-                    .padding(.vertical, Tokens.Space.s2)
+    /// A device asked to be signed in: what it is, who it signs in as, and anything the server wants first.
+    private func card(_ request: PairRequest) -> some View {
+        DesignPage(eyebrow: Self.eyebrow, title: Self.title, identifier: "pair-page") {
+            DesignSection(title: "") {
+                DesignRows {
+                    DesignRow(title: request.deviceName, value: request.code ?? "", on: true, detail: request.facts)
+                        .accessibilityIdentifier("pair-device")
                 }
-                .buttonStyle(.plain)
-                .accessibilityLabel(shownName(choice))
-                .accessibilityAddTraits(picked ? [.isSelected] : [])
-                .accessibilityIdentifier("pair-as-\(choice.name)")
             }
-        }
-        if needsPin {
-            SectionTitle("The PIN on its screen")
-            Secondary("Six digits that change every 30 seconds. Type the ones showing now.")
-            DigitsEntry(code: $pin, checking: busy, wrongTries: wrongPins, label: "The PIN on its screen") { _ in
-                if ready { answer(approve: true) }
+            DesignSection(title: "Signing in as") {
+                DesignChips {
+                    ForEach(request.profiles ?? []) { choice in
+                        DesignChip(title: shownName(choice), on: chosen == choice.id) {
+                            chosen = choice.id
+                            passwordAsked = false
+                        }
+                        .accessibilityIdentifier("pair-as-\(choice.name)")
+                    }
+                }
             }
+            if needsPin {
+                DesignSection(title: "The PIN on its screen") {
+                    DesignNote(text: "Six digits that change every 30 seconds. Type the ones showing now.")
+                    DigitsEntry(code: $pin, checking: busy, wrongTries: wrongPins, label: "The PIN on its screen") { _ in
+                        if ready { answer(approve: true) }
+                    }
+                }
+            }
+            if needsPassword {
+                DesignSection(title: "Your password") {
+                    DesignNote(text: "Signing a device in as an administrator needs your password again.")
+                    passwordFields
+                }
+            }
+            if !problem.isEmpty { DesignSection(title: "") { ProblemLine(problem) } }
+        } actions: {
+            Button { answer(approve: true) } label: { BusyText("Approve", busy: busy) }
+                .action(primary: true)
+                .disabled(!ready || busy)
+            Button("Not this TV") { answer(approve: false) }
+                .action()
         }
-        if needsPassword {
-            Secondary("Signing a device in as an administrator needs your password again.")
-            passwordFields
-        }
-        if !problem.isEmpty { ProblemLine(problem) }
-        Button { answer(approve: true) } label: { BusyText(say("signInTvApprove"), busy: busy) }
-            .action(.primary, wide: true, tall: true)
-            .disabled(!ready || busy)
-        Button(say("signInTvDeny")) { answer(approve: false) }
-            .action(.quiet)
-            .frame(maxWidth: .infinity)
     }
 
-    @ViewBuilder private func inviteCard(_ invite: PairInvite) -> some View {
+    /// Six digits for the TV to type, for a TV that asks for a code.
+    private func inviteCard(_ invite: PairInvite) -> some View {
         let minutes = max(1, (invite.expiresInSec ?? 600) / 60)
-        Text(invite.code)
-            .font(.system(size: 44, weight: .bold, design: .monospaced))
-            .kerning(8)
-            .foregroundStyle(palette.text)
-            .frame(maxWidth: .infinity)
-            .padding(.vertical, Tokens.Space.s6)
-            .background(RoundedRectangle(cornerRadius: Tokens.Radius.lg, style: .continuous).fill(palette.panel))
-            .accessibilityLabel(invite.code.map(String.init).joined(separator: " "))
-            .accessibilityIdentifier("pair-invite")
-        Secondary(say("signInTvInviteHint").replacingOccurrences(of: "{minutes}", with: "\(minutes)"))
-        Button(say("back")) { reset() }.action(.secondary, wide: true, tall: true)
+        return DesignPage(eyebrow: Self.eyebrow, title: "Type this code on your TV",
+                          lead: say("signInTvInviteHint").replacingOccurrences(of: "{minutes}", with: "\(minutes)"),
+                          identifier: "pair-page") {
+            DesignSection(title: "") {
+                DesignRows {
+                    DesignRow(title: "Code", value: invite.code.map(String.init).joined(separator: " "), on: true)
+                        .accessibilityLabel(invite.code.map(String.init).joined(separator: " "))
+                        .accessibilityIdentifier("pair-invite")
+                }
+            }
+        } actions: {
+            Button(say("back")) { reset() }.action()
+        }
     }
 
-    @ViewBuilder private var start: some View {
-        #if os(iOS)
-        if CameraAccess.exists {
-            Button { openScanner() } label: { Label("Scan the code on its screen", systemImage: "qrcode.viewfinder") }
-                .action(.primary, wide: true, tall: true)
-                .accessibilityIdentifier("pair-scan")
-            if !cameraNote.isEmpty { Secondary(cameraNote) }
-            Secondary("Or type the code it shows:")
+    /// Where it starts: the camera (on a phone that has one) or the code the TV shows, typed.
+    private var start: some View {
+        DesignPage(eyebrow: Self.eyebrow, title: Self.title,
+                   lead: "Open WittyMediaServer on the TV, choose Sign in with a code, and type what it shows.",
+                   identifier: "pair-page") {
+            DesignSection(title: "Code") {
+                #if os(iOS)
+                if CameraAccess.exists {
+                    DesignChips {
+                        DesignChip(title: "Scan the code on its screen", on: true, symbol: "qrcode.viewfinder") { openScanner() }
+                            .accessibilityIdentifier("pair-scan")
+                    }
+                    if !cameraNote.isEmpty { DesignNote(text: cameraNote) }
+                    DesignNote(text: "Or type the code it shows:")
+                }
+                #endif
+                LetterCodeEntry(code: $code, checking: busy, wrongTries: wrongTries, onComplete: look)
+                if !problem.isEmpty { ProblemLine(problem) }
+            }
+            if inviteNeedsPassword {
+                DesignSection(title: "Your password") {
+                    DesignNote(text: "A code that signs a device in as an administrator needs your password again.")
+                    passwordFields
+                }
+            } else {
+                DesignSection(title: "") {
+                    DesignChips {
+                        DesignChip(title: say("signInTvInvite")) { makeInvite() }
+                    }
+                }
+            }
+        } actions: {
+            if inviteNeedsPassword {
+                Button { makeInvite() } label: { BusyText("Get a code", busy: busy) }
+                    .action(primary: true)
+                    .disabled(password.isEmpty || busy)
+            }
         }
-        #endif
-        LetterCodeEntry(code: $code, checking: busy, wrongTries: wrongTries, onComplete: look)
-        if !problem.isEmpty { ProblemLine(problem) }
-        if inviteNeedsPassword {
-            Secondary("A code that signs a device in as an administrator needs your password again.")
-            passwordFields
-            Button { makeInvite() } label: { BusyText("Get a code", busy: busy) }
-                .action(.secondary, wide: true, tall: true)
-                .disabled(password.isEmpty || busy)
+    }
+
+    /// Signed in, or not: what happened, and what next.
+    private func done(_ outcome: String) -> some View {
+        DesignPage(eyebrow: Self.eyebrow, title: outcome, identifier: "pair-page") {
+            EmptyView()
+        } actions: {
+            Button(say("back")) { dismiss() }.action(primary: true)
+            Button(say("signInTvAnother")) { reset() }.action()
+        }
+    }
+
+    @ViewBuilder private var page: some View {
+        if model.user?.isAdult == false {
+            DesignPage(eyebrow: Self.eyebrow, title: "Ask an adult", lead: say("signInTvAdultOnly"), identifier: "pair-page") {
+                EmptyView()
+            }
+        } else if let outcome {
+            done(outcome)
+        } else if let invite {
+            inviteCard(invite)
+        } else if let asked {
+            card(asked)
         } else {
-            Button(say("signInTvInvite")) { makeInvite() }
-                .action(.quiet)
-                .frame(maxWidth: .infinity)
+            start
         }
     }
 
     var body: some View {
-        SettingsScreen(title: say("rowSignInTv"), detail: asked == nil && invite == nil && outcome == nil ? say("signInTvHint") : "") {
-            if model.user?.isAdult == false {
-                Secondary(say("signInTvAdultOnly"))
-            } else if let outcome {
-                OutcomeLine(words: outcome, good: outcome == say("signInTvDone"))
-                Button(say("signInTvAnother")) { reset() }.action(.secondary, wide: true, tall: true)
-                Button(say("back")) { dismiss() }.action(.primary, wide: true, tall: true)
-            } else if let invite {
-                inviteCard(invite)
-            } else if let asked {
-                card(asked)
-            } else {
-                start
-            }
-        }
+        page
         .animation(.easeOut(duration: Tokens.Motion.appear), value: asked)
         #if os(iOS)
         .sheet(isPresented: $scanning) {
