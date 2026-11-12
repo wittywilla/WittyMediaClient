@@ -463,7 +463,7 @@ class SduiScreen(val document: SduiDocument) {
             put("scope", document.theme?.scope.orEmpty())
             layout.shell?.let { shell ->
                 put("shell", buildJsonObject {
-                    put("layout", shell.layout)
+                    if (shell.experience.isNotEmpty()) put("experience", shell.experience) else put("layout", shell.layout)
                     put("nav", shell.nav)
                     if (shell.overlay) put("overlay", true)
                     put("size", shell.size)
