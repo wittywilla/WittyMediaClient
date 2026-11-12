@@ -203,6 +203,15 @@ struct DesignRows<Content: View>: View {
     }
 }
 
+/// A Design 2 row's press, focus and ring, for a row drawn by its own view.
+struct DesignRowButton: ButtonStyle {
+    var selected = false
+
+    func makeBody(configuration: Configuration) -> some View {
+        DesignRowStyle(selected: selected).makeBody(configuration: configuration)
+    }
+}
+
 private struct DesignRowStyle: ButtonStyle {
     let selected: Bool
 

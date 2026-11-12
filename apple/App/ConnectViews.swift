@@ -35,6 +35,7 @@ struct ConnectView: View {
 
     @EnvironmentObject private var model: AppModel
     @Environment(\.metrics) private var metrics
+    @Environment(\.palette) private var palette
     let initialMessage: String
     @State private var address = ""
     @State private var error = ""
@@ -168,23 +169,22 @@ struct ConnectView: View {
         found.filter { server in !added.contains { $0.url == server.url || (!$0.serverId.isEmpty && $0.serverId == server.id) } }
     }
 
-    @ViewBuilder private var findWords: some View {
-        BrandLockup(app: true)
-        SignInHeading(title: say("findTitle"), detail: say("findSubtitle"), display: true)
-        if !error.isEmpty { ProblemLine(error) }
-    }
-
     /// Servers found on the network that this device hasn't used: where each one is, and nothing else until it's added.
     @ViewBuilder private func foundSection(_ others: [SavedServer]) -> some View {
-        SearchingCaption(words: say("foundServers"), searching: searching)
-            .padding(.top, savedFirst && !others.isEmpty ? Tokens.Space.s2 : 0)
-        if found.isEmpty {
-            NoteCard(words: refused ? say("findNotSupported") : searchedLong ? say("findNone") : say("findSearching"),
-                     busy: searching, icon: refused ? "wifi.slash" : "magnifyingglass")
-        }
-        ForEach(foundOnly(others)) { server in
-            ServerCard(url: server.url, connecting: connectingTo == server.url) { Task { await connect(server.url) } }
-                .focused($spot, equals: .found(server.id))
+        DesignSection(title: "Found on this network") {
+            if found.isEmpty {
+                HStack(spacing: Tokens.Space.s2) {
+                    if searching { ProgressView().tint(palette.textSecondary) }
+                    DesignNote(text: refused ? say("findNotSupported") : searchedLong ? say("findNone") : say("findSearching"))
+                }
+                .accessibilityElement(children: .combine)
+            }
+            DesignRows {
+                ForEach(foundOnly(others)) { server in
+                    ServerCard(url: server.url, connecting: connectingTo == server.url) { Task { await connect(server.url) } }
+                        .focused($spot, equals: .found(server.id))
+                }
+            }
         }
     }
 
@@ -200,58 +200,74 @@ struct ConnectView: View {
                 .focused($spot, equals: .recent(server.url))
                 .firstFocus(in: scope, when: server.url == first)
         }
+        .remoteSection()
+        .padding(.top, Tokens.Space.s6)
     }
 
-    private var manageButton: some View {
-        // Somewhere to remove servers that needs no gesture to find.
-        Button {
-            showManage = true
-            error = ""
-        } label: {
-            Label(say("manageServers"), systemImage: "slider.horizontal.3")
+    /// Enter an address, Join from away: the other ways in, as chips.
+    private func otherWays(_ none: Bool) -> some View {
+        DesignSection(title: "") {
+            DesignChips {
+                DesignChip(title: say("enterAddress"), on: none, symbol: "link") {
+                    showForm = true
+                    error = ""
+                }
+                .focused($spot, equals: .enterAddress)
+                .firstFocus(in: scope, when: none)
+                // For a device that has never been at home with its server: it shows a code to type in there.
+                if PeerLibrary.available {
+                    DesignChip(title: say("joinAway"), symbol: "dot.radiowaves.left.and.right") {
+                        showJoin = true
+                        error = ""
+                    }
+                    .focused($spot, equals: .joinAway)
+                }
+            }
         }
-        .action(.quiet, wide: true)
-        .focused($spot, equals: .manage)
     }
 
-    @ViewBuilder private func findActions(_ listed: [SavedServer]) -> some View {
+    /// Show saved servers first, and somewhere to forget a server that needs no gesture to find.
+    private func onThisDevice(_ any: Bool) -> some View {
+        DesignSection(title: "On this device") {
+            DesignRows {
+                DesignRow(title: "Show saved servers first", value: savedFirst ? "On" : "Off", on: savedFirst) {
+                    savedFirst.toggle()
+                }
+                .accessibilityIdentifier("connect.savedFirst")
+                if any {
+                    DesignRow(title: "Forget a server", detail: "Removes its sign-in and downloads from this device") {
+                        showManage = true
+                        error = ""
+                    }
+                    .focused($spot, equals: .manage)
+                    .accessibilityIdentifier("connect.manage")
+                }
+            }
+        }
+    }
+
+    private func findPage(_ listed: [SavedServer]) -> some View {
         // With "Show saved servers first" (the usual), the servers used before come first, the last one used at the
         // top, so nobody scrolls past the network's to reach their own; what's found on the network is below them.
         let others = savedFirst ? ServerOrder.recentFirst(listed, lastUsed: model.lastUsedURL) : listed
         let savedOnTop = savedFirst && !others.isEmpty
-        VStack(alignment: .leading, spacing: Tokens.Space.s3) {
+        return DesignPage(eyebrow: "Welcome", title: "Choose your server",
+                          lead: savedOnTop || others.isEmpty
+                              ? "Saved servers come first. Servers found on your network are below."
+                              : "Servers found on your network come first. Saved servers are below.",
+                          identifier: "connect") {
+            if !error.isEmpty { DesignSection(title: "") { DesignNote(text: error, tone: true) } }
             if savedOnTop {
                 savedSection(others)
-                manageButton
                 foundSection(others)
             } else {
                 foundSection(others)
                 if !others.isEmpty { savedSection(others) }
             }
+            otherWays(found.isEmpty && others.isEmpty)
+            onThisDevice(!others.isEmpty)
+            DesignSection(title: "") { LegalNote() }
         }
-        Button {
-            showForm = true
-            error = ""
-        } label: {
-            Label(say("enterAddress"), systemImage: "link")
-        }
-        .action(found.isEmpty && others.isEmpty ? .primary : .secondary, wide: true, tall: true)
-        .focused($spot, equals: .enterAddress)
-        .firstFocus(in: scope, when: found.isEmpty && !savedOnTop)
-        .padding(.top, Tokens.Space.s2)
-        // For a device that has never been at home with its server: it shows a code to type in there.
-        if PeerLibrary.available {
-            Button {
-                showJoin = true
-                error = ""
-            } label: {
-                Label(say("joinAway"), systemImage: "dot.radiowaves.left.and.right")
-            }
-            .action(.quiet, wide: true)
-            .focused($spot, equals: .joinAway)
-        }
-        if !others.isEmpty && !savedOnTop { manageButton }
-        LegalNote()
     }
 
     @ViewBuilder private var addressWords: some View {
@@ -283,7 +299,7 @@ struct ConnectView: View {
                 SignInLayout(back: closeForm) { addressWords } actions: { addressActions }
                     .task { wantField = true }
             } else {
-                SignInLayout { findWords } actions: { findActions(others) }
+                findPage(others)
             }
         }
         .serverUndo()
