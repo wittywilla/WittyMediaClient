@@ -496,6 +496,8 @@ struct DesignCard: View {
     var body: some View {
         Button(action: action) {
             VStack(alignment: .leading, spacing: 2) {
+                // A look's layout, as a preview in its colours: W6's LayoutThumb(layout:swatches:) goes here when it lands
+                // (swap this line); until then the swatch strip below stands in for it.
                 if card.swatches.count >= 3 {
                     HStack(spacing: 3) {
                         RoundedRectangle(cornerRadius: 5).fill(colour(card.swatches[0])).frame(maxWidth: .infinity)
@@ -506,6 +508,13 @@ struct DesignCard: View {
                     .frame(height: sizes.chipHeight * 0.8)
                     .accessibilityHidden(true)
                     .padding(.bottom, 4)
+                } else if !card.symbol.isEmpty {
+                    Image(systemName: card.symbol)
+                        .font(.system(size: sizes.body * 1.5, weight: .semibold))
+                        .foregroundStyle(palette.accentText)
+                        .frame(height: sizes.body * 2, alignment: .leading)
+                        .accessibilityHidden(true)
+                        .padding(.bottom, 4)
                 }
                 Text(card.title).font(.system(size: sizes.small, weight: .heavy)).foregroundStyle(palette.text)
                     .lineLimit(2).multilineTextAlignment(.leading)

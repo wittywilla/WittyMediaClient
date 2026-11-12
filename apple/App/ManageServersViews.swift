@@ -17,7 +17,7 @@ enum ServerWords {
 
     static func name(_ server: SavedServer) -> String { server.name.isEmpty ? "WittyMediaServer" : server.name }
 
-    static func address(_ server: SavedServer) -> String { PeerInfo.isPlaceholder(server.url) ? say("awayOnly") : server.url }
+    static func address(_ server: SavedServer) -> String { PeerInfo.isPlaceholder(server.url) ? ServerCard.peerRemote : server.url }
 
     static func names(_ servers: [SavedServer]) -> String { servers.map(name).joined(separator: ", ") }
 

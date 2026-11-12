@@ -42,6 +42,9 @@ struct ConnectView: View {
     @State private var busy = false
     @State private var connectingTo = ""
     @State private var showForm = false
+    /// The form is for an invite link (Join with a link or code), not an address.
+    @State private var formForInvite = false
+    @State private var scanning = false
     @State private var showJoin = false
     @State private var showManage = false
     /// A server that hasn't been set up: its address, for the screen that says to finish in a browser.
@@ -204,25 +207,60 @@ struct ConnectView: View {
         .padding(.top, Tokens.Space.s6)
     }
 
-    /// Enter an address, Join from away: the other ways in, as chips.
-    private func otherWays(_ none: Bool) -> some View {
-        DesignSection(title: "") {
-            DesignChips {
-                DesignChip(title: say("enterAddress"), on: none, symbol: "link") {
-                    showForm = true
-                    error = ""
-                }
-                .focused($spot, equals: .enterAddress)
-                .firstFocus(in: scope, when: none)
-                // For a device that has never been at home with its server: it shows a code to type in there.
+    private func openForm(invite: Bool) {
+        formForInvite = invite
+        showForm = true
+        error = ""
+    }
+
+    /// What the camera read: an invite link joins from away; a server's address connects. Nothing else is sent anywhere.
+    private func scanned(_ text: String) {
+        scanning = false
+        let read = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        if let invite = PeerConnect.invite(from: read) {
+            Task { await join(invite) }
+        } else if case .ok(let url) = Address.normalize(read), read.lowercased().hasPrefix("http") {
+            Task { await connect(url) }
+        } else {
+            error = "That QR code isn’t an invite or a server’s address."
+        }
+    }
+
+    /// The canvas's "Connect to a remote server": peer to peer, made obvious. On a phone, a tablet and a Mac, an invite
+    /// link or code, the camera, or an address; on a TV, a code to type in from a phone, or an address.
+    @ViewBuilder private func remoteWays(_ none: Bool) -> some View {
+        DesignSection(title: "Connect to a remote server") {
+            DesignCards {
                 if PeerLibrary.available {
-                    DesignChip(title: say("joinAway"), symbol: "dot.radiowaves.left.and.right") {
+                    #if os(tvOS)
+                    DesignCard(card: .init(id: "join", title: "Join with a code", subtitle: "Type it in on a phone signed in to your server",
+                                           symbol: "qrcode")) {
                         showJoin = true
                         error = ""
                     }
                     .focused($spot, equals: .joinAway)
+                    .accessibilityIdentifier("connect.join")
+                    #else
+                    DesignCard(card: .init(id: "join", title: "Join with a link or code", subtitle: "From an invite, peer to peer",
+                                           symbol: "link.badge.plus")) { openForm(invite: true) }
+                        .focused($spot, equals: .joinAway)
+                        .accessibilityIdentifier("connect.join")
+                    #if os(iOS)
+                    if CameraAccess.exists {
+                        DesignCard(card: .init(id: "scan", title: "Scan a QR code", subtitle: "An invite on another screen",
+                                               symbol: "qrcode.viewfinder")) { scanning = true }
+                            .accessibilityIdentifier("connect.scan")
+                    }
+                    #endif
+                    #endif
                 }
+                DesignCard(card: .init(id: "address", title: say("enterAddress"), subtitle: "A web address or IP and port",
+                                       on: none, symbol: "globe")) { openForm(invite: false) }
+                    .focused($spot, equals: .enterAddress)
+                    .firstFocus(in: scope, when: none)
+                    .accessibilityIdentifier("connect.address")
             }
+            DesignNote(text: "Peer to peer connects this device straight to your server from anywhere, end to end encrypted. Nothing is opened on your router. Your server’s owner sends you an invite.", tone: true)
         }
     }
 
@@ -264,25 +302,42 @@ struct ConnectView: View {
                 foundSection(others)
                 if !others.isEmpty { savedSection(others) }
             }
-            otherWays(found.isEmpty && others.isEmpty)
+            remoteWays(found.isEmpty && others.isEmpty)
             onThisDevice(!others.isEmpty)
             DesignSection(title: "") { LegalNote() }
         }
     }
 
-    @ViewBuilder private var addressWords: some View {
-        BrandLockup(app: true)
-        SignInHeading(title: say("addressTitle"), detail: say("addressHint"))
-        if PeerLibrary.available { Secondary(say("inviteHint")) }
-    }
-
-    @ViewBuilder private var addressActions: some View {
-        OutlinedField(label: say("addressLabel"), text: $address, kind: .address, icon: "link", request: $wantField, onSubmit: submit)
-        if !error.isEmpty { ProblemLine(error) }
-        // Never disabled: on a TV that would take the focus away from under the person.
-        Button { if !busy { submit() } } label: { BusyText(say("connect"), busy: busy) }
-            .action(.primary, wide: true, tall: true)
-        LegalNote()
+    /// Enter an address, or (`formForInvite`) paste an invite: one field, Connect, and the way back.
+    private var addressPage: some View {
+        DesignPage(eyebrow: formForInvite ? "Connect to a remote server" : "Welcome",
+                   title: formForInvite ? "Join with a link or code" : say("addressTitle"),
+                   lead: formForInvite
+                       ? "Paste the invite link your server’s owner sent you. It works once, for a short time, and connects peer to peer from anywhere."
+                       : say("addressHint") + (PeerLibrary.available ? " " + say("inviteHint") : ""),
+                   identifier: "connect.form") {
+            DesignSection(title: "") {
+                OutlinedField(label: formForInvite ? "Invite link" : say("addressLabel"), text: $address, kind: .address,
+                              icon: "link", request: $wantField, onSubmit: submit)
+                if !error.isEmpty { ProblemLine(error) }
+            }
+            if formForInvite, PeerLibrary.available {
+                DesignSection(title: "") {
+                    DesignChips {
+                        DesignChip(title: "Show a code on this device instead", symbol: "qrcode") {
+                            showForm = false
+                            showJoin = true
+                        }
+                    }
+                }
+            }
+            DesignSection(title: "") { LegalNote() }
+        } actions: {
+            // Never disabled: on a TV that would take the focus away from under the person.
+            Button { if !busy { submit() } } label: { BusyText(say("connect"), busy: busy) }
+                .action(primary: true)
+            Button(say("back"), action: closeForm).action()
+        }
     }
 
     var body: some View {
@@ -296,13 +351,19 @@ struct ConnectView: View {
             } else if showJoin {
                 JoinAwayPanel(back: closeJoin)
             } else if showForm {
-                SignInLayout(back: closeForm) { addressWords } actions: { addressActions }
+                addressPage
                     .task { wantField = true }
             } else {
                 findPage(others)
             }
         }
         .serverUndo()
+        #if os(iOS)
+        .sheet(isPresented: $scanning) {
+            ScannerSheet(looking: "an invite", hint: "Point the camera at the invite’s QR code on the other screen.",
+                         instead: "The camera couldn’t be started. Paste the invite link instead.") { scanned($0) }
+        }
+        #endif
         .focusRoot(scope)
         .onChange(of: spot) { focusChanged($0) }
         .onRemoteBack(notSetUp != nil ? { notSetUp = nil } : showManage ? { closeManage() } : showJoin ? { closeJoin() } : showForm ? { closeForm() } : nil)

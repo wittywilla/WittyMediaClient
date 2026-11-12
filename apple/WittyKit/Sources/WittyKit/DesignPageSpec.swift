@@ -107,13 +107,21 @@ public struct DesignPageSpec: Codable, Equatable, Sendable {
         public var on: Bool
         /// Background, second background and accent; empty for none.
         public var swatches: [String]
+        /// A symbol over the title (an SF Symbol name on Apple), for a card that is a way to do something; empty for none.
+        public var symbol: String
+        /// A look's layout id ("lumen", "rail", "classic", …): the card shows a preview of that layout in its swatches'
+        /// colours (W6's `LayoutThumb`), where it would show the swatch strip. Empty for none.
+        public var layout: String
 
-        public init(id: String = "", title: String, subtitle: String = "", on: Bool = false, swatches: [String] = []) {
+        public init(id: String = "", title: String, subtitle: String = "", on: Bool = false, swatches: [String] = [], symbol: String = "",
+                    layout: String = "") {
             self.id = id.isEmpty ? DesignPageSpec.slug(title) : id
             self.title = title
             self.subtitle = subtitle
             self.on = on
             self.swatches = swatches
+            self.symbol = symbol
+            self.layout = layout
         }
     }
 
@@ -278,14 +286,16 @@ extension DesignPageSpec.Chip {
 }
 
 extension DesignPageSpec.Card {
-    private enum Keys: String, CodingKey { case id, title, subtitle, on, swatches }
+    private enum Keys: String, CodingKey { case id, title, subtitle, on, swatches, symbol, layout }
 
     public init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: Keys.self)
         self.init(id: try c.decodeIfPresent(String.self, forKey: .id) ?? "", title: try c.decode(String.self, forKey: .title),
                   subtitle: try c.decodeIfPresent(String.self, forKey: .subtitle) ?? "",
                   on: try c.decodeIfPresent(Bool.self, forKey: .on) ?? false,
-                  swatches: try c.decodeIfPresent([String].self, forKey: .swatches) ?? [])
+                  swatches: try c.decodeIfPresent([String].self, forKey: .swatches) ?? [],
+                  symbol: try c.decodeIfPresent(String.self, forKey: .symbol) ?? "",
+                  layout: try c.decodeIfPresent(String.self, forKey: .layout) ?? "")
     }
 }
 
