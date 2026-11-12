@@ -223,6 +223,15 @@ fun TvSideMenu(nav: Nav, closed: Dp, open: Dp, modifier: Modifier = Modifier) {
             .padding(vertical = metrics.u(48), horizontal = metrics.u(16)).semantics { role = Role.Tab },
         verticalArrangement = Arrangement.spacedBy(metrics.u(12), Alignment.CenterVertically),
     ) {
+        // The server's name in its colours: a centred mark badge closed, the whole name open (never left out of a frame).
+        val brand = LocalExtraColours.current.brandAccent
+        val name = com.wittywilla.wittymediaclient.net.BrandName.plain(nav.brandName, nav.brandParts)
+        Row(Modifier.padding(start = metrics.u(8), bottom = metrics.u(16)), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(metrics.u(16))) {
+            Box(Modifier.size(metrics.u(56)).background(scheme.primary.copy(alpha = 0.16f), RoundedCornerShape(metrics.u(14))), contentAlignment = Alignment.Center) {
+                Text(name.firstOrNull()?.uppercase() ?: "W", color = brand, fontSize = metrics.u(30).value.sp, fontWeight = FontWeight.Bold)
+            }
+            if (inside) Text(brandAnnotated(nav.brandName, nav.brandParts, scheme.onBackground, brand), fontSize = metrics.u(29).value.sp, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis)
+        }
         nav.sduiMenuAll.forEach { (entry, route) ->
             val on = chosen(nav, route)
             Pressable(
