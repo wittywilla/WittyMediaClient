@@ -16,6 +16,8 @@ public struct SDUIButtonModel: Equatable, Identifiable, Sendable {
     public var icon: String
     public var primary: Bool
     public var action: SDUIAction?
+    /// A toggle that is on (Watch later, when the title is on the list): drawn as on, read as selected.
+    public var pressed = false
 }
 
 /// One choice of a filter, a sort or a season.
@@ -247,7 +249,12 @@ public struct SDUIScreen: Equatable, Sendable {
                     e.filters.append(SDUIFilterField(id: field.text("id"), label: field.text("label"), value: value, options: options,
                                                      summary: field.text("label") + ": " + (chosen.isEmpty ? "Any" : chosen)))
                 }
-                if let count = p.whole("count") { text("count", "\(count) titles") }
+                // The server's own words for the count ("1 title"); older servers sent only the number.
+                if !p.text("countText").isEmpty {
+                    text("count", p.text("countText"))
+                } else if let count = p.whole("count") {
+                    text("count", count == 1 ? "1 title" : "\(count) titles")
+                }
             case "DetailHeader":
                 e.role = "region"
                 e.label = p.text("title")
@@ -466,7 +473,8 @@ public struct SDUIScreen: Equatable, Sendable {
                 guard let fields = value.object else { return nil }
                 let id = fields.text("id").isEmpty ? "action\(index)" : fields.text("id")
                 return SDUIButtonModel(id: id, label: fields.text("label"), icon: fields.text("icon"),
-                                       primary: fields.flag("primary") == true, action: fields["action"]?.decoded(SDUIAction.self))
+                                       primary: fields.flag("primary") == true, action: fields["action"]?.decoded(SDUIAction.self),
+                                       pressed: fields.flag("pressed") == true)
             }
         }
     }
