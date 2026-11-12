@@ -5,10 +5,10 @@ import Foundation
 // What the server sends for a server-driven page: the server's docs/SDUI.md, "The rendered document".
 // Every type here reads what it knows and ignores the rest, so a newer server's additions do no harm.
 
-/// The catalogue revision this app was built against. Sent with every request (`catalog=2`), so a newer
+/// The catalogue revision this app was built against. Sent with every request (`catalog=6`), so a newer
 /// server sends nothing this app can't draw.
 public enum SDUI {
-    public static let catalog = 5
+    public static let catalog = 6
     public static let version = 1
     /// The features in `/capabilities` that the app's server-driven pages need, all of them.
     public static let neededFeatures: Set<String> = ["sdui-pages", "sdui-catalog", "sdui-navigation", "sdui-personal"]
