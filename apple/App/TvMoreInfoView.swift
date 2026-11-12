@@ -48,7 +48,7 @@ struct MoreInfoSheet: View {
         do {
             info = try await client.programmeInfo(channel: channel, start: start)
         } catch let error as APIError {
-            problem = error.status == 404 ? "That programme isn’t listed any more." : error.message
+            problem = error.status == 404 ? "Details are no longer available" : error.message
         } catch {
             problem = plainWords(Problem.of(error))
         }

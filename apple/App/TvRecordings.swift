@@ -19,6 +19,8 @@ struct RecordingsView: View {
     @State private var note = ""
     /// A series rule whose options are being changed (`tv-dvr-rules-2`).
     @State private var changing: RecordingRule?
+    /// WittyTV More info for a recording (its `channelKey` and `programme`).
+    @State private var moreInfo: MoreInfoAsk?
     @Namespace private var scope
 
     /// What's being asked before something goes.
@@ -84,6 +86,9 @@ struct RecordingsView: View {
         } message: {
             Text(note)
         }
+        .sheet(item: $moreInfo) { ask in
+            MoreInfoSheet(channel: ask.channel, start: ask.start, onWatch: { _ in moreInfo = nil }, onFromStart: { _, _ in moreInfo = nil })
+        }
         .sheet(item: $changing) { rule in
             RecordOptionsSheet(title: rule.title, series: true, start: rule.options, onSave: { options in
                 do {
@@ -136,6 +141,10 @@ struct RecordingsView: View {
             Text(r.statusWords).font(dress.font(18.75, .bold)).foregroundStyle(r.status == "recording" ? p.accent : p.text)
             if r.status == "done" {
                 Button { play(r) } label: { Label("Play", systemImage: "play.fill") }.buttonStyle(TvButtonStyle(dress: dress, on: true))
+            }
+            if let info = r.moreInfo, model.has(TvFeature.programmeInfo) {
+                Button { moreInfo = MoreInfoAsk(channel: info.channel, start: info.start) } label: { Label("More info", systemImage: "info.circle") }
+                    .buttonStyle(TvButtonStyle(dress: dress))
             }
             Button(r.isFinished ? "Remove" : "Cancel") { asking = Asking(recording: r, deleteFile: false) }.buttonStyle(TvButtonStyle(dress: dress))
             if model.user?.isAdmin == true, r.path?.isEmpty == false, r.status != "recording", r.status != "scheduled" {
