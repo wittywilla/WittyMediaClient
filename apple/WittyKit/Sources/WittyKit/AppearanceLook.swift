@@ -518,3 +518,34 @@ public extension WittyClient {
         return answer.header("ETag")?.trimmingCharacters(in: CharacterSet(charactersIn: "\"")) ?? etag
     }
 }
+
+
+public extension LookPolicy {
+    /// The sheet that chooses what is required of one person or everyone: a look, a theme, either, or neither. Pressing a
+    /// card chooses it (pressing the chosen one again, or "Not required", clears the part); Done keeps it.
+    static func picker(who: String, current: Requirement, looks: [ExperienceCatalogue.Info], themes: [AppearancePage.ThemeChoice]) -> DesignPageSpec {
+        let lookCards = [DesignPageSpec.Card(id: "look-none", title: "Not required", subtitle: "They choose their own look", on: current.experience.isEmpty)]
+            + looks.map { DesignPageSpec.Card(id: "look-" + $0.id, title: $0.name, subtitle: $0.tagline, on: current.experience == $0.id,
+                                              swatches: AppearancePage.swatches(for: $0.theme, in: themes)) }
+        let themeCards = [DesignPageSpec.Card(id: "theme-none", title: "Not required", subtitle: "They choose their own theme", on: current.theme.isEmpty)]
+            + themes.map { DesignPageSpec.Card(id: "theme-" + $0.id, title: $0.name, subtitle: $0.dark ? "Dark" : "Light", on: current.theme == $0.id,
+                                               swatches: $0.swatches.isEmpty ? AppearancePage.fallbackSwatches : $0.swatches) }
+        var page = DesignPageSpec(eyebrow: "Settings · People · Looks and themes", title: "Require for \(who)",
+                                  lead: "Choose a look, a theme, or both. They are locked for \(who), with your name beside them.",
+                                  sections: [.secC("Look", lookCards, 5), .secC("Theme", themeCards, 6)],
+                                  actions: [.A1("Done"), .A2("Cancel")], layer: true)
+        page.start = current.experience.isEmpty ? "look-none" : "look-" + current.experience
+        return page
+    }
+
+    /// What pressing a card of the picker does to the requirement.
+    static func applying(_ id: String, to current: Requirement) -> Requirement {
+        var r = current
+        switch AppearancePage.pick(id) {
+        case (let look?, _): r.experience = (look == "none" || look == current.experience) ? "" : look
+        case (_, let theme?): r.theme = (theme == "none" || theme == current.theme) ? "" : theme
+        default: break
+        }
+        return r
+    }
+}

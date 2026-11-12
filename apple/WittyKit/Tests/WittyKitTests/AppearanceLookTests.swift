@@ -228,3 +228,26 @@ final class CommandParamsTests: XCTestCase {
         XCTAssertEqual(body(r), #"{"room":"r1","code":"{item}"}"#)
     }
 }
+
+final class PolicyPickerTests: XCTestCase {
+    func testPressingCardsChoosesAndClears() {
+        var r = LookPolicy.Requirement()
+        r = LookPolicy.applying("look-rail", to: r)
+        r = LookPolicy.applying("theme-cinema", to: r)
+        XCTAssertEqual(r.experience, "rail")
+        XCTAssertEqual(r.theme, "cinema")
+        XCTAssertEqual(LookPolicy.applying("look-rail", to: r).experience, "")
+        XCTAssertEqual(LookPolicy.applying("theme-none", to: r).theme, "")
+        XCTAssertEqual(LookPolicy.applying("nonsense", to: r), r)
+    }
+
+    func testPickerMarksWhatIsRequired() {
+        let page = LookPolicy.picker(who: "Pip", current: .init(experience: "rail"),
+                                     looks: [.init(id: "lumen", name: "Lumen"), .init(id: "rail", name: "Rail")],
+                                     themes: [.init(id: "default", name: "Witty")])
+        XCTAssertEqual(page.sections[0].cards.filter(\.on).map(\.id), ["look-rail"])
+        XCTAssertEqual(page.sections[1].cards.filter(\.on).map(\.id), ["theme-none"])
+        XCTAssertEqual(page.title, "Require for Pip")
+        XCTAssertEqual(page.start, "look-rail")
+    }
+}

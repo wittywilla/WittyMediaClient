@@ -275,7 +275,15 @@ struct LookPolicyView: View {
     @State private var policy = LookPolicy()
     @State private var etag = ""
     @State private var message = ""
-    @State private var editing = ""
+    /// Who is being chosen for: "everyone" or a profile's id; the requirement being edited.
+    @State private var choosing: Choosing?
+
+    struct Choosing: Identifiable {
+        let who: String
+        let key: String
+        var draft: LookPolicy.Requirement
+        var id: String { key }
+    }
 
     private func name(look id: String) -> String { catalogue.experiences.first { $0.id == id }?.name ?? id }
     private func name(theme id: String) -> String { themes.first { $0.id == id }?.name ?? id }
@@ -300,43 +308,29 @@ struct LookPolicyView: View {
             let r = policy.profiles[String(u.id)]
             return .R(u.displayName ?? u.name, words(r), r?.isEmpty == false, r?.isEmpty == false ? "Required by \(r?.by.isEmpty == false ? r!.by : "an administrator")" : (u.kind ?? ""))
         }))
-        if !editing.isEmpty { sections.append(.secN("", "Choose what to require, then Save. Pressing again cycles through the looks and themes, then off.", true)) }
         if !message.isEmpty { sections.append(.secN("", message, true)) }
         return DesignPageSpec(eyebrow: "Settings · People · Looks and themes", title: "Who must use what",
                               lead: "Require a look, a theme, or both, for a profile or for everyone. A required choice is locked, with your name beside it. A profile with nothing required can choose freely.",
                               sections: sections, actions: [.A1("Save"), .A2("Undo")], foot: "Changes apply the next time each person opens an app.")
     }
 
-    /// Each press of a row moves its requirement on: off, then each look (or theme) in turn.
-    private func cycle(_ current: String, _ options: [String]) -> String {
-        guard let at = options.firstIndex(of: current) else { return options.first ?? "" }
-        return at + 1 < options.count ? options[at + 1] : ""
-    }
-
     private func pressed(_ id: String) {
-        let looks = catalogue.experiences.map(\.id), themeIds = themes.map(\.id)
         switch id {
-        case "require-a-look":
-            var r = policy.everyone ?? .init()
-            r.experience = cycle(r.experience, looks)
-            policy.everyone = r.isEmpty ? nil : r
-        case "require-a-theme":
-            var r = policy.everyone ?? .init()
-            r.theme = cycle(r.theme, themeIds)
-            policy.everyone = r.isEmpty ? nil : r
+        case "require-a-look", "require-a-theme":
+            choosing = Choosing(who: "everyone", key: "everyone", draft: policy.everyone ?? .init())
         case "let-people-import-themes": policy.profileThemes.toggle()
         case "save": Task { await save() }
         case "undo": Task { await load() }
         default:
-            guard let user = users.first(where: { ($0.displayName ?? $0.name).lowercased().replacingOccurrences(of: " ", with: "-") == id || DesignPageSpec.slug($0.displayName ?? $0.name) == id }) else { return }
-            var r = policy.profiles[String(user.id)] ?? .init()
-            // One press moves the look, a second press round moves the theme: the row says which.
-            if r.experience.isEmpty && r.theme.isEmpty { r.experience = looks.first ?? "" }
-            else if !r.experience.isEmpty, let next = looks.firstIndex(of: r.experience), next + 1 < looks.count { r.experience = looks[next + 1] }
-            else if !r.experience.isEmpty { r.experience = ""; r.theme = themeIds.first ?? "" }
-            else { r.theme = cycle(r.theme, themeIds) }
-            policy.profiles[String(user.id)] = r.isEmpty ? nil : r
+            guard let user = users.first(where: { DesignPageSpec.slug($0.displayName ?? $0.name) == id }) else { return }
+            choosing = Choosing(who: user.displayName ?? user.name, key: String(user.id), draft: policy.profiles[String(user.id)] ?? .init())
         }
+    }
+
+    private func keep(_ done: Choosing) {
+        if done.key == "everyone" { policy.everyone = done.draft.isEmpty ? nil : done.draft }
+        else { policy.profiles[done.key] = done.draft.isEmpty ? nil : done.draft }
+        choosing = nil
     }
 
     private func load() async {
@@ -372,5 +366,15 @@ struct LookPolicyView: View {
         DesignSpecPage(spec: spec, onPress: pressed)
             .accessibilityIdentifier("look-policy")
             .task { await load() }
+            .sheet(item: $choosing) { pick in
+                DesignSpecPage(spec: LookPolicy.picker(who: pick.who, current: choosing?.draft ?? pick.draft, looks: catalogue.experiences, themes: themes),
+                               onPress: { id in
+                                   switch id {
+                                   case "done": keep(choosing ?? pick)
+                                   case "cancel": choosing = nil
+                                   default: choosing?.draft = LookPolicy.applying(id, to: choosing?.draft ?? pick.draft)
+                                   }
+                               }, onBack: { choosing = nil })
+            }
     }
 }
