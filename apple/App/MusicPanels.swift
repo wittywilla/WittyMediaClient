@@ -949,6 +949,8 @@ struct KaraokeView: View {
                         .frame(minHeight: 18)
                         .padding(.horizontal, 16).padding(.bottom, max(10, insets.bottom))
                 }
+                // Never wider than the screen, whatever a row inside would like.
+                .frame(width: geo.size.width)
                 .padding(.top, insets.top)
             }
         }

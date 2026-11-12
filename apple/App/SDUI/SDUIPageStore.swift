@@ -99,7 +99,17 @@ final class SDUIPageStore: ObservableObject {
         loadedAt = Date()
         if fresh != working || screen == nil { show(fresh) }
         phase = .ready
+        // A season chosen on this page stays chosen when the page is asked for again (after Watch later, say).
+        if let center = lastCenter {
+            for (section, url) in chosenSeasons where fresh.root.find(section) != nil {
+                Task { await fetch(section: section, url: url, center: center) }
+            }
+        }
     }
+
+    /// The seasons chosen on this page, by section: asked for again when the page is.
+    private var chosenSeasons: [String: String] = [:]
+    private weak var lastCenter: SDUICenter?
 
     private func fail(_ error: Error, center: SDUICenter) {
         if let refusal = error as? APIError, refusal.status == 404 {
@@ -146,6 +156,7 @@ final class SDUIPageStore: ObservableObject {
         guard next != params else { return }
         params = next
         served = nil
+        chosenSeasons = [:]
         // Another page of results is another page: nothing fetched for the one before belongs to it.
         let before = working
         working = nil
@@ -191,6 +202,8 @@ final class SDUIPageStore: ObservableObject {
     /// Another season: its episodes take the place of the ones there.
     func choose(_ season: SDUISeason, in section: SDUIElement, center: SDUICenter) async {
         guard !season.selected else { return }
+        chosenSeasons[section.id] = season.url
+        lastCenter = center
         await fetch(section: section.id, url: season.url, center: center)
     }
 }
