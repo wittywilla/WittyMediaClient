@@ -55,5 +55,20 @@ internal fun PlayingHereScreen(nav: Nav, s: Map<String, String>) {
             )
             Hint(s["canvasHint"].orEmpty())
         }
+        // Being a device the account's other devices play on and steer (player/RemoteHub.kt), where the server has it.
+        val hub = nav.app.remote
+        if (hub.remoteOn) {
+            GroupedList(
+                s["remoteCaption"].orEmpty(),
+                listOf(
+                    GroupRow(
+                        s["letOthersControl"].orEmpty(), onClick = { hub.chooseLetOthers(!hub.letOthers) },
+                        icon = Symbols.Devices, tint = Color(0xFF3E5BD0), value = if (hub.letOthers) on else off,
+                        chevron = false, selected = hub.letOthers, focusKey = "let-others", trailing = { Toggle(hub.letOthers) },
+                    ),
+                ),
+            )
+            Hint(s["letOthersHint"].orEmpty())
+        }
     }
 }

@@ -623,6 +623,10 @@ fun WebNowPlaying(nav: Nav) {
                         if (album.isNotEmpty() && library > 0) MenuItem(if (books) "Go to book" else "Go to album") { nav.pop(); nav.push(Route.Album(library, album, artist)) } else null,
                         if (!books && artist.isNotEmpty() && library > 0) MenuItem("Go to artist") { nav.pop(); nav.push(Route.Artist(library, artist)) } else null,
                         if (video != null) MenuItem("Watch the video") { watchVideo() } else null,
+                        // Handed over to another device at the same place, where the server and this profile allow it.
+                        if (nav.app.remote.canControl) MenuItem("Play on another device", Symbols.Devices) {
+                            nav.app.remote.sourcePlayingMusic()?.let { nav.push(RemoteRoute.PlayOn(it)) }
+                        } else null,
                         MenuItem("Stop and close", WebIcons.Close) { listening.stop(); nav.pop() },
                     ),
                     at(NpMenu.More),

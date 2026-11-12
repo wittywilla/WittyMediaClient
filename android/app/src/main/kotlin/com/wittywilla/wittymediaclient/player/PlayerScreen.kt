@@ -173,7 +173,9 @@ fun PlayerScreen(nav: Nav, id: Long, startOver: Boolean) {
 
     var item by remember { mutableStateOf<Item?>(null) }
     var stream by remember { mutableStateOf<Playback?>(null) }
-    var ask by remember { mutableStateOf(Ask(startSec = if (startOver) 0.0 else null)) }
+    // Where another device or a watch party asked for this to start, and with which tracks (player/RemoteHub.kt).
+    val preset = remember { nav.app.remote.takePreset(id) }
+    var ask by remember { mutableStateOf(Ask(audio = preset?.audio, subtitle = preset?.subtitle, startSec = preset?.startSec ?: if (startOver) 0.0 else null)) }
     var problem by remember { mutableStateOf("") }
     var controls by remember { mutableStateOf(true) }
     var picker by remember { mutableStateOf(Picker.None) }
@@ -191,6 +193,9 @@ fun PlayerScreen(nav: Nav, id: Long, startOver: Boolean) {
     // The system's now-playing card, media keys and voice control. One session per player, and only
     // while this screen is up: a film stops when the app is left. Sound has ListeningService.
     val session = remember { MediaSession.Builder(context, player).setId("witty-$id").build() }
+    // This player as another device and a watch party see it. What it does is filled in below, once it's defined.
+    val remoteTarget = remember(player) { ScreenVideoTarget(id, player) }
+    var partyOpen by remember { mutableStateOf(false) }
 
     fun currentFilmSec() = player.currentPosition / 1000.0 + (stream?.timeOffsetSec ?: 0.0)
 
@@ -249,6 +254,8 @@ fun PlayerScreen(nav: Nav, id: Long, startOver: Boolean) {
                 if (state == Player.STATE_READY) clock.ready()
                 if (state == Player.STATE_ENDED) {
                     saveProgress()
+                    // A watch party moves everyone on together, rather than each player counting down by itself.
+                    if (remoteTarget.steering?.ended() == true) return
                     if (stream?.nextId != null) countdown = NEXT_COUNTDOWN_SEC else nav.pop()
                 }
             }
@@ -414,7 +421,7 @@ fun PlayerScreen(nav: Nav, id: Long, startOver: Boolean) {
 
     // How far can be reached depends on the stream: a growing one has to be
     // reopened to go past what exists so far (see `seek` in docs/CLIENT-API.md).
-    fun seekFilm(targetSec: Double) {
+    fun moveTo(targetSec: Double) {
         val current = stream ?: return
         if (current.seek == "none") return
         val target = targetSec.coerceIn(0.0, current.durationSec.takeIf { it > 0 } ?: Double.MAX_VALUE)
@@ -428,11 +435,29 @@ fun PlayerScreen(nav: Nav, id: Long, startOver: Boolean) {
         }
         filmSec = target
     }
+    // A seek as the viewer's: a watch party sends it to the room, which moves everyone.
+    fun seekFilm(targetSec: Double) = remoteTarget.seekFilm(targetSec)
     // Where the intro, recap, adverts or credits end, while one is on, from every source the server marks (SkipTracker.kt).
     val skipping = rememberTvSkipping(nav, id, { stream?.intro }, { filmSec }, { stream?.durationSec ?: 0.0 }, { playing && problem.isEmpty() }, { stream?.nextId }, ::seekFilm)
     fun introEnd(): Double? = skipping.now?.toSec
-    fun playPause() { if (player.isPlaying) player.pause() else player.play() }
-    fun playNext() { stream?.nextId?.let(nav::playInstead) }
+    fun playPause() = remoteTarget.togglePlay()
+    // In a watch party Next episode is the party's Next: it moves everyone.
+    fun playNext() {
+        if (remoteTarget.steering?.ended() == true) return
+        stream?.nextId?.let(nav::playInstead)
+    }
+    remoteTarget.readItem = { item }
+    remoteTarget.readStream = { stream }
+    remoteTarget.readProblem = { problem }
+    remoteTarget.onToggle = { if (player.isPlaying) player.pause() else player.play() }
+    remoteTarget.onMove = ::moveTo
+    remoteTarget.onReopen = { at -> ask = ask.copy(startSec = at, reload = true, waitMs = 0, attempt = ask.attempt + 1) }
+    remoteTarget.onAudio = { index -> ask = ask.copy(audio = index, startSec = clock.lastPlace() ?: currentFilmSec(), reload = false, waitMs = 0, attempt = ask.attempt + 1) }
+    remoteTarget.onSubtitle = { index -> ask = ask.copy(subtitle = index, startSec = clock.lastPlace() ?: currentFilmSec(), reload = false, waitMs = 0, attempt = ask.attempt + 1) }
+    DisposableEffect(remoteTarget) {
+        nav.app.remote.adopt(remoteTarget)
+        onDispose { nav.app.remote.released(remoteTarget) }
+    }
 
     // Back goes up one level at a time: `input-map.json`'s rule. On a phone the system's own back
     // gesture comes here too, without passing through key events.
@@ -440,6 +465,7 @@ fun PlayerScreen(nav: Nav, id: Long, startOver: Boolean) {
         when {
             // The same as Cancel. The film has ended, so stopping the count here would leave nothing on screen.
             countdown != null -> { countdown = null; nav.pop() }
+            partyOpen -> partyOpen = false
             showInfo -> showInfo = false
             picker != Picker.None -> picker = Picker.None
             controls && playing -> controls = false
@@ -452,6 +478,8 @@ fun PlayerScreen(nav: Nav, id: Long, startOver: Boolean) {
     // seek or show the controls. With them showing, focus moves among the buttons.
     fun onKey(code: Int): Boolean {
         interactions++
+        // The party's panel is a list like any other: the arrows move among its rows.
+        if (partyOpen && code != KeyEvent.KEYCODE_BUTTON_B && code != KeyEvent.KEYCODE_ESCAPE) return false
         when (code) {
             KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE, KeyEvent.KEYCODE_BUTTON_X, KeyEvent.KEYCODE_SPACE -> playPause()
             KeyEvent.KEYCODE_MEDIA_PLAY -> player.play()
@@ -575,6 +603,8 @@ fun PlayerScreen(nav: Nav, id: Long, startOver: Boolean) {
                 onAudio = { picker = Picker.Audio },
                 onSubtitles = { picker = Picker.Subtitles },
                 onBack = nav::pop,
+                onPlayOn = if (nav.app.remote.canControl) ({ nav.app.remote.sourcePlayingVideo()?.let { nav.push(com.wittywilla.wittymediaclient.ui.RemoteRoute.PlayOn(it)) } }) else null,
+                onParty = if (nav.has(SYNCPLAY_FEATURE) && (item?.kind ?: "video") == "video") ({ if (nav.app.remote.party.room != null) partyOpen = true else nav.push(com.wittywilla.wittymediaclient.ui.RemoteRoute.Party(id)) }) else null,
                 modifier = Modifier.align(Alignment.BottomCenter),
             )
         } else {
@@ -592,7 +622,50 @@ fun PlayerScreen(nav: Nav, id: Long, startOver: Boolean) {
             }
         }
         TvSkipNotice(skipping, Modifier.align(Alignment.TopCenter))
+        // The watch party's panel, down the side over the picture, which goes on playing beside it.
+        if (partyOpen) {
+            com.wittywilla.wittymediaclient.ui.PartyPanel(nav, { partyOpen = false }, Modifier.align(Alignment.CenterEnd).fillMaxHeight().widthIn(max = 560.dp))
+        }
     }
+}
+
+// The TV's player as the hub sees it (VideoTarget.kt). The screen's state lives in the composable, so what this reads
+// and does is handed to it there, each time it is drawn.
+internal class ScreenVideoTarget(override val itemId: Long, override val exo: ExoPlayer) : VideoTarget {
+    var readItem: () -> Item? = { null }
+    var readStream: () -> Playback? = { null }
+    var readProblem: () -> String = { "" }
+    var onToggle: () -> Unit = {}
+    var onMove: (Double) -> Unit = {}
+    var onReopen: (Double) -> Unit = {}
+    var onAudio: (Int) -> Unit = {}
+    var onSubtitle: (Int) -> Unit = {}
+    override var steering: VideoSteering? = null
+
+    override val item: Item? get() = readItem()
+    override val stream: Playback? get() = readStream()
+    override val problem: String get() = readProblem()
+    override val durationSec: Double get() = stream?.durationSec?.takeIf { it > 0 } ?: item?.runtimeSec ?: 0.0
+    override val ended: Boolean get() = exo.playbackState == Player.STATE_ENDED
+
+    override fun togglePlay() {
+        if (steering?.toggle() == true) return
+        onToggle()
+    }
+
+    override fun seekFilm(targetSec: Double) {
+        if (steering?.seek(targetSec) == true) return
+        onMove(targetSec)
+    }
+
+    override fun askSpeed(rate: Float) {
+        if (steering?.speed(rate) == true) return
+        exo.setPlaybackParameters(androidx.media3.common.PlaybackParameters(rate))
+    }
+
+    override fun reopenAt(filmSec: Double) = onReopen(filmSec)
+    override fun chooseAudio(index: Int) = onAudio(index)
+    override fun chooseSubtitle(index: Int) = onSubtitle(index)
 }
 
 // The bar along the film or the track. Left and right on a remote move it, and it only seeks once they stop:
@@ -697,6 +770,8 @@ private fun Controls(
     onAudio: () -> Unit,
     onSubtitles: () -> Unit,
     onBack: () -> Unit,
+    onPlayOn: (() -> Unit)? = null,
+    onParty: (() -> Unit)? = null,
     modifier: Modifier = Modifier,
 ) {
     val metrics = LocalMetrics.current
@@ -725,6 +800,8 @@ private fun Controls(
             if (stereo) ActionButton(if (flattened) "Show as stored" else "Show in 2D", onFlatten, focusKey = "c-flatten")
             if (hasInfo) ActionButton("Info", onInfo, focusKey = "c-info")
             if (hasNext && !nextDue) ActionButton("Next episode", onNext, focusKey = "c-next")
+            if (onParty != null) ActionButton("Watch party", onParty, focusKey = "c-party")
+            if (onPlayOn != null) ActionButton("Play on…", onPlayOn, focusKey = "c-play-on")
             // On a remote or a phone Back does this too; this is for those who look for it.
             ActionButton("Leave", onBack, focusKey = "c-leave")
             if (durationSec > 0) {

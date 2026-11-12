@@ -105,6 +105,7 @@ private val ICONS: Map<String, () -> ImageVector> = mapOf(
     "gavel" to { Symbols.Gavel }, "menu_book" to { Symbols.Book }, "receipt_long" to { Symbols.Receipt },
     // From away: the globe the app already has, for reaching the server from anywhere.
     "settings_input_antenna" to { Symbols.Globe },
+    "cast" to { Symbols.Devices }, "groups" to { Symbols.Group },
 )
 
 private fun youIcon(name: String): ImageVector = ICONS[name]?.invoke() ?: Symbols.Info
@@ -162,6 +163,8 @@ fun YouScreen(nav: Nav, s: Map<String, String>) {
         layouts = (nav.sduiNav?.layouts?.options?.size ?: 0) > 1,
         moduleSettings = nav.has("module-settings"),
         nativeProfiles = nav.has(com.wittywilla.wittymediaclient.net.FEATURE_PARENTAL),
+        remote = nav.app.remote.canControl,
+        parties = nav.app.remote.hasParties,
         off = com.wittywilla.wittymediaclient.player.ScreenTimeWatch.limits?.features?.filterValues { !it }?.keys.orEmpty(),
     )
     fun open(row: YouRow) {
@@ -172,6 +175,8 @@ fun YouScreen(nav: Nav, s: Map<String, String>) {
                     YouNative.Licences -> Route.Notices
                     YouNative.Log -> Route.Logs
                     YouNative.Profiles -> HouseholdRoute(HouseholdScreen.Profiles)
+                    YouNative.RemoteControl -> RemoteRoute.Devices
+                    YouNative.WatchParty -> RemoteRoute.Party(null)
                     else -> Route.You(opens.screen)
                 }
                 is YouOpens.Page -> if (nav.app.isTv) Route.OnPhone(title, opens.path) else Route.Page(opens.path, title)
@@ -332,6 +337,8 @@ fun YouSettingScreen(nav: Nav, s: Map<String, String>, screen: YouNative) {
         YouNative.Layout -> LayoutScreen(nav, s)
         YouNative.Modules -> ModuleSettingsListScreen(nav, s)
         YouNative.PlayingHere -> PlayingHereScreen(nav, s)
+        YouNative.RemoteControl -> RemoteRouteScreen(nav, RemoteRoute.Devices)
+        YouNative.WatchParty -> RemoteRouteScreen(nav, RemoteRoute.Party(null))
     }
 }
 

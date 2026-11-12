@@ -31,6 +31,8 @@ data class RoomSummary(val id: String = "", val name: String = "", val hostName:
 data class SyncInfo(
     val enabled: Boolean = false,
     val canCreate: Boolean = false,
+    // False when this profile's limits turn watch parties off; an older server doesn't say, and lets anyone join.
+    val canJoin: Boolean = true,
     val drift: Drift = Drift(),
     val limits: SyncLimits = SyncLimits(),
     val rooms: List<RoomSummary> = emptyList(),
@@ -68,6 +70,8 @@ data class Room(
     val you: String = "",
     val canControl: Boolean = false,
     val blocked: Boolean = false,
+    // This member's screen time has run out: it sits the party out, keeping its place, until a parent gives more.
+    val timeUp: Boolean = false,
     val members: List<Member> = emptyList(),
     val queue: List<Long> = emptyList(),
     val items: List<RoomItem> = emptyList(),

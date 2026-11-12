@@ -88,18 +88,23 @@ private fun newVideoPlayer(context: Context): ExoPlayer =
 data class NetNote(val text: String, val lost: Boolean = false, val at: Long = System.nanoTime())
 
 @OptIn(UnstableApi::class)
-class VideoSession(private val nav: Nav, val id: Long, private val startAt: Double?) {
+class VideoSession(private val nav: Nav, val id: Long, private val startAt: Double?) : VideoTarget {
     private val app = nav.app
     private val api get() = app.api
     val player: ExoPlayer = newVideoPlayer(app)
+    override val exo: ExoPlayer get() = player
+    override val itemId: Long get() = id
+
+    // A watch party steering this player (player/WatchParty.kt), while one is.
+    override var steering: VideoSteering? = null
     private val media = MediaSession.Builder(app, player).setId("witty-video-$id-${System.nanoTime()}").build()
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
 
-    var item by mutableStateOf<Item?>(null)
+    override var item by mutableStateOf<Item?>(null)
         private set
-    var stream by mutableStateOf<Playback?>(null)
+    override var stream by mutableStateOf<Playback?>(null)
         private set
-    var problem by mutableStateOf("")
+    override var problem by mutableStateOf("")
         private set
     var playing by mutableStateOf(false)
         private set
@@ -109,7 +114,7 @@ class VideoSession(private val nav: Nav, val id: Long, private val startAt: Doub
         private set
     var bufferedSec by mutableDoubleStateOf(0.0)
         private set
-    var ended by mutableStateOf(false)
+    override var ended by mutableStateOf(false)
         private set
     var speed by mutableFloatStateOf(1f)
         private set
@@ -141,14 +146,16 @@ class VideoSession(private val nav: Nav, val id: Long, private val startAt: Doub
     var activity by mutableStateOf(0)
         private set
 
-    private var ask by mutableStateOf(VideoAsk(startSec = startAt))
+    // Where another device or a watch party asked for this video to start, and with which tracks.
+    private val preset = app.remote.takePreset(id)
+    private var ask by mutableStateOf(VideoAsk(audio = preset?.audio, subtitle = preset?.subtitle, startSec = preset?.startSec ?: startAt))
     private val clock = PlaybackClock()
     private val budget = RetryBudget()
     private var waitingForNetwork = false
     private var nextAsked = false
     private var closed = false
 
-    val durationSec: Double get() = stream?.durationSec?.takeIf { it > 0 } ?: item?.runtimeSec ?: 0.0
+    override val durationSec: Double get() = stream?.durationSec?.takeIf { it > 0 } ?: item?.runtimeSec ?: 0.0
     val nextId: Long? get() = stream?.nextId ?: item?.nextId
 
     private val listener = object : Player.Listener {
@@ -163,6 +170,8 @@ class VideoSession(private val nav: Nav, val id: Long, private val startAt: Doub
             if (state == Player.STATE_ENDED) {
                 ended = true
                 saveProgress()
+                // A watch party moves everyone on together, rather than each player counting down by itself.
+                if (steering?.ended() == true) return
                 // Only an episode with one after it counts down; a recommendation never plays by itself.
                 if (stream?.nextId != null || item?.nextId != null) countdown = COUNTDOWN_FROM
             }
@@ -191,10 +200,11 @@ class VideoSession(private val nav: Nav, val id: Long, private val startAt: Doub
         scope.launch { snapshotFlow { ask }.collectLatest { open(it) } }
         scope.launch { tick() }
         scope.launch { snapshotFlow { countdown }.collectLatest { left -> runCountdown(left) } }
+        app.remote.adopt(this)
         scope.launch {
             skipping.run(
                 app, id, { nav.has(ExtrasFeature.MARKERS) }, { introFallback() }, { filmSec }, { durationSec }, { playing && problem.isEmpty() }, { nextId },
-                seek = ::seekFilm, playNext = { if (!mini) nav.playVideoInstead(it) }, said = { note(it) },
+                seek = ::seekFilm, playNext = { if (steering?.ended() != true && !mini) nav.playVideoInstead(it) }, said = { note(it) },
             )
         }
     }
@@ -397,13 +407,28 @@ class VideoSession(private val nav: Nav, val id: Long, private val startAt: Doub
         app.scope.launch { runCatching { api.saveProgress(id, at, duration) } }
     }
 
+    override fun togglePlay() = playPause()
+
     fun playPause() {
+        if (steering?.toggle() == true) return
         if (ended) { seekFilm(0.0); player.play(); return }
         if (player.isPlaying) player.pause() else player.play()
     }
 
+    // A seek as the viewer's: a watch party sends it to the room, which moves everyone.
+    override fun seekFilm(targetSec: Double) {
+        if (steering?.seek(targetSec) == true) return
+        moveTo(targetSec)
+    }
+
+    override fun reopenAt(filmSec: Double) {
+        ask = ask.copy(startSec = filmSec, reload = true, waitMs = 0)
+        this.filmSec = filmSec
+        ended = false
+    }
+
     // A growing stream has to be asked for again to go past what exists so far.
-    fun seekFilm(targetSec: Double) {
+    private fun moveTo(targetSec: Double) {
         val current = stream ?: return
         if (current.seek == "none") return
         val target = targetSec.coerceIn(0.0, durationSec.takeIf { it > 0 } ?: Double.MAX_VALUE)
@@ -415,15 +440,24 @@ class VideoSession(private val nav: Nav, val id: Long, private val startAt: Doub
         ended = false
     }
 
+    override fun askSpeed(rate: Float) = changeSpeed(rate)
+
+    override fun showSpeed(rate: Float) {
+        speed = rate
+    }
+
     fun changeSpeed(value: Float) {
+        if (steering?.speed(value) == true) return
         speed = value
         player.setPlaybackParameters(PlaybackParameters(value))
     }
 
     // Choosing a track asks again from the same place, as the website does.
-    fun chooseAudio(index: Int) {
+    override fun chooseAudio(index: Int) {
         ask = ask.copy(audio = index, startSec = filmSec, reload = false, waitMs = 0)
     }
+
+    override fun chooseSubtitle(index: Int) = chooseSubtitle(index, false)
 
     fun chooseSubtitle(index: Int, burn: Boolean) {
         ask = ask.copy(subtitle = index, burn = burn, startSec = filmSec, reload = burn || ask.burn, waitMs = 0)
@@ -457,6 +491,7 @@ class VideoSession(private val nav: Nav, val id: Long, private val startAt: Doub
     fun close() {
         if (closed) return
         closed = true
+        app.remote.released(this)
         saveProgress()
         ClientLog.session = ""
         val streamId = stream?.streamId.orEmpty()

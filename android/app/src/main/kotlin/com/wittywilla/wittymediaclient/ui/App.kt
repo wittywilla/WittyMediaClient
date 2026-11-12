@@ -526,10 +526,12 @@ class Nav(val app: WittyApp, private val s: Map<String, String>) {
                 "collections" -> Route.Sdui("collections")
                 "download" -> serverPage("Download")
                 "share" -> serverPage("Share")
-                "playOn" -> serverPage("Play on…")
-                "watchParty" -> serverPage("Watch party")
+                // The app's own picker and party screens, where the server and this profile have them.
+                "playOn" -> item.toLongOrNull()?.takeIf { app.remote.canControl }
+                    ?.let { RemoteRoute.PlayOn(com.wittywilla.wittymediaclient.net.remote.PlayOnSource(it, "", "")) } ?: serverPage("Play on…")
+                "watchParty" -> if (has(com.wittywilla.wittymediaclient.player.SYNCPLAY_FEATURE) && item.toLongOrNull() != null) RemoteRoute.Party(item.toLongOrNull()) else serverPage("Watch party")
                 "downloads" -> if (app.isTv) null else Route.Page("/downloads", "Downloads")
-                "remote" -> if (app.isTv) null else Route.Page("/remote", "Remote")
+                "remote" -> if (app.remote.canControl) RemoteRoute.Devices else if (app.isTv) null else Route.Page("/remote", "Remote")
                 else -> null
             }
         }
@@ -1079,8 +1081,11 @@ class Nav(val app: WittyApp, private val s: Map<String, String>) {
         video = null
         // The last place on a track goes first, while the sign-in is still good.
         val placeSent = app.listening.forget()
+        // This device leaves other devices' lists, and its watch party seat goes, while the sign-in is still good.
+        val goodbye = app.remote.goodbye(old)
         if (old.token.isNotEmpty()) app.scope.launch {
             placeSent.join()
+            goodbye.join()
             runCatching { old.logout() }
         }
     }
@@ -1200,16 +1205,28 @@ fun AppRoot(app: WittyApp) {
             app.onGuideKey = nav::openGuide
             onDispose { app.onGuideKey = null }
         }
+        // Remote control and watch parties (player/RemoteHub.kt) follow the app's screens, who is signed in, and
+        // whether the app is in front.
+        val activity = context as? ComponentActivity
+        DisposableEffect(activity) {
+            app.remote.attach(nav, activity)
+            onDispose { app.remote.attach(nav, null) }
+        }
+        val signedInNow = nav.current.signedIn && app.api.token.isNotEmpty()
+        LaunchedEffect(app.api.token, signedInNow, nav.features) { app.remote.session(signedInNow, nav.features) }
         LifecycleEventEffect(Lifecycle.Event.ON_START) {
             app.peers.appBack()
             scope.launch { nav.recheck() }
             app.listening.appeared()
+            app.remote.foreground(true)
         }
         LifecycleEventEffect(Lifecycle.Event.ON_STOP) {
             // Music in the background keeps a connection from away open; a film stops below, and so lets it go.
             app.peers.appLeft(playing = app.listening.isPlaying)
             nav.syncTvHome()
             nav.finishForget()
+            // Before the music lets go of its player: this device may still answer for it from the background.
+            app.remote.foreground(false)
             app.listening.disappeared()
             // A film stops when the app is left, with its place kept.
             nav.video?.backgrounded()
@@ -1331,6 +1348,7 @@ fun AppRoot(app: WittyApp) {
                         is GamesRoute -> GamesRouteScreen(nav, route)
                         is HouseholdRoute -> HouseholdRouteScreen(nav, strings, route)
                         is TvRoute -> TvRouteScreen(nav, route)
+                        is RemoteRoute -> RemoteRouteScreen(nav, route)
                     }
                 }
             }
@@ -1353,6 +1371,8 @@ fun AppRoot(app: WittyApp) {
         if (metrics.tv && route.signedIn) TvReminderAlert(nav)
         // Screen time and what a profile's limits turn off, over every screen and every player.
         ProfileGuard(nav, app.api, strings)
+        // News from remote control and watch parties, and invitations, over whatever is showing.
+        if (route.signedIn) RemoteOverlay(nav)
     }
 }
 

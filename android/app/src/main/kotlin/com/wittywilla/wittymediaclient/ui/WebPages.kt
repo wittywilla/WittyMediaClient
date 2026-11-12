@@ -463,7 +463,7 @@ fun PhoneItem(nav: Nav, s: Map<String, String>, id: Long) {
     TracksScroll(scroll)
     // What an administrator can have the server make for this title, and the job's card (TitleAdmin.kt).
     val made = rememberItemExtras(nav, it.id)
-    val rows = TitleLook.moreRows(it, facts, admin).map { row -> itemSheetRow(nav, it, row, playable) } + made.sheetRows()
+    val rows = TitleLook.moreRows(it, facts, admin).map { row -> itemSheetRow(nav, it, row, playable) } + made.sheetRows() + togetherRows(nav, it)
     val credit = TitleLook.credit(facts.provider, facts.providerId)
     val scrambled = disc && facts.disc?.scrambled == true
     val poster = if (facts.poster.isNullOrEmpty()) null else api.posterUrl(it)

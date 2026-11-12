@@ -40,6 +40,8 @@ data class RemoteInfo(
     val v: Int = REMOTE_V,
     val minV: Int = REMOTE_V,
     val controlOthers: Boolean = false,
+    // This profile may play on and steer devices. False when its limits turn that off; an older server doesn't say.
+    val canControl: Boolean = true,
     val navigateKeys: List<String> = emptyList(),
     val limits: RemoteLimits = RemoteLimits(),
 )
