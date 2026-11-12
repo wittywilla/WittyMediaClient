@@ -183,6 +183,8 @@ struct DiscSections: View {
             .padding(Tokens.Space.s3 + 1)
             .background(card.fill(palette.panel))
             .overlay(card.strokeBorder(palette.border, lineWidth: 1))
+            // Why this title is the film (DiscWhy.swift); a new film puts its own feature here.
+            DiscWhy(item: item.id, playable: playable) { _ in Task { await load() } }
             if DiscPage.showsScenes(main) {
                 heading("Scenes", top: Tokens.Space.s6, size: 17)
                 scenes(main)

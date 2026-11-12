@@ -847,6 +847,8 @@ private struct TvItemView: View {
                 Text(overview).foregroundStyle(palette.textSecondary).fixedSize(horizontal: false, vertical: true)
             }
             MediaItemExtras(item: item)
+            // Which title of a disc is the film and why; its player isn't on this device.
+            if TitleLook.isDisc(item) { DiscWhy(item: item.id, playable: false, top: Tokens.Space.s2) }
         }
     }
 
