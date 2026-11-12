@@ -87,6 +87,7 @@ import com.wittywilla.wittymediaclient.net.child
 import com.wittywilla.wittymediaclient.net.image
 import com.wittywilla.wittymediaclient.net.int
 import com.wittywilla.wittymediaclient.net.isOn
+import com.wittywilla.wittymediaclient.net.ShelfRules
 import com.wittywilla.wittymediaclient.net.objects
 import com.wittywilla.wittymediaclient.net.str
 import com.wittywilla.wittymediaclient.tv.TvLayer
@@ -126,7 +127,28 @@ fun SduiNode(view: SduiView, parent: SduiView?, topLevel: Boolean = false) {
         "Image" -> SduiImageBlock(view, Modifier.padding(horizontal = side))
         "SearchBox" -> SduiSearchBox(view, Modifier.padding(horizontal = side))
         "NativeView" -> SduiNativeView(view)
+        "Dock" -> SduiDock(view, side)
+        "KeyLegend" -> Box(Modifier.padding(horizontal = side)) { KeyLegendRow() }
         else -> SduiStack(view, side)
+    }
+}
+
+// The screen's Dock: its buttons in one row that never moves, and the key legend of the input in use under them (which a
+// touch screen doesn't show). A server older than the component sends nothing for it, and the page is as it was.
+@Composable
+private fun SduiDock(view: SduiView, side: Dp) {
+    val env = LocalSdui.current
+    val scheme = MaterialTheme.colorScheme
+    Column(
+        Modifier.fillMaxWidth().padding(horizontal = side).background(scheme.surface, RoundedCornerShape(env.pt(14)))
+            .defaultMinSize(minHeight = if (env.tv) env.pt(DesignTokens.Tv.DOCK_HEIGHT) else 0.dp)
+            .padding(horizontal = env.space("m"), vertical = env.space("s")).focusGroup(),
+        verticalArrangement = Arrangement.spacedBy(env.space("s")),
+    ) {
+        Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(env.space("s")), verticalAlignment = Alignment.CenterVertically) {
+            view.children.forEach { SduiNode(it, view) }
+        }
+        KeyLegendRow(hasDock = true)
     }
 }
 
@@ -229,7 +251,12 @@ fun SduiShelf(view: SduiView, side: Dp) {
             view.empty || view.children.isEmpty() -> SduiEmptyLine(view, edge)
             else -> {
                 val state = rememberLazyListState()
-                val wide = env.pt(view.cardWidth.takeIf { it > 0 } ?: 120)
+                val layoutWidth = env.pt(view.cardWidth.takeIf { it > 0 } ?: 120)
+                // A TV's shelf has a peek of its next card (net/ShelfRules.kt); a touch screen's cards are the layout's.
+                val wide = if (!env.tv) layoutWidth else ShelfRules.cardWidth(
+                    visible = (span.content + span.side).value, gap = env.pt(env.layout.cardGap).value, width = layoutWidth.value,
+                    peek = DesignTokens.Tv.SHELF_PEEK, count = view.children.size + if (view.seeAll.isNotEmpty()) 1 else 0,
+                ).dp
                 val nearEnd by remember(view.children.size) { derivedStateOf { (state.layoutInfo.visibleItemsInfo.lastOrNull()?.index ?: 0) >= view.children.size - 4 } }
                 if (view.hasMore && nearEnd) LaunchedEffect(view.children.size) { env.more(view.id, false) }
                 val ring = if (env.tv) LocalMetrics.current.focusRing else 0.dp

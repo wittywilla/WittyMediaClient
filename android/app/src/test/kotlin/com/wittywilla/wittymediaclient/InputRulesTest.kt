@@ -156,3 +156,27 @@ class InputRulesTest {
         assertEquals(600, DesignTokens.Breakpoints.COMPACT)
     }
 }
+
+class ShelfRulesTest {
+    // A TV page: 870 dp of content, 45 dp of margin, 12 dp between cards, a layout card 210 dp wide.
+    @Test fun `a shelf with more cards than fit shows a peek of the next`() {
+        val w = com.wittywilla.wittymediaclient.net.ShelfRules.cardWidth(915f, 12f, 210f, 0.18f, 20)
+        // Four whole cards, four gaps and 0.18 of the next fill the room to the edge.
+        assertEquals(915f, 4 * w + 4 * 12f + 0.18f * w, 0.01f)
+        assertTrue("stays close to the layout's", w in 168f..252f)
+    }
+
+    @Test fun `a short shelf keeps the layout's width`() {
+        assertEquals(210f, com.wittywilla.wittymediaclient.net.ShelfRules.cardWidth(915f, 12f, 210f, 0.18f, 3), 0f)
+    }
+
+    @Test fun `a change over a fifth is not made`() {
+        // Room for 1.6 cards of 300: fitting two and a peek would shrink them by more than a fifth.
+        assertEquals(300f, com.wittywilla.wittymediaclient.net.ShelfRules.cardWidth(550f, 24f, 300f, 0.18f, 10), 0f)
+    }
+
+    @Test fun `bad input is left alone`() {
+        assertEquals(0f, com.wittywilla.wittymediaclient.net.ShelfRules.cardWidth(900f, 12f, 0f, 0.18f, 9), 0f)
+        assertEquals(210f, com.wittywilla.wittymediaclient.net.ShelfRules.cardWidth(0f, 12f, 210f, 0.18f, 9), 0f)
+    }
+}
