@@ -33,6 +33,8 @@ function cleanEntry(entry) {
   if (p2p) out.p2p = p2p
   // When it was last reached, in milliseconds. Left out by a version that didn't keep it.
   if (Number.isSafeInteger(entry.lastSeen) && entry.lastSeen > 0) out.lastSeen = entry.lastSeen
+  // The person stopped this computer connecting to it from away (the menu's From away).
+  if (entry.awayOff === true) out.awayOff = true
   return out
 }
 
@@ -114,6 +116,7 @@ function remember(state, server) {
   // The way to reach it from away stays with it, unless this says otherwise (null forgets it).
   const p2p = cleanInfo(server.p2p === undefined ? before && before.p2p : server.p2p)
   if (p2p) entry.p2p = p2p
+  if (before && before.awayOff) entry.awayOff = true
   const others = (state.recent || []).filter((s) => !sameServer(s, server))
   return { ...state, server: server.url, recent: [entry, ...others].slice(0, MAX_RECENT) }
 }

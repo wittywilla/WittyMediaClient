@@ -63,6 +63,12 @@ final class RemoteDeviceHost: ObservableObject {
         }
     }
 
+    /// This device's remote control in the logs, the same id as the server's: "rc-" and its device id.
+    private var logSession: String {
+        let id = deviceId.filter { $0.isASCII && ($0.isLetter || $0.isNumber || "-_.:".contains($0)) }
+        return id.isEmpty ? "" : "rc-" + id.prefix(61)
+    }
+
     private func halt() {
         loop?.cancel()
         loop = nil
@@ -122,9 +128,16 @@ final class RemoteDeviceHost: ObservableObject {
             } catch let refusal as APIError {
                 online = false
                 next = DeviceLife.after(refusal: refusal, backoff: &backoff)
-                if refusal.code == "version" { ClientLog.shared.warn("remote", "This app speaks an older Remote Protocol than the server accepts.") }
+                if refusal.code == "version" {
+                    ClientLog.shared.warn("remote", "This app speaks an older Remote Protocol than the server accepts.", session: logSession)
+                } else {
+                    ClientLog.shared.warnSeldom("remote", "The remote control channel was refused: \(refusal.status) \(refusal.code)", session: logSession)
+                }
             } catch {
                 // Nothing heard for a minute, or the network went: the channel is dead.
+                if !Task.isCancelled, !(error is CancellationError) {
+                    ClientLog.shared.warnSeldom("remote", "The remote control channel was lost: \((error as? URLError)?.code.rawValue ?? 0)", session: logSession)
+                }
                 online = false
                 next = DeviceLife.after(bye: nil, backoff: &backoff)
             }
@@ -170,6 +183,7 @@ final class RemoteDeviceHost: ObservableObject {
             } catch {
                 ok = false
                 words = "That didn't work on this device."
+                ClientLog.shared.warnSeldom("remote", "A remote command failed: \(command.type.prefix(40)): \(String(describing: type(of: error)))", session: logSession)
             }
         } else {
             ok = false
@@ -177,7 +191,13 @@ final class RemoteDeviceHost: ObservableObject {
         }
         if let client, let id = command.id, !id.isEmpty, !deviceId.isEmpty {
             // A 404 `no-command` means it's no longer waiting (it timed out, or the channel reopened): carry on.
-            try? await client.remoteAck(deviceId, command: id, ok: ok, error: words)
+            do {
+                try await client.remoteAck(deviceId, command: id, ok: ok, error: words)
+            } catch let refusal as APIError where refusal.status == 404 {
+                // Expected now and then.
+            } catch {
+                ClientLog.shared.warnSeldom("remote", "A remote command couldn't be answered: \((error as? APIError)?.status ?? 0)", session: logSession)
+            }
         }
         reportSoon()
     }
@@ -211,6 +231,9 @@ final class RemoteDeviceHost: ObservableObject {
                 refusal = refused
             } catch {
                 // The next one says it.
+                if !(error is CancellationError) {
+                    ClientLog.shared.warnSeldom("remote", "This device's state couldn't be sent: \((error as? URLError)?.code.rawValue ?? 0)", session: self?.logSession)
+                }
             }
             guard let self else { return }
             self.reporting = false
@@ -219,7 +242,9 @@ final class RemoteDeviceHost: ObservableObject {
                     // Nothing is lost: the latest state goes a moment later.
                     self.reporter.reset()
                     self.reporter.refused(nowMs: Self.nowMs(), retryAfterSec: refusal.retryAfter)
-                } else if refusal.status == 404, self.loop != nil, let using = self.client {
+                } else if refusal.status != 404 {
+                    ClientLog.shared.warnSeldom("remote", "This device's state was refused: \(refusal.status)", session: self.logSession)
+                } else if self.loop != nil, let using = self.client {
                     // The server has forgotten this device: announce again.
                     self.restart(using)
                 }

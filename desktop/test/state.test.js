@@ -97,3 +97,12 @@ test('a server\'s logo is kept with it, and only as a picture', () => {
   }
   assert.deepStrictEqual(clean({ recent: [{ url: 'http://10.0.0.2:9797', logo }] }).recent[0].logo, logo)
 })
+
+test('a server whose connecting from away was stopped stays stopped when it is remembered again', () => {
+  const { remember, clean } = require('../state')
+  let st = clean({ recent: [{ url: 'http://10.0.0.2:9797', name: 'Home', awayOff: true }] })
+  assert.strictEqual(st.recent[0].awayOff, true)
+  st = remember(st, { url: 'http://10.0.0.2:9797', name: 'Home' })
+  assert.strictEqual(st.recent[0].awayOff, true)
+  assert.strictEqual(clean({ recent: [{ url: 'http://10.0.0.2:9797', awayOff: 'yes' }] }).recent[0].awayOff, undefined)
+})

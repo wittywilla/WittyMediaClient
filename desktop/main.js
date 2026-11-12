@@ -123,7 +123,9 @@ function copyDiagnostics() {
 function showHelpMenu(at) {
   const { width, height } = win.getContentBounds()
   Menu.buildFromTemplate([
-    ...(server ? [{ label: 'Manage servers…', click: manageServers }, { type: 'separator' }] : []),
+    ...(server ? [{ label: 'Manage servers…', click: manageServers }] : []),
+    ...(awayState() ? [{ label: awayState() === 'on' ? 'Stop connecting from away' : 'Connect from away again', click: () => (awayState() === 'on' ? stopAway() : startAway()) }] : []),
+    ...(server ? [{ type: 'separator' }] : []),
     { label: 'Open logs folder', click: openLogs },
     { label: 'Copy diagnostic info', click: copyDiagnostics },
     { type: 'separator' },
@@ -189,7 +191,7 @@ function openTvMenu() {
     tvMenu.webContents.on('will-navigate', (e) => e.preventDefault())
     watchContents(tvMenu.webContents, 'TV menu', () => closeTvMenu())
   }
-  const details = { hasServer: Boolean(server) }
+  const details = { hasServer: Boolean(server), away: awayState() }
   const show = () => {
     win.contentView.addChildView(tvMenu)
     layout()
@@ -370,6 +372,12 @@ function keepP2P(url, info) {
   saveState()
 }
 
+// One connection's id in the logs, the same as the server's: "p2p-" and the end of this device's peer ID.
+function p2pSession(deviceId) {
+  const id = String(deviceId || '').replace(/[^A-Za-z0-9\-_.:]/g, '')
+  return id ? 'p2p-' + id.slice(-8) : ''
+}
+
 // Starts the helper for a server and waits for its address on this computer.
 async function openTunnel(info) {
   closeTunnel()
@@ -378,9 +386,9 @@ async function openTunnel(info) {
     log.warn('p2p', 'The connection helper is not installed with this app')
     return { error: 'p2p-missing' }
   }
-  let run, ready
+  let run, ready, key
   try {
-    const key = await deviceKey(program)
+    key = await deviceKey(program)
     run = new p2p.Tunnel(program, { key: key.key, serverId: info.id, hints: info.hints || [], port: info.port || 0 }, { log: (line) => log.info('p2p', line) })
     ready = await run.ready
     log.addSecret(ready.secret)
@@ -390,11 +398,26 @@ async function openTunnel(info) {
     tunnel = { run, id: info.id, origin, port: ready.port, deviceId: ready.deviceId }
   } catch (err) {
     if (run) run.stop()
-    log.noteError('warn', 'p2p', 'The connection helper could not start', err)
+    log.noteError('warn', 'p2p', 'The connection helper could not start', err, { session: p2pSession(key && key.deviceId) })
     return { error: 'p2p-failed' }
   }
   const mine = tunnel
-  run.on('state', (s) => { if (tunnel === mine) sayPath(server === mine.origin ? p2p.pathWords(s) : '') })
+  const logSession = p2pSession(mine.deviceId)
+  let lastPath = ''
+  const warned = {}
+  run.on('state', (s) => {
+    if (tunnel !== mine) return
+    sayPath(server === mine.origin ? p2p.pathWords(s) : '')
+    // A change of path: worth reporting only when it got worse, through a relay or gone.
+    const path = s && s.path
+    if (!path || path === lastPath || path === 'connecting') return
+    const before = lastPath
+    lastPath = path
+    // Sent to the server at most once a minute for each path; the rest stays in the file.
+    const worse = (path === 'offline' || path === 'relayed') && Date.now() - (warned[path] || 0) >= 60000
+    if (worse) warned[path] = Date.now()
+    log[worse ? 'warn' : 'info']('p2p', `The connection's path changed from ${before || 'nothing'} to ${path}`, { session: logSession })
+  })
   run.on('addrs', (hints) => {
     if (tunnel !== mine || !hints.length) return
     const entry = (saved.recent || []).find((s) => s.p2p && s.p2p.id === mine.id)
@@ -402,7 +425,7 @@ async function openTunnel(info) {
   })
   run.on('exit', (code) => {
     if (tunnel !== mine) return
-    log.warn('p2p', `The connection helper stopped by itself (${code})`)
+    log.warn('p2p', `The connection helper stopped by itself (${code})`, { session: logSession })
     const showing = server === mine.origin
     closeTunnel()
     if (showing) showConnect({ lost: '1' })
@@ -422,7 +445,7 @@ async function reachFromAway(entry) {
   const st = await mine.run.whenConnected(AWAY_CONNECT_MS)
   if (tunnel !== mine) return { error: 'unreachable' } // given up on meanwhile
   if (!p2p.connected(st)) {
-    log.warn('p2p', `The server was not reached from away: ${st.error || st.path}`)
+    log.warn('p2p', `The server was not reached from away: ${st.error || st.path}`, { session: p2pSession(mine.deviceId) })
     closeTunnel()
     return { error: 'p2p-failed' }
   }
@@ -454,7 +477,7 @@ async function learnP2P() {
   const program = helperProgram()
   if (!origin || !program) return
   const entry = viaTunnel(origin + '/') ? (saved.recent || []).find((s) => s.p2p && s.p2p.id === tunnel.id) : entryFor(origin)
-  if (!entry) return
+  if (!entry || entry.awayOff) return
   try {
     const to = await reportTarget()
     if (!to || to.origin !== origin) return // not signed in yet: asked again later
@@ -979,6 +1002,45 @@ function backFromManaging() {
 // What the list shows about the server in use while managing: its address, or '' for none.
 const managedNow = () => (managing && saved.server === managing ? managing : '')
 
+// ---------------------------------------------------------------- from away, on and off
+
+// The server in use's entry, whichever way it is reached.
+const entryInUse = () => (tunnel && server === tunnel.origin ? (saved.recent || []).find((s) => s.p2p && s.p2p.id === tunnel.id) : entryFor(server))
+
+// awayState: whether the menu offers Stop or Connect again, or nothing (no helper, no server).
+function awayState() {
+  if (!server || !helperProgram()) return ''
+  const entry = entryInUse()
+  if (!entry) return ''
+  return entry.awayOff ? 'off' : 'on'
+}
+
+// Stop: this computer is taken off the server's list of devices that may reach it from away
+// and forgets how to; reached from away right now, that ends, back to the server list. As the
+// Apple apps' You, From away.
+async function stopAway() {
+  const entry = entryInUse()
+  if (!entry) return
+  const away = !!tunnel && server === tunnel.origin
+  const to = await reportTarget().catch(() => null)
+  entry.awayOff = true
+  saveState()
+  await forgetP2P(to)
+  log.info('p2p', 'Connecting from away was turned off for a server', { where: entry.url })
+  updateMenu()
+  if (away) { closeTunnel(); showConnect({ lost: '1' }) }
+}
+
+// Connect again: this computer goes back on the list now, if the server can be asked.
+async function startAway() {
+  const entry = entryInUse()
+  if (!entry) return
+  delete entry.awayOff
+  saveState()
+  updateMenu()
+  await learnP2P()
+}
+
 // What the last run was using, if it still is who it was.
 async function startUp() {
   await clearMergedAway()
@@ -1089,13 +1151,13 @@ function servePages() {
 // The Mac's menu bar, which is where the title bar's Help is on a Mac.
 function macMenu() {
   return Menu.buildFromTemplate(mac.menu({
-    connected: Boolean(server), changeServer: () => leaveServer(), manageServers, zoom: zoomPage, openLogs, copyDiagnostics,
+    connected: Boolean(server), changeServer: () => leaveServer(), manageServers, away: awayState(), stopAway, startAway, zoom: zoomPage, openLogs, copyDiagnostics,
   }))
 }
 
+// The menu bar follows the server in use: Change server, and From away's Stop or Connect again.
 function updateMenu() {
-  const item = MAC && Menu.getApplicationMenu() && Menu.getApplicationMenu().getMenuItemById('change-server')
-  if (item) item.enabled = Boolean(server)
+  if (MAC && Menu.getApplicationMenu()) Menu.setApplicationMenu(macMenu())
 }
 
 // In half steps, as Electron's own menu does. Nought is back to normal.
@@ -1263,6 +1325,7 @@ ipcMain.on('tv-menu', (e, action) => {
   if (action === 'close') closeTvMenu()
   else if (action === 'change-server') { closeTvMenu(); leaveServer() }
   else if (action === 'manage-servers') { closeTvMenu(); manageServers() }
+  else if (action === 'away') { closeTvMenu(); if (awayState() === 'on') stopAway(); else if (awayState() === 'off') startAway() }
   else if (action === 'quit') win.close()
 })
 

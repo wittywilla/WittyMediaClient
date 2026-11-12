@@ -445,6 +445,10 @@ class Nav(val app: WittyApp, private val s: Map<String, String>) {
         }
     }
 
+    // Counts up when what every page shows has changed underneath them (more screen time was given): the server's pages
+    // on screen ask again.
+    var pagesStamp by androidx.compose.runtime.mutableIntStateOf(0)
+
     // After the profile rearranged its menu, or a page changed what is in it.
     suspend fun reloadSduiNav() {
         val client = sdui ?: return

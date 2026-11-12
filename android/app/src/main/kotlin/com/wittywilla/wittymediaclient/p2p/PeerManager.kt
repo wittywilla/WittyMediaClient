@@ -121,6 +121,19 @@ class PeerManager(private val app: WittyApp) {
         return withContext(Dispatchers.IO) { runCatching { PeerLibrary.native?.deviceId(key) }.getOrNull().orEmpty() }.also { cachedId = it }
     }
 
+    // This device's connections from away in the logs, the same id as the server's: "p2p-" and the end of its peer ID.
+    private val logSession: String get() = ClientLog.sessionId("p2p-", cachedId.orEmpty(), keepEnd = 8)
+    private var lastPath = ""
+
+    // A change of path: worth reporting only when it got worse, through a relay or gone; otherwise kept here.
+    private fun notePath(path: String) {
+        if (path == lastPath || path == "connecting" || path.isEmpty()) return
+        val before = lastPath
+        lastPath = path
+        val words = "The connection's path changed from ${before.ifEmpty { "nothing" }} to $path"
+        if (path == "relayed" || path == "offline") ClientLog.warnSeldom("p2p", words, session = logSession) else ClientLog.info("p2p", words)
+    }
+
     // MARK: at home
 
     // At home and signed in: put this device on the server's list, once, and keep where the server is.
@@ -141,7 +154,7 @@ class PeerManager(private val app: WittyApp) {
         } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {
-            ClientLog.warn("network", "This device couldn't be put on the server's list for connecting from away: ${e.javaClass.simpleName}")
+            ClientLog.warn("p2p", "This device couldn't be put on the server's list for connecting from away: ${e.javaClass.simpleName}", session = logSession)
         }
     }
 
@@ -160,6 +173,7 @@ class PeerManager(private val app: WittyApp) {
 
     private fun settled(server: SavedServer, info: PeerInfo, state: PeerState) {
         way = PeerWay.Away(state)
+        notePath(state.path)
         if (PeerRoute.port != info.port) keep(server, info.copy(port = PeerRoute.port))
         watchHome(server)
     }
@@ -168,6 +182,7 @@ class PeerManager(private val app: WittyApp) {
     private suspend fun open(info: PeerInfo, waitMs: Long): PeerState? = lock.withLock {
         val native = PeerLibrary.native ?: return null
         val key = deviceKey() ?: return null
+        deviceId() // for the logs' session id
         if (link != null && linkInfo?.serverId != info.serverId) shut()
         val started = link ?: try {
             withContext(Dispatchers.IO) {
@@ -177,7 +192,7 @@ class PeerManager(private val app: WittyApp) {
                 native.start(PeerRules.configuration(key, info.serverId, info.hints, port)) { state -> main.post { heard(state) } }
             }
         } catch (e: Exception) {
-            ClientLog.warn("network", "The connection from away couldn't start: ${e.javaClass.simpleName}")
+            ClientLog.warn("p2p", "The connection from away couldn't start: ${e.javaClass.simpleName}", session = logSession)
             return null
         }
         link = started
@@ -192,6 +207,7 @@ class PeerManager(private val app: WittyApp) {
             now
         }
         if (state == null) {
+            ClientLog.warnSeldom("p2p", "The server wasn't reached from away in ${waitMs / 1000} s", session = logSession)
             shut()
             return null
         }
@@ -203,7 +219,10 @@ class PeerManager(private val app: WittyApp) {
     private fun heard(text: String) {
         if (link == null) return
         val state = PeerRules.state(text)
-        if (way is PeerWay.Away) way = PeerWay.Away(state)
+        if (way is PeerWay.Away) {
+            way = PeerWay.Away(state)
+            notePath(state.path)
+        }
         // The server is on this network: home is better than a connection through the connector.
         if (state.path == "local") checkHomeSoon()
         if (state.connected) app.scope.launch { keepAddrs() }
@@ -412,6 +431,7 @@ class PeerManager(private val app: WittyApp) {
 
     // Under the lock.
     private suspend fun shut() {
+        lastPath = ""
         closeLinkOnly()
         PeerRoute.clear()
         awayFor = ""

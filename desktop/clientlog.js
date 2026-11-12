@@ -39,17 +39,19 @@ const HIDDEN = '[hidden]'
 // these run on the main process, where a slow pattern would freeze the window.
 const PATTERNS = [
   // In an address or a command line: token=..., ?st=..., password=...
-  [/(\b(?:token|access_token|refresh_token|id_token|auth|api[_\-]?key|apikey|password|passwd|pwd|pass|secret|pin|key|st|sig|signature|setup[_\-]?code|recovery[_\-]?code|pair(?:ing)?[_\-]?code|otp|totp)=)[^\&\s"'<>]+/gi, `$1${HIDDEN}`],
+  [/(\b(?:token|access_token|refresh_token|id_token|auth|api[_\-]?key|apikey|password|passwd|pwd|pass|secret|pin|key|k|st|s|member|sig|signature|setup[_\-]?code|recovery[_\-]?code|pair(?:ing)?[_\-]?code|otp|totp)=)[^\&\s"'<>]+/gi, `$1${HIDDEN}`],
   // The same with its name percent-encoded: %74oken=... signs in just the same.
   [/([^\s\&?=;"'<>]{0,24}%[0-9a-f]{2}[^\s\&?=;"'<>]{0,24}=)[^\&\s"'<>]+/gi, `$1${HIDDEN}`],
   // A header, as a line of text.
-  [/\b(proxy-authorization|authorization|set-cookie|cookie|x-wms-token|x-api-key)(\s*[:=]\s*)[^\r\n"']+/gi, `$1$2${HIDDEN}`],
+  [/\b(proxy-authorization|authorization|set-cookie|cookie|x-wms-token|x-wms-pair-secret|x-witty-connect|x-api-key)(\s*[:=]\s*)[^\r\n"']+/gi, `$1$2${HIDDEN}`],
   [/\b(Bearer\s+)[A-Za-z0-9._~+\/=\-]+/gi, `$1${HIDDEN}`],
   [/\b(Basic\s+)[A-Za-z0-9+\/]*[A-Z0-9+\/][A-Za-z0-9+\/]{10,}={0,2}/g, `$1${HIDDEN}`],
   // JSON, finished or cut short: "password": "..."
   [/("(?:[a-z_\-]{0,40}(?:token|secret)|password|passwd|api[_\-]?key|apikey|pin|code|setup[_\-]?code|recovery[_\-]?code|pair(?:ing)?[_\-]?code|cookie|authorization)"\s*:\s*)"[^"\\]*(?:\\.[^"\\]*)*(?:"|$)/gi, `$1"${HIDDEN}"`],
   // A login in an address: rtsp://user:password@camera/
   [/\b([a-z][a-z0-9+.\-]{0,20}:\/\/)[^\/\s:@]+:[^\/\s@]+@/gi, `$1${HIDDEN}@`],
+  // An Xtream login in a catch-up address: /timeshift/<user>/<password>/
+  [/(\/timeshift\/)[^\/\s?#]+\/[^\/\s?#]+\//gi, `$1${HIDDEN}/${HIDDEN}/`],
   // A share link's token.
   [/(\/(?:api\/)?(?:s|share)\/)[A-Za-z0-9_\-]{8,}/g, `$1${HIDDEN}`],
   // The sign-in cookie and stream tokens, however they got there.
