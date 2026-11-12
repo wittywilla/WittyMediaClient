@@ -192,6 +192,9 @@ struct SDUIActor {
                 if let tab = params["tab"], !tab.isEmpty { await store?.set(["tab": tab], center: center) }
             case "refresh":
                 await store?.refresh(center)
+            case "control.open":
+                // The page opens the control itself (SDUIControls.swift).
+                if let control = params["control"], !control.isEmpty { store?.control = SDUIControlRequest(control: control, target: params["target"] ?? "") }
             default:
                 do {
                     guard try await center.client.sduiCommand(center.catalog.command(op), item: item) else { return }

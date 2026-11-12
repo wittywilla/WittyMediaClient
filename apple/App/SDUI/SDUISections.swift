@@ -37,6 +37,8 @@ struct SDUINodeView: View {
         case "List": SDUIListView(list: element)
         case "ListItem": SDUIListRow(row: element, dense: false)
         case "NativeView": SDUINativeView(native: element)
+        case "Dock": SDUIDockView(dock: element)
+        case "KeyLegend": SDUIKeyLegendView(legend: element)
         case "Page": SDUIColumn(children: element.children)
         default: SDUIStackView(stack: element)
         }
@@ -93,7 +95,7 @@ struct SDUIShelfView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: layout.sp("s")) {
-            SDUISectionHeading(element: shelf, seeAll: shelf.seeAll.isEmpty ? nil : { actor.open(route: shelf.seeAll) })
+            SDUISectionHeading(element: shelf, seeAll: shelf.seeAll.isEmpty || shelf.seeAllCard ? nil : { actor.open(route: shelf.seeAll) })
             if shelf.state == .error {
                 SDUISectionError(id: shelf.id) { Task { await store.retry(shelf, center: center) } }
             } else if loading {
@@ -112,19 +114,15 @@ struct SDUIShelfView: View {
         .task(id: shelf.stateName) { await store.fill(shelf, center: center) }
     }
 
-    /// The width a card is drawn at. On Apple TV a row shows whole cards and a slice of the next (the tokens' tv.shelf.peek),
-    /// so the person can see there is more: the cards are the page's own size, nudged to the nearest that makes that
-    /// fit. Elsewhere they are exactly the size the page gave.
+    /// The width a card is drawn at. A row that scrolls shows whole cards and a slice of the next (`peek`, a fraction of a
+    /// card's width, from the page's layout), so the person can see there is more: the cards are the page's own size, nudged to
+    /// the nearest that makes that fit.
     private var shownWidth: CGFloat {
-        #if os(tvOS)
-        guard layout.isTV, !isChips, pageWidth > 0 else { return cardWidth }
+        guard shelf.peek > 0, !isChips, pageWidth > 0 else { return cardWidth }
         let available = Double(pageWidth - layout.margin)
-        let items = shelf.children.count + (shelf.seeAll.isEmpty ? 0 : 1)
+        let items = shelf.children.count + (shelf.seeAllCard ? 1 : 0)
         let whole = TvGeometry.wholeCards(available: available, width: Double(cardWidth), gap: Double(layout.gap))
-        return CGFloat(TvGeometry.peekWidth(available: available, nominal: Double(cardWidth), gap: Double(layout.gap), hasMore: items > whole))
-        #else
-        return cardWidth
-        #endif
+        return CGFloat(TvGeometry.peekWidth(available: available, nominal: Double(cardWidth), gap: Double(layout.gap), peek: shelf.peek, hasMore: items > whole))
     }
 
     private var shownHeight: CGFloat { cardHeight * shownWidth / max(cardWidth, 1) }
@@ -141,11 +139,9 @@ struct SDUIShelfView: View {
                 if store.busy.contains(shelf.id) {
                     SkeletonShape().frame(width: shownWidth, height: shownHeight)
                 }
-                #if os(tvOS)
-                if !shelf.seeAll.isEmpty, !isChips {
+                if shelf.seeAllCard, !shelf.seeAll.isEmpty, !isChips {
                     SDUISeeAllCard(width: shownWidth, height: shownHeight, title: shelf.shown("title")) { actor.open(route: shelf.seeAll) }
                 }
-                #endif
             }
             .padding(.horizontal, layout.margin)
             // The room a focused card needs to lift without being cut off.
@@ -165,9 +161,10 @@ struct SDUIGridView: View {
     @EnvironmentObject private var store: SDUIPageStore
     @Environment(\.palette) private var palette
     @Environment(\.sduiLayout) private var layout
+    @Environment(\.sduiListView) private var asList
     let grid: SDUIElement
 
-    private var columns: Int { max(grid.columns, 1) }
+    private var columns: Int { asList ? 1 : max(grid.columns, 1) }
     private var ratio: CGFloat { grid.cardHeight > 0 ? CGFloat(grid.cardWidth) / CGFloat(grid.cardHeight) : 2.0 / 3.0 }
     private var loading: Bool { grid.state == .deferred || (store.busy.contains(grid.id) && grid.children.isEmpty) }
 
@@ -193,7 +190,17 @@ struct SDUIGridView: View {
     private func cells(placeholders: Int) -> some View {
         let isChips = grid.cardStyle == "chip"
         let items = Array(repeating: GridItem(.flexible(), spacing: layout.gap, alignment: .top), count: columns)
-        return LazyVGrid(columns: isChips ? [GridItem(.adaptive(minimum: 120), spacing: layout.gap, alignment: .leading)] : items,
+        if asList && !isChips {
+            return AnyView(LazyVStack(alignment: .leading, spacing: layout.sp("xs")) {
+                ForEach(Array(grid.children.enumerated()), id: \.element.id) { index, card in
+                    SDUICardRow(card: card)
+                        .onAppear { if grid.hasMore, index >= grid.children.count - 10 { Task { await store.more(grid, center: center) } } }
+                }
+            }
+            .padding(.horizontal, layout.margin)
+            .remoteSection())
+        }
+        return AnyView(LazyVGrid(columns: isChips ? [GridItem(.adaptive(minimum: 120), spacing: layout.gap, alignment: .leading)] : items,
                          alignment: .leading, spacing: layout.gap) {
             ForEach(Array(grid.children.enumerated()), id: \.element.id) { index, card in
                 SDUICardView(card: card, width: CGFloat(max(grid.cardWidth, 1)), height: CGFloat(max(grid.cardHeight, 1)), fills: true)
@@ -208,7 +215,7 @@ struct SDUIGridView: View {
         }
         .padding(.horizontal, layout.margin)
         .padding(.vertical, layout.isTV ? Tokens.focusRoom / 2 : 0)
-        .remoteSection()
+        .remoteSection())
     }
 }
 

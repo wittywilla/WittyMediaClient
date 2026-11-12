@@ -24,6 +24,8 @@ final class SDUIPageStore: ObservableObject {
     @Published private(set) var busy: Set<String> = []
     /// Asking again for a page that's already showing.
     @Published private(set) var refreshing = false
+    /// A Dock control the person chose (`control.open`), until the page has opened it.
+    @Published var control: SDUIControlRequest?
 
     let page: String
     private(set) var params: [String: String]
@@ -219,4 +221,10 @@ final class SDUIPageStore: ObservableObject {
         lastCenter = center
         await fetch(section: section.id, url: season.url, center: center)
     }
+}
+
+/// What a Dock's button asked for: `sort`, `filter`, `view` or `jump`, for the Grid with this id.
+struct SDUIControlRequest: Equatable {
+    let control: String
+    let target: String
 }
