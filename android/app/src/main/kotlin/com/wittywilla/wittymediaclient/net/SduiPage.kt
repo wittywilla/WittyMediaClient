@@ -35,6 +35,16 @@ class SduiPage(val base: SduiDocument, val loads: Map<String, SduiSectionLoad> =
     // What is drawn: the server's tree with what was fetched laid over it.
     val shown: SduiDocument by lazy { if (loads.isEmpty()) base else base.copy(root = overlay(base.root) ?: base.root) }
 
+    // What is drawn, laid out. Made once for each page and ahead of time, off the main thread (ready()), as laying out
+    // a long page took long enough on a TV stick for the system to end the app.
+    val screen: SduiScreen by lazy { SduiScreen(shown) }
+
+    // Lays the page out now, on whatever thread this is called from.
+    fun ready(): SduiPage {
+        screen.root
+        return this
+    }
+
     private fun overlay(node: SduiNode): SduiNode? {
         val load = loads[node.id]
         if (load?.gone == true) return null

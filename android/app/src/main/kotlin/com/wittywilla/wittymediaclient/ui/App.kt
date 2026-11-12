@@ -383,15 +383,19 @@ class Nav(val app: WittyApp, private val s: Map<String, String>) {
         val client = sdui ?: return
         if (sduiReadFor === client) return
         sduiReadFor = client
-        if (sduiNav == null) client.keptNavigation()?.let { sduiNav = it }
-        runCatching { client.navigation() }.onSuccess { if (sdui === client) sduiNav = it.value }.onFailure { handleExpired(it) }
-        runCatching { client.catalog() }.onSuccess { if (sdui === client) sduiRouter = SduiRouter(it.routes, it.commands) }
+        // Reading the kept files and decoding the catalogue (every component, route and command) are off the main
+        // thread: on a slow TV stick they took long enough for the system to end the app.
+        val io = kotlinx.coroutines.Dispatchers.IO
+        if (sduiNav == null) kotlinx.coroutines.withContext(io) { client.keptNavigation() }?.let { sduiNav = it }
+        kotlinx.coroutines.withContext(io) { runCatching { client.navigation() } }.onSuccess { if (sdui === client) sduiNav = it.value }.onFailure { handleExpired(it) }
+        kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Default) { runCatching { client.catalog().let { SduiRouter(it.routes, it.commands) } } }
+            .onSuccess { if (sdui === client) sduiRouter = it }
     }
 
     // After the profile rearranged its menu, or a page changed what is in it.
     suspend fun reloadSduiNav() {
         val client = sdui ?: return
-        runCatching { client.navigation() }.onSuccess { if (sdui === client) sduiNav = it.value }
+        kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) { runCatching { client.navigation() } }.onSuccess { if (sdui === client) sduiNav = it.value }
     }
 
     // A title chosen on an Android TV's home screen: its page, or playing it, over Home. Only those two are taken.
