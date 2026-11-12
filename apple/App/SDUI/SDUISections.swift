@@ -36,6 +36,7 @@ struct SDUINodeView: View {
         case "SearchBox": SDUISearchBoxView(box: element)
         case "List": SDUIListView(list: element)
         case "ListItem": SDUIListRow(row: element, dense: false)
+        case "Credits": SDUICreditsView(credits: element)
         case "Dock": EmptyView()
         // A key legend outside a Dock: a TV's remote is always in use; touch alone never shows one.
         case "KeyLegend":

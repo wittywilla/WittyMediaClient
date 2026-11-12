@@ -380,6 +380,30 @@ public struct SDUIScreen: Equatable, Sendable {
             case "NativeView":
                 e.role = "group"
                 e.label = p.text("view")
+            case "Credits":
+                // Cast and crew (revision 5): person cards in parts, the parts in order with how many of each were sent.
+                e.role = "region"
+                e.label = p.text("title")
+                e.cards = node.kids.count
+                text("title", p.text("title"))
+                lines("title", 1)
+                e.textSize = layout.textSize("heading")
+                let parts: [String] = p.items("groups").compactMap { value in
+                    guard let group = value.object else { return nil }
+                    let shown = group.whole("shown") ?? 0, total = group.whole("total") ?? 0
+                    return group.text("label") + " \(shown)" + (total > shown ? " of \(total)" : "")
+                }
+                text("groups", parts.joined(separator: " · "))
+                if let card = p.fields("card") {
+                    e.cardStyle = "person"
+                    e.cardWidth = card.whole("width") ?? 0
+                    e.cardHeight = card.whole("height") ?? 0
+                }
+                if let more = p.fields("more") {
+                    e.hasMore = true
+                    e.buttons = [SDUIButtonModel(id: "showAll", label: more.text("label").isEmpty ? "Show all" : more.text("label"), icon: "",
+                                                 primary: false, action: nil)]
+                }
             case "Stack", "Split", "Spacer":
                 break
             default:
