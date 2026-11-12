@@ -95,23 +95,12 @@ struct SDUICreditsView: View {
                         Button { actor.perform(card.action) } label: { PersonCard(card: card, side: portrait) }
                             .personButtonStyle()
                             .sduiFocusable(card.isFocusable ? focus : nil, card.id)
-                            .accessibilityElement(children: .ignore)
+                            // A button is one element already; wrapping it in another hides it from a TV's focus.
                             .accessibilityLabel(card.label)
-                            .accessibilityAddTraits(.isButton)
                             .accessibilityIdentifier("sdui.card." + card.id)
                     }
                     if credits.hasMore, part.id == parts.first(where: \.isPeople)?.id {
-                        Button(action: askForAll) {
-                            VStack(spacing: layout.sp("xs")) {
-                                Circle().fill(palette.card).frame(width: portrait, height: portrait)
-                                    .overlay(Image(systemName: "arrow.right")
-                                        .font(.system(size: portrait * 0.25, weight: .semibold))
-                                        .foregroundStyle(palette.text))
-                                Text("Show all cast").sduiFont("body", weight: .medium).foregroundStyle(palette.text)
-                                    .lineLimit(2).multilineTextAlignment(.center)
-                            }
-                            .frame(width: portrait)
-                        }
+                        Button(action: askForAll) { ShowAllTile(side: portrait) }
                         .personButtonStyle()
                         .accessibilityIdentifier("sdui.credits.showAll")
                     }
@@ -175,10 +164,37 @@ struct SDUICreditsView: View {
     }
 }
 
+/// The cast row's last tile: Show all cast, round like the portraits.
+private struct ShowAllTile: View {
+    @Environment(\.palette) private var palette
+    @Environment(\.sduiLayout) private var layout
+    @Environment(\.metrics) private var metrics
+    @Environment(\.isFocused) private var focused
+    let side: CGFloat
+
+    var body: some View {
+        VStack(spacing: layout.sp("xs")) {
+            Circle().fill(palette.card).frame(width: side, height: side)
+                .overlay(Image(systemName: "arrow.right").font(.system(size: side * 0.25, weight: .semibold))
+                    .foregroundStyle(palette.text))
+                .overlay(Circle().strokeBorder(palette.tvRing, lineWidth: metrics.focusRing).padding(-metrics.focusRoom)
+                    .opacity(focused ? 1 : 0))
+                .scaleEffect(focused ? metrics.focusScale : 1)
+                .animation(.easeOut(duration: Tokens.Motion.focus), value: focused)
+            Text("Show all cast").sduiFont("body", weight: .medium).foregroundStyle(palette.text)
+                .lineLimit(2).multilineTextAlignment(.center)
+        }
+        .frame(width: side)
+    }
+}
+
 /// A round portrait, the name under it and the part played under that. Without a photo, the person's initials on `bg3`.
 private struct PersonCard: View {
     @Environment(\.palette) private var palette
     @Environment(\.sduiLayout) private var layout
+    @Environment(\.metrics) private var metrics
+    /// The button around it has a TV's focus.
+    @Environment(\.isFocused) private var focused
     let card: SDUIElement
     let side: CGFloat
 
@@ -202,8 +218,12 @@ private struct PersonCard: View {
                 }
             }
             .frame(width: side, height: side)
+            .overlay(Circle().strokeBorder(palette.tvRing, lineWidth: metrics.focusRing).padding(-metrics.focusRoom)
+                .opacity(focused ? 1 : 0))
+            .scaleEffect(focused ? metrics.focusScale : 1)
+            .animation(.easeOut(duration: Tokens.Motion.focus), value: focused)
             Text(card.shown("title")).sduiFont("body", weight: .medium).foregroundStyle(palette.text)
-                .lineLimit(1).multilineTextAlignment(.center)
+                .lineLimit(2).multilineTextAlignment(.center).fixedSize(horizontal: false, vertical: true)
             if !card.shown("subtitle").isEmpty {
                 Text(card.shown("subtitle")).sduiFont("caption").foregroundStyle(palette.textSecondary)
                     .lineLimit(2).multilineTextAlignment(.center)
@@ -214,12 +234,14 @@ private struct PersonCard: View {
 }
 
 private extension View {
-    /// A TV's lifted card; a plain press elsewhere.
-    @ViewBuilder func personButtonStyle() -> some View {
-        #if os(tvOS)
-        buttonStyle(.borderless)
-        #else
-        buttonStyle(.plain)
-        #endif
+    /// The portrait draws its own focus (a ring round the circle and a lift); a press dims it a little.
+    func personButtonStyle() -> some View { buttonStyle(PersonPress()) }
+}
+
+private struct PersonPress: ButtonStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .opacity(configuration.isPressed ? 0.7 : 1)
+            .contentShape(Rectangle())
     }
 }
