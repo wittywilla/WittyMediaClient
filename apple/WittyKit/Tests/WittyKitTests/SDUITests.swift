@@ -7,7 +7,7 @@ import XCTest
 /// "Customise", the cache and the requests. Everything here is made up.
 final class SDUITests: XCTestCase {
     static let page = #"""
-    {"version":1,"catalog":5,"futureField":{"x":1},
+    {"version":1,"catalog":6,"futureField":{"x":1},
      "page":{"id":"home","kind":"home","title":"Home","route":"/","params":{"tab":"a","n":3}},
      "layout":{"formFactor":"tv","class":"hd","canvas":{"width":1920,"height":1080},"scale":1,"breakpoint":"large",
        "safeArea":{"top":60,"right":80,"bottom":60,"left":80},"focusEngine":true,"density":"comfortable",
@@ -496,7 +496,7 @@ final class SDUITests: XCTestCase {
         XCTAssertFalse(SDUI.accepts(old), "a client built for revision 4 refuses another revision's tree")
         old.catalog = nil
         XCTAssertTrue(SDUI.accepts(old))
-        let bar = #"{"version":1,"catalog":5,"page":{"id":"l","kind":"library","title":"L"},"layout":{"formFactor":"phone"},"root":{"type":"Page","id":"page","children":[{"type":"FilterBar","id":"f","props":{"count":1,"countText":"1 title"}},{"type":"DetailHeader","id":"h","props":{"title":"T","actions":[{"id":"watchLater","label":"In Watch later","icon":"check","pressed":true,"action":{"type":"command","op":"watchLater.remove","item":"5"}}]}}]}}"#
+        let bar = #"{"version":1,"catalog":6,"page":{"id":"l","kind":"library","title":"L"},"layout":{"formFactor":"phone"},"root":{"type":"Page","id":"page","children":[{"type":"FilterBar","id":"f","props":{"count":1,"countText":"1 title"}},{"type":"DetailHeader","id":"h","props":{"title":"T","actions":[{"id":"watchLater","label":"In Watch later","icon":"check","pressed":true,"action":{"type":"command","op":"watchLater.remove","item":"5"}}]}}]}}"#
         let screen = SDUIScreen(document: try JSONDecoder().decode(SDUIDocument.self, from: Data(bar.utf8)))
         XCTAssertEqual(screen.root.find("f")?.shown("count"), "1 title")
         XCTAssertEqual(screen.root.find("h")?.buttons.first?.pressed, true)
