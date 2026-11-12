@@ -186,6 +186,8 @@ targets:
         # What the server's pages save goes where the Files app can see it.
         UIFileSharingEnabled: true
         LSSupportsOpeningDocumentsInPlace: true
+        # You → Sign in a TV scans the code on the other device's screen. Typing the code works without it.
+        NSCameraUsageDescription: WittyMediaClient uses the camera to scan the sign-in code shown on a TV or another device.
     settings:
       base:
         TARGETED_DEVICE_FAMILY: "1,2,7"

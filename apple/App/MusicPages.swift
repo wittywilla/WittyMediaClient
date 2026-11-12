@@ -1528,6 +1528,7 @@ struct MusicAlbumPage: View {
                 }
                 .aspectRatio(books && !pods ? 2.0 / 3.0 : 1, contentMode: .fit)
                 .frame(width: min(screenSize.width * 0.6, 240))
+                .overlay { CanvasLayer(item: books ? nil : tracks.first?.id, active: !listening.screenShown) }
                 .clipShape(RoundedRectangle(cornerRadius: Tokens.Radius.lg, style: .continuous))
                 .shadow(color: .black.opacity(0.35), radius: 16, y: 8)
                 .padding(.bottom, Tokens.Space.s5)

@@ -330,15 +330,18 @@ public struct SDUINavigation: Codable, Equatable, Sendable {
     public var formFactor: String?
     public var etag: String?
     public var items: [SDUINavItem]
+    /// For a profile that may rearrange the menu: every entry it could have, in its order, hidden ones included.
+    public var personal: SDUIPersonalInfo?
 
-    public init(items: [SDUINavItem], formFactor: String? = nil, etag: String? = nil) {
+    public init(items: [SDUINavItem], formFactor: String? = nil, etag: String? = nil, personal: SDUIPersonalInfo? = nil) {
         self.version = SDUI.version
         self.items = items
         self.formFactor = formFactor
         self.etag = etag
+        self.personal = personal
     }
 
-    enum CodingKeys: String, CodingKey { case version, formFactor, etag, items }
+    enum CodingKeys: String, CodingKey { case version, formFactor, etag, items, personal }
 
     public init(from decoder: Decoder) throws {
         let box = try decoder.container(keyedBy: CodingKeys.self)
@@ -346,6 +349,7 @@ public struct SDUINavigation: Codable, Equatable, Sendable {
         formFactor = try? box.decodeIfPresent(String.self, forKey: .formFactor)
         etag = try? box.decodeIfPresent(String.self, forKey: .etag)
         items = ((try? box.decodeIfPresent([Loose<SDUINavItem>].self, forKey: .items)) ?? []).compactMap(\.value)
+        personal = try? box.decodeIfPresent(SDUIPersonalInfo.self, forKey: .personal)
     }
 
     public func placed(_ placement: String) -> [SDUINavItem] { items.filter { ($0.placement ?? "primary") == placement } }

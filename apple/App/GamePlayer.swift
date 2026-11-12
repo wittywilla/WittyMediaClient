@@ -400,6 +400,8 @@ final class GamePlayerModel: ObservableObject {
 
     private func fail(_ error: Error) {
         if error is CancellationError { return }
+        // Screen time is up: the time-up screen says so and closes the game.
+        if Household.caught(error) { return }
         let words = (error as? APIError)?.message ?? plainWords(Problem.of(error))
         phase = .failed(words.isEmpty ? "This game couldn't start." : words)
     }

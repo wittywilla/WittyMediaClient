@@ -119,7 +119,7 @@ struct GuideDetails: View {
             if later, channel.canTune, ask.cell.kind == .programme, let p {
                 Button(reminded ? "✓ Reminder set" : "Remind me") { Task { onSaid(await reminders.toggle(channel.key, p)) } }.action(selected: reminded)
             }
-            if channel.canRecord == true, ask.cell.isBroadcast, ask.cell.end > now, let p {
+            if channel.canRecord == true, model.household.allows(ProfileFeature.recordings), ask.cell.isBroadcast, ask.cell.end > now, let p {
                 Button("Record every airing") {
                     Task {
                         do { try await client.recordSeries(channel: channel.key, title: p.title); onSaid("Every airing of \(p.title) will be recorded"); dismiss() }
