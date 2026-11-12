@@ -74,7 +74,7 @@ struct ConnectView: View {
                 problem = away
             } else if reason == "not-set-up" {
                 // Setup is web-only: the app doesn't connect until it is done, and says where to finish it.
-                notSetUp = url
+                notSetUp = (url.hasSuffix("/") ? String(url.dropLast()) : url) + "/setup"
             } else {
                 problem = reasonText(reason)
             }
