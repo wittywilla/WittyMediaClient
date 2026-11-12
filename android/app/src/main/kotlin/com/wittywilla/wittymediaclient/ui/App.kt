@@ -445,6 +445,9 @@ class Nav(val app: WittyApp, private val s: Map<String, String>) {
     var requiredTheme by mutableStateOf<SduiRequired?>(null)
         private set
 
+    // The form factor this device draws a look's wire for.
+    val experienceForm: String get() = sduiDevice?.formFactor.orEmpty()
+
     // The finished look from `GET /theme`: type set, finish amounts, scene, glass and gloss recipes.
     var look by mutableStateOf(com.wittywilla.wittymediaclient.net.Look.NONE)
         private set

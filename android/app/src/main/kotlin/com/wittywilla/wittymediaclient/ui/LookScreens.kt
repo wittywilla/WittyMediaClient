@@ -67,7 +67,7 @@ fun LookScreen(nav: Nav, s: Map<String, String>) {
                 GroupRow(
                     e.name, onClick = { pick(e.id) }, chevron = false, selected = chosen == e.id, detail = e.tagline, focusKey = "look-" + e.id, requestFocus = chosen == e.id,
                     // A wireframe of the look's layout in the colours in use: where the menu is, Home, the cards.
-                    leading = { LayoutThumb(com.wittywilla.wittymediaclient.net.ThumbSpecs.forId(e.id), e.name, Modifier.width(88.dp)) },
+                    leading = { LayoutThumb(com.wittywilla.wittymediaclient.net.Wire.of(e.wire, nav.experienceForm), e.name, Modifier.width(120.dp), selected = chosen == e.id) },
                     trailing = { check(chosen == e.id) },
                 )
             })
@@ -104,7 +104,7 @@ fun FirstLookScreen(nav: Nav, s: Map<String, String>) {
                     list.forEachIndexed { i, e ->
                         val on = (state?.choice?.chosen?.ifEmpty { state.choice.current }) == e.id
                         Row(horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
-                        LayoutThumb(com.wittywilla.wittymediaclient.net.ThumbSpecs.forId(e.id), e.name, Modifier.width(120.dp))
+                        LayoutThumb(com.wittywilla.wittymediaclient.net.Wire.of(e.wire, nav.experienceForm), e.name, Modifier.width(160.dp), selected = on)
                         WittyButton(e.name + if (e.tagline.isNotEmpty()) " · " + e.tagline else "", {
                             if (busy) return@WittyButton
                             busy = true
