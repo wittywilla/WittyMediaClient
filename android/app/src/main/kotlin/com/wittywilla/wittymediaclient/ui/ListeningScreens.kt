@@ -344,6 +344,8 @@ fun AlbumScreen(nav: Nav, s: Map<String, String>, route: Route.Album) {
             val start = whereToStart(tracks, books)
             val resume = hasPlaceToResume(tracks, books)
             val cover = tracks.firstOrNull()?.let { nav.app.api.posterUrl(it) }.orEmpty()
+            // The album's canvas, faint across the top, when it has one (CanvasLoop.kt).
+            CanvasBanner(nav, tracks.firstOrNull()?.id ?: 0L)
             LazyColumn(
                 Modifier.fillMaxSize().safeDrawingPadding(),
                 contentPadding = PaddingValues(horizontal = metrics.gutter, vertical = if (metrics.tv) metrics.edge else Space.S4),

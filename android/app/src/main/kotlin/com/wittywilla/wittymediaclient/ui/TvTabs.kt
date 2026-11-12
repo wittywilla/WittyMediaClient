@@ -134,6 +134,16 @@ fun TvShell(nav: Nav, content: @Composable () -> Unit) {
             nav.reset(Route.Home)
         }
     }
+    // The layout option's frame: a menu down the side where the server says so (LayoutFrames.kt), else the top menu.
+    if (nav.sduiNav != null && menuStyle(nav, tv = true) == "tvSideMenu") {
+        val metrics = LocalMetrics.current
+        val shell = nav.sduiNav?.shell
+        Row(Modifier.fillMaxSize()) {
+            TvSideMenu(nav, metrics.u(shell?.size?.takeIf { it > 0 } ?: 120), metrics.u(shell?.open?.takeIf { it > 0 } ?: 400))
+            Box(Modifier.weight(1f)) { CompositionLocalProvider(LocalTvBar provides bar) { content() } }
+        }
+        return
+    }
     Column(Modifier.fillMaxSize()) {
         TvTopBar(nav, bar, libraries)
         Box(Modifier.weight(1f)) { CompositionLocalProvider(LocalTvBar provides bar) { content() } }
@@ -189,7 +199,7 @@ private fun TvTopBar(nav: Nav, bar: TvBar, libraries: List<Library>) {
         val route = nav.routeOf(entry)?.takeIf { it != Route.Profile && isTvTab(it) } ?: return@mapNotNull null
         TvTab(route, entry.label, tvBarIcon(entry.icon))
     }.distinctBy { it.route.key }
-    val left = fixed + libraries.filter { it.id in nav.topMenu }.map { TvTab(Route.Pinned(it), it.name, it.barSymbol) }.filter { pinned -> fixed.none { (it.route as? Route.Library)?.library?.id == (pinned.route as Route.Pinned).library.id } }
+    val left = fixed.filter { profileOffers(it.route) } + libraries.filter { it.id in nav.topMenu }.map { TvTab(Route.Pinned(it), it.name, it.barSymbol) }.filter { pinned -> fixed.none { (it.route as? Route.Library)?.library?.id == (pinned.route as Route.Pinned).library.id } }
     Row(
         Modifier
             .fillMaxWidth()
@@ -306,7 +316,7 @@ private fun TvTabPill(nav: Nav, tab: TvTab, requester: FocusRequester, modifier:
                 Icon(tab.icon, contentDescription = null, tint = ink, modifier = Modifier.size(metrics.u(BAR_ICON)))
                 Text(tab.title, color = ink, style = MaterialTheme.typography.label, maxLines = 1)
             } else {
-                Avatar(person.ifEmpty { "?" }, metrics.u(28))
+                ProfileFace(person.ifEmpty { "?" }, nav.me?.avatar, metrics.u(28))
                 Text(person.ifEmpty { tab.title }, color = ink, style = MaterialTheme.typography.label, maxLines = 1)
             }
         }

@@ -174,6 +174,34 @@ fun PhoneShell(nav: Nav, content: @Composable () -> Unit) {
     val topRoom = status + TOP_BAR.dp + 8.dp
     val top = isTopPage(nav.current, nav.menu, served?.map { it.second }.orEmpty())
 
+    // The layout option's frame (LayoutFrames.kt): a sidebar or a rail down the side, tabs across the top, or the
+    // floating bar as before.
+    val style = menuStyle(nav, tv = false)
+    val tablet = androidx.compose.ui.platform.LocalConfiguration.current.smallestScreenWidthDp >= 600
+    if (served != null && style != "bottomTabs") {
+        val size = menuSize(nav, style, tablet).dp
+        val side = style == "sidebar" || style == "rail"
+        val overlay = nav.sduiNav?.shell?.overlay == true
+        val sideRoom = 24.dp + inset + if (docked) DOCK_SPACE.dp else 0.dp
+        val tabsRoom = if (side) status + 8.dp else if (overlay) status else status + size + 8.dp
+        Box(Modifier.fillMaxSize().background(scheme.background)) {
+            Box(Modifier.fillMaxSize().padding(start = if (side) size else 0.dp)) {
+                CompositionLocalProvider(LocalShellScroll provides scroll, LocalBottomRoom provides sideRoom, LocalTopRoom provides (if (top) tabsRoom else topRoom), LocalOverShell provides over) {
+                    content()
+                }
+                // Beside a side menu a top page needs no strip of libraries along the top: the menu has them. A page
+                // further in keeps its Back.
+                if (!top) TopBar(nav, scroll, status, false)
+                else if (!side) TopTabs(nav, size, status, solid = !overlay || scroll.under)
+                val aboveEdge = 8.dp + inset
+                if (video != null) VideoDock(nav, video, aboveEdge)
+                else if (listening) PhoneMiniBar(nav, Modifier.align(Alignment.BottomCenter).padding(start = 8.dp, end = 8.dp, bottom = aboveEdge))
+            }
+            if (side) SideMenu(nav, size, labels = style == "sidebar", top = status, bottom = inset)
+            over.sheets.forEach { sheet -> key(sheet) { sheet() } }
+        }
+        return
+    }
     Box(Modifier.fillMaxSize().background(scheme.background)) {
         CompositionLocalProvider(LocalShellScroll provides scroll, LocalBottomRoom provides bottomRoom, LocalTopRoom provides topRoom, LocalOverShell provides over) {
             content()
@@ -343,7 +371,7 @@ private fun TabBar(nav: Nav, inset: Dp, modifier: Modifier, openMenu: () -> Unit
         val me = nav.me
         val name = if (me == null) "" else avatarName(me.displayName, me.name)
         Cell("You, $name", current == Route.Profile, { if (current != Route.Profile) nav.reset(Route.Profile) }) {
-            Avatar(name.ifEmpty { "?" }, 32.dp)
+            ProfileFace(name.ifEmpty { "?" }, me?.avatar, 32.dp)
         }
     }
 }

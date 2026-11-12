@@ -119,6 +119,8 @@ sealed interface Route {
     data object Notices : Route { override val key = "notices" }
     // A device that has never been at home with its server shows a code for it (ui/AwayScreens.kt).
     data object JoinAway : Route { override val key = "join-away" }
+    // One module's settings, at the address the server gave (ui/ModuleSettingsScreens.kt).
+    data class ModuleSettings(val url: String, val title: String) : Route { override val key = "module-settings:$url" }
     data object Logs : Route { override val key = "logs" }
     // With something chosen, as the website's /library/3?genre=Drama: from a title's genre, tag or service.
     data class Library(val library: com.wittywilla.wittymediaclient.net.Library, val chosen: Map<String, String> = emptyMap()) : Route {
@@ -403,6 +405,44 @@ class Nav(val app: WittyApp, private val s: Map<String, String>) {
         kotlinx.coroutines.withContext(io) { runCatching { client.navigation() } }.onSuccess { if (sdui === client) sduiNav = it.value }.onFailure { handleExpired(it) }
         kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Default) { runCatching { client.catalog().let { SduiRouter(it.routes, it.commands) } } }
             .onSuccess { if (sdui === client) sduiRouter = it }
+    }
+
+    // Every entry of the server's menu that leads somewhere in this app, in its order, You last: what a side menu and
+    // a row of tabs across the top show (layout options).
+    val sduiMenuAll: List<Pair<SduiNavItem, Route>>
+        get() {
+            val served = sduiNav ?: return emptyList()
+            val all = served.items.mapNotNull { entry -> routeOf(entry)?.let { entry to it } }.distinctBy { it.second.key }
+            return all.filter { it.second != Route.Profile } + all.filter { it.second == Route.Profile }
+        }
+
+    // Opening one of the menu's entries: Home, Search, You and the server's pages are places of their own; anything
+    // else opens over Home.
+    fun openMenuEntry(route: Route) {
+        if (current.key == route.key) return
+        if (route == Route.Home || route == Route.Search || route == Route.Profile || route is Route.Sdui) reset(route)
+        else { reset(Route.Home); push(route) }
+    }
+
+    // The profile's layout on this device, from You's Layout row; null follows the server again. The menu and every
+    // page are asked for again in it.
+    suspend fun chooseLayout(layout: String?): String? {
+        val client = sdui ?: return null
+        val url = sduiNav?.layouts?.url?.ifEmpty { null } ?: return null
+        return try {
+            client.chooseLayout(url, layout)
+            sduiMade = null
+            sduiMadeFor = null
+            sduiReadFor = null
+            // What pages last showed was in the other layout.
+            shown.clear()
+            loadSdui()
+            null
+        } catch (e: ApiError) {
+            e.message
+        } catch (_: IOException) {
+            s["errLost"]
+        }
     }
 
     // After the profile rearranged its menu, or a page changed what is in it.
@@ -1239,6 +1279,7 @@ fun AppRoot(app: WittyApp) {
                         is Route.OwnItem -> PageShell(nav) { if (LocalMetrics.current.tv) ItemScreen(nav, strings, route.id) else PhoneItem(nav, strings, route.id) }
                         Route.Notices -> NoticesScreen(nav)
                         Route.JoinAway -> JoinAwayScreen(nav, strings)
+                        is Route.ModuleSettings -> ModuleSettingsScreen(nav, strings, route.url, route.title)
                         Route.Logs -> LogsScreen(nav)
                         is Route.Library -> {
                             val body = @Composable {
@@ -1285,6 +1326,7 @@ fun AppRoot(app: WittyApp) {
                         is Route.Help -> ServerPageScreen(nav, route, route.path, keptToGames = false, public = true)
                         is Route.OnPhone -> OnPhoneScreen(nav, strings, route.title, route.path)
                         is GamesRoute -> GamesRouteScreen(nav, route)
+                        is HouseholdRoute -> HouseholdRouteScreen(nav, strings, route)
                         is TvRoute -> TvRouteScreen(nav, route)
                     }
                 }
@@ -1306,6 +1348,8 @@ fun AppRoot(app: WittyApp) {
         }
         // A WittyTV reminder comes up on whatever's showing, once someone is signed in.
         if (metrics.tv && route.signedIn) TvReminderAlert(nav)
+        // Screen time and what a profile's limits turn off, over every screen and every player.
+        ProfileGuard(nav, app.api, strings)
     }
 }
 

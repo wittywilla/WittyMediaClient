@@ -40,6 +40,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusDirection
 import androidx.compose.ui.focus.focusProperties
@@ -290,6 +291,8 @@ fun NowPlayingScreen(nav: Nav) {
     }
 
     Screen {
+        // The song's canvas, faint behind everything, when it has one and this device may play it (CanvasLoop.kt).
+        CanvasBackdrop(nav, now?.mediaId?.toLongOrNull() ?: 0L, Modifier.fillMaxSize().alpha(0.35f))
         if (wide) {
             Row(
                 Modifier.fillMaxSize().safeDrawingPadding().padding(horizontal = metrics.gutter, vertical = if (metrics.tv) metrics.edge else Space.S4),

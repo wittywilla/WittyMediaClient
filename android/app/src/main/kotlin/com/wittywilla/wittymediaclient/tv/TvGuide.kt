@@ -605,7 +605,7 @@ private fun GuideBar(
             TvButton(dress, "$dayLabel ▾", onDay, onBar = true)
             TvIconButton(dress, Symbols.Search, "Search the schedule", onSearch, onBar = true)
             TvButton(dress, "Look", onLook, onBar = true)
-            TvButton(dress, "Recordings", { nav.push(TvRoute(TvScreen.Recordings)) }, onBar = true)
+            if (com.wittywilla.wittymediaclient.player.ScreenTimeWatch.can("recordings")) TvButton(dress, "Recordings", { nav.push(TvRoute(TvScreen.Recordings)) }, onBar = true)
             if (nav.me?.isAdmin == true) TvButton(dress, "Edit channels", { nav.push(Route.OnPhone("Edit channels", "/tv/channels")) }, onBar = true, icon = Symbols.Settings)
         }
     }

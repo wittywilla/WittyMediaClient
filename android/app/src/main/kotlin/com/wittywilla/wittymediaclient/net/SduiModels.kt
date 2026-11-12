@@ -213,7 +213,24 @@ data class SduiNavigation(
     val formFactor: String = "",
     val etag: String = "",
     val items: List<SduiNavItem> = emptyList(),
+    // The frame the app draws its menu in (Layout options in docs/SDUI.md), and what this profile may choose on this
+    // device. Both null from a server without layout options.
+    val shell: SduiShell? = null,
+    val layouts: SduiLayouts? = null,
 )
+
+// The layouts this profile may choose on this device, for You's Layout row: the one in use, the one chosen here (empty:
+// following the server), the choices, and where a choice is saved.
+@Serializable
+data class SduiLayouts(
+    val current: String = "",
+    val chosen: String = "",
+    val options: List<SduiChoice> = emptyList(),
+    val url: String = "",
+)
+
+@Serializable
+data class SduiChoice(val value: String = "", val label: String = "")
 
 @Serializable
 data class SduiNavItem(
