@@ -232,6 +232,7 @@ class KaraokeStems(private val app: WittyApp, private val listening: Listening, 
         if (playing) {
             playing = false
             listening.keeper?.soundChanged(levelingChanged = false)
+            listening.stemsStopped()
         }
         if (had) app.scope.launch(Dispatchers.IO) {
             // Not under a load that has started since.

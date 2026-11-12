@@ -184,7 +184,7 @@ fun artColour(bitmap: Bitmap?): Triple<Int, Int, Int> {
 
 @Composable
 internal fun NpRound(icon: ImageVector, label: String, size: Dp, iconSize: Dp, on: Boolean = false, tint: Color? = null, fill: Color = Np.chip, modifier: Modifier = Modifier, enabled: Boolean = true, onClick: () -> Unit) {
-    Pressable(onClick, modifier.size(size), shape = CircleShape, fill = if (on) Np.fg else fill, label = label, selected = on, enabled = enabled, disabledAlpha = 0.4f, pressScale = 0.94f, ring = false) {
+    Pressable(onClick, modifier.size(size), shape = CircleShape, fill = if (on) Np.fg else fill, label = label, selected = on, enabled = enabled, disabledAlpha = 0.4f, pressScale = 0.94f, ring = LocalMetrics.current.tv) {
         Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
             Icon(icon, null, tint = tint ?: if (on) Color.Black else Np.fg, modifier = Modifier.size(iconSize))
         }
@@ -196,7 +196,7 @@ internal fun NpRound(icon: ImageVector, label: String, size: Dp, iconSize: Dp, o
 @Composable
 internal fun NpChip(words: String, on: Boolean = false, icon: ImageVector? = null, iconSize: Dp = 20.dp, small: Boolean = false, modifier: Modifier = Modifier, enabled: Boolean = true, label: String = words, after: (@Composable () -> Unit)? = null, onClick: () -> Unit) {
     val high = if (small) 36.dp else 44.dp
-    Pressable(onClick, modifier.heightIn(min = high), shape = RoundedCornerShape(50), fill = if (on) Np.fg else Np.chip, label = label, selected = on, enabled = enabled, disabledAlpha = 0.45f, ring = false) {
+    Pressable(onClick, modifier.heightIn(min = high), shape = RoundedCornerShape(50), fill = if (on) Np.fg else Np.chip, label = label, selected = on, enabled = enabled, disabledAlpha = 0.45f, ring = LocalMetrics.current.tv) {
         Row(Modifier.heightIn(min = high).padding(horizontal = if (small) 12.dp else 16.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             if (icon != null) Icon(icon, null, tint = if (on) Color.Black else Np.fg, modifier = Modifier.size(iconSize))
             Text(words, color = if (on) Color.Black else Np.fg, fontSize = if (small) 13.sp else 14.sp, fontWeight = FontWeight.SemiBold, maxLines = 1)
