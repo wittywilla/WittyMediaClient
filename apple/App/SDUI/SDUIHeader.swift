@@ -313,6 +313,7 @@ struct SDUIDetailHeaderView: View {
         .background {
             if style != "compact" {
                 SDUIPicture(picture: header.picture ?? header.poster, blank: true)
+                    .overlay { CanvasLayer(item: store.params["item"].flatMap { Int64($0) }, active: !model.listening.screenShown) }
                     .opacity(0.55)
                     .overlay(LinearGradient(stops: [.init(color: palette.background, location: 0), .init(color: .clear, location: 0.8)],
                                             startPoint: .leading, endPoint: .trailing))
@@ -335,6 +336,8 @@ struct SDUIDetailHeaderView: View {
                 let width = pageWidth > 0 ? pageWidth : 390
                 SDUIPicture(picture: header.picture ?? header.poster, symbol: "film", shownWidth: width)
                     .frame(height: min(width * 9 / 16, 460))
+                    // The title's canvas, where it has one, loops over the still (MediaCanvas.swift decides when).
+                    .overlay { CanvasLayer(item: store.params["item"].flatMap { Int64($0) }, active: !model.listening.screenShown) }
                     .overlay(LinearGradient(stops: [.init(color: .clear, location: 0.5), .init(color: palette.background, location: 1)],
                                             startPoint: .top, endPoint: .bottom))
                     .clipped()

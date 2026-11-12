@@ -157,6 +157,11 @@ private struct PartyCodeEntry: View {
                     .accessibilityLabel("Code")
                     .accessibilityIdentifier("party-code")
             }
+            // The keyboard comes up with the screen, as the boxes show they're waiting for it.
+            .task {
+                try? await Task.sleep(nanoseconds: 450_000_000)
+                if code.isEmpty { focused = true }
+            }
         #endif
     }
 }
