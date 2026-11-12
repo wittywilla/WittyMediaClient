@@ -124,6 +124,7 @@
   "rowGameSettings": "Game settings",
   "rowControllers": "Controllers",
   "rowTheme": "Theme",
+  "rowLookAndTheme": "Look and theme",
   "rowLook": "Look",
   "lookHint": "How this app is arranged and finished on this device: the menu, the cards, the type. Theme is chosen separately.",
   "lookServer": "Follow the server",
