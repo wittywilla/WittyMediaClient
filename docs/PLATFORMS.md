@@ -223,7 +223,7 @@ library for each processor the APKs are split by (arm64, 32-bit ARM, x86-64 and 
 the others. It needs Go, the Android SDK and its NDK (`sdkmanager 'ndk;27.2.12479018'`). The build finds it by itself: with it, the
 bridge in `src/p2p` is compiled; without it, the one in `src/nop2p` that says it isn't there, and the app builds and runs the same with
 nothing about connecting from away shown. R8 keeps the library's Java side whole (`app/proguard-rules.pro`), as its Go side calls it
-by name. It adds about 10 MB to each processor's APK.
+by name. Its library, `libgojni.so`, is 27 MB uncompressed for arm64; the arm64 APK with it is 44 MB.
 
 **How the app uses it**, as Apple's apps do: `p2p/PeerManager.kt` chooses the way, the server's own address first; peer to peer when
 that doesn't answer and this device is on the server's list (`net/PeerRules.kt` has the rules and their tests). From away the app's
