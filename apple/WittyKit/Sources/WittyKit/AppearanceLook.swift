@@ -180,6 +180,8 @@ public extension WittyClient {
         for query in AppearanceQuery.targets(device, everywhere: everywhere) {
             _ = try await call("PUT", "/sdui/experience" + query, body: body)
         }
+        // This device's own choice would still win over the one for all: forget it, so it follows them.
+        if everywhere { _ = try? await call("DELETE", "/sdui/experience" + AppearanceQuery.string(device)) }
     }
 
     /// This device follows the server's look again.
@@ -214,11 +216,9 @@ enum AppearanceQuery {
     /// This device's own key, or, for every device, the form factor each kind of device falls back to.
     static func targets(_ device: SDUIDevice, everywhere: Bool) -> [String] {
         guard everywhere else { return [string(device)] }
-        var out = [string(device)]
-        for form in ["phone", "tablet", "tv", "desktop", "headset"] {
-            out.append("?platform=\(device.platform)&formFactor=\(form)")
-        }
-        return out
+        // Only the form-factor keys (`form:phone` ...), which every device without a choice of its own follows: five of the
+        // server's 32 entries per profile, and none for this device itself.
+        return ["phone", "tablet", "tv", "desktop", "headset"].map { "?platform=\(device.platform)&formFactor=\($0)" }
     }
 }
 
