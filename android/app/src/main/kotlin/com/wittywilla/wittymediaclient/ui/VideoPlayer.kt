@@ -305,6 +305,8 @@ fun VideoPlayerScreen(nav: Nav, route: Route.Player) {
         if (session.playing) shown = false
     }
     var lastTap by remember { mutableLongStateOf(0L) }
+    // The watch party's panel, down the side (PartyScreens.kt). It has its own Back.
+    var partyOpen by remember { mutableStateOf(false) }
     BackHandler { if (open != Open.None) open = Open.None else nav.minimizeVideo() }
 
     BoxWithConstraints(
@@ -359,9 +361,18 @@ fun VideoPlayerScreen(nav: Nav, route: Route.Player) {
                     Text(subLine(item, stream?.decision.orEmpty()), color = Dark.fg2, fontSize = if (compact) 12.sp else 13.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 }
                 if (stream != null) PlayerIcon(WebIcons.Info, "How this is playing", 44.dp, 24.dp, { open = Open.Info })
+                // Watch party and Play on…, where the server and this profile have them (player/RemoteHub.kt).
+                val hub = nav.app.remote
+                if (nav.has(com.wittywilla.wittymediaclient.player.SYNCPLAY_FEATURE) && (item?.kind ?: "video") == "video") {
+                    PlayerIcon(Symbols.Group, "Watch party", 44.dp, 24.dp, { if (hub.party.room != null) partyOpen = !partyOpen else nav.push(RemoteRoute.Party(session.id)) }, on = hub.party.room != null)
+                }
+                if (hub.canControl && stream != null) {
+                    PlayerIcon(Symbols.Devices, "Play on another device", 44.dp, 24.dp, { hub.sourcePlayingVideo()?.let { nav.push(RemoteRoute.PlayOn(it)) } })
+                }
                 session.nextId?.let { next ->
                     SmallButton(
-                        if (fit == Fit.Wide) "Next episode" else null, WebIcons.Next, "Next episode", { nav.playVideoInstead(next) },
+                        // In a watch party Next episode is the party's Next: it moves everyone.
+                        if (fit == Fit.Wide) "Next episode" else null, WebIcons.Next, "Next episode", { if (session.steering?.ended() != true) nav.playVideoInstead(next) },
                         padding = if (fit == Fit.Wide) 12.dp else 9.dp, size = if (fit == Fit.Wide) 13 else 12,
                     )
                 }
@@ -407,6 +418,12 @@ fun VideoPlayerScreen(nav: Nav, route: Route.Player) {
             Open.Info -> InfoSheet(nav, session) { open = Open.None }
             Open.Keys -> KeysSheet { open = Open.None }
             else -> {}
+        }
+        if (partyOpen) {
+            // A sheet from the foot on a narrow phone, down the side wider; the picture still answers beside it.
+            val panel = if (fit == Fit.Compact) Modifier.align(Alignment.BottomCenter).fillMaxWidth().fillMaxHeight(0.7f)
+            else Modifier.align(Alignment.CenterEnd).fillMaxHeight().width(380.dp)
+            PartyPanel(nav, { partyOpen = false }, panel)
         }
     }
 }

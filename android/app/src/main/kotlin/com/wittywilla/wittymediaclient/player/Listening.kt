@@ -177,7 +177,10 @@ class Listening(private val app: WittyApp) {
 
     private fun read(player: Player) {
         now = player.currentMediaItem
+        val wasPlaying = isPlaying
         isPlaying = player.isPlaying
+        // Behind other apps, whether music plays decides whether this device stays reachable by remote.
+        if (wasPlaying != isPlaying) app.remote.listeningChanged()
         isLoading = player.playbackState == Player.STATE_BUFFERING && player.playWhenReady
         nowIndex = player.currentMediaItemIndex
         shuffle = player.shuffleModeEnabled
@@ -208,6 +211,7 @@ class Listening(private val app: WittyApp) {
     // finished and the service went with it, there's nothing to show.
     fun appeared() {
         keptForStems = false
+        keptForRemote = false
         if (serviceRunning) connect {} else clear()
     }
 
@@ -229,14 +233,29 @@ class Listening(private val app: WittyApp) {
             keptForStems = true
             return
         }
+        // Another device may pause it, skip or turn it down while this app is in the background: the player is kept
+        // heard while it plays and this device answers for it (player/RemoteHub.kt).
+        if (app.remote.holdsListening) {
+            keptForRemote = true
+            return
+        }
         letGo()
+    }
+
+    private var keptForRemote = false
+
+    // This device stopped answering remote commands in the background: nothing needs to hear the player any more.
+    fun remoteReleased() {
+        if (!keptForRemote) return
+        keptForRemote = false
+        if (!keptForStems) letGo()
     }
 
     // Karaoke's parts have stopped: in the background, nothing needs to hear the player any more.
     fun stemsStopped() {
         if (!keptForStems) return
         keptForStems = false
-        letGo()
+        if (!keptForRemote) letGo()
     }
 
     private fun letGo() {

@@ -6,7 +6,7 @@ package com.wittywilla.wittymediaclient.ui
 // Apart from the screen, so it can be tested without one. Rows the server would refuse are left out,
 // not greyed.
 
-enum class YouNative { Names, Password, TwoStep, Devices, SignInTv, Theme, TopMenu, Licences, Log, Servers, Away, Profiles, PlayingHere }
+enum class YouNative { Names, Password, TwoStep, Devices, SignInTv, Theme, TopMenu, Licences, Log, Servers, Away, Profiles, PlayingHere, RemoteControl, WatchParty }
 
 sealed interface YouOpens {
     data class Native(val screen: YouNative) : YouOpens
@@ -34,6 +34,10 @@ data class YouWho(
     val nativeProfiles: Boolean = false,
     // What this profile's limits turn off (GET /me/limits): rows for those aren't offered.
     val off: Set<String> = emptySet(),
+    // The server and this profile have remote control of other devices (`remote-protocol`, canControl).
+    val remote: Boolean = false,
+    // The server has watch parties (`syncplay`), and this profile may join them.
+    val parties: Boolean = false,
 )
 
 private const val QUIET = "#5d6474"
@@ -68,6 +72,9 @@ fun youGroups(who: YouWho): List<YouGroup> {
             page("rowActivity", "monitoring", "#99690a", "/settings/activity"),
             if (who.hasGames && "games" !in who.off) page("rowGameSettings", "sports_esports", "#7f46b8", "/settings/games") else null,
             if (who.hasGames && "games" !in who.off) page("rowControllers", "gamepad", "#3e5bd0", "/controllers") else null,
+            // Playing on and steering other devices, and watching together: the app's own screens.
+            if (who.remote && "remoteControl" !in who.off) native("rowRemoteControl", "cast", "#3e5bd0", YouNative.RemoteControl) else null,
+            if (who.parties && "syncplay" !in who.off) native("rowWatchParty", "groups", "#bd2f85", YouNative.WatchParty) else null,
         ),
     )
     groups += YouGroup(

@@ -83,6 +83,21 @@ class YouTest {
     }
 
     @Test
+    fun remoteControlAndWatchPartiesOnlyWhereTheServerAndTheProfileHaveThem() {
+        assertFalse("rowRemoteControl" in rows(adult))
+        assertFalse("rowWatchParty" in rows(adult))
+        val both = adult.copy(remote = true, parties = true)
+        val all = youGroups(both).flatMap { it.rows }.associateBy { it.key }
+        assertEquals(YouOpens.Native(YouNative.RemoteControl), all.getValue("rowRemoteControl").opens)
+        assertEquals(YouOpens.Native(YouNative.WatchParty), all.getValue("rowWatchParty").opens)
+        // A profile whose limits turn either off isn't offered it.
+        assertFalse("rowRemoteControl" in rows(both.copy(off = setOf("remoteControl"))))
+        assertFalse("rowWatchParty" in rows(both.copy(off = setOf("syncplay"))))
+        // A Kids profile may still watch along, if its limits allow.
+        assertTrue("rowWatchParty" in rows(both.copy(adult = false)))
+    }
+
+    @Test
     fun roles() {
         assertEquals("roleAdmin", roleKey(true, "adult"))
         assertEquals("roleAdult", roleKey(false, "adult"))

@@ -156,7 +156,7 @@ fun MiniPlayer(nav: Nav, modifier: Modifier = Modifier) {
 // A remote walks down through these: the bar, then the buttons, then the queue. Left and right stay within a row,
 // and on the bar they move it.
 @Composable
-private fun Controls(listening: Listening) {
+private fun Controls(listening: Listening, playOn: (() -> Unit)? = null) {
     val place = rememberPlace(listening)
     val duration = listening.durationSec()
     val books = listening.keepsPlace
@@ -194,9 +194,11 @@ private fun Controls(listening: Listening) {
                 )
             }
         }
-        if (books) {
-            Row(Modifier.fillMaxWidth().focusGroup(), horizontalArrangement = Arrangement.Center) {
-                ActionButton("Speed ${speedWords(listening.speed)}", listening::cycleSpeed, pill = true, focusKey = "np-speed")
+        if (books || playOn != null) {
+            Row(Modifier.fillMaxWidth().focusGroup(), horizontalArrangement = Arrangement.spacedBy(Space.S2, Alignment.CenterHorizontally)) {
+                if (books) ActionButton("Speed ${speedWords(listening.speed)}", listening::cycleSpeed, pill = true, focusKey = "np-speed")
+                // Handed over to another device at the same place (RemoteScreens.kt).
+                if (playOn != null) ActionButton("Play on…", playOn, pill = true, focusKey = "np-play-on")
             }
         }
     }
@@ -303,7 +305,7 @@ fun NowPlayingScreen(nav: Nav) {
                         Art(Modifier.size(if (metrics.tv) TV_COVER else SIDE_COVER))
                         Box(Modifier.weight(1f)) { Words(center = false) }
                     }
-                    Controls(listening)
+                    Controls(listening, playOnFor(nav))
                     if (music && metrics.tv) Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.Center) {
                         WittyButton("Karaoke", { karaoke = true }, kind = ButtonKind.Secondary, pill = true, focusKey = "np-karaoke")
                     }
@@ -338,7 +340,7 @@ fun NowPlayingScreen(nav: Nav) {
                     Column(verticalArrangement = Arrangement.spacedBy(Space.S4), horizontalAlignment = Alignment.CenterHorizontally) {
                         Art(Modifier.fillMaxWidth().widthIn(max = COVER))
                         Words(center = true)
-                        Controls(listening)
+                        Controls(listening, playOnFor(nav))
                     }
                 }
                 queueList(listening, editing, { editing = !editing }, onClear)
@@ -350,3 +352,7 @@ fun NowPlayingScreen(nav: Nav) {
 private val COVER = 360.dp
 private val TV_COVER = 240.dp
 private val SIDE_COVER = 120.dp
+
+// Play on… for what plays here, where the server and this profile have it.
+private fun playOnFor(nav: Nav): (() -> Unit)? =
+    if (nav.app.remote.canControl) ({ nav.app.remote.sourcePlayingMusic()?.let { nav.push(RemoteRoute.PlayOn(it)) } }) else null

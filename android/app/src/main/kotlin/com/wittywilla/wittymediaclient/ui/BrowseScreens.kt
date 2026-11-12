@@ -606,6 +606,9 @@ fun ItemScreen(nav: Nav, s: Map<String, String>, id: Long) {
                         Row(Modifier.remoteRow(), horizontalArrangement = Arrangement.spacedBy(Space.S3)) {
                             ActionButton(if (resume) "Resume" else "Play",{ nav.push(Route.Player(it.id, false)) }, primary = true, pill = true, icon = Icons.Filled.PlayArrow, focusKey = "play", requestFocus = true)
                             if (resume) ActionButton("Start over", { nav.push(Route.Player(it.id, true)) }, pill = true, focusKey = "startover")
+                            // Watch party and Play on…, where the server and this profile have them (RemoteScreens.kt).
+                            if (it.kind == "video" && nav.has(com.wittywilla.wittymediaclient.player.SYNCPLAY_FEATURE)) ActionButton("Watch party", { nav.push(RemoteRoute.Party(it.id)) }, pill = true, focusKey = "party")
+                            if (nav.app.remote.canControl) ActionButton("Play on…", { nav.push(RemoteRoute.PlayOn(com.wittywilla.wittymediaclient.net.remote.PlayOnSource(it.id, it.title, it.kind))) }, pill = true, focusKey = "play-on")
                         }
                     } else {
                         ActionButton("Open", { nav.replace(Route.Page(it.pagePath())) }, primary = true, pill = true, icon = Icons.Filled.PlayArrow, requestFocus = true)

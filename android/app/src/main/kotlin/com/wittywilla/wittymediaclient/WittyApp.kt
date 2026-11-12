@@ -54,6 +54,9 @@ class WittyApp : Application(), SingletonImageLoader.Factory {
     // What's playing in the listening service, for the screens that show it.
     val listening by lazy { Listening(this) }
 
+    // This app as a device other apps play on and steer, its remote for others, and its watch party (player/RemoteHub.kt).
+    val remote by lazy { com.wittywilla.wittymediaclient.player.RemoteHub(this) }
+
     // Reaching the server from away, peer to peer (p2p/PeerManager.kt).
     val peers by lazy { com.wittywilla.wittymediaclient.p2p.PeerManager(this) }
 
