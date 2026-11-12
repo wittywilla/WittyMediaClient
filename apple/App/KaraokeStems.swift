@@ -190,7 +190,7 @@ final class KaraokeStems: ObservableObject {
                 do {
                     try player.play(from: at)
                 } catch {
-                    ClientLog.shared.warn("karaoke", "the parts couldn't start: \(error.localizedDescription)")
+                    ClientLog.shared.warnSeldom("karaoke", "the parts couldn't start: \(error.localizedDescription)", key: "start")
                     run(machine.stemsFailed())
                     return
                 }

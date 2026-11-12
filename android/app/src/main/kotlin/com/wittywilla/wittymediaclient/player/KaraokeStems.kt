@@ -165,7 +165,7 @@ class KaraokeStems(private val app: WittyApp, private val listening: Listening, 
                 withContext(Dispatchers.IO + kotlinx.coroutines.NonCancellable) { into.deleteRecursively() }
                 throw e
             } catch (e: Exception) {
-                ClientLog.warn("player", "Karaoke's parts couldn't be fetched: ${e.javaClass.simpleName}")
+                ClientLog.warn("karaoke", "Karaoke's parts couldn't be fetched: ${e.javaClass.simpleName}")
                 withContext(Dispatchers.IO) { into.deleteRecursively() }
                 if (machine.song == song) send(KaraokeEvent.StemsFailed(if (e is TooLarge) KaraokeMachine.TOO_LARGE else ""))
                 return@launch
@@ -195,7 +195,7 @@ class KaraokeStems(private val app: WittyApp, private val listening: Listening, 
     private fun mixerFailed(from: StemMixer, why: String) {
         app.scope.launch {
             if (mixer !== from) return@launch
-            ClientLog.warn("player", "Karaoke's parts stopped: $why")
+            ClientLog.warnSeldom("karaoke", "Karaoke's parts stopped: $why", key = "stopped")
             send(KaraokeEvent.StemsFailed(""))
         }
     }

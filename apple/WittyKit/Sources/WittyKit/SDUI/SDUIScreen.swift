@@ -74,6 +74,8 @@ public struct SDUIElement: Equatable, Identifiable, Sendable {
     public var scope: String
     public var tokens: [String: String]
     public var children: [SDUIElement]
+    /// The type the server sent when this app doesn't know it (and draws it as a `Stack`); empty otherwise.
+    public var unknownType = ""
 
     // What assistive technology is told.
     public var role = "none"
@@ -141,6 +143,8 @@ public struct SDUIScreen: Equatable, Sendable {
     public var title: String { document.page.title }
     /// The page's top-level sections.
     public var sections: [SDUIElement] { root.children }
+    /// The node types on this page that this app doesn't know, and draws as plain columns.
+    public var unknownTypes: Set<String> { Set(root.flattened.map(\.unknownType).filter { !$0.isEmpty }) }
 
     /// `window` is the window's real width in points, where the app knows it: placeholders and columns follow it.
     public init(document: SDUIDocument, catalog: SDUICatalog = .builtIn, window: Int? = nil) {
@@ -355,6 +359,7 @@ public struct SDUIScreen: Equatable, Sendable {
                 break
             default:
                 // A type this catalogue doesn't have is drawn as a plain column.
+                e.unknownType = node.type
                 e.type = "Stack"
             }
             return e

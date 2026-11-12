@@ -86,7 +86,16 @@ extension AppModel {
             let before = self.way
             self.way = way
             if before.words != way.words || before.isAway != way.isAway {
-                ClientLog.shared.info("p2p", way.isAway ? "Reaching the server from away: \(way.words)" : way == .home ? "Reaching the server at home" : "No way to the server")
+                let said = way.isAway ? "Reaching the server from away: \(way.words)" : way == .home ? "Reaching the server at home" : "No way to the server"
+                // Worse than it was: through a relay, reconnecting, or no way at all after being away.
+                var worse = false
+                if case .away(let state) = way { worse = state.path == .relayed || state.path == .offline }
+                if way == .none && before.isAway { worse = true }
+                if worse {
+                    ClientLog.shared.warnSeldom("p2p", said, session: self.awayLogSession)
+                } else {
+                    ClientLog.shared.info("p2p", said)
+                }
             }
         }
         manager.onRoute = { [weak self] route in
@@ -163,6 +172,11 @@ extension AppModel {
 
     /// This device's name on servers' lists, for showing.
     var awayDeviceID: String { PeerLibrary.deviceID(of: Keychain.peerKey) ?? "" }
+    /// This device's connections from away in the logs, the same id as the server's: "p2p-" and the end of its peer ID.
+    var awayLogSession: String {
+        let id = awayDeviceID.filter { $0.isASCII && ($0.isLetter || $0.isNumber || "-_.:".contains($0)) }
+        return id.isEmpty ? "" : "p2p-" + id.suffix(8)
+    }
 
     /// Whether this device can reach the server in use from away.
     var awayReady: Bool { current.flatMap(awayInfo(for:)) != nil && !Keychain.peerKey.isEmpty }
@@ -203,7 +217,7 @@ extension AppModel {
         guard !Task.isCancelled, peers.current?.home == server.url else { return false }
         if case .away(let state) = way, state.connected { return true }
         if peers.way != .home {
-            ClientLog.shared.warn("p2p", "The server wasn't reached from away: \(peers.problem.isEmpty ? peers.way.words : peers.problem)")
+            ClientLog.shared.warn("p2p", "The server wasn't reached from away: \(peers.problem.isEmpty ? peers.way.words : peers.problem)", session: awayLogSession)
             peers.close()
         }
         return peers.way == .home

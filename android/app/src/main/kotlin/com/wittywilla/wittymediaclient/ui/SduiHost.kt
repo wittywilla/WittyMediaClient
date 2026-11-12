@@ -32,6 +32,7 @@ import androidx.compose.ui.unit.sp
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.repeatOnLifecycle
+import com.wittywilla.wittymediaclient.diag.ClientLog
 import com.wittywilla.wittymediaclient.net.ApiError
 import com.wittywilla.wittymediaclient.net.SduiAction
 import com.wittywilla.wittymediaclient.net.SduiClient
@@ -41,6 +42,7 @@ import com.wittywilla.wittymediaclient.net.SduiPage
 import com.wittywilla.wittymediaclient.net.SduiScreen
 import com.wittywilla.wittymediaclient.net.SduiTokens
 import com.wittywilla.wittymediaclient.net.SduiUnsupported
+import com.wittywilla.wittymediaclient.net.SduiView
 import com.wittywilla.wittymediaclient.net.problemWords
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
@@ -98,6 +100,17 @@ private val paramsSaver = Saver<Map<String, String>, ArrayList<String>>(
     restore = { list -> list.chunked(2).associate { it[0] to it[1] } },
 )
 
+// The types the server sent that this app draws as plain columns, as it doesn't know them.
+internal fun sduiUnknownTypes(view: SduiView): Set<String> {
+    val out = LinkedHashSet<String>()
+    fun walk(v: SduiView) {
+        if (v.type == "Stack" && v.node.type != "Stack" && v.node.type.isNotEmpty()) out += v.node.type
+        v.children.forEach { walk(it) }
+    }
+    walk(view)
+    return out
+}
+
 private const val RETRY_MS = 5000L
 private const val COOL_MS = 8000L
 
@@ -129,9 +142,27 @@ fun SduiPageScreen(nav: Nav, page: String, params: Map<String, String>, top: Boo
     val cooling = remember { HashMap<String, Long>() }
 
     SideEffect { model?.let { m -> shownFor?.let { nav.remember(memoryKey, SduiHeld(client, it, m)) } } }
+    // A part of a type this app doesn't know is drawn as a column: noted once for each type on each page, not at
+    // every drawing.
+    LaunchedEffect(model) {
+        val shown = model ?: return@LaunchedEffect
+        for (type in sduiUnknownTypes(shown.screen.root).take(20)) {
+            ClientLog.warnSeldom("sdui", "A part of type ${type.take(60)} isn't known to this app; drawn as a plain column", everyMs = 3_600_000, page = page)
+        }
+    }
 
     fun failed(e: Exception, whole: Boolean) {
         if (nav.handleExpired(e)) return
+        // A page that isn't there is an answer, not a fault; the rest is noted, the same one at most once a minute.
+        if (!(e is ApiError && e.status == 404)) {
+            val what = when (e) {
+                is SduiUnsupported -> "this app can't draw it: ${e.message.orEmpty()}"
+                is ApiError -> "the server answered ${e.status}"
+                is IOException -> "no answer (${e.javaClass.simpleName})"
+                else -> e.javaClass.simpleName
+            }
+            ClientLog.warnSeldom("sdui", "The page couldn't be ${if (whole) "loaded" else "refreshed"}: $what", page = page)
+        }
         val words = when (e) {
             is SduiUnsupported -> e.message.orEmpty()
             else -> problemWords(e, "Can't reach the server.")

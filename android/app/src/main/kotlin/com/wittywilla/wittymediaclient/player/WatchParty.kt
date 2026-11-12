@@ -103,6 +103,9 @@ class PartySession(private val context: Context, private val scope: CoroutineSco
 
     suspend fun joinRoom(id: String) = enter(api().syncJoinRoom(id, device))
 
+    // The watch party in the logs, the same id as the server's: "party-" and the room's id.
+    val logSession: String get() = logSessionFor(room?.id.orEmpty())
+
     // The app was closed with a seat in a party: if the server still keeps it, sit back down.
     suspend fun comeBack(found: SyncInfo) {
         val kept = prefs.getString(KEY_ROOM, null).orEmpty()
@@ -115,7 +118,8 @@ class PartySession(private val context: Context, private val scope: CoroutineSco
             joinRoom(kept)
         } catch (e: CancellationException) {
             throw e
-        } catch (_: Exception) {
+        } catch (e: Exception) {
+            ClientLog.warn("party", "Sitting back down in the watch party failed: ${(e as? ApiError)?.status ?: e.javaClass.simpleName}", session = logSessionFor(kept))
             prefs.edit { remove(KEY_ROOM) }
         }
     }
@@ -198,7 +202,15 @@ class PartySession(private val context: Context, private val scope: CoroutineSco
     fun report(state: String, rev: Long) {
         val now = room ?: return
         val using = api()
-        scope.launch { runCatching { using.syncReport(now.id, now.you, state, rev) } }
+        scope.launch {
+            try {
+                using.syncReport(now.id, now.you, state, rev)
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                ClientLog.warnSeldom("party", "This player's state couldn't be sent to the watch party: ${(e as? ApiError)?.status ?: e.javaClass.simpleName}", session = logSessionFor(now.id))
+            }
+        }
     }
 
     suspend fun set(everyone: Boolean? = null, waitForAll: Boolean? = null) {
@@ -226,7 +238,8 @@ class PartySession(private val context: Context, private val scope: CoroutineSco
                 api().syncPing(now.id, now.you, sent, clock.rttMs)
             } catch (e: CancellationException) {
                 throw e
-            } catch (_: Exception) {
+            } catch (e: Exception) {
+                ClientLog.warnSeldom("party", "A watch party ping failed: ${(e as? ApiError)?.status ?: e.javaClass.simpleName}", session = logSessionFor(now.id))
                 continue
             }
             clock.add(ClockSample(sent, answer.t1, answer.t2, steadyMs()))
@@ -252,8 +265,10 @@ class PartySession(private val context: Context, private val scope: CoroutineSco
                 }
                 closed?.let { SeatStep.Over(it) } ?: seat.dropped(SystemClock.elapsedRealtime())
             } catch (e: SseRefused) {
+                ClientLog.warnSeldom("party", "The watch party's events were refused: ${e.status} ${e.code}", session = logSessionFor(id))
                 seat.refused(e.status, e.code, SystemClock.elapsedRealtime())
             } catch (e: IOException) {
+                ClientLog.warnSeldom("party", "The watch party's events stopped: ${e.javaClass.simpleName}", session = logSessionFor(id))
                 closed?.let { SeatStep.Over(it) } ?: seat.dropped(SystemClock.elapsedRealtime())
             }
             when (step) {
@@ -274,13 +289,15 @@ class PartySession(private val context: Context, private val scope: CoroutineSco
                         room = again
                         onRoom?.invoke(again)
                     } catch (e: ApiError) {
+                        ClientLog.warnSeldom("party", "Rejoining the watch party was refused: ${e.status} ${e.code}", session = logSessionFor(id))
                         val after = seat.refused(e.status, e.code, SystemClock.elapsedRealtime())
                         if (after is SeatStep.Over) {
                             gone(closedWords(after.reason))
                             return
                         }
-                    } catch (_: IOException) {
+                    } catch (e: IOException) {
                         // Still no network: round again.
+                        ClientLog.warnSeldom("party", "Rejoining the watch party failed: ${e.javaClass.simpleName}", session = logSessionFor(id))
                     }
                 }
             }
@@ -288,6 +305,7 @@ class PartySession(private val context: Context, private val scope: CoroutineSco
     }
 
     companion object {
+        fun logSessionFor(roomId: String): String = ClientLog.sessionId("party-", roomId)
         private const val KEY_DEVICE = "device"
         private const val KEY_ROOM = "room"
     }
@@ -452,6 +470,13 @@ class PartyFollower(val target: VideoTarget, private val party: PartySession, pr
         if (behind == null || now() - logged < LOG_EVERY_MS) return
         logged = now()
         ClientLog.info("party", String.format(Locale.ROOT, "Drift %+.3f s, rate %.2f, round trip %.0f ms.", -behind, rate, party.rttMs))
+        // Far enough off that it had to jump: worth the server knowing, once a minute at most.
+        if (kotlin.math.abs(behind) >= party.drift.seekSec) {
+            ClientLog.warnSeldom(
+                "party", String.format(Locale.ROOT, "Far out of step with the watch party: %+.0f ms (round trip %.0f ms)", -behind * 1000, party.rttMs),
+                key = "drift", session = party.logSession,
+            )
+        }
     }
 
     // MARK: what the viewer does
@@ -471,9 +496,13 @@ class PartyFollower(val target: VideoTarget, private val party: PartySession, pr
                 throw e
             } catch (e: ApiError) {
                 // The end of the queue, said by every player at once, is nothing to tell anyone.
-                if (e.code != "end-of-queue" && e.code != "stale") hub.say(syncWords(e))
-            } catch (_: IOException) {
+                if (e.code != "end-of-queue" && e.code != "stale") {
+                    hub.say(syncWords(e))
+                    ClientLog.warnSeldom("party", "A watch party command failed: ${type.take(40)}: ${e.status} ${e.code}", session = party.logSession)
+                }
+            } catch (e: IOException) {
                 hub.say("The watch party couldn't be reached. Check the connection.")
+                ClientLog.warnSeldom("party", "A watch party command failed: ${type.take(40)}: ${e.javaClass.simpleName}", session = party.logSession)
             }
         }
     }

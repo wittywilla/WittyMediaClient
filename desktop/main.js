@@ -370,6 +370,12 @@ function keepP2P(url, info) {
   saveState()
 }
 
+// One connection's id in the logs, the same as the server's: "p2p-" and the end of this device's peer ID.
+function p2pSession(deviceId) {
+  const id = String(deviceId || '').replace(/[^A-Za-z0-9\-_.:]/g, '')
+  return id ? 'p2p-' + id.slice(-8) : ''
+}
+
 // Starts the helper for a server and waits for its address on this computer.
 async function openTunnel(info) {
   closeTunnel()
@@ -378,9 +384,9 @@ async function openTunnel(info) {
     log.warn('p2p', 'The connection helper is not installed with this app')
     return { error: 'p2p-missing' }
   }
-  let run, ready
+  let run, ready, key
   try {
-    const key = await deviceKey(program)
+    key = await deviceKey(program)
     run = new p2p.Tunnel(program, { key: key.key, serverId: info.id, hints: info.hints || [], port: info.port || 0 }, { log: (line) => log.info('p2p', line) })
     ready = await run.ready
     log.addSecret(ready.secret)
@@ -390,11 +396,26 @@ async function openTunnel(info) {
     tunnel = { run, id: info.id, origin, port: ready.port, deviceId: ready.deviceId }
   } catch (err) {
     if (run) run.stop()
-    log.noteError('warn', 'p2p', 'The connection helper could not start', err)
+    log.noteError('warn', 'p2p', 'The connection helper could not start', err, { session: p2pSession(key && key.deviceId) })
     return { error: 'p2p-failed' }
   }
   const mine = tunnel
-  run.on('state', (s) => { if (tunnel === mine) sayPath(server === mine.origin ? p2p.pathWords(s) : '') })
+  const logSession = p2pSession(mine.deviceId)
+  let lastPath = ''
+  const warned = {}
+  run.on('state', (s) => {
+    if (tunnel !== mine) return
+    sayPath(server === mine.origin ? p2p.pathWords(s) : '')
+    // A change of path: worth reporting only when it got worse, through a relay or gone.
+    const path = s && s.path
+    if (!path || path === lastPath || path === 'connecting') return
+    const before = lastPath
+    lastPath = path
+    // Sent to the server at most once a minute for each path; the rest stays in the file.
+    const worse = (path === 'offline' || path === 'relayed') && Date.now() - (warned[path] || 0) >= 60000
+    if (worse) warned[path] = Date.now()
+    log[worse ? 'warn' : 'info']('p2p', `The connection's path changed from ${before || 'nothing'} to ${path}`, { session: logSession })
+  })
   run.on('addrs', (hints) => {
     if (tunnel !== mine || !hints.length) return
     const entry = (saved.recent || []).find((s) => s.p2p && s.p2p.id === mine.id)
@@ -402,7 +423,7 @@ async function openTunnel(info) {
   })
   run.on('exit', (code) => {
     if (tunnel !== mine) return
-    log.warn('p2p', `The connection helper stopped by itself (${code})`)
+    log.warn('p2p', `The connection helper stopped by itself (${code})`, { session: logSession })
     const showing = server === mine.origin
     closeTunnel()
     if (showing) showConnect({ lost: '1' })
@@ -422,7 +443,7 @@ async function reachFromAway(entry) {
   const st = await mine.run.whenConnected(AWAY_CONNECT_MS)
   if (tunnel !== mine) return { error: 'unreachable' } // given up on meanwhile
   if (!p2p.connected(st)) {
-    log.warn('p2p', `The server was not reached from away: ${st.error || st.path}`)
+    log.warn('p2p', `The server was not reached from away: ${st.error || st.path}`, { session: p2pSession(mine.deviceId) })
     closeTunnel()
     return { error: 'p2p-failed' }
   }
