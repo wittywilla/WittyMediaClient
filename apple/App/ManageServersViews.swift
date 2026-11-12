@@ -283,7 +283,7 @@ struct ManageServersList: View {
     }
 
     private func choose(_ days: Int) {
-        let found = ServerBook.notReached(for: days, in: servers, now: ServerBook.now(), since: model.keepingTimesSince)
+        let found = ServerBook.notReached(for: days, in: servers, now: ServerBook.now())
         if found.isEmpty {
             said = say("removeOldNone")
         } else {

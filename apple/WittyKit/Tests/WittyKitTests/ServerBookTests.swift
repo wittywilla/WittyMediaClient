@@ -184,15 +184,11 @@ final class ServerBookTests: XCTestCase {
         let year = server("http://c", "C", seen: now - 400 * day)
         let unknown = server("http://d", "D")
         let list = [recent, month, year, unknown]
-        // Times have been kept on this device for 100 days.
-        let since = now - 100 * day
-        XCTAssertEqual(ServerBook.notReached(for: 30, in: list, now: now, since: since).map(\.name), ["B", "C", "D"], "exactly 30 days counts")
-        XCTAssertEqual(ServerBook.notReached(for: 90, in: list, now: now, since: since).map(\.name), ["C", "D"])
-        XCTAssertEqual(ServerBook.notReached(for: 180, in: list, now: now, since: since).map(\.name), ["C"],
-                       "one with no time has only gone unreached for as long as times have been kept")
-        XCTAssertEqual(ServerBook.notReached(for: 365, in: list, now: now, since: since).map(\.name), ["C"])
-        XCTAssertEqual(ServerBook.notReached(for: 30, in: list, now: now, since: 0).map(\.name), ["B", "C"], "with nothing known, it is never chosen")
-        XCTAssertEqual(ServerBook.notReached(for: 30, in: [recent], now: now, since: since), [])
+        XCTAssertEqual(ServerBook.notReached(for: 30, in: list, now: now).map(\.name), ["B", "C"],
+                       "exactly 30 days counts, and one never reached is never chosen")
+        XCTAssertEqual(ServerBook.notReached(for: 90, in: list, now: now).map(\.name), ["C"])
+        XCTAssertEqual(ServerBook.notReached(for: 365, in: list, now: now).map(\.name), ["C"])
+        XCTAssertEqual(ServerBook.notReached(for: 30, in: [recent], now: now), [])
         XCTAssertEqual(ServerBook.periods, [30, 90, 180, 365])
     }
 
