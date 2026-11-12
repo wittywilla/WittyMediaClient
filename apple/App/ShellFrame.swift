@@ -134,13 +134,15 @@ struct SideMenu: View {
 }
 
 /// A row of tabs across the top: every place by name, scrolling sideways when they don't fit, You at the end. Laid
-/// over the page (`overlay`) it is clear with a scrim behind its words until the page scrolls under it.
+/// over the page (`overlay`) it is clear with a scrim behind its words until the page scrolls under it, then turns
+/// solid as the library strip does, by `solid` (0 at the top of the page, 1 once it has scrolled under).
 struct TopTabsBar: View {
     @EnvironmentObject private var model: AppModel
     @EnvironmentObject private var center: SDUICenter
     @Environment(\.palette) private var palette
     let height: CGFloat
     let overlay: Bool
+    var solid = 1.0
 
     var body: some View {
         let list = FrameEntries(center: center, model: model)
@@ -168,34 +170,40 @@ struct TopTabsBar: View {
         }
         .frame(height: height)
         .background {
-            if overlay {
-                LinearGradient(colors: [palette.background.opacity(0.85), palette.background.opacity(0)], startPoint: .top, endPoint: .bottom)
-                    .ignoresSafeArea(edges: .top)
-            } else {
+            ZStack {
+                if overlay {
+                    LinearGradient(colors: [palette.background.opacity(0.85), palette.background.opacity(0)], startPoint: .top, endPoint: .bottom)
+                        .opacity(1 - solid)
+                }
                 ZStack {
                     Rectangle().fill(.regularMaterial)
                     palette.background.opacity(0.85)
                 }
                 .overlay(alignment: .bottom) { Rectangle().fill(palette.border).frame(height: 1) }
-                .ignoresSafeArea(edges: .top)
+                .opacity(overlay ? solid : 1)
             }
+            .ignoresSafeArea(edges: .top)
         }
         .accessibilityElement(children: .contain)
         .accessibilityLabel("Menu")
     }
 }
-/// The top tabs on one tab's stack, so the screens pushed onto it lay out below them; over the page when `overlay`.
+/// The top tabs on one tab's stack, so the screens pushed onto it lay out below them; over the page when `overlay`,
+/// solid once the page under them scrolls (see `stripSolidity`).
 struct TopTabsSlot: ViewModifier {
     let nav: FrameNav
     let height: CGFloat
     let overlay: Bool
     let shown: Bool
+    @State private var solid = 0.0
 
     func body(content: Content) -> some View {
         if nav != .topTabs {
             content
         } else if overlay {
-            content.overlay(alignment: .top) { if shown { TopTabsBar(height: height, overlay: true) } }
+            content
+                .stripSolidity($solid)
+                .overlay(alignment: .top) { if shown { TopTabsBar(height: height, overlay: true, solid: solid) } }
         } else {
             // Above the stack, not an inset of it: a page pushed onto it lays out below the tabs, its Back with it.
             VStack(spacing: 0) {
