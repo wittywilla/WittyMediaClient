@@ -410,12 +410,14 @@ final class AppModel: ObservableObject {
         themeFetch?.cancel()
         let following = themeChoice.isEmpty
         let resolving = has("theme-derived") || has("theme-shape-type")
-        let dark = systemScheme != .light
+        let systemDark = systemScheme != .light
         themeFetch = Task { [weak self] in
             // A server with the theme engine's layers says the colours this account sees: the theme with the
             // administrator's overrides and the profile's own colours over it. Followed when this device follows
             // the server's theme; its corners, typefaces and name are used either way.
             if resolving, let resolved = try? await asking.resolvedTheme(), !Task.isCancelled, let self, self.client.base == asking.base {
+                // The theme's own look decides; only the automatic theme follows the device's light or dark setting.
+                let dark = resolved.scheme == "auto" ? systemDark : resolved.scheme != "light"
                 self.themeStyle = ThemeStyle(shape: resolved.shape(dark: dark), type: resolved.typefaces(dark: dark), brand: resolved.brand)
                 if following, self.themeChoice.isEmpty {
                     let colors = resolved.colors(dark: dark)
