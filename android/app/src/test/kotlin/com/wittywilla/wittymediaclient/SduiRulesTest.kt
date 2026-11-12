@@ -33,7 +33,6 @@ import com.wittywilla.wittymediaclient.net.ThemeColour
 import com.wittywilla.wittymediaclient.net.ThemeTokens
 import com.wittywilla.wittymediaclient.net.ThemeTranslator
 import com.wittywilla.wittymediaclient.net.json
-import com.wittywilla.wittymediaclient.net.sduiAvailable
 import com.wittywilla.wittymediaclient.net.str
 import kotlinx.coroutines.runBlocking
 import kotlinx.serialization.json.JsonNull
@@ -258,8 +257,6 @@ class SduiRulesTest {
         assertEquals("hd", SduiDevice.tvClass(1080, lowMemory = false))
         assertEquals("4k", SduiDevice.tvClass(2160, lowMemory = false))
         assertEquals("a stick short of memory never asks for 4K pictures", "hd", SduiDevice.tvClass(2160, lowMemory = true))
-        assertTrue(sduiAvailable(setOf("sdui-pages", "sdui-catalog", "sdui-navigation", "sdui-personal", "live-tv")))
-        assertFalse("an older server keeps the app's own screens", sduiAvailable(setOf("sdui", "sdui-pages")))
     }
 
     @Test

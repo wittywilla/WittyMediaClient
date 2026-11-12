@@ -188,28 +188,6 @@ fun TvShell(nav: Nav, content: @Composable () -> Unit) {
     }
 }
 
-// The server's page as a tab's own: its Back closes what's open on it and goes back through it, then up to the bar,
-// and Up from its topmost control goes to the bar too, when the page says so (data-app-up); from the bar, Back is the bar's.
-@Composable
-private fun PageInTab(nav: Nav, route: Route, path: String) {
-    val bar = LocalTvBar.current
-    ServerPageScreen(
-        nav, route, path, keptToGames = false,
-        out = { bar?.focusPill() }, backEnabled = bar?.inBar != true, upOut = { bar?.focusPill() },
-    )
-}
-
-// A library added to the top menu, as its tab: its own screen where the app has one, as Home opens it, else its page.
-@Composable
-fun PinnedLibraryScreen(nav: Nav, s: Map<String, String>, library: Library) {
-    when {
-        gamesRouteFor(library) != null -> GamesLibraryInTab(nav, library)
-        library.isListening -> ListeningLibraryScreen(nav, s, library)
-        library.hasOwnScreen -> LibraryScreen(nav, s, library)
-        else -> PageInTab(nav, Route.Pinned(library), library.pagePath())
-    }
-}
-
 private fun pillKey(route: Route) = "tab-${route.key}"
 
 // Pills the gutter in from the sides and 24 below the top of the picture's safe area, as on Apple TV. From the left:
@@ -408,30 +386,6 @@ private fun rememberLibraries(nav: Nav, s: Map<String, String>, attempt: Int): P
     return libraries to error
 }
 
-// Every library this profile can see, as tiles: the phone's Menu list as a page. Each opens as it does from Home.
-@Composable
-fun LibrariesScreen(nav: Nav, s: Map<String, String>) {
-    val metrics = LocalMetrics.current
-    val ring = metrics.focusRing
-    var attempt by remember { mutableIntStateOf(0) }
-    val (libraries, error) = rememberLibraries(nav, s, attempt)
-    when {
-        libraries == null && error.isNotEmpty() -> LoadFailed(nav, error) { attempt++ }
-        libraries == null -> Loading()
-        libraries.isEmpty() -> TvEmpty(s["librariesNone"].orEmpty(), s["librariesNoneDetail"].orEmpty())
-        // The tiles keep their rings' room inside them: 32 between tiles, the first at the gutter.
-        else -> LazyVerticalGrid(
-            GridCells.Fixed(LIBRARY_COLUMNS),
-            Modifier.fillMaxSize(),
-            contentPadding = PaddingValues(start = metrics.gutter - ring, end = metrics.gutter - ring, top = metrics.u(24) - ring, bottom = metrics.u(32)),
-            horizontalArrangement = Arrangement.spacedBy(metrics.u(32) - ring * 2),
-            verticalArrangement = Arrangement.spacedBy(metrics.u(32) - ring * 2),
-        ) {
-            items(libraries, key = { it.id }) { library -> LibraryTile(library) { nav.open(library) } }
-        }
-    }
-}
-
 private const val LIBRARY_COLUMNS = 4
 
 // The website's library tile at a TV's size: the library's icon on the accent, then its name.
@@ -579,34 +533,3 @@ private fun GamesShelf(nav: Nav, s: Map<String, String>, library: Library) {
 private const val SHELF_LENGTH = 20
 private const val GAME_BOX = 3f / 4f
 
-// Live TV: WittyTV's guide, in the account's look, under the bar, with Recordings at its top, as on Apple TV. A server
-// with no channels says so.
-@Composable
-fun LiveTvScreen(nav: Nav, s: Map<String, String>) {
-    var has by remember { mutableStateOf<Boolean?>(null) }
-    var error by remember { mutableStateOf("") }
-    var attempt by remember { mutableIntStateOf(0) }
-    LaunchedEffect(attempt) {
-        try {
-            has = "live-tv" in nav.app.api.capabilities().features && nav.app.api.guide(1, 1).channels.isNotEmpty()
-            error = ""
-        } catch (e: CancellationException) {
-            throw e
-        } catch (e: ApiError) {
-            // A server without live TV at all.
-            if (e.status == 404) has = false else if (!nav.handleExpired(e) && has == null) error = problemWords(e, s["errLost"].orEmpty())
-        } catch (e: Exception) {
-            if (has == null) error = problemWords(e, s["errLost"].orEmpty())
-        }
-        nav.hasGuide = has == true
-    }
-    when {
-        has == true -> GuideScreen(nav)
-        has == false -> TvEmpty(s["liveTvNone"].orEmpty(), s["liveTvNoneDetail"].orEmpty())
-        error.isNotEmpty() -> LoadFailed(nav, error) {
-            error = ""
-            attempt++
-        }
-        else -> Loading()
-    }
-}

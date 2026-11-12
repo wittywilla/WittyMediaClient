@@ -79,11 +79,6 @@ import com.wittywilla.wittymediaclient.net.notice
 val LocalCardFill = androidx.compose.runtime.compositionLocalOf<Dp?> { null }
 
 @Composable
-fun CardWidth(content: @Composable () -> Unit) {
-    BoxWithConstraints { androidx.compose.runtime.CompositionLocalProvider(LocalCardFill provides maxWidth) { content() } }
-}
-
-@Composable
 fun cardWidth(wide: Boolean = false): Dp {
     LocalCardFill.current?.let { return it }
     val w = androidx.compose.ui.platform.LocalConfiguration.current.screenWidthDp
