@@ -208,6 +208,6 @@ fun LayoutScreen(nav: Nav, s: Map<String, String>) {
             GroupRow(option.label, onClick = { if (!on) pick(option.value) }, selected = on, chevron = false, focusKey = "layout-${option.value}", requestFocus = on,
                 trailing = if (on) ({ Text("✓", color = MaterialTheme.colorScheme.primary) }) else null)
         })
-        Note(problem, busy = busy)
+        if (problem.isNotEmpty() || busy) Note(problem, busy = busy)
     }
 }

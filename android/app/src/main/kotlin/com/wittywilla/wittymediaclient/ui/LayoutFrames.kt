@@ -94,7 +94,11 @@ fun SideMenu(nav: Nav, width: Dp, labels: Boolean, top: Dp, bottom: Dp, modifier
         verticalArrangement = Arrangement.spacedBy(4.dp),
         horizontalAlignment = if (labels) Alignment.Start else Alignment.CenterHorizontally,
     ) {
-        if (labels) Box(Modifier.padding(start = 8.dp, bottom = 12.dp)) { Lockup("", null, app = false) }
+        // The server's name at the top of a sidebar, cut to fit rather than overrun it.
+        if (labels) Text(
+            nav.server?.name?.ifEmpty { null } ?: "WittyMediaServer", color = scheme.onBackground, fontSize = 17.sp, fontWeight = FontWeight.Bold,
+            maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(start = 12.dp, end = 4.dp, top = 6.dp, bottom = 12.dp),
+        )
         nav.sduiMenuAll.forEach { (entry, route) ->
             val on = chosen(nav, route)
             Pressable(

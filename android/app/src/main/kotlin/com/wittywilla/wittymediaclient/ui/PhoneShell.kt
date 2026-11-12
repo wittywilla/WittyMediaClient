@@ -183,14 +183,16 @@ fun PhoneShell(nav: Nav, content: @Composable () -> Unit) {
         val side = style == "sidebar" || style == "rail"
         val overlay = nav.sduiNav?.shell?.overlay == true
         val sideRoom = 24.dp + inset + if (docked) DOCK_SPACE.dp else 0.dp
-        val tabsRoom = if (side) topRoom else if (overlay) status else status + size + 8.dp
+        val tabsRoom = if (side) status + 8.dp else if (overlay) status else status + size + 8.dp
         Box(Modifier.fillMaxSize().background(scheme.background)) {
             Box(Modifier.fillMaxSize().padding(start = if (side) size else 0.dp)) {
                 CompositionLocalProvider(LocalShellScroll provides scroll, LocalBottomRoom provides sideRoom, LocalTopRoom provides (if (top) tabsRoom else topRoom), LocalOverShell provides over) {
                     content()
                 }
-                if (side || !top) TopBar(nav, scroll, status, top)
-                else TopTabs(nav, size, status, solid = !overlay || scroll.under)
+                // Beside a side menu a top page needs no strip of libraries along the top: the menu has them. A page
+                // further in keeps its Back.
+                if (!top) TopBar(nav, scroll, status, false)
+                else if (!side) TopTabs(nav, size, status, solid = !overlay || scroll.under)
                 val aboveEdge = 8.dp + inset
                 if (video != null) VideoDock(nav, video, aboveEdge)
                 else if (listening) PhoneMiniBar(nav, Modifier.align(Alignment.BottomCenter).padding(start = 8.dp, end = 8.dp, bottom = aboveEdge))
