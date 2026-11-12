@@ -240,6 +240,22 @@ fun ConnectScreen(nav: Nav, s: Map<String, String>, message: String) {
         if (it.type == KeyEventType.KeyDown && it.key.nativeKeyCode in ARROWS) moved = true
         false
     }
+    // On a TV, the first card takes focus: the server used last, else the first one found, else Enter an address. As
+    // servers are found after the screen opens, focus follows the first of them until the person moves it themselves,
+    // so it never stays on Enter an address below a long list.
+    val firstKey = when {
+        recent.isNotEmpty() -> "recent-${recent[0].url}"
+        foundOnly.isNotEmpty() -> "found-${foundOnly[0].id}"
+        else -> "enter-address"
+    }
+    LaunchedEffect(firstKey) {
+        if (!tv || moved || editing) return@LaunchedEffect
+        val at = memory.last
+        if (at != null && at != "enter-address" && !at.startsWith("found-")) return@LaunchedEffect
+        focusOn = null
+        withFrameNanos { }
+        focusOn = firstKey
+    }
     Box(Modifier.fillMaxSize()) {
     SignInLayout(
         words = {
@@ -287,7 +303,7 @@ fun ConnectScreen(nav: Nav, s: Map<String, String>, message: String) {
                                         logo = LogoCache.file(context, server.url, server.brandLogo), lastUsed = server.url == last?.url,
                                         connecting = connecting == at, requestFocus = foundOnly.isEmpty() && found.isNotEmpty() && i == 0 && !moved,
                                         focusKey = "recent-${server.url}",
-                                        reached = reachedWords(s, server.lastSeen, now), stale = isStale(server.lastSeen, now),
+                                        reached = reachedWords(s, server.lastSeen, now), stale = isStale(server.lastSeen, now, nav.app.store.recentSince),
                                         takeFocus = focusOn == "recent-${server.url}",
                                         onLongClick = { if (tv) asking = server else menuFor = server },
                                         longClickLabel = if (tv) s["removeServer"] else fill(s["serverOptions"], "name" to name),
@@ -311,7 +327,7 @@ fun ConnectScreen(nav: Nav, s: Map<String, String>, message: String) {
             WittyButton(
                 s["enterAddress"].orEmpty(), { showForm = true; problem = "" }, Modifier.fillMaxWidth().padding(top = metrics.u(8)),
                 kind = if (nothing) ButtonKind.Primary else ButtonKind.Secondary, icon = Symbols.Address, tall = true,
-                requestFocus = found.isEmpty(), takeFocus = focusOn == "enter-address", focusKey = "enter-address",
+                requestFocus = firstKey == "enter-address", takeFocus = focusOn == "enter-address", focusKey = "enter-address",
             )
             // Where every remembered server can be removed: one, all, or those not reached for a while.
             if (recent.isNotEmpty()) {

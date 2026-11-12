@@ -75,6 +75,7 @@ import androidx.core.view.WindowInsetsControllerCompat
 import com.wittywilla.wittymediaclient.net.lineIndex
 import androidx.compose.foundation.focusable
 import androidx.compose.foundation.layout.width
+import androidx.compose.ui.focus.focusProperties
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.input.key.KeyEventType
@@ -155,7 +156,8 @@ internal fun KaraokeScreen(nav: Nav, words: LyricsWords, title: String, artist: 
 
     Box(
         Modifier.fillMaxSize().graphicsLayer { alpha = rise.value; translationY = (1 - rise.value) * 16.dp.toPx() }
-            .background(Color(0xFF06060A)).clickable(remember { MutableInteractionSource() }, null) {}
+            // Taps stop here, so nothing underneath answers them; it never takes a remote's focus, which belongs to the controls.
+            .background(Color(0xFF06060A)).focusProperties { canFocus = false }.clickable(remember { MutableInteractionSource() }, null) {}
             .drawBehind {
                 // radial-gradient(80% 70% at 50% 40%, art/.28, transparent 80%)
                 val rx = size.width * 0.8f
@@ -251,7 +253,7 @@ internal fun KaraokeScreen(nav: Nav, words: LyricsWords, title: String, artist: 
                 itemVerticalAlignment = Alignment.CenterVertically,
             ) {
                 NpRound(WebIcons.Prev, "Previous line", 52.dp, 20.dp) { goLine(-1) }
-                Pressable(listening::toggle, Modifier.size(64.dp), shape = CircleShape, fill = Color.White, label = if (listening.isPlaying) "Pause" else "Play", pressScale = 0.96f, ring = false) {
+                Pressable(listening::toggle, Modifier.size(64.dp), shape = CircleShape, fill = Color.White, label = if (listening.isPlaying) "Pause" else "Play", pressScale = 0.96f, ring = LocalMetrics.current.tv, requestFocus = true, focusKey = "karaoke-play") {
                     Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { Icon(if (listening.isPlaying) WebIcons.Pause else WebIcons.Play, null, tint = Color.Black, modifier = Modifier.size(30.dp)) }
                 }
                 NpRound(WebIcons.Next, "Next line", 52.dp, 20.dp) { goLine(1) }
@@ -272,7 +274,7 @@ internal fun KaraokeScreen(nav: Nav, words: LyricsWords, title: String, artist: 
                 } else Row(Modifier.clip(RoundedCornerShape(50)).background(Np.chip).padding(3.dp).semantics { contentDescription = "Singer's voice" }, horizontalArrangement = Arrangement.spacedBy(2.dp)) {
                     com.wittywilla.wittymediaclient.ui.Karaoke.VOCALS.forEach { (cut, name) ->
                         val on = sound.vocalCut == cut
-                        Pressable({ listening.setSound { it.copy(vocalCut = cut) } }, Modifier.heightIn(min = 46.dp), shape = RoundedCornerShape(50), fill = if (on) Color.White else Color.Transparent, label = name, selected = on, ring = false) {
+                        Pressable({ listening.setSound { it.copy(vocalCut = cut) } }, Modifier.heightIn(min = 46.dp), shape = RoundedCornerShape(50), fill = if (on) Color.White else Color.Transparent, label = name, selected = on, ring = LocalMetrics.current.tv) {
                             Box(Modifier.heightIn(min = 46.dp).padding(horizontal = if (compact) 10.dp else 16.dp), contentAlignment = Alignment.Center) {
                                 Text(name, color = if (on) Color.Black else Color.White, fontSize = if (compact) 13.sp else 15.sp, fontWeight = FontWeight.SemiBold, maxLines = 1)
                             }
@@ -381,7 +383,7 @@ private fun Stepper(words: String, compact: Boolean, group: String, lower: Strin
     ) {
         @Composable
         fun Step(sign: String, label: String, enabled: Boolean, run: () -> Unit) {
-            Pressable(run, Modifier.size(46.dp), shape = CircleShape, fill = Np.chip, label = label, enabled = enabled, disabledAlpha = 0.4f, ring = false) {
+            Pressable(run, Modifier.size(46.dp), shape = CircleShape, fill = Np.chip, label = label, enabled = enabled, disabledAlpha = 0.4f, ring = LocalMetrics.current.tv) {
                 Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { Text(sign, color = Color.White, fontSize = 20.sp, fontWeight = FontWeight.Bold) }
             }
         }

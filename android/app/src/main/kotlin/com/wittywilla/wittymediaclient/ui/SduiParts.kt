@@ -478,8 +478,8 @@ fun SduiDetailHeader(view: SduiView) {
                 }
                 Row(Modifier.padding(start = side, end = side, top = env.space("m"), bottom = env.space("s")), horizontalArrangement = Arrangement.spacedBy(env.space("m")), verticalAlignment = Alignment.Bottom) {
                     if (poster != null && (p.str("layout") == "poster" || backdrop == null)) {
-                        val posterWide = env.pt(300)
-                        val shape = aspectOf(poster.aspect).takeIf { it > 0f } ?: (2f / 3f)
+                        val shape = headerShape(poster, p.str("kind"))
+                        val posterWide = env.pt(if (shape > 1f) 480 else 300)
                         SduiPicture(poster, posterWide, shape, sduiKindIcon(p.str("kind")), Modifier.width(posterWide).aspectRatio(shape).clip(RoundedCornerShape(env.pt(14))))
                     }
                     Column(Modifier.widthIn(max = env.pt(1000)), verticalArrangement = Arrangement.spacedBy(env.space("xs"))) {
@@ -513,8 +513,9 @@ fun SduiDetailHeader(view: SduiView) {
                 val showPoster = poster != null && (env.tablet || p.str("layout") == "poster" || backdrop == null || compact)
                 Row(Modifier.padding(horizontal = side).padding(top = env.space("s")), horizontalArrangement = Arrangement.spacedBy(env.space("m"))) {
                     if (showPoster && poster != null) {
-                        val posterWide = if (env.tablet) 160.dp else if (compact) 72.dp else 104.dp
-                        val shape = aspectOf(poster.aspect).takeIf { it > 0f } ?: (2f / 3f)
+                        val shape = headerShape(poster, p.str("kind"))
+                        // An episode's still is wide: it gets the room a poster's height would have had.
+                        val posterWide = (if (env.tablet) 160.dp else if (compact) 72.dp else 104.dp) * (if (shape > 1f) 1.6f else 1f)
                         SduiPicture(poster, posterWide, shape, sduiKindIcon(p.str("kind")), Modifier.width(posterWide).aspectRatio(shape).restingShadow(10.dp).clip(RoundedCornerShape(10.dp)))
                     }
                     Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(env.space("xs"))) {
@@ -556,6 +557,13 @@ fun SduiDetailHeader(view: SduiView) {
         }
     }
 }
+
+// The shape of the picture beside a header's words: what the picture says it is, else its own size, else an episode's
+// still is 16:9 (the server sends it as the episode's poster) and anything else a 2:3 poster.
+internal fun headerShape(picture: com.wittywilla.wittymediaclient.net.SduiImage, kind: String): Float =
+    aspectOf(picture.aspect).takeIf { it > 0f }
+        ?: picture.takeIf { it.width > 0 && it.height > 0 }?.let { it.width.toFloat() / it.height }
+        ?: if (kind == "episode") 16f / 9f else 2f / 3f
 
 // How far through a title the profile is.
 @Composable
@@ -689,7 +697,9 @@ fun SduiTabs(view: SduiView, side: Dp, withContent: Boolean) {
                     val words = tab.text["title"].orEmpty()
                     when {
                         // A TV's are pills, centred above what they show.
-                        env.tv -> Pressable({ env.act(tab.node.action) }, shape = Radius.FULL, fill = if (on) scheme.primary.copy(alpha = 0.14f) else Color.Transparent, label = words, selected = on, state = if (on) "Selected" else null, focusKey = tab.id) {
+                        // Chosen as focus rests on it, as Android TV's tabs are: after a moment, so passing over one on the way
+                        // to another doesn't ask the server for each page between.
+                        env.tv -> Pressable({ if (!on) env.act(tab.node.action) }, Modifier.chooseOnRest(on) { env.act(tab.node.action) }, shape = Radius.FULL, fill = if (on) scheme.primary.copy(alpha = 0.14f) else Color.Transparent, label = words, selected = on, state = if (on) "Selected" else null, focusKey = tab.id) {
                             Box(Modifier.heightIn(min = env.pt(66)).padding(horizontal = env.pt(32)), contentAlignment = Alignment.Center) { Text(words, color = if (on) accentText else scheme.onSurfaceVariant, fontSize = env.size("body"), fontWeight = FontWeight.Medium, maxLines = 1) }
                         }
                         // Views of the same thing: a segmented control.
@@ -710,6 +720,21 @@ fun SduiTabs(view: SduiView, side: Dp, withContent: Boolean) {
         if (withContent) view.children.forEach { tab -> tab.children.forEach { Box(Modifier.padding(top = env.pt(env.layout.sectionGap))) { SduiNode(it, tab) } } }
     }
 }
+
+// Calls choose once focus has rested on something not yet chosen for a moment.
+@Composable
+private fun Modifier.chooseOnRest(chosen: Boolean, choose: () -> Unit): Modifier {
+    var focused by remember { mutableStateOf(false) }
+    val latest by androidx.compose.runtime.rememberUpdatedState(choose)
+    LaunchedEffect(focused, chosen) {
+        if (!focused || chosen) return@LaunchedEffect
+        kotlinx.coroutines.delay(TAB_REST_MS)
+        latest()
+    }
+    return onFocusChanged { focused = it.isFocused }
+}
+
+private const val TAB_REST_MS = 400L
 
 // MARK: SeasonList
 

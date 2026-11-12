@@ -260,7 +260,7 @@ fun ManageServersScreen(nav: Nav, s: Map<String, String>) {
                     "",
                     servers.mapIndexed { i, server ->
                         val name = shownName(server)
-                        val stale = isStale(server.lastSeen, now)
+                        val stale = isStale(server.lastSeen, now, nav.app.store.recentSince)
                         GroupRow(
                             title = name,
                             detail = server.url + " · " + reachedWords(s, server.lastSeen, now),
@@ -318,7 +318,7 @@ fun ManageServersScreen(nav: Nav, s: Map<String, String>) {
                     STALE_CHOICES.forEach { days ->
                         WittyButton(
                             s["staleDays$days"].orEmpty(),
-                            { choosing = false; old = days to notReachedFor(servers, days, System.currentTimeMillis()) },
+                            { choosing = false; old = days to notReachedFor(servers, days, System.currentTimeMillis(), nav.app.store.recentSince) },
                             Modifier.fillMaxWidth(),
                         )
                     }
