@@ -318,6 +318,8 @@
   "awayOffHint": "Turned off on this device. It isn't on your server's list, and doesn't add itself to it.",
   "manageServers": "Manage servers",
   "manageServersHint": "Servers this device has used. Removing one takes it off this device only: nothing on the server itself is deleted, and you can add it again at any time.",
+  "savedServersFirst": "Show saved servers first",
+  "savedServersFirstHint": "Servers this device has used are listed above the ones found on your network, the last one used first.",
   "rowServers": "Servers on this device",
   "editServers": "Edit",
   "editServersDone": "Done",

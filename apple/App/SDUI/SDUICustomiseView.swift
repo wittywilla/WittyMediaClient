@@ -24,9 +24,10 @@ struct SDUICustomiseView: View {
         // What was stored before, so that what this page doesn't show isn't lost; a profile with nothing stored has nothing.
         let stored = (try? await center.client.sduiPersonal(page: page)) ?? SDUIPersonal()
         edit = SDUICustomise(document: document, stored: stored)
-        if document.page.kind == "home", center.features.contains("sdui-navigation"), let shown = center.navigation?.items {
+        if document.page.kind == "home", center.features.contains("sdui-navigation"), let navigation = center.navigation,
+           navigation.personal?.editable != false {
             let storedMenu = (try? await center.client.sduiPersonal(page: nil)) ?? SDUIPersonal()
-            menu = SDUINavCustomise(shown: shown, stored: storedMenu)
+            menu = SDUINavCustomise(shown: navigation.items, stored: storedMenu, listed: navigation.personal)
         }
     }
 

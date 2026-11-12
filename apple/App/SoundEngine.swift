@@ -280,7 +280,17 @@ final class SoundEngine: @unchecked Sendable {
     /// Puts a tap on a song. Its tracks are looked at first, which a stream answers quickly.
     @discardableResult
     func attach(to item: AVPlayerItem) async -> SoundTap? {
-        guard let track = try? await item.asset.loadTracks(withMediaType: .audio).first else { return nil }
+        guard let track = try? await item.asset.loadTracks(withMediaType: .audio).first, let made = makeTap() else { return nil }
+        let parameters = AVMutableAudioMixInputParameters(track: track)
+        parameters.audioTapProcessor = made.tap
+        let mix = AVMutableAudioMix()
+        mix.inputParameters = [parameters]
+        await MainActor.run { item.audioMix = mix }
+        return made.state
+    }
+
+    /// A tap with filters of its own, for one track of a mix: a song's one track, or each part of karaoke's stems.
+    func makeTap() -> (tap: MTAudioProcessingTap, state: SoundTap)? {
         let state = SoundTap(engine: self)
         var callbacks = MTAudioProcessingTapCallbacks(
             version: kMTAudioProcessingTapCallbacksVersion_0,
@@ -292,12 +302,7 @@ final class SoundEngine: @unchecked Sendable {
             Unmanaged.passUnretained(state).release()
             return nil
         }
-        let parameters = AVMutableAudioMixInputParameters(track: track)
-        parameters.audioTapProcessor = tap
-        let mix = AVMutableAudioMix()
-        mix.inputParameters = [parameters]
-        await MainActor.run { item.audioMix = mix }
-        return state
+        return (tap, state)
     }
 
     /// The song the visualizer listens to.

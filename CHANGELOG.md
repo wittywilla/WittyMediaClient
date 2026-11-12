@@ -5,6 +5,16 @@ What changed in WittyMediaClient, newest first. What changed before it had a rep
 
 ## Unreleased
 
+- **Apple: signing in to a server for the first time no longer leaves Home and Search spinning.** The server's status was read before the app
+  had a connection to it, so it was never asked what it can do; its pages stayed "not known yet" and the menu showed "No libraries yet".
+  Opening a server now always asks. Seen on the iPhone and iPad simulators against a 0.8.0-alpha server.
+- **Apple: pairing with a QR code and a PIN, profiles and parental controls, Remote Protocol, watch parties, skip markers, canvases and Where to
+  Watch**, brought in from the paused branches (`wip/client-apple-pair`, `-remote`, `-media`) and built for iPhone, iPad and Apple TV. A TV or
+  phone being signed in shows a QR code, its code and a PIN that changes every 30 seconds; **Sign in a TV** under You approves it, now on
+  Apple TV too. On Apple, the media branch's own karaoke mixer was left out in favour of the karaoke above.
+- **Apple TV: the server picker scrolls** when many servers are found, so **Manage servers** stays reachable, and it takes focus by itself
+  after the server in use is removed. A server never reached is no longer counted among those "not reached for N days", as on the desktop and
+  Android. **Customise** lists menu entries the profile hid by their names. Server-driven cards' titles use the title size on every device.
 - **Desktop: Manage servers from the menu.** **Server → Manage Servers…** on a Mac, **Manage servers…** in the title bar's
   Help menu on Windows and Linux, and in TV mode's menu open the list of servers this computer remembers without leaving
   the one in use: it is marked **In use**, **Back to** it (or Escape) returns to it still signed in, and it can be removed
@@ -17,8 +27,8 @@ What changed in WittyMediaClient, newest first. What changed before it had a rep
   takes the singer out and puts them back, and **More**: a slider for each part, **Reset**, and whether it's the **Quick version** or
   **Separated**, with **Preparing a better version…** while the better one is made, which then takes over without a press. Levels are remembered
   for each profile. Lyrics, seeking and pausing follow the song as before. If the parts can't be played the normal track plays and the screen
-  says why; on an older server karaoke is as it was. On Apple TV it's in Now Playing, behind **Karaoke**. On Apple, the parts play at normal
-  speed only. Checked on screen on an Android phone emulator only; see [PLATFORMS.md](docs/PLATFORMS.md).
+  says why; on an older server karaoke is as it was. On Apple TV it's in Now Playing, behind **Karaoke**. On Apple the parts follow the song's
+  speed and its equaliser, preamp and volume levelling. Checked on screen on an Android phone emulator only; see [PLATFORMS.md](docs/PLATFORMS.md).
 - **Apple: Home, Search, libraries and title pages are the server's own pages, on a server that has them.** With WittyMediaServer 0.8.0-alpha
   (features `sdui-pages`, `sdui-catalog`, `sdui-navigation` and `sdui-personal`), the iPhone, iPad and Apple TV apps draw the pages the server
   describes ([SDUI.md](https://github.com/wittywilla/WittyMediaServer/blob/master/docs/SDUI.md)) with their own SwiftUI views: all 25 components

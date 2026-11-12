@@ -165,13 +165,10 @@ public enum ServerBook {
     }
 
     /// The servers not reached for `days` or more. One whose last time isn't known (remembered before the
-    /// app kept it) is counted from `since`, when this device began keeping times: it has not been reached
-    /// since then, and that much is known. With no `since` either, nothing is known and it is never chosen.
-    public static func notReached(for days: Int, in list: [SavedServer], now: Int64, since: Int64) -> [SavedServer] {
-        list.filter { server in
-            let last = server.lastSeen > 0 ? server.lastSeen : since
-            return last > 0 && now - last >= Int64(days) * day
-        }
+    /// app kept times, or never reached since) is never chosen: nothing says how long it has been, and the
+    /// desktop and Android apps leave it out the same way. It can still be removed by itself or with Remove all.
+    public static func notReached(for days: Int, in list: [SavedServer], now: Int64) -> [SavedServer] {
+        list.filter { $0.lastSeen > 0 && now - $0.lastSeen >= Int64(days) * day }
     }
 
     // MARK: Focus

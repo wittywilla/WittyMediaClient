@@ -84,8 +84,7 @@ struct KaraokeStemsControl: View {
         case .preparing(let progress): return StemMix.preparingWords(progress)
         case .unavailable(let message), .fallback(let message): return message
         case .ready:
-            if stems.loaded == nil { return StemMix.preparingWords(-1) }
-            return stems.heldForSpeed ? "Karaoke's parts only play at normal speed, so this is the normal track." : nil
+            return stems.loaded == nil ? StemMix.preparingWords(-1) : nil
         }
     }
 
@@ -111,7 +110,7 @@ struct KaraokeStemsControl: View {
                     .frame(maxWidth: .infinity)
                     .accessibilityIdentifier("karaoke-stems-words")
             }
-            if let loaded = stems.loaded, !stems.heldForSpeed, case .ready = stems.machine.phase {
+            if let loaded = stems.loaded, case .ready = stems.machine.phase {
                 HStack(spacing: 8) {
                     StemLevelSlider(label: "Vocals", level: StemMix.vocalsLevel(loaded, stems.levels), ink: ink, big: true) { stems.setVocals($0) }
                         .accessibilityIdentifier("karaoke-vocals")

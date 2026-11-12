@@ -253,6 +253,7 @@ private struct BackBar: ViewModifier {
 /// A top page of the website's other than Home and a library's: the strip above it, its own solid once the page
 /// scrolls under it (if the page starts with ScrollTop).
 private struct UnderStrip: ViewModifier {
+    @Environment(\.frameNav) private var frameNav
     var path: String?
     var hidden = false
     @State private var solid = 0.0
@@ -261,7 +262,8 @@ private struct UnderStrip: ViewModifier {
         content
             .stripSolidity($solid)
             .safeAreaInset(edge: .top, spacing: 0) {
-                if !hidden { LibraryStrip(currentPath: path, solid: solid) }
+                // A side menu or top tabs already list every place the strip would.
+                if !hidden && !frameNav.listsEverything { LibraryStrip(currentPath: path, solid: solid) }
             }
     }
 }
@@ -366,7 +368,7 @@ struct FloatingBar: View {
     private var shownTabs: [AppTab] {
         let hidden: [String] = model.navPrefs.hidden ?? []
         let tabs: [AppTab] = [.home, .guide, .search]
-        return tabs.filter { (tab: AppTab) -> Bool in !hidden.contains(menuKey(tab)) }
+        return model.household.shown(tabs).filter { (tab: AppTab) -> Bool in !hidden.contains(menuKey(tab)) }
     }
 
     private func barIcon(_ symbol: String, size: CGFloat = 20) -> some View {
@@ -385,7 +387,7 @@ struct FloatingBar: View {
 
     @ViewBuilder private func profileIcon(_ name: String) -> some View {
         if model.user != nil {
-            AvatarTile(name: name, size: 32).overlay(alignment: .topTrailing) { updateDot }
+            AvatarTile(name: name, size: 32, picture: model.user?.avatar).overlay(alignment: .topTrailing) { updateDot }
         } else {
             Image(systemName: "person.crop.circle").font(.system(size: 22, weight: .medium))
         }

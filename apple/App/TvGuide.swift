@@ -180,7 +180,9 @@ struct GuideView: View {
                 Button { searchOpen = true } label: { Image(systemName: "magnifyingglass") }
                     .buttonStyle(TvButtonStyle(dress: dress, kind: .icon, onBar: true)).accessibilityLabel("Search the schedule")
                 Button("Look") { lookOpen = true }.buttonStyle(TvButtonStyle(dress: dress, onBar: true))
-                NavigationLink(value: Route.recordings) { Text("Recordings") }.buttonStyle(TvButtonStyle(dress: dress, onBar: true))
+                if model.household.allows(ProfileFeature.recordings) {
+                    NavigationLink(value: Route.recordings) { Text("Recordings") }.buttonStyle(TvButtonStyle(dress: dress, onBar: true))
+                }
                 if model.user?.isAdmin == true {
                     NavigationLink(value: Route.page("/tv/channels")) { Label("Edit channels", systemImage: "gearshape") }
                         .buttonStyle(TvButtonStyle(dress: dress, onBar: true))

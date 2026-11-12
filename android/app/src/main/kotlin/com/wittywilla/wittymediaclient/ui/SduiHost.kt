@@ -142,20 +142,25 @@ fun SduiPageScreen(nav: Nav, page: String, params: Map<String, String>, top: Boo
     LaunchedEffect(client, asked, attempt) {
         if (model == null || shownFor != asked) {
             // What was kept from the last run shows at once, while the server is asked.
-            withContext(Dispatchers.IO) { client.keptPage(page, asked) }?.let {
-                if (model == null || shownFor != asked) { model = SduiPage(it); shownFor = asked }
+            withContext(Dispatchers.IO) { client.keptPage(page, asked)?.let { SduiPage(it).ready() } }?.let {
+                if (model == null || shownFor != asked) { model = it; shownFor = asked }
             }
         }
         try {
-            val loaded = withContext(Dispatchers.Default) { client.page(page, asked) }
             val have = model
-            model = when {
-                have == null || shownFor != asked -> SduiPage(loaded.value)
-                have.base.meta.etag == loaded.value.meta.etag && have.base == loaded.value -> have
-                else -> have.withBase(loaded.value)
+            val fresh = shownFor != asked
+            val loaded = withContext(Dispatchers.Default) {
+                val loaded = client.page(page, asked)
+                val next = when {
+                    have == null || fresh -> SduiPage(loaded.value)
+                    have.base.meta.etag == loaded.value.meta.etag && have.base == loaded.value -> have
+                    else -> have.withBase(loaded.value)
+                }
+                loaded to next.ready()
             }
+            model = loaded.second
             shownFor = asked
-            offline = loaded.offline
+            offline = loaded.first.offline
             problem = null
         } catch (e: CancellationException) {
             throw e
@@ -180,7 +185,10 @@ fun SduiPageScreen(nav: Nav, page: String, params: Map<String, String>, top: Boo
         val forWhat = shownFor ?: return
         try {
             val fresh = withContext(Dispatchers.Default) { client.refreshed(page, forWhat, have.base) }
-            if (fresh != null && shownFor == forWhat) model = model?.withBase(fresh)
+            if (fresh != null && shownFor == forWhat) {
+                val now = model
+                model = withContext(Dispatchers.Default) { now?.withBase(fresh)?.ready() }
+            }
             offline = false
         } catch (e: CancellationException) {
             throw e
@@ -214,13 +222,17 @@ fun SduiPageScreen(nav: Nav, page: String, params: Map<String, String>, top: Boo
         scope.launch {
             try {
                 val answer = withContext(Dispatchers.Default) { client.items(url) }
-                model = model?.withItems(section, answer)
+                val have = model
+                val next = withContext(Dispatchers.Default) { have?.withItems(section, answer)?.ready() }
+                // Another answer may have landed meanwhile: lay this one over that.
+                model = if (model === have) next else withContext(Dispatchers.Default) { model?.withItems(section, answer)?.ready() }
                 cooling.remove(section)
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
                 if (!nav.handleExpired(e)) {
-                    model = model?.withFailure(section)
+                    val have = model
+                    model = withContext(Dispatchers.Default) { have?.withFailure(section)?.ready() }
                     cooling[section] = System.currentTimeMillis()
                 }
             } finally {
@@ -229,7 +241,7 @@ fun SduiPageScreen(nav: Nav, page: String, params: Map<String, String>, top: Boo
         }
     }
 
-    val screen = remember(model) { model?.let { SduiScreen(it.shown) } }
+    val screen = model?.screen
     val screenTime = model?.base?.screenTime
 
     fun act(action: SduiAction?) {

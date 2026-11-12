@@ -234,9 +234,9 @@ private fun CardWords(view: SduiView, centred: Boolean) {
     var first = true
     @Composable
     fun line(words: String, lines: Int, title: Boolean) {
-        // The picture's caption is small type, so a poster's name fits under it: the title in its weight, the rest quieter.
+        // The title in the title size and the rest in the caption size, as the specification says for every device.
         Text(
-            words, color = if (title) scheme.onBackground else hint, fontSize = env.size("caption") * (if (title) 1.08f else 1f),
+            words, color = if (title) scheme.onBackground else hint, fontSize = env.size(if (title) "title" else "caption"),
             fontWeight = if (title) FontWeight.SemiBold else FontWeight.Normal, maxLines = lines.coerceAtLeast(1), overflow = TextOverflow.Ellipsis, textAlign = align,
             modifier = Modifier.fillMaxWidth().padding(top = env.pt(if (first) (if (env.tv) 14 else 8) else (if (env.tv) 4 else 2))),
         )

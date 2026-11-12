@@ -222,10 +222,10 @@ fun putBack(recent: List<SavedServer>, plan: ForgetPlan): List<SavedServer> {
 // "Remove servers not reached for…": those last reached at least that many days ago. A server remembered before
 // this app kept the time (0) is never chosen by this, as nobody knows how long it has been: it is shown as such,
 // and goes only when the person removes it themselves or removes all.
-fun notReachedFor(recent: List<SavedServer>, days: Int, now: Long): List<SavedServer> =
-    recent.filter { it.lastSeen > 0 && now - it.lastSeen >= days * DAY_MS }
+fun notReachedFor(recent: List<SavedServer>, days: Int, now: Long, since: Long = 0): List<SavedServer> =
+    recent.filter { val seen = seenOrSince(it.lastSeen, since); seen > 0 && now - seen >= days * DAY_MS }
 
-fun isStale(lastSeen: Long, now: Long): Boolean = lastSeen > 0 && now - lastSeen > STALE_AFTER_DAYS * DAY_MS
+fun isStale(lastSeen: Long, now: Long, since: Long = 0): Boolean = seenOrSince(lastSeen, since).let { it > 0 && now - it > STALE_AFTER_DAYS * DAY_MS }
 
 // When a server was last reached, by the days of the calendar where the device is.
 sealed interface Reached {
@@ -285,3 +285,25 @@ fun oldEntryFor(shown: SavedServer, recent: List<SavedServer>): SavedServer? =
 // announce an ID, so its identity is still checked there before anything about it is believed or changed.
 fun addressNow(server: SavedServer, found: List<FoundServer>): String =
     found.firstOrNull { server.serverId.isNotEmpty() && it.id == server.serverId }?.url ?: server.url
+
+// MARK: what is kept by a server's own numbers
+
+// A short name for one server, for keys of things kept by its own numbers (a video's picture settings, the last TV
+// channel), so they can go with that server alone. By its ID where it has one, else by its address; a server
+// removed takes the keys under both.
+fun serverTag(server: SavedServer?): String {
+    val name = server?.serverId?.ifEmpty { server.url } ?: return ""
+    return tagOf(name)
+}
+
+fun serverTags(server: SavedServer): List<String> = listOfNotNull(server.serverId.takeIf { it.isNotEmpty() }, server.url.takeIf { it.isNotEmpty() }).map(::tagOf)
+
+private fun tagOf(name: String): String =
+    java.security.MessageDigest.getInstance("SHA-256").digest(name.toByteArray()).take(6).joinToString("") { "%02x".format(it) }
+
+// MARK: servers never reached since this version
+
+// A server whose last contact isn't known (remembered before the app kept it) counts from when this version first ran:
+// the same rule as Apple's apps (ServerBook.recentSince). So it is offered for "not reached for N days" once that many
+// days have passed without reaching it, and it shows as long unreached the same way.
+fun seenOrSince(lastSeen: Long, since: Long): Long = if (lastSeen > 0) lastSeen else since

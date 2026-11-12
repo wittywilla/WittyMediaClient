@@ -5,7 +5,7 @@ import WittyKit
 
 /// Keeps the server's own pages and menu in step with who is signed in to what, with the window, and with the
 /// app coming back to the front. Put on the shell, which is made again for each server and person.
-struct SDUIShell: ViewModifier {
+struct SDUIShellSync: ViewModifier {
     @ObservedObject var center: SDUICenter
     @EnvironmentObject private var model: AppModel
     @Environment(\.scenePhase) private var scenePhase

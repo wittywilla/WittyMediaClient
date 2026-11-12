@@ -112,15 +112,10 @@ extension LogoCache {
 }
 
 extension AppModel {
-    /// When this device began keeping the time each server was last reached.
-    private static let sinceKey = "recentSince"
-
     /// Every name in this app's own preferences. Not what the system or the launch arguments add.
     private var ownKeys: [String] {
         Array((defaults.persistentDomain(forName: Bundle.main.bundleIdentifier ?? "") ?? [:]).keys)
     }
-
-    var keepingTimesSince: Int64 { (defaults.object(forKey: Self.sinceKey) as? NSNumber)?.int64Value ?? 0 }
 
     /// The server in use: the one whose screens are showing, signed in or signing in.
     func isInUse(_ server: SavedServer) -> Bool {
@@ -159,7 +154,8 @@ extension AppModel {
             recent = tidy.list
         }
         for move in tidy.moves { follow(move) }
-        if defaults.object(forKey: Self.sinceKey) == nil { defaults.set(NSNumber(value: ServerBook.now()), forKey: Self.sinceKey) }
+        // Kept by an earlier version, which counted a server never reached from that day; nothing uses it now.
+        defaults.removeObject(forKey: "recentSince")
         sweep()
     }
 

@@ -37,8 +37,9 @@ class Forgotten internal constructor(
 //   web view             its cookies and what its pages stored
 //   on the server        the sign-in is ended there too, once Undo is no longer offered
 //
-// Two things are kept by a video's or channel's number, with no server's name on them (settings "wms.view" for a
-// video's own picture settings, "wittytv" for the last channel), so they go when the last server does. The sound
+// Two things are kept by a video's or channel's number (settings "wms.view" for a video's own picture settings,
+// "wittytv" for the last channel): under the server's tag, so they go with it; the untagged ones from before go
+// when the last server does. The sound
 // settings, the streaming choice, WittyPlay's device name and the app's own log are this device's, and stay.
 object ForgetServer {
     private const val SIGN_OUT_MS = 3000L
@@ -68,11 +69,14 @@ object ForgetServer {
         if (gone.plan.wasCurrent) app.forgetImages()
         runCatching { File(app.cacheDir, "booklets").deleteRecursively() }
         gone.plan.urls.forEach { forgetWeb(app, it) }
+        val tags = gone.plan.removed.flatMap(::serverTags).distinct()
+        ViewPrefsStore.forgetServer(app, tags)
+        LastChannel.forgetServer(app, tags)
         if (app.store.recent.isEmpty() && app.store.server.isEmpty()) {
             ViewPrefsStore.forgetVideos(app)
             LastChannel.forget(app)
         }
-        forgetPeerToPeer(gone.server)
+        forgetPeerToPeer(app, gone.server, gone.signIn)
         val signIn = gone.signIn?.takeIf { it.token.isNotEmpty() } ?: return
         val url = gone.taken.current.ifEmpty { gone.server.url }
         app.scope.launch { withTimeoutOrNull(SIGN_OUT_MS) { signOutThere(url, signIn) } }
@@ -99,8 +103,9 @@ object ForgetServer {
         }
     }
 
-    // Peer-to-peer data for this server (its pairing and relay state). Android has no peer-to-peer yet, so there
-    // is nothing to delete; when it gets it, this is where that server's part goes.
-    @Suppress("UNUSED_PARAMETER")
-    private fun forgetPeerToPeer(server: SavedServer) = Unit
+    // Peer-to-peer data for this server: what was kept for reaching it from away, this device's place on its list
+    // (with the sign-in it had, best effort), and the connection if it was to it (p2p/PeerManager.kt).
+    private fun forgetPeerToPeer(app: WittyApp, server: SavedServer, signIn: SignIn?) {
+        app.scope.launch { app.peers.forgetAway(server, signIn?.token.orEmpty()) }
+    }
 }

@@ -72,10 +72,12 @@ public struct SDUILayout: Codable, Equatable, Sendable {
     public var externalLinks: Bool?
     public var reducedMotion: Bool?
     public var truncated: Bool?
+    /// The frame the app draws around the page: the layout option chosen and its menu (docs/SDUI.md, Layout options).
+    public var shell: SDUIShell?
 
     enum CodingKeys: String, CodingKey {
         case formFactor, canvas, scale, breakpoint, safeArea, focusEngine, density, spacing, text, cards, hero
-        case imageWidths, budget, textLimits, externalLinks, reducedMotion, truncated
+        case imageWidths, budget, textLimits, externalLinks, reducedMotion, truncated, shell
         case deviceClass = "class"
     }
 
@@ -99,6 +101,7 @@ public struct SDUILayout: Codable, Equatable, Sendable {
         externalLinks = try? box.decodeIfPresent(Bool.self, forKey: .externalLinks)
         reducedMotion = try? box.decodeIfPresent(Bool.self, forKey: .reducedMotion)
         truncated = try? box.decodeIfPresent(Bool.self, forKey: .truncated)
+        shell = try? box.decodeIfPresent(SDUIShell.self, forKey: .shell)
     }
 
     public init(formFactor: String, deviceClass: String? = nil, canvas: Size? = nil, scale: Int, breakpoint: String,
@@ -212,4 +215,35 @@ public struct SDUILayout: Codable, Equatable, Sendable {
         while let last = kept.last, " ,.;:-–—".contains(last) { kept.removeLast() }
         return kept + "…"
     }
+}
+
+/// A layout option's frame: which layout, the menu's style (`sidebar`, `rail`, `bottomTabs`, `topTabs`, `tvTopMenu`,
+/// `tvSideMenu`), its breadth in points, whether the bar lies over the page until it scrolls, and how wide a TV's side
+/// menu opens while it has focus.
+public struct SDUIShell: Codable, Equatable, Sendable {
+    public var layout: String
+    public var nav: String
+    public var overlay: Bool?
+    public var size: Int
+    public var open: Int?
+
+    public init(layout: String, nav: String, overlay: Bool? = nil, size: Int, open: Int? = nil) {
+        self.layout = layout
+        self.nav = nav
+        self.overlay = overlay
+        self.size = size
+        self.open = open
+    }
+
+    public init(from decoder: Decoder) throws {
+        let box = try decoder.container(keyedBy: CodingKeys.self)
+        layout = (try? box.decodeIfPresent(String.self, forKey: .layout)) ?? ""
+        nav = (try? box.decodeIfPresent(String.self, forKey: .nav)) ?? ""
+        overlay = try? box.decodeIfPresent(Bool.self, forKey: .overlay)
+        size = (try? box.decodeIfPresent(Int.self, forKey: .size)) ?? 0
+        open = try? box.decodeIfPresent(Int.self, forKey: .open)
+    }
+
+    /// The menu styles this app draws. A style it doesn't know is drawn as the device's usual one.
+    public static let navs: Set<String> = ["sidebar", "rail", "bottomTabs", "topTabs", "tvTopMenu", "tvSideMenu"]
 }

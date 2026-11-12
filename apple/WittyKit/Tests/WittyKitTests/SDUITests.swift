@@ -465,6 +465,25 @@ final class SDUITests: XCTestCase {
         XCTAssertEqual(edit.personal, SDUIPersonal(order: ["home", "settings", "search", "livetv"], hidden: ["search"]))
     }
 
+    func testTheMenuListsWhatTheServerSaysTheProfileCouldHave() throws {
+        let json = #"""
+        {"version":1,"items":[{"id":"home","label":"Home","kind":"page","page":"home","icon":"home"},
+          {"id":"settings","label":"Settings","kind":"native","screen":"settings"}],
+          "personal":{"editable":true,"allow":["reorder","hide"],"url":"/api/v1/sdui/navigation/personal",
+          "sections":[{"id":"home","title":"Home"},{"id":"livetv","title":"Live TV","hidden":true},{"id":"settings","title":"Settings"}]}}
+        """#
+        let navigation = try JSONDecoder().decode(SDUINavigation.self, from: Data(json.utf8))
+        XCTAssertEqual(navigation.personal?.sections?.count, 3)
+        var edit = SDUINavCustomise(shown: navigation.items, stored: SDUIPersonal(hidden: ["livetv"]), listed: navigation.personal)
+        XCTAssertEqual(edit.rows.map(\.label), ["Home", "Live TV", "Settings"], "a hidden entry has its name and its place")
+        XCTAssertEqual(edit.rows.map(\.hidden), [false, true, false])
+        XCTAssertEqual(edit.rows.first?.icon, "home")
+        XCTAssertTrue(edit.rows.last?.fixed == true)
+        edit.setHidden("livetv", false)
+        edit.setHidden("settings", true)
+        XCTAssertEqual(edit.personal, SDUIPersonal(order: ["home", "livetv", "settings"]))
+    }
+
     // MARK: Theme scopes
 
     func testAScopesTokensGoOnTopOfTheTheme() {

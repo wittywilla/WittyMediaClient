@@ -6,7 +6,7 @@ package com.wittywilla.wittymediaclient.ui
 // Apart from the screen, so it can be tested without one. Rows the server would refuse are left out,
 // not greyed.
 
-enum class YouNative { Names, Password, TwoStep, Devices, SignInTv, Theme, TopMenu, Licences, Log, Servers }
+enum class YouNative { Names, Password, TwoStep, Devices, SignInTv, Theme, TopMenu, Licences, Log, Servers, Away }
 
 sealed interface YouOpens {
     data class Native(val screen: YouNative) : YouOpens
@@ -28,6 +28,8 @@ data class YouWho(
     // The server offers two-step sign-in to this profile.
     val twoStepAvailable: Boolean,
     val onTv: Boolean,
+    // The app can reach a server from away (the connector library is in it).
+    val fromAway: Boolean = false,
 )
 
 private const val QUIET = "#5d6474"
@@ -71,6 +73,8 @@ fun youGroups(who: YouWho): List<YouGroup> {
             if (who.onTv) native("rowTopMenu", "toolbar", "#bd2f85", YouNative.TopMenu) else null,
             // The servers this device remembers, to remove the ones no longer wanted.
             native("rowServers", "dns", QUIET, YouNative.Servers),
+            // How this device reaches the server when it isn't at home: peer to peer.
+            if (who.fromAway) native("rowAway", "settings_input_antenna", "#0a6fb8", YouNative.Away) else null,
         ),
     )
     if (who.admin) {

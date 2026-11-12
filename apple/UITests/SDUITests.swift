@@ -72,10 +72,11 @@ final class SDUITests: XCTestCase {
         let customise = named(app, "sdui.customise")
         #if os(tvOS)
         let remote = XCUIRemote.shared
-        for _ in 0..<40 where !customise.hasFocus {
+        // Rows below come as the page scrolls: Customise exists only once it's near.
+        for _ in 0..<40 where !(customise.exists && customise.hasFocus) {
             remote.press(.down)
         }
-        XCTAssertTrue(customise.hasFocus, "Customise is the last stop of the page")
+        XCTAssertTrue(customise.exists && customise.hasFocus, "Customise is the last stop of the page")
         remote.press(.select)
         app.buttons["Done"].firstMatch.shown(20)
         remote.press(.menu)
@@ -90,4 +91,93 @@ final class SDUITests: XCTestCase {
         #endif
         home.shown()
     }
+
+    #if os(tvOS)
+    // MARK: Apple TV's focus, by the remote
+
+    @MainActor
+    private func focused(_ app: XCUIApplication) -> XCUIElement {
+        app.descendants(matching: .any).element(matching: NSPredicate(format: "hasFocus == true"))
+    }
+
+    @MainActor
+    private func waitForFocus(_ element: XCUIElement, _ seconds: TimeInterval = 20) -> Bool {
+        let end = Date().addingTimeInterval(seconds)
+        while Date() < end {
+            if element.exists, element.hasFocus { return true }
+            usleep(250_000)
+        }
+        return false
+    }
+
+    /// The page's `focus.default` is the hero's Play: focus is there at launch, not on the menu's Home.
+    @MainActor
+    func testAppleTVFocusStartsOnTheHerosPlay() throws {
+        let app = try launchApp()
+        page(app, startingWith: "home").shown(40)
+        let play = named(app, "sdui.action.play")
+        guard play.waitForExistence(timeout: 20) else { throw XCTSkip("The test server's Home has no hero: give it a few titles with art.") }
+        XCTAssertTrue(waitForFocus(play), "focus at launch is on \(focused(app).identifier), not the hero's Play")
+    }
+
+    /// Right past the hero's last button is the next title; left past its first goes back.
+    @MainActor
+    func testAppleTVRightPastTheHerosButtonsChangesTitle() throws {
+        let app = try launchApp()
+        page(app, startingWith: "home").shown(40)
+        let play = named(app, "sdui.action.play")
+        guard play.waitForExistence(timeout: 20), waitForFocus(play) else { throw XCTSkip("No hero with focus on its Play.") }
+        let dots = app.descendants(matching: .any).matching(NSPredicate(format: "label BEGINSWITH %@", "Title ")).firstMatch
+        guard dots.waitForExistence(timeout: 5) else { throw XCTSkip("The hero has one title only.") }
+        let before = dots.label
+        let remote = XCUIRemote.shared
+        // Play, More info, then past the end.
+        for _ in 0..<4 where dots.label == before { remote.press(.right) }
+        XCTAssertNotEqual(dots.label, before, "right past the buttons didn't change the title")
+        let after = dots.label
+        for _ in 0..<4 where dots.label == after { remote.press(.left) }
+        XCTAssertNotEqual(dots.label, after, "left past the first button didn't go back")
+    }
+
+    /// A row remembers the card it was left on: down into a row, along it, down out of it and back up lands on
+    /// the same card, not the row's first.
+    @MainActor
+    func testAppleTVARowRemembersItsCard() throws {
+        let app = try launchApp()
+        page(app, startingWith: "home").shown(40)
+        let remote = XCUIRemote.shared
+        let card = NSPredicate(format: "identifier BEGINSWITH %@", "sdui.card.")
+        var chosen = ""
+        for _ in 0..<6 {
+            remote.press(.down)
+            if card.evaluate(with: focused(app)) { break }
+        }
+        guard card.evaluate(with: focused(app)) else { throw XCTSkip("No row of cards on the test server's Home.") }
+        let first = focused(app).identifier
+        remote.press(.right)
+        remote.press(.right)
+        chosen = focused(app).identifier
+        guard chosen != first else { throw XCTSkip("The first row has one card only.") }
+        remote.press(.down)
+        remote.press(.up)
+        XCTAssertEqual(focused(app).identifier, chosen, "coming back to the row didn't return to the card it was left on")
+    }
+    /// With a layout whose menu is down the side (`tvSideMenu`), left from the page reaches the menu, which opens with
+    /// the places' names, and choosing one shows it. Skips itself unless the test server gives Apple TV that layout.
+    @MainActor
+    func testAppleTVSideMenuOpensWithFocus() throws {
+        let app = try launchApp()
+        page(app, startingWith: "home").shown(40)
+        let home = named(app, "frame.entry.home")
+        guard home.waitForExistence(timeout: 10) else { throw XCTSkip("The server's layout for Apple TV has its menu at the top.") }
+        let remote = XCUIRemote.shared
+        for _ in 0..<4 where !home.hasFocus { remote.press(.left) }
+        XCTAssertTrue(home.hasFocus, "left from the page didn't reach the side menu's Home")
+        // Open, the menu shows names beside its icons.
+        XCTAssertTrue(app.staticTexts["Search"].firstMatch.waitForExistence(timeout: 5), "the menu didn't open with its names")
+        remote.press(.down)
+        remote.press(.select)
+        page(app, startingWith: "search").shown(20)
+    }
+    #endif
 }
