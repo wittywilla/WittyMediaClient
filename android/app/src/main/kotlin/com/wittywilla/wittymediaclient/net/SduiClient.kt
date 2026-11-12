@@ -3,7 +3,9 @@
 package com.wittywilla.wittymediaclient.net
 
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.put
 import kotlinx.serialization.json.jsonPrimitive
 import java.io.File
 import java.io.IOException
@@ -29,6 +31,9 @@ data class SduiDevice(
     val capabilities: List<String> = emptyList(),
     val components: List<String> = SDUI_OPTIONAL_COMPONENTS,
     val views: List<String> = emptyList(),
+    // A stable name of this app's own on this device, so a profile's layout can be chosen per device. Never
+    // anything that identifies the hardware.
+    val device: String = "",
 ) {
     val parameters: List<Pair<String, String>>
         get() = buildList {
@@ -41,6 +46,7 @@ data class SduiDevice(
             if (capabilities.isNotEmpty()) add("capabilities" to capabilities.joinToString(","))
             add("components" to components.joinToString(",").ifEmpty { "none" })
             if (views.isNotEmpty()) add("views" to views.joinToString(","))
+            if (device.isNotEmpty()) add("device" to device)
         }
 
     // An address with this device's parameters added. One the address already carries stays as it is.
@@ -242,6 +248,13 @@ class SduiClient(private val transport: SduiTransport, val device: SduiDevice, p
 
     suspend fun resetPersonal(url: String) {
         send("DELETE", url)
+    }
+
+    // This profile's layout on this device (Layout options): one of the navigation's `layouts.options`, or null to
+    // follow the server again. Every page and the menu change with it, so they are all asked for again.
+    suspend fun chooseLayout(url: String, layout: String?) {
+        if (layout == null) send("DELETE", device.on(url))
+        else send("PUT", device.on(url), buildJsonObject { put("layout", layout) }.toString())
     }
 
     // Carries out one of the catalogue's commands for an item.

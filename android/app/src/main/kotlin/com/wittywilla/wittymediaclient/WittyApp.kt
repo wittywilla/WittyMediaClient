@@ -70,6 +70,15 @@ class WittyApp : Application(), SingletonImageLoader.Factory {
 
     // How this device is named in the server's list of sign-ins.
     val deviceName: String get() = "${Build.MANUFACTURER} ${Build.MODEL}".take(60)
+    // This app's own name for this device in a profile's layout choice (docs/SDUI.md, Layout options): made once,
+    // at random, letters and digits only, and nothing to do with the hardware.
+    val layoutDeviceName: String by lazy {
+        val prefs = getSharedPreferences("wms.device", MODE_PRIVATE)
+        prefs.getString("name", null) ?: ("android-" + java.util.UUID.randomUUID().toString().replace("-", "").take(12)).also {
+            prefs.edit().putString("name", it).apply()
+        }
+    }
+
     val platformName: String get() = if (isTv) "Android TV" else "Android"
 
     override fun onCreate() {

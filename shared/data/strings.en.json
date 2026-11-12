@@ -589,5 +589,20 @@
   "skipCreditsHint": "Credits that run to the end go straight on to the next episode.",
   "canvasCaption": "Artwork",
   "canvasRow": "Moving artwork",
-  "canvasHint": "A short silent video behind a song or a title, where your server has one. It stays still on battery saver, on Data Saver or a metered connection, away from home, on a device with little memory, and when animations are turned off."
+  "canvasHint": "A short silent video behind a song or a title, where your server has one. It stays still on battery saver, on Data Saver or a metered connection, away from home, on a device with little memory, and when animations are turned off.",
+  "rowLayout": "Layout",
+  "layoutHint": "How this app is arranged on this device: where the menu is, and how pages look. Your other devices keep their own.",
+  "layoutFollow": "As the server sets it",
+  "layoutFollowNow": "As the server sets it: {name}",
+  "layoutNotHere": "This server doesn't offer a choice of layouts.",
+  "rowModuleSettings": "Modules",
+  "moduleSettingsHint": "Settings the server's modules offer: some for you alone, some for the whole server.",
+  "moduleSettingsNone": "No module has settings for you here.",
+  "moduleSecretSet": "Set",
+  "moduleSecretNotSet": "Not set",
+  "moduleSecretNew": "Type a new one",
+  "moduleSecretClear": "Clear",
+  "moduleReadOnly": "Only an administrator changes this.",
+  "moduleSaved": "Saved.",
+  "groupModules": "Modules"
 }

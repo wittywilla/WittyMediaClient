@@ -159,6 +159,8 @@ fun YouScreen(nav: Nav, s: Map<String, String>) {
         twoStepAvailable = twoStep?.available == true,
         onTv = metrics.tv,
         fromAway = nav.app.peers.available,
+        layouts = (nav.sduiNav?.layouts?.options?.size ?: 0) > 1,
+        moduleSettings = nav.has("module-settings"),
         nativeProfiles = nav.has(com.wittywilla.wittymediaclient.net.FEATURE_PARENTAL),
         off = com.wittywilla.wittymediaclient.player.ScreenTimeWatch.limits?.features?.filterValues { !it }?.keys.orEmpty(),
     )
@@ -327,6 +329,8 @@ fun YouSettingScreen(nav: Nav, s: Map<String, String>, screen: YouNative) {
         YouNative.Log -> LogsScreen(nav)
         YouNative.Servers -> ManageServersScreen(nav, s)
         YouNative.Away -> AwayScreen(nav, s)
+        YouNative.Layout -> LayoutScreen(nav, s)
+        YouNative.Modules -> ModuleSettingsListScreen(nav, s)
         YouNative.PlayingHere -> PlayingHereScreen(nav, s)
     }
 }
