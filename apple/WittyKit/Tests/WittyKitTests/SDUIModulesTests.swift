@@ -100,3 +100,14 @@ final class SDUIModulesTests: XCTestCase {
         XCTAssertEqual(try JSONDecoder().decode(ThemeModules.self, from: Data(#"{"id":"witty"}"#.utf8)).tokens, [:])
     }
 }
+
+final class SDUINavDrawerTests: XCTestCase {
+    func testALibraryEntryCarriesItsDrawer() throws {
+        let json = #"{"version":1,"items":[{"id":"lib:2","label":"Films","kind":"page","drawer":{"title":"Films","icon":"movie","count":120,"views":[{"id":"recent","label":"Recently added","icon":"plus","params":{"library":"2","sort":"added"},"route":"/library/2?sort=added"},{"id":"all","label":"All","route":"/library/2"}]}}],"shell":{"experience":"rail","nav":"railDrawer","size":76,"open":240,"drawer":360}}"#
+        let nav = try JSONDecoder().decode(SDUINavigation.self, from: Data(json.utf8))
+        XCTAssertEqual(nav.items[0].drawer?.count, 120)
+        XCTAssertEqual(nav.items[0].drawer?.views.map(\.id), ["recent", "all"])
+        XCTAssertEqual(nav.shell?.drawer, 360)
+        XCTAssertTrue(nav.shell?.shows("dock") == true)
+    }
+}

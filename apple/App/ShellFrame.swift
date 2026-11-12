@@ -62,7 +62,12 @@ struct FrameEntries {
     var entries: [SDUINavItem] {
         let you = center.youEntry
         // Settings is You here: one entry for both, at the end.
-        let rest = center.items.filter { !$0.isSettings && $0.id != you?.id && model.household.shown([center.tab(for: $0)]).count == 1 }
+        // A region the placements hide isn't drawn: Search where the shell has hidden it (Settings and You are never hideable).
+        let searchShown = center.shell?.shows("search") != false
+        let rest = center.items.filter {
+            !$0.isSettings && $0.id != you?.id && model.household.shown([center.tab(for: $0)]).count == 1
+                && (searchShown || ($0.route != "/search" && $0.id != "search"))
+        }
         return rest + (you.map { [$0] } ?? [])
     }
 
@@ -99,21 +104,25 @@ struct SideMenu: View {
     let iconsOnly: Bool
     /// A rail that can be kept open: this is its pin (shown while it is open).
     var pinned: Binding<Bool>?
+    /// A rail with a library drawer: choosing an entry that has one opens it (the entry is passed here) instead of the page.
+    var drawerEntry: Binding<SDUINavItem?>?
 
     var body: some View {
         let list = FrameEntries(center: center, model: model)
         VStack(alignment: iconsOnly ? .center : .leading, spacing: 2) {
-            if iconsOnly {
-                // The mark in a square badge, centred: never a bare letter.
-                BrandBadge(size: 48).padding(.vertical, Tokens.Space.s3)
-            } else {
-                BrandLockup().padding(.horizontal, Tokens.Space.s3).padding(.vertical, Tokens.Space.s3)
+            if center.shell?.shows("brand") != false {
+                if iconsOnly {
+                    // The mark in a square badge, centred: never a bare letter.
+                    BrandBadge(size: 48).padding(.vertical, Tokens.Space.s3)
+                } else {
+                    BrandLockup().padding(.horizontal, Tokens.Space.s3).padding(.vertical, Tokens.Space.s3)
+                }
             }
             ScrollView(.vertical, showsIndicators: false) {
                 VStack(alignment: iconsOnly ? .center : .leading, spacing: 2) {
                     ForEach(list.entries) { entry in
                         let here = list.isCurrent(entry)
-                        Button { list.open(entry) } label: {
+                        Button { if let drawerEntry, entry.drawer != nil { drawerEntry.wrappedValue = entry } else { list.open(entry) } } label: {
                             HStack(spacing: Tokens.Space.s3) {
                                 Image(systemName: list.symbol(entry))
                                     .font(.system(size: iconsOnly ? 20 : 16, weight: .medium))
@@ -161,18 +170,99 @@ struct SideMenu: View {
 /// The rail: icons and the mark's badge while closed, the full menu (names, the brand lockup, Keep menu open) when it has the
 /// pointer, focus or a pin. The widths are the shell's (`size` closed, `open` open).
 struct RailMenu: View {
+    @EnvironmentObject private var model: AppModel
+    @EnvironmentObject private var center: SDUICenter
+    @Environment(\.palette) private var palette
     let closed: CGFloat
     let open: CGFloat
+    /// The width of a library's drawer beside the menu; 0 for a rail without one.
+    var drawerWidth: CGFloat = 0
     @AppStorage("frame.railPinned") private var pinned = false
     @State private var hovering = false
+    @State private var drawer: SDUINavItem?
 
     var body: some View {
-        let isOpen = pinned || hovering
-        SideMenu(width: isOpen ? open : closed, iconsOnly: !isOpen, pinned: $pinned)
-            .animation(.easeOut(duration: DesignTokens.Motion.screen / 1000), value: isOpen)
-            .onHover { hovering = $0 }
-            // The options key opens it for a keyboard.
-            .background { Button("") { hovering.toggle() }.keyboardShortcut(".", modifiers: []).opacity(0).accessibilityHidden(true) }
+        let isOpen = pinned || hovering || drawer != nil
+        HStack(spacing: 0) {
+            SideMenu(width: isOpen ? open : closed, iconsOnly: !isOpen, pinned: $pinned, drawerEntry: drawerWidth > 0 ? $drawer : nil)
+            if let entry = drawer, let content = entry.drawer, drawerWidth > 0 {
+                RailDrawer(entry: entry, content: content, width: drawerWidth) { drawer = nil }
+                    .transition(.move(edge: .leading).combined(with: .opacity))
+            }
+        }
+        .animation(.easeOut(duration: DesignTokens.Motion.screen / 1000), value: isOpen)
+        .animation(.easeOut(duration: DesignTokens.Motion.screen / 1000), value: drawer?.id)
+        .onHover { hovering = $0 }
+        // The options key opens it for a keyboard; Escape (Back) closes the drawer, then the rail.
+        .background {
+            Group {
+                Button("") { hovering.toggle() }.keyboardShortcut(".", modifiers: [])
+                Button("") { if drawer != nil { drawer = nil } else { hovering = false; pinned = false } }.keyboardShortcut(.escape, modifiers: [])
+            }
+            .opacity(0).accessibilityHidden(true)
+        }
+        .accessibilityElement(children: .contain)
+    }
+}
+
+/// A library's drawer: its name large with its icon and item count, then its views (Recently added, Genres, Collections, All ...).
+struct RailDrawer: View {
+    @EnvironmentObject private var model: AppModel
+    @EnvironmentObject private var center: SDUICenter
+    @Environment(\.palette) private var palette
+    let entry: SDUINavItem
+    let content: SDUINavDrawer
+    let width: CGFloat
+    let close: () -> Void
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: Tokens.Space.s3) {
+            HStack(spacing: Tokens.Space.s3) {
+                Image(systemName: SDUIIcon.symbol(content.icon, or: "folder")).font(.system(size: 22, weight: .semibold)).foregroundStyle(palette.accentText)
+                    .accessibilityHidden(true)
+                VStack(alignment: .leading, spacing: 0) {
+                    Text(PlainWords.clean(content.title, limit: 40)).font(.system(size: 22, weight: .bold)).foregroundStyle(palette.text).lineLimit(1)
+                        .accessibilityAddTraits(.isHeader)
+                    if let count = content.count, count > 0 {
+                        Text(count == 1 ? "1 title" : "\(count) titles").font(.system(size: 13)).foregroundStyle(palette.textSecondary)
+                    }
+                }
+                Spacer(minLength: 0)
+                Button(action: close) { Image(systemName: "xmark") }.buttonStyle(.plain).foregroundStyle(palette.textSecondary)
+                    .accessibilityLabel("Close \(content.title)")
+            }
+            .padding(.top, Tokens.Space.s3)
+            ScrollView(.vertical, showsIndicators: false) {
+                VStack(alignment: .leading, spacing: 2) {
+                    ForEach(content.views) { view in
+                        Button {
+                            if let route = view.route { model.tab = .home; SDUIActor(model: model, center: center, store: nil).open(route: route) }
+                            close()
+                        } label: {
+                            HStack(spacing: Tokens.Space.s3) {
+                                Image(systemName: SDUIIcon.symbol(view.icon, or: "square")).frame(width: 24).accessibilityHidden(true)
+                                Text(view.label).lineLimit(1)
+                                Spacer(minLength: 0)
+                            }
+                            .font(.system(size: 15, weight: .medium))
+                            .foregroundStyle(palette.text)
+                            .padding(.horizontal, Tokens.Space.s3)
+                            .frame(minHeight: 44)
+                            .contentShape(Rectangle())
+                        }
+                        .buttonStyle(.plain)
+                        .accessibilityIdentifier("frame.drawer." + view.id)
+                    }
+                }
+            }
+        }
+        .padding(.horizontal, Tokens.Space.s3)
+        .frame(width: width)
+        .frame(maxHeight: .infinity, alignment: .top)
+        .background(palette.card.ignoresSafeArea())
+        .overlay(alignment: .trailing) { Rectangle().fill(palette.border).frame(width: 1).ignoresSafeArea() }
+        .accessibilityElement(children: .contain)
+        .accessibilityLabel(content.title)
     }
 }
 
