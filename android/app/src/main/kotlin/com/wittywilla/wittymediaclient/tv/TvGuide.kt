@@ -696,6 +696,13 @@ fun GuideScreen(nav: Nav) {
                         onFavourite = { current?.let { favourite(it) } }, onStep = { moveRow(spot.row + it) },
                         onRecord = { val c = current; val p = currentCell?.programmeAt(spot.at); if (c != null && p != null) record(c, p) },
                         onSaid = ::say,
+                        onFromStart = run {
+                            val c = current
+                            val p = currentCell?.programmeAt(spot.at)
+                            if (catchupOn && c != null && p != null && currentCell?.kind == GuideCell.Kind.Programme && CatchupRules.canWatchFromStart(c, p, now)) {
+                                { fromStart(c, p) }
+                            } else null
+                        },
                     )
                     GuideBar(nav, dress, store, from, now, today, onShift = { shift(it) }, onNow = ::goNow, onJump = { goAt(it) },
                         onDay = { dayOpen = true }, onSearch = { searchOpen = true }, onLook = { lookOpen = true },
