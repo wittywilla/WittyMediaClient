@@ -31,7 +31,7 @@ object SduiCardStyles {
         style("square", "square", "1/1", 1, 1, "title", "subtitle"),
         style("album", "square", "1/1", 1, 1, "title", "subtitle"),
         style("circle", "circle", "1/1", 2, 0, "title"),
-        style("person", "circle", "1/1", 1, 1, "title", "subtitle"),
+        style("person", "circle", "1/1", 1, 1, "title", "subtitle", "badges"),
         style("book", "poster", "2/3", 2, 1, "title", "subtitle", "progress"),
         style("game", "poster", "3/4", 1, 1, "title", "subtitle", "badges"),
         style("photo", "square", "1/1", 0, 0),

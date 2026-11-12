@@ -31,7 +31,7 @@ sealed interface SduiEffect {
     data class OpenControl(val control: String, val target: String) : SduiEffect
     data object Refresh : SduiEffect
     // One of the catalogue's commands that changes something on the server; the page is asked for again after.
-    data class Command(val spec: SduiCommandSpec, val item: String) : SduiEffect
+    data class Command(val spec: SduiCommandSpec, val item: String, val params: Map<String, String> = emptyMap()) : SduiEffect
     // An action of a type, or a command, this app doesn't know: it does nothing.
     data object Nothing : SduiEffect
 }
@@ -92,8 +92,11 @@ class SduiRouter(routes: List<SduiRouteSpec> = DEFAULT_ROUTES, commands: List<Sd
             "control.open" -> SduiEffect.OpenControl(action.params.str("control"), action.params.str("target"))
             "selectTab" -> action.params.str("tab").let { if (it.isEmpty()) SduiEffect.Nothing else SduiEffect.SelectTab(it) }
             "refresh" -> SduiEffect.Refresh
-            else -> commands[action.op]?.takeIf { it.path.isNotEmpty() && SduiCommands.request(it, action.item) != null }
-                ?.let { SduiEffect.Command(it, action.item) } ?: SduiEffect.Nothing
+            else -> {
+                val given = SduiCommands.given(action.params)
+                commands[action.op]?.takeIf { it.path.isNotEmpty() && SduiCommands.request(it, action.item, given) != null }
+                    ?.let { SduiEffect.Command(it, action.item, given) } ?: SduiEffect.Nothing
+            }
         }
         else -> SduiEffect.Nothing
     }
@@ -171,8 +174,42 @@ object SduiCommands {
 
     private const val SHOW_IDS_FROM = 16
 
-    fun request(spec: SduiCommandSpec, item: String): Request? {
+    // An action's params as text, for the command's own {name} values.
+    fun given(params: Map<String, kotlinx.serialization.json.JsonElement>): Map<String, String> =
+        params.mapNotNull { (k, v) -> (v as? kotlinx.serialization.json.JsonPrimitive)?.let { k to it.content } }.toMap()
+
+    private fun inPath(v: String) = java.net.URLEncoder.encode(v, "UTF-8").replace("+", "%20")
+    private fun inString(v: String) = v.replace("\\", "\\\\").replace("\"", "\\\"")
+
+    // The command's {name} values: in the path escaped for a URL, in the body escaped for a JSON string; an int takes the
+    // place of its quoted token ("{name}") as a number; one not given is an empty string, and a required one not given
+    // refuses the command.
+    private fun fill(spec: SduiCommandSpec, path: String, body: String, given: Map<String, String>): Pair<String, String>? {
+        var p = path
+        var b = body
+        for (param in spec.params) {
+            val v = given[param.name].orEmpty()
+            if (v.isEmpty() && param.required) return null
+            if (param.type == "int") {
+                val n = v.toLongOrNull()
+                if (v.isNotEmpty() && n == null) return null
+                b = b.replace("\"{${param.name}}\"", n?.toString() ?: "\"\"")
+                p = p.replace("{${param.name}}", n?.toString().orEmpty())
+            } else {
+                p = p.replace("{${param.name}}", inPath(v))
+                b = b.replace("{${param.name}}", inString(v))
+            }
+        }
+        return p to b
+    }
+
+    fun request(spec: SduiCommandSpec, item: String, given: Map<String, String> = emptyMap()): Request? {
         if (spec.path.isEmpty()) return null
+        if (spec.params.isNotEmpty()) {
+            val filled = fill(spec, spec.path, spec.body, given) ?: return null
+            val itemSpec = spec.copy(path = filled.first, body = filled.second, params = emptyList())
+            return if ("{item}" in itemSpec.path || "{item}" in itemSpec.body) request(itemSpec, item) else Request(itemSpec.method, itemSpec.path, itemSpec.body.takeIf { it.isNotEmpty() })
+        }
         if (serverRevision >= SHOW_IDS_FROM) {
             if (item.isEmpty() || item.any { it.isISOControl() }) return null
             val inPath = java.net.URLEncoder.encode(item, "UTF-8").replace("+", "%20")

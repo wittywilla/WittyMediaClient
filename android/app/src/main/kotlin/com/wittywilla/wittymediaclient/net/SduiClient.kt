@@ -252,8 +252,8 @@ class SduiClient(private val transport: SduiTransport, val device: SduiDevice, p
     }
 
     // Carries out one of the catalogue's commands for an item.
-    suspend fun command(spec: SduiCommandSpec, item: String) {
-        val request = SduiCommands.request(spec, item) ?: return
+    suspend fun command(spec: SduiCommandSpec, item: String, params: Map<String, String> = emptyMap()) {
+        val request = SduiCommands.request(spec, item, params) ?: return
         send(request.method, request.path, request.body)
     }
 

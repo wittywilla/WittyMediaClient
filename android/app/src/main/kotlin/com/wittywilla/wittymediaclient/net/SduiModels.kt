@@ -302,7 +302,14 @@ data class SduiRouteSpec(
 )
 
 @Serializable
-data class SduiCommandSpec(val op: String = "", val method: String = "", val path: String = "", val body: String = "")
+data class SduiCommandSpec(
+    val op: String = "", val method: String = "", val path: String = "", val body: String = "",
+    // Values beyond the item that a command takes from the action's params, filling {name} in the path and body.
+    val params: List<SduiCommandParam> = emptyList(),
+)
+
+@Serializable
+data class SduiCommandParam(val name: String = "", val type: String = "string", val required: Boolean = false)
 
 @Serializable
 data class SduiCardStyleSpec(

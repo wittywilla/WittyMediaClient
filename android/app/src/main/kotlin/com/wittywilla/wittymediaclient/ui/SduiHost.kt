@@ -313,7 +313,7 @@ fun SduiPageScreen(nav: Nav, page: String, params: Map<String, String>, top: Boo
             }
             is SduiEffect.Command -> scope.launch {
                 try {
-                    client.command(effect.spec, effect.item)
+                    client.command(effect.spec, effect.item, effect.params)
                     toast = when (effect.spec.op) {
                         "watchLater.add" -> "Added to Watch later"
                         "watched.set" -> "Marked as watched"
