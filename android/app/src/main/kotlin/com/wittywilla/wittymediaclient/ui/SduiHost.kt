@@ -230,6 +230,10 @@ fun SduiPageScreen(nav: Nav, page: String, params: Map<String, String>, top: Boo
         }
     }
 
+    // Something changed for every page (more screen time): asked again now.
+    val stamp = nav.pagesStamp
+    LaunchedEffect(stamp) { if (stamp > 0) refresh() }
+
     // The page says how long it is good for: asked again after that while it is on screen, and when the app comes back.
     val etag = model?.base?.meta?.etag
     val ttl = model?.base?.meta?.ttlSeconds ?: 0
