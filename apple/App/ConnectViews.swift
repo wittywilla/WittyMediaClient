@@ -43,6 +43,8 @@ struct ConnectView: View {
     @State private var showForm = false
     @State private var showJoin = false
     @State private var showManage = false
+    /// A server that hasn't been set up: its address, for the screen that says to finish in a browser.
+    @State private var notSetUp: String?
     @State private var found: [FoundServer] = []
     @State private var finder: ServerFinder?
     @State private var searchedLong = false
@@ -69,6 +71,9 @@ struct ConnectView: View {
             // Not there: this device isn't at home. The other way to it, if it has one.
             if reason == "unreachable", let away = await model.arriveFromAway(url) {
                 problem = away
+            } else if reason == "not-set-up" {
+                // Setup is web-only: the app doesn't connect until it is done, and says where to finish it.
+                notSetUp = url
             } else {
                 problem = reasonText(reason)
             }
@@ -268,7 +273,9 @@ struct ConnectView: View {
         // Every added server is listed as itself; one also found on the network isn't listed twice.
         let others = uniqued(model.recent)
         Group {
-            if showManage {
+            if let notSetUp {
+                SetupRequiredView(address: notSetUp, retry: { let a = notSetUp; self.notSetUp = nil; Task { await connect(a) } }, back: { self.notSetUp = nil })
+            } else if showManage {
                 ManageServersPanel(back: closeManage)
             } else if showJoin {
                 JoinAwayPanel(back: closeJoin)
@@ -282,7 +289,7 @@ struct ConnectView: View {
         .serverUndo()
         .focusRoot(scope)
         .onChange(of: spot) { focusChanged($0) }
-        .onRemoteBack(showManage ? { closeManage() } : showJoin ? { closeJoin() } : showForm ? { closeForm() } : nil)
+        .onRemoteBack(notSetUp != nil ? { notSetUp = nil } : showManage ? { closeManage() } : showJoin ? { closeJoin() } : showForm ? { closeForm() } : nil)
         .onAppear {
             if error.isEmpty { error = initialMessage }
             #if DEBUG
@@ -852,3 +859,32 @@ private struct TwoFactorKeyboard: View {
     }
 }
 #endif
+
+/// "This server isn't set up yet": first-run setup happens in a web browser only, and a server that hasn't finished it answers
+/// `setupRequired`. The app doesn't connect; it says where to finish, with a code a phone's camera can read.
+struct SetupRequiredView: View {
+    @Environment(\.palette) private var palette
+    let address: String
+    let retry: () -> Void
+    let back: () -> Void
+
+    var body: some View {
+        ZStack {
+            palette.background.ignoresSafeArea()
+            SignInGlow()
+            VStack(spacing: Tokens.Space.s6) {
+                SignInHeading(title: say("setupNeededTitle"), detail: say("setupNeededDetail"))
+                if let image = QRImage.make(for: address) { QRCard(image: image, caption: say("pairScan")) }
+                Text(address).font(.wmLabel).foregroundStyle(palette.accentText).multilineTextAlignment(.center)
+                    .accessibilityLabel("Finish setup in a web browser at \(address)")
+                HStack(spacing: Tokens.Space.s4) {
+                    Button(say("setupNeededRetry"), action: retry).action(.primary, tall: true)
+                    Button(say("back"), action: back).action(.secondary, tall: true)
+                }
+            }
+            .padding(Tokens.gutter)
+            .accessibilityElement(children: .contain)
+            .accessibilityIdentifier("connect.notSetUp")
+        }
+    }
+}
