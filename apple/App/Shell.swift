@@ -123,7 +123,7 @@ private struct TabRoot: View {
         #endif
         #if os(tvOS)
         case .libraries: LibrariesPage()
-        case .games: GamesTab()
+        case .games: GamesTab().moduleScope("wittyplay")
         case .guide: LiveTvTab()
         case .library(let id):
             if let library = model.libraries.first(where: { $0.id == id }) {
@@ -186,8 +186,8 @@ private struct TabRoot: View {
                     case .item(let id): ItemView(id: id).plainNavigation(overPicture: true)
                     // WittyPlay's own screens on every device: the Shelves home, which is a library's page with the
                     // strip and no Back, or a console's collection under its band, and a game's page over its picture.
-                    case .gameLibrary(let library, nil): GamesLibraryView(library: library, console: nil).noNavigationBar().id(library.id)
-                    case .gameLibrary(let library, let console): GamesLibraryView(library: library, console: console).plainNavigation(overPicture: true)
+                    case .gameLibrary(let library, nil): GamesLibraryView(library: library, console: nil).moduleScope("wittyplay").noNavigationBar().id(library.id)
+                    case .gameLibrary(let library, let console): GamesLibraryView(library: library, console: console).moduleScope("wittyplay").plainNavigation(overPicture: true)
                     case .game(let id): GameDetailView(id: id).plainNavigation(overPicture: true)
                     #if os(tvOS)
                     // A new identity for each game, so a second one gets a new player.
@@ -212,6 +212,9 @@ private struct TabRoot: View {
                     case .away: AwayView().plainNavigation()
                     case .servers: ManageServersView().plainNavigation()
                     case .mediaExtras: MediaSettingsView().plainNavigation()
+                    case .layout: LayoutSettingsView().plainNavigation()
+                    case .modules: ModulesSettingsView().plainNavigation()
+                    case .moduleSettings(let module): ModuleSettingsView(module: module).plainNavigation()
                     #if os(tvOS)
                     case .topMenu: TopMenuView().plainNavigation()
                     #else
@@ -278,10 +281,10 @@ struct LibraryScreen: View {
 
     var body: some View {
         if library.hasGameScreens {
-            GamesLibraryView(library: library, console: nil)
+            GamesLibraryView(library: library, console: nil).moduleScope("wittyplay")
         } else if library.hasListeningScreens {
             #if os(iOS) || os(visionOS)
-            MusicLibraryPage(library: library)
+            MusicLibraryPage(library: library).moduleScope("wittyaudio")
             #else
             ListeningLibraryView(library: library)
             #endif

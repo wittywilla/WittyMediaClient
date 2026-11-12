@@ -94,7 +94,7 @@ final class ProfileDesk: ObservableObject {
 
 /// A row with no icon: its words, a second line, and whatever it's set to at the end. The same height, hairline
 /// and focus as the icon rows in SettingsKit.
-private struct SettingRow<Trailing: View>: View {
+struct SettingRow<Trailing: View>: View {
     @Environment(\.palette) private var palette
     @Environment(\.metrics) private var metrics
     @Environment(\.displayScale) private var displayScale
@@ -125,7 +125,7 @@ private struct SettingRow<Trailing: View>: View {
 }
 
 /// On or off, changed by pressing the row: a finger and a remote both can.
-private struct SwitchRow: View {
+struct SwitchRow: View {
     @Environment(\.palette) private var palette
     let title: String
     var detail = ""
@@ -156,7 +156,7 @@ private struct SwitchRow: View {
 }
 
 /// One of a set: the chosen one has the tick.
-private struct ChoiceRow: View {
+struct ChoiceRow: View {
     @Environment(\.palette) private var palette
     let title: String
     var detail = ""

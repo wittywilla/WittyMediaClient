@@ -382,3 +382,25 @@ public enum ThemeMaker {
             adjusted: accent.lowercased() != accent0.lowercased())
     }
 }
+
+/// Each module's palette from `GET /theme` (`modules.<module>.tokens`): the whole palette with the module's own
+/// colours and the administrator's overrides over it. For what the app draws of a module outside a server-driven
+/// page, such as its own games or music screens; inside a page, nodes carry their scope's tokens already.
+public struct ThemeModules: Decodable, Equatable, Sendable {
+    public var tokens: [String: [String: String]]
+
+    public init(tokens: [String: [String: String]] = [:]) { self.tokens = tokens }
+
+    private struct Scope: Decodable { let tokens: [String: String]? }
+    enum CodingKeys: String, CodingKey { case modules }
+
+    public init(from decoder: Decoder) throws {
+        let box = try decoder.container(keyedBy: CodingKeys.self)
+        let scopes = (try? box.decodeIfPresent([String: Scope].self, forKey: .modules)) ?? [:]
+        tokens = scopes.compactMapValues { $0.tokens?.isEmpty == false ? $0.tokens : nil }
+    }
+}
+
+public extension WittyClient {
+    func themeModules() async throws -> ThemeModules { try await get("/theme") }
+}
