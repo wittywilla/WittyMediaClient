@@ -45,6 +45,7 @@ struct SDUICardView: View {
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(card.label)
         .accessibilityAddTraits(.isButton)
+        .accessibilityIdentifier("sdui.card." + card.id)
         #if os(iOS) || os(visionOS)
         .contextMenu { menu }
         #endif
