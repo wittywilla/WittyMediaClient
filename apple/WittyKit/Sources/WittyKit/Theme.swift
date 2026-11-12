@@ -499,7 +499,7 @@ public struct ResolvedTheme: Decodable, Equatable, Sendable {
 
     /// How one part of the server's name is coloured (the server's docs/THEMES.md, The server's name): the theme's text colour, its
     /// accent, any theme colour token, a fixed colour, or a gradient of two to four fixed stops across the part.
-    public struct BrandColour: Decodable, Equatable, Sendable {
+    public struct BrandColour: Codable, Equatable, Sendable {
         public var kind: String
         public var token: String?
         public var hex: String?
@@ -540,6 +540,13 @@ public struct ResolvedTheme: Decodable, Equatable, Sendable {
         public var imageUrl: String?
         public var shown: String?
 
+        public init(kind: String? = nil, text: String? = nil, imageUrl: String? = nil, shown: String? = nil) {
+            self.kind = kind
+            self.text = text
+            self.imageUrl = imageUrl
+            self.shown = shown
+        }
+
         /// The characters for a badge with no picture: what the server says, else the first letter of the name.
         public func characters(name: String) -> String {
             if let shown, !shown.isEmpty { return shown }
@@ -553,11 +560,25 @@ public struct ResolvedTheme: Decodable, Equatable, Sendable {
             public var accent: Bool?
             public var color: BrandColour?
             public var bold: Bool?
+
+            public init(text: String, accent: Bool? = nil, color: BrandColour? = nil, bold: Bool? = nil) {
+                self.text = text
+                self.accent = accent
+                self.color = color
+                self.bold = bold
+            }
         }
         public var parts: [Part]
         public var token: String?
         public var color: String?
         public var mark: Mark?
+
+        public init(parts: [Part], token: String? = nil, color: String? = nil, mark: Mark? = nil) {
+            self.parts = parts
+            self.token = token
+            self.color = color
+            self.mark = mark
+        }
     }
 
     public var id: String?
@@ -567,10 +588,12 @@ public struct ResolvedTheme: Decodable, Equatable, Sendable {
     public var type: ThemeType?
     public var brand: Brand?
     public var tv: TVColours?
+    /// The experience's effects, corners and type set with the theme's finish and scene (`look`).
+    public var experienceLook: ExperienceLook?
     public var variants: [String: Look]
     public var etag: String?
 
-    enum CodingKeys: String, CodingKey { case id, scheme, tokens, shape, type, brand, tv, variants, etag }
+    enum CodingKeys: String, CodingKey { case id, scheme, tokens, shape, type, brand, tv, variants, etag, look }
 
     public init(from decoder: Decoder) throws {
         let box = try decoder.container(keyedBy: CodingKeys.self)
@@ -581,6 +604,7 @@ public struct ResolvedTheme: Decodable, Equatable, Sendable {
         type = try? box.decodeIfPresent(ThemeType.self, forKey: .type)
         brand = try? box.decodeIfPresent(Brand.self, forKey: .brand)
         tv = try? box.decodeIfPresent(TVColours.self, forKey: .tv)
+        experienceLook = try? box.decodeIfPresent(ExperienceLook.self, forKey: .look)
         variants = (try? box.decodeIfPresent([String: Look].self, forKey: .variants)) ?? [:]
         etag = try? box.decodeIfPresent(String.self, forKey: .etag)
     }

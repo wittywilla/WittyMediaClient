@@ -15,7 +15,7 @@ struct CardPlate: View {
         switch badge {
         case .disc(let name):
             Text(name)
-                .font(.system(size: 11, weight: .bold))
+                .font(.wm(size: 11, weight: .bold))
                 .tracking(0.22)
                 .foregroundStyle(.white)
                 .padding(.horizontal, 6)
@@ -23,13 +23,13 @@ struct CardPlate: View {
                 .background(RoundedRectangle(cornerRadius: Tokens.Radius.xs, style: .continuous).fill(palette.scrim))
         case .seen:
             Image(systemName: "checkmark")
-                .font(.system(size: 10, weight: .heavy))
+                .font(.wm(size: 10, weight: .heavy))
                 .foregroundStyle(.white)
                 .frame(width: 20, height: 20)
                 .background(Circle().fill(palette.scrim))
         case .unwatched(let count):
             Text("\(count)")
-                .font(.system(size: 11, weight: .bold))
+                .font(.wm(size: 11, weight: .bold))
                 .tracking(0.22)
                 .foregroundStyle(palette.onAccent)
                 .padding(.horizontal, 6)

@@ -186,6 +186,8 @@ private struct TabRoot: View {
                     case .mediaExtras: MediaSettingsView().plainNavigation()
                     case .personalColours: PersonalColoursView().plainNavigation()
                     case .modules: ModulesSettingsView().plainNavigation()
+                    case .layoutEditor: LayoutEditorView().plainNavigation()
+                    case .brandEditor: BrandEditorView().plainNavigation()
                     case .moduleSettings(let module): ModuleSettingsView(module: module).plainNavigation()
                     #if os(tvOS)
                     case .topMenu: TopMenuView().plainNavigation()
@@ -308,14 +310,26 @@ private struct TopTabs: View {
             } else {
                 VStack(spacing: 0) {
                     if model.path.isEmpty {
+                        // Rows run under the page's edge so a lifted card isn't cut off; scrolled up, their titles reach the
+                        // bar. It sits above the page on a scrim of the page's colour, fading out below it, so they never
+                        // run under the pills unreadable.
                         TvTopBar(focus: $bar).ignoresSafeArea(.container, edges: .horizontal)
+                            .background(alignment: .top) { palette.background.opacity(0.96).ignoresSafeArea(edges: .top) }
+                            .overlay(alignment: .bottom) {
+                                LinearGradient(colors: [palette.background.opacity(0.96), palette.background.opacity(0)], startPoint: .top, endPoint: .bottom)
+                                    .frame(height: Tokens.Space.s10)
+                                    .offset(y: Tokens.Space.s10)
+                                    .allowsHitTesting(false)
+                                    .accessibilityHidden(true)
+                            }
+                            .zIndex(1)
                     }
                     page
                 }
             }
         }
         .focusScope(root)
-        .background(palette.background.ignoresSafeArea())
+        .pageGround()
         // Home's first look comes after the bar, which has focus meanwhile as the only thing there. Once, if nobody has
         // moved it, it goes on to Home's main action, when the page says it has arrived.
         .sduiOnChange(of: center.settles) { _ in

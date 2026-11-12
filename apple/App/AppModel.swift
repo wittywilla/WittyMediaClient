@@ -128,6 +128,8 @@ enum Route: Hashable {
     case modules
     /// This profile's own colours over the theme: see PersonalColoursView.swift.
     case personalColours
+    /// The layout editor (LayoutEditor.swift) and the server's name and mark editor, for administrators (BrandEditor.swift).
+    case layoutEditor, brandEditor
     case moduleSettings(String)
     /// Apple TV's choice of libraries for the top menu: see YouViews.swift.
     case topMenu
@@ -195,7 +197,7 @@ final class AppModel: ObservableObject {
     }
     /// The theme in use, translated from the server's tokens: docs/APP-DESIGN.md, Themes.
     @Published private(set) var appTheme: AppTheme = SharedData.appTheme("default") {
-        didSet { Tokens.Radius.theme = CGFloat(appTheme.radius) }
+        didSet { applyShape() }
     }
     /// Every theme the server has, once asked.
     @Published private(set) var themeList: ThemeList?
@@ -419,6 +421,7 @@ final class AppModel: ObservableObject {
                 // The theme's own look decides; only the automatic theme follows the device's light or dark setting.
                 let dark = resolved.scheme == "auto" ? systemDark : resolved.scheme != "light"
                 self.themeStyle = ThemeStyle(shape: resolved.shape(dark: dark), type: resolved.typefaces(dark: dark), brand: resolved.brand, colors: resolved.colors(dark: dark))
+                self.look = resolved.experienceLook ?? .plain
                 if following, self.themeChoice.isEmpty {
                     let colors = resolved.colors(dark: dark)
                     if !colors.isEmpty {
@@ -434,6 +437,18 @@ final class AppModel: ObservableObject {
             if let data = try? JSONEncoder().encode(tokens) { self.defaults.set(data, forKey: self.tokensKey(id)) }
             self.appTheme = ThemeTranslator.translate(tokens, preview: self.preview(id))
         }
+    }
+
+    /// The experience's effects, corners and type set with the theme's finish and scene (`look` in `GET /theme`): what every
+    /// surface is finished with (App/LookKit.swift). Plain until the server says.
+    @Published private(set) var look: ExperienceLook = .plain {
+        didSet { applyShape() }
+    }
+
+    /// The corners and the type set of the look in use: the theme's radius times the experience's multiple.
+    private func applyShape() {
+        Tokens.Radius.theme = CGFloat(appTheme.radius * look.radiusMultiple)
+        TypeSet.current = look.type
     }
 
     /// The resolved theme's corners, typefaces and the server's name, on a server that has them: what server-driven
@@ -879,9 +894,16 @@ final class AppModel: ObservableObject {
         themeList = nil
         customTheme = nil
         appTheme = SharedData.appTheme("default")
+        look = .plain
         brandName = ""
         brandLogo = ""
         stage = .connect(message: "")
+    }
+
+    /// After the name, its colours, the mark or the logo changed: asks the server how it looks now.
+    func refreshBrand() async {
+        guard let status = try? await client.status() else { return }
+        learn(status)
     }
 
     /// What a server says about how it looks: its theme, and the owner's name and logo for it.

@@ -87,7 +87,7 @@ struct SDUICustomiseView: View {
                 LoadingView().frame(maxWidth: .infinity, maxHeight: .infinity)
             }
         }
-        .background(palette.background.ignoresSafeArea())
+        .pageGround()
         .task { await load() }
     }
 

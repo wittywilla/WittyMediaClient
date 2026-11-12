@@ -56,6 +56,13 @@ Apple (Apple TV, iPhone, iPad, Apple Vision Pro, Mac)
     It includes the parts WebRTC builds in (BoringSSL, Opus, libvpx, libyuv,
     libsrtp, usrsctp, Abseil), each under its own permissive licence, listed
     with WebRTC's source.
+  Nunito                   OFL-1.1          https://github.com/googlefonts/nunito
+  Source Sans 3            OFL-1.1          https://github.com/adobe-fonts/source-sans
+  Source Serif 4           OFL-1.1          https://github.com/adobe-fonts/source-serif
+  JetBrains Mono           OFL-1.1          https://github.com/JetBrains/JetBrainsMono
+    The type sets of the looks (rounded, humanist, serif, mono), bundled as variable fonts
+    in apple/App/Fonts so a look never depends on what is installed. Each font's licence
+    text sits beside it (OFL-<name>.txt) and ships in the app.
   Otherwise only Apple's own system frameworks ship in the app.
   XcodeGen                 MIT              build tool only, not shipped
   Wittyconnect             AGPL-3.0-or-later   https://github.com/wittywilla/WittyMediaServer
