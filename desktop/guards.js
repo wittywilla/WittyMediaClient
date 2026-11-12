@@ -143,6 +143,9 @@ const validToken = (token) => typeof token === 'string' && token.length > 0 && t
 // A code to show for someone to approve, as the server writes it (BCDF-GHJK), and the secret
 // that collects the sign-in once they have. Nothing else gets as far as the screen or the server.
 const validPairCode = (code) => typeof code === 'string' && /^[A-Z0-9]{2,8}(-[A-Z0-9]{2,8}){0,2}$/.test(code)
+// Secure pairing (docs/CLIENT-API.md "With a QR code and a PIN"): a session's ID and the PIN it shows.
+const validPairSession = (id) => typeof id === 'string' && /^[0-9A-Za-z_-]{8,128}$/.test(id)
+const validPin = (pin) => typeof pin === 'string' && /^[0-9]{4,10}$/.test(pin)
 const validDeviceSecret = (secret) => typeof secret === 'string' && /^[0-9A-Za-z_-]{32,128}$/.test(secret)
 
 // A page of the server's, from a path the server gave, and only ever on that server.
@@ -168,6 +171,6 @@ function menuPoint(at, width, height) {
 
 module.exports = {
   PAGE_SCHEME, CONNECT_PAGE, BAR_PAGE, TV_MENU_PAGE, isConnectUrl, pageFile, navigation, outsideAddress, budget, downloadAllowed, readJson, whyFailed, isCertificateCode,
-  cleanText, cleanName, cleanMessage, validCode, validToken, validPairCode, validDeviceSecret, serverPage, pollSeconds, menuPoint,
+  cleanText, cleanName, cleanMessage, validCode, validToken, validPairCode, validPairSession, validPin, validDeviceSecret, serverPage, pollSeconds, menuPoint,
   readBytes, logoType, logoVersion, MAX_ANSWER_BYTES, MAX_NAME, MAX_LOGO_BYTES,
 }

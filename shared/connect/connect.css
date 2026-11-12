@@ -567,3 +567,7 @@ main.compact { padding-top: var(--sp-6); padding-bottom: var(--sp-6); }
 .links.manage .pref input { flex: none; width: 22px; height: 22px; margin: 2px 0 0; accent-color: var(--accent); }
 .links.manage .pref > span { display: grid; gap: 2px; }
 .links.manage .pref small { color: var(--fg-2); }
+/* Secure pairing's PIN, under the code: the same size, and when it changes. */
+.pair-pin { margin-top: var(--sp-3); }
+.pair-pin .pin-digits { font-variant-numeric: tabular-nums; letter-spacing: .08em; }
+.pair-pin .pin-left { display: block; margin-bottom: var(--sp-2); }

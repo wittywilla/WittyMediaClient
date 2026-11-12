@@ -5,6 +5,9 @@ What changed in WittyMediaClient, newest first. What changed before it had a rep
 
 ## Unreleased
 
+- **Desktop: secure pairing.** Signing this computer in by having a phone approve it now uses the server's secure
+  pairing where it has it (`pair-totp`): a QR code, the code, and a 6-digit PIN that changes every 30 seconds with a
+  countdown, which the person approving types. Against an older server it shows the code alone, as before.
 - **Desktop: saved servers first.** The server list puts the servers this computer has used on top, the last one used
   first and with focus, and the servers found on the network below them, so nothing found pushes them out of sight. A
   switch under the list, **Show saved servers first** (on unless turned off, kept on this computer), brings back the

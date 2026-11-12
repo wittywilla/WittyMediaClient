@@ -840,6 +840,28 @@ async function pairStart(url) {
   const found = await admitted(url, false)
   if (found.error) return { error: found.error }
   let res, answer
+  // Secure pairing first: a QR code and a PIN that changes every 30 seconds. An older server
+  // without it (404) gets the code alone, as before.
+  try {
+    const v2 = await postJson(found.at + API + '/auth/pair', { device: deviceName(), platform: OS_NAME })
+    if (v2.status !== 404 && v2.status !== 405) {
+      const data = await guards.readJson(v2)
+      const d = data && typeof data === 'object' ? data : {}
+      if (v2.ok && guards.validPairSession(d.sessionId) && guards.validDeviceSecret(d.deviceSecret) && guards.validPin(d.pin) && guards.validPairCode(d.code)) {
+        pairing = { url: found.url, at: found.at, secret: d.deviceSecret, session: d.sessionId }
+        return {
+          ok: true, code: d.code, intervalSec: guards.pollSeconds(d.intervalSec),
+          pin: d.pin, pinSec: pinSeconds(d.pinExpiresAt, d.period),
+          approveAt: guards.serverPage(found.url, d.approvePath, '/pair'),
+          scan: guards.serverPage(found.url, d.approveUrl, `/pair?code=${encodeURIComponent(d.code)}`),
+        }
+      }
+      log.warn('network', `Asking for a PIN to show was refused: ${v2.status}`, { where: found.url })
+      if (!v2.ok) return { message: guards.cleanMessage(d.error) }
+    } else v2.body?.cancel().catch(() => {})
+  } catch (err) {
+    log.noteError('info', 'network', 'Secure pairing could not be asked for; the code alone is used', err, { where: found.url })
+  }
   try {
     res = await postJson(found.at + API + '/pair/start', { device: deviceName(), platform: OS_NAME })
     answer = await guards.readJson(res)
@@ -860,13 +882,39 @@ async function pairStart(url) {
   }
 }
 
+// How long the PIN shown now lasts, in seconds, from when the server says it ends; this
+// computer's clock may differ, so it is kept within one period.
+function pinSeconds(expiresAt, period) {
+  const p = Number.isFinite(period) && period > 0 && period <= 120 ? period : 30
+  const left = Number.isFinite(expiresAt) ? Math.round(expiresAt - Date.now() / 1000) : p
+  return Math.min(p, Math.max(1, left))
+}
+
+// The PIN to show now, for a secure pairing.
+async function pairPin() {
+  const asked = pairing
+  if (!asked || !asked.session) return { error: 'expired' }
+  try {
+    const res = await fetchJson(`${asked.at}${API}/auth/pair/${encodeURIComponent(asked.session)}/pin`, { headers: { 'X-WMS-Pair-Secret': asked.secret } })
+    const d = await guards.readJson(res)
+    if (pairing !== asked) return { error: 'expired' }
+    if (!res.ok || !d || !guards.validPin(d.pin)) return { error: res.status === 410 || res.status === 404 ? 'expired' : 'lost' }
+    return { pin: d.pin, pinSec: pinSeconds(d.pinExpiresAt, d.period) }
+  } catch (err) {
+    log.noteError('info', 'network', 'Asking for the new PIN failed', err, { where: asked.url })
+    return { error: 'lost' }
+  }
+}
+
 // Has someone approved the code? Approved, the sign-in is kept as a typed code's is.
 async function pairPoll() {
   const asked = pairing
   if (!asked) return { status: 'expired' }
   let res, answer
   try {
-    res = await postJson(asked.at + API + '/pair/poll', { deviceSecret: asked.secret })
+    res = asked.session
+      ? await fetchJson(`${asked.at}${API}/auth/pair/${encodeURIComponent(asked.session)}`, { headers: { 'X-WMS-Pair-Secret': asked.secret } })
+      : await postJson(asked.at + API + '/pair/poll', { deviceSecret: asked.secret })
     answer = await guards.readJson(res)
   } catch (err) {
     log.noteError('info', 'network', 'Asking whether a code was approved failed', err, { where: asked.url })
@@ -1158,6 +1206,7 @@ ipcMain.handle('redeem', (e, url, code) => (fromConnect(e) ? redeem(String(url),
 ipcMain.handle('open-server', (e, request) => (fromConnect(e) ? openServer(request) : { error: 'invalid' }))
 ipcMain.handle('pair-start', (e, url) => (fromConnect(e) ? pairStart(String(url)) : { error: 'invalid' }))
 ipcMain.handle('pair-poll', (e) => (fromConnect(e) ? pairPoll() : { status: 'expired' }))
+ipcMain.handle('pair-pin', (e) => (fromConnect(e) ? pairPin() : { error: 'expired' }))
 ipcMain.on('pair-stop', (e) => { if (fromConnect(e)) pairing = null })
 ipcMain.handle('p2p-invite', (e, link) => (fromConnect(e) ? joinByInvite(String(link).slice(0, 4096)) : { error: 'invite' }))
 // Giving up on a server being reached from away: whatever comes of it isn't wanted now.

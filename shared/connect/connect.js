@@ -724,7 +724,34 @@
     const usePassword = button(S.usePassword, () => enter({ url: server.url, name: server.name }), { kind: 'quiet' })
     const links = el('div', { className: 'links' }, button(S.codeTitle, () => codeScreen(server), { kind: 'quiet' }), usePassword,
       button(S.changeServer, () => listScreen(), { kind: 'quiet' }))
-    const codeShown = (on) => { hint.hidden = where.hidden = code.hidden = qr.hidden = !on }
+    // Secure pairing: the PIN shown now, as large as the code, and when it changes.
+    const pinShown = el('span', { className: 'pin-digits', 'aria-hidden': 'true' })
+    const pinSpoken = el('span', { className: 'sr-only' })
+    const pinLeft = el('span', { className: 'caption pin-left' })
+    const pin = el('div', { className: 'pair-pin' }, el('p', { className: 'caption', textContent: S.pairPin }), el('p', { className: 'pair-code' }, pinShown, pinSpoken), pinLeft, el('p', { className: 'caption', textContent: S.pairPinHint }))
+    pin.hidden = true
+    let pinTimer = 0
+    const showPin = (mine, digits, seconds) => {
+      clearInterval(pinTimer)
+      pinShown.textContent = digits.length === 6 ? digits.slice(0, 3) + ' ' + digits.slice(3) : digits
+      pinSpoken.textContent = `${S.pairPin} ${digits.split('').join(' ')}`
+      let left = seconds
+      pinLeft.textContent = fill(S.pairPinChanges, { seconds: left })
+      pin.hidden = false
+      pinTimer = setInterval(async () => {
+        if (turn !== screen || mine !== round) { clearInterval(pinTimer); return }
+        left -= 1
+        if (left > 0) { pinLeft.textContent = fill(S.pairPinChanges, { seconds: left }); return }
+        clearInterval(pinTimer)
+        let r
+        try { r = await bridge.pairPin() } catch (e) { r = { error: 'lost' } }
+        if (turn !== screen || mine !== round) return
+        if (r.pin) showPin(mine, r.pin, r.pinSec || 30)
+        else if (r.error === 'expired') ended(S.pairExpired)
+        else setTimeout(() => showPin(mine, digits, 1), 2000) // ask again shortly
+      }, 1000)
+    }
+    const codeShown = (on) => { hint.hidden = where.hidden = code.hidden = qr.hidden = !on; if (!on) { pin.hidden = true; clearInterval(pinTimer) } }
 
     const ended = (words) => {
       codeShown(false)
@@ -768,6 +795,7 @@
       if (picturePart) picture.appendChild(picturePart)
       codeShown(true)
       qr.hidden = !picturePart
+      if (r.pin && bridge.pairPin) showPin(mine, r.pin, r.pinSec || 30)
       waitWords.textContent = S.pairWaiting
       poll(mine, r.intervalSec || 3)
     }
@@ -776,12 +804,13 @@
       back: () => codeScreen(server),
       className: 'compact',
       lockup: lockup(server),
-      words: [el('h1', { textContent: S.pairTitle }), hint, where, code, said.node],
+      words: [el('h1', { textContent: S.pairTitle }), hint, where, code, pin, said.node],
       actions: [qr, waiting, again, links],
       focus: usePassword,
     })
     onLeave = () => {
       round++
+      clearInterval(pinTimer)
       if (bridge.pairStop) bridge.pairStop()
     }
     begin()
