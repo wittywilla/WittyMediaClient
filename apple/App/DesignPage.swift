@@ -452,7 +452,10 @@ struct DesignCard: View {
     var body: some View {
         Button(action: action) {
             VStack(alignment: .leading, spacing: 2) {
-                if card.swatches.count >= 3 {
+                if let wire = card.wire {
+                    // A look: its layout as a wireframe in its theme's colours.
+                    LayoutThumb(wire: wire, swatches: card.swatches).padding(.bottom, 4)
+                } else if card.swatches.count >= 3 {
                     HStack(spacing: 3) {
                         RoundedRectangle(cornerRadius: 5).fill(colour(card.swatches[0])).frame(maxWidth: .infinity)
                         RoundedRectangle(cornerRadius: 5).fill(colour(card.swatches[1])).frame(maxWidth: .infinity)

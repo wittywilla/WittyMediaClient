@@ -38,6 +38,12 @@ final class AppearanceModel: ObservableObject {
     }
 
     /// The themes on offer, with the colours to draw a swatch: the server's list, or the built-in ones before it answers.
+    #if os(tvOS)
+    static let isTV = true
+    #else
+    static let isTV = false
+    #endif
+
     static func themes(_ list: ThemeList?) -> [AppearancePage.ThemeChoice] {
         if let themes = list?.themes, !themes.isEmpty {
             // The canvas's order: the built-in themes as drawn, then the person's own imports by name.
@@ -67,7 +73,7 @@ final class AppearanceModel: ObservableObject {
         return AppearancePage.Inputs(catalogue: catalogue, state: state, look: model.requiredLook.map { merged($0) } ?? look,
                                      themes: Self.themes(model.themeList), chosenTheme: model.themeChoice,
                                      pendingExperience: pendingExperience, pendingTheme: pendingTheme, canPickFile: mayImport,
-                                     server: model.client.base, profile: model.user?.shownName ?? "", problem: message)
+                                     server: model.client.base, profile: model.user?.shownName ?? "", tv: Self.isTV, problem: message)
     }
 
     private func merged(_ fresh: LookState) -> LookState {
@@ -373,7 +379,7 @@ struct LookPolicyView: View {
             .accessibilityIdentifier("look-policy")
             .task { await load() }
             .sheet(item: $choosing) { pick in
-                DesignSpecPage(spec: LookPolicy.picker(who: pick.who, current: choosing?.draft ?? pick.draft, looks: catalogue.experiences, themes: themes),
+                DesignSpecPage(spec: LookPolicy.picker(who: pick.who, current: choosing?.draft ?? pick.draft, tv: AppearanceModel.isTV, looks: catalogue.experiences, themes: themes),
                                onPress: { id in
                                    switch id {
                                    case "done": keep(choosing ?? pick)

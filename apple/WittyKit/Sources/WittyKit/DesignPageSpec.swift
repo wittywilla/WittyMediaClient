@@ -107,13 +107,17 @@ public struct DesignPageSpec: Codable, Equatable, Sendable {
         public var on: Bool
         /// Background, second background and accent; empty for none.
         public var swatches: [String]
+        /// The wireframe of a look's layout (the server's `wire` of the experience), drawn in the swatches' colours instead of the three swatches (`LayoutThumb`).
+        public var wire: LayoutWire?
 
-        public init(id: String = "", title: String, subtitle: String = "", on: Bool = false, swatches: [String] = []) {
+        public init(id: String = "", title: String, subtitle: String = "", on: Bool = false, swatches: [String] = [],
+                    wire: LayoutWire? = nil) {
             self.id = id.isEmpty ? DesignPageSpec.slug(title) : id
             self.title = title
             self.subtitle = subtitle
             self.on = on
             self.swatches = swatches
+            self.wire = wire
         }
     }
 
@@ -278,14 +282,15 @@ extension DesignPageSpec.Chip {
 }
 
 extension DesignPageSpec.Card {
-    private enum Keys: String, CodingKey { case id, title, subtitle, on, swatches }
+    private enum Keys: String, CodingKey { case id, title, subtitle, on, swatches, wire }
 
     public init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: Keys.self)
         self.init(id: try c.decodeIfPresent(String.self, forKey: .id) ?? "", title: try c.decode(String.self, forKey: .title),
                   subtitle: try c.decodeIfPresent(String.self, forKey: .subtitle) ?? "",
                   on: try c.decodeIfPresent(Bool.self, forKey: .on) ?? false,
-                  swatches: try c.decodeIfPresent([String].self, forKey: .swatches) ?? [])
+                  swatches: try c.decodeIfPresent([String].self, forKey: .swatches) ?? [],
+                  wire: try? c.decodeIfPresent(LayoutWire.self, forKey: .wire))
     }
 }
 
