@@ -110,7 +110,7 @@ object SduiRows {
                     // Only the chosen tab was sent with anything in it.
                     view.children.forEach { tab -> tab.children.forEach { add(it, tab) } }
                 }
-                (view.type == "Stack" || view.type == "Tab" || view.type == "NativeView") && view.props.str("direction") != "row" && view.children.any { it.type in LONG } ->
+                (view.type == "Stack" || view.type == "Tab" || view.type == "NativeView") && !view.node.type.equals("Form") && view.props.str("direction") != "row" && view.children.any { it.type in LONG } ->
                     view.children.forEach { add(it, view) }
                 else -> out += SduiRow.Block(view, parent, first)
             }

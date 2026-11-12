@@ -37,6 +37,11 @@ import coil3.request.ImageRequest
 import coil3.size.Precision
 import com.wittywilla.wittymediaclient.net.SduiAction
 import com.wittywilla.wittymediaclient.net.SduiCardStyles
+import com.wittywilla.wittymediaclient.net.SduiFocusRules
+import com.wittywilla.wittymediaclient.net.SduiItemActions
+import com.wittywilla.wittymediaclient.net.SduiPresence
+import com.wittywilla.wittymediaclient.net.strings
+import androidx.compose.ui.graphics.graphicsLayer
 import com.wittywilla.wittymediaclient.net.SduiImage
 import com.wittywilla.wittymediaclient.net.SduiView
 import com.wittywilla.wittymediaclient.net.aspectOf
@@ -141,7 +146,7 @@ private val WATCHABLE = setOf("movie", "episode", "video")
 
 // One card. `parent` is the row or grid it is in, which says how big its picture is and whether titles are shown.
 @Composable
-fun SduiCard(view: SduiView, parent: SduiView?, width: Dp, modifier: Modifier = Modifier) {
+fun SduiCard(view: SduiView, parent: SduiView?, width: Dp, modifier: Modifier = Modifier, grow: SduiGrow? = null) {
     val env = LocalSdui.current
     val p = view.props
     val known = SduiCardStyles.named(p.str("style"))
@@ -161,13 +166,25 @@ fun SduiCard(view: SduiView, parent: SduiView?, width: Dp, modifier: Modifier = 
             ?: when (shape) { "landscape" -> 16f / 9f; "square", "circle" -> 1f; else -> 2f / 3f }
         val round = shape == "circle"
         val corner: Shape = if (round) CircleShape else RoundedCornerShape(env.pt(CARD_RADIUS))
-        val focusing = view.node.focus != null || view.node.action != null
+        // A card with no action is a stop for focus only when the page's focus plan says so or its row says `focusable` (a friend).
+        val focusing = SduiFocusRules.focusable(view)
+        val pick = SduiItemActions.select(view)
         var menu by remember { mutableStateOf(false) }
         val choices = remember(view) { if (env.tv) emptyList() else cardChoices(view) }
         val tile = style == "tile"
-        Box(modifier.width(width)) {
+        val reduce = LocalReduceMotion.current || env.layout.reducedMotion
+        val scale by androidx.compose.animation.core.animateFloatAsState(
+            if (grow != null && grow.selected && !reduce) grow.scale else 1f, if (reduce) androidx.compose.animation.core.snap() else androidx.compose.animation.core.tween(180), label = "grow",
+        )
+        // The focused card grows from its leading edge and the cards after it step aside by what it gained.
+        val aside = if (grow == null) 0.dp else width * (scale - 1f)
+        val ringed = grow != null && grow.selected && reduce
+        Box(
+            modifier.padding(end = aside).width(width).graphicsLayer { scaleX = scale; scaleY = scale; transformOrigin = androidx.compose.ui.graphics.TransformOrigin(0f, 0f) }
+                .then(if (grow == null) Modifier else Modifier.sduiSelects(grow, view.id)).sduiPadKeys(view),
+        ) {
             Pressable(
-                { env.act(view.node.action) }, Modifier.width(width), shape = if (round) RoundedCornerShape(env.pt(CARD_RADIUS)) else corner, label = view.label,
+                { if (grow != null && grow.tapSelects && !grow.selected) grow.onSelect() else env.act(pick) }, Modifier.width(width).then(if (ringed) Modifier.border(env.pt(3), scheme.primary, corner) else Modifier), shape = if (round) RoundedCornerShape(env.pt(CARD_RADIUS)) else corner, label = view.label,
                 focusKey = view.id.takeIf { env.tv }, requestFocus = env.tv && view.id == env.screen.focus.default, enabled = focusing,
                 pressScale = 0.975f, disabledAlpha = 1f, ring = env.tv, clip = false,
                 onLongClick = if (choices.size > 1) ({ menu = true }) else null, longClickLabel = "More",
@@ -200,7 +217,10 @@ fun SduiCard(view: SduiView, parent: SduiView?, width: Dp, modifier: Modifier = 
                             }
                         }
                         val edge = env.pt(if (env.tv) 14 else 8)
-                        view.text["badges"]?.let { Plate(it, Modifier.align(Alignment.TopStart).padding(edge)) }
+                        // A person's badge is their presence: a dot on the avatar in the style's tone, the same on every app.
+                        val presence = if (style == "person") SduiPresence.tone(style, p.strings("badges")) else ""
+                        if (presence.isNotEmpty()) PresenceDot(presence, Modifier.align(Alignment.BottomEnd).padding(edge / 2))
+                        else view.text["badges"]?.let { Plate(it, Modifier.align(Alignment.TopStart).padding(edge)) }
                         view.text["number"]?.let { Plate(it, Modifier.align(Alignment.TopStart).padding(edge)) }
                         view.text["unwatched"]?.let { Plate(it, Modifier.align(Alignment.TopEnd).padding(edge), scheme.primary, scheme.onPrimary) }
                         if ("watched" in view.shows) Box(Modifier.align(Alignment.TopEnd).padding(edge).size(env.pt(if (env.tv) 34 else 20)).clip(CircleShape).background(extra.scrim.copy(alpha = 0.68f)), contentAlignment = Alignment.Center) {
