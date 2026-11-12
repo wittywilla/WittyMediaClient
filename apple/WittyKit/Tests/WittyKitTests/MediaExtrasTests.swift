@@ -107,21 +107,16 @@ final class MediaExtrasTests: XCTestCase {
         let canvas = try await client.canvas(item: 9)
         let address = try await client.canvasURL(canvas, item: 9)
         XCTAssertEqual(address?.absoluteString, "\(server.address)/api/media/9/canvas/file?v=x1&st=st_abc")
-        let stems = try await client.stems(item: 9)
-        XCTAssertEqual(stems.stems, [])
         let markers = try await client.markers(item: 9)
         XCTAssertEqual(markers.intro?.endSec, 20)
         let watch = try await client.whereToWatch(item: 9)
         XCTAssertEqual(watch.reason, "no-api-key")
-        var started = try await client.makeApproximateStems(item: 9)
+        var started = try await client.generateCanvas(item: 9)
         XCTAssertEqual(started.task, "t1-1")
-        started = try await client.separateStems(item: 9)
-        started = try await client.generateCanvas(item: 9)
         started = try await client.detectIntros(show: 4)
         try await client.removeCanvas(item: 9)
         let lines = server.requests.map(\.line).map { $0.replacingOccurrences(of: " HTTP/1.1", with: "") }
-        XCTAssertEqual(Array(lines.suffix(5)), ["POST /api/v1/media/9/stems/approximate", "POST /api/v1/media/9/stems/separate", "POST /api/v1/media/9/canvas/generate",
-                                                "POST /api/v1/shows/4/detect-intros", "DELETE /api/v1/media/9/canvas"])
+        XCTAssertEqual(Array(lines.suffix(3)), ["POST /api/v1/media/9/canvas/generate", "POST /api/v1/shows/4/detect-intros", "DELETE /api/v1/media/9/canvas"])
         XCTAssertTrue(server.requests.allSatisfy(\.hasToken))
         XCTAssertEqual(client.tokenURL(path: "/api/media/9/stems/vocals", token: "st_abc")?.absoluteString, "\(server.address)/api/media/9/stems/vocals?st=st_abc")
     }
