@@ -247,31 +247,28 @@ struct ConnectView: View {
     /// a code to type in on a phone, or an address, the first focused.
     private func remoteWays(_ none: Bool) -> some View {
         ConnectAnywherePanel {
-            if PeerLibrary.available {
-                #if os(tvOS)
-                Button { showJoin = true; error = "" } label: { Label("Join with a link or code", systemImage: "link") }
-                    .action(primary: true, wide: true)
-                    .focused($spot, equals: .joinAway)
-                    .firstFocus(in: scope, when: none)
-                    .accessibilityIdentifier("connect.join")
-                #else
-                Button { openForm(invite: true) } label: { Label("Join with a link or code", systemImage: "link") }
-                    .action(primary: true, wide: true)
-                    .focused($spot, equals: .joinAway)
-                    .accessibilityIdentifier("connect.join")
-                #if os(iOS)
-                if CameraAccess.exists {
-                    Button { scanning = true } label: { Label("Scan a QR code", systemImage: "qrcode.viewfinder") }
-                        .action(wide: true)
-                        .accessibilityIdentifier("connect.scan")
-                }
-                #endif
-                #endif
-            }
+            // Always shown, so the way in is never hidden: a copy built without peer to peer says so when it's chosen.
+            #if os(tvOS)
+            Button { showJoin = true; error = "" } label: { Label("Join with a link or code", systemImage: "link") }
+                .action(primary: true, wide: true)
+                .focused($spot, equals: .joinAway)
+                .firstFocus(in: scope, when: none)
+                .accessibilityIdentifier("connect.join")
+            #else
+            Button { openForm(invite: true) } label: { Label("Join with a link or code", systemImage: "link") }
+                .action(primary: true, wide: true)
+                .focused($spot, equals: .joinAway)
+                .accessibilityIdentifier("connect.join")
+            #if os(iOS)
+            // Without a camera (a simulator, say) the sheet says so and points to pasting the link.
+            Button { scanning = true } label: { Label("Scan a QR code", systemImage: "qrcode.viewfinder") }
+                .action(wide: true)
+                .accessibilityIdentifier("connect.scan")
+            #endif
+            #endif
             Button { openForm(invite: false) } label: { Label(say("enterAddress"), systemImage: "keyboard") }
-                .action(primary: !PeerLibrary.available, wide: true)
+                .action(wide: true)
                 .focused($spot, equals: .enterAddress)
-                .firstFocus(in: scope, when: none && !PeerLibrary.available)
                 .accessibilityIdentifier("connect.address")
         }
     }
@@ -322,7 +319,9 @@ struct ConnectView: View {
         DesignPage(eyebrow: formForInvite ? "Connect to a remote server" : "Welcome",
                    title: formForInvite ? "Join with a link or code" : say("addressTitle"),
                    lead: formForInvite
-                       ? "Paste the invite link your server’s owner sent you. It works once, for a short time, and connects peer to peer from anywhere."
+                       ? (PeerLibrary.available
+                           ? "Paste the invite link your server’s owner sent you. It works once, for a short time, and connects peer to peer from anywhere."
+                           : "This copy of WittyMediaClient was built without peer to peer, so an invite can’t be used here. Enter your server’s address instead, or install a copy built with it.")
                        : say("addressHint") + (PeerLibrary.available ? " " + say("inviteHint") : ""),
                    identifier: "connect.form") {
             DesignSection(title: "") {
