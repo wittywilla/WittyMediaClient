@@ -83,7 +83,7 @@ final class SDUITests: XCTestCase {
     func testTheCatalogueKeepsItsOwnTablesWhereTheServersAreMissing() throws {
         let catalog = try JSONDecoder().decode(SDUICatalog.self, from: Data(#"{"revision":3,"routes":[{"pattern":"/x/{id}","page":"{id}"},7],"components":[{"type":"Page"}]}"#.utf8))
         XCTAssertEqual(catalog.routes.count, 1)
-        XCTAssertEqual(catalog.cardStyles.count, 15)
+        XCTAssertEqual(catalog.cardStyles.count, 18)
         XCTAssertEqual(catalog.cardStyle("photo")?.shows, [])
         XCTAssertNotNil(catalog.command("watched.set"))
     }
