@@ -259,10 +259,17 @@ public struct VisualizerPrefs: Codable, Equatable {
     public var slow = false
     public var shuffleEvery = 0
     public var shufflePool = "mine"
+    /// Design 2: the colour family ("theme" follows the theme), how one effect gives way to the next, Calm mode,
+    /// and how much and how fast it moves (0...1).
+    public var colour = "theme"
+    public var change = "fade"
+    public var calm = false
+    public var intensity = 0.7
+    public var speed = 0.45
 
     public init() {}
 
-    private enum CodingKeys: String, CodingKey { case viz, style, slow, shuffleEvery, shufflePool }
+    private enum CodingKeys: String, CodingKey { case viz, style, slow, shuffleEvery, shufflePool, colour, change, calm, intensity, speed }
 
     public init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
@@ -273,10 +280,20 @@ public struct VisualizerPrefs: Codable, Equatable {
         let every = (try? c.decodeIfPresent(Int.self, forKey: .shuffleEvery)) ?? 0
         shuffleEvery = Self.shuffleChoices.contains(every) ? every : 0
         shufflePool = (try? c.decodeIfPresent(String.self, forKey: .shufflePool)) == "all" ? "all" : "mine"
+        let family = (try? c.decodeIfPresent(String.self, forKey: .colour)) ?? "theme"
+        colour = VisualizerEffects.colours.contains { $0.id == family } ? family : "theme"
+        let how = (try? c.decodeIfPresent(String.self, forKey: .change)) ?? "fade"
+        change = VisualizerEffects.changes.contains { $0.id == how } ? how : "fade"
+        calm = (try? c.decodeIfPresent(Bool.self, forKey: .calm)) == true
+        intensity = min(1, max(0, (try? c.decodeIfPresent(Double.self, forKey: .intensity)) ?? 0.7))
+        speed = min(1, max(0, (try? c.decodeIfPresent(Double.self, forKey: .speed)) ?? 0.45))
     }
 
     /// The style drawn here: one of the player's own, or Bars for an effect only the website's plugin draws.
     public var nativeStyle: String { Self.styles.contains { $0.id == style } ? style : "bars" }
+
+    /// The effect to draw: any of the 18 or the app's three; Skyline for an id this version doesn't know.
+    public var effect: VisualizerEffect { VisualizerEffects.named(style) ?? VisualizerEffects.all[0] }
 
     /// "Off: stay on this one", "Every 15 seconds", "Every minute", "Every 2 minutes".
     public static func everyWords(_ seconds: Int) -> String {

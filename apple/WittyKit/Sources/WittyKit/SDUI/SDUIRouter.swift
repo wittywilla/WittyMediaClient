@@ -100,20 +100,68 @@ public struct SDUIRouter: Equatable, Sendable {
         return resolve(route: entry.route ?? "")
     }
 
-    /// The request a command makes, from the catalogue: method, path under the server and body, with the item filled in.
+    /// The request a command makes, from the catalogue: method, path under the server and body, with the item and the
+    /// command's other values filled in. The item goes in as sent (`5`, `show-5`), URL-escaped in a path and JSON-escaped
+    /// in a body, where it stands inside a string; each declared parameter does the same from `params`, an `int` one
+    /// replacing its quoted token with the number, and one not given is an empty string.
     /// Nil for the commands that only ask for the page again (`selectTab`, `refresh`) and for ones this app doesn't know.
-    public static func request(for command: SDUICommand?, item: String) -> (method: String, path: String, body: Data?)? {
+    public static func request(for command: SDUICommand?, item: String, params: [String: String] = [:]) -> (method: String, path: String, body: Data?)? {
         guard let command, let method = command.method, let path = command.path, !method.isEmpty, path.hasPrefix("/api/") else { return nil }
-        // An item's ID goes into a path and a JSON body: only what an ID is made of may.
-        guard !item.isEmpty, item.count <= 128, item.allSatisfy({ $0.isASCII && ($0.isLetter || $0.isNumber || "_.:-~".contains($0)) }) else { return nil }
-        // A newer catalogue writes `"{item}"` inside a JSON string, which takes the ID as it is (a show's `show-5` too);
-        // an older one wrote it bare, where a number goes in as a number and anything else as a string.
-        let number = Int64(item)
-        let bare = number.map(String.init) ?? "\"\(item)\""
-        let body = command.body.map { template in
-            template.replacingOccurrences(of: "\"{item}\"", with: "\"\(item)\"").replacingOccurrences(of: "{item}", with: bare)
+        // An item's ID goes into a path and a JSON body: only what an ID is made of may. A command that puts it in its
+        // path needs one; one that only names it in the body (joining a room by its code) may have none.
+        let inPath = path.contains("{item}"), inBody = command.body?.contains("{item}") ?? false
+        if inPath || inBody {
+            let wellFormed = item.count <= 128 && item.allSatisfy { $0.isASCII && ($0.isLetter || $0.isNumber || "_.:-~".contains($0)) }
+            guard wellFormed, !item.isEmpty || !inPath else { return nil }
+            if item.isEmpty, command.body?.contains("\"{item}\"") != true { return nil }
         }
-        return (method.uppercased(), path.replacingOccurrences(of: "{item}", with: item), body.flatMap { $0.data(using: .utf8) })
+        let declared = command.params ?? []
+        func unreserved(_ text: String) -> String {
+            text.addingPercentEncoding(withAllowedCharacters: CharacterSet(charactersIn: "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-._~")) ?? ""
+        }
+        func jsonEscaped(_ text: String) -> String {
+            guard let data = try? JSONSerialization.data(withJSONObject: [text], options: [.fragmentsAllowed]),
+                  let whole = String(data: data, encoding: .utf8) else { return "" }
+            // ["…"]: the text inside the quotes.
+            return String(whole.dropFirst(2).dropLast(2))
+        }
+        // One pass: the tokens become markers first, so a value that looks like another token is never filled again.
+        var slots: [String] = []
+        func mark(_ template: String, inPath: Bool) -> String {
+            var out = template
+            func put(_ token: String, _ value: String) {
+                let marker = "\u{1}\(slots.count)\u{1}"
+                slots.append(value)
+                out = out.replacingOccurrences(of: token, with: marker)
+            }
+            // The item: a quoted token takes the ID as it is; a bare one (an older catalogue) a number as a number.
+            if !inPath {
+                put("\"{item}\"", "\"" + jsonEscaped(item) + "\"")
+                put("{item}", Int64(item).map(String.init) ?? "\"" + jsonEscaped(item) + "\"")
+            } else {
+                put("{item}", unreserved(item))
+            }
+            for p in declared {
+                let value = params[p.name] ?? ""
+                if inPath {
+                    put("{\(p.name)}", unreserved(value))
+                } else if p.type == "int" {
+                    put("\"{\(p.name)}\"", Int64(value).map(String.init) ?? "\"\"")
+                    put("{\(p.name)}", Int64(value).map(String.init) ?? "")
+                } else {
+                    put("{\(p.name)}", jsonEscaped(value))
+                }
+            }
+            return out
+        }
+        var filledPath = mark(path, inPath: true)
+        var filledBody = command.body.map { mark($0, inPath: false) }
+        for (index, value) in slots.enumerated() {
+            let marker = "\u{1}\(index)\u{1}"
+            filledPath = filledPath.replacingOccurrences(of: marker, with: value)
+            filledBody = filledBody?.replacingOccurrences(of: marker, with: value)
+        }
+        return (method.uppercased(), filledPath, filledBody.flatMap { $0.data(using: .utf8) })
     }
 
     static func isPageName(_ name: String) -> Bool {

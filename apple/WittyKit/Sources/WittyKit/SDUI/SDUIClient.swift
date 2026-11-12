@@ -136,8 +136,8 @@ public extension WittyClient {
     /// Carries out one of the catalogue's commands that is a request (`watchLater.add`, `watched.set`, `watched.clear`).
     /// False for the ones that only ask for the page again, and for one the catalogue doesn't have.
     @discardableResult
-    func sduiCommand(_ command: SDUICommand?, item: String) async throws -> Bool {
-        guard let request = SDUIRouter.request(for: command, item: item) else { return false }
+    func sduiCommand(_ command: SDUICommand?, item: String, params: [String: String] = [:]) async throws -> Bool {
+        guard let request = SDUIRouter.request(for: command, item: item, params: params) else { return false }
         // The catalogue writes the path from the server's root; this app's requests start under its API.
         let path: String
         if request.path.hasPrefix("/api/v1/") {

@@ -101,20 +101,42 @@ struct PersonalColoursView: View {
             .accessibilityHidden(true)
     }
 
-    @ViewBuilder private func row(_ token: String) -> some View {
+    /// One colour as a Design 2 row: what it's for, whose it is, its value (in the accent when it's yours) and a swatch.
+    private func face(_ token: String, _ sizes: DesignSizes) -> some View {
+        let mine = edits[token] != nil
+        let value = (edits[token] ?? seen[token] ?? "").uppercased()
+        return HStack(spacing: sizes.gap) {
+            VStack(alignment: .leading, spacing: 2) {
+                Text(PersonalColours.label(token)).font(.system(size: sizes.body, weight: .bold)).foregroundStyle(palette.text)
+                Text(mine ? "Yours" : "The theme’s").font(.system(size: sizes.tiny)).foregroundStyle(palette.text.opacity(0.7))
+            }
+            Spacer(minLength: sizes.gap)
+            Text(value).font(.system(size: sizes.small, weight: .bold).monospaced())
+                .foregroundStyle(mine ? palette.accentText : palette.textSecondary)
+            swatch(shown(token))
+        }
+    }
+
+    private func row(_ token: String) -> some View {
+        WithDesignSizes { sizes in rowBody(token, sizes) }
+    }
+
+    @ViewBuilder private func rowBody(_ token: String, _ sizes: DesignSizes) -> some View {
         let label = PersonalColours.label(token)
         let mine = edits[token] != nil
         #if os(tvOS)
         Button { open = open == token ? nil : token } label: {
-            SettingRow(title: label, detail: mine ? "Yours: \(edits[token] ?? "")" : "The theme's") { swatch(shown(token)) }
+            face(token, sizes)
+                .padding(.horizontal, sizes.gap * 1.6)
+                .frame(maxWidth: .infinity, minHeight: sizes.rowHeight)
         }
-        .rowStyle()
+        .buttonStyle(DesignRowButton(selected: open == token))
         .accessibilityLabel(label)
         .accessibilityValue(mine ? "Your colour, \(edits[token] ?? "")" : "The theme's colour")
         if open == token {
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: Tokens.Space.s3) {
-                    Button("The theme's") { edits[token] = nil; open = nil }.action(.quiet)
+                    DesignChip(title: "The theme’s") { edits[token] = nil; open = nil }
                     ForEach(PersonalColoursView.presets(for: token), id: \.self) { hex in
                         Button { edits[token] = hex; open = nil } label: { swatch(ThemeColour(hex: hex), size: 48) }
                             .buttonStyle(.card)
@@ -124,57 +146,63 @@ struct PersonalColoursView: View {
                 .padding(Tokens.Space.s3)
             }
             .unclippedScroll()
+            .remoteSection()
         }
         #else
-        SettingRow(title: label, detail: mine ? "Yours" : "The theme's") {
-            HStack(spacing: Tokens.Space.s3) {
-                if mine {
-                    Button("Reset") { edits[token] = nil }.action(.quiet).accessibilityLabel("Reset \(label)")
-                }
-                ColorPicker(label, selection: Binding(
-                    get: { shown(token).map { Color(.sRGB, red: $0.red, green: $0.green, blue: $0.blue, opacity: $0.alpha) } ?? .gray },
-                    set: { edits[token] = PersonalColoursView.hex($0) }
-                ), supportsOpacity: false)
-                .labelsHidden()
-                .accessibilityLabel(label)
+        HStack(spacing: sizes.gap) {
+            face(token, sizes)
+            if mine {
+                Button("Reset") { edits[token] = nil }.action(.quiet).accessibilityLabel("Reset \(label)")
             }
+            ColorPicker(label, selection: Binding(
+                get: { shown(token).map { Color(.sRGB, red: $0.red, green: $0.green, blue: $0.blue, opacity: $0.alpha) } ?? .gray },
+                set: { edits[token] = PersonalColoursView.hex($0) }
+            ), supportsOpacity: false)
+            .labelsHidden()
+            .accessibilityLabel(label)
         }
+        .padding(.horizontal, sizes.gap * 1.6)
+        .padding(.vertical, sizes.gap * 0.6)
+        .frame(maxWidth: .infinity, minHeight: sizes.rowHeight)
+        .designRowSurface()
+        .accessibilityIdentifier("personalColours.row." + token)
         #endif
     }
 
     var body: some View {
-        SettingsScreen(title: "Your colours", detail: "Colours of your own over the server's theme, for this profile on every device. Text has to stay easy to read: colours that don't are refused, with what's wrong.") {
+        DesignPage(eyebrow: "Settings · Appearance", title: "Your colours",
+                   lead: "Change any colour just for you. It follows you to every device.", identifier: "personalColours") {
             if loaded {
                 ForEach(PersonalColours.groups, id: \.title) { group in
-                    ListGroup(title: group.title) {
-                        ForEach(group.tokens, id: \.self) { row($0) }
+                    DesignSection(title: group.title) {
+                        DesignRows { ForEach(group.tokens, id: \.self) { row($0) } }
                     }
                 }
+                // The server's refusal, pair by pair: which colours, how far apart, and what they need.
                 if !refused.isEmpty {
-                    VStack(alignment: .leading, spacing: Tokens.Space.s1) {
-                        Text("Hard to read").font(.wmLabel).foregroundStyle(palette.danger).accessibilityAddTraits(.isHeader)
-                        ForEach(Array(refused.enumerated()), id: \.offset) { _, pair in
-                            Text(ContrastRefusal.words(pair)).font(.wmSecondary).foregroundStyle(palette.textSecondary)
-                        }
+                    DesignSection(title: "") {
+                        DesignNote(text: refused.map(ContrastRefusal.words).joined(separator: "\n") + "\nIt was not saved.", tone: true)
+                            .accessibilityIdentifier("personalColours.refused")
                     }
-                    .padding(Tokens.Space.s4)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .background(RoundedRectangle(cornerRadius: Tokens.Radius.md, style: .continuous).fill(palette.danger.opacity(0.11)))
-                    .accessibilityElement(children: .combine)
                 }
-                if !problem.isEmpty, refused.isEmpty { ProblemLine(problem) }
-                if !said.isEmpty { OutcomeLine(words: said).id(said) }
-                Button { save() } label: { BusyText("Save", busy: busy) }
-                    .action(.primary, wide: true, tall: true)
-                    .disabled(!changed)
-                    .accessibilityIdentifier("personalColours.save")
-                if !saved.tokens.isEmpty || !saved.modules.isEmpty {
-                    Button("Use the theme's colours") { resetAll() }.action(.secondary, wide: true)
-                }
+                if !problem.isEmpty, refused.isEmpty { DesignSection(title: "") { ProblemLine(problem) } }
+                if !said.isEmpty { DesignSection(title: "") { DesignNote(text: said).id(said) } }
             } else if problem.isEmpty {
                 ProgressView().frame(maxWidth: .infinity, minHeight: 80)
             } else {
-                ProblemLine(problem)
+                DesignSection(title: "") { ProblemLine(problem) }
+            }
+        } actions: {
+            if loaded {
+                Button { save() } label: { BusyText("Save", busy: busy) }
+                    .action(primary: true)
+                    .disabled(!changed)
+                    .accessibilityIdentifier("personalColours.save")
+                if !saved.tokens.isEmpty || !saved.modules.isEmpty || changed {
+                    Button("Reset") { if changed && saved.tokens.isEmpty && saved.modules.isEmpty { edits = [:] } else { resetAll() } }
+                        .action()
+                        .accessibilityIdentifier("personalColours.reset")
+                }
             }
         }
         .task { await load() }
