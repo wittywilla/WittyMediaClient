@@ -5,6 +5,10 @@ What changed in WittyMediaClient, newest first. What changed before it had a rep
 
 ## Unreleased
 
+- **Desktop: From away, on and off.** **Server → Stop Connecting from Away** on a Mac (in the Help menu on Windows and
+  Linux, and TV mode's menu) takes this computer off the server's list of devices that may reach it from away; reached
+  from away right now, it goes back to the server list. **Connect from Away Again** puts it back. The choice is kept
+  for that server. As the Apple apps' You → From away.
 - **The app has its icons, and a new logo.** The family's mark is now orbitw: a ring with its own coloured dot and
   what each app is inside. This app's is a screen on a stand carrying a small ring with the W and a mint dot; a
   server's is the W in its orbit with an amber dot, so the two are told apart at a glance. iPhone and iPad have an

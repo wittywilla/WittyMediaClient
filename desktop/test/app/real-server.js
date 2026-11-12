@@ -18,6 +18,8 @@ const SERVER = process.env.WMC_SERVER
 const USER = process.env.WMC_USER
 const PASSWORD = process.env.WMC_PASSWORD
 const SHOTS = process.env.WMC_SHOTS || ''
+// WMC_PAIR=1 signs in by secure pairing (a code and a PIN shown here) instead of a typed code.
+const PAIR = process.env.WMC_PAIR === '1'
 const TV = process.argv.includes('--tv')
 if (!SERVER || !USER || !PASSWORD) {
   console.error('Set WMC_SERVER, WMC_USER and WMC_PASSWORD.')
@@ -135,8 +137,22 @@ async function run() {
     await shot('03-code')
   })
 
-  await step('a real security code signs in', async () => {
-    for (const digit of await securityCode()) await press(digit)
+  await step(PAIR ? 'a code and PIN shown here, approved as from a phone, sign in' : 'a real security code signs in', async () => {
+    if (PAIR) {
+      // Secure pairing: the screen shows a code and a PIN that changes every 30 seconds; whoever
+      // approves types both, as the server's /pair page does.
+      await inPage(`Array.from(document.querySelectorAll('button')).find((b) => b.textContent === ${JSON.stringify('Show a code on this screen instead')}).click()`)
+      await until('a PIN', () => inPage("!!document.querySelector('.pair-pin:not([hidden]) .pin-digits') && document.querySelector('.pair-pin .pin-digits').textContent.length >= 6"))
+      const code = await inPage("document.querySelector('.pair-code [aria-hidden]').textContent")
+      const pin = (await inPage("document.querySelector('.pair-pin .pin-digits').textContent")).replace(/\D/g, '')
+      assert.ok(/New PIN in \d+ s/.test(await inPage("document.querySelector('.pin-left').textContent")), 'it says when the PIN changes')
+      await shot('03b-pin')
+      const headers = { 'Content-Type': 'application/json' }
+      const login = await fetch(`${SERVER}/api/login`, { method: 'POST', headers, body: JSON.stringify({ name: USER, password: PASSWORD }) })
+      const { token } = await login.json()
+      const ok = await fetch(`${SERVER}/api/pair/approve`, { method: 'POST', headers: { ...headers, Authorization: `Bearer ${token}` }, body: JSON.stringify({ code, pin, password: PASSWORD }) })
+      assert.ok(ok.ok, `the approval was refused: ${ok.status} ${await ok.text()}`)
+    } else for (const digit of await securityCode()) await press(digit)
     await until('the server page', () => page().getURL().startsWith(SERVER))
     await until('the page to draw', () => inPage("!!document.querySelector('.content, main')"))
     await wait(1500)

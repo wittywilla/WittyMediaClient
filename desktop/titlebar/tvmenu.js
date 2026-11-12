@@ -7,6 +7,7 @@
   document.getElementById('stay').addEventListener('click', close)
   document.getElementById('change').addEventListener('click', () => window.wittyBar.menu('change-server'))
   document.getElementById('manage').addEventListener('click', () => window.wittyBar.menu('manage-servers'))
+  document.getElementById('away').addEventListener('click', () => window.wittyBar.menu('away'))
   document.getElementById('quit').addEventListener('click', () => window.wittyBar.menu('quit'))
 
   document.addEventListener('keydown', (e) => {
@@ -23,7 +24,10 @@
     list[(here + step + list.length) % list.length].focus()
   })
 
-  window.wittyBar.onMenu(({ hasServer }) => {
+  window.wittyBar.onMenu(({ hasServer, away }) => {
+    const awayButton = document.getElementById('away')
+    awayButton.hidden = !away
+    awayButton.textContent = away === 'off' ? 'Connect from away again' : 'Stop connecting from away'
     document.getElementById('change').hidden = !hasServer
     document.getElementById('manage').hidden = !hasServer
     document.getElementById('stay').focus()

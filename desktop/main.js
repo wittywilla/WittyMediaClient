@@ -123,7 +123,9 @@ function copyDiagnostics() {
 function showHelpMenu(at) {
   const { width, height } = win.getContentBounds()
   Menu.buildFromTemplate([
-    ...(server ? [{ label: 'Manage servers…', click: manageServers }, { type: 'separator' }] : []),
+    ...(server ? [{ label: 'Manage servers…', click: manageServers }] : []),
+    ...(awayState() ? [{ label: awayState() === 'on' ? 'Stop connecting from away' : 'Connect from away again', click: () => (awayState() === 'on' ? stopAway() : startAway()) }] : []),
+    ...(server ? [{ type: 'separator' }] : []),
     { label: 'Open logs folder', click: openLogs },
     { label: 'Copy diagnostic info', click: copyDiagnostics },
     { type: 'separator' },
@@ -189,7 +191,7 @@ function openTvMenu() {
     tvMenu.webContents.on('will-navigate', (e) => e.preventDefault())
     watchContents(tvMenu.webContents, 'TV menu', () => closeTvMenu())
   }
-  const details = { hasServer: Boolean(server) }
+  const details = { hasServer: Boolean(server), away: awayState() }
   const show = () => {
     win.contentView.addChildView(tvMenu)
     layout()
@@ -454,7 +456,7 @@ async function learnP2P() {
   const program = helperProgram()
   if (!origin || !program) return
   const entry = viaTunnel(origin + '/') ? (saved.recent || []).find((s) => s.p2p && s.p2p.id === tunnel.id) : entryFor(origin)
-  if (!entry) return
+  if (!entry || entry.awayOff) return
   try {
     const to = await reportTarget()
     if (!to || to.origin !== origin) return // not signed in yet: asked again later
@@ -979,6 +981,45 @@ function backFromManaging() {
 // What the list shows about the server in use while managing: its address, or '' for none.
 const managedNow = () => (managing && saved.server === managing ? managing : '')
 
+// ---------------------------------------------------------------- from away, on and off
+
+// The server in use's entry, whichever way it is reached.
+const entryInUse = () => (tunnel && server === tunnel.origin ? (saved.recent || []).find((s) => s.p2p && s.p2p.id === tunnel.id) : entryFor(server))
+
+// awayState: whether the menu offers Stop or Connect again, or nothing (no helper, no server).
+function awayState() {
+  if (!server || !helperProgram()) return ''
+  const entry = entryInUse()
+  if (!entry) return ''
+  return entry.awayOff ? 'off' : 'on'
+}
+
+// Stop: this computer is taken off the server's list of devices that may reach it from away
+// and forgets how to; reached from away right now, that ends, back to the server list. As the
+// Apple apps' You, From away.
+async function stopAway() {
+  const entry = entryInUse()
+  if (!entry) return
+  const away = !!tunnel && server === tunnel.origin
+  const to = await reportTarget().catch(() => null)
+  entry.awayOff = true
+  saveState()
+  await forgetP2P(to)
+  log.info('p2p', 'Connecting from away was turned off for a server', { where: entry.url })
+  updateMenu()
+  if (away) { closeTunnel(); showConnect({ lost: '1' }) }
+}
+
+// Connect again: this computer goes back on the list now, if the server can be asked.
+async function startAway() {
+  const entry = entryInUse()
+  if (!entry) return
+  delete entry.awayOff
+  saveState()
+  updateMenu()
+  await learnP2P()
+}
+
 // What the last run was using, if it still is who it was.
 async function startUp() {
   await clearMergedAway()
@@ -1089,13 +1130,13 @@ function servePages() {
 // The Mac's menu bar, which is where the title bar's Help is on a Mac.
 function macMenu() {
   return Menu.buildFromTemplate(mac.menu({
-    connected: Boolean(server), changeServer: () => leaveServer(), manageServers, zoom: zoomPage, openLogs, copyDiagnostics,
+    connected: Boolean(server), changeServer: () => leaveServer(), manageServers, away: awayState(), stopAway, startAway, zoom: zoomPage, openLogs, copyDiagnostics,
   }))
 }
 
+// The menu bar follows the server in use: Change server, and From away's Stop or Connect again.
 function updateMenu() {
-  const item = MAC && Menu.getApplicationMenu() && Menu.getApplicationMenu().getMenuItemById('change-server')
-  if (item) item.enabled = Boolean(server)
+  if (MAC && Menu.getApplicationMenu()) Menu.setApplicationMenu(macMenu())
 }
 
 // In half steps, as Electron's own menu does. Nought is back to normal.
@@ -1263,6 +1304,7 @@ ipcMain.on('tv-menu', (e, action) => {
   if (action === 'close') closeTvMenu()
   else if (action === 'change-server') { closeTvMenu(); leaveServer() }
   else if (action === 'manage-servers') { closeTvMenu(); manageServers() }
+  else if (action === 'away') { closeTvMenu(); if (awayState() === 'on') stopAway(); else if (awayState() === 'off') startAway() }
   else if (action === 'quit') win.close()
 })
 
