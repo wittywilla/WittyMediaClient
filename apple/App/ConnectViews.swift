@@ -275,7 +275,17 @@ struct ConnectView: View {
             finder = nil
         }
         .task {
+            #if os(tvOS)
+            // Coming here from the server just removed, the question's going leaves the system with nothing to focus
+            // until the first press: the first card, or Enter an address, takes it.
+            try? await Task.sleep(nanoseconds: 700_000_000)
+            if spot == nil, !showForm, !showJoin, !showManage {
+                spot = found.first.map { .found($0.id) } ?? model.recent.first.map { .recent($0.url) } ?? .enterAddress
+            }
+            try? await Task.sleep(nanoseconds: 5_300_000_000)
+            #else
             try? await Task.sleep(nanoseconds: 6_000_000_000)
+            #endif
             searchedLong = true
         }
     }
