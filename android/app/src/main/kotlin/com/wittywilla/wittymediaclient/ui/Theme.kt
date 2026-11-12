@@ -115,6 +115,10 @@ data class Metrics(
     val minTarget: Dp,
     val focusRing: Dp = 3.dp,
     val focusScale: Float = 1f,
+    // How far a focused card lifts (up, in dp), and whether a control takes focus as a fill of the text colour
+    // rather than a ring (docs/plans/DESIGN-2.md, section 2: focus style ring-lift for media, fill for controls).
+    val focusLift: Dp = 0.dp,
+    val focusFill: Boolean = false,
     // dp in one of the page's units: 1 on a phone or tablet, 0.5 on a TV.
     val unit: Float = 1f,
     val tablet: Boolean = false,
@@ -143,10 +147,13 @@ val PhoneMetrics = Metrics(tv = false, gutter = Space.S4, edge = Space.S2, cardW
 val TabletMetrics = PhoneMetrics.copy(gutter = Space.S8, cardWidth = 148.dp, tablet = true)
 
 // A TV may crop its picture's edge, so the margins are wide: 90 units, as Apple TV's. Focus is a 4-unit
-// ring round the thing and 1.05 larger, as Apple TV draws it.
+// ring round the thing, 1.06 larger and lifted 6 units; all of it from the generated tokens (DesignTokens.kt), in
+// TV units of half a dp.
 val TvMetrics = Metrics(
-    tv = true, gutter = 45.dp, edge = 30.dp, cardWidth = 168.dp, minTarget = 24.dp,
-    focusRing = 2.dp, focusScale = 1.05f, unit = 0.5f,
+    tv = true, gutter = (DesignTokens.Tv.GUTTER * 0.5f).dp, edge = 30.dp, cardWidth = 168.dp,
+    minTarget = (DesignTokens.Tv.TARGET_MIN * 0.5f).dp,
+    focusRing = (DesignTokens.Tv.FOCUS_RING * 0.5f).dp, focusScale = DesignTokens.Tv.FOCUS_SCALE,
+    focusLift = (DesignTokens.Tv.FOCUS_LIFT * 0.5f).dp, focusFill = true, unit = 0.5f,
 )
 
 // Apple TV keeps everything inside the picture's safe area, 80 units in from the sides and 60 from the top
@@ -166,9 +173,14 @@ data class ExtraColours(
     val warn: Color = Color.Yellow,
     val accentPressed: Color = Color.Gray,
     val scrim: Color = Color.Black,
+    val brandAccent: Color = Color.White,
+    val focus: Color = Color.White,
 )
 
 val LocalExtraColours = compositionLocalOf { ExtraColours(Color.Gray, Color.White, Color.Green) }
+
+// The server's name in its coloured parts, for every frame that draws it (ui/Brand.kt).
+val LocalBrandParts = compositionLocalOf { emptyList<com.wittywilla.wittymediaclient.net.BrandPart>() }
 
 // When the system says to keep animation down, nothing moves unless the viewer moves it.
 val LocalReduceMotion = compositionLocalOf { false }
@@ -222,7 +234,7 @@ val Typography.secondary get() = bodyMedium
 val Typography.caption get() = labelSmall
 
 @Composable
-fun WittyTheme(theme: AppTheme, metrics: Metrics, reduceMotion: Boolean, words: Map<String, String>, content: @Composable () -> Unit) {
+fun WittyTheme(theme: AppTheme, metrics: Metrics, reduceMotion: Boolean, words: Map<String, String>, brandParts: List<com.wittywilla.wittymediaclient.net.BrandPart> = emptyList(), content: @Composable () -> Unit) {
     // A new theme cross-fades in 200 ms, or at once with Reduce Motion.
     @Composable
     fun shown(c: ThemeColour): Color =
@@ -252,12 +264,12 @@ fun WittyTheme(theme: AppTheme, metrics: Metrics, reduceMotion: Boolean, words: 
     }
     val extra = ExtraColours(
         shown(theme.textHint), shown(theme.accentText), shown(theme.ok), shown(theme.raised), control,
-        shown(theme.warn), shown(theme.accentPressed), shown(theme.scrim),
+        shown(theme.warn), shown(theme.accentPressed), shown(theme.scrim), shown(theme.brandAccent), shown(theme.focus),
     )
     val type = remember(metrics.tv) { typeScale(if (metrics.tv) TvType else PhoneType) }
     CompositionLocalProvider(
         LocalMetrics provides metrics.copy(themeRadius = theme.radius.toFloat()), LocalExtraColours provides extra,
-        LocalReduceMotion provides reduceMotion, LocalWords provides words, LocalAppTheme provides theme,
+        LocalReduceMotion provides reduceMotion, LocalWords provides words, LocalAppTheme provides theme, LocalBrandParts provides brandParts,
     ) {
         MaterialTheme(colorScheme = scheme, typography = type, content = content)
     }

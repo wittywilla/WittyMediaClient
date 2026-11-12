@@ -47,6 +47,7 @@ import com.wittywilla.wittymediaclient.data.entryFor
 import com.wittywilla.wittymediaclient.data.SavedServer
 import com.wittywilla.wittymediaclient.diag.ClientLog
 import com.wittywilla.wittymediaclient.net.Api
+import com.wittywilla.wittymediaclient.net.BrandPart
 import com.wittywilla.wittymediaclient.net.ApiError
 import com.wittywilla.wittymediaclient.net.SduiClient
 import com.wittywilla.wittymediaclient.net.SduiDevice
@@ -200,6 +201,8 @@ class Nav(val app: WittyApp, private val s: Map<String, String>) {
     var brandName by mutableStateOf("")
         private set
     var brandLogo by mutableStateOf("")
+        private set
+    var brandParts by mutableStateOf<List<BrandPart>>(emptyList())
         private set
 
     // Who is signed in, for the avatar on the You tab.
@@ -654,6 +657,7 @@ class Nav(val app: WittyApp, private val s: Map<String, String>) {
 
     private fun showBrand(base: String, status: ServerStatus) {
         brandName = status.brandName
+        brandParts = status.brandParts
         brandLogo = brandLogoUrl(base, status.brandLogo)
     }
 
@@ -669,6 +673,7 @@ class Nav(val app: WittyApp, private val s: Map<String, String>) {
 
     private fun forgetBrand() {
         brandName = ""
+        brandParts = emptyList()
         brandLogo = ""
     }
 
@@ -1203,7 +1208,7 @@ fun AppRoot(app: WittyApp) {
         onDispose { }
     }
 
-    WittyTheme(theme, metrics, reduceMotion, strings) {
+    WittyTheme(theme, metrics, reduceMotion, strings, nav.brandParts) {
         LaunchedEffect(Unit) { nav.startUp() }
         DisposableEffect(Unit) {
             app.onGuideKey = nav::openGuide

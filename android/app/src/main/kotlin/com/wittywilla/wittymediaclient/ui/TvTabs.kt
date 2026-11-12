@@ -61,6 +61,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import com.wittywilla.wittymediaclient.games.GamesNav
@@ -87,7 +88,7 @@ private val FIXED_TABS = listOf(Route.Home, Route.Libraries, Route.Games, Route.
 val TABS_BESIDE_HOME = setOf(Route.Libraries, Route.Games, Route.LiveTv, Route.Search, Route.Profile)
 
 // You's avatar with 12 above and below it, the same for every pill.
-private const val PILL_HEIGHT = 52
+private const val PILL_HEIGHT = DesignTokens.Tv.TOP_BAR_PILL
 
 // How far the pills that don't fit fade out, before the space in front of You.
 private const val FADE = 48
@@ -203,17 +204,24 @@ private fun TvTopBar(nav: Nav, bar: TvBar, libraries: List<Library>) {
     Row(
         Modifier
             .fillMaxWidth()
-            .padding(top = metrics.tvSafeEnds + metrics.u(24) - ring * 2, bottom = metrics.u(16) - ring * 2)
+            .padding(top = metrics.tvSafeEnds + metrics.u(DesignTokens.Tv.TOP_BAR_TOP) - ring * 2, bottom = metrics.u(16) - ring * 2)
             .focusProperties { onEnter = { bar.requester(nav.current).requestFocus() } }
             .onFocusChanged { bar.inBar = it.hasFocus }
             .focusGroup(),
         verticalAlignment = Alignment.CenterVertically,
     ) {
+        // The server's name, in its coloured parts, at the start of the bar in every theme and layout.
+        val extra = LocalExtraColours.current
+        Text(
+            brandAnnotated(nav.brandName, nav.brandParts, MaterialTheme.colorScheme.onBackground, extra.brandAccent),
+            style = MaterialTheme.typography.label.copy(fontWeight = FontWeight.Bold), maxLines = 1, overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.padding(start = metrics.gutter).widthIn(max = metrics.u(320)).semantics { heading() },
+        )
         Box(Modifier.weight(1f).onSizeChanged { viewport = it.width }.fadeEnd(metrics.u(FADE))) {
             Row(
                 Modifier
                     .horizontalScroll(scroll)
-                    .padding(start = metrics.gutter - ring, end = metrics.u(FADE) + ring)
+                    .padding(start = metrics.u(24) - ring, end = metrics.u(FADE) + ring)
                     .padding(vertical = ring),
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(metrics.u(16) - ring * 2),
@@ -304,7 +312,10 @@ private fun TvTabPill(nav: Nav, tab: TvTab, requester: FocusRequester, modifier:
         selected = chosen,
         focusKey = pillKey(tab.route),
         focusRequester = requester,
-    ) {
+        focusStyle = FocusStyle.Fill,
+    ) { active ->
+        // A focused pill is filled with the text colour and its words take the page's.
+        val shown = if (active && metrics.focusFill) scheme.background else ink
         Row(
             Modifier.height(metrics.u(PILL_HEIGHT)).padding(horizontal = metrics.u(24)),
             verticalAlignment = Alignment.CenterVertically,
@@ -313,11 +324,11 @@ private fun TvTabPill(nav: Nav, tab: TvTab, requester: FocusRequester, modifier:
             if (tab.icon != null) {
                 // Material Symbols leave more room round their shapes than SF Symbols, so the box is larger for the
                 // same size of icon as Apple TV's.
-                Icon(tab.icon, contentDescription = null, tint = ink, modifier = Modifier.size(metrics.u(BAR_ICON)))
-                Text(tab.title, color = ink, style = MaterialTheme.typography.label, maxLines = 1)
+                Icon(tab.icon, contentDescription = null, tint = shown, modifier = Modifier.size(metrics.u(BAR_ICON)))
+                Text(tab.title, color = shown, style = MaterialTheme.typography.label, maxLines = 1)
             } else {
                 ProfileFace(person.ifEmpty { "?" }, nav.me?.avatar, metrics.u(28))
-                Text(person.ifEmpty { tab.title }, color = ink, style = MaterialTheme.typography.label, maxLines = 1)
+                Text(person.ifEmpty { tab.title }, color = shown, style = MaterialTheme.typography.label, maxLines = 1)
             }
         }
     }

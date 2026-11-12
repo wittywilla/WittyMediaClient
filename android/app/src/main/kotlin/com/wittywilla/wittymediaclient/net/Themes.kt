@@ -106,6 +106,10 @@ data class AppTheme(
     val scrim: ThemeColour,
     // The medium radius: buttons, fields, posters.
     val radius: Double,
+    // The colour the server's name's accent parts are drawn in, and the focus ring's; a theme that names neither gets
+    // its accent text and its text colour (docs/THEMES.md, derived tokens).
+    val brandAccent: ThemeColour = accentText,
+    val focus: ThemeColour = text,
 )
 
 // GET /themes/{id}/tokens.json. Lengths are kept loose: one an uploaded theme wrote oddly is left out, not the theme.
@@ -213,6 +217,8 @@ object ThemeTranslator {
             warn = token("warn") ?: base("warn"),
             scrim = token("overlay") ?: ThemeColour.BLACK.opacity(0.6),
             radius = radius,
+            brandAccent = token("brand-accent") ?: token("brandAccent") ?: token("accent-text") ?: accent,
+            focus = token("focus") ?: text,
         )
     }
 
