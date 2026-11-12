@@ -5,7 +5,8 @@ package com.wittywilla.wittymediaclient.ui
 
 // A TV's numbers are TV units: 1 unit = 1 pt on Apple TV (1920x1080), 0.5 dp on Android TV (960x540).
 object DesignTokens {
-    object TypeRole { class Role(val size: Int, val weight: Int, val leading: Float, val tracking: Float)
+    class Role(val size: Int, val weight: Int, val leading: Float, val tracking: Float)
+    object TypeRole {
         val DISPLAY = Role(48, 650, 1.14f, -0.022f)
         val PAGETITLE = Role(30, 650, 1.14f, -0.012f)
         val HEADING = Role(20, 650, 1.32f, -0.012f)
@@ -22,17 +23,24 @@ object DesignTokens {
         const val L = 24
         const val XL = 40
     }
-    // fill and line are theme colour names; shadow is dp of blur for the platforms that draw one.
-    class Elevation(val fill: String, val line: String, val shadow: Int)
+    class Shadow(val y: Int, val blur: Int, val opacity: Float)
+    // fill and line are theme colour names (line empty for none); shadow is what platforms that draw one use.
+    class Elevation(val fill: String, val line: String, val shadow: List<Shadow>)
     val ELEVATION = listOf(
-        Elevation("bg", "none", 0),
-        Elevation("bg2", "border", 0),
-        Elevation("bg3", "border", 4),
-        Elevation("bg3", "borderStrong", 12),
+        Elevation("bg", "", listOf()),
+        Elevation("bg2", "border", listOf()),
+        Elevation("bg3", "border", listOf(Shadow(10, 24, 0.5f))),
+        Elevation("bg3", "borderStrong", listOf(Shadow(10, 30, 0.45f))),
     )
+    // Multiples of spacing and of control height; chosen per profile per device.
+    class DensityStep(val space: Float, val control: Float)
+    const val DENSITY_DEFAULT = "comfortable"
+    const val DENSITY_TV_DEFAULT = "comfortable"
+    val DENSITY = mapOf("compact" to DensityStep(0.75f, 0.875f), "comfortable" to DensityStep(1.0f, 1.0f), "spacious" to DensityStep(1.25f, 1.125f))
     class FocusSpec(val width: Int, val offset: Int, val scale: Float)
     val FOCUS_POINTER = FocusSpec(2, 2, 1.0f)
     val FOCUS_KEYS = FocusSpec(3, 3, 1.0f)
+    val FOCUS_TV = FocusSpec(4, 4, 1.06f)
     const val FOCUS_STYLE_MEDIA = "ring-lift"
     const val FOCUS_STYLE_CONTROL = "fill"
     const val FOCUS_STYLE_FIELD = "ring"
@@ -42,9 +50,11 @@ object DesignTokens {
         const val ENTER_FROM_OUTSIDE = "last-or-first"
         val ZONES = listOf("bar", "stage", "dock", "layer")
         val BACK_LADDER = listOf("layer", "dock", "stage", "bar", "home", "exit")
-        const val OFF_LINE = 1.0f
-        const val OFF_CENTRE = 0.5f
-        const val LEAVES_LINE = 3.0f
+        // Weights of the spatial search, per heading: the same numbers as web/src/spatial.ts, so no port drifts.
+        class Weights(val left: Float, val right: Float, val up: Float, val down: Float)
+        val OFF_LINE = Weights(4.0f, 4.0f, 1.2f, 1.2f)
+        val OFF_CENTRE = Weights(0.1f, 0.1f, 0.3f, 0.3f)
+        val LEAVES_LINE = Weights(4000.0f, 4000.0f, 0.0f, 0.0f)
     }
     object Tv {
         const val SAFE_X = 90
@@ -87,21 +97,24 @@ object DesignTokens {
         const val DOCK_HEIGHT = 112
         const val DOCK_HINT_SIZE = 25
     }
+    // Window width classes in dp: compact below COMPACT, medium below MEDIUM, expanded below EXPANDED, else large.
     object Breakpoints { const val COMPACT = 600; const val MEDIUM = 840; const val EXPANDED = 1200 }
-    object Density { const val COMFORTABLE = 1.0f; const val COMPACT = 0.85f; const val SPACIOUS = 1.2f }
     object Motion { const val FOCUS_MOVE_MS = 120; const val SCREEN_MS = 240; const val HERO_MS = 600 }
-    // The key map as data: action -> the keys that do it, per kind of input (docs/plans/DESIGN-2.md section 3).
+    // The key map as data: action -> the keys that do it, per kind of input (docs/plans/DESIGN-2.md section 3), by the
+    // names the web uses (KeyboardEvent.code, pad buttons, remote keys); ui/InputRules maps them to Android's.
     val INPUT_KEYBOARD: Map<String, List<String>> = mapOf(
         "move" to listOf("ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight"),
         "select" to listOf("Enter", "Space"),
         "back" to listOf("Escape", "Backspace", "Alt+ArrowLeft"),
         "options" to listOf("Period", "Shift+F10", "ContextMenu"),
         "search" to listOf("Slash", "Ctrl+K"),
-        "prevTab" to listOf("Ctrl+["),
-        "nextTab" to listOf("Ctrl+]"),
+        "tabPrev" to listOf("Ctrl+BracketLeft", "PageUp"),
+        "tabNext" to listOf("Ctrl+BracketRight", "PageDown"),
         "pageUp" to listOf("PageUp"),
         "pageDown" to listOf("PageDown"),
         "top" to listOf("Home"),
+        "playPause" to listOf("Space", "KeyK"),
+        "seek" to listOf("ArrowLeft", "ArrowRight", "KeyJ", "KeyL"),
         "dock" to listOf("Tab"),
         "help" to listOf("Shift+Slash"),
     )
@@ -111,11 +124,13 @@ object DesignTokens {
         "back" to listOf("B"),
         "options" to listOf("X", "HoldA"),
         "search" to listOf("Y"),
-        "prevTab" to listOf("LB"),
-        "nextTab" to listOf("RB"),
+        "tabPrev" to listOf("LB"),
+        "tabNext" to listOf("RB"),
         "pageUp" to listOf("LT"),
         "pageDown" to listOf("RT"),
         "top" to listOf("RightStickClick"),
+        "playPause" to listOf("A"),
+        "seek" to listOf("LB", "RB"),
         "dock" to listOf("Start"),
         "help" to listOf("Back+Start"),
     )
@@ -125,11 +140,13 @@ object DesignTokens {
         "back" to listOf("Back"),
         "options" to listOf("LongOK", "Menu", "Options"),
         "search" to listOf("Search"),
-        "prevTab" to listOf("channel-up"),
-        "nextTab" to listOf("channel-down"),
+        "tabPrev" to listOf("ChannelUp"),
+        "tabNext" to listOf("ChannelDown"),
         "pageUp" to listOf("ChannelUp"),
         "pageDown" to listOf("ChannelDown"),
         "top" to listOf("DoubleUp"),
+        "playPause" to listOf("PlayPause"),
+        "seek" to listOf("MediaRewind", "MediaFastForward"),
         "dock" to listOf("Menu"),
         "help" to listOf("HoldMenu"),
     )

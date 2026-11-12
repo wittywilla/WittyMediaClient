@@ -98,6 +98,9 @@ import java.util.TimeZone
 // The highlighted row and the moment in it, as the page keeps them.
 data class GuideSpot(val row: Int, val at: Long)
 
+// Which of the Dock's menus is open.
+private enum class DockMenu { Channels, Filter, Record }
+
 // What the details sheet is about.
 data class GuideAsk(val channel: GuideChannel, val programme: GuideProgramme?, val cell: GuideCell, val day: Boolean = false)
 
@@ -154,6 +157,9 @@ fun GuideScreen(nav: Nav) {
     var lookOpen by remember { mutableStateOf(false) }
     var searchOpen by remember { mutableStateOf(false) }
     var dayOpen by remember { mutableStateOf(false) }
+    // The Dock under the grid, and which of its menus is open (docs/plans/DESIGN-2.md, section 4: WittyTV's four places).
+    val dockFocus = remember { FocusRequester() }
+    var dockMenu by remember { mutableStateOf<DockMenu?>(null) }
     // A cell held with Select: everything else that can be done with it.
     var menu by remember { mutableStateOf<Pair<GuideChannel, GuideCell>?>(null) }
     var toast by remember { mutableStateOf("") }
@@ -645,6 +651,20 @@ fun GuideScreen(nav: Nav) {
         }
     }
 
+    // The Dock's six, always in this order, each with the key that does the same from anywhere.
+    val recordable = current?.takeIf { it.canRecord == true }?.let { c -> currentCell?.takeIf { it.isBroadcast && it.end > now }?.programme?.let { c to it } }
+    val dockEntries = listOf(
+        DockEntry(DockKeys.LOOK, "Look") { lookOpen = true },
+        DockEntry(DockKeys.DAY, "Day") { dayOpen = true },
+        DockEntry(DockKeys.CHANNELS, "Channels") { dockMenu = DockMenu.Channels },
+        DockEntry(DockKeys.FILTER, "Filter") { dockMenu = DockMenu.Filter },
+        DockEntry(DockKeys.RECORDINGS, "Recordings", enabled = com.wittywilla.wittymediaclient.player.ScreenTimeWatch.can("recordings")) { nav.push(TvRoute(TvScreen.Recordings)) },
+        DockEntry(DockKeys.RECORD, "Record", enabled = recordable != null) { dockMenu = DockMenu.Record },
+    )
+    fun dockPress(key: Char) {
+        dockEntries.firstOrNull { it.key == key && it.enabled }?.action?.invoke()
+    }
+
     val previewName = run {
         val c = current
         if (c != null && c.key == previewWanted) "${c.number} ${c.name}"
@@ -682,6 +702,8 @@ fun GuideScreen(nav: Nav) {
                                 code == KeyEvent.KEYCODE_PROG_GREEN -> { shift(86400); true }
                                 code == KeyEvent.KEYCODE_PROG_YELLOW -> { if (store.hasSets) cycleSet(1) else cycleKind(); true }
                                 code == KeyEvent.KEYCODE_PROG_BLUE -> { findOpen = true; true }
+                                DockKeys.opensDock(code) -> { runCatching { dockFocus.requestFocus() }; true }
+                                DockKeys.forKeyCode(code) != null -> { dockPress(DockKeys.forKeyCode(code)!!); true }
                                 code == KeyEvent.KEYCODE_PAGE_DOWN -> page(1)
                                 code == KeyEvent.KEYCODE_PAGE_UP -> page(-1)
                                 else -> false
@@ -705,8 +727,7 @@ fun GuideScreen(nav: Nav) {
                         },
                     )
                     GuideBar(nav, dress, store, from, now, today, onShift = { shift(it) }, onNow = ::goNow, onJump = { goAt(it) },
-                        onDay = { dayOpen = true }, onSearch = { searchOpen = true }, onLook = { lookOpen = true },
-                        onSets = { setPanel = SetPanel.Picker }, onFind = { findOpen = true })
+                        onSets = { setPanel = SetPanel.Picker })
                     if (store.hasSets || store.paged || store.search.isNotEmpty()) {
                         GuidePager(dress, store, onCycle = ::cycleSet, onPage = { page(it) }, onClear = { narrow("") })
                     }
@@ -720,6 +741,11 @@ fun GuideScreen(nav: Nav) {
                         dress, store, listState, from, to, now, slots, trackWidth, perSecond, spot, actions,
                         Modifier.weight(1f),
                     )
+                    GuideDock(dress, dockEntries, dockFocus, onUp = {
+                        val start = currentCell?.start
+                        val req = if (start != null) requesters[spot.row to start] else null
+                        if (req == null) false else runCatching { req.requestFocus() }.isSuccess
+                    })
                     if (dress.shape in listOf(TvShape.Box, TvShape.Receiver, TvShape.Teletext, TvShape.Listings)) {
                         val c = if (store.hasSets) store.currentSet?.name ?: "All" else null
                         GuideFooter(dress, store.filter.kind, c, onShift = { shift(it) }, onKind = { if (store.hasSets) cycleSet(1) else cycleKind() })
@@ -786,6 +812,42 @@ fun GuideScreen(nav: Nav) {
                 onFavourite = { menu = null; favourite(c) },
             )
         }
+        dockMenu?.let { m ->
+            val close = { dockMenu = null }
+            val filter = store.filter
+            val hasBoth = store.lineup.any { it.kind == "tuner" } && store.lineup.any { it.kind == "library" }
+            val items = buildList {
+                when (m) {
+                    DockMenu.Channels -> {
+                        if (store.hasSets) add(TvDialogButton("Channel sets…") { close(); setPanel = SetPanel.Picker })
+                        add(TvDialogButton("Channels per page…") { close(); lookOpen = true })
+                        add(TvDialogButton("Find a channel") { close(); findOpen = true })
+                        if (nav.me?.isAdmin == true) add(TvDialogButton("Edit channels") { close(); nav.push(Route.OnPhone("Edit channels", "/tv/channels")) })
+                    }
+                    DockMenu.Filter -> {
+                        if (store.hasSets) {
+                            add(TvDialogButton("Choose a set…") { close(); setPanel = SetPanel.Picker })
+                        } else {
+                            add(TvDialogButton("All channels", preferred = filter.isAll) { close(); store.choose(GuideFilter()) })
+                            add(TvDialogButton(if (filter.favourites) "Favourites (on)" else "Favourites") { close(); store.choose(GuideFilter(favourites = !filter.favourites)) })
+                            for (g in store.groups) add(TvDialogButton(g, preferred = filter.group == g) { close(); store.choose(GuideFilter(group = if (filter.group == g) "" else g)) })
+                            if (hasBoth) {
+                                add(TvDialogButton("My library") { close(); store.choose(GuideFilter(kind = if (filter.kind == "library") "" else "library")) })
+                                add(TvDialogButton("Live TV") { close(); store.choose(GuideFilter(kind = if (filter.kind == "tuner") "" else "tuner")) })
+                            }
+                        }
+                        add(TvDialogButton("Search the schedule") { close(); searchOpen = true })
+                    }
+                    DockMenu.Record -> recordable?.let { (c, p) ->
+                        add(TvDialogButton("Record this", preferred = true) { close(); record(c, p) })
+                        add(TvDialogButton("Record every airing") { close(); series(c, p) })
+                    }
+                }
+                add(TvDialogButton("Close", cancel = true, action = close))
+            }
+            BackHandler(onBack = close)
+            TvDialog(when (m) { DockMenu.Channels -> "Channels"; DockMenu.Filter -> "Filter and favourites"; DockMenu.Record -> recordable?.second?.title ?: "Record" }, null, items, close, stacked = true)
+        }
         if (dayOpen) {
             DayPicker(today, onDay = { dayOpen = false; goDay(it) }, onClose = { dayOpen = false })
         }
@@ -799,7 +861,8 @@ object TvChannels {
     var list: List<GuideChannel> = emptyList()
 }
 
-// The strip between the top and the grid: the filters, then the times to go to, search, the look and recordings.
+// The strip between the top and the grid: the filters, then the times to go to. Look, Day, Channels, Filter, Recordings
+// and Record are the Dock's, under the grid (TvGuideDock.kt).
 @Composable
 private fun GuideBar(
     nav: Nav,
@@ -811,11 +874,7 @@ private fun GuideBar(
     onShift: (Long) -> Unit,
     onNow: () -> Unit,
     onJump: (Long) -> Unit,
-    onDay: () -> Unit,
-    onSearch: () -> Unit,
-    onLook: () -> Unit,
     onSets: () -> Unit,
-    onFind: () -> Unit,
 ) {
     val p = dress.paint
     val shape = dress.shape
@@ -893,12 +952,8 @@ private fun GuideBar(
             TvButton(dress, "Now", onNow, on = GuideRules.floorSlot(now) == from, onBar = true)
             TvIconButton(dress, Symbols.Next, "Half an hour later", { onShift(GuideRules.SLOT) }, onBar = true)
             for (j in GuideRules.jumps(now, TimeZone.getDefault())) TvButton(dress, j.label, { onJump(j.at) }, kind = TvButtonKind.Link, onBar = true)
-            TvButton(dress, "$dayLabel ▾", onDay, onBar = true)
-            TvButton(dress, "Find channel", onFind, onBar = true)
-            TvIconButton(dress, Symbols.Search, "Search the schedule", onSearch, onBar = true)
-            TvButton(dress, "Look", onLook, onBar = true)
-            if (com.wittywilla.wittymediaclient.player.ScreenTimeWatch.can("recordings")) TvButton(dress, "Recordings", { nav.push(TvRoute(TvScreen.Recordings)) }, onBar = true)
-            if (nav.me?.isAdmin == true) TvButton(dress, "Edit channels", { nav.push(Route.OnPhone("Edit channels", "/tv/channels")) }, onBar = true, icon = Symbols.Settings)
+            // The day being shown, as words: choosing another is the Dock's Day.
+            Text(dayLabel, style = dress.font(21.25f, W.Medium), color = p.soft, maxLines = 1)
         }
     }
 }

@@ -85,11 +85,11 @@ class InputRulesTest {
 
     @Test fun `the generated key map names every action the rules know`() {
         for (kind in listOf(DesignTokens.INPUT_KEYBOARD, DesignTokens.INPUT_GAMEPAD, DesignTokens.INPUT_REMOTE)) {
-            for (a in listOf("move", "select", "back", "options", "search", "prevTab", "nextTab", "pageUp", "pageDown", "top", "dock", "help")) {
+            for (a in listOf("move", "select", "back", "options", "search", "tabPrev", "tabNext", "pageUp", "pageDown", "top", "dock", "help")) {
                 assertTrue("missing $a", kind.containsKey(a))
             }
         }
-        assertEquals(listOf("X"), DesignTokens.INPUT_GAMEPAD["options"])
+        assertEquals(listOf("X", "HoldA"), DesignTokens.INPUT_GAMEPAD["options"])
     }
 
     @Test fun `zones move by one press and never wrap`() {
@@ -112,7 +112,7 @@ class InputRulesTest {
         assertEquals(BackStep.BarToHome, BackLadder.next(BackState(false, Zone.Bar, false)))
         assertEquals(BackStep.Leave, BackLadder.next(BackState(false, Zone.Bar, true)))
         // The table in the tokens names the same order.
-        assertEquals(listOf("layer", "dock", "stage", "bar", "home", "leave"), DesignTokens.Nav.BACK_LADDER)
+        assertEquals(listOf("layer", "dock", "stage", "bar", "home", "exit"), DesignTokens.Nav.BACK_LADDER)
     }
 
     @Test fun `focus memory returns to the last card of a group else the first`() {

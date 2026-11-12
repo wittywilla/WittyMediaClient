@@ -31,6 +31,15 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.compositionLocalOf
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.SideEffect
+import androidx.compose.ui.input.key.onKeyEvent
+import com.wittywilla.wittymediaclient.net.BackLadder
+import com.wittywilla.wittymediaclient.net.BackState
+import com.wittywilla.wittymediaclient.net.BackStep
+import com.wittywilla.wittymediaclient.net.InputAction
+import com.wittywilla.wittymediaclient.net.InputContext
+import com.wittywilla.wittymediaclient.net.InputKind
+import com.wittywilla.wittymediaclient.net.Zone
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -104,6 +113,19 @@ class TvBar(private val nav: Nav) {
     fun focusPill() {
         runCatching { requester(nav.current).requestFocus() }
     }
+
+    // The tabs in the bar's order, You last, as the bar last drew them: what a pad's bumpers and the channel keys step through.
+    var tabs: List<Route> = emptyList()
+
+    // The tab before or after the current one: no wrapping. Its pill keeps focus, as choosing it with OK does.
+    fun step(by: Int): Boolean {
+        val i = tabs.indexOf(nav.current)
+        if (i < 0) return false
+        val to = tabs.getOrNull(i + by) ?: return false
+        nav.focusFor(to.key).last = pillKey(to)
+        nav.reset(to)
+        return true
+    }
 }
 
 val LocalTvBar = compositionLocalOf<TvBar?> { null }
@@ -126,8 +148,11 @@ fun TvShell(nav: Nav, content: @Composable () -> Unit) {
     // The server's own menu, where it has one: the bar is made from it.
     val pages = nav.sdui
     LaunchedEffect(pages) { nav.loadSdui() }
-    BackHandler(enabled = onTab && !(bar.inBar && current == Route.Home)) {
-        if (!bar.inBar) {
+    // Back unwinds the zones one at a time (net/InputRules.kt, BackLadder): what is open on a page goes first, by that page's
+    // own handler; then the stage to the bar's tab, then the bar to Home, then the app is left.
+    val ladder = BackLadder.next(BackState(layerOpen = false, zone = if (bar.inBar) Zone.Bar else Zone.Stage, barOnHome = current == Route.Home))
+    BackHandler(enabled = onTab && (ladder == BackStep.StageToBar || ladder == BackStep.BarToHome)) {
+        if (ladder == BackStep.StageToBar) {
             bar.focusPill()
         } else {
             // Home comes back with its pill chosen and focused.
@@ -135,17 +160,29 @@ fun TvShell(nav: Nav, content: @Composable () -> Unit) {
             nav.reset(Route.Home)
         }
     }
+    // A TV is used with a remote or a pad: the legend and the keys follow. A key pressed later says which.
+    LaunchedEffect(Unit) { if (InputInUse.kind == null) InputInUse.kind = InputKind.Remote }
+    val keys = Modifier.onKeyEvent { e ->
+        when (e.action(InputContext(inBar = bar.inBar))) {
+            InputAction.Search -> { if (nav.current != Route.Search && nav.me != null) nav.reset(Route.Search); true }
+            InputAction.PrevTab -> bar.step(-1)
+            InputAction.NextTab -> bar.step(1)
+            InputAction.Help -> { InputInUse.helpOpen = true; true }
+            else -> false
+        }
+    }
+    if (InputInUse.helpOpen) KeyHelpSheet { InputInUse.helpOpen = false }
     // The layout option's frame: a menu down the side where the server says so (LayoutFrames.kt), else the top menu.
     if (nav.sduiNav != null && menuStyle(nav, tv = true) == "tvSideMenu") {
         val metrics = LocalMetrics.current
         val shell = nav.sduiNav?.shell
-        Row(Modifier.fillMaxSize()) {
+        Row(Modifier.fillMaxSize().then(keys)) {
             TvSideMenu(nav, metrics.u(shell?.size?.takeIf { it > 0 } ?: 120), metrics.u(shell?.open?.takeIf { it > 0 } ?: 400))
             Box(Modifier.weight(1f)) { CompositionLocalProvider(LocalTvBar provides bar) { content() } }
         }
         return
     }
-    Column(Modifier.fillMaxSize()) {
+    Column(Modifier.fillMaxSize().then(keys)) {
         TvTopBar(nav, bar, libraries)
         Box(Modifier.weight(1f)) { CompositionLocalProvider(LocalTvBar provides bar) { content() } }
     }
@@ -201,6 +238,7 @@ private fun TvTopBar(nav: Nav, bar: TvBar, libraries: List<Library>) {
         TvTab(route, entry.label, tvBarIcon(entry.icon))
     }.distinctBy { it.route.key }
     val left = fixed.filter { profileOffers(it.route) } + libraries.filter { it.id in nav.topMenu }.map { TvTab(Route.Pinned(it), it.name, it.barSymbol) }.filter { pinned -> fixed.none { (it.route as? Route.Library)?.library?.id == (pinned.route as Route.Pinned).library.id } }
+    SideEffect { bar.tabs = left.map { it.route } + Route.Profile }
     Row(
         Modifier
             .fillMaxWidth()

@@ -15,42 +15,55 @@ import argparse, json, os, sys
 HERE = os.path.dirname(os.path.abspath(__file__))
 REPO = os.path.dirname(HERE)
 OUT = os.path.join(REPO, "android/app/src/main/kotlin/com/wittywilla/wittymediaclient/ui/DesignTokens.generated.kt")
+# The design branch's file where there is one (this repository's design worktree sits beside it), else the server's own.
 CANDIDATES = [
-    os.path.join(REPO, "../WittyMediaServer/themes/tokens.json"),
     os.path.join(REPO, "../design-WittyMediaServer/themes/tokens.json"),
+    os.path.join(REPO, "../WittyMediaServer/themes/tokens.json"),
     os.path.join(REPO, "../../WittyMediaServer/themes/tokens.json"),
 ]
 
-# docs/plans/DESIGN-2.md section 2: what every platform assumes when tokens.json does not say.
+# docs/plans/DESIGN-2.md section 2, in the shape themes/tokens.json has it: what every platform assumes when the file
+# does not say (an older server's file has none of this).
 DEFAULTS = {
     "type": {"role": {
-        "display": {"size": 38, "weight": 650, "leading": 1.14, "tracking": -0.022},
-        "pageTitle": {"size": 30, "weight": 650, "leading": 1.14, "tracking": -0.022},
-        "heading": {"size": 24, "weight": 650, "leading": 1.14, "tracking": -0.012},
-        "title": {"size": 20, "weight": 600, "leading": 1.32, "tracking": -0.012},
+        "display": {"size": 48, "weight": 650, "leading": 1.14, "tracking": -0.022},
+        "pageTitle": {"size": 30, "weight": 650, "leading": 1.14, "tracking": -0.012},
+        "heading": {"size": 20, "weight": 650, "leading": 1.32, "tracking": -0.012},
+        "title": {"size": 17, "weight": 600, "leading": 1.32, "tracking": 0.0},
         "body": {"size": 15, "weight": 400, "leading": 1.55, "tracking": 0.0},
-        "caption": {"size": 13, "weight": 400, "leading": 1.32, "tracking": 0.0},
-        "label": {"size": 14, "weight": 500, "leading": 1.32, "tracking": 0.07},
+        "caption": {"size": 12, "weight": 400, "leading": 1.32, "tracking": 0.0},
+        "label": {"size": 11, "weight": 600, "leading": 1.32, "tracking": 0.07},
     }},
     "space": {"none": 0, "xs": 4, "s": 8, "m": 16, "l": 24, "xl": 40},
     "elevation": {
-        "0": {"fill": "bg", "line": "none", "shadow": 0},
-        "1": {"fill": "bg-2", "line": "border", "shadow": 0},
-        "2": {"fill": "bg-3", "line": "none", "shadow": 4},
-        "3": {"fill": "bg-4", "line": "border", "shadow": 12},
+        "0": {"fill": "bg", "line": "", "shadow": [{"y": 0, "blur": 0, "opacity": 0.0}]},
+        "1": {"fill": "bg2", "line": "border", "shadow": [{"y": 0, "blur": 0, "opacity": 0.0}]},
+        "2": {"fill": "bg3", "line": "border", "shadow": [{"y": 10, "blur": 24, "opacity": 0.5}]},
+        "3": {"fill": "bg3", "line": "borderStrong", "shadow": [{"y": 10, "blur": 30, "opacity": 0.45}]},
     },
+    "density": {"default": "comfortable", "tvDefault": "comfortable", "steps": {
+        "compact": {"space": 0.75, "control": 0.875},
+        "comfortable": {"space": 1.0, "control": 1.0},
+        "spacious": {"space": 1.25, "control": 1.125},
+    }},
     "focus": {
-        "width": 2, "offset": 2, "scale": 1.0,
         "style": {"media": "ring-lift", "control": "fill", "field": "ring"},
-        "pointer": {"width": 2, "offset": 2, "scale": 1.0},
-        "keys": {"width": 3, "offset": 3, "scale": 1.0},
+        "input": {
+            "pointer": {"width": 2, "offset": 2, "scale": 1.0},
+            "keys": {"width": 3, "offset": 3, "scale": 1.0},
+            "tv": {"width": 4, "offset": 4, "scale": 1.06},
+        },
     },
     "nav": {
         "wrap": False, "rememberPerGroup": True, "enterFromOutside": "last-or-first",
         "zones": ["bar", "stage", "dock", "layer"],
-        "backLadder": ["layer", "dock", "stage", "bar", "home", "leave"],
-        "bumpers": "tabs",
-        "score": {"offLine": 1.0, "offCentre": 0.5, "leavesLine": 3.0},
+        "backLadder": ["layer", "dock", "stage", "bar", "home", "exit"],
+        "bumpers": {"prev": "LB", "next": "RB"},
+        "weights": {
+            "offLine": {"left": 4.0, "right": 4.0, "up": 1.2, "down": 1.2},
+            "offCentre": {"left": 0.1, "right": 0.1, "up": 0.3, "down": 0.3},
+            "leavesLine": {"left": 4000.0, "right": 4000.0, "up": 0.0, "down": 0.0},
+        },
     },
     "tv": {
         "safe": {"x": 90, "y": 60}, "gutter": 90,
@@ -61,29 +74,30 @@ DEFAULTS = {
         "focus": {"ring": 4, "gap": 4, "scale": 1.06, "lift": 6, "concentric": True},
         "shelf": {"rowGap": 56, "cardGap": 24, "peek": 0.18, "padTop": 24, "padBottom": 24},
         "card": {
-            "poster": [250, 375], "wide": [420, 236], "square": [300, 300], "circle": [200, 200], "channel": [280, 158],
+            "poster": {"w": 250, "h": 375}, "wide": {"w": 420, "h": 236}, "square": {"w": 300, "h": 300},
+            "circle": 200, "channel": {"w": 280, "h": 158},
         },
         "dock": {"height": 112, "hintSize": 25},
     },
-    "layout": {"breakpoints": {"compact": 600, "medium": 840, "expanded": 1200}},
-    "density": {"comfortable": 1.0, "compact": 0.85, "spacious": 1.2},
+    "layout": {"breakpoints": {"compact": {"max": 600}, "medium": {"min": 600, "max": 840}, "expanded": {"min": 840, "max": 1200}, "large": {"min": 1200}}},
     "motion": {"focusMove": 120, "screen": 240, "hero": 600},
     "input": {
         "keyboard": {
-            "move": ["arrows"], "select": ["Enter", "Space"], "back": ["Escape", "Backspace", "Alt+Left"],
-            "options": [".", "Shift+F10", "ContextMenu"], "search": ["/", "Ctrl+K"],
-            "prevTab": ["Ctrl+["], "nextTab": ["Ctrl+]"], "pageUp": ["PageUp"], "pageDown": ["PageDown"],
-            "top": ["Home"], "dock": ["Tab"], "help": ["?"],
+            "move": ["ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight"], "select": ["Enter", "Space"],
+            "back": ["Escape", "Backspace", "Alt+ArrowLeft"], "options": ["Period", "Shift+F10", "ContextMenu"],
+            "search": ["Slash", "Ctrl+K"], "tabPrev": ["Ctrl+BracketLeft", "PageUp"], "tabNext": ["Ctrl+BracketRight", "PageDown"],
+            "pageUp": ["PageUp"], "pageDown": ["PageDown"], "top": ["Home"], "playPause": ["Space", "KeyK"],
+            "seek": ["ArrowLeft", "ArrowRight", "KeyJ", "KeyL"], "dock": ["Tab"], "help": ["Shift+Slash"],
         },
         "gamepad": {
-            "move": ["dpad", "left-stick"], "select": ["A"], "back": ["B"], "options": ["X"], "search": ["Y"],
-            "prevTab": ["LB"], "nextTab": ["RB"], "pageUp": ["LT"], "pageDown": ["RT"], "top": ["right-stick-click"],
-            "dock": ["Start"], "help": ["Back+Start"],
+            "move": ["DPad", "LeftStick"], "select": ["A"], "back": ["B"], "options": ["X", "HoldA"], "search": ["Y"],
+            "tabPrev": ["LB"], "tabNext": ["RB"], "pageUp": ["LT"], "pageDown": ["RT"], "top": ["RightStickClick"],
+            "playPause": ["A"], "seek": ["LB", "RB"], "dock": ["Start"], "help": ["Back+Start"],
         },
         "remote": {
-            "move": ["dpad"], "select": ["OK"], "back": ["Back"], "options": ["long-OK", "Menu"], "search": ["Search"],
-            "prevTab": ["channel-up"], "nextTab": ["channel-down"], "pageUp": ["channel-up"], "pageDown": ["channel-down"],
-            "top": ["double-Up"], "dock": ["Menu"], "help": ["long-Menu"],
+            "move": ["DPad"], "select": ["OK"], "back": ["Back"], "options": ["LongOK", "Menu", "Options"], "search": ["Search"],
+            "tabPrev": ["ChannelUp"], "tabNext": ["ChannelDown"], "pageUp": ["ChannelUp"], "pageDown": ["ChannelDown"],
+            "top": ["DoubleUp"], "playPause": ["PlayPause"], "seek": ["MediaRewind", "MediaFastForward"], "dock": ["Menu"], "help": ["HoldMenu"],
         },
     },
 }
@@ -94,7 +108,11 @@ NAMES = {"keyboard": "KEYBOARD", "gamepad": "GAMEPAD", "remote": "REMOTE"}
 def merge(base, over):
     """`over` laid on `base`: only keys base knows are kept, so unknown keys are ignored; a missing key keeps its default."""
     if not isinstance(base, dict) or not isinstance(over, dict):
-        return over if type(over) is type(base) or (isinstance(base, (int, float)) and isinstance(over, (int, float)) and not isinstance(over, bool)) else base
+        if base is None or over is None:
+            return base if over is None and base is not None else over
+        if isinstance(base, (int, float)) and not isinstance(base, bool):
+            return over if isinstance(over, (int, float)) and not isinstance(over, bool) else base
+        return over if type(over) is type(base) else base
     out = {}
     for k, v in base.items():
         out[k] = merge(v, over[k]) if k in over else v
@@ -124,25 +142,36 @@ def render(t):
     w("")
     w("// A TV's numbers are TV units: 1 unit = 1 pt on Apple TV (1920x1080), 0.5 dp on Android TV (960x540).")
     w("object DesignTokens {")
-    w("    object TypeRole { class Role(val size: Int, val weight: Int, val leading: Float, val tracking: Float)")
+    w("    class Role(val size: Int, val weight: Int, val leading: Float, val tracking: Float)")
+    w("    object TypeRole {")
     for k, r in t["type"]["role"].items():
         w("        val %s = Role(%s, %s, %s, %s)" % (k.upper(), i(r["size"]), i(r["weight"]), f(r["leading"]), f(r["tracking"])))
     w("    }")
     w("    object Space {")
     for k, v in t["space"].items():
-        w("        const val %s = %s" % (k.upper(), i(v)))
+        if k in DEFAULTS["space"]:
+            w("        const val %s = %s" % (k.upper(), i(v)))
     w("    }")
-    w("    // fill and line are theme colour names; shadow is dp of blur for the platforms that draw one.")
-    w("    class Elevation(val fill: String, val line: String, val shadow: Int)")
+    w("    class Shadow(val y: Int, val blur: Int, val opacity: Float)")
+    w("    // fill and line are theme colour names (line empty for none); shadow is what platforms that draw one use.")
+    w("    class Elevation(val fill: String, val line: String, val shadow: List<Shadow>)")
     w("    val ELEVATION = listOf(")
     for k in ("0", "1", "2", "3"):
         e = t["elevation"][k]
-        w("        Elevation(%s, %s, %s)," % (q(e["fill"]), q(e["line"]), i(e["shadow"])))
+        sh = e["shadow"] if isinstance(e["shadow"], list) else []
+        w("        Elevation(%s, %s, listOf(%s))," % (q(e["fill"]), q(e["line"] or ""), ", ".join("Shadow(%s, %s, %s)" % (i(x["y"]), i(x["blur"]), f(x["opacity"])) for x in sh if x.get("blur"))))
     w("    )")
+    d = t["density"]
+    w("    // Multiples of spacing and of control height; chosen per profile per device.")
+    w("    class DensityStep(val space: Float, val control: Float)")
+    w("    const val DENSITY_DEFAULT = %s" % q(d["default"]))
+    w("    const val DENSITY_TV_DEFAULT = %s" % q(d["tvDefault"]))
+    w("    val DENSITY = mapOf(%s)" % ", ".join("%s to DensityStep(%s, %s)" % (q(k), f(v["space"]), f(v["control"])) for k, v in d["steps"].items()))
     fo = t["focus"]
     w("    class FocusSpec(val width: Int, val offset: Int, val scale: Float)")
-    w("    val FOCUS_POINTER = FocusSpec(%s, %s, %s)" % (i(fo["pointer"]["width"]), i(fo["pointer"]["offset"]), f(fo["pointer"]["scale"])))
-    w("    val FOCUS_KEYS = FocusSpec(%s, %s, %s)" % (i(fo["keys"]["width"]), i(fo["keys"]["offset"]), f(fo["keys"]["scale"])))
+    for k in ("pointer", "keys", "tv"):
+        x = fo["input"][k]
+        w("    val FOCUS_%s = FocusSpec(%s, %s, %s)" % (k.upper(), i(x["width"]), i(x["offset"]), f(x["scale"])))
     w("    const val FOCUS_STYLE_MEDIA = %s" % q(fo["style"]["media"]))
     w("    const val FOCUS_STYLE_CONTROL = %s" % q(fo["style"]["control"]))
     w("    const val FOCUS_STYLE_FIELD = %s" % q(fo["style"]["field"]))
@@ -153,9 +182,11 @@ def render(t):
     w("        const val ENTER_FROM_OUTSIDE = %s" % q(n["enterFromOutside"]))
     w("        val ZONES = listOf(%s)" % ", ".join(q(z) for z in n["zones"]))
     w("        val BACK_LADDER = listOf(%s)" % ", ".join(q(z) for z in n["backLadder"]))
-    w("        const val OFF_LINE = %s" % f(n["score"]["offLine"]))
-    w("        const val OFF_CENTRE = %s" % f(n["score"]["offCentre"]))
-    w("        const val LEAVES_LINE = %s" % f(n["score"]["leavesLine"]))
+    w("        // Weights of the spatial search, per heading: the same numbers as web/src/spatial.ts, so no port drifts.")
+    w("        class Weights(val left: Float, val right: Float, val up: Float, val down: Float)")
+    for k, name in (("offLine", "OFF_LINE"), ("offCentre", "OFF_CENTRE"), ("leavesLine", "LEAVES_LINE")):
+        x = n["weights"][k]
+        w("        val %s = Weights(%s, %s, %s, %s)" % (name, f(x["left"]), f(x["right"]), f(x["up"]), f(x["down"])))
     w("    }")
     tv = t["tv"]
     w("    object Tv {")
@@ -179,19 +210,20 @@ def render(t):
     w("        const val SHELF_PEEK = %s" % f(tv["shelf"]["peek"]))
     w("        const val SHELF_PAD_TOP = %s" % i(tv["shelf"]["padTop"]))
     w("        const val SHELF_PAD_BOTTOM = %s" % i(tv["shelf"]["padBottom"]))
-    for k, (a, b) in tv["card"].items():
-        w("        const val CARD_%s_W = %s" % (k.upper(), i(a)))
-        w("        const val CARD_%s_H = %s" % (k.upper(), i(b)))
+    for k, v in tv["card"].items():
+        wh = (v["w"], v["h"]) if isinstance(v, dict) else (v, v)
+        w("        const val CARD_%s_W = %s" % (k.upper(), i(wh[0])))
+        w("        const val CARD_%s_H = %s" % (k.upper(), i(wh[1])))
     w("        const val DOCK_HEIGHT = %s" % i(tv["dock"]["height"]))
     w("        const val DOCK_HINT_SIZE = %s" % i(tv["dock"]["hintSize"]))
     w("    }")
     bp = t["layout"]["breakpoints"]
-    w("    object Breakpoints { const val COMPACT = %s; const val MEDIUM = %s; const val EXPANDED = %s }" % (i(bp["compact"]), i(bp["medium"]), i(bp["expanded"])))
-    d = t["density"]
-    w("    object Density { const val COMFORTABLE = %s; const val COMPACT = %s; const val SPACIOUS = %s }" % (f(d["comfortable"]), f(d["compact"]), f(d["spacious"])))
+    w("    // Window width classes in dp: compact below COMPACT, medium below MEDIUM, expanded below EXPANDED, else large.")
+    w("    object Breakpoints { const val COMPACT = %s; const val MEDIUM = %s; const val EXPANDED = %s }" % (i(bp["compact"]["max"]), i(bp["medium"]["max"]), i(bp["expanded"]["max"])))
     m = t["motion"]
     w("    object Motion { const val FOCUS_MOVE_MS = %s; const val SCREEN_MS = %s; const val HERO_MS = %s }" % (i(m["focusMove"]), i(m["screen"]), i(m["hero"])))
-    w("    // The key map as data: action -> the keys that do it, per kind of input (docs/plans/DESIGN-2.md section 3).")
+    w("    // The key map as data: action -> the keys that do it, per kind of input (docs/plans/DESIGN-2.md section 3), by the")
+    w("    // names the web uses (KeyboardEvent.code, pad buttons, remote keys); ui/InputRules maps them to Android's.")
     for kind, name in NAMES.items():
         w("    val INPUT_%s: Map<String, List<String>> = mapOf(" % name)
         for a, keys in t["input"][kind].items():
@@ -211,11 +243,6 @@ def main():
     if path and os.path.exists(path):
         given = json.load(open(path))
     t = merge(DEFAULTS, given)
-    # `space` in the file is the numeric 4-point steps; the named steps are the defaults unless the file names them.
-    if isinstance(given.get("space"), dict):
-        named = {k: v for k, v in given["space"].items() if k in DEFAULTS["space"] and isinstance(v, (int, float))}
-        t["space"] = {**DEFAULTS["space"], **named}
-    # The tv focus block and the new `focus.style` may be absent in older files: defaults stand.
     src = render(t)
     if a.check:
         have = open(OUT).read() if os.path.exists(OUT) else ""

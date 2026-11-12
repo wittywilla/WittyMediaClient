@@ -215,6 +215,7 @@ fun Pressable(
             }
             .then(if (clip) Modifier.clip(shape) else Modifier)
             .background(if (filled) MaterialTheme.colorScheme.onBackground else fill, shape)
+            .optionsKey(if (enabled) onLongClick else null)
             .then(
                 if (onLongClick == null) Modifier.clickable(interactionSource = interaction, indication = null, role = Role.Button) { if (enabled) onClick() }
                 else Modifier.combinedClickable(
