@@ -158,7 +158,6 @@ IPAs, made by `apple/scripts/package-ipas.sh`. Neither has been installed on a d
   things to sign, the app and its Top Shelf extension, so it uses two of a free Apple ID's app identifiers. An unsigned file carries no
   entitlements, so the signer has to add the App Group below to both for the Top Shelf to fill, and a tool that makes a group of its own
   for each Apple ID gives one the code doesn't name. Either way the app works, with an empty Top Shelf.
-- The iOS app has no icon yet, so it installs with a blank one. The source shows the desktop app's icon.
 
 **The Top Shelf on Apple TV needs one more thing.** The app and its Top Shelf share a folder through an App
 Group, `group.com.wittywilla.wittymediaclient`, which belongs to your signing team:
@@ -188,8 +187,8 @@ system's Back and the swipe from the edge both get out of them. Download a photo
 8. Open Photos and a photo. Do left and right on the remote go through them, and does Back leave?
 9. Choose TV guide and a channel, with a channel made on the server. Does the picture start, and does Back leave it?
 
-**Before submitting to Apple:** the app needs an icon and a Top Shelf image in an asset catalog, which don't exist
-yet, and the iPhone app's background audio will need explaining: it's there for picture in picture.
+**Before submitting to Apple:** the iPhone app's background audio will need explaining: it's there for picture in
+picture. The icons and Top Shelf images are in `apple/Brand`, written by `scripts/sync-brand.sh`.
 
 ## Step 4: Publish, when you're ready
 

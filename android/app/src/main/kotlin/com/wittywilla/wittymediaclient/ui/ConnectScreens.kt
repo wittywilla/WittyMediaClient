@@ -901,8 +901,7 @@ private fun WhoStep(
     if (metrics.tv) {
         // Everything centred, as on Apple TV: the lockup, the title, the faces, the other ways in in one row,
         // then this server.
-        val accent = MaterialTheme.colorScheme.primary
-        Box(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background).signInGlow(accent), contentAlignment = Alignment.Center) {
+        TvBackdrop(contentAlignment = Alignment.Center) {
             Column(
                 Modifier.padding(horizontal = metrics.gutter + metrics.tvSafeSides),
                 horizontalAlignment = Alignment.CenterHorizontally,

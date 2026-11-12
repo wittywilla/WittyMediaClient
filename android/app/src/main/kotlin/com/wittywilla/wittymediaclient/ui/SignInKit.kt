@@ -111,25 +111,24 @@ fun BackArrow(onBack: () -> Unit, modifier: Modifier = Modifier) {
 }
 
 // A TV, as Apple TV lays it out: the words on the left half, the actions on the right half, 64 apart, each
-// centred up and down, inside the safe area and its 90-unit gutter (so 170 in from each side). The glow is
-// behind the whole screen. The remote's Back goes back.
+// centred up and down, inside the safe area and its 90-unit gutter (so 170 in from each side). The backdrop
+// (TvBackdrop) is behind the whole screen. The remote's Back goes back.
 @Composable
 fun TvSignInPage(onBack: (() -> Unit)? = null, words: @Composable ColumnScope.() -> Unit, actions: @Composable ColumnScope.() -> Unit) {
     val metrics = LocalMetrics.current
-    val accent = MaterialTheme.colorScheme.primary
     BackHandler(enabled = onBack != null) { onBack?.invoke() }
-    Row(
-        Modifier
-            .fillMaxSize()
-            .background(MaterialTheme.colorScheme.background)
-            .signInGlow(accent)
-            .padding(horizontal = metrics.gutter + metrics.tvSafeSides, vertical = metrics.edge + metrics.tvSafeEnds),
-        horizontalArrangement = Arrangement.spacedBy(metrics.u(64)),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(metrics.u(20)), content = words)
-        Box(Modifier.weight(1f).fillMaxHeight(), contentAlignment = Alignment.CenterStart) {
-            Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(metrics.u(16)), content = actions)
+    TvBackdrop {
+        Row(
+            Modifier
+                .fillMaxSize()
+                .padding(horizontal = metrics.gutter + metrics.tvSafeSides, vertical = metrics.edge + metrics.tvSafeEnds),
+            horizontalArrangement = Arrangement.spacedBy(metrics.u(64)),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(metrics.u(20)), content = words)
+            Box(Modifier.weight(1f).fillMaxHeight(), contentAlignment = Alignment.CenterStart) {
+                Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(metrics.u(16)), content = actions)
+            }
         }
     }
 }
@@ -139,12 +138,8 @@ fun TvSignInPage(onBack: (() -> Unit)? = null, words: @Composable ColumnScope.()
 @Composable
 fun TvCentredPage(onBack: (() -> Unit)? = null, words: @Composable ColumnScope.() -> Unit, actions: @Composable ColumnScope.() -> Unit) {
     val metrics = LocalMetrics.current
-    val accent = MaterialTheme.colorScheme.primary
     BackHandler(enabled = onBack != null) { onBack?.invoke() }
-    Box(
-        Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background).signInGlow(accent),
-        contentAlignment = Alignment.Center,
-    ) {
+    TvBackdrop(contentAlignment = Alignment.Center) {
         Column(
             Modifier.padding(horizontal = metrics.gutter + metrics.tvSafeSides, vertical = metrics.edge + metrics.tvSafeEnds),
             horizontalAlignment = Alignment.CenterHorizontally,

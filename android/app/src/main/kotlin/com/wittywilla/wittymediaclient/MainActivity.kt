@@ -37,6 +37,9 @@ import com.wittywilla.wittymediaclient.ui.showSystemBars
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
+        // The manifest starts this activity in AppTheme.Launch, the mark on the background while the app loads (or
+        // Android 12's own splash). Back to the app's own theme before the window is made, so it isn't left behind.
+        setTheme(R.style.AppTheme)
         // Android 15 and later draw this way whatever an app says. The screens leave room for the bars,
         // and AppRoot sets them to the server's theme once that's known. Dark until then, as the first screen is.
         showSystemBars(this, light = false, background = getColor(R.color.background))

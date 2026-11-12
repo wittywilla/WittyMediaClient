@@ -8,35 +8,24 @@ import WittyKit
 
 // MARK: - Brand
 
-/// The server's icon, drawn rather than shipped as a picture so it's sharp at every size: a dark
-/// rounded square with a ring and a play triangle in the brand's violet. The owner's own logo
-/// replaces it when the server has one.
+/// A server's mark, or the app's own with `app`, drawn rather than shipped as a picture so it's sharp at every
+/// size: the family's marks from BrandArt.swift, the W in its orbit with an amber dot for a server and a screen
+/// on a stand with a mint dot for the app (docs/APP-DESIGN.md, Brand). The owner's own logo replaces the server's when it has one.
 struct BrandMark: View {
     var size: CGFloat = 32
     var logo: URL?
+    /// The app's own mark (the screen) rather than a server's (the tower).
+    var app = false
 
     var body: some View {
         let shape = RoundedRectangle(cornerRadius: size * 14 / 64, style: .continuous)
         Group {
             if let logo {
                 ArtImage(url: logo, width: size, blank: true).clipShape(shape)
+            } else if app {
+                Canvas { context, canvas in BrandArt.client(&context, canvas) }
             } else {
-                Canvas { context, canvas in
-                    let scale = canvas.width / 64
-                    func point(_ x: CGFloat, _ y: CGFloat) -> CGPoint { CGPoint(x: x * scale, y: y * scale) }
-                    let violet = Gradient(colors: [Color(hex: "#9d7bff"), Color(hex: "#5b3df5")])
-                    let shading = GraphicsContext.Shading.linearGradient(violet, startPoint: .zero, endPoint: point(64, 64))
-                    context.fill(Path(roundedRect: CGRect(origin: .zero, size: canvas), cornerRadius: 14 * scale, style: .continuous),
-                                 with: .color(Color(hex: "#1b1e25")))
-                    let ring = Path(ellipseIn: CGRect(x: 12 * scale, y: 12 * scale, width: 40 * scale, height: 40 * scale))
-                    context.stroke(ring, with: shading, lineWidth: 5 * scale)
-                    var play = Path()
-                    play.move(to: point(27, 23))
-                    play.addLine(to: point(41, 32))
-                    play.addLine(to: point(27, 41))
-                    play.closeSubpath()
-                    context.fill(play, with: shading)
-                }
+                Canvas { context, canvas in BrandArt.server(&context, canvas) }
             }
         }
         .frame(width: size, height: size)
@@ -93,7 +82,7 @@ struct BrandLockup: View {
 
     var body: some View {
         HStack(spacing: metrics.tv ? Tokens.Space.s5 : 10) {
-            BrandMark(size: metrics.tv ? 72 : 32, logo: app ? nil : model.client.brandLogoURL(version: model.brandLogo))
+            BrandMark(size: metrics.tv ? 72 : 32, logo: app ? nil : model.client.brandLogoURL(version: model.brandLogo), app: app)
             Wordmark(app: app, name: model.brandName, brand: model.themeStyle?.brand)
         }
         .accessibilityElement(children: .combine)
@@ -149,6 +138,29 @@ enum LogoCache {
             try? manager.removeItem(at: folder.appendingPathComponent(old))
         }
         try? data.write(to: file, options: .atomic)
+    }
+}
+
+/// Behind the sign-in screens: the theme's background and the glow, and on a TV the brand's backdrop between
+/// them (a dark violet scene with the mark large on the right), veiled in the background so the words still read.
+struct SignInBackground: View {
+    @Environment(\.palette) private var palette
+
+    var body: some View {
+        ZStack {
+            palette.background.ignoresSafeArea()
+            #if os(tvOS)
+            Color.clear
+                .overlay(Image("ConnectBackdrop").resizable().aspectRatio(contentMode: .fill))
+                .clipped()
+                .overlay(LinearGradient(colors: [palette.background.opacity(0.6), palette.background.opacity(0.25)],
+                                        startPoint: .leading, endPoint: .trailing))
+                .ignoresSafeArea()
+                .allowsHitTesting(false)
+                .accessibilityHidden(true)
+            #endif
+            SignInGlow()
+        }
     }
 }
 
@@ -221,7 +233,7 @@ struct BackButton: View {
     }
 }
 
-/// On a TV: what to read on the left and what to press on the right, with the glow behind.
+/// On a TV: what to read on the left and what to press on the right, with the backdrop and the glow behind.
 struct TvSignInPage<Words: View, Actions: View>: View {
     @Environment(\.palette) private var palette
     @Environment(\.metrics) private var metrics
@@ -230,8 +242,7 @@ struct TvSignInPage<Words: View, Actions: View>: View {
 
     var body: some View {
         ZStack {
-            palette.background.ignoresSafeArea()
-            SignInGlow()
+            SignInBackground()
             HStack(alignment: .center, spacing: Tokens.Space.s16) {
                 VStack(alignment: .leading, spacing: Tokens.Space.s5) { words }
                     .frame(maxWidth: .infinity, alignment: .leading)
@@ -262,8 +273,7 @@ struct TvCentredPage<Words: View, Actions: View>: View {
 
     var body: some View {
         ZStack {
-            palette.background.ignoresSafeArea()
-            SignInGlow()
+            SignInBackground()
             VStack(spacing: Tokens.Space.s8) {
                 VStack(spacing: Tokens.Space.s5) { words }
                 VStack(spacing: Tokens.Space.s4) { actions }

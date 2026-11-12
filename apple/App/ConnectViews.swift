@@ -674,8 +674,7 @@ struct SignInView: View {
         }
         if metrics.tv {
             ZStack {
-                palette.background.ignoresSafeArea()
-                SignInGlow()
+                SignInBackground()
                 page.padding(.horizontal, metrics.gutter).frame(maxWidth: .infinity)
             }
         } else {
@@ -794,8 +793,7 @@ struct SignInView: View {
                 PairPanel(onUsePassword: { useCode = false }, onBack: showsPeople ? { useCode = false } : nil)
             } else if profiles == nil {
                 ZStack {
-                    palette.background.ignoresSafeArea()
-                    SignInGlow()
+                    SignInBackground()
                     ProgressView()
                 }
             } else if case .password(let profile) = step {

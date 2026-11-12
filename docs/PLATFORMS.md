@@ -671,8 +671,6 @@ anything, the Keychain, the web view, the Top Shelf, or generating the Xcode pro
 - A prompt for two-factor codes on password sign-in. Those accounts can use code sign-in instead.
 - On Android: picture in picture and playing a film in the background, a choice between a file's several pictures, and a baseline profile
   for faster starts. Live channels play, in the server's page. Music, audiobooks and podcasts have [their own player](#music-audiobooks-and-podcasts-on-android).
-- App icons and TV artwork. Android has a placeholder, Apple has none, and the desktop app has
-  Electron's default icon.
 
 ## Checked on the desktop client
 

@@ -5,6 +5,15 @@ What changed in WittyMediaClient, newest first. What changed before it had a rep
 
 ## Unreleased
 
+- **The app has its icons, and a new logo.** The family's mark is now orbitw: a ring with its own coloured dot and
+  what each app is inside. This app's is a screen on a stand carrying a small ring with the W and a mint dot; a
+  server's is the W in its orbit with an amber dot, so the two are told apart at a glance. iPhone and iPad have an
+  icon with dark and tinted versions, Apple Vision Pro a three-layer one, and Apple TV a layered icon that moves in
+  depth when focused, Top Shelf pictures (standard and wide), and a backdrop behind its sign-in screens. Android has
+  launcher icons for every density, a round icon, an adaptive icon with a themed (monochrome) layer, a TV banner, a
+  splash screen and the same TV backdrop; the desktop app has icons for macOS, Windows and Linux, a disk-image
+  background and installer pictures. The marks inside the app are drawn from generated code, sharp at any size. All of
+  it is drawn by WittyMediaServer's genicon: `scripts/sync-brand.sh` redraws it.
 - **Android: from away, peer to peer.** With WittyMediaServer 0.8.0-alpha's connector built into the app
   (`android/scripts/build-wittyconnect.sh`), a phone, tablet or TV that is on its server's list reaches it from anywhere, as the Apple
   apps do: home first, then peer to peer, back home by itself. **You → From away**, invite links in the address box, and **Join from

@@ -226,7 +226,7 @@ fun WhoIsWatchingScreen(nav: Nav, s: Map<String, String>) {
                 }
                 if (metrics.tv) {
                     androidx.activity.compose.BackHandler { nav.pop() }
-                    Box(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background).signInGlow(MaterialTheme.colorScheme.primary), contentAlignment = Alignment.Center) {
+                    TvBackdrop(contentAlignment = Alignment.Center) {
                         Column(
                             Modifier.padding(horizontal = metrics.gutter + metrics.tvSafeSides),
                             horizontalAlignment = Alignment.CenterHorizontally,

@@ -5,6 +5,11 @@
         <item name="android:statusBarColor">@color/background</item>
         <item name="android:navigationBarColor">@color/background</item>
     </style>
+    <!-- While the app starts: the client's mark in the middle of the app's background (drawable/splash_screen, made by
+         scripts/sync-brand.sh). MainActivity sets AppTheme again before its first screen. -->
+    <style name="AppTheme.Launch">
+        <item name="android:windowBackground">@drawable/splash_screen</item>
+    </style>
     <color name="background">#0f1115</color>
     <color name="accent">#7955ff</color>
 </resources>

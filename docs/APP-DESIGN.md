@@ -194,11 +194,37 @@ TVs use the same layer and the same list. WittyTV's guide keeps its own looks on
 
 ## Brand
 
-- **Mark:** the server's icon (`web/public/icon.svg` in WittyMediaServer), drawn natively: a 64×64
-  rounded square (radius 14) in `#1b1e25`, a ring of radius 20 and width 5, and a play triangle with
-  points (27,23), (41,32), (27,41), both in a gradient from `#9d7bff` (top left) to `#5b3df5` (bottom right).
+- **Marks:** the family's mark is the W in its orbit (`orbitw`): a thick ring with a gap at the top right, a dot
+  sitting in the gap, and what the app is inside the ring, on the website's dark slate tile. The server's is the W in a
+  lilac-to-violet ring with an amber dot; the client's (this app's) is a screen on a stand carrying a small ring with
+  the W, in violet into sky blue, with a mint dot. The two differ on purpose: the round mark stands for a server, the
+  screen for the app, and every app of the family has its own dot colour.
+  Both are drawn by WittyMediaServer's `scripts/genicon` from the same drawings as every icon (its `docs/BRAND.md`
+  explains the design), and `scripts/sync-brand.sh` here writes what each platform needs. Nothing it writes is edited
+  by hand: run the script again instead.
+  - **In the app** the marks are drawn natively, sharp at every size: on Apple from `apple/App/BrandArt.swift`
+    (`BrandArt.server` and `BrandArt.client`), which `BrandMark` paints. A server's mark is the default; the app's own
+    (`BrandMark(app: true)`) is used wherever the app means itself, such as the lockup on Choose your server.
+  - **Apple's icons** are in `apple/Brand`: on iPhone and iPad one 1024 icon with dark and tinted versions, on Apple
+    Vision Pro a three-layer icon (`AppIcon.solidimagestack`), and on Apple TV a three-layer icon that moves with the
+    remote, for the Home screen and the App Store, and the Top Shelf images (standard and wide) shown when the app
+    has nothing to put there. The launch screen is the theme's background with the client's mark in the middle
+    (`LaunchMark`, 120).
+  - **The TV's sign-in backdrop** (`ConnectBackdrop` on Apple TV, `connect_backdrop` on Android TV): a calm space
+    scene, the house theme's night with thin faint orbits open at a gap like the logo's ring, a small dot or two and
+    dim stars, the W in its ring faint at the orbits' centre on the right, and nothing written on it. It is behind
+    Choose your server, the address, the code, every sign-in screen and Who's watching on a TV, under a veil of the
+    theme's background (Apple: 60% on the left to 25% on the right; Android: 50%, or 82% on a light theme). Phones
+    keep the plain background with the glow.
+  - **On Android** the app's mark (`BrandArt.Client`) appears in the lockup only before a server is chosen; anywhere
+    else the mark stands for a server (`BrandArt.Server`, or the server's own logo). The launcher has a round icon and
+    an adaptive icon with a themed (monochrome) layer, the TV a banner at every density.
+  - **Launch:** iOS shows the theme's background with `LaunchMark` in the middle. On Android, `AppTheme.Launch` shows
+    `splash_screen` (the mark centred on the background); on Android 12 and later the system splash uses the
+    background colour and `splash_icon`. MainActivity switches back to `AppTheme` before its window is created.
 - **The app is WittyMediaClient.** Its name on the device, and its wordmark wherever no server has been added yet,
-  is "Witty**Media**Client" in Headline weight bold, with "Media" in `accentText`, after the mark. WittyMediaServer is
+  is "Witty**Media**Client" in Headline weight bold, with "Media" in `accentText`, after the mark. In pictures (the
+  Top Shelf, the TV banner, the store graphics) it is drawn in Inter Bold with the website's -0.02em spacing. WittyMediaServer is
   the server's name, never the app's.
 - **A server's identity comes only once it's added.** Until a server has been added to the app (its address entered or
   chosen, and its identity checked), the app shows nothing the server says about itself: no name, no logo. After that,
@@ -412,7 +438,8 @@ White, radius 14, 16 inside, the code black on white, at 180 on a phone and 280 
 
 ## Signing in
 
-Every sign-in screen has the glow, a single centred column (max 440 wide on a phone or tablet), and the lockup at the
+Every sign-in screen has the glow (on Apple TV over the brand's backdrop, veiled in `background` at 60% on the left
+fading to 25% on the right so the words read), a single centred column (max 440 wide on a phone or tablet), and the lockup at the
 top unless it shows a person instead. On a phone the column starts a third of the way down when it's short, and scrolls
 when it isn't. Back, where there's somewhere to go back to, is the system's: the back button top left on Apple, the
 back gesture or a top-left arrow on Android.

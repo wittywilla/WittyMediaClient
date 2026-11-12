@@ -2,9 +2,11 @@
 // Copyright (C) 2026 WittyWilla and contributors
 package com.wittywilla.wittymediaclient.ui
 
-import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.Image
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.size
@@ -20,15 +22,14 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawBehind
-import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.Path
-import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.drawscope.scale
+import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
@@ -40,35 +41,21 @@ import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.Dp
 import coil3.compose.AsyncImage
 import coil3.compose.AsyncImagePainter
+import com.wittywilla.wittymediaclient.R
 
-// docs/APP-DESIGN.md, "Brand". The mark is the server's icon (web/public/icon.svg in WittyMediaServer)
-// drawn here on its own 64 grid, so it's sharp at any size and needs no picture file.
-private val MARK_TILE = Color(0xFF1B1E25)
-private val MARK_LIGHT = Color(0xFF9D7BFF)
-private val MARK_DARK = Color(0xFF5B3DF5)
+// docs/APP-DESIGN.md, "Brand". The marks are the family's own (BrandArt, generated from the same drawings as every
+// icon, so they're sharp at any size and need no picture file), on the website's dark tile: the server, a W inside a
+// thick lilac-to-violet ring with a gap and an amber dot; this app, a screen on a stand carrying the small ring with
+// the W, violet into sky blue, with a mint dot. A mark stands for a server unless `client` says it's this app's own.
+// markShape clips a server's own logo to about the tile's corners.
 private const val MARK_GRID = 64f
 private const val MARK_RADIUS = 14f
 
 fun markShape(size: Dp) = RoundedCornerShape(size * (MARK_RADIUS / MARK_GRID))
 
 @Composable
-fun BrandMark(size: Dp, modifier: Modifier = Modifier) {
-    Canvas(modifier.size(size)) {
-        val k = this.size.width / MARK_GRID
-        drawRoundRect(MARK_TILE, cornerRadius = CornerRadius(MARK_RADIUS * k))
-        // Each shape has the gradient across its own box, top left to bottom right, as in the SVG.
-        drawCircle(
-            Brush.linearGradient(listOf(MARK_LIGHT, MARK_DARK), Offset(12 * k, 12 * k), Offset(52 * k, 52 * k)),
-            radius = 20 * k, center = Offset(32 * k, 32 * k), style = Stroke(5 * k),
-        )
-        val play = Path().apply {
-            moveTo(27 * k, 23 * k)
-            lineTo(41 * k, 32 * k)
-            lineTo(27 * k, 41 * k)
-            close()
-        }
-        drawPath(play, Brush.linearGradient(listOf(MARK_LIGHT, MARK_DARK), Offset(27 * k, 23 * k), Offset(41 * k, 41 * k)))
-    }
+fun BrandMark(size: Dp, modifier: Modifier = Modifier, client: Boolean = false) {
+    Image(imageVector = if (client) BrandArt.Client else BrandArt.Server, contentDescription = null, modifier = modifier.size(size))
 }
 
 // The server's own logo in the mark's square, or the mark until it arrives or if it can't be had. `logo` is
@@ -123,8 +110,9 @@ fun Wordmark(brandName: String, modifier: Modifier = Modifier, app: Boolean = fa
     Text(words, style = style, maxLines = 1, modifier = modifier)
 }
 
-// Mark then wordmark: 32 and 10 apart on a phone, 72 and 20 apart on a TV. The app's own (WittyMediaClient)
-// before a server is added; that server's on its own screens. Heard as the name.
+// Mark then wordmark: 32 and 10 apart on a phone, 72 and 20 apart on a TV. The app's own (WittyMediaClient, with
+// the client's mark) before a server is added; that server's (its logo, or the server mark) on its own screens.
+// Heard as the name.
 @Composable
 fun Lockup(brandName: String, logo: Any?, modifier: Modifier = Modifier, app: Boolean = false) {
     val metrics = LocalMetrics.current
@@ -136,10 +124,28 @@ fun Lockup(brandName: String, logo: Any?, modifier: Modifier = Modifier, app: Bo
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(metrics.u(if (metrics.tv) 20 else 10)),
     ) {
-        ServerMark(metrics.u(if (metrics.tv) 72 else 32), if (app) null else logo)
+        val mark = metrics.u(if (metrics.tv) 72 else 32)
+        if (app) BrandMark(mark, client = true) else ServerMark(mark, logo)
         Wordmark(brandName, app = app)
     }
 }
+
+// Behind a TV's connect, server-picking and sign-in screens: the family's backdrop (drawable-nodpi/connect_backdrop,
+// a dark scene with this app's mark faint on the right, no words; made by scripts/sync-brand.sh) filling the screen, under a veil of the theme's background so the words
+// and cards on it read as they do on the plain background. A phone keeps the plain background and the glow.
+@Composable
+fun TvBackdrop(modifier: Modifier = Modifier, contentAlignment: Alignment = Alignment.TopStart, content: @Composable BoxScope.() -> Unit) {
+    val background = MaterialTheme.colorScheme.background
+    val veil = if (background.luminance() > 0.5f) VEIL_LIGHT else VEIL_DARK
+    Box(modifier.fillMaxSize().background(background), contentAlignment = contentAlignment) {
+        Image(painterResource(R.drawable.connect_backdrop), contentDescription = null, modifier = Modifier.matchParentSize(), contentScale = ContentScale.Crop)
+        Box(Modifier.matchParentSize().background(background.copy(alpha = veil)))
+        content()
+    }
+}
+
+private const val VEIL_DARK = 0.5f
+private const val VEIL_LIGHT = 0.82f
 
 // The soft light at the top of the sign-in screens: the web's
 // radial-gradient(70% 60% at 50% 0%, accent/.16, transparent 70%).

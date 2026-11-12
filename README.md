@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="desktop/build/icons/256x256.png" width="96" alt="">
+</p>
+
 # WittyMediaClient
 
 Apps that connect to a WittyMediaServer, for TV boxes, phones, tablets and desktops. You need one if you'd rather not use a browser on that device. Most of this is early, and [Platforms](#platforms) says how far each one has been run.

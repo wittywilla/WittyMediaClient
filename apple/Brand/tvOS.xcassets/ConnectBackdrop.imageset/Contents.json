@@ -1,0 +1,18 @@
+{
+  "images": [
+    {
+      "filename": "ConnectBackdrop@1x.jpg",
+      "idiom": "tv",
+      "scale": "1x"
+    },
+    {
+      "filename": "ConnectBackdrop@2x.jpg",
+      "idiom": "tv",
+      "scale": "2x"
+    }
+  ],
+  "info": {
+    "author": "xcode",
+    "version": 1
+  }
+}

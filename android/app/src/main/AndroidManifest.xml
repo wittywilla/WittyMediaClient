@@ -48,6 +48,7 @@
         android:appCategory="video"
         android:banner="@drawable/banner"
         android:icon="@mipmap/ic_launcher"
+        android:roundIcon="@mipmap/ic_launcher_round"
         android:label="WittyMediaClient"
         android:networkSecurityConfig="@xml/network_security"
         android:supportsRtl="true"
@@ -56,7 +57,8 @@
         <!-- No links lead in, so no web page can open a screen here by address. A card the app put on a TV's
              home screen names this activity outright and says which title to open (data/TvHome.kt): only a
              title's page or playing a title is taken from it, on the server already signed in to. An
-             empty task affinity keeps another app from placing itself in this app's task. -->
+             empty task affinity keeps another app from placing itself in this app's task. The launch theme shows the
+             mark while the app starts (values-v31 hands it to Android 12's own splash); onCreate puts AppTheme back. -->
         <activity
             android:name=".MainActivity"
             android:configChanges="orientation|screenSize|screenLayout|smallestScreenSize|keyboard|keyboardHidden|navigation|uiMode|density|fontScale|layoutDirection"
@@ -64,6 +66,7 @@
             android:launchMode="singleTask"
             android:taskAffinity=""
             android:supportsPictureInPicture="false"
+            android:theme="@style/AppTheme.Launch"
             android:windowSoftInputMode="adjustResize">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
