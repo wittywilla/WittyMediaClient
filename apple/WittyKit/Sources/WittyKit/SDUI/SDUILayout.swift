@@ -237,14 +237,28 @@ public struct SDUIShell: Codable, Equatable, Sendable {
     /// How wide a menu is while open (a TV's side menu with focus, a rail's full menu), and the width of a rail's library drawer.
     public var open: Int?
     public var drawer: Int?
+    /// Where each region of the shell is and whether it shows: brand, nav, search, profile, clock, dock, legend, hero (the experience's,
+    /// with the administrator's and the person's laid over them by the server).
+    public var placements: [String: Placement]?
 
-    public init(experience: String, nav: String, overlay: Bool? = nil, size: Int, open: Int? = nil, drawer: Int? = nil) {
+    public struct Placement: Codable, Equatable, Sendable {
+        public var position: String?
+        public var visible: Bool?
+        /// The hero's style: billboard, banner, carousel or row.
+        public var style: String?
+    }
+
+    /// Whether a region is drawn: shown unless the placements say it is hidden.
+    public func shows(_ region: String) -> Bool { placements?[region]?.visible != false }
+
+    public init(experience: String, nav: String, overlay: Bool? = nil, size: Int, open: Int? = nil, drawer: Int? = nil, placements: [String: Placement]? = nil) {
         self.experience = experience
         self.nav = nav
         self.overlay = overlay
         self.size = size
         self.open = open
         self.drawer = drawer
+        self.placements = placements
     }
 
     public init(from decoder: Decoder) throws {
@@ -255,6 +269,7 @@ public struct SDUIShell: Codable, Equatable, Sendable {
         size = (try? box.decodeIfPresent(Int.self, forKey: .size)) ?? 0
         open = try? box.decodeIfPresent(Int.self, forKey: .open)
         drawer = try? box.decodeIfPresent(Int.self, forKey: .drawer)
+        placements = try? box.decodeIfPresent([String: Placement].self, forKey: .placements)
     }
 
     /// The menu styles of the catalogue's `navStyles` (docs/SDUI.md, Experiences).
