@@ -16,14 +16,21 @@ import kotlinx.serialization.json.put
 // activating it does. The same views, written out by `normalised`, are what the server's conformance fixtures
 // compare (pkg/sdui/conformance), so the description comes from what is drawn, not from a second reading of the page.
 
-// How a card style draws what a card carries: catalogue revision 2's fourteen styles.
-class SduiCardStyle(val style: String, val shape: String, val aspect: String, val shows: List<String>, val titleLines: Int, val subtitleLines: Int)
+// How a card style draws what a card carries. `image` is the picture kinds in order of preference and `badgeTones` the tone
+// a badge's text is drawn in (a person's presence dot).
+class SduiCardStyle(
+    val style: String, val shape: String, val aspect: String, val shows: List<String>, val titleLines: Int, val subtitleLines: Int,
+    val image: List<String> = emptyList(), val badgeTones: Map<String, String> = emptyMap(),
+)
 
 object SduiCardStyles {
     private fun style(name: String, shape: String, aspect: String, titleLines: Int, subtitleLines: Int, vararg shows: String) =
         SduiCardStyle(name, shape, aspect, shows.toList(), titleLines, subtitleLines)
 
-    val ALL: List<SduiCardStyle> = listOf(
+    // Catalogue revision 8's table, built in for the moment before the server's own has been read and for offline tests:
+    // the app reads the real one from GET /api/sdui/catalog at sign-in (`use`), and a unit test checks this one against the
+    // conformance kit's card-style-table.json.
+    val BUILT_IN: List<SduiCardStyle> = listOf(
         style("poster", "poster", "2/3", 1, 1, "title", "subtitle", "progress", "watched", "unwatched", "badges"),
         style("landscape", "landscape", "16/9", 1, 1, "title", "subtitle", "badges"),
         style("progress", "landscape", "16/9", 1, 1, "title", "subtitle", "progress", "remaining"),
@@ -31,7 +38,7 @@ object SduiCardStyles {
         style("square", "square", "1/1", 1, 1, "title", "subtitle"),
         style("album", "square", "1/1", 1, 1, "title", "subtitle"),
         style("circle", "circle", "1/1", 2, 0, "title"),
-        style("person", "circle", "1/1", 1, 1, "title", "subtitle"),
+        style("person", "circle", "1/1", 1, 1, "title", "subtitle", "badges"),
         style("book", "poster", "2/3", 2, 1, "title", "subtitle", "progress"),
         style("game", "poster", "3/4", 1, 1, "title", "subtitle", "badges"),
         style("photo", "square", "1/1", 0, 0),
@@ -43,9 +50,30 @@ object SduiCardStyles {
         style("logo", "landscape", "16/9", 1, 0, "number", "title"),
     )
 
-    private val byName = ALL.associateBy { it.style }
+    @Volatile
+    private var current: List<SduiCardStyle> = BUILT_IN
+
+    @Volatile
+    private var byName: Map<String, SduiCardStyle> = BUILT_IN.associateBy { it.style }
+
+    // The styles in force: the server's, once the app has read its catalogue.
+    val ALL: List<SduiCardStyle> get() = current
+
+    // Takes the catalogue's card styles. A catalogue with none leaves the built-in table.
+    fun use(specs: List<SduiCardStyleSpec>) {
+        if (specs.isEmpty()) return
+        val next = specs.map { SduiCardStyle(it.style, it.shape, it.aspect, it.shows, it.titleLines, it.subtitleLines, it.image, it.badgeTones) }
+        current = next
+        byName = next.associateBy { it.style }
+    }
+
+    // Back to the built-in table: for a new sign-in and for tests.
+    fun reset() = use(emptyList()).also { current = BUILT_IN; byName = BUILT_IN.associateBy { it.style } }
 
     fun named(style: String): SduiCardStyle? = byName[style]
+
+    // The tone of a card's badge by its style's table: ok, warn, muted, or "" for a badge with none.
+    fun toneOf(style: String, badge: String): String = byName[style]?.badgeTones?.get(badge).orEmpty()
 
     // A style this app doesn't know is drawn as its shape: the picture, with the title and subtitle under it.
     val UNKNOWN = SduiCardStyle("", "", "", listOf("title", "subtitle"), 1, 1)
@@ -305,7 +333,8 @@ class SduiScreen(val document: SduiDocument) {
                 p.child("sort")?.let { buttons += "Sort: " + optionLabel(it, it.str("value")) }
                 p.objects("fields").forEach { buttons += it.str("label") + ": " + optionLabel(it, it.str("value")).ifEmpty { "Any" } }
                 d.buttons = buttons
-                p.int("count")?.let { d.say("count", "$it titles") }
+                val countText = p.str("countText")
+                if (countText.isNotEmpty()) d.say("count", countText) else p.int("count")?.let { d.say("count", "$it titles") }
             }
             "DetailHeader" -> {
                 d.role = "region"; d.label = p.str("title")

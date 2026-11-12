@@ -150,7 +150,9 @@ fun PageShell(nav: Nav, content: @Composable () -> Unit) {
 // Home, Search and You in a floating pill at the bottom of a phone, within reach of a thumb. A TV has six
 // along the top instead, where up from a tab's first row gets to them: see TvTabs.kt.
 @Composable
-fun Shell(nav: Nav, content: @Composable () -> Unit) {
+fun Shell(nav: Nav, page: @Composable () -> Unit) {
+    // The regions a page asked for (status bar, system dock) are drawn around it by the shell.
+    val content: @Composable () -> Unit = { SduiRegionsFrame(nav, page) }
     val metrics = LocalMetrics.current
     if (!metrics.tv) {
         PhoneShell(nav, content)
