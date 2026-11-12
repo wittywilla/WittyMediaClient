@@ -242,7 +242,10 @@ struct SDUIPageBody: View {
         .ignoresSafeArea(.container, edges: .horizontal)
         #else
         .refreshable { await store.refresh(center) }
+        #if os(iOS)
+        // Not on visionOS, which has no on-screen keyboard to put away.
         .scrollDismissesKeyboard(.immediately)
+        #endif
         #endif
     }
 }
