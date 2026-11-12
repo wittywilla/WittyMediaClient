@@ -124,7 +124,7 @@ struct KeysFocusRing: ViewModifier {
         #if os(tvOS)
         content
         #else
-        let width = CGFloat(DesignTokens.Focus.Input.keys.width), offset = CGFloat(DesignTokens.Focus.Input.keys.offset)
+        let width = CGFloat(DesignTokens.Focus.Input.Keys.width), offset = CGFloat(DesignTokens.Focus.Input.Keys.offset)
         content.overlay {
             if focused {
                 RoundedRectangle(cornerRadius: radius + offset + width, style: .continuous)

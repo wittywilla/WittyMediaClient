@@ -67,7 +67,6 @@ struct SDUIDockView: View {
         #endif
         .accessibilityElement(children: .contain)
         .accessibilityLabel(dock.label)
-        .accessibilityAddTraits(.isToolbar)
         .accessibilityIdentifier("sdui.dock")
     }
 }

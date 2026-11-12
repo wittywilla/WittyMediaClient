@@ -161,8 +161,8 @@ final class InputRulesTests: XCTestCase {
 
 final class DesignTokensTests: XCTestCase {
     func testTheTvNumbersAreTheContracts() {
-        XCTAssertEqual(DesignTokens.Tv.safe.x, 90)
-        XCTAssertEqual(DesignTokens.Tv.safe.y, 60)
+        XCTAssertEqual(DesignTokens.Tv.Safe.x, 90)
+        XCTAssertEqual(DesignTokens.Tv.Safe.y, 60)
         XCTAssertEqual(DesignTokens.Tv.Focus.ring, 4)
         XCTAssertEqual(DesignTokens.Tv.Focus.scale, 1.06)
         XCTAssertEqual(DesignTokens.Tv.Target.min, 66)
@@ -174,8 +174,8 @@ final class DesignTokensTests: XCTestCase {
     }
 
     func testTheFocusLanguage() {
-        XCTAssertEqual(DesignTokens.Focus.Input.tv.scale, 1.06)
-        XCTAssertEqual(DesignTokens.Focus.Input.keys.width, 3)
+        XCTAssertEqual(DesignTokens.Focus.Input.Tv.scale, 1.06)
+        XCTAssertEqual(DesignTokens.Focus.Input.Keys.width, 3)
         XCTAssertEqual(DesignTokens.Focus.Style.media, "ring-lift")
         XCTAssertEqual(DesignTokens.Focus.Style.control, "fill")
     }

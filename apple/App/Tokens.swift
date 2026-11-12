@@ -42,7 +42,7 @@ enum Tokens {
     /// The safe area of a TV that may crop its picture: rows run under it so that a lifted card isn't cut off, and
     /// everything in them starts inside it.
     static let gutter = CGFloat(DesignTokens.Tv.gutter)
-    static let edge = CGFloat(DesignTokens.Tv.safe.y)
+    static let edge = CGFloat(DesignTokens.Tv.Safe.y)
     static let cardWidth = CGFloat(DesignTokens.Tv.Card.Poster.w)
     static let wideCardWidth = CGFloat(DesignTokens.Tv.Card.Wide.w)
     static let minTarget = CGFloat(DesignTokens.Tv.Target.min)
