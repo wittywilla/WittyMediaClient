@@ -383,7 +383,7 @@ struct AvatarTile: View {
                 .accessibilityHidden(true)
         } else {
             Text(AvatarLook.initial(of: name))
-                .font(.system(size: size * 0.43, weight: .bold))
+                .font(.wm(size: size * 0.43, weight: .bold))
                 .foregroundStyle(.white)
                 .frame(width: size, height: size)
                 .background(shape.fill(Color(hex: AvatarLook.colour(for: name))))
@@ -553,21 +553,21 @@ struct ServerCard: View {
                     ServerLogo(server: saved, size: mark)
                 } else {
                     Image(systemName: "server.rack")
-                        .font(.system(size: mark * 0.45, weight: .medium))
+                        .font(.wm(size: mark * 0.45, weight: .medium))
                         .foregroundStyle(palette.textSecondary)
                         .frame(width: mark, height: mark)
                         .accessibilityHidden(true)
                 }
                 VStack(alignment: .leading, spacing: 2) {
-                    Text(name).font(.system(size: sizes.body, weight: .bold)).foregroundStyle(palette.text).lineLimit(1)
+                    Text(name).font(.wm(size: sizes.body, weight: .bold)).foregroundStyle(palette.text).lineLimit(1)
                     Text(metrics.tv || reached.isEmpty ? detail : "\(detail) · \(reached)")
-                        .font(.system(size: sizes.tiny)).foregroundStyle(palette.text.opacity(0.7)).lineLimit(2)
+                        .font(.wm(size: sizes.tiny)).foregroundStyle(palette.text.opacity(0.7)).lineLimit(2)
                 }
                 Spacer(minLength: sizes.gap)
                 if connecting {
                     ProgressView().tint(palette.textSecondary)
                 } else if !value.isEmpty {
-                    Text(value).font(.system(size: sizes.small, weight: .bold))
+                    Text(value).font(.wm(size: sizes.small, weight: .bold))
                         .foregroundStyle(lastUsed ? palette.accentText : palette.textSecondary)
                 }
             }
@@ -826,7 +826,7 @@ struct BrandBadge: View {
                 ArtImage(url: url, width: size, fit: true, blank: true).padding(size * 0.14)
             } else {
                 let words = mark?.characters(name: model.brandName) ?? mark.map { _ in "W" } ?? "W"
-                Text(words).font(.system(size: size * (words.count > 1 ? 0.34 : 0.5), weight: .bold, design: .rounded))
+                Text(words).font(.wm(size: size * (words.count > 1 ? 0.34 : 0.5), weight: .bold, design: .rounded))
                     .foregroundStyle(accent.map { Color(.sRGB, red: $0.red, green: $0.green, blue: $0.blue, opacity: 1) } ?? palette.accentText)
                     .minimumScaleFactor(0.5).lineLimit(1)
             }

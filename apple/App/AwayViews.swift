@@ -139,7 +139,7 @@ struct JoinAwayPanel: View {
             if !code.isEmpty {
                 Text(code)
                     .accessibilityIdentifier("joinCode")
-                    .font(.system(size: metrics.tv ? 72 : 40, weight: .bold, design: .monospaced))
+                    .font(.wm(size: metrics.tv ? 72 : 40, weight: .bold, design: .monospaced))
                     .kerning(metrics.tv ? 8 : 4)
                     .foregroundStyle(palette.text)
                     .padding(.horizontal, Tokens.Space.s6)

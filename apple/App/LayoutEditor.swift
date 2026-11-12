@@ -212,6 +212,10 @@ struct LayoutEditorView: View {
     // MARK: The page
 
     var body: some View {
+        GeometryReader { geo in page.environment(\.designSizes, DesignSizes.of(metrics, width: geo.size.width)) }
+    }
+
+    private var page: some View {
         VStack(spacing: 0) {
             header
             if loading {
@@ -404,9 +408,7 @@ struct LayoutEditorView: View {
         func at(_ id: String, _ positions: String...) -> Bool { draft.shown(id) ? positions.contains(draft.position(id) ?? "") : false }
         return VStack(spacing: 10) {
             // The bar across the top: the name, the menu when it is on top, and what the others put there.
-            let topItems = [at("brand", "top") ? "brand" : "", nav == "top" ? "nav" : "", at("search", "top") || (nav == "top" && at("search", "nav")) ? "search" : "",
-                            at("profile", "top") || (nav == "top" && at("profile", "nav")) ? "profile" : "",
-                            at("clock", "top") ? "clock" : "", at("dock", "top") ? "dock" : ""].filter { !$0.isEmpty }
+            let topItems = topBarItems(draft)
             let brandInBar = (brand == "start" || brand == "center") && !columnFirst
             if !topItems.isEmpty || brandInBar {
                 HStack(alignment: .top, spacing: 10) {
@@ -467,6 +469,20 @@ struct LayoutEditorView: View {
         .padding(Tokens.Space.s3)
         .finished(RoundedRectangle(cornerRadius: Tokens.Radius.lg, style: .continuous), fill: palette.panel, role: .card)
         .remoteSection()
+    }
+
+    /// What is drawn in the bar across the top, in order.
+    private func topBarItems(_ draft: LayoutDraft) -> [String] {
+        func shown(_ id: String, _ positions: [String]) -> Bool { draft.shown(id) && positions.contains(draft.position(id) ?? "") }
+        let nav = draft.position("nav") ?? "top"
+        var out: [String] = []
+        if shown("brand", ["top"]) { out.append("brand") }
+        if nav == "top" { out.append("nav") }
+        if shown("search", nav == "top" ? ["top", "nav"] : ["top"]) { out.append("search") }
+        if shown("profile", nav == "top" ? ["top", "nav"] : ["top"]) { out.append("profile") }
+        if shown("clock", ["top"]) { out.append("clock") }
+        if shown("dock", ["top"]) { out.append("dock") }
+        return out
     }
 
     private func column(_ draft: LayoutDraft, brandHere: Bool) -> some View {

@@ -69,8 +69,12 @@ struct RootView: View {
 
     /// The finish of the look in use, a step lower on a modest device or when the person asked for less transparency or motion.
     private var finish: Finish {
-        let modest = reduceTransparency || reduceMotion || ProcessInfo.processInfo.isLowPowerModeEnabled
-        return Finish(look: model.look, palette: model.palette, theme: model.appTheme, modest: modest)
+        #if os(tvOS)
+        let lowPower = false
+        #else
+        let lowPower = ProcessInfo.processInfo.isLowPowerModeEnabled
+        #endif
+        return Finish(look: model.look, palette: model.palette, theme: model.appTheme, modest: reduceTransparency || lowPower, calm: reduceMotion)
     }
 
     var body: some View {

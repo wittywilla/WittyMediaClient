@@ -161,6 +161,7 @@ struct SDUICardView: View {
                     ProgressStrip(fraction: Double(percent) / 100).padding(layout.sp("xs"))
                 }
             }
+            .overlay { FinishCardEdge(shape: clip) }
             .clipShape(clip)
             .tvFocusRing(radius: isCircle ? 999 : draw.radius("Card", style: style))
     }

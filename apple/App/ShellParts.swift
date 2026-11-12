@@ -89,13 +89,13 @@ struct ActivityButton: View {
                                 ProgressView().scaleEffect(1.2)
                             }
                         }
-                        Image(systemName: "waveform.path.ecg").font(.system(size: 15, weight: .semibold))
+                        Image(systemName: "waveform.path.ecg").font(.wm(size: 15, weight: .semibold))
                             .foregroundStyle(busy > 0 ? palette.text : palette.textHint)
                     }
                     .frame(width: 40, height: 40)
                     .overlay(alignment: .topTrailing) {
                         if busy > 0 {
-                            Text("\(busy)").font(.system(size: 11, weight: .bold).monospacedDigit())
+                            Text("\(busy)").font(.wm(size: 11, weight: .bold).monospacedDigit())
                                 .foregroundStyle(palette.onAccent)
                                 .padding(.horizontal, 4)
                                 .frame(minWidth: 17, minHeight: 17)
@@ -173,7 +173,7 @@ private struct ActivitySheet: View {
     }
 
     private func note(_ words: String) -> some View {
-        Text(words).font(.system(size: 13)).foregroundStyle(palette.textSecondary)
+        Text(words).font(.wm(size: 13)).foregroundStyle(palette.textSecondary)
             .padding(Tokens.Space.s3).frame(maxWidth: .infinity, alignment: .leading)
             .background(RoundedRectangle(cornerRadius: Tokens.Radius.md, style: .continuous).fill(palette.card))
     }
@@ -187,9 +187,9 @@ private struct ActivitySheet: View {
                 let known = group.tasks.compactMap { ($0.percent ?? -1) >= 0 ? $0.percent : nil }
                 VStack(alignment: .leading, spacing: Tokens.Space.s2) {
                     HStack {
-                        Text(group.name).font(.system(size: 15, weight: .semibold)).foregroundStyle(palette.text)
+                        Text(group.name).font(.wm(size: 15, weight: .semibold)).foregroundStyle(palette.text)
                         Spacer()
-                        if !known.isEmpty { Text("\(Int((known.reduce(0, +) / Double(known.count)).rounded()))%").font(.system(size: 13).monospacedDigit()).foregroundStyle(palette.textSecondary) }
+                        if !known.isEmpty { Text("\(Int((known.reduce(0, +) / Double(known.count)).rounded()))%").font(.wm(size: 13).monospacedDigit()).foregroundStyle(palette.textSecondary) }
                     }
                     .accessibilityElement(children: .combine)
                     .accessibilityAddTraits(.isHeader)
@@ -204,20 +204,20 @@ private struct ActivitySheet: View {
         return VStack(alignment: .leading, spacing: 6) {
             HStack(alignment: .top) {
                 VStack(alignment: .leading, spacing: 2) {
-                    Text(task.title ?? "").font(.system(size: 14, weight: .semibold)).foregroundStyle(palette.text)
-                    Text([task.by.map { "started by \($0)" }].compactMap { $0 }.joined(separator: " · ")).font(.system(size: 12)).foregroundStyle(palette.textSecondary)
+                    Text(task.title ?? "").font(.wm(size: 14, weight: .semibold)).foregroundStyle(palette.text)
+                    Text([task.by.map { "started by \($0)" }].compactMap { $0 }.joined(separator: " · ")).font(.wm(size: 12)).foregroundStyle(palette.textSecondary)
                 }
                 Spacer(minLength: 0)
-                Text(task.stateWords).font(.system(size: 12, weight: .semibold)).foregroundStyle(palette.textSecondary)
+                Text(task.stateWords).font(.wm(size: 12, weight: .semibold)).foregroundStyle(palette.textSecondary)
             }
             if percent >= 0 {
                 ProgressView(value: min(1, percent / 100)).tint(palette.accent)
             } else if task.state == "running" {
                 ProgressView().progressViewStyle(.linear).tint(palette.accent)
             }
-            if let phase = task.phase, !phase.isEmpty { Text(phase).font(.system(size: 12)).foregroundStyle(palette.textSecondary) }
-            if !task.countWords.isEmpty { Text(task.countWords).font(.system(size: 12)).foregroundStyle(palette.textSecondary) }
-            if let item = task.item, !item.isEmpty { Text(item).font(.system(size: 12)).foregroundStyle(palette.textHint).lineLimit(1) }
+            if let phase = task.phase, !phase.isEmpty { Text(phase).font(.wm(size: 12)).foregroundStyle(palette.textSecondary) }
+            if !task.countWords.isEmpty { Text(task.countWords).font(.wm(size: 12)).foregroundStyle(palette.textSecondary) }
+            if let item = task.item, !item.isEmpty { Text(item).font(.wm(size: 12)).foregroundStyle(palette.textHint).lineLimit(1) }
             if !readOnly, task.canPause == true || task.canResume == true || task.canCancel == true {
                 HStack(spacing: Tokens.Space.s2) {
                     if task.canPause == true { Button { act(task, "pause") } label: { Label("Pause", systemImage: "pause.fill") }.pageButton(.secondary) }
@@ -243,15 +243,15 @@ private struct ActivitySheet: View {
                 ForEach(history) { task in
                     VStack(alignment: .leading, spacing: 6) {
                         HStack(alignment: .top) {
-                            Text(task.title ?? "").font(.system(size: 14, weight: .semibold)).foregroundStyle(palette.text)
+                            Text(task.title ?? "").font(.wm(size: 14, weight: .semibold)).foregroundStyle(palette.text)
                             Spacer(minLength: 0)
-                            Text(task.stateWords).font(.system(size: 12, weight: .semibold))
+                            Text(task.stateWords).font(.wm(size: 12, weight: .semibold))
                                 .foregroundStyle(task.state == "failed" ? palette.danger : palette.textSecondary)
                         }
-                        if let result = task.result, !result.isEmpty { Text(result).font(.system(size: 12)).foregroundStyle(palette.textSecondary) }
+                        if let result = task.result, !result.isEmpty { Text(result).font(.wm(size: 12)).foregroundStyle(palette.textSecondary) }
                         if let error = task.error, !error.isEmpty {
-                            Text(error).font(.system(size: 13, weight: .semibold)).foregroundStyle(palette.danger)
-                            if let fix = task.fix, !fix.isEmpty { Text(fix).font(.system(size: 12)).foregroundStyle(palette.textSecondary) }
+                            Text(error).font(.wm(size: 13, weight: .semibold)).foregroundStyle(palette.danger)
+                            if let fix = task.fix, !fix.isEmpty { Text(fix).font(.wm(size: 12)).foregroundStyle(palette.textSecondary) }
                         }
                         if !readOnly, task.canRetry == true {
                             Button { act(task, "retry") } label: { Label(task.type == "scan" ? "Scan again" : "Try again", systemImage: "arrow.clockwise") }
@@ -288,7 +288,7 @@ struct PageFoot: View {
             ForEach(notices, id: \.self) { kind in
                 if let notice = model.legal?.notice(kind) {
                     (Text(notice.words + " ") + Text(.init("[\(notice.link)](wms://legal)")))
-                        .font(.system(size: 12))
+                        .font(.wm(size: 12))
                         .foregroundStyle(palette.textHint)
                         .tint(palette.accentText)
                         .lineSpacing(3)
@@ -301,9 +301,9 @@ struct PageFoot: View {
                 }
             }
             HStack(spacing: 6) {
-                Text("WittyMediaServer \(version.number)").font(.system(size: 15)).foregroundStyle(palette.text)
+                Text("WittyMediaServer \(version.number)").font(.wm(size: 15)).foregroundStyle(palette.text)
                 if !version.stage.isEmpty {
-                    Text(version.stage).font(.system(size: 11, weight: .bold)).tracking(0.55)
+                    Text(version.stage).font(.wm(size: 11, weight: .bold)).tracking(0.55)
                         .foregroundStyle(palette.accentText)
                         .padding(.horizontal, 6)
                         .background(RoundedRectangle(cornerRadius: Tokens.Radius.xs, style: .continuous).fill(palette.accent.opacity(0.16)))

@@ -214,13 +214,14 @@ public struct ExperienceLook: Decodable, Equatable, Sendable {
         scene = ((try? box.decodeIfPresent(Scene.self, forKey: .scene))?.layers) ?? []
     }
 
-    /// The look for a modest device, or a person who asked for less transparency or motion: every effect a step lower, and
-    /// only the scene's first layer ("On modest hardware and with reduced transparency or motion a renderer draws only the
-    /// first layer", the server's docs/THEMES.md).
-    public func adjusted(modest: Bool) -> ExperienceLook {
-        guard modest else { return self }
+    /// The look for a modest device, or a person who asked for less transparency or motion: with `modest` (a slow device, low power,
+    /// Reduce Transparency) every effect a step lower; with `modest` or `calm` (Reduce Motion) only the scene's first layer and no
+    /// overshoot ("On modest hardware and with reduced transparency or motion a renderer draws only the first layer", the server's
+    /// docs/THEMES.md).
+    public func adjusted(modest: Bool, calm: Bool = false) -> ExperienceLook {
+        guard modest || calm else { return self }
         var out = self
-        out.effects = effects.lowered
+        if modest { out.effects = effects.lowered }
         out.scene = Array(scene.prefix(1))
         out.overshoot = false
         return out

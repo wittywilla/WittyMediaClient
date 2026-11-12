@@ -128,9 +128,9 @@ struct Finish: Equatable {
 
     init() {}
 
-    /// `modest`: a device that is slow, in low power mode, or whose person asked for less transparency or motion.
-    init(look: ExperienceLook, palette: Palette, theme: AppTheme, modest: Bool) {
-        let adjusted = look.adjusted(modest: modest)
+    /// `modest`: a device that is slow, in low power mode, or whose person asked for less transparency; `calm`: less motion.
+    init(look: ExperienceLook, palette: Palette, theme: AppTheme, modest: Bool, calm: Bool) {
+        let adjusted = look.adjusted(modest: modest, calm: calm)
         effects = adjusted.effects
         focusStyle = adjusted.focusStyle
         overshoot = adjusted.overshoot
@@ -287,6 +287,25 @@ private struct FinishGlow: ViewModifier {
     func body(content: Content) -> some View {
         let level = finish.effects.glow
         content.shadow(color: on && level.on ? colour.opacity(0.6 * level.amount + 0.2) : .clear, radius: on && level.on ? 8 + 6 * level.amount : 0)
+    }
+}
+
+/// The edge of a card's picture: a lit rim and a shaded foot where the look has bevel, a rim of the glass's edge where it has glass.
+struct FinishCardEdge<S: Shape>: View {
+    @Environment(\.finish) private var finish
+    let shape: S
+
+    var body: some View {
+        let e = finish.effects
+        ZStack {
+            if e.bevel.on {
+                shape.stroke(LinearGradient(stops: [.init(color: .white.opacity(0.4 * e.bevel.amount), location: 0), .init(color: .clear, location: 0.4),
+                                                    .init(color: .black.opacity(0.3 * e.bevel.amount), location: 1)], startPoint: .top, endPoint: .bottom), lineWidth: 2)
+            }
+            if e.glass == .full { shape.stroke(finish.glassEdge, lineWidth: 2) }
+        }
+        .allowsHitTesting(false)
+        .accessibilityHidden(true)
     }
 }
 

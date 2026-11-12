@@ -113,7 +113,7 @@ struct RememberedServers<Card: View>: View {
     var body: some View {
         VStack(alignment: .leading, spacing: sizes.gap * 0.6) {
             HStack(spacing: Tokens.Space.s2) {
-                Text("Saved").font(.system(size: sizes.body, weight: .heavy)).foregroundStyle(palette.text)
+                Text("Saved").font(.wm(size: sizes.body, weight: .heavy)).foregroundStyle(palette.text)
                     .accessibilityAddTraits(.isHeader)
                 Spacer(minLength: 0)
                 #if !os(tvOS)

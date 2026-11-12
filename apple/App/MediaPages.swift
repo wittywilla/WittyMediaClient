@@ -125,7 +125,7 @@ private struct MediaHeading: View {
             SectionTitle(words)
         } else {
             Text(words)
-                .font(.system(size: 17, weight: .semibold))
+                .font(.wm(size: 17, weight: .semibold))
                 .tracking(-0.2)
                 .foregroundStyle(palette.text)
                 .accessibilityAddTraits(.isHeader)

@@ -106,18 +106,18 @@ struct GameShelfRow: View {
                 EraName(name: title, era: GameShelves.era(console), size: tv ? 28 : 20, colour: palette.text)
                     .accessibilityAddTraits(.isHeader)
                 if let era = GameShelves.era(console), let name = GameShelves.eraNames[era] {
-                    Text(name).font(.system(size: tv ? 20 : 12, weight: .medium)).foregroundStyle(palette.textHint)
+                    Text(name).font(.wm(size: tv ? 20 : 12, weight: .medium)).foregroundStyle(palette.textHint)
                 }
             } else {
-                Text(title).font(.system(size: tv ? 28 : 20, weight: .semibold)).foregroundStyle(palette.text).lineLimit(1)
+                Text(title).font(.wm(size: tv ? 28 : 20, weight: .semibold)).foregroundStyle(palette.text).lineLimit(1)
                     .accessibilityAddTraits(.isHeader)
             }
             if let count {
-                Text(count.formatted()).font(.system(size: tv ? 22 : 13)).foregroundStyle(palette.textHint)
+                Text(count.formatted()).font(.wm(size: tv ? 22 : 13)).foregroundStyle(palette.textHint)
             }
             if let console, console.ready == false {
                 Text(console.unavailable != nil ? "Not on this server" : "Needs setting up")
-                    .font(.system(size: tv ? 20 : 12, weight: .semibold)).foregroundStyle(palette.warn)
+                    .font(.wm(size: tv ? 20 : 12, weight: .semibold)).foregroundStyle(palette.warn)
             }
             Spacer(minLength: Tokens.Space.s2)
             if let all {
@@ -205,15 +205,15 @@ struct PulledInfo: View {
         let c = context.console(item)
         let entry = context.progress[item.id]
         VStack(alignment: .leading, spacing: tv ? Tokens.Space.s2 : Tokens.Space.s1) {
-            Text(item.title).font(.system(size: tv ? 30 : 17, weight: .semibold)).foregroundStyle(palette.text).lineLimit(2)
+            Text(item.title).font(.wm(size: tv ? 30 : 17, weight: .semibold)).foregroundStyle(palette.text).lineLimit(2)
             let facts = gameFacts(item, c)
-            if !facts.isEmpty { Text(facts).font(.system(size: tv ? 22 : 13)).foregroundStyle(palette.textSecondary).lineLimit(1) }
+            if !facts.isEmpty { Text(facts).font(.wm(size: tv ? 22 : 13)).foregroundStyle(palette.textSecondary).lineLimit(1) }
             if let entry, entry.save != nil, let when = entry.lastPlayed {
                 HStack(spacing: Tokens.Space.s1) {
                     Circle().fill(palette.accent).frame(width: tv ? 10 : 6, height: tv ? 10 : 6)
                     Text("\(say("wpWhereYouLeftOff")): \(GameWords.ago(when))")
                 }
-                .font(.system(size: tv ? 22 : 13)).foregroundStyle(palette.textSecondary)
+                .font(.wm(size: tv ? 22 : 13)).foregroundStyle(palette.textSecondary)
             }
             HStack(spacing: Tokens.Space.s2) {
                 if c?.ready ?? true {
@@ -300,8 +300,8 @@ struct ResumeCard: View {
                 HStack(alignment: .bottom, spacing: Tokens.Space.s3) {
                     VStack(alignment: .leading, spacing: 2) {
                         Text(say("wpWhereYouLeftOff")).font(.caption).foregroundStyle(.white.opacity(0.8))
-                        Text(item.title).font(.system(size: 22, weight: .semibold)).foregroundStyle(.white).lineLimit(2)
-                        Text(facts).font(.system(size: 13)).foregroundStyle(.white.opacity(0.85)).lineLimit(1)
+                        Text(item.title).font(.wm(size: 22, weight: .semibold)).foregroundStyle(.white).lineLimit(2)
+                        Text(facts).font(.wm(size: 13)).foregroundStyle(.white.opacity(0.85)).lineLimit(1)
                     }
                     Spacer(minLength: 0)
                     Label(entry.save != nil ? "Resume" : "Play", systemImage: "play.fill")
@@ -351,7 +351,7 @@ struct OnTheGoRow: View {
         if !entries.isEmpty {
             VStack(alignment: .leading, spacing: Tokens.Space.s2) {
                 if let title {
-                    Text(title).font(.system(size: tv ? 28 : 20, weight: .semibold)).foregroundStyle(palette.text)
+                    Text(title).font(.wm(size: tv ? 28 : 20, weight: .semibold)).foregroundStyle(palette.text)
                         .accessibilityAddTraits(.isHeader).padding(.horizontal, gutter)
                 }
                 ScrollView(.horizontal, showsIndicators: false) {
@@ -386,9 +386,9 @@ struct OnTheGoRow: View {
                 .clipShape(RoundedRectangle(cornerRadius: Tokens.Radius.md, style: .continuous))
                 .overlay(alignment: .topTrailing) { if entry.save != nil { ShelfRibbon().padding(.trailing, Tokens.Space.s3).offset(y: -4) } }
                 .padding(.bottom, Tokens.Space.s1)
-                Text(item.title).font(.system(size: tv ? 24 : 14, weight: .semibold)).foregroundStyle(palette.text).lineLimit(1)
+                Text(item.title).font(.wm(size: tv ? 24 : 14, weight: .semibold)).foregroundStyle(palette.text).lineLimit(1)
                 Text([played > 60 ? GameWords.played(played) : nil, entry.lastPlayed.map { GameWords.ago($0) }].compactMap { $0 }.joined(separator: " · "))
-                    .font(.system(size: tv ? 20 : 12)).foregroundStyle(palette.textHint).lineLimit(1)
+                    .font(.wm(size: tv ? 20 : 12)).foregroundStyle(palette.textHint).lineLimit(1)
             }
             .frame(width: size.width, alignment: .leading)
         }
@@ -428,7 +428,7 @@ struct CollectionBand: View {
                     .accessibilityAddTraits(.isHeader)
                 let facts = [console.name != console.shortName ? console.name : nil,
                              count.map { "\($0.formatted()) \($0 == 1 ? "game" : "games")" }].compactMap { $0 }.joined(separator: " · ")
-                if !facts.isEmpty { Text(facts).font(.system(size: tv ? 24 : 15)).foregroundStyle(ink.opacity(0.85)) }
+                if !facts.isEmpty { Text(facts).font(.wm(size: tv ? 24 : 15)).foregroundStyle(ink.opacity(0.85)) }
             }
             .padding(.horizontal, metrics.gutter)
             .padding(.bottom, tv ? Tokens.Space.s8 : Tokens.Space.s6)
@@ -505,9 +505,9 @@ struct GameGridCell: View {
                 GameCaseView(item: item, console: c, ribbon: context.inProgress(item), favourite: context.favourites.contains(item.id), fit: width)
                     .frame(width: width, height: min(176 * s.scale, width * 1.45), alignment: .bottom)
                     .padding(.bottom, Tokens.Space.s2)
-                Text(item.title).font(.system(size: tv ? 22 : 14, weight: .semibold)).foregroundStyle(palette.text).lineLimit(1)
+                Text(item.title).font(.wm(size: tv ? 22 : 14, weight: .semibold)).foregroundStyle(palette.text).lineLimit(1)
                 Text([c?.shortName, item.year.map(String.init)].compactMap { $0 }.joined(separator: " · "))
-                    .font(.system(size: tv ? 18 : 12)).foregroundStyle(palette.textHint).lineLimit(1)
+                    .font(.wm(size: tv ? 18 : 12)).foregroundStyle(palette.textHint).lineLimit(1)
             }
             .frame(width: width, alignment: .leading)
         }
@@ -565,17 +565,17 @@ struct TvGamePreview: View {
         HStack(alignment: .center, spacing: Tokens.Space.s12) {
             VStack(alignment: .leading, spacing: Tokens.Space.s3) {
                 Text([c?.shortName, GameShelves.era(c).flatMap { GameShelves.eraNames[$0] }].compactMap { $0 }.joined(separator: " · "))
-                    .font(.system(size: 20, weight: .semibold)).foregroundStyle(palette.textSecondary)
-                Text(item.title).font(.system(size: 64, weight: .bold)).tracking(-1.4).foregroundStyle(palette.text)
+                    .font(.wm(size: 20, weight: .semibold)).foregroundStyle(palette.textSecondary)
+                Text(item.title).font(.wm(size: 64, weight: .bold)).tracking(-1.4).foregroundStyle(palette.text)
                     .lineLimit(2).minimumScaleFactor(0.6)
                 let facts = [item.year.map(String.init), item.studio, item.genres?.first].compactMap { $0 }.filter { !$0.isEmpty }.joined(separator: " · ")
-                if !facts.isEmpty { Text(facts).font(.system(size: 24)).foregroundStyle(palette.textSecondary).lineLimit(1) }
+                if !facts.isEmpty { Text(facts).font(.wm(size: 24)).foregroundStyle(palette.textSecondary).lineLimit(1) }
                 if let entry, entry.save != nil, let when = entry.lastPlayed {
                     HStack(spacing: Tokens.Space.s2) {
                         Circle().fill(palette.accent).frame(width: 12, height: 12)
                         Text("\(say("wpWhereYouLeftOff")): \(GameWords.ago(when))\(item.playedSeconds > 60 ? " · " + GameWords.played(item.playedSeconds) + " played" : "")")
                     }
-                    .font(.system(size: 22)).foregroundStyle(palette.textSecondary)
+                    .font(.wm(size: 22)).foregroundStyle(palette.textSecondary)
                 }
                 HStack(spacing: Tokens.Space.s4) {
                     if c?.ready ?? true {
@@ -640,12 +640,12 @@ struct TvPromptBar: View {
 
     private func hint(_ key: Text, _ words: String) -> some View {
         HStack(spacing: Tokens.Space.s2) {
-            key.font(.system(size: 18, weight: .bold))
+            key.font(.wm(size: 18, weight: .bold))
                 .foregroundStyle(palette.text)
                 .padding(.horizontal, Tokens.Space.s3)
                 .frame(minWidth: 40, minHeight: 40)
                 .overlay(Capsule().strokeBorder(palette.text.opacity(0.6), lineWidth: 2))
-            Text(words).font(.system(size: 22)).foregroundStyle(palette.textSecondary)
+            Text(words).font(.wm(size: 22)).foregroundStyle(palette.textSecondary)
         }
     }
 }

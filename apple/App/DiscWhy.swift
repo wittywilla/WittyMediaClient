@@ -206,7 +206,7 @@ struct DiscWhy: View {
             Button { decided.toggle() } label: {
                 HStack(spacing: 6) {
                     Image(systemName: "arrowtriangle.right.fill")
-                        .font(.system(size: metrics.tv ? 14 : 8))
+                        .font(.wm(size: metrics.tv ? 14 : 8))
                         .rotationEffect(.degrees(decided ? 90 : 0))
                         .accessibilityHidden(true)
                     Text("How the engine decided")
