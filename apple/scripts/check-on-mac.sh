@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
 # SPDX-License-Identifier: GPL-3.0-or-later
 # Copyright (C) 2026 WittyWilla and contributors
-# The first check of the Apple apps, for a Mac with Xcode. It signs nothing and installs nothing on a
-# real device. It runs WittyKit's tests, builds for Apple TV, iPhone and iPad, then opens each in a
-# simulator and takes a picture. Everything it finds goes in apple/build-logs, to send back.
+# The first check of the Apple apps, for a Mac with Xcode. It installs nothing on a real device, and signs only
+# for this Mac, which needs no account. It runs WittyKit's tests, builds for Apple TV, iPhone and iPad, then opens
+# each in a simulator and takes a picture. Everything it finds goes in apple/build-logs, to send back.
 #
 #   bash apple/scripts/check-on-mac.sh
 set -u
@@ -32,8 +32,10 @@ fi
 say "ok    generating the Xcode project"
 
 build() { # scheme, platform name, log name
+  # Every build here is for a simulator, signed for this Mac only by project.yml: no account is needed, and an
+  # app with no signature at all would be refused the simulator's keychain, so it couldn't keep a sign-in.
   if xcodebuild -project WittyMedia.xcodeproj -scheme "$1" -destination "generic/platform=$2" -derivedDataPath DerivedData \
-    CODE_SIGNING_ALLOWED=NO build >"$LOGS/$3.log" 2>&1; then
+    build >"$LOGS/$3.log" 2>&1; then
     say "ok    building for $2"
     return 0
   fi

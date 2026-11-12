@@ -64,6 +64,9 @@ enum Keychain {
         return status
     }
 
+    /// The status of the last save that failed (errSecSuccess after one that didn't), for the words to show.
+    private(set) static var lastFailure: OSStatus = errSecSuccess
+
     static var token: String { read(tokenAccount) }
 
     /// The key of the server the token was kept with. Empty for a server too old to have one.
@@ -74,6 +77,7 @@ enum Keychain {
     static func save(token: String, pin: String) -> Bool {
         let tokenStatus = write(token, tokenAccount)
         let pinStatus = tokenStatus == errSecSuccess ? write(pin, pinAccount) : tokenStatus
+        lastFailure = pinStatus
         if pinStatus == errSecSuccess { return true }
         ClientLog.shared.warn("keychain", "The sign-in couldn't be saved: \(pinStatus)")
         clear()

@@ -27,6 +27,16 @@ settings:
     INFOPLIST_KEY_CFBundleDisplayName: WittyMediaClient
     # Filled in by the owner in Xcode: see docs/OWNER-STEPS.md.
     DEVELOPMENT_TEAM: ""
+    # A simulator build is signed for this Mac only ("sign to run locally", no account needed). An app with no
+    # signature has no entitlements, and the simulator's keychain refuses it (errSecMissingEntitlement, -34018):
+    # the sign-in couldn't be kept and was asked for again at every launch. Builds for a device are untouched:
+    # package-ipas.sh leaves them unsigned for AltStore or SideStore to sign.
+    "CODE_SIGNING_ALLOWED[sdk=iphonesimulator*]": "YES"
+    "CODE_SIGNING_ALLOWED[sdk=appletvsimulator*]": "YES"
+    "CODE_SIGNING_ALLOWED[sdk=xrsimulator*]": "YES"
+    "CODE_SIGN_IDENTITY[sdk=iphonesimulator*]": "-"
+    "CODE_SIGN_IDENTITY[sdk=appletvsimulator*]": "-"
+    "CODE_SIGN_IDENTITY[sdk=xrsimulator*]": "-"
     # LiveKit's WebRTC has no Intel build for the tvOS or visionOS simulators: Apple silicon only there.
     "EXCLUDED_ARCHS[sdk=appletvsimulator*]": x86_64
     "EXCLUDED_ARCHS[sdk=xrsimulator*]": x86_64
