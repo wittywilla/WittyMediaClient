@@ -285,8 +285,9 @@ object CatchupRules {
         return programme.start <= now && now - programme.start <= days * 86400L
     }
 
+    // With a short-lived pass in the stream's address, as tune has it: the player sends no sign-in of its own.
     fun path(key: String, programme: GuideProgramme, viewer: String): String =
-        "/tv/${GuideRules.pathPart(key)}/catchup?start=${programme.start}&end=${programme.end}&viewer=${GuideRules.pathPart(viewer)}"
+        "/tv/${GuideRules.pathPart(key)}/catchup?start=${programme.start}&end=${programme.end}&streamToken=1&viewer=${GuideRules.pathPart(viewer)}"
 }
 
 // A recording's options, as POST /recordings and /recording-rules take them on a server with `tv-dvr-rules-2`.

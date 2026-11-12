@@ -273,7 +273,8 @@ object LiveTv {
                     why = when {
                         programme != null && e.status == 404 -> "That programme is no longer kept, so it can't be watched from the start."
                         programme != null -> problemText(e, "That programme can't be watched from the start right now.")
-                        else -> problemText(e, "This channel can't be played right now.")
+                        // A tuner's own reason ("the stream answered 404 …") is said after what it means.
+                        else -> problemText(e, "").let { r -> if (r.isEmpty()) "This channel can't be played right now." else if (r.first().isLowerCase()) "This channel can't be played right now: $r." else r }
                     }
                     state = State.Failed
                     return

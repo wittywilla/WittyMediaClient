@@ -224,6 +224,9 @@ fun ChannelScreen(nav: Nav, start: String) {
     }
     BackHandler(enabled = mini) { closeMini() }
 
+    val failedHere = LiveTv.state == LiveTv.State.Failed && LiveTv.key == key
+    // Back on the picture once it's tuning again, so the arrows change channel.
+    LaunchedEffect(failedHere) { if (!failedHere && !mini) runCatching { screen.requestFocus() } }
     CompositionLocalProvider(LocalTvApi provides api) {
         Box(
             Modifier
@@ -233,6 +236,9 @@ fun ChannelScreen(nav: Nav, start: String) {
                 .onKeyEvent { e ->
                     if (mini || e.type != KeyEventType.KeyDown) return@onKeyEvent false
                     val code = e.nativeKeyEvent.keyCode
+                    // A channel that failed: the arrows and Select are for its buttons.
+                    if (failedHere && code in listOf(KeyEvent.KEYCODE_DPAD_UP, KeyEvent.KEYCODE_DPAD_DOWN, KeyEvent.KEYCODE_DPAD_LEFT, KeyEvent.KEYCODE_DPAD_RIGHT,
+                            KeyEvent.KEYCODE_DPAD_CENTER, KeyEvent.KEYCODE_ENTER, KeyEvent.KEYCODE_NUMPAD_ENTER)) return@onKeyEvent false
                     if (code in KeyEvent.KEYCODE_0..KeyEvent.KEYCODE_9 || code in KeyEvent.KEYCODE_NUMPAD_0..KeyEvent.KEYCODE_NUMPAD_9) {
                         val digit = '0' + if (code >= KeyEvent.KEYCODE_NUMPAD_0) code - KeyEvent.KEYCODE_NUMPAD_0 else code - KeyEvent.KEYCODE_0
                         dialled = DialRules.append(dialled, digit)
@@ -253,7 +259,7 @@ fun ChannelScreen(nav: Nav, start: String) {
                         else -> false
                     }
                 }
-                .focusable(!mini),
+                .focusable(!mini && !failedHere),
         ) {
             LivePicture(Modifier.fillMaxSize())
             if (LiveTv.key == key && LiveTv.playing && LiveTv.info?.now?.kind == "slate") {
@@ -261,7 +267,7 @@ fun ChannelScreen(nav: Nav, start: String) {
                     SlateCard(dress, LiveTv.info?.name ?: channel?.name.orEmpty(), LiveTv.info?.next)
                 }
             }
-            if (LiveTv.state == LiveTv.State.Failed && LiveTv.key == key) {
+            if (failedHere) {
                 Failure(dress, channel, LiveTv.why, fromStart != null, onTune = ::tune, onNext = { step(1) }, onGuide = ::toGuide)
             } else if (LiveTv.key != key || !LiveTv.playing) {
                 Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { Spinner(Color.White, dress.pt(64)) }
@@ -304,6 +310,9 @@ fun ChannelScreen(nav: Nav, start: String) {
 @Composable
 private fun Failure(dress: TvDress, channel: GuideChannel?, why: String, fromStart: Boolean, onTune: (String) -> Unit, onNext: () -> Unit, onGuide: () -> Unit) {
     val p = dress.paint
+    // The focus starts on Try again, where the remote can reach every button.
+    val first = remember { FocusRequester() }
+    LaunchedEffect(Unit) { runCatching { first.requestFocus() } }
     Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
         Column(
             Modifier
@@ -318,7 +327,7 @@ private fun Failure(dress: TvDress, channel: GuideChannel?, why: String, fromSta
             Text(why, style = MaterialTheme.typography.label.copy(fontWeight = FontWeight.Normal), color = p.text, textAlign = TextAlign.Center)
             Row(horizontalArrangement = Arrangement.spacedBy(dress.pt(16))) {
                 channel?.alternative?.let { alt -> TvButton(dress, "Watch ${alt.number} ${alt.name} instead", { onTune(alt.key) }, on = true) }
-                TvButton(dress, "Try again", { LiveTv.retry() })
+                TvButton(dress, "Try again", { LiveTv.retry() }, focusRequester = first)
                 if (fromStart) TvButton(dress, "Watch live", { LiveTv.goLive() }, on = true)
                 TvButton(dress, "Next channel", onNext)
                 TvButton(dress, "Back to the guide", onGuide)

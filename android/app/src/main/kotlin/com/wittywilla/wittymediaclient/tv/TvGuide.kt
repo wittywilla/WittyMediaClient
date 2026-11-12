@@ -173,6 +173,8 @@ fun GuideScreen(nav: Nav) {
     var offerAll by remember { mutableStateOf<Pair<String, Int>?>(null) }
     // A row to go to once the rows of a newly chosen set or page have come, and the time to go to in it.
     var pending by remember { mutableStateOf<GuideSpot?>(null) }
+    // A set changed from the grid with the coloured key: the focus goes back to the grid, not to the tabs above it.
+    var refocus by remember { mutableStateOf(false) }
     // A number being typed on the remote's digits.
     var dialled by remember { mutableStateOf("") }
     // This device's choice of set is kept for each server and account.
@@ -282,6 +284,7 @@ fun GuideScreen(nav: Nav) {
     // The set before or after, with the remote's coloured keys or the strip over the grid.
     fun cycleSet(step: Int) {
         val next = SetRules.cycle(store.set, store.sets.orEmpty(), step) ?: return
+        refocus = focusedKey != null
         chooseSet(next)
         store.sets?.firstOrNull { it.id == next }?.let { say(it.name) }
     }
@@ -574,7 +577,8 @@ fun GuideScreen(nav: Nav) {
         pending = null
         store.setFrom(from)
         store.ensure(0)
-        if (target.row > 0) {
+        if (target.row > 0 || refocus) {
+            refocus = false
             spot = spot.copy(at = target.at)
             moveRow(target.row)
         } else {
@@ -745,11 +749,13 @@ fun GuideScreen(nav: Nav) {
             TvDialog(
                 if (wanted.all { it.isDigit() }) "Channel $wanted isn't in $where" else "That channel isn't in $where",
                 "It's in All channels.",
+                // One above the other: side by side, "Show all channels" didn't fit its half of the dialog.
                 listOf(
-                    TvDialogButton("Stay here", cancel = true, action = close),
                     TvDialogButton("Show all channels", preferred = true) { close(); showAllAt(GuideSpot(row, spot.at)) },
+                    TvDialogButton("Stay here", cancel = true, action = close),
                 ),
                 close,
+                stacked = true,
             )
         }
         if (searchOpen) GuideSearch(nav, onGo = ::go, onClose = { searchOpen = false })
