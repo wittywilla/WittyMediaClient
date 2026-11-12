@@ -67,10 +67,11 @@ struct MoreInfoSheet: View {
                 do {
                     try await client.record(channel: info.channel.key, title: p.title, sub: p.sub.isEmpty ? nil : p.sub, start: p.start, stop: p.end)
                     said("Recording \(p.title)")
+                    await load()
                 } catch { said((error as? APIError)?.message ?? "That couldn’t be recorded.") }
             }
         case "remind-me", "remove-reminder":
-            Task { said(await reminders.toggle(info.channel.key, guideProgramme)) }
+            Task { said(await reminders.toggle(info.channel.key, guideProgramme)); await load() }
         case "open-item-page":
             if let item = info.library?.itemId { dismiss(); model.path.append(.item(item)) }
             else if let show = info.library?.showId { dismiss(); model.path.append(.show(show)) }
