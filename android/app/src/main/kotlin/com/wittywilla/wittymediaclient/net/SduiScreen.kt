@@ -310,6 +310,21 @@ class SduiScreen(val document: SduiDocument) {
                 d.hasMore = p.child("more") != null
                 p.child("card")?.let { d.cardStyle = "episode"; d.cardWidth = it.int("width") ?: 0; d.cardHeight = it.int("height") ?: 0 }
             }
+            "Credits" -> {
+                // The cast's and the guest stars' cards in rows, then each department's people; how many of each were sent.
+                d.role = "region"; d.label = p.str("title")
+                d.cards = node.children.size
+                d.say("title", p.str("title"))
+                d.limit("title", 1)
+                d.textSize = layout.textSize("heading")
+                d.say("groups", p.objects("groups").joinToString(" · ") { g ->
+                    val shown = g.int("shown") ?: 0
+                    val total = g.int("total") ?: 0
+                    g.str("label") + " " + shown + if (total > shown) " of $total" else ""
+                })
+                p.child("card")?.let { c -> d.cardStyle = "person"; d.cardWidth = c.int("width") ?: 0; d.cardHeight = c.int("height") ?: 0 }
+                p.child("more")?.let { m -> d.hasMore = true; d.buttons = listOf(m.str("label").ifEmpty { "Show all" }) }
+            }
             "TrackList" -> { d.role = "list"; d.label = "Tracks"; d.cards = node.children.size }
             "Track" -> {
                 d.role = "button"

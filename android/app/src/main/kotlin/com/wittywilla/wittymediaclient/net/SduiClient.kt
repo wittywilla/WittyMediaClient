@@ -16,11 +16,6 @@ import java.security.MessageDigest
 // device this is and what it can draw; every answer is kept with its ETag, so the next ask is a 304 and a server
 // out of reach still shows the page as it last was.
 
-// The server's features this depends on. Against a server without them the app keeps its own screens.
-val SDUI_FEATURES = listOf("sdui-pages", "sdui-catalog", "sdui-navigation", "sdui-personal")
-
-fun sduiAvailable(features: Set<String>): Boolean = features.containsAll(SDUI_FEATURES)
-
 // What this device is, sent with every request. `viewport` is the window in points, "411x891", empty on a TV.
 data class SduiDevice(
     val platform: String,

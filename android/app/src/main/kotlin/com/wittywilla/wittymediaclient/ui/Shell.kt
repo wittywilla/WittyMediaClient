@@ -217,58 +217,6 @@ private sealed interface Found {
     data class AShow(val show: Show) : Found
 }
 
-@Composable
-fun SearchScreen(nav: Nav, s: Map<String, String>) {
-    val metrics = LocalMetrics.current
-    var text by rememberSaveable { mutableStateOf("") }
-    var results by remember { mutableStateOf<List<Found>?>(null) }
-    var problem by remember { mutableStateOf("") }
-    LaunchedEffect(text) {
-        val wanted = text.trim()
-        problem = ""
-        if (wanted.length < SEARCH_MIN) { results = null; return@LaunchedEffect }
-        delay(SEARCH_WAIT_MS)
-        try {
-            val shows = nav.app.api.searchShows(wanted, SEARCH_LIMIT).shows.map { Found.AShow(it) }
-            val items = nav.app.api.searchItems(wanted, SEARCH_LIMIT).items.map { Found.AnItem(it) }
-            results = shows + items
-        } catch (e: CancellationException) {
-            throw e
-        } catch (e: Exception) {
-            if (!nav.handleExpired(e)) problem = problemWords(e, s["errLost"].orEmpty())
-        }
-    }
-    Column(
-        Modifier.fillMaxSize().statusBarsPadding().imePadding().padding(horizontal = metrics.gutter).padding(top = Space.S4),
-        verticalArrangement = Arrangement.spacedBy(Space.S3),
-    ) {
-        Heading("Search")
-        OutlinedTextField(
-            value = text, onValueChange = { text = it }, label = { Text("Titles, shows and songs") }, singleLine = true,
-            keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search, autoCorrectEnabled = false),
-            modifier = Modifier.fillMaxWidth().tvLeavable(),
-        )
-        ErrorText(problem)
-        val list = results
-        if (list != null && list.isEmpty()) Secondary("Nothing found for that.", Modifier.semantics { contentDescription = "Nothing found" })
-        if (!list.isNullOrEmpty()) {
-            LazyVerticalGrid(
-                posterColumns(),
-                contentPadding = PaddingValues(bottom = LocalBottomRoom.current + Space.S4),
-                horizontalArrangement = Arrangement.spacedBy(Space.S2),
-                verticalArrangement = Arrangement.spacedBy(Space.S3),
-            ) {
-                items(list, key = { if (it is Found.AShow) "s${it.show.id}" else "i${(it as Found.AnItem).item.id}" }) { found ->
-                    when (found) {
-                        is Found.AShow -> ShowCard(nav, found.show)
-                        is Found.AnItem -> ItemCard(nav, found.item)
-                    }
-                }
-            }
-        }
-    }
-}
-
 // Up and down scroll the words while there are more that way. Up from the top leaves, for Back.
 private fun textScrollKey(key: Int, scroll: ScrollState, stepPx: Float, scope: CoroutineScope, reduce: Boolean): Boolean {
     val by = when {

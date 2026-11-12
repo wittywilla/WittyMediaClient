@@ -107,53 +107,6 @@ private fun <T : Any> Answered(nav: Nav, answer: Answer<T>, content: @Composable
     }
 }
 
-// The list of a listening library. Its first row chooses which part, and only moves left and right.
-@Composable
-fun ListeningLibraryScreen(nav: Nav, s: Map<String, String>, library: Library) {
-    val metrics = LocalMetrics.current
-    var part by rememberSaveable { mutableStateOf(Part.Albums) }
-    var sort by rememberSaveable { mutableStateOf(if (library.type == "audiobooks") "artist" else "title") }
-    val pods = library.type == "podcasts"
-    val music = library.type == "music"
-    Screen {
-        // The rows run to the screen's edge, so that one too long for it shows there's more that way.
-        Column(Modifier.fillMaxSize().safeDrawingPadding().padding(top = Space.S4), verticalArrangement = Arrangement.spacedBy(Space.S2)) {
-            Heading(library.name, Modifier.padding(horizontal = metrics.gutter))
-            ChoiceRow {
-                item(key = "albums") { Choice(albumsWord(library.type), part == Part.Albums, "part-albums") { part = Part.Albums } }
-                if (!pods) item(key = "artists") { Choice(artistsWord(library.type), part == Part.Artists, "part-artists") { part = Part.Artists } }
-                if (music) item(key = "songs") { Choice("Songs", part == Part.Songs, "part-songs") { part = Part.Songs } }
-                // Playlists, lyrics, a song's radio and following a podcast.
-                item(key = "full") { ActionButton("More", { nav.push(Route.Page(library.fullPagePath())) }, pill = true, focusKey = "more") }
-            }
-            if (part == Part.Albums && !pods) {
-                ChoiceRow {
-                    listOf("title" to "Title", "artist" to artistsWord(library.type).trimEnd('s'), "added" to "Newest").forEach { (key, words) ->
-                        item(key = "sort-$key") { Choice(words, sort == key, "sort-$key") { sort = key } }
-                    }
-                }
-            }
-            Box(Modifier.weight(1f).padding(horizontal = metrics.gutter)) {
-                when (part) {
-                    Part.Albums -> AlbumGrid(nav, s, library.id, sort, null)
-                    Part.Artists -> ArtistGrid(nav, s, library)
-                    Part.Songs -> SongList(nav, s, library)
-                }
-            }
-        }
-    }
-}
-
-@Composable
-private fun ChoiceRow(content: androidx.compose.foundation.lazy.LazyListScope.() -> Unit) {
-    LazyRow(
-        Modifier.remoteRow(),
-        horizontalArrangement = Arrangement.spacedBy(Space.S2),
-        contentPadding = PaddingValues(horizontal = LocalMetrics.current.gutter, vertical = Space.S1),
-        content = content,
-    )
-}
-
 // What's chosen says so with a tick as well as a colour.
 @Composable
 private fun Choice(words: String, chosen: Boolean, focusKey: String, choose: () -> Unit) {
@@ -180,63 +133,6 @@ private fun AlbumGrid(nav: Nav, s: Map<String, String>, library: Long, sort: Str
                     aspect = 1f, focusKey = "a-${album.artist}-${album.title}", requestFocus = album === distinct.first(),
                 )
             }
-        }
-    }
-}
-
-@Composable
-private fun ArtistGrid(nav: Nav, s: Map<String, String>, library: Library) {
-    val answer = rememberAnswer(nav, s, "artists-${library.id}") { nav.app.api.artists(library.id) }
-    Answered(nav, answer) { artists: List<Artist> ->
-        val distinct = remember(artists) { artists.distinctBy { it.name } }
-        LazyVerticalGrid(
-            posterColumns(),
-            contentPadding = PaddingValues(bottom = Space.S6),
-            horizontalArrangement = Arrangement.spacedBy(Space.S2),
-            verticalArrangement = Arrangement.spacedBy(Space.S4),
-        ) {
-            items(distinct, key = { it.name }) { artist ->
-                val count = if (artist.albums == 1) "1 ${albumsWord(library.type).lowercase().trimEnd('s')}" else "${artist.albums} ${albumsWord(library.type).lowercase()}"
-                PosterCard(
-                    artist.name.ifEmpty { "Unknown" }, count, nav.app.api.coverUrl(artist.coverItem),
-                    { nav.push(Route.Artist(library.id, artist.name)) },
-                    aspect = 1f, focusKey = "ar-${artist.name}", requestFocus = artist === distinct.first(),
-                )
-            }
-        }
-    }
-}
-
-@Composable
-private fun SongList(nav: Nav, s: Map<String, String>, library: Library) {
-    val songs = remember { mutableStateListOf<Item>() }
-    var finished by remember { mutableStateOf(false) }
-    var wanted by remember { mutableIntStateOf(0) }
-    var problem by remember { mutableStateOf("") }
-    LaunchedEffect(library.id, wanted) {
-        problem = ""
-        try {
-            val page = nav.app.api.songs(library.id, songs.size, SONGS_PAGE)
-            val seen = songs.mapTo(HashSet()) { it.id }
-            songs.addAll(page.filter { it.id !in seen }.distinctBy { it.id })
-            if (page.size < SONGS_PAGE) finished = true
-        } catch (e: CancellationException) {
-            throw e
-        } catch (e: Exception) {
-            if (!nav.handleExpired(e)) problem = problemWords(e, s["errLost"].orEmpty())
-        }
-    }
-    if (songs.isEmpty() && problem.isNotEmpty()) { LoadFailed(nav, problem) { wanted++ }; return }
-    if (songs.isEmpty() && !finished) { Loading(); return }
-    ErrorText(problem)
-    LazyColumn(contentPadding = PaddingValues(bottom = Space.S6), verticalArrangement = Arrangement.spacedBy(Space.S1)) {
-        itemsIndexed(songs, key = { _, it -> it.id }) { index, song ->
-            TrackRow(
-                nav, song, index, subtitle = listOf(song.artist.ifEmpty { song.albumArtist }, song.album).filter { it.isNotEmpty() }.joinToString(" · "),
-                showArt = true, books = false, requestFocus = index == 0,
-                onPlay = { nav.startListening(songs.toList(), Start(index), false) },
-            )
-            if (index == songs.lastIndex && !finished) LaunchedEffect(songs.size) { wanted++ }
         }
     }
 }
@@ -308,80 +204,6 @@ private fun TrackRow(
             { if (!added) { nav.app.listening.addToQueue(listOf(track), books); added = true } },
             focusKey = "add-${track.id}",
         )
-    }
-}
-
-private fun tracksWords(libraryType: String, count: Int): String {
-    val word = when (libraryType) {
-        "audiobooks" -> "part"
-        "podcasts" -> "episode"
-        else -> "song"
-    }
-    return if (count == 1) "1 $word" else "$count ${word}s"
-}
-
-private fun lengthWords(sec: Double): String {
-    val minutes = ((sec + 30) / 60).toInt()
-    return if (minutes >= 60) "${minutes / 60} h ${minutes % 60} min" else "$minutes min"
-}
-
-// An album, a book or a podcast. Beside its cover on a TV or a wide screen, under it on a phone held upright.
-@OptIn(ExperimentalLayoutApi::class)
-@Composable
-fun AlbumScreen(nav: Nav, s: Map<String, String>, route: Route.Album) {
-    val metrics = LocalMetrics.current
-    val upright = !metrics.tv && LocalConfiguration.current.screenWidthDp < UPRIGHT_BELOW
-    var libraryType by remember { mutableStateOf("") }
-    // The kind of library first: Play means something different in a book, so nothing is shown until that is known.
-    val answer = rememberAnswer(nav, s, route.key) {
-        libraryType = nav.libraryType(route.library)
-        nav.app.api.tracks(route.library, route.album, route.artist)
-    }
-    Screen {
-        Answered(nav, answer) { found: List<Item> ->
-            val tracks = remember(found) { found.distinctBy { it.id } }
-            val books = keepsPlace(libraryType)
-            val start = whereToStart(tracks, books)
-            val resume = hasPlaceToResume(tracks, books)
-            val cover = tracks.firstOrNull()?.let { nav.app.api.posterUrl(it) }.orEmpty()
-            // The album's canvas, faint across the top, when it has one (CanvasLoop.kt).
-            CanvasBanner(nav, tracks.firstOrNull()?.id ?: 0L)
-            LazyColumn(
-                Modifier.fillMaxSize().safeDrawingPadding(),
-                contentPadding = PaddingValues(horizontal = metrics.gutter, vertical = if (metrics.tv) metrics.edge else Space.S4),
-                verticalArrangement = Arrangement.spacedBy(Space.S2),
-            ) {
-                item(key = "head") {
-                    FlowRow(
-                        Modifier.fillMaxWidth().padding(bottom = Space.S3),
-                        horizontalArrangement = Arrangement.spacedBy(Space.S6, if (upright) Alignment.CenterHorizontally else Alignment.Start),
-                        verticalArrangement = Arrangement.spacedBy(Space.S4),
-                    ) {
-                        ServerImage(cover, ALBUM_ART, 1f, Modifier.width(ALBUM_ART).aspectRatio(1f).clip(Radius.LG), placeholder = route.album)
-                        Column((if (upright) Modifier.fillMaxWidth() else Modifier.widthIn(min = 280.dp, max = 640.dp).weight(1f, fill = false)), verticalArrangement = Arrangement.spacedBy(Space.S3)) {
-                            Heading(route.album.ifEmpty { "No album" })
-                            if (route.artist.isNotEmpty() && route.artist != route.album) Secondary(route.artist)
-                            val year = tracks.firstNotNullOfOrNull { it.year }?.takeIf { !books }
-                            Secondary(listOfNotNull(year?.toString(), tracksWords(libraryType, tracks.size), lengthWords(tracks.sumOf { it.runtimeSec })).joinToString(" · "))
-                            ErrorText(answer.problem)
-                            // The buttons wrap on a narrow phone, so they aren't a row a remote is held in.
-                            FlowRow(horizontalArrangement = Arrangement.spacedBy(Space.S2), verticalArrangement = Arrangement.spacedBy(Space.S2)) {
-                                ActionButton(if (resume) "Resume" else "Play", { nav.startListening(tracks, start, books) }, primary = true, pill = true, icon = Icons.Filled.PlayArrow, focusKey = "play", requestFocus = tracks.isNotEmpty())
-                                if (resume) ActionButton("Start over", { nav.startListening(tracks, Start(0), books) }, pill = true, focusKey = "startover")
-                                if (!books) ActionButton("Shuffle", { nav.startListening(tracks.shuffled(), Start(0), books) }, pill = true, icon = Glyphs.Shuffle, focusKey = "shuffle")
-                                ActionButton("Add to queue", { nav.app.listening.addToQueue(tracks, books) }, pill = true, focusKey = "queueall")
-                            }
-                        }
-                    }
-                }
-                itemsIndexed(tracks, key = { _, it -> it.id }) { index, track ->
-                    TrackRow(
-                        nav, track, index, subtitle = if (track.artist != route.artist) track.artist else "", showArt = false, books = books,
-                        onPlay = { nav.startListening(tracks, Start(index, placeOn(track, books)), books) },
-                    )
-                }
-            }
-        }
     }
 }
 
