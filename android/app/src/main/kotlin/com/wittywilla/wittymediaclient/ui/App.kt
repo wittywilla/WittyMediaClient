@@ -604,7 +604,10 @@ class Nav(val app: WittyApp, private val s: Map<String, String>) {
         app.scope.launch {
             val caps = runCatching { api.capabilities() }.getOrNull()
             if (server?.url == base) {
-                if (caps != null) features = caps.features.toSet()
+                if (caps != null) {
+                    features = caps.features.toSet()
+                    com.wittywilla.wittymediaclient.net.SduiCommands.serverRevision = caps.apiRevision
+                }
                 featuresRead = true
             }
             runCatching { api.themes() }.getOrNull()?.let { if (server?.url == base) themeList = it }

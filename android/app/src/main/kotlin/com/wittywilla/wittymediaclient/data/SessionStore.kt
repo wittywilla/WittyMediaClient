@@ -119,6 +119,11 @@ class SessionStore(context: Context) {
     // The server in use, as a tag for what is kept by its own numbers (serverTag).
     val currentTag: String get() = serverTag(find(server) ?: SavedServer(server, ""))
 
+    // "Show saved servers first" in the list of servers: on unless turned off, kept on this device.
+    var savedFirst: Boolean
+        get() = prefs.getBoolean("savedServersFirst", true)
+        set(v) = prefs.edit().putBoolean("savedServersFirst", v).apply()
+
     // When this version first ran: what a server never reached since then counts from (seenOrSince).
     val recentSince: Long
         get() {

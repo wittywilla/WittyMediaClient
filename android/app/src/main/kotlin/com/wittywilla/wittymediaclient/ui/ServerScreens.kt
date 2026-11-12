@@ -284,6 +284,12 @@ fun ManageServersScreen(nav: Nav, s: Map<String, String>) {
                         )
                     },
                 )
+                // The order of the list of servers: what this device has used first, or what's found on the network.
+                var savedFirst by remember { mutableStateOf(nav.app.store.savedFirst) }
+                GroupedList("", listOf(GroupRow(
+                    s["savedServersFirst"].orEmpty(), onClick = { savedFirst = !savedFirst; nav.app.store.savedFirst = savedFirst },
+                    detail = s["savedServersFirstHint"].orEmpty(), chevron = false, focusKey = "saved-first", trailing = { Toggle(savedFirst) },
+                )))
                 WittyButton(s["removeOldServers"].orEmpty(), { choosing = true }, Modifier.fillMaxWidth(), tall = true, focusKey = "remove-old")
                 WittyButton(s["removeAllServers"].orEmpty(), { askingAll = true }, Modifier.fillMaxWidth(), kind = ButtonKind.Destructive, tall = true, focusKey = "remove-all")
             }

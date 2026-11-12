@@ -158,8 +158,21 @@ object SduiCommands {
 
     fun bodyItem(item: String): String = item.toLongOrNull()?.toString() ?: ("\"" + item.replace("\\", "\\\\").replace("\"", "\\\"") + "\"")
 
+    // The server's apiRevision, read with its capabilities. From 16 its templates hold {item} inside a JSON string and
+    // its routes take a show's "show-<n>" (marking a whole show watched included), so nothing needs working round.
+    @Volatile
+    var serverRevision = 0
+
+    private const val SHOW_IDS_FROM = 16
+
     fun request(spec: SduiCommandSpec, item: String): Request? {
         if (spec.path.isEmpty()) return null
+        if (serverRevision >= SHOW_IDS_FROM) {
+            if (item.isEmpty() || item.any { it.isISOControl() }) return null
+            val inPath = java.net.URLEncoder.encode(item, "UTF-8").replace("+", "%20")
+            val inString = item.replace("\\", "\\\\").replace("\"", "\\\"")
+            return Request(spec.method, spec.path.replace("{item}", inPath), spec.body.takeIf { it.isNotEmpty() }?.replace("{item}", inString))
+        }
         val show = showId(item)
         if (show != null) {
             return if (spec.op == "watchLater.add") Request(spec.method, spec.path, "{\"shows\":[$show]}") else null

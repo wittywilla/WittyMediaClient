@@ -65,4 +65,20 @@ class LayoutAndModulesTest {
         assertEquals("""{"values":{"ages":null}}""", ModuleSettingsRules.change("ages", null))
         assertFalse(ModuleSettingsRules.known(ModuleSettingRow(kind = "colour")))
     }
+
+    @Test
+    fun aNewServerTakesAShowsIdInItsOwnTemplates() {
+        val spec = com.wittywilla.wittymediaclient.net.SduiCommandSpec(op = "watched.set", method = "POST", path = "/api/v1/items/{item}/progress", body = "{\"items\":[\"{item}\"]}")
+        val before = com.wittywilla.wittymediaclient.net.SduiCommands.serverRevision
+        try {
+            com.wittywilla.wittymediaclient.net.SduiCommands.serverRevision = 16
+            val r = com.wittywilla.wittymediaclient.net.SduiCommands.request(spec, "show-5")!!
+            assertEquals("/api/v1/items/show-5/progress", r.path)
+            assertEquals("{\"items\":[\"show-5\"]}", r.body)
+            com.wittywilla.wittymediaclient.net.SduiCommands.serverRevision = 15
+            assertNull(com.wittywilla.wittymediaclient.net.SduiCommands.request(spec, "show-5"))
+        } finally {
+            com.wittywilla.wittymediaclient.net.SduiCommands.serverRevision = before
+        }
+    }
 }

@@ -259,11 +259,12 @@ fun ConnectScreen(nav: Nav, s: Map<String, String>, message: String) {
         if (it.type == KeyEventType.KeyDown && it.key.nativeKeyCode in ARROWS) moved = true
         false
     }
+    val savedFirst = nav.app.store.savedFirst
     // On a TV, the first card takes focus: the server used last, else the first one found, else Enter an address. As
     // servers are found after the screen opens, focus follows the first of them until the person moves it themselves,
     // so it never stays on Enter an address below a long list.
     val firstKey = when {
-        recent.isNotEmpty() -> "recent-${recent[0].url}"
+        recent.isNotEmpty() && (savedFirst || foundOnly.isEmpty()) -> "recent-${recent[0].url}"
         foundOnly.isNotEmpty() -> "found-${foundOnly[0].id}"
         else -> "enter-address"
     }
@@ -285,7 +286,11 @@ fun ConnectScreen(nav: Nav, s: Map<String, String>, message: String) {
         },
         actions = {
             Column(noticeMoves.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(metrics.u(12))) {
-                SectionLabel(s["foundServers"].orEmpty(), searching = !cantSearch && !searchedLong)
+                // Saved servers first (the setting under Servers on this device, on unless turned off): what this device
+                // has used is on top, the last used first, so a long list found on the network never pushes it out of
+                // sight. Off, the found servers come first, as before.
+                val foundBlock = @Composable {
+                SectionLabel(s["foundServers"].orEmpty(), Modifier.padding(top = if (savedFirst && recent.isNotEmpty()) metrics.u(8) else 0.dp), searching = !cantSearch && !searchedLong)
                 if (found.isEmpty()) {
                     when {
                         cantSearch -> Note(s["findNotSupported"].orEmpty())
@@ -298,13 +303,15 @@ fun ConnectScreen(nav: Nav, s: Map<String, String>, message: String) {
                     key(server.id) {
                         ServerCard(
                             hostAndPort(server.url), s["foundOnNetwork"].orEmpty(), { connect(server.url) }, saved = false,
-                            connecting = connecting == server.url, requestFocus = i == 0 && !moved, focusKey = "found-${server.id}",
+                            connecting = connecting == server.url, requestFocus = i == 0 && !moved && (!savedFirst || recent.isEmpty()), focusKey = "found-${server.id}",
                             takeFocus = focusOn == "found-${server.id}",
                         )
                     }
                 }
+                }
+                val savedBlock = @Composable {
                 if (recent.isNotEmpty()) {
-                    Row(Modifier.fillMaxWidth().padding(top = metrics.u(8)), verticalAlignment = Alignment.CenterVertically) {
+                    Row(Modifier.fillMaxWidth().padding(top = if (savedFirst) 0.dp else metrics.u(8)), verticalAlignment = Alignment.CenterVertically) {
                         SectionLabel(s["recentServers"].orEmpty(), Modifier.weight(1f))
                         // A TV has Manage servers and the card's own long press for this.
                         if (!tv) WittyButton(s[if (editing) "editServersDone" else "editServers"].orEmpty(), { editing = !editing }, kind = ButtonKind.Quiet, focusKey = "edit-servers")
@@ -320,7 +327,7 @@ fun ConnectScreen(nav: Nav, s: Map<String, String>, message: String) {
                                     ServerCard(
                                         name, server.url, { connect(at) },
                                         logo = LogoCache.file(context, server.url, server.brandLogo), lastUsed = server.url == last?.url,
-                                        connecting = connecting == at, requestFocus = foundOnly.isEmpty() && found.isNotEmpty() && i == 0 && !moved,
+                                        connecting = connecting == at, requestFocus = i == 0 && !moved && (savedFirst || (foundOnly.isEmpty() && found.isNotEmpty())),
                                         focusKey = "recent-${server.url}",
                                         reached = reachedWords(s, server.lastSeen, now), stale = isStale(server.lastSeen, now, nav.app.store.recentSince),
                                         takeFocus = focusOn == "recent-${server.url}",
@@ -342,6 +349,8 @@ fun ConnectScreen(nav: Nav, s: Map<String, String>, message: String) {
                         }
                     }
                 }
+                }
+                if (savedFirst) { savedBlock(); foundBlock() } else { foundBlock(); savedBlock() }
             }
             WittyButton(
                 s["enterAddress"].orEmpty(), { showForm = true; problem = "" }, Modifier.fillMaxWidth().padding(top = metrics.u(8)),
