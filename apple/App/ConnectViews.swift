@@ -879,7 +879,7 @@ struct SetupRequiredView: View {
                     .accessibilityLabel("Finish setup in a web browser at \(address)")
                 HStack(spacing: Tokens.Space.s4) {
                     Button(say("setupNeededRetry"), action: retry).action(.primary, tall: true)
-                    Button(say("back"), action: back).action(tall: true)
+                    Button(say("back"), action: back).action(.secondary, tall: true)
                 }
             }
             .padding(Tokens.gutter)
