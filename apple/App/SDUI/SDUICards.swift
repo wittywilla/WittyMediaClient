@@ -95,10 +95,14 @@ struct SDUICardView: View {
     }
 
     @ViewBuilder private var content: some View {
-        if style == "channel" {
+        if style == "channel" || style == "logo" {
             channel
         } else if style == "tile" {
             tile
+        } else if style == "plate" {
+            plateCard
+        } else if style == "block" {
+            blockCard
         } else {
             VStack(alignment: isCircle ? .center : .leading, spacing: layout.sp("xs")) {
                 HStack(alignment: .bottom, spacing: layout.sp("xs")) {
@@ -224,6 +228,54 @@ struct SDUICardView: View {
         }
         .frame(width: fills ? nil : width, alignment: .leading)
         .frame(maxWidth: fills ? .infinity : nil, alignment: .leading)
+        .contentShape(Rectangle())
+    }
+
+    /// Upright art with the title over it on a scrim along its foot (the Rail look's card).
+    private var plateCard: some View {
+        Color.clear
+            .aspectRatio(width / max(height, 1), contentMode: .fit)
+            .frame(width: fills ? nil : width)
+            .frame(maxWidth: fills ? .infinity : nil)
+            .overlay { SDUIPicture(picture: card.picture, symbol: pictureSymbol, shownWidth: width) }
+            .overlay { LinearGradient(colors: [.clear, palette.scrim], startPoint: .center, endPoint: .bottom) }
+            .overlay(alignment: .bottomLeading) {
+                VStack(alignment: .leading, spacing: 2) {
+                    if shows("title") {
+                        Text(card.shown("title")).sduiFont("title", weight: .semibold).foregroundStyle(onImage).sduiLines(card.lineLimit("title"))
+                    }
+                    if shows("subtitle"), !card.shown("subtitle").isEmpty {
+                        Text(card.shown("subtitle")).sduiFont("caption").foregroundStyle(onImage.opacity(0.85)).sduiLines(card.lineLimit("subtitle") ?? 1)
+                    }
+                }
+                .padding(layout.sp("s"))
+            }
+            .overlay(alignment: .topLeading) {
+                if shows("badges") {
+                    HStack(spacing: 4) { ForEach(card.badges.prefix(3), id: \.self) { plate($0) } }.padding(layout.sp("xs"))
+                }
+            }
+            .clipShape(RoundedRectangle(cornerRadius: draw.radius("Card", style: style), style: .continuous))
+            .tvFocusRing(radius: draw.radius("Card", style: style))
+            .contentShape(Rectangle())
+    }
+
+    /// A flat block of the theme's card colour with the title in it: teletext's cell.
+    private var blockCard: some View {
+        VStack(alignment: .leading, spacing: 2) {
+            Text(card.shown("title")).sduiFont("title", weight: .semibold).foregroundStyle(palette.text).sduiLines(card.lineLimit("title"))
+            if shows("subtitle"), !card.shown("subtitle").isEmpty {
+                Text(card.shown("subtitle")).sduiFont("caption").foregroundStyle(palette.textSecondary).sduiLines(card.lineLimit("subtitle") ?? 1)
+            }
+            Spacer(minLength: 0)
+        }
+        .padding(layout.sp("s"))
+        .frame(width: fills ? nil : width, height: fills ? nil : height, alignment: .topLeading)
+        .frame(maxWidth: fills ? .infinity : nil, alignment: .topLeading)
+        .aspectRatio(fills ? width / max(height, 1) : nil, contentMode: .fit)
+        .background(palette.card)
+        .clipShape(RoundedRectangle(cornerRadius: draw.radius("Card", style: style), style: .continuous))
+        .tvFocusRing(radius: draw.radius("Card", style: style))
         .contentShape(Rectangle())
     }
 

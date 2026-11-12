@@ -131,6 +131,9 @@ public struct SDUICatalog: Codable, Equatable, Sendable {
             SDUICardStyle("photo", shape: "square", aspect: "1/1", shows: [], titleLines: 0, subtitleLines: 0),
             SDUICardStyle("channel", shape: "landscape", aspect: "16/9", shows: ["number", "title", "now", "next", "progress"], titleLines: 1, subtitleLines: 2),
             SDUICardStyle("tile", shape: "landscape", aspect: "16/9", shows: ["title", "count"], titleLines: 1, subtitleLines: 0),
+            SDUICardStyle("plate", shape: "poster", aspect: "2/3", shows: ["title", "subtitle", "badges"], titleLines: 2, subtitleLines: 1),
+            SDUICardStyle("block", shape: "landscape", aspect: "16/9", shows: ["title", "subtitle"], titleLines: 2, subtitleLines: 1),
+            SDUICardStyle("logo", shape: "landscape", aspect: "16/9", shows: ["number", "title"], titleLines: 1, subtitleLines: 0),
             SDUICardStyle("chip", shape: "chip", aspect: "", shows: ["title"], titleLines: 1, subtitleLines: 0),
         ],
         routes: [
