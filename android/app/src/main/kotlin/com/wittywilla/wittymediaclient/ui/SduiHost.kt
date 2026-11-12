@@ -11,6 +11,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.MutableState
 import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
@@ -74,6 +75,10 @@ class SduiEnv(
     val ask: (Map<String, String>) -> Unit,
     // The sections with a request on its way.
     val loading: List<String>,
+    // A Dock's control that has been pressed and not yet taken up by the part of the page it opens, and whether grids
+    // are drawn as a list (the profile's choice on this device).
+    val control: MutableState<SduiControl?>,
+    val listView: MutableState<Boolean>,
 ) {
     val layout: SduiLayout get() = screen.layout
     fun pt(points: Int): Dp = (points * unit).dp
@@ -85,6 +90,16 @@ class SduiEnv(
 
     // A picture's or a section's address on the server the app is signed in to.
     fun url(path: String): String = if (path.startsWith("/")) nav.app.api.base + path else ""
+}
+
+// A Dock control waiting for what it opens.
+class SduiControl(val kind: String, val target: String)
+
+// Whether a profile on this device wants a page's grids as a list, remembered per page.
+object SduiViewPref {
+    private fun prefs(c: android.content.Context) = c.getSharedPreferences("sdui-view", android.content.Context.MODE_PRIVATE)
+    fun get(c: android.content.Context, page: String) = prefs(c).getBoolean(page, false)
+    fun set(c: android.content.Context, page: String, list: Boolean) = prefs(c).edit().putBoolean(page, list).apply()
 }
 
 val LocalSdui = staticCompositionLocalOf<SduiEnv> { error("no page") }
@@ -278,6 +293,9 @@ fun SduiPageScreen(nav: Nav, page: String, params: Map<String, String>, top: Boo
 
     val screen = model?.screen
     val screenTime = model?.base?.screenTime
+    val control = remember { mutableStateOf<SduiControl?>(null) }
+    val pageKey = page + params.entries.sortedBy { it.key }.joinToString("&") { it.key + "=" + it.value }
+    val listView = remember(pageKey) { mutableStateOf(SduiViewPref.get(context, pageKey)) }
 
     fun act(action: SduiAction?) {
         when (val effect = nav.sduiRouter.effect(action)) {
@@ -288,6 +306,11 @@ fun SduiPageScreen(nav: Nav, page: String, params: Map<String, String>, top: Boo
             SduiEffect.Back -> nav.back()
             is SduiEffect.SelectTab -> chosen = chosen + ("tab" to effect.tab)
             SduiEffect.Refresh -> scope.launch { refresh() }
+            is SduiEffect.OpenControl -> when (effect.control) {
+                "view" -> { listView.value = !listView.value; SduiViewPref.set(context, pageKey, listView.value) }
+                "sort", "filter", "jump" -> control.value = SduiControl(effect.control, effect.target)
+                else -> Unit
+            }
             is SduiEffect.Command -> scope.launch {
                 try {
                     client.command(effect.spec, effect.item)
@@ -329,7 +352,7 @@ fun SduiPageScreen(nav: Nav, page: String, params: Map<String, String>, top: Boo
                     },
                     season = ::fetch,
                     ask = { change -> chosen = (chosen + change).filter { (k, v) -> v.isNotEmpty() || params[k]?.isNotEmpty() == true } },
-                    loading = flying,
+                    loading = flying, control = control, listView = listView,
                 )
                 val base = LocalAppTheme.current
                 val pageTokens = screen.document.theme?.tokens.orEmpty()

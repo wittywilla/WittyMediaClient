@@ -39,6 +39,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.wittywilla.wittymediaclient.net.GUIDE_PATH
+import com.wittywilla.wittymediaclient.net.SduiJump
 import com.wittywilla.wittymediaclient.net.SduiScreen
 import com.wittywilla.wittymediaclient.net.SduiScreenTime
 import com.wittywilla.wittymediaclient.net.SduiTokens
@@ -82,13 +83,18 @@ object SduiRows {
     private const val NEAR_END_LINES = 6
 
     // The page's sections as the items of one column. `columns` is how many cards a grid has across on this screen.
-    fun flatten(screen: SduiScreen, tv: Boolean, columns: (SduiView) -> Int): List<SduiRow> {
+    fun flatten(screen: SduiScreen, tv: Boolean, asList: Boolean = false, columns: (SduiView) -> Int): List<SduiRow> {
         val out = ArrayList<SduiRow>()
         fun add(view: SduiView, parent: SduiView?) {
             val first = out.isEmpty()
             val ready = !view.deferred && !view.failed && !view.empty && view.children.isNotEmpty()
             when {
                 view.type == "NativeView" && view.props.str("view") == "guide" -> out += SduiRow.Native(view)
+                view.type == "Grid" && ready && asList -> {
+                    // The Dock's View: the grid as a list, one line for each card.
+                    out += SduiRow.Head(view, first)
+                    view.children.forEachIndexed { i, child -> out += SduiRow.Line(child, view, i >= view.children.size - NEAR_END_LINES) }
+                }
                 view.type == "Grid" && ready -> {
                     out += SduiRow.Head(view, first)
                     val across = columns(view).coerceAtLeast(1)
@@ -140,13 +146,18 @@ fun SduiPageView(
         val side = if (layout.safeArea.left > 0) env.pt(layout.safeArea.left) else env.space("m")
         val span = SduiSpan(maxWidth - side * 2, side)
         val points = (span.content.value / env.unit).toInt()
-        val rows = remember(screen, points) {
-            SduiRows.flatten(screen, env.tv) { grid ->
+        val asList = env.listView.value
+        val everything = remember(screen, points, asList) {
+            SduiRows.flatten(screen, env.tv, asList) { grid ->
                 val fixed = grid.columns.takeIf { it > 0 } ?: layout.cards[grid.cardStyle]?.columns ?: 0
                 // A TV's grid has the columns its layout says; a window's has as many cards as fit it now.
                 if (env.tv && fixed > 0) fixed else if (grid.cardWidth > 0) layout.columnsFor(points, grid.cardWidth) else fixed.coerceAtLeast(2)
             }
         }
+        // The Dock is the screen's own bar, outside the page's scroll, at the foot (layout.dock.placement `bottom`), or a sheet
+        // an Options button opens (`sheet`, a phone).
+        val dock = everything.firstOrNull { it is SduiRow.Block && it.view.type == "Dock" }?.let { (it as SduiRow.Block).view }
+        val rows = remember(everything) { everything.filter { !(it is SduiRow.Block && it.view.type == "Dock") } }
         val tallFirst = rows.firstOrNull()?.let { (it as? SduiRow.Block)?.view?.type in TALL_FIRST } == true
         // The bar over a phone's page sits on the picture when the page starts with one.
         if (!env.tv) HeroPage(tallFirst && !offline && screenTime == null)
@@ -160,6 +171,33 @@ fun SduiPageView(
         val heading = title.takeIf { !env.tv && !tallFirst && screen.document.page.kind != "home" && it.isNotEmpty() }
         val topRoom = if (env.tv) env.space("s") else if (tallFirst && !offline && screenTime == null) 0.dp else LocalTopRoom.current
         val bottomRoom = if (env.tv) env.pt(layout.safeArea.bottom) else LocalBottomRoom.current
+        // The Dock's jump to a letter: choose one, then ask for pages until a title starting with it has come (at most 20), and
+        // bring the grid to it.
+        var wanted by remember { mutableStateOf<String?>(null) }
+        val latest by androidx.compose.runtime.rememberUpdatedState(rows)
+        env.control.value?.takeIf { it.kind == "jump" }?.let {
+            SduiChooser("Jump to", SduiJump.LETTERS.map { l -> l to l }, "", { env.control.value = null }) { l -> env.control.value = null; wanted = l }
+        }
+        LaunchedEffect(wanted) {
+            val letter = wanted ?: return@LaunchedEffect
+            var tries = 0
+            while (true) {
+                val lead = (if (offline) 1 else 0) + (if (screenTime != null) 1 else 0) + (if (heading != null) 1 else 0)
+                val shown = latest.filter { it !is SduiRow.Native }
+                val at = shown.indexOfFirst { r ->
+                    val cards = (r as? SduiRow.Cards)?.cards ?: (r as? SduiRow.Line)?.let { listOf(it.view) } ?: emptyList()
+                    cards.any { SduiJump.letterOf(it.text["title"].orEmpty()) == letter }
+                }
+                if (at >= 0) { list.scrollToItem(at + lead); break }
+                val grid = shown.firstNotNullOfOrNull { (it as? SduiRow.Cards)?.grid ?: (it as? SduiRow.Line)?.parent }
+                if (grid == null || !grid.hasMore || tries++ >= SduiJump.MOST_PAGES) break
+                val had = grid.children.size
+                env.more(grid.id, false)
+                var waited = 0
+                while (waited++ < 40 && (latest.filter { it !is SduiRow.Native }.firstNotNullOfOrNull { (it as? SduiRow.Cards)?.grid ?: (it as? SduiRow.Line)?.parent }?.children?.size ?: had) == had) delay(150)
+            }
+            wanted = null
+        }
         CompositionLocalProvider(LocalSduiSpan provides span) {
             val content: LazyListScope.() -> Unit = {
                 if (offline) item(key = "~offline", contentType = "note") { SduiPageNote("Can't reach the server. This is how the page last was.", Modifier.padding(horizontal = side).padding(bottom = gap)) }
@@ -205,7 +243,8 @@ fun SduiPageView(
                     if (!env.tv) item(key = "~foot", contentType = "foot") { PageFoot(env.nav) }
                 }
             }
-            when {
+            Column(Modifier.fillMaxSize()) {
+            Box(Modifier.weight(1f).fillMaxWidth()) { when {
                 native != null -> Column(Modifier.fillMaxSize().padding(top = if (env.tv) 0.dp else topRoom)) {
                     // What comes before the app's own view keeps its place above it; the view takes the rest.
                     rows.filter { it !is SduiRow.Native }.forEach { SduiRowView(it, gap) }
@@ -219,6 +258,8 @@ fun SduiPageView(
                 else -> PullToRefreshBox(refreshing, onRefresh, Modifier.fillMaxSize()) {
                     LazyColumn(Modifier.fillMaxSize(), state = list, contentPadding = PaddingValues(top = topRoom, bottom = bottomRoom), content = content)
                 }
+            } }
+            if (dock != null) SduiScoped(dock, null) { SduiDockBar(dock, side) }
             }
         }
     }

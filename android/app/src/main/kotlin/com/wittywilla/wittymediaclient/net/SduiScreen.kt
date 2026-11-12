@@ -6,6 +6,7 @@ import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.buildJsonArray
+import kotlinx.serialization.json.booleanOrNull
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
 
@@ -50,12 +51,7 @@ object SduiCardStyles {
 // The components this app draws. Any other type is drawn as a plain column of its children.
 val SDUI_COMPONENTS = setOf(
     "Page", "Hero", "Shelf", "Grid", "Card", "Tabs", "Tab", "FilterBar", "DetailHeader", "SeasonList", "TrackList", "Track",
-    "Banner", "Text", "Notice", "Divider", "Spacer", "Stack", "Split", "Button", "Image", "SearchBox", "List", "ListItem", "NativeView",
-)
-
-// The optional ones among them, named in `components=` so the server sends each as itself and not as its fallback.
-val SDUI_OPTIONAL_COMPONENTS = listOf(
-    "Hero", "Tabs", "Tab", "FilterBar", "DetailHeader", "SeasonList", "TrackList", "Track", "Banner", "Split", "SearchBox", "NativeView",
+    "Banner", "Text", "Notice", "Divider", "Spacer", "Stack", "Split", "Button", "Image", "SearchBox", "List", "ListItem", "NativeView", "Dock", "KeyLegend",
 )
 
 // One button of a Hero slide or a DetailHeader: {id, label, icon, primary, action}.
@@ -94,6 +90,9 @@ class SduiView internal constructor(
     val buttons: List<String>,
     val action: String,
     val children: List<SduiView>,
+    // See all drawn as the row's last card, and the fraction of the next card that peeks in.
+    val seeAllCard: Boolean = false,
+    val peek: Double = 0.0,
 ) {
     val id: String get() = node.id
     val props: JsonObject get() = node.props
@@ -191,6 +190,8 @@ class SduiScreen(val document: SduiDocument) {
         var columns = 0
         var hasMore = false
         var seeAll = ""
+        var seeAllCard = false
+        var peek = 0.0
         var image = ""
         val shows = ArrayList<String>()
         var progress: Int? = null
@@ -209,6 +210,7 @@ class SduiScreen(val document: SduiDocument) {
         return SduiView(
             node, d.type, depth, d.role, d.label, d.text, d.lines, d.textSize, d.cards, d.placeholders, d.cardStyle, d.cardWidth,
             d.cardHeight, d.columns, d.hasMore, d.seeAll, d.image, d.shows, d.progress, d.buttons, d.action, children,
+            d.seeAllCard, d.peek,
         )
     }
 
@@ -226,6 +228,8 @@ class SduiScreen(val document: SduiDocument) {
         p.int("columns")?.let { d.columns = it }
         d.hasMore = p.child("more") != null && d.node.state != "deferred" && d.node.state != "error"
         d.seeAll = p.child("seeAll")?.str("route").orEmpty()
+        d.seeAllCard = p.child("seeAll") != null && p.isOn("seeAllCard")
+        if (d.node.type == "Shelf" && (p["peek"] as? JsonPrimitive)?.booleanOrNull != false) d.peek = layout.peek
         d.say("title", p.str("title"))
         d.say("subtitle", p.str("subtitle"))
         d.say("empty", p.str("emptyText"))
@@ -257,7 +261,19 @@ class SduiScreen(val document: SduiDocument) {
                 d.role = "region"; d.label = p.str("title").ifEmpty { "Featured" }
                 d.cards = node.children.size
                 p.child("size")?.let { d.cardWidth = it.int("width") ?: 0; d.cardHeight = it.int("height") ?: 0 }
+                if (p.isOn("peek")) d.peek = layout.peek
                 p.int("autoAdvanceSec")?.let { d.say("autoAdvance", "$it s") }
+            }
+            "Dock" -> {
+                d.role = "toolbar"; d.label = p.str("title").ifEmpty { "Options" }
+                d.cards = node.children.size
+                d.buttons = node.children.filter { it.type == "Button" }.map { it.props.str("label") }
+                d.cardHeight = layout.dock.height
+                d.say("placement", p.str("placement"))
+            }
+            "KeyLegend" -> {
+                d.say("keys", p.objects("entries").joinToString(" · ") { it.str("label") })
+                d.textSize = layout.dock.hintSize
             }
             "Tabs" -> { d.role = "tablist"; d.cards = node.children.size }
             "Tab" -> {
@@ -466,6 +482,8 @@ class SduiScreen(val document: SduiDocument) {
         put("columns", v.columns)
         put("hasMore", v.hasMore)
         put("seeAll", v.seeAll)
+        put("seeAllCard", v.seeAllCard)
+        put("peek", v.peek)
         put("image", v.image)
         put("shows", JsonArray(v.shows.map(::JsonPrimitive)))
         v.progress?.let { put("progress", it) }

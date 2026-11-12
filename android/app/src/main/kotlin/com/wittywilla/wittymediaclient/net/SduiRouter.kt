@@ -26,6 +26,9 @@ sealed interface SduiEffect {
     data class External(val url: String) : SduiEffect
     data object Back : SduiEffect
     data class SelectTab(val tab: String) : SduiEffect
+
+    // A Dock's control: sort, filter, view or jump, for the Grid it names.
+    data class OpenControl(val control: String, val target: String) : SduiEffect
     data object Refresh : SduiEffect
     // One of the catalogue's commands that changes something on the server; the page is asked for again after.
     data class Command(val spec: SduiCommandSpec, val item: String) : SduiEffect
@@ -86,6 +89,7 @@ class SduiRouter(routes: List<SduiRouteSpec> = DEFAULT_ROUTES, commands: List<Sd
         "external" -> if (action.url.startsWith("http://") || action.url.startsWith("https://")) SduiEffect.External(action.url) else SduiEffect.Nothing
         "back" -> SduiEffect.Back
         "command" -> when (action.op) {
+            "control.open" -> SduiEffect.OpenControl(action.params.str("control"), action.params.str("target"))
             "selectTab" -> action.params.str("tab").let { if (it.isEmpty()) SduiEffect.Nothing else SduiEffect.SelectTab(it) }
             "refresh" -> SduiEffect.Refresh
             else -> commands[action.op]?.takeIf { it.path.isNotEmpty() && SduiCommands.request(it, action.item) != null }
