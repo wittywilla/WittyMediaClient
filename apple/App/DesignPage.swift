@@ -26,13 +26,37 @@ struct DesignSizes {
     }
 }
 
-private struct DesignSizesKey: EnvironmentKey { static let defaultValue = DesignSizes.of(.phone, width: 390) }
+private struct DesignSizesKey: EnvironmentKey {
+    /// Outside a page, the device's own: a TV's on Apple TV, a phone's elsewhere.
+    #if os(tvOS)
+    static let defaultValue = DesignSizes.of(.television, width: 1920)
+    #else
+    static let defaultValue = DesignSizes.of(.phone, width: 390)
+    #endif
+}
+
+private struct DesignRowDrawnKey: EnvironmentKey { static let defaultValue = false }
 
 extension EnvironmentValues {
     var designSizes: DesignSizes {
         get { self[DesignSizesKey.self] }
         set { self[DesignSizesKey.self] = newValue }
     }
+
+    /// Inside a `DesignRowButton`, which draws the row's surface: a row view inside it draws none of its own.
+    var designRowDrawn: Bool {
+        get { self[DesignRowDrawnKey.self] }
+        set { self[DesignRowDrawnKey.self] = newValue }
+    }
+}
+
+/// The page's sizes, for a part drawn by a screen's own code inside a `DesignPage` (whose environment has them; the
+/// screen's own doesn't).
+struct WithDesignSizes<Content: View>: View {
+    @Environment(\.designSizes) private var sizes
+    @ViewBuilder let content: (DesignSizes) -> Content
+
+    var body: some View { content(sizes) }
 }
 
 /// The page: eyebrow, title and lead, then `content` (its sections), the actions and the foot line, scrolling.
@@ -233,9 +257,29 @@ private struct DesignRowStyle: ButtonStyle {
 
         var body: some View {
             configuration.label
+                .environment(\.designRowDrawn, true)
                 .designRowBackground(selected: selected, pressed: configuration.isPressed, focused: focused)
                 .scaleEffect(focused ? 1.02 : 1)
                 .animation(.easeOut(duration: Tokens.Motion.focus), value: focused)
+        }
+    }
+}
+
+extension View {
+    /// A Design 2 row's surface (`bg2` at the theme's corner, a ring when chosen) for a row that isn't one button, such
+    /// as one with a control inside it. Pad it as a `DesignRow` is: `sizes.gap * 1.6` across, `sizes.rowHeight` tall.
+    func designRowSurface(selected: Bool = false) -> some View {
+        designRowBackground(selected: selected, pressed: false, focused: false)
+    }
+}
+
+extension View {
+    /// A row that switches something on and off: VoiceOver calls it a switch, with its words as the value.
+    @ViewBuilder func designSwitch(_ value: String) -> some View {
+        if #available(iOS 17, tvOS 17, visionOS 1, *) {
+            accessibilityAddTraits(.isToggle).accessibilityValue(value)
+        } else {
+            accessibilityValue(value)
         }
     }
 }
