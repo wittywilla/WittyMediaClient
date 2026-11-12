@@ -27,6 +27,8 @@ final class SDUICenter: ObservableObject {
     }
 
     @Published private(set) var mode: Mode = .unknown
+    /// The server's catalogue revision when it isn't the one this app draws.
+    @Published private(set) var otherRevision: Int?
     @Published private(set) var navigation: SDUINavigation?
     @Published private(set) var catalog = SDUICatalog.builtIn
     @Published private(set) var device: SDUIDevice
@@ -172,10 +174,13 @@ final class SDUICenter: ObservableObject {
             cache?.write("catalog", etag: etag, body: body)
             if value != catalog { catalog = value }
         }
-        // A server whose catalogue is another revision writes pages this app refuses: its own screens instead.
-        if freshCatalog != nil, let revision = catalog.revision, revision != SDUI.catalog, mode == .on {
-            ClientLog.shared.warn("sdui", "the server's catalogue is revision \(revision), this app draws \(SDUI.catalog): its own screens")
-            mode = .off
+        // A server whose catalogue is another revision writes pages this app refuses: each page says so
+        // (SDUIRevisionMismatch.swift). There is no other set of screens to fall back to.
+        if freshCatalog != nil, let revision = catalog.revision, revision != SDUI.catalog {
+            otherRevision = revision
+            ClientLog.shared.warn("sdui", "the server's catalogue is revision \(revision), this app draws \(SDUI.catalog)")
+        } else if freshCatalog != nil {
+            otherRevision = nil
         }
     }
 
