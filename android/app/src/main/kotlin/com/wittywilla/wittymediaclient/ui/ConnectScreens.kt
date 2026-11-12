@@ -171,6 +171,8 @@ fun ConnectScreen(nav: Nav, s: Map<String, String>, message: String) {
     var searchedLong by remember { mutableStateOf(false) }
     var cantSearch by remember { mutableStateOf(false) }
     var moved by remember { mutableStateOf(false) }
+    // A server whose first-time setup isn't done (setup is web-only): its address, for the screen that says so.
+    var notSetUp by remember { mutableStateOf<String?>(null) }
 
     // Only looks while this screen is open.
     DisposableEffect(Unit) {
@@ -197,6 +199,9 @@ fun ConnectScreen(nav: Nav, s: Map<String, String>, message: String) {
                     if (r.reason == "unreachable" && saved != null && nav.app.peers.info(saved) != null) {
                         problem = s["awayConnecting"].orEmpty()
                         if (nav.tryFromAway(saved)) null else s["errAwayFailed"].orEmpty()
+                    } else if (r.reason == "not-set-up") {
+                        notSetUp = url
+                        null
                     } else reasonText(s, r.reason)
                 }
             }
@@ -225,6 +230,11 @@ fun ConnectScreen(nav: Nav, s: Map<String, String>, message: String) {
             is Address.Result.Ok -> connect(r.url)
             is Address.Result.Bad -> problem = reasonText(s, r.reason)
         }
+    }
+
+    notSetUp?.let { at ->
+        SetupRequiredScreen(s, at, retry = { notSetUp = null; connect(at) }, back = { notSetUp = null })
+        return
     }
 
     if (showForm) {
@@ -1145,6 +1155,29 @@ fun OnPhoneScreen(nav: Nav, s: Map<String, String>, title: String, path: String)
         actions = {
             if (address.isNotEmpty()) QrCard(address, address, if (metrics.tv) Modifier else Modifier.align(Alignment.CenterHorizontally))
             WittyButton(s["back"].orEmpty(), nav::pop, Modifier.fillMaxWidth(), kind = ButtonKind.Primary, tall = true, takeFocus = true)
+        },
+    )
+}
+
+// "This server isn't set up yet": first-time setup happens in a web browser only, and the app doesn't connect (or try to
+// sign in) until it is done. The address to finish it at, with a QR code of it, then Check again or another server.
+@Composable
+fun SetupRequiredScreen(s: Map<String, String>, address: String, retry: () -> Unit, back: () -> Unit) {
+    val metrics = LocalMetrics.current
+    androidx.activity.compose.BackHandler(onBack = back)
+    SignInLayout(
+        onBack = back,
+        words = {
+            SignInHeading(s["setupNeededTitle"].orEmpty(), detail = s["setupNeededDetail"].orEmpty())
+            QrCard(address, s["pairScan"].orEmpty())
+            Text(
+                address, color = LocalExtraColours.current.accentText, style = MaterialTheme.typography.label,
+                modifier = Modifier.semantics { contentDescription = "Finish setup in a web browser at $address" },
+            )
+        },
+        actions = {
+            WittyButton(s["setupNeededRetry"].orEmpty(), retry, kind = ButtonKind.Primary, tall = true, requestFocus = true, focusKey = "setup-retry")
+            WittyButton(s["back"].orEmpty(), back, kind = ButtonKind.Secondary, tall = true, focusKey = "setup-back")
         },
     )
 }

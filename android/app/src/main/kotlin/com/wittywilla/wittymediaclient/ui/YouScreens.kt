@@ -161,6 +161,7 @@ fun YouScreen(nav: Nav, s: Map<String, String>) {
         onTv = metrics.tv,
         fromAway = nav.app.peers.available,
         moduleSettings = nav.has("module-settings"),
+        looks = (nav.experienceList?.experiences?.size ?: 0) > 1,
         nativeProfiles = nav.has(com.wittywilla.wittymediaclient.net.FEATURE_PARENTAL),
         remote = nav.app.remote.canControl,
         parties = nav.app.remote.hasParties,
@@ -327,6 +328,7 @@ fun YouSettingScreen(nav: Nav, s: Map<String, String>, screen: YouNative) {
         YouNative.Devices -> DevicesScreen(nav, s)
         YouNative.SignInTv -> if (nav.has(com.wittywilla.wittymediaclient.net.PAIR_QR_FEATURE)) ApproveDeviceScreen(nav, s) else SignInTvScreen(nav, s)
         YouNative.Profiles -> ProfilesScreen(nav, s)
+        YouNative.Look -> LookScreen(nav, s)
         YouNative.Theme -> ThemeScreen(nav, s)
         YouNative.TopMenu -> TopMenuScreen(nav, s)
         YouNative.Licences -> NoticesScreen(nav)
@@ -1129,7 +1131,21 @@ private fun ThemeScreen(nav: Nav, s: Map<String, String>) {
             modifier = Modifier.size(LocalMetrics.current.u(20)).graphicsLayer { alpha = if (choice == id) 1f else 0f },
         )
     }
+    val required = nav.requiredTheme
+    val scope = rememberCoroutineScope()
+    var said by remember { mutableStateOf("") }
+    val picker = androidx.activity.compose.rememberLauncherForActivityResult(androidx.activity.result.contract.ActivityResultContracts.GetContent()) { uri ->
+        if (uri == null) return@rememberLauncherForActivityResult
+        scope.launch {
+            val bytes = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) { runCatching { context.contentResolver.openInputStream(uri)?.use { it.readBytes() } }.getOrNull() }
+            said = if (bytes == null) s["errInvalid"].orEmpty() else nav.app.api.importTheme(bytes, forEveryone = nav.me?.isAdmin == true) ?: s["themeImported"].orEmpty()
+            nav.loadThemes(true)
+        }
+    }
     SettingsPage(nav, s["rowTheme"].orEmpty(), s["themeHint"].orEmpty()) {
+        // An administrator's requirement is shown locked, with who set it; nothing below can be chosen then.
+        if (required != null) GroupedList("", listOf(GroupRow(themeName(nav, bundled, required.value, s), icon = Symbols.Password, detail = com.wittywilla.wittymediaclient.net.SduiLook.lockedWords(required), chevron = false, focusKey = "theme-required", requestFocus = true)))
+        else GroupedList("", listOf(GroupRow(s["themeImport"].orEmpty(), onClick = { picker.launch("*/*") }, icon = Symbols.Palette, detail = said.ifEmpty { s["themeImportHint"].orEmpty() }, focusKey = "theme-import")))
         val firsts = buildList {
             add(
                 GroupRow(

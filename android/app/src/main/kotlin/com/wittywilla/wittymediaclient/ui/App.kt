@@ -50,6 +50,10 @@ import com.wittywilla.wittymediaclient.net.Api
 import com.wittywilla.wittymediaclient.net.BrandPart
 import com.wittywilla.wittymediaclient.net.ApiError
 import com.wittywilla.wittymediaclient.net.SduiClient
+import com.wittywilla.wittymediaclient.net.SduiExperienceList
+import com.wittywilla.wittymediaclient.net.SduiExperienceState
+import com.wittywilla.wittymediaclient.net.SduiLook
+import com.wittywilla.wittymediaclient.net.SduiRequired
 import com.wittywilla.wittymediaclient.net.SduiDevice
 import com.wittywilla.wittymediaclient.net.SduiFileStore
 import com.wittywilla.wittymediaclient.net.SduiNavItem
@@ -333,6 +337,8 @@ class Nav(val app: WittyApp, private val s: Map<String, String>) {
         private set
 
     fun chooseTheme(choice: String) {
+        // An administrator's requirement wins: the choice is locked (Settings shows who set it).
+        if (requiredTheme != null) return
         themeChoice = choice
         server?.let { app.store.chooseTheme(it.url, choice) }
         wantTheme(choice.ifEmpty { themeId })
@@ -405,6 +411,7 @@ class Nav(val app: WittyApp, private val s: Map<String, String>) {
         kotlinx.coroutines.withContext(io) { runCatching { client.navigation() } }.onSuccess { if (sdui === client) sduiNav = it.value }.onFailure { handleExpired(it) }
         kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Default) { runCatching { client.catalog().let { SduiRouter(it.routes, it.commands) } } }
             .onSuccess { if (sdui === client) sduiRouter = it }
+        loadExperiences()
     }
 
     // Every entry of the server's menu that leads somewhere in this app, in its order, You last: what a side menu and
@@ -427,6 +434,59 @@ class Nav(val app: WittyApp, private val s: Map<String, String>) {
     // Counts up when what every page shows has changed underneath them (more screen time was given): the server's pages
     // on screen ask again.
     var pagesStamp by androidx.compose.runtime.mutableIntStateOf(0)
+
+    // MARK: experiences (docs/plans/DESIGN-2.md section 7)
+
+    // Every experience, the one in force on this device with what may be chosen, and what an administrator requires.
+    var experienceList by mutableStateOf<SduiExperienceList?>(null)
+        private set
+    var experienceState by mutableStateOf<SduiExperienceState?>(null)
+        private set
+    var requiredTheme by mutableStateOf<SduiRequired?>(null)
+        private set
+
+    // The chooser offered the first time the app connects to a server, after the profile is chosen.
+    var firstLook by mutableStateOf(false)
+
+    private fun lookPrefs() = app.getSharedPreferences("looks", android.content.Context.MODE_PRIVATE)
+    private fun lookKey() = "seen:" + (server?.url ?: app.api.base) + ":" + (me?.id ?: 0)
+
+    suspend fun loadExperiences() {
+        val client = sdui ?: return
+        val io = kotlinx.coroutines.Dispatchers.IO
+        kotlinx.coroutines.withContext(io) { runCatching { client.experiences() } }.onSuccess { if (sdui === client) experienceList = it }
+        kotlinx.coroutines.withContext(io) { runCatching { client.experienceState() } }.onSuccess { if (sdui === client) experienceState = it }
+        kotlinx.coroutines.withContext(io) { runCatching { app.api.resolvedTheme() } }.onSuccess {
+            requiredTheme = SduiLook.requiredTheme(it)
+            // A required theme is the one drawn.
+            requiredTheme?.let { r -> if (themeChoice != r.value) { themeChoice = r.value; wantTheme(r.value) } }
+        }
+        if (SduiLook.offerFirst(experienceState, lookPrefs().getBoolean(lookKey(), false))) firstLook = true
+    }
+
+    fun finishFirstLook() {
+        firstLook = false
+        lookPrefs().edit().putBoolean(lookKey(), true).apply()
+    }
+
+    // This profile's experience on this device; null follows the server again. The menu and every page are asked for again.
+    suspend fun chooseExperience(id: String?): String? {
+        val client = sdui ?: return null
+        return try {
+            client.chooseExperience(id)
+            sduiMade = null
+            sduiMadeFor = null
+            sduiReadFor = null
+            shown.clear()
+            loadSdui()
+            loadExperiences()
+            null
+        } catch (e: ApiError) {
+            e.message
+        } catch (_: IOException) {
+            s["errLost"]
+        }
+    }
 
     // After the profile rearranged its menu, or a page changed what is in it.
     suspend fun reloadSduiNav() {
@@ -1322,6 +1382,8 @@ fun AppRoot(app: WittyApp) {
             }
         }
         if (InputInUse.helpOpen && !metrics.tv) KeyHelpSheet { InputInUse.helpOpen = false }
+        // The first time this device connects to a server, after the profile is chosen: the look and the theme.
+        if (nav.firstLook && route.signedIn && route == Route.Home) FirstLookScreen(nav, strings)
         // A WittyTV reminder comes up on whatever's showing, once someone is signed in.
         if (metrics.tv && route.signedIn) TvReminderAlert(nav)
         // Screen time and what a profile's limits turn off, over every screen and every player.
