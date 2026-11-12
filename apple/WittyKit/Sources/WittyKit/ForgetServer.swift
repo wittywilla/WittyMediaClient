@@ -13,6 +13,8 @@ public enum ServerKeys {
     static let themeTokens = "themeTokens|"
     static let topMenu = "topMenu."
     static let peer = "peer."
+    /// Whether the server has its own pages, remembered so the first screen draws at once: SDUI/SDUICenter.swift.
+    static let sduiAvailable = "sdui.available|"
 
     /// Where the way to a server from away is kept: apple/App/AwayModel.swift.
     public static func peerKey(_ server: SavedServer) -> String {
@@ -41,6 +43,7 @@ public enum ServerKeys {
             let fits = addresses.filter { rest.hasPrefix($0 + ".") }.max { $0.count < $1.count }
             return .address(fits ?? rest)
         }
+        if key.hasPrefix(sduiAvailable) { return .address(String(key.dropFirst(sduiAvailable.count))) }
         if key.hasPrefix(peer) { return .peer(String(key.dropFirst(peer.count))) }
         return nil
     }
@@ -56,7 +59,7 @@ public enum ServerKeys {
         let old = move.from.url, new = move.to.url
         var out: [(from: String, to: String)] = []
         for key in byAddress(old, in: keys, addresses: addresses) {
-            for prefix in [theme, themeTokens, topMenu] where key.hasPrefix(prefix) {
+            for prefix in [theme, themeTokens, topMenu, sduiAvailable] where key.hasPrefix(prefix) {
                 out.append((key, prefix + new + key.dropFirst(prefix.count + old.count)))
             }
         }

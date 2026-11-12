@@ -28,6 +28,8 @@ final class ForgetServerTests: XCTestCase {
         XCTAssertEqual(ServerKeys.owner(of: "topMenu.http://nas.local.willow", addresses: addresses), .address("http://nas.local"))
         XCTAssertEqual(ServerKeys.owner(of: "topMenu.http://nas.willow", addresses: addresses), .address("http://nas"))
         XCTAssertEqual(ServerKeys.owner(of: "topMenu.http://nas.a.b", addresses: addresses), .address("http://nas"), "a profile's name can have a dot")
+        XCTAssertEqual(ServerKeys.owner(of: "sdui.available|http://nas:9797", addresses: addresses), .address("http://nas:9797"),
+                       "whether a server has its own pages goes with it")
         XCTAssertEqual(ServerKeys.owner(of: "topMenu.http://gone:1.willow", addresses: addresses), .address("http://gone:1.willow"), "nobody's")
         XCTAssertEqual(ServerKeys.owner(of: "theme.http://nas", addresses: addresses), .address("http://nas"))
         XCTAssertEqual(ServerKeys.owner(of: "themeTokens|http://nas|light", addresses: addresses), .address("http://nas"))
