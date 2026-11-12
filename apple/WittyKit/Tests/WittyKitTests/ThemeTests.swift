@@ -97,7 +97,7 @@ final class BrandColourTests: XCTestCase {
     private let fg = ThemeColour(hex: "#ffffff")!, accent = ThemeColour(hex: "#7955ff")!
 
     func testEachKindOfPartColour() throws {
-        let json = #"{"parts":[{"text":"Witty"},{"text":"Media","color":{"kind":"accent"}},{"text":"A","color":{"kind":"token","token":"ok"},"bold":true},{"text":"B","color":{"kind":"static","hex":"#ff0000"}},{"text":"C","color":{"kind":"gradient","stops":["#ff0000","#0000ff"],"angle":90}}],"mark":{"kind":"initials","shown":"WMS"}}"#
+        let json = ##"{"parts":[{"text":"Witty"},{"text":"Media","color":{"kind":"accent"}},{"text":"A","color":{"kind":"token","token":"ok"},"bold":true},{"text":"B","color":{"kind":"static","hex":"#ff0000"}},{"text":"C","color":{"kind":"gradient","stops":["#ff0000","#0000ff"],"angle":90}}],"mark":{"kind":"initials","shown":"WMS"}}"##
         let brand = try JSONDecoder().decode(ResolvedTheme.Brand.self, from: Data(json.utf8))
         let colors = ["ok": "#00ff00"]
         XCTAssertNil(brand.parts[0].color)
