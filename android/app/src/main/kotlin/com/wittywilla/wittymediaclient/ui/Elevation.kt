@@ -1,0 +1,46 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+// Copyright (C) 2026 WittyWilla and contributors
+package com.wittywilla.wittymediaclient.ui
+
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.runtime.Composable
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Shape
+import androidx.compose.ui.unit.dp
+
+// Surfaces step by tone, not by shadow on the page (docs/plans/DESIGN-2.md, section 1): 0 is the page, 1 a panel with a
+// hairline, 2 a lifted card, 3 an overlay. The fill and line are theme colours by the token's names, the shadow is the
+// token's (phones and tablets draw it; a TV doesn't).
+object Elevation {
+    // The theme colour a token name stands for, in this app's scheme.
+    @Composable
+    fun colour(name: String): Color {
+        val scheme = MaterialTheme.colorScheme
+        val extra = LocalExtraColours.current
+        return when (name) {
+            "bg" -> scheme.background
+            "bg2" -> scheme.surface
+            "bg3" -> scheme.surfaceVariant
+            "bg4" -> extra.raised
+            "border" -> scheme.outline
+            "borderStrong" -> extra.control
+            else -> Color.Transparent
+        }
+    }
+}
+
+@Composable
+fun Modifier.elevated(level: Int, shape: Shape, radius: androidx.compose.ui.unit.Dp = 10.dp): Modifier {
+    val spec = DesignTokens.ELEVATION[level.coerceIn(0, DesignTokens.ELEVATION.lastIndex)]
+    val fill = Elevation.colour(spec.fill)
+    val line = if (spec.line.isEmpty()) Color.Transparent else Elevation.colour(spec.line)
+    var m = this
+    if (!LocalMetrics.current.tv) {
+        for (s in spec.shadow) m = m.cssShadow(s.y.dp, s.blur.dp, Color.Black.copy(alpha = s.opacity), radius)
+    }
+    m = m.background(fill, shape)
+    return if (spec.line.isEmpty()) m else m.border(1.dp, line, shape)
+}

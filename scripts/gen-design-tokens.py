@@ -6,8 +6,7 @@
     python3 scripts/gen-design-tokens.py [--tokens PATH] [--check]
 
 Reads themes/tokens.json (the single source, docs/plans/DESIGN-2.md section 2) from the server checkout next to this
-repository, lays it over the DESIGN-2 defaults below (a key the file lacks takes the default; a key this script does not
-know is ignored) and writes android/.../ui/DesignTokens.generated.kt. With --check it writes nothing and exits 1 when the
+repository, requires every key below (no defaults; a file lacking one is refused; a key this script does not know is ignored) and writes android/.../ui/DesignTokens.generated.kt. With --check it writes nothing and exits 1 when the
 file on disk is not what the tokens would give, for CI.
 """
 import argparse, json, os, sys
@@ -22,8 +21,8 @@ CANDIDATES = [
     os.path.join(REPO, "../../WittyMediaServer/themes/tokens.json"),
 ]
 
-# docs/plans/DESIGN-2.md section 2, in the shape themes/tokens.json has it: what every platform assumes when the file
-# does not say (an older server's file has none of this).
+# The shape of themes/tokens.json the apps require (docs/plans/DESIGN-2.md section 2); the values are W1's. Only its keys
+# matter: a file lacking one is refused, there are no defaults.
 DEFAULTS = {
     "type": {"role": {
         "display": {"size": 48, "weight": 650, "leading": 1.14, "tracking": -0.022},
@@ -103,6 +102,21 @@ DEFAULTS = {
 }
 
 NAMES = {"keyboard": "KEYBOARD", "gamepad": "GAMEPAD", "remote": "REMOTE"}
+
+
+def lacking(shape, got, path=""):
+    """Dotted names of keys `shape` has that `got` does not (the file may carry more: those are ignored)."""
+    out = []
+    if not isinstance(shape, dict):
+        return out
+    if not isinstance(got, dict):
+        return [path or "."]
+    for k, v in shape.items():
+        if k not in got:
+            out.append((path + "." + k).lstrip("."))
+        else:
+            out += lacking(v, got[k], (path + "." + k).lstrip("."))
+    return out
 
 
 def merge(base, over):
@@ -242,7 +256,12 @@ def main():
     given = {}
     if path and os.path.exists(path):
         given = json.load(open(path))
-    t = merge(DEFAULTS, given)
+    # No fallbacks: the new schema is required. A file lacking a key the apps read is an error, not a default.
+    missing = lacking(DEFAULTS, given)
+    if not given or missing:
+        print("tokens.json lacks: " + ", ".join(missing or ["(no file found)"]), file=sys.stderr)
+        return 2
+    t = given
     src = render(t)
     if a.check:
         have = open(OUT).read() if os.path.exists(OUT) else ""

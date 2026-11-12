@@ -7,13 +7,13 @@ package com.wittywilla.wittymediaclient.ui
 object DesignTokens {
     class Role(val size: Int, val weight: Int, val leading: Float, val tracking: Float)
     object TypeRole {
-        val DISPLAY = Role(48, 650, 1.14f, -0.022f)
         val PAGETITLE = Role(30, 650, 1.14f, -0.012f)
         val HEADING = Role(20, 650, 1.32f, -0.012f)
         val TITLE = Role(17, 600, 1.32f, 0.0f)
         val BODY = Role(15, 400, 1.55f, 0.0f)
         val CAPTION = Role(12, 400, 1.32f, 0.0f)
         val LABEL = Role(11, 600, 1.32f, 0.07f)
+        val DISPLAY = Role(48, 650, 1.14f, -0.022f)
     }
     object Space {
         const val NONE = 0

@@ -140,7 +140,7 @@ private fun SduiDock(view: SduiView, side: Dp) {
     val env = LocalSdui.current
     val scheme = MaterialTheme.colorScheme
     Column(
-        Modifier.fillMaxWidth().padding(horizontal = side).background(scheme.surface, RoundedCornerShape(env.pt(14)))
+        Modifier.fillMaxWidth().padding(horizontal = side).elevated(1, RoundedCornerShape(env.pt(14)), env.pt(14))
             .defaultMinSize(minHeight = if (env.tv) env.pt(DesignTokens.Tv.DOCK_HEIGHT) else 0.dp)
             .padding(horizontal = env.space("m"), vertical = env.space("s")).focusGroup(),
         verticalArrangement = Arrangement.spacedBy(env.space("s")),
