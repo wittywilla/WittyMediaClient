@@ -99,6 +99,7 @@ struct RootView: View {
             if phase == .active { Task { await model.cameBack() } }
             if phase == .background { model.leftScreen() }
         }
+        .modifier(RemoteRoot())
         #if os(tvOS)
         // Only Apple TV has anything that opens this, the Top Shelf, so only it registers the scheme.
         .onOpenURL { model.open(link: $0) }

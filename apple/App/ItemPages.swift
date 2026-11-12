@@ -1141,6 +1141,7 @@ struct ItemPage: View {
                 if canSave {
                     Button { sheet = .save } label: { Label("Save", systemImage: "plus") }.pageButton(.secondary)
                 }
+                TitleTogether(item: item, compact: true)
                 if !rows.isEmpty { moreButton() }
                 if !item.isPlayable, item.isRigGame { Spacer(minLength: 0) }
             }
@@ -1231,6 +1232,7 @@ struct ItemPage: View {
                 if canSave {
                     Button { sheet = .save } label: { Label("Save", systemImage: "plus") }.pageButton(.secondary)
                 }
+                TitleTogether(item: item)
                 ForEach(row.tools.map { sheetRow($0, item) }) { button in
                     Button(action: button.run) { Label(button.words, systemImage: button.icon) }.pageButton(.ghost)
                 }

@@ -170,6 +170,7 @@ struct NowPlayingCover: ViewModifier {
         // The website's Now Playing, always on black.
         content.fullScreenCover(isPresented: $listening.screenShown) {
             PhoneNowPlaying()
+                .modifier(MusicTogether())
                 .environmentObject(model)
                 .environmentObject(listening)
                 .environment(\.palette, palette)
@@ -416,6 +417,7 @@ struct NowPlayingView: View {
             Spacer()
             Button(editing ? "Done" : "Change") { editing.toggle() }.action()
             Button("Clear") { listening.stop() }.action()
+            MusicPlayOnButton()
         }
         .padding(.top, Tokens.Space.s2)
         .remoteSection()

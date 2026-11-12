@@ -45,6 +45,7 @@ struct PhonePlayerScreen: View {
             let shown = id
             playback.onFinished = { [weak model] next in model?.videoFinished(next: next, from: shown) }
             model.video = playback
+            model.remote.adopt(playback, id: id)
             await playback.start(id: id, client: client, startOver: startOver)
         }
     }
@@ -339,6 +340,7 @@ struct VideoPlayerView: View {
                 }
             }
             .frame(maxWidth: .infinity, alignment: .leading)
+            PlayerTogetherButtons(playback: playback)
             if stream != nil {
                 PlayerIconButton(symbol: "info.circle.fill", label: "How this is playing") { touched(); panel = .info }
             }

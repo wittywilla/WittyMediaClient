@@ -208,6 +208,8 @@ final class AppModel: ObservableObject {
     let listening = Listening()
     /// What this profile may do and its screen time: see Household.swift.
     let household = Household()
+    /// Playing on other devices, being played on from them, and watch parties: see RemoteHub.swift.
+    let remote = RemoteHub()
     @Published var libraries: [Library] = []
     /// The phone's Menu: the drawer of libraries from the left.
     @Published var menuOpen = false
@@ -790,6 +792,7 @@ final class AppModel: ObservableObject {
         Task {
             await placeSent?.value
             await first?(old)
+            await remote.goodbye()
             try? await old.logout()
         }
     }
@@ -984,6 +987,7 @@ final class AppModel: ObservableObject {
             let following = PlaybackModel()
             following.onFinished = { [weak self] after in self?.videoFinished(next: after, from: then) }
             video = following
+            remote.adopt(following, id: then)
             Task { await following.start(id: then, client: client, startOver: false) }
         }
     }

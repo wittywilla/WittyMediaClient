@@ -123,6 +123,7 @@ struct YouView: View {
                 row(.away, "dot.radiowaves.left.and.right", RowTint.account, "rowAway", value: model.awayRowValue)
             }
             row(.servers, "server.rack", RowTint.quiet, "rowServers", value: "\(model.recent.count)")
+            TogetherRows()
         }
         if isAdmin {
             ListGroup(title: say("groupServer")) {
