@@ -413,42 +413,47 @@ struct MediaSettingsView: View {
     @State private var moving = CanvasWatch.shared.wanted
     @Namespace private var scope
 
-    private func toggle(_ title: String, _ on: Binding<Bool>, id: String, first: Bool = false) -> some View {
-        Toggle(isOn: on) {
-            Text(title).font(.subheadline).foregroundStyle(palette.text)
-        }
-        .tint(palette.accent)
-        .padding(.horizontal, Tokens.Space.s4)
-        .frame(minHeight: 52)
-        .firstFocus(in: scope, when: first)
-        .accessibilityIdentifier(id)
-    }
+    /// The canvas's order: the parts people meet first come first.
+    private static let order: [SkipKind] = [.intro, .recap, .credits, .commercial]
 
-    private func skip(_ kind: SkipKind) -> Binding<Bool> {
-        Binding(get: { prefs.skips(kind) }, set: { on in
-            prefs.set(kind, on)
+    /// A part skipped by itself, or a button that asks, for one kind.
+    private func skipRow(_ kind: SkipKind) -> some View {
+        let on = prefs.skips(kind)
+        let value = on ? "By itself" : "Ask"
+        return DesignRow(title: kind.button, value: value, on: on) {
+            prefs.set(kind, !on)
             SkipPrefs.save(prefs)
-        })
+        }
+        .accessibilityLabel(kind.button)
+        .designSwitch(value)
+        .firstFocus(in: scope, when: kind == Self.order.first)
+        .accessibilityIdentifier("auto-skip-\(kind.rawValue)")
     }
 
     var body: some View {
         let standing = CanvasRules.words(CanvasRules.standing(canvases.conditions(server: model.client.base)))
-        SettingsScreen(title: "Skipping and moving pictures", detail: "Kept on this device, for every profile that uses it.") {
-            ListGroup(title: "Skip by itself",
-                      footer: "A part is skipped once, as the video plays into it, and for a moment there's a way back. Going back into a part plays it. Where nothing is switched on, the Skip button is still there.") {
-                ForEach(Array(SkipKind.allCases.enumerated()), id: \.element) { index, kind in
-                    toggle(kind.settingName, skip(kind), id: "auto-skip-\(kind.rawValue)", first: index == 0)
-                }
+        DesignPage(eyebrow: "You · Playing", title: "Skip buttons",
+                   lead: "Skip intro, recap and credits when the server has found them.", identifier: "skip-settings") {
+            DesignSection(title: "Skipping") {
+                DesignRows { ForEach(Self.order, id: \.self) { skipRow($0) } }
+            }
+            DesignSection(title: "") {
+                DesignNote(text: "The skip button appears over the picture and takes focus when it does. A part set to skip by itself is skipped once, as the video plays into it, with a moment to go back. Kept on this device, for every profile that uses it.")
             }
             if model.has(MediaFeature.canvas) {
-                ListGroup(title: "Moving pictures",
-                          footer: standing.isEmpty
-                              ? "A canvas is a short silent video that loops behind the music player and on some pages. It stays still in Low Power Mode, with Reduce Motion, on mobile data and away from the server's own network."
-                              : standing) {
-                    toggle("Play canvases", Binding(get: { moving }, set: { on in
-                        moving = on
-                        canvases.wanted = on
-                    }), id: "canvas-wanted")
+                DesignSection(title: "Moving pictures") {
+                    DesignRows {
+                        DesignRow(title: "Play canvases", value: moving ? "On" : "Off", on: moving,
+                                  detail: standing.isEmpty
+                                      ? "A short silent video that loops behind the music player and on some pages. It stays still in Low Power Mode, with Reduce Motion, on mobile data and away from home."
+                                      : standing) {
+                            moving.toggle()
+                            canvases.wanted = moving
+                        }
+                        .accessibilityLabel("Play canvases")
+                        .designSwitch(moving ? "On" : "Off")
+                        .accessibilityIdentifier("canvas-wanted")
+                    }
                 }
             }
         }

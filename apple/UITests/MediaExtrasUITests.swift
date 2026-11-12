@@ -193,18 +193,19 @@ final class MediaExtrasUITests: XCTestCase {
     @MainActor
     func testYouHasTheChoicesForSkippingAndCanvases() throws {
         let app = try launchApp(extra: ["-WMCOpen", "settings"] + skipping(#"{}"#))
-        app.staticTexts["Skipping and moving pictures"].firstMatch.shown(30)
-        let intros = app.switches["auto-skip-intro"].firstMatch
+        app.staticTexts["Skip buttons"].firstMatch.shown(30)
+        let row = { (id: String) in app.descendants(matching: .any)[id].firstMatch }
+        let intros = row("auto-skip-intro")
         intros.shown(10)
-        XCTAssertTrue(app.switches["auto-skip-recap"].exists && app.switches["auto-skip-credits"].exists && app.switches["auto-skip-commercial"].exists)
-        XCTAssertTrue(app.switches["canvas-wanted"].firstMatch.exists, "the server lists canvases, so their switch is here")
-        XCTAssertEqual(intros.value as? String, "0")
+        XCTAssertTrue(row("auto-skip-recap").exists && row("auto-skip-credits").exists && row("auto-skip-commercial").exists)
+        XCTAssertTrue(row("canvas-wanted").exists, "the server lists canvases, so their switch is here")
+        XCTAssertEqual(intros.value as? String, "Ask")
         #if os(tvOS)
         XCUIRemote.shared.press(.select)
         #else
-        intros.switches.firstMatch.exists ? intros.switches.firstMatch.tap() : intros.tap()
+        intros.tap()
         #endif
-        XCTAssertEqual(intros.value as? String, "1")
+        XCTAssertEqual(intros.value as? String, "By itself")
         shot("settings")
     }
 

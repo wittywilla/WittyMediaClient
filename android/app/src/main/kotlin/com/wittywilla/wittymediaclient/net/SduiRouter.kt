@@ -2,6 +2,9 @@
 // Copyright (C) 2026 WittyWilla and contributors
 package com.wittywilla.wittymediaclient.net
 
+import kotlinx.serialization.json.JsonArray
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
 import java.net.URLDecoder
 
 // One router for every place in the app, driven by the catalogue's routes table (docs/SDUI.md, Routes): a route is
@@ -21,7 +24,8 @@ sealed interface SduiTarget {
 
 // What an action comes to.
 sealed interface SduiEffect {
-    data class Open(val target: SduiTarget) : SduiEffect
+    // `layer`: shown over the current screen (a sheet, an overlay), and Back closes it.
+    data class Open(val target: SduiTarget, val layer: Boolean = false) : SduiEffect
     data class Play(val item: String, val resume: Boolean) : SduiEffect
     data class External(val url: String) : SduiEffect
     data object Back : SduiEffect
@@ -31,7 +35,8 @@ sealed interface SduiEffect {
     data class OpenControl(val control: String, val target: String) : SduiEffect
     data object Refresh : SduiEffect
     // One of the catalogue's commands that changes something on the server; the page is asked for again after.
-    data class Command(val spec: SduiCommandSpec, val item: String, val params: Map<String, String> = emptyMap()) : SduiEffect
+    // `confirm` is a question to ask first (the command's label is the confirming button), `params` the action's values.
+    data class Command(val spec: SduiCommandSpec, val item: String, val params: JsonObject = JsonObject(emptyMap()), val confirm: String = "") : SduiEffect
     // An action of a type, or a command, this app doesn't know: it does nothing.
     data object Nothing : SduiEffect
 }
@@ -80,7 +85,7 @@ class SduiRouter(routes: List<SduiRouteSpec> = DEFAULT_ROUTES, commands: List<Sd
     }
 
     fun effect(action: SduiAction?): SduiEffect = when (action?.type) {
-        "navigate" -> if (action.to.isEmpty()) SduiEffect.Nothing else SduiEffect.Open(resolve(action.to))
+        "navigate" -> if (action.to.isEmpty()) SduiEffect.Nothing else SduiEffect.Open(resolve(action.to), layer = action.asLayer)
         "native" -> {
             val params = action.params.mapNotNull { (k, v) -> (v as? kotlinx.serialization.json.JsonPrimitive)?.content?.let { k to it } }.toMap()
             if (action.to.isEmpty()) SduiEffect.Nothing else SduiEffect.Open(SduiTarget.Native(action.to, params, ""))
@@ -92,11 +97,8 @@ class SduiRouter(routes: List<SduiRouteSpec> = DEFAULT_ROUTES, commands: List<Sd
             "control.open" -> SduiEffect.OpenControl(action.params.str("control"), action.params.str("target"))
             "selectTab" -> action.params.str("tab").let { if (it.isEmpty()) SduiEffect.Nothing else SduiEffect.SelectTab(it) }
             "refresh" -> SduiEffect.Refresh
-            else -> {
-                val given = SduiCommands.given(action.params)
-                commands[action.op]?.takeIf { it.path.isNotEmpty() && SduiCommands.request(it, action.item, given) != null }
-                    ?.let { SduiEffect.Command(it, action.item, given) } ?: SduiEffect.Nothing
-            }
+            else -> commands[action.op]?.takeIf { it.path.isNotEmpty() && SduiCommands.request(it, action.item, action.params) != null }
+                ?.let { SduiEffect.Command(it, action.item, action.params, action.confirm) } ?: SduiEffect.Nothing
         }
         else -> SduiEffect.Nothing
     }
@@ -134,6 +136,16 @@ class SduiRouter(routes: List<SduiRouteSpec> = DEFAULT_ROUTES, commands: List<Sd
             page("/photos", "photos"),
             page("/books", "books"),
             page("/games", "games"),
+            // Catalogue revision 8: the pages the server serves for every app, opened about something.
+            page("/studio/{name}", "studio", "name" to "{name}"),
+            page("/network/{name}", "network", "name" to "{name}"),
+            page("/category/{name}", "category", "name" to "{name}"),
+            page("/versions/{item}", "versions", "item" to "{item}"),
+            page("/save-to/{item}", "save-to", "item" to "{item}"),
+            page("/devices", "devices"),
+            page("/year", "year"),
+            page("/activity", "activity"),
+            page("/notifications", "notifications"),
             page("/page/{id}", "{id}"),
             native("/settings", "settings"),
             native("/settings/{section}", "settings"),
@@ -174,44 +186,50 @@ object SduiCommands {
 
     private const val SHOW_IDS_FROM = 16
 
-    // An action's params as text, for the command's own {name} values.
-    fun given(params: Map<String, kotlinx.serialization.json.JsonElement>): Map<String, String> =
-        params.mapNotNull { (k, v) -> (v as? kotlinx.serialization.json.JsonPrimitive)?.let { k to it.content } }.toMap()
-
-    private fun inPath(v: String) = java.net.URLEncoder.encode(v, "UTF-8").replace("+", "%20")
-    private fun inString(v: String) = v.replace("\\", "\\\\").replace("\"", "\\\"")
-
-    // The command's {name} values: in the path escaped for a URL, in the body escaped for a JSON string; an int takes the
-    // place of its quoted token ("{name}") as a number; one not given is an empty string, and a required one not given
-    // refuses the command.
-    private fun fill(spec: SduiCommandSpec, path: String, body: String, given: Map<String, String>): Pair<String, String>? {
-        var p = path
-        var b = body
+    // A command's request, from its catalogue entry: {item} and each of the entry's params by name go into the path and the
+    // body where the template has them (docs/SDUI.md, Action). An int parameter replaces its string and quotes with the
+    // number, a bool with true or false, an ints one (a list of numbers) with a JSON array; a string is JSON-escaped inside
+    // its quotes and URL-escaped in the path. A parameter that wasn't given is an empty string.
+    fun request(spec: SduiCommandSpec, item: String, params: JsonObject = JsonObject(emptyMap())): Request? {
+        if (spec.path.isEmpty()) return null
+        val base = baseRequest(spec, item) ?: return null
+        var path = base.path
+        var body = base.body
         for (param in spec.params) {
-            val v = given[param.name].orEmpty()
-            if (v.isEmpty() && param.required) return null
-            if (param.type == "int") {
-                val n = v.toLongOrNull()
-                if (v.isNotEmpty() && n == null) return null
-                b = b.replace("\"{${param.name}}\"", n?.toString() ?: "\"\"")
-                p = p.replace("{${param.name}}", n?.toString().orEmpty())
-            } else {
-                p = p.replace("{${param.name}}", inPath(v))
-                b = b.replace("{${param.name}}", inString(v))
+            val value = params[param.name]
+            if (param.required && (value == null || (value is JsonPrimitive && value.isString && value.content.isEmpty()))) return null
+            val text = (value as? JsonPrimitive)?.content.orEmpty()
+            path = path.replace("{" + param.name + "}", java.net.URLEncoder.encode(text, "UTF-8").replace("+", "%20"))
+            body = body?.let { template ->
+                val quoted = "\"{" + param.name + "}\""
+                when (param.type) {
+                    "int" -> {
+                        val number = text.toDoubleOrNull()?.takeIf { it == Math.floor(it) }?.toLong() ?: return null
+                        template.replace(quoted, number.toString())
+                    }
+                    "bool" -> template.replace(quoted, if (text == "true") "true" else if (text == "false") "false" else return null)
+                    "ints" -> template.replace(quoted, ints(value) ?: return null)
+                    else -> template.replace("{" + param.name + "}", text.replace("\\", "\\\\").replace("\"", "\\\"").replace("\n", "\\n"))
+                }
             }
         }
-        return p to b
+        return Request(base.method, path, body)
     }
 
-    fun request(spec: SduiCommandSpec, item: String, given: Map<String, String> = emptyMap()): Request? {
-        if (spec.path.isEmpty()) return null
-        if (spec.params.isNotEmpty()) {
-            val filled = fill(spec, spec.path, spec.body, given) ?: return null
-            val itemSpec = spec.copy(path = filled.first, body = filled.second, params = emptyList())
-            return if ("{item}" in itemSpec.path || "{item}" in itemSpec.body) request(itemSpec, item) else Request(itemSpec.method, itemSpec.path, itemSpec.body.takeIf { it.isNotEmpty() })
+    // A list of numbers as a JSON array: from an array, or from numbers written with commas.
+    private fun ints(value: kotlinx.serialization.json.JsonElement?): String? {
+        val list = when (value) {
+            is JsonArray -> value.map { (it as? JsonPrimitive)?.content?.toLongOrNull() ?: return null }
+            is JsonPrimitive -> value.content.split(',').map { it.trim() }.filter { it.isNotEmpty() }.map { it.toLongOrNull() ?: return null }
+            else -> emptyList()
         }
+        return list.joinToString(",", "[", "]")
+    }
+
+    private fun baseRequest(spec: SduiCommandSpec, item: String): Request? {
         if (serverRevision >= SHOW_IDS_FROM) {
-            if (item.isEmpty() || item.any { it.isISOControl() }) return null
+            if (item.isEmpty() && ("{item}" in spec.path || "{item}" in spec.body)) return null
+            if (item.any { it.isISOControl() }) return null
             val inPath = java.net.URLEncoder.encode(item, "UTF-8").replace("+", "%20")
             val inString = item.replace("\\", "\\\\").replace("\"", "\\\"")
             return Request(spec.method, spec.path.replace("{item}", inPath), spec.body.takeIf { it.isNotEmpty() }?.replace("{item}", inString))

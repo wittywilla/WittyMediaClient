@@ -23,6 +23,8 @@ import com.wittywilla.wittymediaclient.data.fill
 import com.wittywilla.wittymediaclient.net.ApiError
 import com.wittywilla.wittymediaclient.net.ModuleSettingRow
 import com.wittywilla.wittymediaclient.net.ModuleSettingsEntry
+import com.wittywilla.wittymediaclient.net.SettingsSlotPage
+import com.wittywilla.wittymediaclient.net.settingsSlot
 import com.wittywilla.wittymediaclient.net.ModuleSettingsRules
 import com.wittywilla.wittymediaclient.net.ModuleSettingsView
 import com.wittywilla.wittymediaclient.net.moduleSettings
@@ -66,7 +68,7 @@ fun ModuleSettingsListScreen(nav: Nav, s: Map<String, String>) {
 // it. A change is saved as it is made, and the server's answer is what is shown; a refusal keeps the old value and
 // says why by the row.
 @Composable
-fun ModuleSettingsScreen(nav: Nav, s: Map<String, String>, url: String, title: String) {
+fun ModuleSettingsScreen(nav: Nav, s: Map<String, String>, url: String, title: String, only: String = "") {
     val path = remember(url) { ModuleSettingsRules.path(url) }
     val scope = rememberCoroutineScope()
     var view by remember { mutableStateOf<ModuleSettingsView?>(null) }
@@ -104,12 +106,12 @@ fun ModuleSettingsScreen(nav: Nav, s: Map<String, String>, url: String, title: S
         }
     }
 
-    SettingsPage(nav, view?.label?.ifEmpty { null } ?: title, "") {
+    SettingsPage(nav, if (only.isNotEmpty()) title else view?.label?.ifEmpty { null } ?: title, "") {
         val v = view
         when {
             v == null && problem.isNotEmpty() -> Note(problem)
             v == null -> Loading()
-            else -> v.pages.forEach { page ->
+            else -> v.pages.filter { only.isEmpty() || it.id == only }.forEach { page ->
                 page.groups.forEach { group ->
                     val rows = group.rows.filter(ModuleSettingsRules::known)
                     GroupedList(group.title.ifEmpty { page.title }, rows.flatMap { row -> rowsFor(v, row, s, drafts, rowProblems[row.key].orEmpty(), ::save) })
@@ -176,3 +178,17 @@ private fun rowsFor(
     }
 }
 
+
+// The settings pages modules put in one place of the hand-built Settings (the server's GET /api/sdui/slots/{slot}): a group of
+// rows, each opening that page of the module's settings in the app's own controls. Nothing when no module has one there.
+@Composable
+fun SettingsSlotRows(nav: Nav, slot: String, caption: String = "") {
+    var pages by remember(slot) { mutableStateOf<List<SettingsSlotPage>>(emptyList()) }
+    LaunchedEffect(slot, nav.sdui) {
+        pages = runCatching { nav.app.api.settingsSlot(slot).pages.filter { ModuleSettingsRules.path(it.url) != null } }.getOrDefault(emptyList())
+    }
+    if (pages.isEmpty()) return
+    GroupedList(caption, pages.map { p ->
+        GroupRow(p.title.ifEmpty { p.label }, onClick = { nav.push(Route.ModuleSettings(p.url, p.title.ifEmpty { p.label }, p.id)) }, icon = sduiIcon(p.icon.ifEmpty { "extension" }), detail = p.label, focusKey = "slot-$slot-${p.module}-${p.id}")
+    })
+}

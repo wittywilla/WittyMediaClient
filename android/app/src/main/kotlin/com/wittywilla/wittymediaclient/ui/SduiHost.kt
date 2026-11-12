@@ -119,7 +119,7 @@ private val paramsSaver = Saver<Map<String, String>, ArrayList<String>>(
 internal fun sduiUnknownTypes(view: SduiView): Set<String> {
     val out = LinkedHashSet<String>()
     fun walk(v: SduiView) {
-        if (v.type == "Stack" && v.node.type != "Stack" && v.node.type.isNotEmpty()) out += v.node.type
+        if (v.type == "Stack" && v.node.type != "Stack" && v.node.type != "Form" && v.node.type.isNotEmpty()) out += v.node.type
         v.children.forEach { walk(it) }
     }
     walk(view)
@@ -130,7 +130,7 @@ private const val RETRY_MS = 5000L
 private const val COOL_MS = 8000L
 
 @Composable
-fun SduiPageScreen(nav: Nav, page: String, params: Map<String, String>, top: Boolean = false, title: String = "") {
+fun SduiPageScreen(nav: Nav, page: String, params: Map<String, String>, top: Boolean = false, title: String = "", layered: Boolean = false) {
     val client = nav.sdui
     if (client == null) {
         // The first frame, before the window has said how big it is.
@@ -291,19 +291,45 @@ fun SduiPageScreen(nav: Nav, page: String, params: Map<String, String>, top: Boo
         }
     }
 
+    // What the page puts into the shell's regions stays while pages of its theme scope show (not for a layer over a page).
+    LaunchedEffect(model) {
+        val shown = model ?: return@LaunchedEffect
+        if (!layered) nav.regions = com.wittywilla.wittymediaclient.net.SduiRegionRules.after(shown.base, nav.regions)
+    }
+    val layerClose = LocalSduiLayerClose.current
+    var asking by remember { mutableStateOf<SduiEffect.Command?>(null) }
     val screen = model?.screen
     val screenTime = model?.base?.screenTime
     val control = remember { mutableStateOf<SduiControl?>(null) }
     val pageKey = page + params.entries.sortedBy { it.key }.joinToString("&") { it.key + "=" + it.value }
     val listView = remember(pageKey) { mutableStateOf(SduiViewPref.get(context, pageKey)) }
 
+    fun runCommand(effect: SduiEffect.Command) {
+        scope.launch {
+            try {
+                client.command(effect.spec, effect.item, effect.params)
+                toast = when (effect.spec.op) {
+                    "watchLater.add" -> "Added to Watch later"
+                    "watched.set" -> "Marked as watched"
+                    "watched.clear" -> "Marked as unwatched"
+                    else -> "Done"
+                }
+                refresh()
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                failed(e, whole = false)
+            }
+        }
+    }
+
     fun act(action: SduiAction?) {
         when (val effect = nav.sduiRouter.effect(action)) {
-            is SduiEffect.Open -> nav.go(effect.target)
+            is SduiEffect.Open -> if (effect.layer) nav.go(effect.target, layer = true) else { layerClose?.invoke(); nav.go(effect.target) }
             // The server sends no Play when screen time is over; one kept from before is answered with why.
             is SduiEffect.Play -> if (screenTime != null) toast = screenTime.message.ifEmpty { "Screen time is over for now." } else nav.playById(effect.item, effect.resume)
             is SduiEffect.External -> if (screen?.layout?.externalLinks != false) runCatching { context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(effect.url)).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) }
-            SduiEffect.Back -> nav.back()
+            SduiEffect.Back -> if (layerClose != null) layerClose() else nav.back()
             is SduiEffect.SelectTab -> chosen = chosen + ("tab" to effect.tab)
             SduiEffect.Refresh -> scope.launch { refresh() }
             is SduiEffect.OpenControl -> when (effect.control) {
@@ -311,22 +337,7 @@ fun SduiPageScreen(nav: Nav, page: String, params: Map<String, String>, top: Boo
                 "sort", "filter", "jump" -> control.value = SduiControl(effect.control, effect.target)
                 else -> Unit
             }
-            is SduiEffect.Command -> scope.launch {
-                try {
-                    client.command(effect.spec, effect.item, effect.params)
-                    toast = when (effect.spec.op) {
-                        "watchLater.add" -> "Added to Watch later"
-                        "watched.set" -> "Marked as watched"
-                        "watched.clear" -> "Marked as unwatched"
-                        else -> "Done"
-                    }
-                    refresh()
-                } catch (e: CancellationException) {
-                    throw e
-                } catch (e: Exception) {
-                    failed(e, whole = false)
-                }
-            }
+            is SduiEffect.Command -> if (effect.confirm.isNotEmpty()) asking = effect else runCommand(effect)
             SduiEffect.Nothing -> Unit
         }
     }
@@ -377,6 +388,10 @@ fun SduiPageScreen(nav: Nav, page: String, params: Map<String, String>, top: Boo
                 if (base != null && pageTokens.isNotEmpty()) ThemeScope(remember(base, pageTokens) { SduiTokens.over(base, pageTokens) }, body) else body()
             }
         }
+        asking?.let { ask ->
+            SduiConfirm(ask.confirm, ask.spec.label.ifEmpty { "Yes" }, { asking = null; runCommand(ask) }, { asking = null })
+        }
+        if (!layered) nav.layer?.let { SduiLayer(nav, it) { nav.layer = null } }
         if (toast.isNotEmpty()) Toast(toast, { toast = "" }, Modifier.align(Alignment.BottomCenter).padding(bottom = if (metrics.tv) metrics.u(60) else LocalBottomRoom.current - 4.dp))
     }
 }

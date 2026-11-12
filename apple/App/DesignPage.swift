@@ -26,13 +26,52 @@ struct DesignSizes {
     }
 }
 
-private struct DesignSizesKey: EnvironmentKey { static let defaultValue = DesignSizes.of(.phone, width: 390) }
+private struct DesignSizesKey: EnvironmentKey {
+    /// Outside a page, the device's own: a TV's on Apple TV, a phone's elsewhere.
+    #if os(tvOS)
+    static let defaultValue = DesignSizes.of(.television, width: 1920)
+    #else
+    static let defaultValue = DesignSizes.of(.phone, width: 390)
+    #endif
+}
+
+private struct DesignRowDrawnKey: EnvironmentKey { static let defaultValue = false }
+
+/// What a card shows over its title instead of its swatches, for a picture a screen draws itself. A look's layout comes
+/// with the card's own `wire` (W6's LayoutThumb). Nil, or a nil answer, keeps the card's own swatches or symbol.
+struct DesignCardPreview {
+    let make: (DesignPageSpec.Card) -> AnyView?
+}
+
+private struct DesignCardPreviewKey: EnvironmentKey { static let defaultValue: DesignCardPreview? = nil }
 
 extension EnvironmentValues {
     var designSizes: DesignSizes {
         get { self[DesignSizesKey.self] }
         set { self[DesignSizesKey.self] = newValue }
     }
+
+    /// The slot for a card's preview (see `DesignCardPreview`): set it once over the pages that show look cards, as
+    /// `.environment(\.designCardPreview, DesignCardPreview { card in … AnyView(…) or nil })`.
+    var designCardPreview: DesignCardPreview? {
+        get { self[DesignCardPreviewKey.self] }
+        set { self[DesignCardPreviewKey.self] = newValue }
+    }
+
+    /// Inside a `DesignRowButton`, which draws the row's surface: a row view inside it draws none of its own.
+    var designRowDrawn: Bool {
+        get { self[DesignRowDrawnKey.self] }
+        set { self[DesignRowDrawnKey.self] = newValue }
+    }
+}
+
+/// The page's sizes, for a part drawn by a screen's own code inside a `DesignPage` (whose environment has them; the
+/// screen's own doesn't).
+struct WithDesignSizes<Content: View>: View {
+    @Environment(\.designSizes) private var sizes
+    @ViewBuilder let content: (DesignSizes) -> Content
+
+    var body: some View { content(sizes) }
 }
 
 /// The page: eyebrow, title and lead, then `content` (its sections), the actions and the foot line, scrolling.
@@ -233,9 +272,29 @@ private struct DesignRowStyle: ButtonStyle {
 
         var body: some View {
             configuration.label
+                .environment(\.designRowDrawn, true)
                 .designRowBackground(selected: selected, pressed: configuration.isPressed, focused: focused)
                 .scaleEffect(focused ? 1.02 : 1)
                 .animation(.easeOut(duration: Tokens.Motion.focus), value: focused)
+        }
+    }
+}
+
+extension View {
+    /// A Design 2 row's surface (`bg2` at the theme's corner, a ring when chosen) for a row that isn't one button, such
+    /// as one with a control inside it. Pad it as a `DesignRow` is: `sizes.gap * 1.6` across, `sizes.rowHeight` tall.
+    func designRowSurface(selected: Bool = false) -> some View {
+        designRowBackground(selected: selected, pressed: false, focused: false)
+    }
+}
+
+extension View {
+    /// A row that switches something on and off: VoiceOver calls it a switch, with its words as the value.
+    @ViewBuilder func designSwitch(_ value: String) -> some View {
+        if #available(iOS 17, tvOS 17, visionOS 1, *) {
+            accessibilityAddTraits(.isToggle).accessibilityValue(value)
+        } else {
+            accessibilityValue(value)
         }
     }
 }
@@ -363,30 +422,61 @@ struct DesignSpecPage: View {
     let spec: DesignPageSpec
     /// Something on the page was pressed: its `id`.
     var onPress: (String) -> Void = { _ in }
-    /// The page is a layer and Back closes it.
+    /// The page is a layer and Back closes it; a form's Cancel too.
     var onBack: (() -> Void)? = nil
+    /// A control changed (not in a form): the row's `id`, the control's `name` and its new value. A switch says so as
+    /// it's flipped, a choice as it's chosen, a field on Return or leaving it, a slider when it's let go.
+    var onChange: (_ id: String, _ name: String, _ value: String) -> Void = { _, _, _ in }
+    /// A form's Save: every named control's value.
+    var onSubmit: ([String: String]) -> Void = { _ in }
     @FocusState private var focus: String?
+    @State private var values: [String: String] = [:]
+    @State private var seeded = false
     @Environment(\.metrics) private var metrics
+
+    private func set(_ row: DesignPageSpec.Row, _ value: String, final: Bool) {
+        guard let control = row.control else { return }
+        values[control.name.isEmpty ? row.id : control.name] = value
+        // In a form nothing runs until Save.
+        if final, spec.form == nil { onChange(row.id, control.name, value) }
+    }
 
     var body: some View {
         DesignPage(eyebrow: spec.eyebrow, title: spec.title, lead: spec.lead, foot: spec.foot, identifier: "design.page") {
             ForEach(Array(spec.sections.enumerated()), id: \.offset) { _, section in
-                DesignSpecSection(section: section, focus: $focus, onPress: onPress)
+                DesignSpecSection(section: section, focus: $focus, values: values, onPress: onPress, set: set)
             }
         } actions: {
+            if let form = spec.form {
+                Button(form.submitLabel.isEmpty ? "Save" : form.submitLabel) { onSubmit(values) }
+                    .action(primary: true)
+                    .focused($focus, equals: "design.form.submit")
+                    .accessibilityIdentifier("design.form.submit")
+                if !form.cancelLabel.isEmpty {
+                    Button(form.cancelLabel) { onBack?() }
+                        .action()
+                        .accessibilityIdentifier("design.form.cancel")
+                }
+            }
             ForEach(spec.actions, id: \.id) { action in
                 Button(action.title) { onPress(action.id) }
-                    .action(primary: action.primary)
+                    .action(primary: action.primary && spec.form == nil)
                     .focused($focus, equals: action.id)
                     .accessibilityIdentifier("design." + action.id)
             }
         }
         .onRemoteBack(spec.back == .closeLayer ? onBack : nil)
         .onAppear {
+            if !seeded {
+                values = spec.initialValues
+                seeded = true
+            }
             // A TV starts where the spec says; a touch screen leaves focus alone until a keyboard moves it.
             guard metrics.tv, let start = spec.startFocus else { return }
             DispatchQueue.main.async { focus = start }
         }
+        // The server sent the page again (after a command): what it stored is what shows.
+        .onChange(of: spec) { values = $0.initialValues }
     }
 }
 
@@ -395,7 +485,16 @@ private struct DesignSpecSection: View {
     @Environment(\.metrics) private var metrics
     let section: DesignPageSpec.Section
     let focus: FocusState<String?>.Binding
+    let values: [String: String]
     let onPress: (String) -> Void
+    let set: (DesignPageSpec.Row, String, Bool) -> Void
+
+    /// A row's control with the value it has now on this page.
+    private func current(_ row: DesignPageSpec.Row) -> DesignPageSpec.Control? {
+        guard var control = row.control else { return nil }
+        control.value = values[control.name.isEmpty ? row.id : control.name] ?? control.value
+        return control
+    }
 
     var body: some View {
         DesignSection(title: section.heading) {
@@ -403,10 +502,16 @@ private struct DesignSpecSection: View {
             case .rows:
                 DesignRows {
                     ForEach(section.rows, id: \.id) { row in
-                        DesignRow(title: row.title, value: row.value, on: row.on, detail: row.detail,
-                                  action: row.pressable ? { onPress(row.id) } : nil)
-                            .focused(focus, equals: row.id)
-                            .accessibilityIdentifier("design." + row.id)
+                        if let control = current(row) {
+                            DesignControlRow(row: row, control: control) { value, final in set(row, value, final) }
+                                .focused(focus, equals: row.id)
+                                .accessibilityIdentifier("design." + row.id)
+                        } else {
+                            DesignRow(title: row.title, value: row.value, on: row.on, detail: row.detail,
+                                      action: row.pressable ? { onPress(row.id) } : nil)
+                                .focused(focus, equals: row.id)
+                                .accessibilityIdentifier("design." + row.id)
+                        }
                     }
                 }
             case .chips:
@@ -436,11 +541,147 @@ private struct DesignSpecSection: View {
     }
 }
 
+/// A row with a control in it (catalogue revision 8): a switch flips on a press; a choice opens its options (a TV's
+/// press goes to the next); a field is typed in place; a slider slides on a touch screen and steps with a TV's left
+/// and right. `change(value, final)`: final is when it should be sent (a field on Return, a slider let go).
+struct DesignControlRow: View {
+    @Environment(\.palette) private var palette
+    @Environment(\.designSizes) private var sizes
+    let row: DesignPageSpec.Row
+    let control: DesignPageSpec.Control
+    let change: (String, Bool) -> Void
+    @State private var text = ""
+    @State private var sliding: Double?
+
+    private var label: some View {
+        VStack(alignment: .leading, spacing: 2) {
+            Text(row.title).font(.system(size: sizes.body, weight: .bold)).foregroundStyle(palette.text)
+            if !row.detail.isEmpty {
+                Text(row.detail).font(.system(size: sizes.tiny)).foregroundStyle(palette.text.opacity(0.7))
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+        }
+    }
+
+    private func value(_ words: String, on: Bool = false) -> some View {
+        Text(words).font(.system(size: sizes.small, weight: .bold))
+            .foregroundStyle(on ? palette.accentText : palette.textSecondary)
+            .lineLimit(1)
+    }
+
+    private func pressRow(_ trailing: String, on: Bool = false, _ act: @escaping () -> Void) -> some View {
+        Button(action: act) {
+            HStack(spacing: sizes.gap) { label; Spacer(minLength: sizes.gap); value(trailing, on: on) }
+                .padding(.horizontal, sizes.gap * 1.6)
+                .padding(.vertical, sizes.gap * 0.6)
+                .frame(maxWidth: .infinity, minHeight: sizes.rowHeight, alignment: .leading)
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(DesignRowButton())
+    }
+
+    var body: some View {
+        switch control.kind {
+        case .switch:
+            pressRow(control.shown, on: control.isOn) { change(control.flipped, true) }
+                .accessibilityLabel(row.title)
+                .designSwitch(control.shown)
+        case .select:
+            #if os(tvOS)
+            pressRow(control.shown) { change(control.option(after: 1), true) }
+                .accessibilityLabel(row.title)
+                .accessibilityValue(control.shown)
+                .accessibilityHint("Press for the next choice")
+            #else
+            Menu {
+                ForEach(control.options, id: \.value) { option in
+                    Button { change(option.value, true) } label: {
+                        if option.value == control.value { Label(option.label, systemImage: "checkmark") } else { Text(option.label) }
+                    }
+                }
+            } label: {
+                HStack(spacing: sizes.gap) {
+                    label
+                    Spacer(minLength: sizes.gap)
+                    value(control.shown)
+                    Image(systemName: "chevron.up.chevron.down").font(.system(size: sizes.tiny, weight: .bold))
+                        .foregroundStyle(palette.textHint).accessibilityHidden(true)
+                }
+                .padding(.horizontal, sizes.gap * 1.6)
+                .padding(.vertical, sizes.gap * 0.6)
+                .frame(maxWidth: .infinity, minHeight: sizes.rowHeight, alignment: .leading)
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(DesignRowButton())
+            .accessibilityLabel(row.title)
+            .accessibilityValue(control.shown)
+            #endif
+        case .field:
+            VStack(alignment: .leading, spacing: sizes.gap * 0.5) {
+                label
+                TextField(control.placeholder, text: Binding(get: { text }, set: { text = control.clipped($0); change(text, false) }),
+                          axis: control.multiline ? .vertical : .horizontal)
+                    .font(.system(size: sizes.body))
+                    .foregroundStyle(palette.text)
+                    #if os(iOS)
+                    .keyboardType(control.input == "number" ? .numberPad : control.input == "url" ? .URL : .default)
+                    .textInputAutocapitalization(control.input == "text" ? .sentences : .never)
+                    #endif
+                    .submitLabel(control.input == "search" ? .search : .done)
+                    .onSubmit { change(text, true) }
+                    .padding(sizes.gap * 0.8)
+                    .background(RoundedRectangle(cornerRadius: Tokens.Radius.sm, style: .continuous).fill(palette.background.opacity(0.6)))
+                    .accessibilityLabel(row.title)
+            }
+            .padding(.horizontal, sizes.gap * 1.6)
+            .padding(.vertical, sizes.gap * 0.8)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .designRowSurface()
+            .onAppear { text = control.value }
+            .onChange(of: control.value) { if $0 != text { text = $0 } }
+        case .slider:
+            #if os(tvOS)
+            // A remote steps it: left and right while it has focus, a press for one step up.
+            pressRow(control.shown) { change(control.stepped(1), true) }
+                .onMoveCommand { direction in
+                    if direction == .left { change(control.stepped(-1), true) }
+                    if direction == .right { change(control.stepped(1), true) }
+                }
+                .accessibilityLabel(row.title)
+                .accessibilityValue(control.shown)
+                .accessibilityAdjustableAction { direction in
+                    change(control.stepped(direction == .increment ? 1 : -1), true)
+                }
+            #else
+            VStack(alignment: .leading, spacing: sizes.gap * 0.4) {
+                HStack { label; Spacer(minLength: sizes.gap); value(sliding.map { DesignPageSpec.Control(kind: .slider, name: "", value: String($0)).shown } ?? control.shown) }
+                Slider(value: Binding(get: { sliding ?? Double(control.value) ?? control.min ?? 0 }, set: { sliding = $0 }),
+                       in: (control.min ?? 0)...max(control.max ?? 100, (control.min ?? 0) + 1),
+                       step: (control.step ?? 1) > 0 ? (control.step ?? 1) : 1) { editing in
+                    if !editing, let sliding {
+                        let moved = DesignPageSpec.Control(kind: .slider, name: "", value: String(sliding)).shown
+                        self.sliding = nil
+                        change(moved, true)
+                    }
+                }
+                .tint(palette.accent)
+                .accessibilityLabel(row.title)
+            }
+            .padding(.horizontal, sizes.gap * 1.6)
+            .padding(.vertical, sizes.gap * 0.8)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .designRowSurface()
+            #endif
+        }
+    }
+}
+
 /// A card of `secC`: three swatches when it has them (a look's or a theme's colours), its title and a line under it,
 /// on `bg2` at the theme's corner, ringed when chosen.
 struct DesignCard: View {
     @Environment(\.palette) private var palette
     @Environment(\.designSizes) private var sizes
+    @Environment(\.designCardPreview) private var preview
     let card: DesignPageSpec.Card
     let action: () -> Void
 
@@ -452,7 +693,12 @@ struct DesignCard: View {
     var body: some View {
         Button(action: action) {
             VStack(alignment: .leading, spacing: 2) {
-                if card.swatches.count >= 3 {
+                // A look's layout as a preview in its colours, from the slot (`designCardPreview`); else the swatches.
+                if let shown = preview?.make(card) {
+                    shown
+                        .accessibilityHidden(true)
+                        .padding(.bottom, 4)
+                } else if card.swatches.count >= 3 {
                     HStack(spacing: 3) {
                         RoundedRectangle(cornerRadius: 5).fill(colour(card.swatches[0])).frame(maxWidth: .infinity)
                         RoundedRectangle(cornerRadius: 5).fill(colour(card.swatches[1])).frame(maxWidth: .infinity)
@@ -462,6 +708,13 @@ struct DesignCard: View {
                     .frame(height: sizes.chipHeight * 0.8)
                     .accessibilityHidden(true)
                     .padding(.bottom, 4)
+                } else if !card.symbol.isEmpty {
+                    Image(systemName: card.symbol)
+                        .font(.system(size: sizes.body * 1.5, weight: .semibold))
+                        .foregroundStyle(palette.accentText)
+                        .frame(height: sizes.body * 2, alignment: .leading)
+                        .accessibilityHidden(true)
+                        .padding(.bottom, 4)
                 }
                 Text(card.title).font(.system(size: sizes.small, weight: .heavy)).foregroundStyle(palette.text)
                     .lineLimit(2).multilineTextAlignment(.leading)

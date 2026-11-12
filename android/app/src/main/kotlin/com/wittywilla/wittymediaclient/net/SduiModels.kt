@@ -16,7 +16,7 @@ import kotlinx.serialization.json.doubleOrNull
 // expected, so a newer server's page still reads; nothing here touches Android, so it's tested as plain Kotlin.
 
 // The catalogue revision this app was built against, sent with every request.
-const val SDUI_CATALOG = 3
+const val SDUI_CATALOG = 8
 
 // The only document version this app reads. A client refuses any other.
 const val SDUI_VERSION = 1
@@ -33,7 +33,29 @@ data class SduiDocument(
     val root: SduiNode = SduiNode(type = "Page", id = "page"),
     val screenTime: SduiScreenTime? = null,
     val personal: SduiPersonalInfo? = null,
+    // What the page puts into the shell's own regions while it shows (docs/SDUI.md, Shell regions): WittyPlay Online's.
+    val regions: SduiRegions? = null,
     val meta: SduiMeta = SduiMeta(),
+)
+
+// `statusBar` (up to six items) and `systemDock` (up to seven round buttons).
+@Serializable
+data class SduiRegions(
+    val statusBar: List<SduiStatusItem> = emptyList(),
+    val systemDock: List<SduiSystemButton> = emptyList(),
+)
+
+// kind: profile (the profile's name, text the line under it), server (the server's name, drawn from the brand) or text.
+@Serializable
+data class SduiStatusItem(val id: String = "", val kind: String = "", val text: String = "")
+
+@Serializable
+data class SduiSystemButton(
+    val id: String = "",
+    val label: String = "",
+    val icon: String = "",
+    val route: String = "",
+    @SerialName("as") val layer: String = "",
 )
 
 @Serializable
@@ -83,7 +105,13 @@ data class SduiAction(
     val url: String = "",
     val op: String = "",
     val params: JsonObject = NO_PROPS,
-)
+    // `as: "layer"` on a navigate: the page is shown over the screen, and Back closes it.
+    @SerialName("as") val layer: String = "",
+    // A command's question, asked before it runs.
+    val confirm: String = "",
+) {
+    val asLayer: Boolean get() = layer == "layer"
+}
 
 @Serializable
 data class SduiFocus(val order: Int = 0, val group: String = "", val default: Boolean = false)
@@ -303,11 +331,15 @@ data class SduiRouteSpec(
 
 @Serializable
 data class SduiCommandSpec(
-    val op: String = "", val method: String = "", val path: String = "", val body: String = "",
-    // Values beyond the item that a command takes from the action's params, filling {name} in the path and body.
+    val op: String = "",
+    val method: String = "",
+    val path: String = "",
+    val body: String = "",
     val params: List<SduiCommandParam> = emptyList(),
+    val label: String = "",
 )
 
+// A command's own value: `type` is string, int, bool or ints (a list of numbers).
 @Serializable
 data class SduiCommandParam(val name: String = "", val type: String = "string", val required: Boolean = false)
 
@@ -316,9 +348,12 @@ data class SduiCardStyleSpec(
     val style: String = "",
     val shape: String = "",
     val aspect: String = "",
+    val image: List<String> = emptyList(),
     val shows: List<String> = emptyList(),
     val titleLines: Int = 0,
     val subtitleLines: Int = 0,
+    // A badge's text to a tone (ok, warn, muted): the presence dot of a person card.
+    val badgeTones: Map<String, String> = emptyMap(),
 )
 
 // GET /sdui/pages/{page}/diff: patches from the render the client has, or the whole document.
