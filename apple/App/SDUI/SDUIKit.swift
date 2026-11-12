@@ -118,6 +118,9 @@ private struct SDUIRoleFont: ViewModifier {
 extension View {
     func sduiScope(_ tokens: [String: String]) -> some View { modifier(SDUIScope(tokens: tokens)) }
 
+    /// A module's own screen, drawn by this app, in the module's colours from the theme (`/theme` modules).
+    func moduleScope(_ module: String) -> some View { modifier(ModuleScope(module: module)) }
+
     /// One of the five text roles: `pageTitle`, `heading`, `title`, `body`, `caption`.
     func sduiFont(_ role: String, weight: Font.Weight? = nil) -> some View { modifier(SDUIRoleFont(role: role, weight: weight)) }
 
@@ -296,5 +299,14 @@ extension View {
             self.onChange(of: value, perform: action)
         }
         #endif
+    }
+}
+
+private struct ModuleScope: ViewModifier {
+    @EnvironmentObject private var model: AppModel
+    let module: String
+
+    func body(content: Content) -> some View {
+        content.sduiScope(model.modulePalettes[module] ?? [:])
     }
 }

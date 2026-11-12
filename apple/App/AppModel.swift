@@ -124,6 +124,9 @@ enum Route: Hashable {
     case servers
     /// Skipping by itself and canvases, on this device: see MediaPages.swift.
     case mediaExtras
+    /// The server's layout options for this device, and modules' settings: see LayoutModulesSettings.swift.
+    case layout, modules
+    case moduleSettings(String)
     /// Apple TV's choice of libraries for the top menu: see YouViews.swift.
     case topMenu
     /// WittyPlay on Apple TV: a games library or one console's games in it, a game's page, and a
@@ -411,12 +414,18 @@ final class AppModel: ObservableObject {
         let asking = client
         async let list = try? asking.themeList()
         async let made = try? asking.customTheme()
-        let (l, m) = await (list, made)
+        async let modules = has("sdui-modules") ? try? asking.themeModules() : nil
+        let (l, m, scopes) = await (list, made, modules)
         guard client.base == asking.base else { return }
         if let l { themeList = l }
         customTheme = m ?? nil
+        let palettes = scopes?.tokens ?? [:]
+        if palettes != modulePalettes { modulePalettes = palettes }
         refreshTheme()
     }
+
+    /// Each module's colours, for its screens drawn by this app itself: see ThemeModules in WittyKit.
+    @Published private(set) var modulePalettes: [String: [String: String]] = [:]
 
     /// The account as the server has it now, after a change from You.
     func refreshUser() async {

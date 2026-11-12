@@ -253,6 +253,7 @@ private struct BackBar: ViewModifier {
 /// A top page of the website's other than Home and a library's: the strip above it, its own solid once the page
 /// scrolls under it (if the page starts with ScrollTop).
 private struct UnderStrip: ViewModifier {
+    @Environment(\.frameNav) private var frameNav
     var path: String?
     var hidden = false
     @State private var solid = 0.0
@@ -261,7 +262,8 @@ private struct UnderStrip: ViewModifier {
         content
             .stripSolidity($solid)
             .safeAreaInset(edge: .top, spacing: 0) {
-                if !hidden { LibraryStrip(currentPath: path, solid: solid) }
+                // A side menu or top tabs already list every place the strip would.
+                if !hidden && !frameNav.listsEverything { LibraryStrip(currentPath: path, solid: solid) }
             }
     }
 }

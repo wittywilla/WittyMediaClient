@@ -40,21 +40,26 @@ struct TvTopBar: View {
         }
     }
 
-    /// The libraries added to the top menu, in the server's order.
-    private var added: [Library] { model.libraries.filter { model.topMenu.contains($0.id) } }
+    private var row: [(tab: AppTab, name: String, symbol: String)] { TvTopBar.entries(model: model, center: center) }
 
-    /// The row's pills. From the server's own menu where it has one: its entries in its order, then any libraries
-    /// this person added to the top menu that the server's menu doesn't already have there. Otherwise the app's own.
-    private var row: [(tab: AppTab, name: String, symbol: String)] {
+    /// The libraries added to the top menu, in the server's order.
+    private static func added(_ model: AppModel) -> [Library] { model.libraries.filter { model.topMenu.contains($0.id) } }
+
+    /// The menu's places, You aside, as the top bar and the side menu both list them. From the server's own menu where
+    /// it has one: its entries in its order, then any libraries this person added to the top menu that the server's
+    /// menu doesn't already have there. Otherwise the app's own.
+    @MainActor
+    static func entries(model: AppModel, center: SDUICenter) -> [(tab: AppTab, name: String, symbol: String)] {
+        let extra = Self.added(model)
         guard center.enabled else {
-            return model.household.shown(AppTab.tvTabs).map { ($0, $0.title, $0.icon) } + added.map { (AppTab.library($0.id), $0.name, $0.barSymbol) }
+            return model.household.shown(AppTab.tvTabs).map { ($0, $0.title, $0.icon) } + extra.map { (AppTab.library($0.id), $0.name, $0.barSymbol) }
         }
         // The server leaves out what this profile's switches turn off; the app's own tabs are filtered here too.
         var pills = center.topMenuEntries.filter { model.household.shown([center.tab(for: $0)]).count == 1 }.map { entry -> (tab: AppTab, name: String, symbol: String) in
             (center.tab(for: entry), PlainWords.clean(entry.label, limit: 40), SDUIIcon.symbol(entry.icon, or: "square"))
         }
         let routes = Set(center.topMenuEntries.compactMap(\.route))
-        for library in added where !routes.contains("/library/\(library.id)") {
+        for library in extra where !routes.contains("/library/\(library.id)") {
             pills.append((AppTab.library(library.id), library.name, library.barSymbol))
         }
         return pills

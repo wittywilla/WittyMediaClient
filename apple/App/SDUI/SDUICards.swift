@@ -67,10 +67,19 @@ struct SDUICardView: View {
 
     private var chip: some View {
         Button { actor.perform(card.action) } label: {
-            Text(card.shown("title").isEmpty ? card.title : card.shown("title"))
-                .sduiFont("body", weight: .medium)
-                .lineLimit(1)
-                .foregroundStyle(palette.text)
+            HStack(spacing: layout.sp("xs")) {
+                // A library's chip has its kind's icon before its name.
+                if !card.icon.isEmpty || !card.props.text("icon").isEmpty {
+                    Image(systemName: SDUIIcon.symbol(card.icon.isEmpty ? card.props.text("icon") : card.icon, or: "folder"))
+                        .font(.system(size: layout.isTV ? 26 : 15, weight: .medium))
+                        .foregroundStyle(palette.textSecondary)
+                        .accessibilityHidden(true)
+                }
+                Text(card.shown("title").isEmpty ? card.title : card.shown("title"))
+                    .sduiFont("body", weight: .medium)
+                    .lineLimit(1)
+                    .foregroundStyle(palette.text)
+            }
                 .padding(.horizontal, layout.sp("m"))
                 .frame(minHeight: layout.isTV ? 66 : 44)
                 .background(Capsule().fill(palette.card))

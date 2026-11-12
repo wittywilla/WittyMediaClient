@@ -94,7 +94,7 @@ final class ProfileDesk: ObservableObject {
 
 /// A row with no icon: its words, a second line, and whatever it's set to at the end. The same height, hairline
 /// and focus as the icon rows in SettingsKit.
-private struct SettingRow<Trailing: View>: View {
+struct SettingRow<Trailing: View>: View {
     @Environment(\.palette) private var palette
     @Environment(\.metrics) private var metrics
     @Environment(\.displayScale) private var displayScale
@@ -125,7 +125,7 @@ private struct SettingRow<Trailing: View>: View {
 }
 
 /// On or off, changed by pressing the row: a finger and a remote both can.
-private struct SwitchRow: View {
+struct SwitchRow: View {
     @Environment(\.palette) private var palette
     let title: String
     var detail = ""
@@ -156,7 +156,7 @@ private struct SwitchRow: View {
 }
 
 /// One of a set: the chosen one has the tick.
-private struct ChoiceRow: View {
+struct SettingChoiceRow: View {
     @Environment(\.palette) private var palette
     let title: String
     var detail = ""
@@ -464,7 +464,7 @@ struct ProfileLimitsView: View {
         let levels = ageLevels
         ListGroup(title: "What may they watch?") {
             ForEach(levels, id: \.age) { level in
-                ChoiceRow(title: level.label, detail: level.hint, chosen: a.maxAge == level.age) { desk.edit(id) { $0.maxAge = level.age } }
+                SettingChoiceRow(title: level.label, detail: level.hint, chosen: a.maxAge == level.age) { desk.edit(id) { $0.maxAge = level.age } }
                     .accessibilityIdentifier("age-\(level.age)")
             }
         }
@@ -521,13 +521,13 @@ struct ProfileLimitsView: View {
         ForEach(desk.lists?.kinds ?? ["film", "tv", "game", "music", "book"], id: \.self) { kind in
             let mine = a.kinds[kind]
             ListGroup(title: LimitWords.kindLabel(kind)) {
-                ChoiceRow(title: "The same as everything else", chosen: mine == nil) { desk.edit(id) { $0.kinds[kind] = nil } }
+                SettingChoiceRow(title: "The same as everything else", chosen: mine == nil) { desk.edit(id) { $0.kinds[kind] = nil } }
                 ForEach(LimitWords.ages(for: kind, in: systems, including: mine?.maxAge), id: \.self) { age in
-                    ChoiceRow(title: LimitWords.ageChoice(age, kind: kind, in: systems), chosen: mine?.maxAge == age) {
+                    SettingChoiceRow(title: LimitWords.ageChoice(age, kind: kind, in: systems), chosen: mine?.maxAge == age) {
                         desk.edit(id) { $0.kinds[kind] = KindLimit(maxAge: age, allowUnrated: mine?.allowUnrated ?? a.allowUnrated) }
                     }
                 }
-                ChoiceRow(title: "No age limit", chosen: mine?.maxAge == -1) {
+                SettingChoiceRow(title: "No age limit", chosen: mine?.maxAge == -1) {
                     desk.edit(id) { $0.kinds[kind] = KindLimit(maxAge: -1, allowUnrated: mine?.allowUnrated ?? a.allowUnrated) }
                 }
                 if let mine, mine.maxAge >= 0 {
@@ -867,7 +867,7 @@ struct AddProfileView: View {
                 Secondary("With none, the profile opens with a tap on your home network only.")
                 ListGroup(title: "What may they watch?", footer: "Everything else about their limits can be set once the profile is made.") {
                     ForEach(LimitWords.ageLevels, id: \.age) { level in
-                        ChoiceRow(title: level.label, detail: level.hint, chosen: age == level.age) { age = level.age }
+                        SettingChoiceRow(title: level.label, detail: level.hint, chosen: age == level.age) { age = level.age }
                     }
                 }
             }
