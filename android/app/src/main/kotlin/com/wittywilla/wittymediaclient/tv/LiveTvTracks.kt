@@ -11,6 +11,7 @@ import com.wittywilla.wittymediaclient.net.TrackLabels
 // The choices the live player offers: audio, subtitles and picture quality, as the Dock lists them, and the choosing.
 class TrackChoice(val label: String, val selected: Boolean, val choose: () -> Unit)
 
+@androidx.annotation.OptIn(androidx.media3.common.util.UnstableApi::class)
 object LiveTvTracks {
     private fun choices(type: Int): List<Pair<Tracks.Group, Int>> =
         LiveTv.player()?.currentTracks?.groups.orEmpty().filter { it.type == type }.flatMap { g -> (0 until g.length).filter { g.isTrackSupported(it) }.map { g to it } }
