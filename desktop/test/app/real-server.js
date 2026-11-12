@@ -107,7 +107,7 @@ async function securityCode() {
   const login = await fetch(`${SERVER}/api/login`, { method: 'POST', headers, body: JSON.stringify({ name: USER, password: PASSWORD }) })
   assert.ok(login.ok, `the password wasn't accepted: ${login.status}`)
   const { token, user } = await login.json()
-  const invite = await fetch(`${SERVER}/api/pair/invite`, { method: 'POST', headers: { ...headers, Authorization: `Bearer ${token}` }, body: JSON.stringify({ userId: user.id }) })
+  const invite = await fetch(`${SERVER}/api/pair/invite`, { method: 'POST', headers: { ...headers, Authorization: `Bearer ${token}` }, body: JSON.stringify({ userId: user.id, password: PASSWORD }) }) // an administrator is asked for their password again
   assert.ok(invite.ok, `no code was given: ${invite.status}`)
   return String((await invite.json()).code).replace(/\D/g, '')
 }
