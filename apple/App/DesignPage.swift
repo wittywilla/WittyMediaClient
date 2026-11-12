@@ -37,8 +37,8 @@ private struct DesignSizesKey: EnvironmentKey {
 
 private struct DesignRowDrawnKey: EnvironmentKey { static let defaultValue = false }
 
-/// What a card shows over its title instead of its swatches: a look's layout, say (W6's `LayoutThumb`, from the
-/// server's `wire` for the card's `layout`). Nil, or a nil answer, keeps the card's own swatches or symbol.
+/// What a card shows over its title instead of its swatches, for a picture a screen draws itself. A look's layout comes
+/// with the card's own `wire` (W6's LayoutThumb). Nil, or a nil answer, keeps the card's own swatches or symbol.
 struct DesignCardPreview {
     let make: (DesignPageSpec.Card) -> AnyView?
 }
@@ -52,7 +52,7 @@ extension EnvironmentValues {
     }
 
     /// The slot for a card's preview (see `DesignCardPreview`): set it once over the pages that show look cards, as
-    /// `.environment(\.designCardPreview, DesignCardPreview { card in card.layout.isEmpty ? nil : AnyView(LayoutThumb(…)) })`.
+    /// `.environment(\.designCardPreview, DesignCardPreview { card in … AnyView(…) or nil })`.
     var designCardPreview: DesignCardPreview? {
         get { self[DesignCardPreviewKey.self] }
         set { self[DesignCardPreviewKey.self] = newValue }
