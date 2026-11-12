@@ -8,7 +8,7 @@ import Foundation
 /// The catalogue revision this app was built against. Sent with every request (`catalog=2`), so a newer
 /// server sends nothing this app can't draw.
 public enum SDUI {
-    public static let catalog = 2
+    public static let catalog = 3
     public static let version = 1
     /// The features in `/capabilities` that the app's server-driven pages need, all of them.
     public static let neededFeatures: Set<String> = ["sdui-pages", "sdui-catalog", "sdui-navigation", "sdui-personal"]
