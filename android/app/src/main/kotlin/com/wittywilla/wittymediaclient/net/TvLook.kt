@@ -18,16 +18,12 @@ import kotlin.math.pow
 // token, each theme's shape (its proportions, drawn natively to match tvthemes.css), and the viewer's other choices.
 // TvLookTest holds this to what that code works out.
 
-// What's saved in an account, under `tvLook` in GET /me/ui. A look saved before there were themes held a layout and
-// colours instead. Anything of the wrong kind counts as not chosen, as the page reads it.
+// What's saved in an account, under `tvLook` in GET /me/ui. Anything of the wrong kind counts as not chosen, as the page
+// reads it; keys from before there were themes (layout, colours, a side or size for the preview) are not read.
 data class TvSaved(
     val theme: String? = null,
     val custom: Custom? = null,
     val themeColours: Map<String, Map<String, String>>? = null,
-    val layout: String? = null,
-    val colours: String? = null,
-    val customBg: String? = null,
-    val customAccent: String? = null,
     val density: String? = null,
     val hours: Double? = null,
     val nowLine: Boolean? = null,
@@ -39,9 +35,6 @@ data class TvSaved(
     val previewSide: String? = null,
     val previewW: Double? = null,
     val previewSound: Boolean? = null,
-    // From before there was a side and a width.
-    val previewPos: String? = null,
-    val previewSize: String? = null,
 ) {
     data class Custom(val shape: String, val font: String? = null)
 
@@ -71,11 +64,9 @@ data class TvSaved(
             val o = e as? JsonObject ?: return TvSaved()
             return TvSaved(
                 theme = text(o["theme"]), custom = custom(o["custom"]), themeColours = themeColours(o["themeColours"]),
-                layout = text(o["layout"]), colours = text(o["colours"]), customBg = text(o["customBg"]), customAccent = text(o["customAccent"]),
                 density = text(o["density"]), hours = number(o["hours"]), nowLine = flag(o["nowLine"]), progress = flag(o["progress"]),
                 subtitles = flag(o["subtitles"]), logos = flag(o["logos"]), art = flag(o["art"]), preview = text(o["preview"]),
                 previewSide = text(o["previewSide"]), previewW = number(o["previewW"]), previewSound = flag(o["previewSound"]),
-                previewPos = text(o["previewPos"]), previewSize = text(o["previewSize"]),
             )
         }
     }
@@ -242,64 +233,39 @@ object TvLook {
         ),
     )
 
-    private val legacy: Map<String, Map<String, String>> = mapOf(
-        "midnight" to mapOf("bg" to "#000000", "cell" to "#2a2a2a", "live" to "#3a3a3a", "hi" to "#ffffff", "accent" to "#c9a2ff"),
-        "cable" to mapOf("bg" to "#06164a", "cell" to "#1a43b8", "live" to "#0f6a7f", "hi" to "#ffd60a", "accent" to "#ffd60a"),
-        "satellite" to mapOf("bg" to "#07090d", "cell" to "#2b3039", "live" to "#4d3700", "hi" to "#ffb300", "accent" to "#ffb300"),
-    )
-
-    // What a theme came to before there were themes: a layout and a set of colours.
-    internal data class Legacy(val theme: String, val custom: TvSaved.Custom?, val colours: Map<String, String>)
-
     private data class Chosen(val theme: String, val source: TvLookChoice.Source, val custom: TvSaved.Custom?, val colours: Map<String, String>)
 
     // Which theme this account has, and what it changed in it. The app's theme can suggest one, and the owner's look
     // comes with the guide.
-    fun choice(saved: TvSaved?, suggestion: String? = null, ownerTheme: String?, ownerLayout: String?, ownerSkin: String?): TvChosen {
-        val full = choose(saved, suggestion, ownerTheme, ownerLayout, ownerSkin)
+    fun choice(saved: TvSaved?, suggestion: String? = null, ownerTheme: String?): TvChosen {
+        val full = choose(saved, suggestion, ownerTheme)
         return TvChosen(full.theme, full.colours)
     }
 
-    private fun choose(saved: TvSaved?, suggestion: String?, ownerTheme: String?, ownerLayout: String?, ownerSkin: String?): Chosen {
-        val mine = upgrade(saved ?: TvSaved(), ownerLayout, ownerSkin)
+    private fun choose(saved: TvSaved?, suggestion: String?, ownerTheme: String?): Chosen {
+        val mine = upgrade(saved ?: TvSaved())
         fun yours(theme: String) = mine.themeColours?.get(theme) ?: emptyMap()
         mine.theme?.let { if (isTheme(it)) return Chosen(it, TvLookChoice.Source.You, mine.custom, yours(it)) }
         suggestion?.let { if (isTheme(it) && it != "custom") return Chosen(it, TvLookChoice.Source.App, mine.custom, yours(it)) }
         ownerTheme?.let { if (isTheme(it) && it != "custom") return Chosen(it, TvLookChoice.Source.Owner, mine.custom, yours(it)) }
-        if (ownerLayout != null || ownerSkin != null) {
-            val was = fromLegacy(ownerLayout, ownerSkin, null, null)
-            return Chosen(was.theme, TvLookChoice.Source.Owner, mine.custom ?: was.custom, mine.themeColours?.get(was.theme) ?: was.colours)
-        }
         return Chosen("classic", TvLookChoice.Source.Owner, mine.custom, yours("classic"))
     }
 
-    // Reads a look saved in any earlier form, as the page's upgradeSaved does.
-    internal fun upgrade(raw: TvSaved, ownerLayout: String?, ownerSkin: String?): TvSaved {
+    // A saved look with anything not a theme or a Custom shape taken out.
+    internal fun upgrade(raw: TvSaved): TvSaved {
         var out = raw
-        if (out.previewSide == null && raw.previewPos != null) {
-            out = out.copy(previewSide = if (raw.previewPos == "tl" || raw.previewPos == "bl") "left" else "right")
-        }
-        if (out.previewW == null) {
-            mapOf("s" to 220.0, "m" to 320.0, "l" to 460.0)[raw.previewSize]?.let { out = out.copy(previewW = it) }
-        }
-        if (!isTheme(raw.theme) && (raw.layout != null || raw.colours != null)) {
-            val was = fromLegacy(raw.layout ?: ownerLayout, raw.colours ?: ownerSkin, raw.customBg, raw.customAccent)
-            out = out.copy(theme = was.theme)
-            if (was.custom != null) out = out.copy(custom = was.custom)
-            if (was.colours.isNotEmpty()) out = out.copy(themeColours = mapOf(was.theme to was.colours))
-        }
         if (!isTheme(out.theme)) out = out.copy(theme = null)
         if (out.custom != null && TvShape.of(out.custom?.shape) == null) out = out.copy(custom = null)
         return out
     }
 
-    fun colours(saved: TvSaved?, suggestion: String? = null, ownerTheme: String?, ownerLayout: String?, ownerSkin: String?, app: TvAppColours = TvAppColours.fallback): TvColours =
-        resolve(saved, suggestion, ownerTheme, ownerLayout, ownerSkin, app).colours
+    fun colours(saved: TvSaved?, suggestion: String? = null, ownerTheme: String?, app: TvAppColours = TvAppColours.fallback): TvColours =
+        resolve(saved, suggestion, ownerTheme, app).colours
 
     // The whole look, as the page's `useLook` works it out.
-    fun resolve(saved: TvSaved?, suggestion: String? = null, ownerTheme: String?, ownerLayout: String?, ownerSkin: String?, app: TvAppColours = TvAppColours.fallback): TvLookChoice {
-        val mine = upgrade(saved ?: TvSaved(), ownerLayout, ownerSkin)
-        val chosen = choose(saved, suggestion, ownerTheme, ownerLayout, ownerSkin)
+    fun resolve(saved: TvSaved?, suggestion: String? = null, ownerTheme: String?, app: TvAppColours = TvAppColours.fallback): TvLookChoice {
+        val mine = upgrade(saved ?: TvSaved())
+        val chosen = choose(saved, suggestion, ownerTheme)
         val custom = chosen.custom ?: TvSaved.Custom("modern", "")
         val shape = if (chosen.theme == "custom") TvShape.of(custom.shape) ?: TvShape.Modern else TvTheme.byId(chosen.theme)?.shape ?: TvShape.Box
         val hours = (mine.hours ?: 0.0).let { if (it in listOf(0.0, 1.5, 2.0, 3.0, 4.0)) it else 0.0 }
@@ -315,30 +281,6 @@ object TvLook {
     }
 
     private fun isTheme(id: String?) = id != null && id in themes
-
-    internal fun fromLegacy(layout: String?, colours: String?, customBg: String?, customAccent: String?): Legacy {
-        var mine = emptyMap<String, String>()
-        if (customBg != null && customAccent != null && isHex(customBg) && isHex(customAccent)) mine = mapOf("bg" to customBg, "accent" to customAccent, "hi" to customAccent)
-        if (layout == "streaming") {
-            if (colours == "theme") return Legacy("modern", null, emptyMap())
-            return Legacy("modern", null, if (colours == "custom") mine else legacy[colours ?: "midnight"] ?: legacy.getValue("midnight"))
-        }
-        return when (colours) {
-            "satellite" -> Legacy("satellite", null, emptyMap())
-            "midnight" -> Legacy("custom", TvSaved.Custom("box", ""), legacy.getValue("midnight"))
-            "theme" -> Legacy("custom", TvSaved.Custom("box", "system"), emptyMap())
-            "custom" -> Legacy("custom", TvSaved.Custom("box", ""), mine)
-            else -> Legacy("classic", null, emptyMap())
-        }
-    }
-
-    // What a theme says for clients that only know the two earlier looks, kept beside it.
-    fun legacyOf(id: String, shape: TvShape): Pair<String, String> = when {
-        id == "satellite" -> "classic" to "satellite"
-        id == "classic" || id == "teletext" -> "classic" to "cable"
-        shape == TvShape.Box -> "classic" to "theme"
-        else -> "streaming" to "theme"
-    }
 
     // A row's height, from the shape, the width of the page and the viewer's row size.
     fun rowHeight(shape: TvShape, width: Double, density: String): Double {

@@ -330,8 +330,6 @@ data class GuideChannel(
 data class Guide(
     val channels: List<GuideChannel> = emptyList(),
     val theme: String? = null,
-    val layout: String? = null,
-    val skin: String? = null,
     val total: Int? = null,
     val offset: Int? = null,
     val groups: List<String>? = null,

@@ -128,6 +128,11 @@ fun SduiNode(view: SduiView, parent: SduiView?, topLevel: Boolean = false) {
         "SearchBox" -> SduiSearchBox(view, Modifier.padding(horizontal = side))
         "NativeView" -> SduiNativeView(view)
         "Dock" -> SduiDockBar(view, side)
+        "Carousel" -> SduiCarousel(view, side)
+        "CrossBar" -> SduiCrossBar(view, side)
+        "WidgetGrid" -> SduiWidgetGrid(view, side)
+        "Widget" -> Box(Modifier.padding(horizontal = side)) { SduiWidget(view) }
+        "NumberedRow" -> SduiNumberedRow(view, side)
         "KeyLegend" -> Box(Modifier.padding(horizontal = side)) { KeyLegendRow() }
         "Credits" -> SduiCredits(view, side)
         else -> SduiStack(view, side)

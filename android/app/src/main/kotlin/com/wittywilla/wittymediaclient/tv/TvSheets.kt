@@ -596,7 +596,7 @@ private fun ThemeCard(theme: TvTheme, on: Boolean, current: TvLookChoice, app: c
     val metrics = LocalMetrics.current
     val shape = if (theme.id == "custom") current.shape else theme.shape
     val colours = remember(theme.id, on, current.overrides, app) {
-        TvLook.resolve(TvSaved(theme = theme.id, themeColours = if (on) mapOf(theme.id to current.overrides) else null), null, null, null, null, app).colours
+        TvLook.resolve(TvSaved(theme = theme.id, themeColours = if (on) mapOf(theme.id to current.overrides) else null), null, null, app).colours
     }
     val p = remember(colours) { TvPaint(colours) }
     Column(

@@ -393,16 +393,15 @@ fun aspectOf(text: String): Float {
     return if (h <= 0f) 0f else w / h
 }
 
-// The layout option a page is drawn in: its name (sidebar, topTabs, tvRows, compactList, streaming…), the menu's
-// style (sidebar, rail, bottomTabs, topTabs, tvTopMenu, tvSideMenu), whether that menu lies over the page, its
-// breadth in points, and how wide a TV's side menu opens while it has focus.
+// The frame a page is drawn in: the experience (UI) it is of, the menu's style (a `navStyles` entry), whether that menu lies
+// over the page, its breadth in points, how wide it is while open and the width of a rail's library drawer. The frame is
+// drawn from these, never from the experience's id.
 @Serializable
 data class SduiShell(
-    val layout: String = "",
-    // Design 2's experience (lumen, rail, stage, aero, classic…), which takes the layout option's place.
     val experience: String = "",
     val nav: String = "",
     val overlay: Boolean = false,
     val size: Int = 0,
     val open: Int = 0,
+    val drawer: Int = 0,
 )

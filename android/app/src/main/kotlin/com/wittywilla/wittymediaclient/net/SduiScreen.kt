@@ -38,6 +38,9 @@ object SduiCardStyles {
         style("channel", "landscape", "16/9", 1, 2, "number", "title", "now", "next", "progress"),
         style("tile", "landscape", "16/9", 1, 0, "title", "count"),
         style("chip", "chip", "", 1, 0, "title"),
+        style("plate", "poster", "2/3", 2, 1, "title", "subtitle", "badges"),
+        style("block", "landscape", "16/9", 2, 1, "title", "subtitle"),
+        style("logo", "landscape", "16/9", 1, 0, "number", "title"),
     )
 
     private val byName = ALL.associateBy { it.style }
@@ -51,7 +54,7 @@ object SduiCardStyles {
 // The components this app draws. Any other type is drawn as a plain column of its children.
 val SDUI_COMPONENTS = setOf(
     "Page", "Hero", "Shelf", "Grid", "Card", "Tabs", "Tab", "FilterBar", "DetailHeader", "SeasonList", "TrackList", "Track",
-    "Banner", "Text", "Notice", "Divider", "Spacer", "Stack", "Split", "Button", "Image", "SearchBox", "List", "ListItem", "NativeView", "Dock", "KeyLegend",
+    "Banner", "Text", "Notice", "Divider", "Spacer", "Stack", "Split", "Button", "Image", "SearchBox", "List", "ListItem", "NativeView", "Dock", "KeyLegend", "Carousel", "CrossBar", "WidgetGrid", "Widget", "NumberedRow",
 )
 
 // One button of a Hero slide or a DetailHeader: {id, label, icon, primary, action}.
@@ -242,7 +245,7 @@ class SduiScreen(val document: SduiDocument) {
         val p = node.props
         when (node.type) {
             "Page" -> { d.role = "main"; d.label = p.str("title") }
-            "Shelf" -> { collection(d); d.role = "list"; d.label = p.str("title") }
+            "Shelf", "Carousel" -> { collection(d); d.role = "list"; d.label = p.str("title") }
             "Grid" -> {
                 collection(d)
                 // A grid is a list to TalkBack on a touch device.
@@ -275,7 +278,21 @@ class SduiScreen(val document: SduiDocument) {
                 d.say("keys", p.objects("entries").joinToString(" · ") { it.str("label") })
                 d.textSize = layout.dock.hintSize
             }
-            "Tabs" -> { d.role = "tablist"; d.cards = node.children.size }
+            "Tabs", "CrossBar" -> { d.role = "tablist"; d.cards = node.children.size }
+            "WidgetGrid" -> { d.role = "group"; d.label = title; d.columns = p.int("columns") ?: 4; d.cards = node.children.size }
+            "Widget" -> {
+                d.role = "region"; d.label = p.str("title")
+                d.say("title", p.str("title")); d.say("kind", p.str("kind"))
+                d.columns = p.int("w") ?: 0; d.cardHeight = p.int("h") ?: 0
+                d.cards = node.children.size
+            }
+            "NumberedRow" -> {
+                d.cards = node.children.size
+                d.role = "list"; d.label = p.str("title")
+                d.say("title", p.str("title")); d.say("empty", p.str("emptyText"))
+                d.hasMore = p.child("more") != null
+                d.say("numbers", node.children.joinToString(" ") { it.props.str("number") })
+            }
             "Tab" -> {
                 d.role = "tab"
                 d.label = p.str("label") + if (p.isOn("selected")) ", selected" else ""
@@ -463,11 +480,12 @@ class SduiScreen(val document: SduiDocument) {
             put("scope", document.theme?.scope.orEmpty())
             layout.shell?.let { shell ->
                 put("shell", buildJsonObject {
-                    if (shell.experience.isNotEmpty()) put("experience", shell.experience) else put("layout", shell.layout)
+                    put("experience", shell.experience)
                     put("nav", shell.nav)
                     if (shell.overlay) put("overlay", true)
                     put("size", shell.size)
                     if (shell.open > 0) put("open", shell.open)
+                    if (shell.drawer > 0) put("drawer", shell.drawer)
                 })
             }
         })

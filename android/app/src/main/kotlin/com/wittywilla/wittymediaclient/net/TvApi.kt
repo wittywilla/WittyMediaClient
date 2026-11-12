@@ -242,16 +242,6 @@ suspend fun Api.saveTvLook(change: Map<String, JsonElement?>) {
     for ((key, value) in change) {
         if (value == null || value is JsonNull) look.remove(key) else look[key] = value
     }
-    // Beside the theme, what it comes to in the two looks an older app knows about.
-    val theme = (look["theme"] as? JsonPrimitive)?.takeIf { it.isString }?.content
-    val named = TvTheme.byId(theme)
-    if (theme != null && named != null) {
-        val shapeId = ((look["custom"] as? JsonObject)?.get("shape") as? JsonPrimitive)?.content
-        val shape = if (theme == "custom") TvShape.of(shapeId) ?: TvShape.Modern else named.shape
-        val (layout, colours) = TvLook.legacyOf(theme, shape)
-        look["layout"] = JsonPrimitive(layout)
-        look["colours"] = JsonPrimitive(colours)
-    }
     val whole = ui.toMutableMap()
     whole["tvLook"] = JsonObject(look)
     call("PUT", "/me/ui", JsonObject(whole).toString())

@@ -78,12 +78,12 @@ fun tvAppColours(scheme: ColorScheme, extra: ExtraColours): TvAppColours {
 object TvLookStore {
     // What's saved with the account, as it came.
     private var raw: Map<String, JsonElement> = emptyMap()
-    private var owner: Triple<String?, String?, String?> = Triple(null, null, null)
+    private var owner: String? = null
     private var suggestion: String? = null
     private var app = TvAppColours.fallback
     private var askedFor = ""
 
-    var look by mutableStateOf(TvLook.resolve(null, null, null, null, null))
+    var look by mutableStateOf(TvLook.resolve(null, null, null))
         private set
     var loaded by mutableStateOf(false)
         private set
@@ -111,14 +111,14 @@ object TvLookStore {
 
     // The owner's starting look comes with every page of the guide.
     fun learnOwner(guide: Guide) {
-        val next = Triple(guide.theme, guide.layout, guide.skin)
+        val next = guide.theme
         if (next == owner) return
         owner = next
         resolve()
     }
 
     private fun resolve() {
-        look = TvLook.resolve(TvSaved.from(JsonObject(raw)), suggestion, owner.first?.ifEmpty { null }, owner.second, owner.third, app)
+        look = TvLook.resolve(TvSaved.from(JsonObject(raw)), suggestion, owner?.ifEmpty { null }, app)
     }
 
     // A change shows at once, and goes to the account to follow it to other devices. A null takes a choice away.

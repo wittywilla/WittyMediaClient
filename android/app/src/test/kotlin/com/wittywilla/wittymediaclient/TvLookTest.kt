@@ -65,8 +65,8 @@ class TvLookTest {
 
     @Test
     fun yourChoiceThenTheAppsThenTheOwners() {
-        fun theme(saved: TvSaved?, owner: String?, suggestion: String? = null, layout: String? = null, skin: String? = null) =
-            TvLook.choice(saved, suggestion, owner, layout, skin).theme
+        fun theme(saved: TvSaved?, owner: String?, suggestion: String? = null) =
+            TvLook.choice(saved, suggestion, owner).theme
         assertEquals("teletext", theme(TvSaved(theme = "teletext"), "listings"))
         assertEquals("listings", theme(null, "listings"))
         assertEquals("an app theme's suggestion comes before the owner's", "modern", theme(null, "listings", suggestion = "modern"))
@@ -76,34 +76,17 @@ class TvLookTest {
         assertEquals("classic", theme(null, null))
         // An owner can't start people on someone's Custom.
         assertEquals("classic", theme(null, "custom"))
-        assertEquals("satellite", theme(null, null, layout = "classic", skin = "satellite"))
-        assertEquals(TvLookChoice.Source.App, TvLook.resolve(null, "modern", "listings", null, null).source)
-        assertEquals(TvLookChoice.Source.Owner, TvLook.resolve(null, null, "listings", null, null).source)
+        assertEquals("keys from before there were themes are not read", "classic", TvLook.choice(saved("""{"layout":"classic","colours":"satellite"}"""), null, null).theme)
+        assertEquals(TvLookChoice.Source.App, TvLook.resolve(null, "modern", "listings").source)
+        assertEquals(TvLookChoice.Source.Owner, TvLook.resolve(null, null, "listings").source)
     }
 
     @Test
     fun aChangedColourComesWithItsTheme() {
         val saved = TvSaved(theme = "classic", themeColours = mapOf("classic" to mapOf("hi" to "#ff0000"), "modern" to mapOf("hi" to "#00ff00")))
-        assertEquals(mapOf("hi" to "#ff0000"), TvLook.choice(saved, null, null, null, null).colours)
+        assertEquals(mapOf("hi" to "#ff0000"), TvLook.choice(saved, null, null).colours)
     }
 
-    @Test
-    fun aLookSavedBeforeThereWereThemes() {
-        fun was(layout: String?, colours: String?, bg: String? = null, accent: String? = null) =
-            TvLook.choice(TvSaved(layout = layout, colours = colours, customBg = bg, customAccent = accent), null, null, null, null)
-        assertEquals("classic", was("classic", "cable").theme)
-        assertEquals("satellite", was("classic", "satellite").theme)
-        assertEquals("modern", was("streaming", "theme").theme)
-        assertEquals("#ffd60a", was("streaming", "cable").colours["hi"])
-        val own = was("classic", "custom", bg = "#101010", accent = "#ffb300")
-        assertEquals("custom", own.theme)
-        assertEquals(mapOf("bg" to "#101010", "accent" to "#ffb300", "hi" to "#ffb300"), own.colours)
-        // The old box with the app's colours is Custom on the box's shape, in plain type.
-        val box = TvLook.resolve(TvSaved(layout = "classic", colours = "theme"), null, null, null, null)
-        assertEquals("custom", box.theme)
-        assertEquals(TvShape.Box, box.shape)
-        assertEquals("system", box.font)
-    }
 
     @Test
     fun aBadColourIsIgnored() {
@@ -119,12 +102,12 @@ class TvLookTest {
                 "bigpicture" to TvShape.Cinema, "outline" to TvShape.Outline, "compact" to TvShape.Compact, "custom" to TvShape.Modern),
             shapes,
         )
-        val custom = TvLook.resolve(TvSaved(theme = "custom", custom = TvSaved.Custom("listings", "mono")), null, null, null, null)
+        val custom = TvLook.resolve(TvSaved(theme = "custom", custom = TvSaved.Custom("listings", "mono")), null, null)
         assertEquals(TvShape.Listings, custom.shape)
         assertEquals("mono", custom.font)
-        val wrong = TvLook.resolve(TvSaved(theme = "custom", custom = TvSaved.Custom("no such shape")), null, null, null, null)
+        val wrong = TvLook.resolve(TvSaved(theme = "custom", custom = TvSaved.Custom("no such shape")), null, null)
         assertEquals(TvShape.Modern, wrong.shape)
-        assertEquals("only Custom takes a type of its own", "", TvLook.resolve(TvSaved(theme = "teletext", custom = TvSaved.Custom("listings", "serif")), null, null, null, null).font)
+        assertEquals("only Custom takes a type of its own", "", TvLook.resolve(TvSaved(theme = "teletext", custom = TvSaved.Custom("listings", "serif")), null, null).font)
     }
 
     // rowHeight, previewAuto and previewLimit in tvThemes.ts for a 1920 by 1080 screen.
@@ -146,18 +129,18 @@ class TvLookTest {
 
     @Test
     fun theOtherChoicesAndTheirDefaults() {
-        val plain = TvLook.resolve(null, null, "satellite", null, null)
+        val plain = TvLook.resolve(null, null, "satellite")
         assertEquals("normal", plain.density)
         assertEquals(0.0, plain.hours, 0.0)
         assertTrue(plain.nowLine && plain.progress && plain.subtitles && plain.logos && plain.art)
         assertEquals("highlight", plain.preview)
         assertEquals("right", plain.previewSide)
         assertFalse(plain.previewSound)
-        assertEquals("Big picture starts on the left", "left", TvLook.resolve(null, null, "bigpicture", null, null).previewSide)
+        assertEquals("Big picture starts on the left", "left", TvLook.resolve(null, null, "bigpicture").previewSide)
 
         val look = TvLook.resolve(
             saved("""{"theme":"compact","density":"large","hours":3,"nowLine":false,"progress":false,"subtitles":false,"logos":false,"art":false,"preview":"last","previewSide":"left","previewW":500,"previewSound":true}"""),
-            null, null, null, null,
+            null, null,
         )
         assertEquals("large", look.density)
         assertEquals(3.0, look.hours, 0.0)
@@ -166,27 +149,10 @@ class TvLookTest {
         assertEquals("left", look.previewSide)
         assertEquals(500.0, look.previewW!!, 0.0)
         assertTrue(look.previewSound)
-        assertEquals("only the hours the page offers", 0.0, TvLook.resolve(TvSaved(hours = 7.0), null, null, null, null).hours, 0.0)
+        assertEquals("only the hours the page offers", 0.0, TvLook.resolve(TvSaved(hours = 7.0), null, null).hours, 0.0)
     }
 
-    @Test
-    fun aPreviewPlacedBeforeThereWereSides() {
-        val look = TvLook.resolve(saved("""{"previewPos":"bl","previewSize":"l"}"""), null, null, null, null)
-        assertEquals("left", look.previewSide)
-        assertEquals(460.0, look.previewW!!, 0.0)
-    }
 
-    @Test
-    fun whatAnOlderAppIsToldBesideTheTheme() {
-        // legacyOf in tvThemes.ts, for each theme on its own shape.
-        val want = mapOf(
-            "modern" to ("streaming" to "theme"), "classic" to ("classic" to "cable"), "satellite" to ("classic" to "satellite"), "teletext" to ("classic" to "cable"),
-            "listings" to ("streaming" to "theme"), "bigpicture" to ("streaming" to "theme"), "outline" to ("streaming" to "theme"), "compact" to ("streaming" to "theme"),
-            "custom" to ("streaming" to "theme"),
-        )
-        for (theme in TvTheme.all) assertEquals(theme.id, want[theme.id], TvLook.legacyOf(theme.id, theme.shape))
-        assertEquals("classic" to "theme", TvLook.legacyOf("custom", TvShape.Box))
-    }
 
     @Test
     fun aChannelsOwnColourIsMadeVisible() {

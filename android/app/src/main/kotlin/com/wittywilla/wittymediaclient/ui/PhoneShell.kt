@@ -174,6 +174,35 @@ fun PhoneShell(nav: Nav, content: @Composable () -> Unit) {
     val topRoom = status + TOP_BAR.dp + 8.dp
     val top = isTopPage(nav.current, nav.menu, served?.map { it.second }.orEmpty())
 
+    // The experience's frame (ExperienceFrames.kt): a sidebar or a rail down the side, tabs across the top, or the floating
+    // bar as before. It follows `layout.shell.nav` from the server.
+    val style = menuStyle(nav, tv = false)
+    val tablet = androidx.compose.ui.platform.LocalConfiguration.current.smallestScreenWidthDp >= 600
+    if (served != null && style != "bottomTabs") {
+        val size = menuSize(nav, style, tablet).dp
+        val side = isSideStyle(style)
+        val overlay = nav.sduiNav?.shell?.overlay == true
+        val sideRoom = 24.dp + inset + if (docked) DOCK_SPACE.dp else 0.dp
+        val tabsRoom = if (side) status + 8.dp else if (overlay) status else status + size + 8.dp
+        Box(Modifier.fillMaxSize().background(scheme.background)) {
+            RailPin.load(androidx.compose.ui.platform.LocalContext.current)
+            val railOpen = if (style == "rail" || style == "railDrawer") RailPin.pinned else false
+            val startRoom = if (!side) 0.dp else if (railOpen) (nav.sduiNav?.shell?.open?.takeIf { it > 0 } ?: 240).dp else size
+            Box(Modifier.fillMaxSize().padding(start = startRoom)) {
+                CompositionLocalProvider(LocalShellScroll provides scroll, LocalBottomRoom provides sideRoom, LocalTopRoom provides (if (top) tabsRoom else topRoom), LocalOverShell provides over) {
+                    content()
+                }
+                if (!top) TopBar(nav, scroll, status, false)
+                else if (!side) TopTabs(nav, size, status, solid = !overlay || scroll.under)
+                val aboveEdge = 8.dp + inset
+                if (video != null) VideoDock(nav, video, aboveEdge)
+                else if (listening) PhoneMiniBar(nav, Modifier.align(Alignment.BottomCenter).padding(start = 8.dp, end = 8.dp, bottom = aboveEdge))
+            }
+            if (side) SideMenu(nav, size, labels = style == "sidebar", top = status, bottom = inset)
+            over.sheets.forEach { sheet -> key(sheet) { sheet() } }
+        }
+        return
+    }
     Box(Modifier.fillMaxSize().background(scheme.background)) {
         CompositionLocalProvider(LocalShellScroll provides scroll, LocalBottomRoom provides bottomRoom, LocalTopRoom provides topRoom, LocalOverShell provides over) {
             content()
