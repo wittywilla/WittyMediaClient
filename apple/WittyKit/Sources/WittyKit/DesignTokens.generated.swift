@@ -22,13 +22,31 @@ public enum DesignTokens {
             public static let n4xl: Double = 38.0
             public static let n5xl: Double = 48.0
         }
+        public enum PageTitle {
+            public static let min: Double = 24.0
+            public static let max: Double = 30.0
+        }
+        public enum Display {
+            public static let min: Double = 30.0
+            public static let max: Double = 48.0
+        }
+        public enum Leading {
+            public static let tight: Double = 1.14
+            public static let snug: Double = 1.32
+            public static let body: Double = 1.55
+        }
+        public enum Tracking {
+            public static let display: Double = -0.022
+            public static let heading: Double = -0.012
+            public static let label: Double = 0.07
+        }
+        public enum Weight {
+            public static let body: Double = 400.0
+            public static let medium: Double = 500.0
+            public static let strong: Double = 600.0
+            public static let heading: Double = 650.0
+        }
         public enum Role {
-            public enum Display {
-                public static let size: Double = 48.0
-                public static let weight: Double = 650.0
-                public static let leading: Double = 1.14
-                public static let tracking: Double = -0.022
-            }
             public enum PageTitle {
                 public static let size: Double = 30.0
                 public static let weight: Double = 650.0
@@ -65,39 +83,15 @@ public enum DesignTokens {
                 public static let leading: Double = 1.32
                 public static let tracking: Double = 0.07
             }
-        }
-        public enum PageTitle {
-            public static let min: Double = 24.0
-            public static let max: Double = 30.0
-        }
-        public enum Display {
-            public static let min: Double = 30.0
-            public static let max: Double = 48.0
-        }
-        public enum Leading {
-            public static let tight: Double = 1.14
-            public static let snug: Double = 1.32
-            public static let body: Double = 1.55
-        }
-        public enum Tracking {
-            public static let display: Double = -0.022
-            public static let heading: Double = -0.012
-            public static let label: Double = 0.07
-        }
-        public enum Weight {
-            public static let body: Double = 400.0
-            public static let medium: Double = 500.0
-            public static let strong: Double = 600.0
-            public static let heading: Double = 650.0
+            public enum Display {
+                public static let size: Double = 48.0
+                public static let weight: Double = 650.0
+                public static let leading: Double = 1.14
+                public static let tracking: Double = -0.022
+            }
         }
     }
     public enum Space {
-        public static let none: Double = 0.0
-        public static let xs: Double = 4.0
-        public static let s: Double = 8.0
-        public static let m: Double = 16.0
-        public static let l: Double = 24.0
-        public static let xl: Double = 40.0
         public static let n1: Double = 4.0
         public static let n2: Double = 8.0
         public static let n3: Double = 12.0
@@ -108,6 +102,12 @@ public enum DesignTokens {
         public static let n10: Double = 40.0
         public static let n12: Double = 48.0
         public static let n16: Double = 64.0
+        public static let none: Double = 0.0
+        public static let xs: Double = 4.0
+        public static let s: Double = 8.0
+        public static let m: Double = 16.0
+        public static let l: Double = 24.0
+        public static let xl: Double = 40.0
     }
     public enum Elevation {
         public enum N0 {
@@ -271,6 +271,18 @@ public enum DesignTokens {
         }
     }
     public enum Layout {
+        public enum Gutter {
+            public static let min: Double = 16.0
+            public static let max: Double = 40.0
+        }
+        public enum SectionGap {
+            public static let min: Double = 28.0
+            public static let max: Double = 44.0
+        }
+        public static let topBar: Double = 64.0
+        public static let sidebar: Double = 240.0
+        public static let rail: Double = 76.0
+        public static let tabBar: Double = 60.0
         public enum Breakpoints {
             public enum Compact {
                 public static let max: Double = 600.0
@@ -287,18 +299,6 @@ public enum DesignTokens {
                 public static let min: Double = 1200.0
             }
         }
-        public enum Gutter {
-            public static let min: Double = 16.0
-            public static let max: Double = 40.0
-        }
-        public enum SectionGap {
-            public static let min: Double = 28.0
-            public static let max: Double = 44.0
-        }
-        public static let topBar: Double = 64.0
-        public static let sidebar: Double = 240.0
-        public static let rail: Double = 76.0
-        public static let tabBar: Double = 60.0
     }
     public enum Density {
         public static let `default`: String = "comfortable"
@@ -319,6 +319,13 @@ public enum DesignTokens {
         }
     }
     public enum Motion {
+        public enum Duration {
+            public static let press: Double = 90.0
+            public static let hoverFocus: Double = 150.0
+            public static let appear: Double = 240.0
+            public static let backdrop: Double = 420.0
+        }
+        public static let easing: [String: [Double]] = ["out": [0.2, 0.8, 0.2, 1.0], "standard": [0.4, 0.0, 0.2, 1.0]]
         public static let focusMove: Double = 120.0
         public static let screen: Double = 240.0
         public static let hero: Double = 600.0
@@ -332,13 +339,6 @@ public enum DesignTokens {
             public static let press: String = "keep"
             public static let progress: String = "keep"
         }
-        public enum Duration {
-            public static let press: Double = 90.0
-            public static let hoverFocus: Double = 150.0
-            public static let appear: Double = 240.0
-            public static let backdrop: Double = 420.0
-        }
-        public static let easing: [String: [Double]] = ["out": [0.2, 0.8, 0.2, 1.0], "standard": [0.4, 0.0, 0.2, 1.0]]
     }
     public enum Control {
         public enum Height {

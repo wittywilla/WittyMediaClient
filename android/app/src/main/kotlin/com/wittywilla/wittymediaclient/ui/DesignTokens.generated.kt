@@ -21,13 +21,31 @@ object DesignTokens {
             const val n4xl = 38.0
             const val n5xl = 48.0
         }
+        object PageTitle {
+            const val min = 24.0
+            const val max = 30.0
+        }
+        object Display {
+            const val min = 30.0
+            const val max = 48.0
+        }
+        object Leading {
+            const val tight = 1.14
+            const val snug = 1.32
+            const val body = 1.55
+        }
+        object Tracking {
+            const val display = -0.022
+            const val heading = -0.012
+            const val label = 0.07
+        }
+        object Weight {
+            const val body = 400.0
+            const val medium = 500.0
+            const val strong = 600.0
+            const val heading = 650.0
+        }
         object Role {
-            object Display {
-                const val size = 48.0
-                const val weight = 650.0
-                const val leading = 1.14
-                const val tracking = -0.022
-            }
             object PageTitle {
                 const val size = 30.0
                 const val weight = 650.0
@@ -64,39 +82,15 @@ object DesignTokens {
                 const val leading = 1.32
                 const val tracking = 0.07
             }
-        }
-        object PageTitle {
-            const val min = 24.0
-            const val max = 30.0
-        }
-        object Display {
-            const val min = 30.0
-            const val max = 48.0
-        }
-        object Leading {
-            const val tight = 1.14
-            const val snug = 1.32
-            const val body = 1.55
-        }
-        object Tracking {
-            const val display = -0.022
-            const val heading = -0.012
-            const val label = 0.07
-        }
-        object Weight {
-            const val body = 400.0
-            const val medium = 500.0
-            const val strong = 600.0
-            const val heading = 650.0
+            object Display {
+                const val size = 48.0
+                const val weight = 650.0
+                const val leading = 1.14
+                const val tracking = -0.022
+            }
         }
     }
     object Space {
-        const val none = 0.0
-        const val xs = 4.0
-        const val s = 8.0
-        const val m = 16.0
-        const val l = 24.0
-        const val xl = 40.0
         const val n1 = 4.0
         const val n2 = 8.0
         const val n3 = 12.0
@@ -107,6 +101,12 @@ object DesignTokens {
         const val n10 = 40.0
         const val n12 = 48.0
         const val n16 = 64.0
+        const val none = 0.0
+        const val xs = 4.0
+        const val s = 8.0
+        const val m = 16.0
+        const val l = 24.0
+        const val xl = 40.0
     }
     object Elevation {
         object N0 {
@@ -270,6 +270,18 @@ object DesignTokens {
         }
     }
     object Layout {
+        object Gutter {
+            const val min = 16.0
+            const val max = 40.0
+        }
+        object SectionGap {
+            const val min = 28.0
+            const val max = 44.0
+        }
+        const val topBar = 64.0
+        const val sidebar = 240.0
+        const val rail = 76.0
+        const val tabBar = 60.0
         object Breakpoints {
             object Compact {
                 const val max = 600.0
@@ -286,18 +298,6 @@ object DesignTokens {
                 const val min = 1200.0
             }
         }
-        object Gutter {
-            const val min = 16.0
-            const val max = 40.0
-        }
-        object SectionGap {
-            const val min = 28.0
-            const val max = 44.0
-        }
-        const val topBar = 64.0
-        const val sidebar = 240.0
-        const val rail = 76.0
-        const val tabBar = 60.0
     }
     object Density {
         const val default = "comfortable"
@@ -318,6 +318,13 @@ object DesignTokens {
         }
     }
     object Motion {
+        object Duration {
+            const val press = 90.0
+            const val hoverFocus = 150.0
+            const val appear = 240.0
+            const val backdrop = 420.0
+        }
+        val easing = mapOf("out" to listOf(0.2, 0.8, 0.2, 1.0), "standard" to listOf(0.4, 0.0, 0.2, 1.0))
         const val focusMove = 120.0
         const val screen = 240.0
         const val hero = 600.0
@@ -331,13 +338,6 @@ object DesignTokens {
             const val press = "keep"
             const val progress = "keep"
         }
-        object Duration {
-            const val press = 90.0
-            const val hoverFocus = 150.0
-            const val appear = 240.0
-            const val backdrop = 420.0
-        }
-        val easing = mapOf("out" to listOf(0.2, 0.8, 0.2, 1.0), "standard" to listOf(0.4, 0.0, 0.2, 1.0))
     }
     object Control {
         object Height {

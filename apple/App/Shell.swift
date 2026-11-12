@@ -454,6 +454,8 @@ private struct PillShell: View {
             }
         }
         .overlay { MenuDrawer() }
+        // Search, the tab before and after, and Back from a keyboard.
+        .modifier(ShellShortcuts())
         // The menus' arrangement, modules' pages and the legal notices, once per server and person.
         .task(id: "\(model.client.base)|\(model.user?.id ?? 0)") { await model.loadNavigation() }
         // A video in the dock keeps its place and stops in the background, as on its own screen.

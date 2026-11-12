@@ -17,6 +17,8 @@ struct Metrics: Equatable {
     var minTarget: CGFloat
     var focusRing: CGFloat = 3
     var focusScale: CGFloat = 1
+    /// What a focused thing on a TV needs around it for its ring: the ring and the gap off the thing.
+    var focusRoom: CGFloat { tv ? focusRing + CGFloat(DesignTokens.Tv.Focus.gap) : focusRing }
 
     static let phone = Metrics(tv: false, gutter: Tokens.Space.s4, edge: Tokens.Space.s2, cardWidth: 104, minTarget: 44)
     /// The website's `--card-w` from 521 to 1099 across.
@@ -106,6 +108,33 @@ private struct SurfaceBody<Label: View>: View {
             }
             .scaleEffect(ring && !reduceMotion ? metrics.focusScale : 1)
             .opacity(enabled ? (pressed ? 0.8 : 1) : 0.55)
+            .modifier(KeysFocusRing(radius: radius))
+    }
+}
+
+/// Where keys (or a pad) move focus on an iPad, a Mac or a Vision Pro, the one focus language of the design: a ring in the
+/// theme's focus colour a gap off the thing, concentric with its corner (the tokens' focus.input.keys: 3 and 3). A finger
+/// or a pointer shows none, and Apple TV has its own (TvFocus.swift).
+struct KeysFocusRing: ViewModifier {
+    @Environment(\.isFocused) private var focused
+    @Environment(\.palette) private var palette
+    let radius: CGFloat
+
+    func body(content: Content) -> some View {
+        #if os(tvOS)
+        content
+        #else
+        let width = CGFloat(DesignTokens.Focus.Input.keys.width), offset = CGFloat(DesignTokens.Focus.Input.keys.offset)
+        content.overlay {
+            if focused {
+                RoundedRectangle(cornerRadius: radius + offset + width, style: .continuous)
+                    .strokeBorder(palette.focus, lineWidth: width)
+                    .padding(-(offset + width))
+                    .allowsHitTesting(false)
+                    .accessibilityHidden(true)
+            }
+        }
+        #endif
     }
 }
 

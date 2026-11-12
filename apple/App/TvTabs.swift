@@ -47,13 +47,10 @@ struct TvTopBar: View {
 
     /// The menu's places, You aside, as the top bar and the side menu both list them. From the server's own menu where
     /// it has one: its entries in its order, then any libraries this person added to the top menu that the server's
-    /// menu doesn't already have there. Otherwise the app's own.
+    /// menu doesn't already have there.
     @MainActor
     static func entries(model: AppModel, center: SDUICenter) -> [(tab: AppTab, name: String, symbol: String)] {
         let extra = Self.added(model)
-        guard center.enabled else {
-            return model.household.shown(AppTab.tvTabs).map { ($0, $0.title, $0.icon) } + extra.map { (AppTab.library($0.id), $0.name, $0.barSymbol) }
-        }
         // The server leaves out what this profile's switches turn off; the app's own tabs are filtered here too.
         var pills = center.topMenuEntries.filter { model.household.shown([center.tab(for: $0)]).count == 1 }.map { entry -> (tab: AppTab, name: String, symbol: String) in
             (center.tab(for: entry), PlainWords.clean(entry.label, limit: 40), SDUIIcon.symbol(entry.icon, or: "square"))
@@ -73,7 +70,7 @@ struct TvTopBar: View {
     var body: some View {
         // Each pill keeps room for its ring and its growth around it, so the pills themselves start at the gutter,
         // sit 24 from the top and are 16 apart.
-        let ring = metrics.focusRing
+        let ring = metrics.focusRoom
         HStack(spacing: 0) {
             ScrollViewReader { scroller in
                 ScrollView(.horizontal, showsIndicators: false) {
@@ -156,8 +153,8 @@ private struct TvTabPill: View {
         .accessibilityAddTraits(chosen ? [.isSelected] : [])
     }
 
-    /// You's avatar with 12 above and below it, the same for every pill.
-    static let height: CGFloat = 52
+    /// The pill's height from the tokens (tv.topBar.pill), the same for every pill.
+    static let height = CGFloat(DesignTokens.Tv.TopBar.pill)
 }
 
 // MARK: - Libraries
@@ -189,7 +186,7 @@ struct LibrariesPage: View {
 
     private func grid(_ libraries: [Library]) -> some View {
         // The tiles keep their rings' room inside them: 32 between tiles, the first at the gutter.
-        let ring = metrics.focusRing
+        let ring = metrics.focusRoom
         let gap = Tokens.Space.s8 - ring * 2
         return ScrollView {
             LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: gap), count: 4), spacing: gap) {
