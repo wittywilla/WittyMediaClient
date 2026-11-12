@@ -190,3 +190,41 @@ final class MoreInfoSpecTests: XCTestCase {
         XCTAssertEqual(spec.title, "The Quiet Orchard")
     }
 }
+
+final class CommandParamsTests: XCTestCase {
+    private let catalog = SDUICatalog.builtIn
+
+    private func body(_ r: (method: String, path: String, body: Data?)?) -> String { r?.body.map { String(decoding: $0, as: UTF8.self) } ?? "" }
+
+    func testAnIntParamReplacesItsQuotedToken() {
+        let r = SDUIRouter.request(for: catalog.command("wittyplay.state.save"), item: "s-9", params: ["slot": "3"])
+        XCTAssertEqual(r?.path, "/api/play/s-9/action")
+        XCTAssertEqual(body(r), #"{"type":"save","slot":3}"#)
+    }
+
+    func testAStringParamIsEscapedInTheBodyAndAPathParamInThePath() {
+        let join = SDUIRouter.request(for: catalog.command("wittyplay.room.join"), item: "", params: ["code": #"HA"RB"#])
+        XCTAssertEqual(body(join), #"{"room":"","code":"HA\"RB"}"#)
+        let assign = SDUIRouter.request(for: catalog.command("wittyplay.controller.assign"), item: "s1", params: ["user": "a b/c", "seat": "2"])
+        XCTAssertEqual(assign?.path, "/api/play/s1/seats/a%20b%2Fc")
+        XCTAssertEqual(body(assign), #"{"seat":2}"#)
+    }
+
+    func testAnUnsetParamIsAnEmptyString() {
+        let r = SDUIRouter.request(for: catalog.command("wittyplay.room.join"), item: "r1", params: [:])
+        XCTAssertEqual(body(r), #"{"room":"r1","code":""}"#)
+        let del = SDUIRouter.request(for: catalog.command("wittyplay.state.delete"), item: "7", params: ["slot": "2"])
+        XCTAssertEqual(del?.method, "DELETE")
+        XCTAssertEqual(del?.path, "/api/games/7/saves/2")
+    }
+
+    func testClientHandledCommandsMakeNoRequest() {
+        XCTAssertNil(SDUIRouter.request(for: catalog.command("rewind.open"), item: "1"))
+        XCTAssertNil(SDUIRouter.request(for: catalog.command("controller.remap"), item: "1"))
+    }
+
+    func testAValueLookingLikeATokenIsNotFilledAgain() {
+        let r = SDUIRouter.request(for: catalog.command("wittyplay.room.join"), item: "r1", params: ["code": "{item}"])
+        XCTAssertEqual(body(r), #"{"room":"r1","code":"{item}"}"#)
+    }
+}
