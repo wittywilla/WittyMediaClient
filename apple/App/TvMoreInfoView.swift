@@ -35,9 +35,6 @@ struct MoreInfoSheet: View {
             return DesignPageSpec(eyebrow: "WittyTV", title: problem.isEmpty ? "Loading…" : "More info isn’t available", lead: problem,
                                   actions: [.A2("Close")], layer: true)
         }
-        if let info, reminders.has(info.channel.key, info.programme.start), let at = page.actions.firstIndex(where: { $0.title == "Remind me" }) {
-            page.actions[at] = .A2("Remove reminder")
-        }
         if !message.isEmpty { page.sections.insert(.secN("", message, true), at: 0) }
         page.actions.append(.A2("Close"))
         page.start = page.actions.first?.id ?? ""
