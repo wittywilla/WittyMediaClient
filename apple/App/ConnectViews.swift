@@ -52,6 +52,7 @@ struct ConnectView: View {
     @State private var lastSpot: Spot?
     @FocusState private var spot: Spot?
     @State private var wantField = false
+    @AppStorage(ServerOrder.key) private var savedFirst = true
     @Namespace private var scope
 
     /// A server that moves to https gets one more go, at the address it asked for.
@@ -142,7 +143,8 @@ struct ConnectView: View {
     /// row only exists after this update, so the focus has to wait for the next one.
     private func show(_ servers: [FoundServer]) {
         found = servers
-        guard !moved, let first = servers.first else { return }
+        // Saved servers on top keep the focus on the last one used: a server turning up below doesn't take it.
+        guard !moved, !(savedFirst && !model.recent.isEmpty), let first = servers.first else { return }
         let target = Spot.found(first.id)
         offered = target
         DispatchQueue.main.async { spot = target }
@@ -167,27 +169,59 @@ struct ConnectView: View {
         if !error.isEmpty { ProblemLine(error) }
     }
 
-    @ViewBuilder private func findActions(_ others: [SavedServer]) -> some View {
+    /// Servers found on the network that this device hasn't used: where each one is, and nothing else until it's added.
+    @ViewBuilder private func foundSection(_ others: [SavedServer]) -> some View {
+        SearchingCaption(words: say("foundServers"), searching: searching)
+            .padding(.top, savedFirst && !others.isEmpty ? Tokens.Space.s2 : 0)
+        if found.isEmpty {
+            NoteCard(words: refused ? say("findNotSupported") : searchedLong ? say("findNone") : say("findSearching"),
+                     busy: searching, icon: refused ? "wifi.slash" : "magnifyingglass")
+        }
+        ForEach(foundOnly(others)) { server in
+            ServerCard(url: server.url, connecting: connectingTo == server.url) { Task { await connect(server.url) } }
+                .focused($spot, equals: .found(server.id))
+        }
+    }
+
+    /// Servers this device has used, the last one used first when they're listed first.
+    @ViewBuilder private func savedSection(_ others: [SavedServer]) -> some View {
+        let first = savedFirst ? others.first?.url : nil
+        RememberedServers(servers: others, removed: { removed($0, from: others) }) { server in
+            // Found on the network at another address than the one remembered: that is where it is now.
+            let at = ServerBook.address(of: server, found: found)
+            ServerCard(saved: server, url: server.url, lastUsed: server.url == model.lastUsedURL,
+                       connecting: connectingTo == at, reached: ServerWords.reached(server),
+                       stale: ServerBook.isStale(server, now: ServerBook.now())) { Task { await connect(at) } }
+                .focused($spot, equals: .recent(server.url))
+                .firstFocus(in: scope, when: server.url == first)
+        }
+    }
+
+    private var manageButton: some View {
+        // Somewhere to remove servers that needs no gesture to find.
+        Button {
+            showManage = true
+            error = ""
+        } label: {
+            Label(say("manageServers"), systemImage: "slider.horizontal.3")
+        }
+        .action(.quiet, wide: true)
+        .focused($spot, equals: .manage)
+    }
+
+    @ViewBuilder private func findActions(_ listed: [SavedServer]) -> some View {
+        // With "Show saved servers first" (the usual), the servers used before come first, the last one used at the
+        // top, so nobody scrolls past the network's to reach their own; what's found on the network is below them.
+        let others = savedFirst ? ServerOrder.recentFirst(listed, lastUsed: model.lastUsedURL) : listed
+        let savedOnTop = savedFirst && !others.isEmpty
         VStack(alignment: .leading, spacing: Tokens.Space.s3) {
-            SearchingCaption(words: say("foundServers"), searching: searching)
-            if found.isEmpty {
-                NoteCard(words: refused ? say("findNotSupported") : searchedLong ? say("findNone") : say("findSearching"),
-                         busy: searching, icon: refused ? "wifi.slash" : "magnifyingglass")
-            }
-            // A found server says nothing about itself until it's added: only where it is.
-            ForEach(foundOnly(others)) { server in
-                ServerCard(url: server.url, connecting: connectingTo == server.url) { Task { await connect(server.url) } }
-                    .focused($spot, equals: .found(server.id))
-            }
-            if !others.isEmpty {
-                RememberedServers(servers: others, removed: { removed($0, from: others) }) { server in
-                    // Found on the network at another address than the one remembered: that is where it is now.
-                    let at = ServerBook.address(of: server, found: found)
-                    ServerCard(saved: server, url: server.url, lastUsed: server.url == model.lastUsedURL,
-                               connecting: connectingTo == at, reached: ServerWords.reached(server),
-                               stale: ServerBook.isStale(server, now: ServerBook.now())) { Task { await connect(at) } }
-                        .focused($spot, equals: .recent(server.url))
-                }
+            if savedOnTop {
+                savedSection(others)
+                manageButton
+                foundSection(others)
+            } else {
+                foundSection(others)
+                if !others.isEmpty { savedSection(others) }
             }
         }
         Button {
@@ -198,7 +232,7 @@ struct ConnectView: View {
         }
         .action(found.isEmpty && others.isEmpty ? .primary : .secondary, wide: true, tall: true)
         .focused($spot, equals: .enterAddress)
-        .firstFocus(in: scope, when: found.isEmpty)
+        .firstFocus(in: scope, when: found.isEmpty && !savedOnTop)
         .padding(.top, Tokens.Space.s2)
         // For a device that has never been at home with its server: it shows a code to type in there.
         if PeerLibrary.available {
@@ -211,17 +245,7 @@ struct ConnectView: View {
             .action(.quiet, wide: true)
             .focused($spot, equals: .joinAway)
         }
-        // Somewhere to remove servers that needs no gesture to find.
-        if !others.isEmpty {
-            Button {
-                showManage = true
-                error = ""
-            } label: {
-                Label(say("manageServers"), systemImage: "slider.horizontal.3")
-            }
-            .action(.quiet, wide: true)
-            .focused($spot, equals: .manage)
-        }
+        if !others.isEmpty && !savedOnTop { manageButton }
         LegalNote()
     }
 
@@ -275,7 +299,19 @@ struct ConnectView: View {
             finder = nil
         }
         .task {
+            #if os(tvOS)
+            // Coming here from the server just removed, the question's going leaves the system with nothing to focus
+            // until the first press: the first card, or Enter an address, takes it.
+            try? await Task.sleep(nanoseconds: 700_000_000)
+            if spot == nil, !showForm, !showJoin, !showManage {
+                let saved = ServerOrder.recentFirst(model.recent, lastUsed: model.lastUsedURL).first.map { Spot.recent($0.url) }
+                let near = found.first.map { Spot.found($0.id) }
+                spot = (savedFirst ? saved ?? near : near ?? saved) ?? .enterAddress
+            }
+            try? await Task.sleep(nanoseconds: 5_300_000_000)
+            #else
             try? await Task.sleep(nanoseconds: 6_000_000_000)
+            #endif
             searchedLong = true
         }
     }
@@ -449,138 +485,8 @@ struct MismatchView: View {
 
 // MARK: - 8: sign in with a code
 
-/// The TV shows a code; someone already signed in on a phone or computer approves
-/// it, so nobody has to type a password with a remote. See docs/CLIENT-API.md.
-private struct PairPanel: View {
-    @EnvironmentObject private var model: AppModel
-    @Environment(\.palette) private var palette
-    @Environment(\.metrics) private var metrics
-    let onUsePassword: () -> Void
-    var onBack: (() -> Void)?
-    @State private var round = 0
-    @State private var code = ""
-    @State private var approveAt = ""
-    @State private var qr: CGImage?
-    @State private var problem = ""
-    @State private var starting = true
-    /// The server has handed this device all the codes it will for now: a password is the way in.
-    @State private var limited = false
-    @Namespace private var scope
-    /// The screen's main action, which takes the focus when an answer from the server changes it.
-    @FocusState private var mainAction: Bool
-
-    private func run() async {
-        code = ""
-        problem = ""
-        limited = false
-        qr = nil
-        starting = true
-        defer { starting = false }
-        let start: PairStart
-        do {
-            start = try await model.client.pairStart(device: model.deviceName, platform: model.platformName)
-        } catch let error as APIError where error.status == 429 {
-            limited = true
-            problem = say("pairBusy")
-            return
-        } catch {
-            problem = plainWords(Problem.of(error))
-            return
-        }
-        code = start.code
-        approveAt = start.approveAddress(base: model.client.base) ?? model.client.base
-        qr = QRImage.make(for: approveAt)
-        starting = false
-        var wait = max(start.intervalSec ?? 3, 1)
-        while !Task.isCancelled {
-            do {
-                try await Task.sleep(nanoseconds: UInt64(wait) * 1_000_000_000)
-                let poll = try await model.client.pairPoll(deviceSecret: start.deviceSecret)
-                problem = ""
-                switch poll.status {
-                case "approved":
-                    if let token = poll.token {
-                        model.signedIn(token: token)
-                    } else {
-                        problem = say("pairExpired")
-                        code = ""
-                    }
-                    return
-                case "denied":
-                    problem = say("pairDenied"); code = ""; return
-                case "expired":
-                    problem = say("pairExpired"); code = ""; return
-                case "slow-down":
-                    wait = max(poll.intervalSec ?? wait, wait) + 1
-                default:
-                    break
-                }
-            } catch {
-                let trouble = Problem.of(error)
-                if trouble == .cancelled { return }
-                // The code stays good through a lost connection, so this keeps trying until it expires.
-                problem = plainWords(trouble)
-            }
-        }
-    }
-
-    var body: some View {
-        SignInLayout(back: onBack) {
-            BrandLockup()
-            SignInHeading(title: say("pairTitle"), detail: code.isEmpty ? "" : say("pairHint"))
-            if !code.isEmpty {
-                Text(approveAt)
-                    .font(.wmLabel)
-                    .foregroundStyle(palette.accentText)
-                    .multilineTextAlignment(metrics.tv ? .leading : .center)
-                    .textSelectionIfAvailable()
-                Text(code)
-                    .accessibilityIdentifier("pairCode")
-                    .font(.system(size: metrics.tv ? 72 : 40, weight: .bold, design: .monospaced))
-                    .kerning(metrics.tv ? 16 : 8)
-                    .foregroundStyle(palette.text)
-                    .padding(.horizontal, Tokens.Space.s6)
-                    .padding(.vertical, Tokens.Space.s3)
-                    .background(RoundedRectangle(cornerRadius: Tokens.Radius.lg, style: .continuous).fill(palette.panel))
-                    .accessibilityLabel(code.map(String.init).joined(separator: " "))
-                HStack(spacing: Tokens.Space.s2) {
-                    ProgressView()
-                    Secondary(say("pairWaiting"))
-                }
-            } else if starting && problem.isEmpty {
-                ProgressView().frame(maxWidth: .infinity, minHeight: 80)
-            }
-            if !problem.isEmpty { ProblemLine(problem) }
-        } actions: {
-            if !code.isEmpty, let qr {
-                QRCard(image: qr, caption: say("pairScan"))
-                    .frame(maxWidth: .infinity, alignment: metrics.tv ? .leading : .center)
-            }
-            if code.isEmpty && !problem.isEmpty {
-                if limited {
-                    Button(say("usePassword"), action: onUsePassword).action(.primary, wide: true, tall: true).focused($mainAction)
-                } else {
-                    Button(say("pairNew")) { round += 1 }.action(.primary, wide: true, tall: true).focused($mainAction)
-                }
-            }
-            FlowLayout(spacing: Tokens.Space.s2, centred: !metrics.tv) {
-                if model.canTypeCode { Button(say("codeTitle")) { model.askForCode() }.action(.quiet) }
-                if !limited {
-                    Button(say("usePassword"), action: onUsePassword).action(.quiet).firstFocus(in: scope, when: !code.isEmpty)
-                }
-                Button(say("changeServer")) { model.changeServer() }.action(.quiet)
-            }
-            .remoteSection()
-        }
-        .focusRoot(scope)
-        .task(id: round) { await run() }
-        // When the server says no, the remote's focus goes to what to do about it, once it's on screen.
-        .onChange(of: problem.isEmpty) { empty in
-            guard !empty, code.isEmpty else { return }
-            DispatchQueue.main.async { mainAction = true }
-        }
-    }
-}
+// The TV shows a code, and with a newer server a PIN beside it; someone already signed in on a phone or
+// computer approves it. That screen is PairPanel, in PairDevice.swift.
 
 extension View {
     /// Words that can be copied, where there's a way to copy them.
@@ -782,7 +688,7 @@ struct SignInView: View {
         // One centred column on every device: the face, its names centred under it, then the way in.
         SignInLayout(back: back, centred: true) {
             VStack(spacing: Tokens.Space.s2) {
-                AvatarTile(name: profile.shownName, size: metrics.tv ? 200 : 120)
+                AvatarTile(name: profile.shownName, size: metrics.tv ? 200 : 120, picture: profile.avatar)
                     .padding(.bottom, metrics.tv ? Tokens.Space.s2 : 0)
                 Text(profile.shownName).font(.wmHero).foregroundStyle(palette.text).lineLimit(1)
                 if profile.showsUsername {

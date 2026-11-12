@@ -207,8 +207,13 @@ class Listening(private val app: WittyApp) {
     // Back on screen with something playing: catch up with what happened meanwhile. If the queue
     // finished and the service went with it, there's nothing to show.
     fun appeared() {
+        keptForStems = false
         if (serviceRunning) connect {} else clear()
     }
+
+    // Karaoke's parts are playing and the app has gone to the background: the player is still followed, so they carry
+    // on in step with it (the service keeps the app alive while music plays), until they stop.
+    private var keptForStems = false
 
     private fun clear() {
         stems.away()
@@ -220,6 +225,21 @@ class Listening(private val app: WittyApp) {
 
     // Off screen, nothing needs to hear about any of this. The service carries on.
     fun disappeared() {
+        if (stems.playing) {
+            keptForStems = true
+            return
+        }
+        letGo()
+    }
+
+    // Karaoke's parts have stopped: in the background, nothing needs to hear the player any more.
+    fun stemsStopped() {
+        if (!keptForStems) return
+        keptForStems = false
+        letGo()
+    }
+
+    private fun letGo() {
         // Nothing here hears the player from now on, so nothing could keep the parts in step with it.
         stems.away()
         connecting?.let { MediaController.releaseFuture(it) }

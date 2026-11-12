@@ -323,22 +323,36 @@ object LastChannel {
     private const val KEY = "wms.tv.last"
     private fun prefs(context: Context) = context.getSharedPreferences("wittytv", Context.MODE_PRIVATE)
 
-    fun current(context: Context): String = prefs(context).getString(KEY, "").orEmpty()
-    fun before(context: Context): String = prefs(context).getString("$KEY.before", "").orEmpty()
+    // A channel is its server's: kept under that server's tag (data/ServerRules.kt, serverTag).
+    private fun key(context: Context): String {
+        val tag = (context.applicationContext as? com.wittywilla.wittymediaclient.WittyApp)?.store?.currentTag.orEmpty()
+        return if (tag.isEmpty()) KEY else "$KEY.$tag"
+    }
 
-    // A channel is some server's: with no server remembered it's nobody's. The guide's sets are kept for each
-    // server, so they go too.
+    fun current(context: Context): String = prefs(context).getString(key(context), "").orEmpty()
+    fun before(context: Context): String = prefs(context).getString("${key(context)}.before", "").orEmpty()
+
+    // One server's, when it is removed.
+    fun forgetServer(context: Context, tags: List<String>) {
+        val edit = prefs(context).edit()
+        tags.forEach { edit.remove("$KEY.$it").remove("$KEY.$it.before") }
+        edit.apply()
+    }
+
+    // With no server remembered, every channel is nobody's, the untagged one from before included. The guide's
+    // sets are kept for each server, so they go too.
     fun forget(context: Context) {
-        val edit = prefs(context).edit().remove(KEY).remove("$KEY.before")
-        prefs(context).all.keys.filter { it.startsWith(GuidePrefs.SET_PREFIX) }.forEach { edit.remove(it) }
+        val edit = prefs(context).edit()
+        prefs(context).all.keys.filter { it.startsWith(KEY) || it.startsWith(GuidePrefs.SET_PREFIX) }.forEach { edit.remove(it) }
         edit.apply()
     }
 
     fun remember(context: Context, channel: String) {
+        val key = key(context)
         val was = current(context)
         prefs(context).edit().apply {
-            if (was.isNotEmpty() && was != channel) putString("$KEY.before", was)
-            putString(KEY, channel)
+            if (was.isNotEmpty() && was != channel) putString("$key.before", was)
+            putString(key, channel)
         }.apply()
     }
 }

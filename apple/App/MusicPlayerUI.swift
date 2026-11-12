@@ -568,6 +568,7 @@ struct PhoneNowPlaying: View {
             ZStack(alignment: .top) {
                 Color.black
                 glowLayer(full)
+                CanvasLayer(item: music ? now?.item.id : nil, active: !karaoke, shade: Color.black.opacity(0.5))
                 if vizHere, vizLoaded, viz.viz {
                     VisualizerBackground(style: style, slow: viz.slow, colour: glow, playing: listening.isPlaying)
                 }
@@ -1178,6 +1179,12 @@ struct PhoneNowPlaying: View {
             NPMenuRow(words: "Sound: equaliser and more", symbol: "slider.horizontal.3") {
                 menu = nil
                 panel = panel == .sound ? nil : .sound
+            }
+            if model.remote.hasRemote {
+                NPMenuRow(words: "Play on another device", symbol: "tv.and.mediabox") {
+                    menu = nil
+                    model.remote.musicSheet = model.remote.sourcePlayingMusic().map { .playOn($0) }
+                }
             }
             if let now {
                 let library = now.item.libraryId

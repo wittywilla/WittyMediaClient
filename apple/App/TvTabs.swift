@@ -47,9 +47,10 @@ struct TvTopBar: View {
     /// this person added to the top menu that the server's menu doesn't already have there. Otherwise the app's own.
     private var row: [(tab: AppTab, name: String, symbol: String)] {
         guard center.enabled else {
-            return AppTab.tvTabs.map { ($0, $0.title, $0.icon) } + added.map { (AppTab.library($0.id), $0.name, $0.barSymbol) }
+            return model.household.shown(AppTab.tvTabs).map { ($0, $0.title, $0.icon) } + added.map { (AppTab.library($0.id), $0.name, $0.barSymbol) }
         }
-        var pills = center.topMenuEntries.map { entry -> (tab: AppTab, name: String, symbol: String) in
+        // The server leaves out what this profile's switches turn off; the app's own tabs are filtered here too.
+        var pills = center.topMenuEntries.filter { model.household.shown([center.tab(for: $0)]).count == 1 }.map { entry -> (tab: AppTab, name: String, symbol: String) in
             (center.tab(for: entry), PlainWords.clean(entry.label, limit: 40), SDUIIcon.symbol(entry.icon, or: "square"))
         }
         let routes = Set(center.topMenuEntries.compactMap(\.route))
@@ -132,7 +133,7 @@ private struct TvTabPill: View {
         Button(action: action) {
             HStack(spacing: Tokens.Space.s3) {
                 if let user {
-                    AvatarTile(name: user.shownName, size: 28)
+                    AvatarTile(name: user.shownName, size: 28, picture: user.avatar)
                     Text(user.shownName)
                 } else {
                     Image(systemName: symbol).accessibilityHidden(true)

@@ -150,10 +150,10 @@ struct GuideDetails: View {
             if model.has(TvFeature.catchup), ask.cell.kind != .none, let p, CatchupRules.canWatchFromStart(p, on: channel, now: now) {
                 Button { onFromStart(p) } label: { Label("Watch from the start", systemImage: "backward.end") }.action()
             }
-            if channel.canRecord == true, ask.cell.isBroadcast, ask.cell.end > now, let p, model.has(TvFeature.dvrRules) {
+            if channel.canRecord == true, model.household.allows(ProfileFeature.recordings), ask.cell.isBroadcast, ask.cell.end > now, let p, model.has(TvFeature.dvrRules) {
                 Button("Record every airing…") { recordingWith = RecordAsk(programme: p, series: true) }.action()
                 Button("Record this…") { recordingWith = RecordAsk(programme: p, series: false) }.action()
-            } else if channel.canRecord == true, ask.cell.isBroadcast, ask.cell.end > now, let p {
+            } else if channel.canRecord == true, model.household.allows(ProfileFeature.recordings), ask.cell.isBroadcast, ask.cell.end > now, let p {
                 Button("Record every airing") {
                     Task {
                         do { try await client.recordSeries(channel: channel.key, title: p.title); onSaid("Every airing of \(p.title) will be recorded"); dismiss() }

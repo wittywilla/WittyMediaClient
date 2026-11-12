@@ -116,6 +116,19 @@ class SessionStore(context: Context) {
 
     fun find(url: String): SavedServer? = recent.find { it.url == url }
 
+    // The server in use, as a tag for what is kept by its own numbers (serverTag).
+    val currentTag: String get() = serverTag(find(server) ?: SavedServer(server, ""))
+
+    // When this version first ran: what a server never reached since then counts from (seenOrSince).
+    val recentSince: Long
+        get() {
+            val had = prefs.getLong(KEY_RECENT_SINCE, 0)
+            if (had > 0) return had
+            val now = System.currentTimeMillis()
+            prefs.edit().putLong(KEY_RECENT_SINCE, now).apply()
+            return now
+        }
+
     // Writes the list, and takes what each server kept along: to its new address when it moved, and away when the
     // server is no longer in the list. All in the one write the caller applies.
     private fun remembering(edit: SharedPreferences.Editor, before: List<SavedServer>, after: List<SavedServer>) {
@@ -249,6 +262,7 @@ class SessionStore(context: Context) {
 
     private companion object {
         const val KEY_SERVER = "server"
+        const val KEY_RECENT_SINCE = "recentSince"
         const val KEY_TOKEN = "signin"
         const val KEY_RECENT = "recent"
         const val KEY_THEME = ServerKeys.THEME

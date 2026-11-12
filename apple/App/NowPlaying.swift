@@ -170,6 +170,7 @@ struct NowPlayingCover: ViewModifier {
         // The website's Now Playing, always on black.
         content.fullScreenCover(isPresented: $listening.screenShown) {
             PhoneNowPlaying()
+                .modifier(MusicTogether())
                 .environmentObject(model)
                 .environmentObject(listening)
                 .environment(\.palette, palette)
@@ -416,6 +417,7 @@ struct NowPlayingView: View {
             Spacer()
             Button(editing ? "Done" : "Change") { editing.toggle() }.action()
             Button("Clear") { listening.stop() }.action()
+            MusicPlayOnButton()
         }
         .padding(.top, Tokens.Space.s2)
         .remoteSection()
@@ -501,6 +503,10 @@ struct NowPlayingView: View {
             } else {
                 upright
             }
+        }
+        .background {
+            // The song's canvas behind everything, under enough of the page's colour to read the words on it.
+            CanvasLayer(item: listening.now.flatMap { $0.keepsPlace ? nil : $0.item.id }, shade: palette.background.opacity(0.6)).ignoresSafeArea()
         }
         .background(palette.background.ignoresSafeArea())
         // The queue was cleared, from here or from elsewhere.

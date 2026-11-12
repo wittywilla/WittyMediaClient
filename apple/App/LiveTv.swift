@@ -182,6 +182,8 @@ final class LiveTv: ObservableObject {
                 if Task.isCancelled || key != self.key { return }
             } catch {
                 if Task.isCancelled || key != self.key { return }
+                // Screen time is up: with the channel on the whole screen, the time-up screen says so.
+                if Household.caught(error, needsScreen: true) { return }
                 let status = (error as? APIError)?.status ?? 0
                 if programme != nil, status == 404 {
                     state = .failed("This programme is no longer kept, so it can't be watched from the start.")

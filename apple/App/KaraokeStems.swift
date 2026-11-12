@@ -17,8 +17,6 @@ final class KaraokeStems: ObservableObject {
     @Published private(set) var isOpen = false
     /// What the parts being played are. Nil until they're fetched.
     @Published private(set) var loaded: KaraokeStatus?
-    /// The song isn't at its normal speed, which the parts can't follow: the normal track plays meanwhile.
-    @Published private(set) var heldForSpeed = false
 
     weak var listening: Listening?
     private var client: WittyClient?
@@ -166,7 +164,6 @@ final class KaraokeStems: ObservableObject {
         if let folder { try? FileManager.default.removeItem(at: folder) }
         folder = nil
         adrift = false
-        if heldForSpeed { heldForSpeed = false }
         listening?.stemsHeard = false
     }
 
@@ -174,15 +171,9 @@ final class KaraokeStems: ObservableObject {
     /// second while it plays.
     func sync() {
         guard let listening, let player, let loaded else { return }
-        let normalSpeed = abs(listening.speed - 1) < 0.001
-        if heldForSpeed == normalSpeed { heldForSpeed = !normalSpeed }
-        guard normalSpeed else {
-            player.halt()
-            listening.stemsHeard = false
-            return
-        }
+        // The parts follow the song's speed and its equaliser and levelling (StemPlayer.swift).
         player.set(gains: StemMix.gains(loaded, levels))
-        player.set(output: listening.outputLevel, key: listening.sound.keyShift)
+        player.set(output: listening.outputLevel, key: listening.sound.keyShift, speed: Double(listening.speed))
         if listening.trulyPlaying {
             let at = listening.positionSec()
             let off = player.position().map { abs($0 - at) }

@@ -142,6 +142,11 @@ final class StemPlayer {
     private let engine = AVAudioEngine()
     private let mix = AVAudioMixerNode()
     private let pitch = AVAudioUnitTimePitch()
+    /// The app's equaliser, preamp and volume levelling, as the song's own tap applies them (SoundEngine.swift).
+    private let eq = AVAudioUnitEQ(numberOfBands: Equaliser.frequencies.count)
+    private var shapeVersion = -1
+    /// The song's speed, which the parts follow: 1 is normal.
+    private var rate = 1.0
     private var decks: [Deck] = []
     /// Where in the song the parts were at a moment on the device's clock. Nil while they're stopped.
     private var base: (position: Double, host: UInt64)?
@@ -151,7 +156,17 @@ final class StemPlayer {
     init(files: [(id: String, url: URL)]) throws {
         guard !files.isEmpty else { throw StemTrouble.unreadable }
         engine.attach(mix)
+        engine.attach(eq)
         engine.attach(pitch)
+        for (index, frequency) in Equaliser.frequencies.enumerated() {
+            let band = eq.bands[index]
+            band.filterType = index == 0 ? .lowShelf : index == Equaliser.frequencies.count - 1 ? .highShelf : .parametric
+            band.frequency = Float(frequency)
+            // Q 1.1, as the song's own filters have it, in octaves.
+            band.bandwidth = Float(2 * asinh(1 / (2 * 1.1)) / log(2))
+            band.gain = 0
+            band.bypass = false
+        }
         for part in files {
             let file = try AVAudioFile(forReading: part.url)
             guard file.length > 0, file.processingFormat.sampleRate > 0 else { throw StemTrouble.unreadable }
@@ -163,7 +178,8 @@ final class StemPlayer {
         guard let format = AVAudioFormat(standardFormatWithSampleRate: decks[0].file.processingFormat.sampleRate, channels: 2) else {
             throw StemTrouble.unreadable
         }
-        engine.connect(mix, to: pitch, format: format)
+        engine.connect(mix, to: eq, format: format)
+        engine.connect(eq, to: pitch, format: format)
         engine.connect(pitch, to: engine.mainMixerNode, format: format)
         pitch.bypass = true
         engine.prepare()
@@ -178,7 +194,7 @@ final class StemPlayer {
         for deck in decks { deck.node.stop() }
         if !engine.isRunning { try engine.start() }
         let host = mach_absolute_time() + AVAudioTime.hostTime(forSeconds: Self.lead)
-        let start = max(0, position + Self.lead)
+        let start = max(0, position + Self.lead * rate)
         for deck in decks {
             let rate = deck.file.processingFormat.sampleRate
             let frame = AVAudioFramePosition((start * rate).rounded())
@@ -195,8 +211,8 @@ final class StemPlayer {
     func position() -> Double? {
         guard let base, engine.isRunning else { return nil }
         let now = mach_absolute_time()
-        if now >= base.host { return base.position + AVAudioTime.seconds(forHostTime: now - base.host) }
-        return base.position - AVAudioTime.seconds(forHostTime: base.host - now)
+        if now >= base.host { return base.position + AVAudioTime.seconds(forHostTime: now - base.host) * rate }
+        return base.position - AVAudioTime.seconds(forHostTime: base.host - now) * rate
     }
 
     /// Silence, keeping everything ready to start again.
@@ -218,11 +234,31 @@ final class StemPlayer {
         for deck in decks { deck.node.volume = Float(gains[deck.id] ?? 0) }
     }
 
-    /// The app's own volume, and karaoke's key in semitones.
-    func set(output: Float, key: Double) {
+    /// The app's own volume, karaoke's key in semitones, and the song's speed. A new speed starts the parts again
+    /// from where they are, so the place they report stays true.
+    func set(output: Float, key: Double, speed: Double) {
         engine.mainMixerNode.outputVolume = output
         pitch.pitch = Float(key * 100)
-        let off = key == 0
+        let next = min(max(speed, 1.0 / 32), 32)
+        if abs(next - rate) > 0.0001 {
+            rate = next
+            pitch.rate = Float(next)
+            base = nil
+        }
+        let off = key == 0 && abs(rate - 1) < 0.0001
         if pitch.bypass != off { pitch.bypass = off }
+        shape()
+    }
+
+    /// The equaliser and levelling as the rest of the app has them now.
+    private func shape() {
+        let (now, version) = SoundEngine.shared.current()
+        guard version != shapeVersion else { return }
+        shapeVersion = version
+        for (index, band) in eq.bands.enumerated() where index < now.gains.count {
+            band.gain = Float(now.eqOn ? now.gains[index] : 0)
+        }
+        eq.globalGain = Float(min(max((now.eqOn ? now.preampDb : 0) + now.loudnessDb, -96), 24))
+        eq.bypass = !now.eqOn && now.loudnessDb == 0
     }
 }

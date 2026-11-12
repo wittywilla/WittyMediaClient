@@ -37,9 +37,12 @@ public struct User: Decodable, Equatable {
     public let kind: String?
     public let hasPassword: Bool?
     public let twoFactor: Bool?
+    /// The picture the profile chose, as "name:colour". Empty or missing means its initial: see ProfilePicture.
+    public let avatar: String?
 
     public init(id: Int64, name: String, displayName: String? = nil, showUsername: Bool? = nil, isAdmin: Bool? = nil,
-                kind: String? = nil, hasPassword: Bool? = nil, twoFactor: Bool? = nil) {
+                kind: String? = nil, hasPassword: Bool? = nil, twoFactor: Bool? = nil, avatar: String? = nil) {
+        self.avatar = avatar
         self.id = id
         self.name = name
         self.displayName = displayName
@@ -66,8 +69,11 @@ public struct Profile: Decodable, Identifiable, Equatable {
     public let displayName: String?
     public let kind: String?
     public let hasPassword: Bool?
+    /// The picture the profile chose, as "name:colour". Empty or missing means its initial.
+    public let avatar: String?
 
-    public init(id: Int64, name: String, displayName: String? = nil, kind: String? = nil, hasPassword: Bool? = nil) {
+    public init(id: Int64, name: String, displayName: String? = nil, kind: String? = nil, hasPassword: Bool? = nil, avatar: String? = nil) {
+        self.avatar = avatar
         self.id = id
         self.name = name
         self.displayName = displayName

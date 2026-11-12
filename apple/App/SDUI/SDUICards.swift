@@ -45,6 +45,7 @@ struct SDUICardView: View {
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(card.label)
         .accessibilityAddTraits(.isButton)
+        .accessibilityIdentifier("sdui.card." + card.id)
         #if os(iOS) || os(visionOS)
         .contextMenu { menu }
         #endif
@@ -157,12 +158,11 @@ struct SDUICardView: View {
             .accessibilityHidden(true)
     }
 
-    /// The title and what's under it. On a television the words are a size down, as its own cards have them.
+    /// The title and what's under it, in the title and caption sizes the device was given (docs/SDUI.md, Card).
     @ViewBuilder private var words: some View {
-        let titleRole = layout.isTV ? "body" : "title"
         if shows("title") {
             Text(card.shown("title"))
-                .sduiFont(titleRole, weight: .medium)
+                .sduiFont("title", weight: .medium)
                 .foregroundStyle(palette.text)
                 .sduiLines(card.lineLimit("title"))
                 .multilineTextAlignment(isCircle ? .center : .leading)
@@ -199,7 +199,7 @@ struct SDUICardView: View {
                 if shows("number") { Text(card.shown("number")).foregroundStyle(palette.textSecondary) }
                 if shows("title") { Text(card.shown("title")).foregroundStyle(palette.text) }
             }
-            .sduiFont(layout.isTV ? "body" : "title", weight: .medium)
+            .sduiFont("title", weight: .medium)
             .lineLimit(1)
             if shows("now") {
                 Text(card.shown("now")).sduiFont("caption").foregroundStyle(palette.text).sduiLines(card.lineLimit("now"))
@@ -229,7 +229,7 @@ struct SDUICardView: View {
                 VStack(alignment: .leading, spacing: 2) {
                     if shows("title") {
                         Text(card.shown("title"))
-                            .sduiFont(layout.isTV ? "body" : "title", weight: .semibold)
+                            .sduiFont("title", weight: .semibold)
                             .foregroundStyle(card.picture == nil ? palette.text : onImage)
                             .sduiLines(card.lineLimit("title"))
                     }
