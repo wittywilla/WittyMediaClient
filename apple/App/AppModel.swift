@@ -232,10 +232,17 @@ final class AppModel: ObservableObject {
 
     func has(_ feature: String) -> Bool { features.contains(feature) }
 
-    /// Asked for whenever a server is opened, signed in or not: signing in has newer ways too.
-    private func learnFeatures() {
+    /// The server whose features were last asked for, so opening it and learning its status ask once.
+    private var featuresAsked = ""
+
+    /// Asked for whenever a server is opened, signed in or not: signing in has newer ways too. `again` asks a
+    /// server that was asked already (its status was read again, and it may have been updated since).
+    private func learnFeatures(again: Bool = true) {
         let asking = client
-        guard !asking.base.isEmpty else { return }
+        // A status can arrive before the server is opened (a server just chosen, still to be signed in to):
+        // there is nothing to ask then, and opening it asks.
+        guard !asking.base.isEmpty, again || featuresAsked != asking.base else { return }
+        featuresAsked = asking.base
         Task {
             let caps = try? await asking.capabilities()
             guard client.base == asking.base else { return }
@@ -434,6 +441,14 @@ final class AppModel: ObservableObject {
         server = opening.url
         useAway(for: opening)
         client = connection(to: opening.url, token: token)
+        // What it can do decides whether Home and Search are the server's pages; until it's known they wait.
+        // The status that brought it here may have been read before there was a connection to ask with.
+        learnFeatures(again: false)
+        let theme = defaults.string(forKey: "theme." + client.base) ?? ""
+        if theme != themeChoice {
+            themeChoice = theme
+            refreshTheme()
+        }
     }
 
     /// On to signing in, for a server that has been checked.
@@ -781,6 +796,7 @@ final class AppModel: ObservableObject {
         themeId = nil
         features = []
         featuresKnown = false
+        featuresAsked = ""
         themeChoice = ""
         themeList = nil
         customTheme = nil
@@ -792,10 +808,12 @@ final class AppModel: ObservableObject {
 
     /// What a server says about how it looks: its theme, and the owner's name and logo for it.
     private func learn(_ status: ServerStatus) {
+        // A server updated since it was asked may do more now.
+        let updated = serverVersion != (status.version ?? "")
         serverVersion = status.version ?? ""
         serverUpdate = status.update ?? ""
         themeId = status.theme
-        learnFeatures()
+        learnFeatures(again: updated)
         themeChoice = defaults.string(forKey: "theme." + client.base) ?? ""
         refreshTheme()
         brandName = PlainWords.clean(status.brandName ?? "", limit: 60)
