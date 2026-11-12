@@ -38,19 +38,20 @@ enum Tokens {
     }
 
     #if os(tvOS)
-    /// Apple's safe area for a TV that may crop its picture. Rows run under it so that a lifted
-    /// card isn't cut off, and everything in them starts inside it.
-    static let gutter: CGFloat = 90
-    static let edge: CGFloat = 60
-    static let cardWidth: CGFloat = 200
-    static let wideCardWidth: CGFloat = 340
-    static let minTarget: CGFloat = 48
-    /// The room a focused card needs to lift without being clipped.
-    static let focusRoom: CGFloat = 32
+    /// Apple TV's numbers are the design tokens' `tv` block (DesignTokens.generated.swift; 1 unit is 1 point here).
+    /// The safe area of a TV that may crop its picture: rows run under it so that a lifted card isn't cut off, and
+    /// everything in them starts inside it.
+    static let gutter = CGFloat(DesignTokens.Tv.gutter)
+    static let edge = CGFloat(DesignTokens.Tv.safe.y)
+    static let cardWidth = CGFloat(DesignTokens.Tv.Card.Poster.w)
+    static let wideCardWidth = CGFloat(DesignTokens.Tv.Card.Wide.w)
+    static let minTarget = CGFloat(DesignTokens.Tv.Target.min)
+    /// The room a focused card needs to lift without being clipped: the ring, its gap and the lift.
+    static let focusRoom = CGFloat(DesignTokens.Tv.Focus.ring + DesignTokens.Tv.Focus.gap + DesignTokens.Tv.Focus.lift + 12)
     static let heroHeight: CGFloat = 620
     /// How wide the hero's words may be: up to half the screen.
     static let heroTextWidth: CGFloat = 900
-    #elseif os(macOS)
+        #elseif os(macOS)
     static let gutter: CGFloat = 24
     static let edge: CGFloat = 16
     static let cardWidth: CGFloat = 148
@@ -98,6 +99,9 @@ extension Font {
 struct Palette {
     var background, panel, card, raised, border, control, text, textSecondary, textHint: Color
     var accent, accentPressed, onAccent, accentText, danger, ok, warn, scrim: Color
+    /// The focus ring: on a TV the theme's ring colour for a screen across a room, elsewhere its `focus`.
+    var focus, tvRing, tvText: Color
+    var heroScrim: Double
     var isLight: Bool
 
     init(_ theme: AppTheme) {
@@ -119,6 +123,10 @@ struct Palette {
         ok = colour(theme.ok)
         warn = colour(theme.warn)
         scrim = colour(theme.scrim)
+        focus = colour(theme.focus)
+        tvRing = colour(theme.tvRing)
+        tvText = colour(theme.tvText)
+        heroScrim = theme.heroScrim
         isLight = theme.isLight
     }
 }

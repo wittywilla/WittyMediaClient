@@ -21,8 +21,15 @@ struct Metrics: Equatable {
     static let phone = Metrics(tv: false, gutter: Tokens.Space.s4, edge: Tokens.Space.s2, cardWidth: 104, minTarget: 44)
     /// The website's `--card-w` from 521 to 1099 across.
     static let tablet = Metrics(tv: false, gutter: Tokens.Space.s8, edge: Tokens.Space.s2, cardWidth: 148, minTarget: 44)
+    #if os(tvOS)
+    /// From the tokens' `tv.focus`: a ring of 4 with a 4 gap, and a 1.06 lift.
     static let television = Metrics(tv: true, gutter: Tokens.gutter, edge: Tokens.edge, cardWidth: Tokens.cardWidth,
-                                    minTarget: Tokens.minTarget, focusRing: 4, focusScale: 1.05)
+                                    minTarget: Tokens.minTarget, focusRing: CGFloat(DesignTokens.Tv.Focus.ring),
+                                    focusScale: CGFloat(DesignTokens.Tv.Focus.scale))
+    #else
+    static let television = Metrics(tv: true, gutter: 90, edge: 60, cardWidth: 250, minTarget: 66,
+                                    focusRing: CGFloat(DesignTokens.Tv.Focus.ring), focusScale: CGFloat(DesignTokens.Tv.Focus.scale))
+    #endif
 }
 
 private struct MetricsKey: EnvironmentKey {
@@ -85,14 +92,16 @@ private struct SurfaceBody<Label: View>: View {
     var body: some View {
         let shape = RoundedRectangle(cornerRadius: radius, style: .continuous)
         let ring = metrics.tv && focused
+        // On a TV the ring stands a gap off the thing and is concentric with its corner (the tokens' tv.focus).
+        let room = metrics.tv ? metrics.focusRing + CGFloat(DesignTokens.Tv.Focus.gap) : 0
         label
             .background(fill.map { shape.fill($0) })
             .contentShape(shape)
-            .padding(metrics.tv ? metrics.focusRing : 0)
+            .padding(room)
             .overlay {
                 if metrics.tv {
-                    RoundedRectangle(cornerRadius: radius + metrics.focusRing, style: .continuous)
-                        .strokeBorder(ring ? palette.text : Color.clear, lineWidth: metrics.focusRing)
+                    RoundedRectangle(cornerRadius: radius + room, style: .continuous)
+                        .strokeBorder(ring ? palette.tvRing : Color.clear, lineWidth: metrics.focusRing)
                 }
             }
             .scaleEffect(ring && !reduceMotion ? metrics.focusScale : 1)

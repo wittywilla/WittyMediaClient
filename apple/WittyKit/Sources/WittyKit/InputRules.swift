@@ -333,3 +333,30 @@ public enum Density: String, CaseIterable, Sendable {
         return Density(rawValue: tv ? DesignTokens.Density.tvDefault : DesignTokens.Density.default) ?? .comfortable
     }
 }
+
+// MARK: - Jump to a letter
+
+/// The Dock's "Jump": a long list sorted by title, to the first title at or after a letter. "#" stands for every title
+/// that doesn't start with a letter (digits, symbols) and comes first. Nothing here loads anything: a screen asks for
+/// more pages while `firstIndex` still says nil and there is more to load.
+public enum LetterJump {
+    public static let letters: [String] = ["#"] + "ABCDEFGHIJKLMNOPQRSTUVWXYZ".map { String($0) }
+
+    /// The bucket a title sorts under: its first letter or digit, without accents or case; "#" for anything else.
+    public static func key(_ title: String) -> String {
+        let folded = title.trimmingCharacters(in: .whitespacesAndNewlines).folding(options: [.diacriticInsensitive, .caseInsensitive], locale: nil)
+        guard let first = folded.first(where: { $0.isLetter || $0.isNumber }) else { return "#" }
+        let up = String(first).uppercased()
+        return up.count == 1 && up >= "A" && up <= "Z" ? up : "#"
+    }
+
+    /// The first title (by position) whose bucket is `letter` or later; nil if there is none among these.
+    public static func firstIndex(titles: [String], letter: String) -> Int? {
+        titles.firstIndex { key($0) >= letter }
+    }
+
+    /// Whether a list in this order can be jumped by letter: the sort is by title.
+    public static func applies(sort: String, firstSort: String?) -> Bool {
+        sort == "title" || (sort.isEmpty && firstSort == "title")
+    }
+}

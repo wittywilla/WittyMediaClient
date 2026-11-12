@@ -30,6 +30,7 @@ public enum SDUITheme {
         if let c = given["ok"] { out.ok = c }
         if let c = given["warn"] { out.warn = c }
         if let c = given["scrim"] ?? given["overlay"] { out.scrim = c }
+        if let c = given["focus"] { out.focus = c; out.tvRing = c }
         if let accent = given["accent"] {
             // An accent of a scope's own brings what follows from it, as a theme's does, unless the scope says otherwise.
             out.accent = accent

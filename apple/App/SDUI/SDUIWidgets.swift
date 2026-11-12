@@ -176,7 +176,7 @@ struct SDUIFilterBarView: View {
 }
 
 /// A filter's or the sort's choices. "Any" takes a filter away.
-private struct SDUIChoiceList: View {
+struct SDUIChoiceList: View {
     @Environment(\.palette) private var palette
     @Environment(\.dismiss) private var dismiss
     let field: SDUIFilterField

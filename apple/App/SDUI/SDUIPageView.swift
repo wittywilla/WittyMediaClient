@@ -145,6 +145,11 @@ struct SDUIPageBody: View {
     @State private var memory = SDUIFocusMemory()
     @State private var lastFocused: String?
     @Namespace private var scope
+    #if os(tvOS)
+    @State private var dockField: SDUIFilterField?
+    @State private var jumpOpen = false
+    @State private var optionsFor: SDUIElement?
+    #endif
 
     private var layout: SDUILayout { screen.layout }
     private var sections: [SDUIElement] { screen.sections }
@@ -169,7 +174,7 @@ struct SDUIPageBody: View {
                         SDUINodeView(element: sections[nativeAt]).frame(maxWidth: .infinity, maxHeight: .infinity)
                     }
                 } else {
-                    scrolling
+                    stage
                 }
             }
             .environment(\.sduiLayout, layout)
@@ -183,11 +188,33 @@ struct SDUIPageBody: View {
         .focusScope(scope)
         .defaultFocus($focused, screen.focus.start)
         .sduiOnChange(of: focused) { now in
-            if let now { lastFocused = now }
+            // The Dock's own buttons aren't the page's: coming back from them lands where the page had focus.
+            if let now, !now.hasPrefix("dock.") { lastFocused = now }
+            if let now, now.hasPrefix("dock.") { return }
             // The focus engine picked the nearest card by geometry; the row remembers the one that had focus.
             if let instead = memory.moved(to: now, in: screen.focus) {
                 DispatchQueue.main.async { focused = instead }
             }
+        }
+        // The options key (the Play/Pause button of a remote, X or Square on a pad): the focused card's options, or the Dock.
+        .onPlayPauseCommand { options() }
+        .confirmationDialog(optionsFor?.label ?? "Options", isPresented: Binding(get: { optionsFor != nil }, set: { if !$0 { optionsFor = nil } }),
+                            titleVisibility: .visible, presenting: optionsFor) { card in
+            cardOptions(card)
+        }
+        .sheet(item: $dockField) { field in
+            SDUIChoiceList(field: field, layout: layout) { value in
+                dockField = nil
+                if value != field.value { Task { await store.set([field.id: value], center: center) } }
+            }
+            .environment(\.palette, palette)
+        }
+        .sheet(isPresented: $jumpOpen) {
+            TvJumpSheet(present: jumpLetters) { letter in
+                jumpOpen = false
+                Task { await jump(to: letter) }
+            }
+            .environment(\.palette, palette)
         }
         .sduiOnChange(of: screen.focus) { memory.prune(to: $0) }
         .onAppear {
@@ -196,6 +223,100 @@ struct SDUIPageBody: View {
         }
         #endif
     }
+
+    /// The page's scrolling sections and, on Apple TV, the Dock a page of filters has under them.
+    @ViewBuilder private var stage: some View {
+        #if os(tvOS)
+        VStack(spacing: 0) {
+            scrolling
+            if let items = dockItems {
+                TvDock(items: items, legend: .grid, focus: $focused, onBack: { focused = lastFocused ?? screen.focus.start })
+            }
+        }
+        #else
+        scrolling
+        #endif
+    }
+
+    #if os(tvOS)
+    private var filterBar: SDUIElement? { sections.first { $0.type == "FilterBar" } }
+    private var grid: SDUIElement? { sections.first { $0.type == "Grid" } }
+
+    /// Sort, each filter, Clear when anything is chosen, and Jump when the list is in title order: the page's own controls, in
+    /// the Dock (the filter bar stays as the first row of the Stage).
+    private var dockItems: [TvDockItem]? {
+        guard let bar = filterBar else { return nil }
+        var items = bar.filters.map { field in
+            TvDockItem(id: field.id, title: field.id == "sort" ? "Sort: " + field.summary.replacingOccurrences(of: "Sort: ", with: "") : field.summary,
+                       symbol: field.id == "sort" ? "arrow.up.arrow.down" : "line.3.horizontal.decrease",
+                       chosen: field.id != "sort" && !field.value.isEmpty) { dockField = field }
+        }
+        if bar.filters.contains(where: { $0.id != "sort" && !$0.value.isEmpty }) {
+            items.append(TvDockItem(id: "clear", title: "Clear", symbol: "xmark.circle") {
+                var none: [String: String] = [:]
+                for field in bar.filters where field.id != "sort" { none[field.id] = "" }
+                Task { await store.set(none, center: center) }
+            })
+        }
+        let sort = bar.filters.first { $0.id == "sort" }
+        if grid != nil, LetterJump.applies(sort: sort?.value ?? "", firstSort: sort?.options.first?.value) {
+            items.append(TvDockItem(id: "jump", title: "Jump", symbol: "textformat.abc") { jumpOpen = true })
+        }
+        items.append(TvDockItem(id: "top", title: "Top", symbol: "arrow.up.to.line") { focused = screen.focus.start })
+        return items
+    }
+
+    /// Which letters have titles among those loaded so far.
+    private var jumpLetters: Set<String>? {
+        guard let grid, !grid.hasMore else { return nil }
+        return Set(grid.children.map { LetterJump.key($0.shown("title").isEmpty ? $0.title : $0.shown("title")) })
+    }
+
+    /// Focus the first card at or after the letter, asking the server for more of the list until there is one (or it ends).
+    private func jump(to letter: String) async {
+        for _ in 0..<12 {
+            guard let grid = store.screen?.sections.first(where: { $0.type == "Grid" }) else { return }
+            let titles = grid.children.map { $0.shown("title").isEmpty ? $0.title : $0.shown("title") }
+            if let at = LetterJump.firstIndex(titles: titles, letter: letter), grid.children[at].isFocusable {
+                focused = grid.children[at].id
+                return
+            }
+            guard grid.hasMore else {
+                if let last = grid.children.last, last.isFocusable { focused = last.id }
+                return
+            }
+            await store.more(grid, center: center)
+        }
+    }
+
+    /// The options key: the focused card's own choices; with none focused, the Dock.
+    private func options() {
+        if let id = lastFocused ?? focused, !id.hasPrefix("dock."), let card = find(id, in: sections), card.action != nil {
+            optionsFor = card
+        } else if let first = dockItems?.first {
+            focused = "dock." + first.id
+        }
+    }
+
+    private func find(_ id: String, in nodes: [SDUIElement]) -> SDUIElement? {
+        for node in nodes {
+            if node.id == id { return node }
+            if let hit = find(id, in: node.children) { return hit }
+        }
+        return nil
+    }
+
+    @ViewBuilder private func cardOptions(_ card: SDUIElement) -> some View {
+        let actor = SDUIActor(model: model, center: center, store: store)
+        Button("Open") { actor.perform(card.action) }
+        let playId = card.props.text("playId")
+        if !playId.isEmpty, Int64(playId) != nil {
+            Button("Play") { actor.go(.play(item: playId, resume: true)) }
+            if card.progress != nil { Button("Play from the start") { actor.go(.play(item: playId, resume: false)) } }
+        }
+        Button("Cancel", role: .cancel) {}
+    }
+    #endif
 
     private var scrolling: some View {
         ScrollView {

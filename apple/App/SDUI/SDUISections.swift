@@ -79,6 +79,7 @@ struct SDUIShelfView: View {
     @EnvironmentObject private var store: SDUIPageStore
     @Environment(\.palette) private var palette
     @Environment(\.sduiLayout) private var layout
+    @Environment(\.sduiWidth) private var pageWidth
     let shelf: SDUIElement
 
     private var cardWidth: CGFloat { CGFloat(shelf.cardWidth > 0 ? shelf.cardWidth : 160) }
@@ -111,21 +112,38 @@ struct SDUIShelfView: View {
         .task(id: shelf.stateName) { await store.fill(shelf, center: center) }
     }
 
+    /// The width a card is drawn at. On Apple TV a row shows whole cards and a slice of the next (the tokens' tv.shelf.peek),
+    /// so the person can see there is more: the cards are the page's own size, nudged to the nearest that makes that
+    /// fit. Elsewhere they are exactly the size the page gave.
+    private var shownWidth: CGFloat {
+        #if os(tvOS)
+        guard layout.isTV, !isChips, pageWidth > 0 else { return cardWidth }
+        let available = Double(pageWidth - layout.margin)
+        let items = shelf.children.count + (shelf.seeAll.isEmpty ? 0 : 1)
+        let whole = TvGeometry.wholeCards(available: available, width: Double(cardWidth), gap: Double(layout.gap))
+        return CGFloat(TvGeometry.peekWidth(available: available, nominal: Double(cardWidth), gap: Double(layout.gap), hasMore: items > whole))
+        #else
+        return cardWidth
+        #endif
+    }
+
+    private var shownHeight: CGFloat { cardHeight * shownWidth / max(cardWidth, 1) }
+
     private var row: some View {
         ScrollView(.horizontal, showsIndicators: false) {
             LazyHStack(alignment: .top, spacing: layout.gap) {
                 ForEach(Array(shelf.children.enumerated()), id: \.element.id) { index, card in
-                    SDUICardView(card: card, width: cardWidth, height: cardHeight)
+                    SDUICardView(card: card, width: shownWidth, height: shownHeight)
                         .onAppear {
                             if shelf.hasMore, index >= shelf.children.count - perScreen { Task { await store.more(shelf, center: center) } }
                         }
                 }
                 if store.busy.contains(shelf.id) {
-                    SkeletonShape().frame(width: cardWidth, height: cardHeight)
+                    SkeletonShape().frame(width: shownWidth, height: shownHeight)
                 }
                 #if os(tvOS)
                 if !shelf.seeAll.isEmpty, !isChips {
-                    SDUISeeAllCard(width: cardWidth, height: cardHeight, title: shelf.shown("title")) { actor.open(route: shelf.seeAll) }
+                    SDUISeeAllCard(width: shownWidth, height: shownHeight, title: shelf.shown("title")) { actor.open(route: shelf.seeAll) }
                 }
                 #endif
             }

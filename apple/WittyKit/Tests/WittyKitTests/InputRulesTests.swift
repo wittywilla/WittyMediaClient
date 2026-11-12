@@ -216,3 +216,29 @@ final class TvGeometryTests: XCTestCase {
         XCTAssertGreaterThan(TvGeometry.focusRoom(cardWidth: 250), 8)
     }
 }
+
+final class LetterJumpTests: XCTestCase {
+    func testKeys() {
+        XCTAssertEqual(LetterJump.key("Alien"), "A")
+        XCTAssertEqual(LetterJump.key("  \u{00C9}t\u{00E9}"), "E")
+        XCTAssertEqual(LetterJump.key("2001: A Space Odyssey"), "#")
+        XCTAssertEqual(LetterJump.key("\"Crocodile\" Dundee"), "C")
+        XCTAssertEqual(LetterJump.key("!!!"), "#")
+        XCTAssertEqual(LetterJump.key(""), "#")
+    }
+
+    func testFirstAtOrAfter() {
+        let titles = ["12 Angry Men", "Alien", "Brazil", "Brick", "Dune", "Zodiac"]
+        XCTAssertEqual(LetterJump.firstIndex(titles: titles, letter: "#"), 0)
+        XCTAssertEqual(LetterJump.firstIndex(titles: titles, letter: "B"), 2)
+        XCTAssertEqual(LetterJump.firstIndex(titles: titles, letter: "C"), 4, "no C: the next title after it")
+        XCTAssertNil(LetterJump.firstIndex(titles: ["Alien"], letter: "Z"))
+    }
+
+    func testOnlyATitleSortCanBeJumped() {
+        XCTAssertTrue(LetterJump.applies(sort: "title", firstSort: nil))
+        XCTAssertTrue(LetterJump.applies(sort: "", firstSort: "title"))
+        XCTAssertFalse(LetterJump.applies(sort: "newest", firstSort: "title"))
+        XCTAssertFalse(LetterJump.applies(sort: "", firstSort: "added"))
+    }
+}

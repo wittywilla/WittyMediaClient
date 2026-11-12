@@ -82,6 +82,14 @@ public struct AppTheme: Equatable {
     public var text, textSecondary, textHint: ThemeColour
     public var accent, accentPressed, onAccent, accentText: ThemeColour
     public var danger, ok, warn, scrim: ThemeColour
+    /// The focus ring on a phone, a tablet and a computer: the theme's `focus` (the text colour where it has none).
+    public var focus: ThemeColour
+    /// The ring on a screen across the room, the text a little stronger for distance, and how strong the scrim behind a
+    /// hero's words is (docs/plans/DESIGN-2.md section 5, the theme's `tv`). Until the server says, the ring is the focus
+    /// colour, the text is the text, and the scrim is 0.72.
+    public var tvRing: ThemeColour
+    public var tvText: ThemeColour
+    public var heroScrim: Double
     /// The medium radius: buttons, fields, posters. See `radii`.
     public var radius: Double
 
@@ -96,6 +104,17 @@ public struct AppTheme: Equatable {
             && a.textSecondary == b.textSecondary && a.textHint == b.textHint && a.accent == b.accent
             && a.accentPressed == b.accentPressed && a.onAccent == b.onAccent && a.accentText == b.accentText
             && a.danger == b.danger && a.ok == b.ok && a.warn == b.warn && a.scrim == b.scrim && a.radius == b.radius
+            && a.focus == b.focus && a.tvRing == b.tvRing && a.tvText == b.tvText && a.heroScrim == b.heroScrim
+    }
+
+    /// This theme with the server's ten-foot colours in place of the derived ones; anything the server leaves out stays.
+    public func with(tv: ResolvedTheme.TVColours?) -> AppTheme {
+        guard let tv else { return self }
+        var out = self
+        if let c = tv.ringColor.flatMap(ThemeColour.init(hex:)) { out.tvRing = c }
+        if let c = tv.tvText.flatMap(ThemeColour.init(hex:)) { out.tvText = c }
+        if let v = tv.heroScrim, v >= 0, v <= 1 { out.heroScrim = v }
+        return out
     }
 }
 
@@ -230,6 +249,7 @@ public enum ThemeTranslator {
             }
         }()
         let radius = tokens.lengths?["radius"].flatMap { $0 >= 0 && $0 <= 40 ? $0 : nil } ?? 10
+        let focus = token("focus") ?? text
         return AppTheme(
             id: tokens.id,
             name: PlainWords.clean(tokens.name ?? "", limit: 40).isEmpty ? tokens.id : PlainWords.clean(tokens.name ?? "", limit: 40),
@@ -251,6 +271,10 @@ public enum ThemeTranslator {
             ok: token("ok") ?? base("ok"),
             warn: token("warn") ?? base("warn"),
             scrim: token("overlay") ?? ThemeColour.black.opacity(0.6),
+            focus: focus,
+            tvRing: token("tv-ring") ?? token("tvRing") ?? focus,
+            tvText: token("tv-text") ?? token("tvText") ?? text,
+            heroScrim: 0.72,
             radius: radius)
     }
 
@@ -413,14 +437,32 @@ public struct ResolvedTheme: Decodable, Equatable, Sendable {
         public var tokens: [String: String]
         public var shape: [String: Double]?
         public var type: ThemeType?
+        public var tv: TVColours?
 
-        enum CodingKeys: String, CodingKey { case id, tokens, shape, type }
+        enum CodingKeys: String, CodingKey { case id, tokens, shape, type, tv }
         public init(from decoder: Decoder) throws {
             let box = try decoder.container(keyedBy: CodingKeys.self)
             id = try? box.decodeIfPresent(String.self, forKey: .id)
             tokens = (try? box.decodeIfPresent([String: String].self, forKey: .tokens)) ?? [:]
             shape = try? box.decodeIfPresent([String: Double].self, forKey: .shape)
             type = try? box.decodeIfPresent(ThemeType.self, forKey: .type)
+            tv = try? box.decodeIfPresent(TVColours.self, forKey: .tv)
+        }
+    }
+
+    /// The theme's ten-foot colours (`tv` in the response; Design 2): the focus ring across a room, the strength of the
+    /// scrim behind a hero's words (0 to 1), and body text a little stronger for distance. Units are the app's own.
+    public struct TVColours: Decodable, Equatable, Sendable {
+        public var ringColor: String?
+        public var heroScrim: Double?
+        public var tvText: String?
+
+        enum CodingKeys: String, CodingKey { case ringColor, heroScrim, tvText }
+        public init(from decoder: Decoder) throws {
+            let box = try decoder.container(keyedBy: CodingKeys.self)
+            ringColor = try? box.decodeIfPresent(String.self, forKey: .ringColor)
+            heroScrim = try? box.decodeIfPresent(Double.self, forKey: .heroScrim)
+            tvText = try? box.decodeIfPresent(String.self, forKey: .tvText)
         }
     }
 
@@ -471,10 +513,11 @@ public struct ResolvedTheme: Decodable, Equatable, Sendable {
     public var shape: [String: Double]
     public var type: ThemeType?
     public var brand: Brand?
+    public var tv: TVColours?
     public var variants: [String: Look]
     public var etag: String?
 
-    enum CodingKeys: String, CodingKey { case id, scheme, tokens, shape, type, brand, variants, etag }
+    enum CodingKeys: String, CodingKey { case id, scheme, tokens, shape, type, brand, tv, variants, etag }
 
     public init(from decoder: Decoder) throws {
         let box = try decoder.container(keyedBy: CodingKeys.self)
@@ -484,6 +527,7 @@ public struct ResolvedTheme: Decodable, Equatable, Sendable {
         shape = (try? box.decodeIfPresent([String: Double].self, forKey: .shape)) ?? [:]
         type = try? box.decodeIfPresent(ThemeType.self, forKey: .type)
         brand = try? box.decodeIfPresent(Brand.self, forKey: .brand)
+        tv = try? box.decodeIfPresent(TVColours.self, forKey: .tv)
         variants = (try? box.decodeIfPresent([String: Look].self, forKey: .variants)) ?? [:]
         etag = try? box.decodeIfPresent(String.self, forKey: .etag)
     }
@@ -503,6 +547,7 @@ public struct ResolvedTheme: Decodable, Equatable, Sendable {
     /// The corners and type of the look drawn, falling back to the theme's own.
     public func shape(dark: Bool) -> [String: Double] { look(dark: dark)?.shape ?? shape }
     public func typefaces(dark: Bool) -> ThemeType? { look(dark: dark)?.type ?? type }
+    public func tvColours(dark: Bool) -> TVColours? { look(dark: dark)?.tv ?? tv }
 }
 
 /// A profile's own colours: `GET`, `PUT`, `DELETE /theme/personal`.

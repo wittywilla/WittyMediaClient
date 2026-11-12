@@ -36,8 +36,9 @@ struct SDUICardView: View {
             if shape == "chip" {
                 chip
             } else {
+                // The ring is drawn around the picture itself (`picture`), the lift is the whole card's.
                 Button { actor.perform(card.action) } label: { content }
-                    .tileStyle()
+                    .tileStyle(ring: false)
                     .disabled(card.action == nil)
             }
         }
@@ -47,12 +48,13 @@ struct SDUICardView: View {
         .accessibilityLabel(card.label)
         .accessibilityAddTraits(.isButton)
         .accessibilityIdentifier("sdui.card." + card.id)
-        #if os(iOS) || os(visionOS)
+        // A long press on a touch screen; on Apple TV, a long press of the remote's centre (the options key).
+        #if os(iOS) || os(visionOS) || os(tvOS)
         .contextMenu { menu }
         #endif
     }
 
-    /// The card's own menu on a touch screen: what a press does, and playing it where it can be played.
+    /// The card's own menu on a touch screen and on a long press of a TV remote: what a press does, and playing it where it can be played.
     @ViewBuilder private var menu: some View {
         if card.action != nil {
             Button { actor.perform(card.action) } label: { Label("Open", systemImage: "arrow.up.forward.square") }
@@ -86,7 +88,7 @@ struct SDUICardView: View {
                 .background(Capsule().fill(palette.card))
         }
         #if os(tvOS)
-        .buttonStyle(.card)
+        .buttonStyle(TvTileStyle(radius: 33))
         #else
         .buttonStyle(.plain)
         #endif
@@ -156,6 +158,7 @@ struct SDUICardView: View {
                 }
             }
             .clipShape(clip)
+            .tvFocusRing(radius: isCircle ? 999 : draw.radius("Card", style: style))
     }
 
     private func plate(_ words: String) -> some View {
@@ -205,6 +208,7 @@ struct SDUICardView: View {
                     if shows("progress"), let percent = card.progress { ProgressStrip(fraction: Double(percent) / 100).padding(layout.sp("xs")) }
                 }
                 .clipShape(RoundedRectangle(cornerRadius: draw.radius("Card", style: style), style: .continuous))
+                .tvFocusRing(radius: draw.radius("Card", style: style))
             HStack(spacing: layout.sp("xs")) {
                 if shows("number") { Text(card.shown("number")).foregroundStyle(palette.textSecondary) }
                 if shows("title") { Text(card.shown("title")).foregroundStyle(palette.text) }
@@ -252,6 +256,7 @@ struct SDUICardView: View {
                 .padding(layout.sp("s"))
             }
             .clipShape(RoundedRectangle(cornerRadius: draw.radius("Card", style: style), style: .continuous))
+            .tvFocusRing(radius: draw.radius("Card", style: style))
             .contentShape(Rectangle())
     }
 }
