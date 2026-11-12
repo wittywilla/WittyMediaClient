@@ -497,14 +497,67 @@ public struct ResolvedTheme: Decodable, Equatable, Sendable {
         }
     }
 
+    /// How one part of the server's name is coloured (the server's docs/THEMES.md, The server's name): the theme's text colour, its
+    /// accent, any theme colour token, a fixed colour, or a gradient of two to four fixed stops across the part.
+    public struct BrandColour: Decodable, Equatable, Sendable {
+        public var kind: String
+        public var token: String?
+        public var hex: String?
+        public var stops: [String]?
+        /// A gradient's direction in degrees (90: left to right).
+        public var angle: Int?
+
+        public init(kind: String, token: String? = nil, hex: String? = nil, stops: [String]? = nil, angle: Int? = nil) {
+            self.kind = kind
+            self.token = token
+            self.hex = hex
+            self.stops = stops
+            self.angle = angle
+        }
+
+        /// The colour to draw with: one colour, or the stops of a gradient. `colors` are the theme's tokens; `fg` and `accent` stand in for
+        /// the kinds that follow the theme and for anything that can't be read.
+        public func resolved(colors: [String: String], fg: ThemeColour, accent: ThemeColour) -> (solid: ThemeColour, stops: [ThemeColour]) {
+            switch kind {
+            case "accent": return (accent, [])
+            case "token":
+                let c = token.flatMap { colors[$0] }.flatMap(ThemeColour.init(hex:)) ?? fg
+                return (c, [])
+            case "static":
+                return (hex.flatMap(ThemeColour.init(hex:)) ?? fg, [])
+            case "gradient":
+                let list = (stops ?? []).compactMap(ThemeColour.init(hex:))
+                return (list.first ?? fg, list.count >= 2 ? list : [])
+            default: return (fg, [])
+            }
+        }
+    }
+
+    /// The badge for small spaces (the rail's header): what it holds, and the characters it draws.
+    public struct Mark: Decodable, Equatable, Sendable {
+        public var kind: String?
+        public var text: String?
+        public var imageUrl: String?
+        public var shown: String?
+
+        /// The characters for a badge with no picture: what the server says, else the first letter of the name.
+        public func characters(name: String) -> String {
+            if let shown, !shown.isEmpty { return shown }
+            return name.first.map { String($0).uppercased() } ?? "W"
+        }
+    }
+
     public struct Brand: Decodable, Equatable, Sendable {
         public struct Part: Decodable, Equatable, Sendable {
             public var text: String
             public var accent: Bool?
+            public var color: BrandColour?
+            public var bold: Bool?
         }
         public var parts: [Part]
         public var token: String?
         public var color: String?
+        public var mark: Mark?
     }
 
     public var id: String?

@@ -9,16 +9,32 @@ import WittyKit
 // style of its own; against a server without layout options it is the floating bar, as before. Apple TV's top menu
 // and side menu are in TvTabs.swift and TvSideMenu.swift.
 
-/// The menu's style for the frame here: the navigation's, where it names one this device draws.
+/// The menu's style for the frame here, from the catalogue's `navStyles` the server's shell names (docs/SDUI.md, Experiences). The frame
+/// is drawn from the style, never from which experience is chosen: bars across the top share one layout and differ in finish.
 enum FrameNav: String {
-    case bottomTabs, topTabs, sidebar, rail
+    case bottomTabs, topTabs, sidebar, rail, railDrawer, ornament
+    /// How a bar across the top is finished, for the styles that are one.
+    enum Finish { case plain, glass, cable, bevel, teleKeys, crossbar }
 
     static func of(_ shell: SDUIShell?) -> FrameNav {
         switch shell?.nav {
-        case "topTabs": return .topTabs
+        case "topTabs", "floatingGlassBar", "cableBar", "bevelBar", "teleKeys", "crossbar": return .topTabs
         case "sidebar": return .sidebar
         case "rail": return .rail
+        case "railDrawer": return .railDrawer
+        case "ornamentTabs": return .ornament
         default: return .bottomTabs
+        }
+    }
+
+    static func finish(_ shell: SDUIShell?) -> Finish {
+        switch shell?.nav {
+        case "floatingGlassBar": return .glass
+        case "cableBar": return .cable
+        case "bevelBar": return .bevel
+        case "teleKeys": return .teleKeys
+        case "crossbar": return .crossbar
+        default: return .plain
         }
     }
 
@@ -81,12 +97,15 @@ struct SideMenu: View {
     @Environment(\.palette) private var palette
     let width: CGFloat
     let iconsOnly: Bool
+    /// A rail that can be kept open: this is its pin (shown while it is open).
+    var pinned: Binding<Bool>?
 
     var body: some View {
         let list = FrameEntries(center: center, model: model)
         VStack(alignment: iconsOnly ? .center : .leading, spacing: 2) {
             if iconsOnly {
-                BrandMark(size: 32).padding(.vertical, Tokens.Space.s3)
+                // The mark in a square badge, centred: never a bare letter.
+                BrandBadge(size: 48).padding(.vertical, Tokens.Space.s3)
             } else {
                 BrandLockup().padding(.horizontal, Tokens.Space.s3).padding(.vertical, Tokens.Space.s3)
             }
@@ -123,6 +142,12 @@ struct SideMenu: View {
                 }
                 .padding(.horizontal, iconsOnly ? 0 : Tokens.Space.s2)
             }
+            if let pinned, !iconsOnly {
+                Toggle(isOn: pinned) { Label("Keep menu open", systemImage: pinned.wrappedValue ? "pin.fill" : "pin") }
+                    .toggleStyle(.button)
+                    .padding(Tokens.Space.s3)
+                    .accessibilityIdentifier("frame.pin")
+            }
         }
         .frame(width: width)
         .frame(maxHeight: .infinity, alignment: .top)
@@ -130,6 +155,24 @@ struct SideMenu: View {
         .overlay(alignment: .trailing) { Rectangle().fill(palette.border).frame(width: 1).ignoresSafeArea() }
         .accessibilityElement(children: .contain)
         .accessibilityLabel("Menu")
+    }
+}
+
+/// The rail: icons and the mark's badge while closed, the full menu (names, the brand lockup, Keep menu open) when it has the
+/// pointer, focus or a pin. The widths are the shell's (`size` closed, `open` open).
+struct RailMenu: View {
+    let closed: CGFloat
+    let open: CGFloat
+    @AppStorage("frame.railPinned") private var pinned = false
+    @State private var hovering = false
+
+    var body: some View {
+        let isOpen = pinned || hovering
+        SideMenu(width: isOpen ? open : closed, iconsOnly: !isOpen, pinned: $pinned)
+            .animation(.easeOut(duration: DesignTokens.Motion.screen / 1000), value: isOpen)
+            .onHover { hovering = $0 }
+            // The options key opens it for a keyboard.
+            .background { Button("") { hovering.toggle() }.keyboardShortcut(".", modifiers: []).opacity(0).accessibilityHidden(true) }
     }
 }
 
@@ -143,23 +186,64 @@ struct TopTabsBar: View {
     let height: CGFloat
     let overlay: Bool
     var solid = 1.0
+    var finish = FrameNav.Finish.plain
+
+    /// How the chosen tab is marked, by the bar's finish: a tinted pill; a gloss pill; a flat accent band (cable); a bevelled key;
+    /// a colour-coded key (teletext); or a large icon over its name (crossbar).
+    @ViewBuilder private func chosenBackground(_ here: Bool, index: Int) -> some View {
+        let keys = [Color.red, Color.green, Color.yellow, Color.cyan]
+        switch finish {
+        case .plain:
+            Capsule().fill(here ? palette.accent.opacity(0.16) : .clear)
+        case .glass:
+            Capsule().fill(here ? AnyShapeStyle(LinearGradient(colors: [.white.opacity(0.45), palette.accent.opacity(0.35)], startPoint: .top, endPoint: .bottom)) : AnyShapeStyle(Color.clear))
+                .overlay(Capsule().strokeBorder(here ? .white.opacity(0.6) : .clear, lineWidth: 1))
+        case .cable:
+            Rectangle().fill(here ? palette.accent : palette.card)
+        case .bevel:
+            RoundedRectangle(cornerRadius: Tokens.Radius.sm, style: .continuous)
+                .fill(LinearGradient(colors: here ? [palette.accent.opacity(0.9), palette.accent] : [palette.raised, palette.card], startPoint: .top, endPoint: .bottom))
+                .overlay(RoundedRectangle(cornerRadius: Tokens.Radius.sm, style: .continuous).strokeBorder(.white.opacity(0.35), lineWidth: 1))
+        case .teleKeys:
+            Rectangle().fill(keys[index % keys.count].opacity(here ? 1 : 0.55))
+        case .crossbar:
+            Capsule().fill(here ? palette.accent.opacity(0.2) : .clear)
+        }
+    }
+
+    private func chosenText(_ here: Bool) -> Color {
+        switch finish {
+        case .cable: return here ? palette.onAccent : palette.text
+        case .teleKeys: return .black
+        default: return here ? palette.text : palette.textSecondary
+        }
+    }
 
     var body: some View {
         let list = FrameEntries(center: center, model: model)
         ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: Tokens.Space.s1) {
-                ForEach(list.entries) { entry in
+                ForEach(Array(list.entries.enumerated()), id: \.element.id) { index, entry in
                     let here = list.isCurrent(entry)
                     Button { list.open(entry) } label: {
-                        HStack(spacing: 6) {
-                            Image(systemName: list.symbol(entry)).font(.system(size: 14, weight: .medium)).accessibilityHidden(true)
-                            Text(list.label(entry)).font(.system(size: 15, weight: here ? .semibold : .medium)).lineLimit(1)
+                        Group {
+                            if finish == .crossbar {
+                                VStack(spacing: 2) {
+                                    Image(systemName: list.symbol(entry)).font(.system(size: 20, weight: .medium)).accessibilityHidden(true)
+                                    Text(list.label(entry)).font(.system(size: 11, weight: here ? .semibold : .medium)).lineLimit(1)
+                                }
+                            } else {
+                                HStack(spacing: 6) {
+                                    Image(systemName: list.symbol(entry)).font(.system(size: 14, weight: .medium)).accessibilityHidden(true)
+                                    Text(list.label(entry)).font(.system(size: 15, weight: here ? .semibold : .medium)).lineLimit(1)
+                                }
+                            }
                         }
-                        .foregroundStyle(here ? palette.text : palette.textSecondary)
+                        .foregroundStyle(chosenText(here))
                         .padding(.horizontal, Tokens.Space.s3)
                         .frame(minHeight: max(height - 12, 32))
-                        .background(Capsule().fill(here ? palette.accent.opacity(0.16) : .clear))
-                        .contentShape(Capsule())
+                        .background(chosenBackground(here, index: index))
+                        .contentShape(Rectangle())
                     }
                     .buttonStyle(FramePressStyle())
                     .accessibilityAddTraits(here ? [.isSelected] : [])
@@ -176,10 +260,22 @@ struct TopTabsBar: View {
                         .opacity(1 - solid)
                 }
                 ZStack {
-                    Rectangle().fill(.regularMaterial)
-                    palette.background.opacity(0.85)
+                    switch finish {
+                    case .glass:
+                        Rectangle().fill(.regularMaterial)
+                        LinearGradient(colors: [.white.opacity(0.35), palette.accent.opacity(0.15)], startPoint: .top, endPoint: .bottom)
+                    case .cable:
+                        palette.panel
+                    case .bevel:
+                        LinearGradient(colors: [palette.raised, palette.panel], startPoint: .top, endPoint: .bottom)
+                    case .teleKeys:
+                        Color.black
+                    default:
+                        Rectangle().fill(.regularMaterial)
+                        palette.background.opacity(0.85)
+                    }
                 }
-                .overlay(alignment: .bottom) { Rectangle().fill(palette.border).frame(height: 1) }
+                .overlay(alignment: .bottom) { Rectangle().fill(finish == .bevel ? Color.white.opacity(0.35) : palette.border).frame(height: 1) }
                 .opacity(overlay ? solid : 1)
             }
             .ignoresSafeArea(edges: .top)
@@ -195,6 +291,7 @@ struct TopTabsSlot: ViewModifier {
     let height: CGFloat
     let overlay: Bool
     let shown: Bool
+    var finish = FrameNav.Finish.plain
     @State private var solid = 0.0
 
     func body(content: Content) -> some View {
@@ -203,11 +300,11 @@ struct TopTabsSlot: ViewModifier {
         } else if overlay {
             content
                 .stripSolidity($solid)
-                .overlay(alignment: .top) { if shown { TopTabsBar(height: height, overlay: true, solid: solid) } }
+                .overlay(alignment: .top) { if shown { TopTabsBar(height: height, overlay: true, solid: solid, finish: finish) } }
         } else {
             // Above the stack, not an inset of it: a page pushed onto it lays out below the tabs, its Back with it.
             VStack(spacing: 0) {
-                if shown { TopTabsBar(height: height, overlay: false) }
+                if shown { TopTabsBar(height: height, overlay: false, finish: finish) }
                 // The clock's room is the tabs' now: the pages start right under them.
                 content.ignoresSafeArea(.container, edges: shown ? .top : [])
             }

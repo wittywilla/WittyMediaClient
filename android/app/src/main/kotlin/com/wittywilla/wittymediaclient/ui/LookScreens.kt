@@ -5,6 +5,9 @@ package com.wittywilla.wittymediaclient.ui
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
@@ -77,13 +80,19 @@ fun FirstLookScreen(nav: Nav, s: Map<String, String>) {
     val state = nav.experienceState
     val theme = nav.themeList?.themes.orEmpty()
     BackHandler(enabled = step == 1) { step = 0 }
+    // A layer of its own, so the remote and keys stay in it and nothing under it takes them.
+    androidx.compose.ui.window.Dialog(
+        onDismissRequest = { if (step == 1) step = 0 },
+        properties = androidx.compose.ui.window.DialogProperties(usePlatformDefaultWidth = false, decorFitsSystemWindows = false),
+    ) {
+    androidx.compose.foundation.layout.Box(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) {
     SignInLayout(
         onBack = if (step == 1) ({ step = 0 }) else null,
         words = {
             SignInHeading(s[if (step == 0) "firstLookTitle" else "firstThemeTitle"].orEmpty(), detail = s[if (step == 0) "firstLookDetail" else "firstThemeDetail"].orEmpty())
         },
         actions = {
-            Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Column(Modifier.heightIn(max = 420.dp).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 if (step == 0) {
                     list.forEachIndexed { i, e ->
                         val on = (state?.choice?.chosen?.ifEmpty { state.choice.current }) == e.id
@@ -91,16 +100,18 @@ fun FirstLookScreen(nav: Nav, s: Map<String, String>) {
                             if (busy) return@WittyButton
                             busy = true
                             scope.launch { nav.chooseExperience(e.id); busy = false }
-                        }, kind = if (on) ButtonKind.Primary else ButtonKind.Secondary, requestFocus = i == 0 && state?.choice?.current.isNullOrEmpty(), focusKey = "first-" + e.id)
+                        }, kind = if (on) ButtonKind.Primary else ButtonKind.Secondary, takeFocus = i == 0, focusKey = "first-" + e.id)
                     }
                     WittyButton(s["next"].orEmpty(), { step = 1 }, kind = ButtonKind.Primary, tall = true, focusKey = "first-next")
                 } else {
                     theme.forEachIndexed { i, t ->
-                        WittyButton(t.shownName, { nav.chooseTheme(t.id) }, kind = if (nav.themeChoice == t.id) ButtonKind.Primary else ButtonKind.Secondary, requestFocus = i == 0, focusKey = "first-theme-" + t.id)
+                        WittyButton(t.shownName, { nav.chooseTheme(t.id) }, kind = if (nav.themeChoice == t.id) ButtonKind.Primary else ButtonKind.Secondary, takeFocus = i == 0, focusKey = "first-theme-" + t.id)
                     }
                     WittyButton(s["done"].orEmpty(), { nav.finishFirstLook() }, kind = ButtonKind.Primary, tall = true, focusKey = "first-done")
                 }
             }
         },
     )
+    }
+    }
 }

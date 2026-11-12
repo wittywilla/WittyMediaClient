@@ -320,6 +320,8 @@ struct ThemeStyle: Equatable {
     var shape: [String: Double]
     var type: ResolvedTheme.ThemeType?
     var brand: ResolvedTheme.Brand?
+    /// The theme's colour tokens, for what a part of the server's name names by token.
+    var colors: [String: String] = [:]
 }
 
 /// How a server-driven node is drawn from the theme (the server's docs/THEMES.md, SDUI tokens): a component's rounded
