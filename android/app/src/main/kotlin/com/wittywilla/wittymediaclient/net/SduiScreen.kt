@@ -44,10 +44,10 @@ object SduiCardStyles {
         style("photo", "square", "1/1", 0, 0),
         style("channel", "landscape", "16/9", 1, 2, "number", "title", "now", "next", "progress"),
         style("tile", "landscape", "16/9", 1, 0, "title", "count"),
-        style("chip", "chip", "", 1, 0, "title"),
         style("plate", "poster", "2/3", 2, 1, "title", "subtitle", "badges"),
         style("block", "landscape", "16/9", 2, 1, "title", "subtitle"),
         style("logo", "landscape", "16/9", 1, 0, "number", "title"),
+        style("chip", "chip", "", 1, 0, "title"),
     )
 
     @Volatile

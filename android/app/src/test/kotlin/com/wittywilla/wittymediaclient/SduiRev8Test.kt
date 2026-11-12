@@ -67,7 +67,7 @@ class SduiRev8Test {
     @Test
     fun cardStylesComeFromTheServedCatalogue() {
         try {
-            SduiCardStyles.use(listOf(SduiCardStyleSpec("person", "circle", "1/1", listOf("title"), 1, 0, badgeTones = mapOf("Away" to "warn"))))
+            SduiCardStyles.use(listOf(SduiCardStyleSpec("person", "circle", "1/1", shows = listOf("title"), titleLines = 1, subtitleLines = 0, badgeTones = mapOf("Away" to "warn"))))
             assertEquals(listOf("title"), SduiCardStyles.named("person")!!.shows)
             assertEquals("warn", SduiCardStyles.toneOf("person", "Away"))
             assertEquals("a style the server doesn't send is unknown", null, SduiCardStyles.named("poster"))
@@ -81,7 +81,7 @@ class SduiRev8Test {
     fun presenceTonesFollowTheBadge() {
         val tones = mapOf("Playing" to "ok", "Online" to "ok", "Away" to "warn", "Offline" to "muted")
         try {
-            SduiCardStyles.use(SduiCardStyles.BUILT_IN.map { SduiCardStyleSpec(it.style, it.shape, it.aspect, it.shows, it.titleLines, it.subtitleLines, badgeTones = if (it.style == "person") tones else emptyMap()) })
+            SduiCardStyles.use(SduiCardStyles.BUILT_IN.map { SduiCardStyleSpec(it.style, it.shape, it.aspect, shows = it.shows, titleLines = it.titleLines, subtitleLines = it.subtitleLines, badgeTones = if (it.style == "person") tones else emptyMap()) })
             assertEquals("ok", SduiPresence.tone("person", listOf("Playing")))
             assertEquals("warn", SduiPresence.tone("person", listOf("Away")))
             assertEquals("muted", SduiPresence.tone("person", listOf("Offline")))
@@ -96,6 +96,12 @@ class SduiRev8Test {
 
     @Test
     fun commandParametersAreTyped() {
+        val before = SduiCommands.serverRevision
+        SduiCommands.serverRevision = 16
+        try { commandParameters() } finally { SduiCommands.serverRevision = before }
+    }
+
+    private fun commandParameters() {
         val online = spec("wittyplay.online.set", "/api/games/online/me", """{"sharePlaying":"{sharePlaying}","appearOnline":"{appearOnline}"}""", "sharePlaying" to "bool", "appearOnline" to "bool")
         val a = action("""{"type":"command","op":"wittyplay.online.set","params":{"sharePlaying":true,"appearOnline":false}}""")
         assertEquals("""{"sharePlaying":true,"appearOnline":false}""", SduiCommands.request(online, a.item, a.params)!!.body)
