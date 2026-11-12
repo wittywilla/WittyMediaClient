@@ -129,6 +129,7 @@ fun SduiNode(view: SduiView, parent: SduiView?, topLevel: Boolean = false) {
         "NativeView" -> SduiNativeView(view)
         "Dock" -> SduiDockBar(view, side)
         "KeyLegend" -> Box(Modifier.padding(horizontal = side)) { KeyLegendRow() }
+        "Credits" -> SduiCredits(view, side)
         else -> SduiStack(view, side)
     }
 }
@@ -532,6 +533,7 @@ fun SduiDetailHeader(view: SduiView) {
                     Box(Modifier.matchParentSize().background(Brush.verticalGradient(0.55f to Color.Transparent, 1f to page)))
                 }
                 Row(Modifier.padding(start = side, end = side, top = env.space("m"), bottom = env.space("s")), horizontalArrangement = Arrangement.spacedBy(env.space("m")), verticalAlignment = Alignment.Bottom) {
+                    if (poster == null && p.str("kind") == "person") PersonInitials(view.text["title"].orEmpty(), env.pt(300))
                     if (poster != null && (p.str("layout") == "poster" || backdrop == null)) {
                         val shape = headerShape(poster, p.str("kind"))
                         val posterWide = env.pt(if (shape > 1f) 480 else 300)
@@ -567,6 +569,7 @@ fun SduiDetailHeader(view: SduiView) {
                 // A tablet has the poster beside the words; so does a phone when the page asks for it or there is no backdrop.
                 val showPoster = poster != null && (env.tablet || p.str("layout") == "poster" || backdrop == null || compact)
                 Row(Modifier.padding(horizontal = side).padding(top = env.space("s")), horizontalArrangement = Arrangement.spacedBy(env.space("m"))) {
+                    if (poster == null && p.str("kind") == "person") PersonInitials(view.text["title"].orEmpty(), if (env.tablet) 160.dp else 104.dp)
                     if (showPoster && poster != null) {
                         val shape = headerShape(poster, p.str("kind"))
                         // An episode's still is wide: it gets the room a poster's height would have had.
@@ -1189,4 +1192,128 @@ fun SduiSearchBox(view: SduiView, modifier: Modifier = Modifier) {
         keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search, autoCorrectEnabled = false),
         modifier = modifier.fillMaxWidth().widthIn(max = if (env.tv) env.pt(1200) else 560.dp).focusRequester(requester).tvLeavable().semantics { contentDescription = view.label },
     )
+}
+
+// MARK: Credits
+
+// Cast and crew (docs/SDUI.md, Credits; Design 2's item page): the cast as a row of round portraits with the part each
+// played (initials without a photo), ending in "Show all cast"; then the crew as one row of "Job · Name" chips ending in
+// "Show all credits". Either asks for the rest (props.more.url) and the section becomes "Cast and crew by department":
+// the cast, the guest stars, then each department as a heading and its chips. Each person opens their page. On a TV the
+// chip rows scroll sideways under focus; on a phone and tablet they wrap.
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+fun SduiCredits(view: SduiView, side: Dp) {
+    val env = LocalSdui.current
+    val scheme = MaterialTheme.colorScheme
+    val groups = view.props.objects("groups")
+    var expanded by rememberSaveable(view.id) { mutableStateOf(false) }
+    val more = view.props.child("more")
+    fun showAll() {
+        expanded = true
+        if (view.hasMore) env.more(view.id, true)
+    }
+    @Composable
+    fun Heading(words: String, top: Dp) = Text(
+        words, color = scheme.onSurfaceVariant, fontSize = env.size("caption"), fontWeight = FontWeight.SemiBold,
+        modifier = Modifier.padding(horizontal = side).padding(top = top, bottom = env.space("xs")).semantics { heading() },
+    )
+    @Composable
+    fun Chip(words: String, spoken: String, key: String, onClick: () -> Unit) = Pressable(
+        onClick, shape = Radius.FULL, fill = scheme.surface, label = spoken, focusKey = key.takeIf { env.tv }, ring = env.tv,
+    ) {
+        Text(words, color = scheme.onBackground, fontSize = env.size("body"), maxLines = 1, modifier = Modifier.padding(horizontal = if (env.tv) env.pt(24) else 12.dp, vertical = if (env.tv) env.pt(12) else 8.dp))
+    }
+    @Composable
+    fun Chips(label: String, content: @Composable () -> Unit) {
+        if (env.tv) SduiRowScroll {
+            Row(Modifier.remoteRow().fillMaxWidth().horizontalScroll(rememberScrollState()).padding(horizontal = side).semantics { contentDescription = label }, horizontalArrangement = Arrangement.spacedBy(env.pt(16))) { content() }
+        } else FlowRow(
+            Modifier.fillMaxWidth().padding(horizontal = side).semantics { contentDescription = label },
+            horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp),
+        ) { content() }
+    }
+    @Composable
+    fun Person(person: SduiView, withJob: Boolean) {
+        val name = person.props.str("title")
+        val job = person.props.str("subtitle")
+        val words = if (withJob && job.isNotEmpty()) "$job · $name" else name
+        Chip(words, if (job.isEmpty()) name else "$name, $job", person.id) { env.act(person.node.action) }
+    }
+    @Composable
+    fun Portraits(people: List<SduiView>, label: String, tail: String?) {
+        val wide = env.pt(view.cardWidth.takeIf { it > 0 } ?: 140)
+        val ring = if (env.tv) LocalMetrics.current.focusRing else 0.dp
+        SduiRowScroll { LazyRow(
+            (if (env.tv) Modifier.remoteRow() else Modifier).fillMaxWidth().semantics { contentDescription = label },
+            contentPadding = PaddingValues(start = (side - ring).coerceAtLeast(0.dp), end = (side - ring).coerceAtLeast(0.dp), top = if (env.tv) env.pt(12) else 0.dp, bottom = if (env.tv) env.pt(12) else 0.dp),
+            horizontalArrangement = Arrangement.spacedBy((env.pt(if (env.tv) 40 else env.layout.cardGap) - ring * 2).coerceAtLeast(0.dp)),
+        ) {
+            items(people, key = { it.id }, contentType = { "person" }) { person -> SduiCard(person, view, wide) }
+            if (tail != null) item(key = "~show-all-cast", contentType = "show-all") {
+                Pressable(::showAll, Modifier.width(wide), shape = CircleShape, fill = scheme.surface, label = tail, focusKey = view.id + "~show-all-cast") {
+                    Box(Modifier.size(wide), contentAlignment = Alignment.Center) { Text(tail, color = scheme.onSurface, fontSize = env.size("caption"), fontWeight = FontWeight.Medium, textAlign = TextAlign.Center, modifier = Modifier.padding(8.dp)) }
+                }
+            }
+        } }
+    }
+
+    Column(Modifier.fillMaxWidth().semantics { contentDescription = view.label.ifEmpty { "Cast and crew" } }) {
+        val title = if (expanded) "Cast and crew by department" else view.props.str("title").ifEmpty { "Cast and crew" }
+        Text(title, color = scheme.onBackground, fontSize = env.size("heading"), fontWeight = FontWeight.SemiBold,
+            modifier = Modifier.padding(horizontal = side).padding(bottom = env.space("xs")).semantics { heading() })
+        when {
+            view.deferred -> {
+                LaunchedEffect(view.id) { env.more(view.id, false) }
+                SduiPlaceholderRow(view, side, view.placeholders)
+            }
+            view.failed -> SduiFailedLine(view, side)
+            view.empty || view.children.isEmpty() -> SduiEmptyLine(view, side)
+            else -> {
+                val byGroup = view.children.groupBy { it.props.str("group") }
+                val order = groups.map { it.str("id") }.ifEmpty { byGroup.keys.toList() }
+                fun isCast(id: String) = groups.firstOrNull { it.str("id") == id }?.str("role")?.let { it == "cast" || it == "guests" } ?: (id == "cast" || id == "guests")
+                fun labelOf(id: String) = groups.firstOrNull { it.str("id") == id }?.str("label").orEmpty().ifEmpty { id.replaceFirstChar { it.uppercase() } }
+                val cast = byGroup["cast"].orEmpty()
+                val crewIds = order.filter { !isCast(it) && byGroup[it].orEmpty().isNotEmpty() }
+                if (!expanded) {
+                    if (cast.isNotEmpty()) Portraits(cast, "Cast", if (view.hasMore) "Show all cast" else null)
+                    val crew = crewIds.flatMap { byGroup[it].orEmpty() }
+                    if (crew.isNotEmpty() || view.hasMore || byGroup.keys.any { it != "cast" }) {
+                        Heading("Crew", env.space("s"))
+                        Chips("Crew") {
+                            crew.forEach { Person(it, withJob = true) }
+                            val words = more?.str("label").orEmpty().ifEmpty { "Show all" }.let { if (it == "Show all") "Show all credits" else it }
+                            Chip(words, words, view.id + "~show-all") { showAll() }
+                        }
+                    }
+                } else {
+                    var first = true
+                    order.forEach { id ->
+                        val people = byGroup[id].orEmpty()
+                        if (people.isEmpty()) return@forEach
+                        if (isCast(id)) {
+                            Heading(labelOf(id), if (first) 0.dp else env.space("s"))
+                            Portraits(people, labelOf(id), null)
+                        } else {
+                            Heading(labelOf(id), if (first) 0.dp else env.space("s"))
+                            Chips(labelOf(id)) { people.forEach { Person(it, withJob = true) } }
+                        }
+                        first = false
+                    }
+                    if (view.id in env.loading) SduiPlaceholderRow(view, side, 3)
+                }
+            }
+        }
+    }
+}
+
+// A person without a photo, on their own page: their initials in a circle on the page's third background, hidden from
+// assistive technology (their name is read as the page's title).
+@Composable
+private fun PersonInitials(name: String, size: Dp) {
+    val env = LocalSdui.current
+    Box(Modifier.size(size).clip(CircleShape).background(MaterialTheme.colorScheme.surfaceVariant).clearAndSetSemantics { }, contentAlignment = Alignment.Center) {
+        Text(initials(name), color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = env.size("pageTitle"), fontWeight = FontWeight.SemiBold)
+    }
 }

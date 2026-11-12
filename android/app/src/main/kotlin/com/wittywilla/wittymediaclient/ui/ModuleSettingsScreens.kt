@@ -176,38 +176,3 @@ private fun rowsFor(
     }
 }
 
-// You, This device, Layout: what this profile may choose on this device (the navigation's `layouts`), or the server's
-// own. Choosing asks for the menu and every page again in it.
-@Composable
-fun LayoutScreen(nav: Nav, s: Map<String, String>) {
-    val scope = rememberCoroutineScope()
-    var problem by remember { mutableStateOf("") }
-    var busy by remember { mutableStateOf(false) }
-    val layouts = nav.sduiNav?.layouts
-    SettingsPage(nav, s["rowLayout"].orEmpty(), s["layoutHint"].orEmpty()) {
-        if (layouts == null || layouts.options.isEmpty()) {
-            Note(s["layoutNotHere"].orEmpty())
-            return@SettingsPage
-        }
-        fun pick(value: String?) {
-            if (busy) return
-            busy = true
-            problem = ""
-            scope.launch {
-                nav.chooseLayout(value)?.let { problem = it }
-                busy = false
-            }
-        }
-        val following = layouts.chosen.isEmpty()
-        val currentName = layouts.options.firstOrNull { it.value == layouts.current }?.label ?: layouts.current
-        GroupedList("", listOf(
-            GroupRow(fill(s["layoutFollowNow"], "name" to currentName), onClick = { if (!following) pick(null) }, selected = following, chevron = false,
-                focusKey = "layout-follow", requestFocus = following, trailing = if (following) ({ Text("✓", color = MaterialTheme.colorScheme.primary) }) else null),
-        ) + layouts.options.map { option ->
-            val on = !following && layouts.chosen == option.value
-            GroupRow(option.label, onClick = { if (!on) pick(option.value) }, selected = on, chevron = false, focusKey = "layout-${option.value}", requestFocus = on,
-                trailing = if (on) ({ Text("✓", color = MaterialTheme.colorScheme.primary) }) else null)
-        })
-        if (problem.isNotEmpty() || busy) Note(problem, busy = busy)
-    }
-}

@@ -399,6 +399,8 @@ fun aspectOf(text: String): Float {
 @Serializable
 data class SduiShell(
     val layout: String = "",
+    // Design 2's experience (lumen, rail, stage, aero, classic…), which takes the layout option's place.
+    val experience: String = "",
     val nav: String = "",
     val overlay: Boolean = false,
     val size: Int = 0,

@@ -217,10 +217,8 @@ public extension ServerPages {
 
 public struct Guide: Decodable, Equatable {
     public let channels: [GuideChannel]?
-    /// The look the server's owner starts people on. `layout` and `skin` are from before there were themes.
+    /// The look the server's owner starts people on.
     public let theme: String?
-    public let layout: String?
-    public let skin: String?
     /// How many channels there are with what was asked, and where this page of them starts.
     public let total: Int?
     public let offset: Int?

@@ -353,7 +353,7 @@ private struct ThemeCard: View {
 
     var body: some View {
         let shape = theme.id == "custom" ? current.shape : theme.shape
-        let colours = TvLook.resolve(saved: TvSaved(theme: theme.id, themeColours: on ? [theme.id: current.overrides] : nil), ownerTheme: nil, ownerLayout: nil, ownerSkin: nil, app: model.tvAppColours).colours
+        let colours = TvLook.resolve(saved: TvSaved(theme: theme.id, themeColours: on ? [theme.id: current.overrides] : nil), ownerTheme: nil, app: model.tvAppColours).colours
         let p = TvPaint(colours)
         VStack(alignment: .leading, spacing: Tokens.Space.s2) {
             picture(shape, p)

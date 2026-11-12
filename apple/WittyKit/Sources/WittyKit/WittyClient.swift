@@ -965,13 +965,6 @@ public final class WittyClient: @unchecked Sendable {
         for (key, value) in change {
             if let value { look[key] = value } else { look.removeValue(forKey: key) }
         }
-        // Beside the theme, what it comes to in the two looks an older app knows about.
-        if let theme = look["theme"] as? String, let named = TvTheme.byId(theme) {
-            let shape = theme == "custom" ? TvShape(rawValue: (look["custom"] as? [String: Any])?["shape"] as? String ?? "") ?? .modern : named.shape
-            let was = TvLook.legacyOf(theme, shape: shape)
-            look["layout"] = was.layout
-            look["colours"] = was.colours
-        }
         ui["tvLook"] = look
         _ = try await call("PUT", "/me/ui", body: try JSONSerialization.data(withJSONObject: ui))
     }

@@ -15,18 +15,18 @@ final class TvLookStore: ObservableObject {
 
     /// What's saved with the account, as it came.
     private var raw: [String: Any] = [:]
-    private var owner: (theme: String?, layout: String?, skin: String?) = (nil, nil, nil)
+    private var owner: String?
     private var suggestion: String?
     private var app = TvAppColours.fallback
     private var askedFor = ""
-    @Published private(set) var look = TvLook.resolve(saved: nil, ownerTheme: nil, ownerLayout: nil, ownerSkin: nil) {
+    @Published private(set) var look = TvLook.resolve(saved: nil, ownerTheme: nil) {
         didSet { dress = TvDress(look) }
     }
     @Published private(set) var loaded = false
 
     /// The look worked out into colours and sizes once, when it changes: the guide asks for it hundreds of times each
     /// time the highlight moves, and working it out reads every colour from its hex code.
-    private(set) var dress = TvDress(TvLook.resolve(saved: nil, ownerTheme: nil, ownerLayout: nil, ownerSkin: nil))
+    private(set) var dress = TvDress(TvLook.resolve(saved: nil, ownerTheme: nil))
 
     /// Asks the server what this account chose, and what the app's theme suggests.
     func load(client: WittyClient, themeId: String?, app: TvAppColours) async {
@@ -46,7 +46,7 @@ final class TvLookStore: ObservableObject {
 
     /// The owner's starting look comes with every page of the guide.
     func learnOwner(_ guide: Guide) {
-        let next = (guide.theme, guide.layout, guide.skin)
+        let next = guide.theme
         guard next != owner else { return }
         owner = next
         resolve()
@@ -54,8 +54,8 @@ final class TvLookStore: ObservableObject {
 
     private func resolve() {
         let saved = (try? JSONSerialization.data(withJSONObject: raw)).flatMap { try? JSONDecoder().decode(TvSaved.self, from: $0) }
-        look = TvLook.resolve(saved: saved, suggestion: suggestion, ownerTheme: owner.theme.flatMap { $0.isEmpty ? nil : $0 },
-                              ownerLayout: owner.layout, ownerSkin: owner.skin, app: app)
+        look = TvLook.resolve(saved: saved, suggestion: suggestion, ownerTheme: owner.flatMap { $0.isEmpty ? nil : $0 },
+                              app: app)
     }
 
     /// A change shows at once, and goes to the account to follow it to other devices.

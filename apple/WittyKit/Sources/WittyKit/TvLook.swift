@@ -8,8 +8,7 @@ import Foundation
 // every colour token, each theme's shape (its proportions, which the app draws natively to match
 // tvthemes.css), and the viewer's other choices. TvLookTests holds this to what that code works out.
 
-/// What's saved in an account, under `tvLook` in GET /me/ui. A look saved before there were themes
-/// held a layout and colours instead.
+/// What's saved in an account, under `tvLook` in GET /me/ui.
 public struct TvSaved: Decodable, Equatable {
     public struct Custom: Decodable, Equatable {
         public var shape: String
@@ -24,10 +23,6 @@ public struct TvSaved: Decodable, Equatable {
     public var theme: String?
     public var custom: Custom?
     public var themeColours: [String: [String: String]]?
-    public var layout: String?
-    public var colours: String?
-    public var customBg: String?
-    public var customAccent: String?
     public var density: String?
     public var hours: Double?
     public var nowLine: Bool?
@@ -39,21 +34,13 @@ public struct TvSaved: Decodable, Equatable {
     public var previewSide: String?
     public var previewW: Double?
     public var previewSound: Bool?
-    /// From before there was a side and a width.
-    public var previewPos: String?
-    public var previewSize: String?
 
-    public init(theme: String? = nil, custom: Custom? = nil, themeColours: [String: [String: String]]? = nil, layout: String? = nil, colours: String? = nil,
-                customBg: String? = nil, customAccent: String? = nil, density: String? = nil, hours: Double? = nil, nowLine: Bool? = nil,
+    public init(theme: String? = nil, custom: Custom? = nil, themeColours: [String: [String: String]]? = nil, density: String? = nil, hours: Double? = nil, nowLine: Bool? = nil,
                 progress: Bool? = nil, subtitles: Bool? = nil, logos: Bool? = nil, art: Bool? = nil, preview: String? = nil,
                 previewSide: String? = nil, previewW: Double? = nil, previewSound: Bool? = nil) {
         self.theme = theme
         self.custom = custom
         self.themeColours = themeColours
-        self.layout = layout
-        self.colours = colours
-        self.customBg = customBg
-        self.customAccent = customAccent
         self.density = density
         self.hours = hours
         self.nowLine = nowLine
@@ -68,8 +55,8 @@ public struct TvSaved: Decodable, Equatable {
     }
 
     enum CodingKeys: String, CodingKey {
-        case theme, custom, themeColours, layout, colours, customBg, customAccent, density, hours, nowLine, progress, subtitles, logos, art
-        case preview, previewSide, previewW, previewSound, previewPos, previewSize
+        case theme, custom, themeColours, density, hours, nowLine, progress, subtitles, logos, art
+        case preview, previewSide, previewW, previewSound
     }
 
     /// Anything of the wrong kind counts as not chosen, as the page reads it.
@@ -81,10 +68,6 @@ public struct TvSaved: Decodable, Equatable {
         theme = text(.theme)
         custom = try? c.decodeIfPresent(Custom.self, forKey: .custom)
         themeColours = try? c.decodeIfPresent([String: [String: String]].self, forKey: .themeColours)
-        layout = text(.layout)
-        colours = text(.colours)
-        customBg = text(.customBg)
-        customAccent = text(.customAccent)
         density = text(.density)
         hours = number(.hours)
         nowLine = flag(.nowLine)
@@ -96,8 +79,6 @@ public struct TvSaved: Decodable, Equatable {
         previewSide = text(.previewSide)
         previewW = number(.previewW)
         previewSound = flag(.previewSound)
-        previewPos = text(.previewPos)
-        previewSize = text(.previewSize)
     }
 }
 
@@ -253,26 +234,17 @@ public enum TvLook {
                      "text": "#1b1813", "soft": "#4d463a", "hi": "#1b1813", "accent": "#9c1c12", "key-a": "#1b1813", "key-b": "#1b1813", "key-c": "#1b1813", "err": "#9c1c12", "lite": "#9c1c121f"],
     ]
 
-    private static let legacy: [String: [String: String]] = [
-        "midnight": ["bg": "#000000", "cell": "#2a2a2a", "live": "#3a3a3a", "hi": "#ffffff", "accent": "#c9a2ff"],
-        "cable": ["bg": "#06164a", "cell": "#1a43b8", "live": "#0f6a7f", "hi": "#ffd60a", "accent": "#ffd60a"],
-        "satellite": ["bg": "#07090d", "cell": "#2b3039", "live": "#4d3700", "hi": "#ffb300", "accent": "#ffb300"],
-    ]
-
     // MARK: Which theme
-
-    /// What a theme came to before there were themes: a layout and a set of colours.
-    struct Legacy { var theme: String; var custom: TvSaved.Custom?; var colours: [String: String] }
 
     /// Which theme this account has, and what it changed in it. The app's theme can suggest one, and
     /// the owner's look comes with the guide.
-    public static func choice(saved: TvSaved?, suggestion: String? = nil, ownerTheme: String?, ownerLayout: String?, ownerSkin: String?) -> (theme: String, colours: [String: String]) {
-        let full = choose(saved: saved, suggestion: suggestion, ownerTheme: ownerTheme, ownerLayout: ownerLayout, ownerSkin: ownerSkin)
+    public static func choice(saved: TvSaved?, suggestion: String? = nil, ownerTheme: String?) -> (theme: String, colours: [String: String]) {
+        let full = choose(saved: saved, suggestion: suggestion, ownerTheme: ownerTheme)
         return (full.theme, full.colours)
     }
 
-    private static func choose(saved: TvSaved?, suggestion: String?, ownerTheme: String?, ownerLayout: String?, ownerSkin: String?) -> (theme: String, source: TvLookChoice.Source, custom: TvSaved.Custom?, colours: [String: String]) {
-        let mine = upgrade(saved ?? TvSaved(), ownerLayout: ownerLayout, ownerSkin: ownerSkin)
+    private static func choose(saved: TvSaved?, suggestion: String?, ownerTheme: String?) -> (theme: String, source: TvLookChoice.Source, custom: TvSaved.Custom?, colours: [String: String]) {
+        let mine = upgrade(saved ?? TvSaved())
         func yours(_ theme: String) -> [String: String] { mine.themeColours?[theme] ?? [:] }
         if let theme = mine.theme, isTheme(theme) {
             return (theme, .you, mine.custom, yours(theme))
@@ -283,37 +255,25 @@ public enum TvLook {
         if let theme = ownerTheme, isTheme(theme), theme != "custom" {
             return (theme, .owner, mine.custom, yours(theme))
         }
-        if ownerLayout != nil || ownerSkin != nil {
-            let was = fromLegacy(ownerLayout, ownerSkin, nil, nil)
-            return (was.theme, .owner, mine.custom ?? was.custom, mine.themeColours?[was.theme] ?? was.colours)
-        }
         return ("classic", .owner, mine.custom, yours("classic"))
     }
 
-    /// Reads a look saved in any earlier form, as the page's upgradeSaved does.
-    static func upgrade(_ raw: TvSaved, ownerLayout: String?, ownerSkin: String?) -> TvSaved {
+    /// Drops what isn't valid (an unknown theme or shape).
+    static func upgrade(_ raw: TvSaved) -> TvSaved {
         var out = raw
-        if out.previewSide == nil, let pos = raw.previewPos { out.previewSide = pos == "tl" || pos == "bl" ? "left" : "right" }
-        if out.previewW == nil, let size = raw.previewSize, let w = ["s": 220.0, "m": 320, "l": 460][size] { out.previewW = w }
-        if !isTheme(raw.theme), raw.layout != nil || raw.colours != nil {
-            let was = fromLegacy(raw.layout ?? ownerLayout, raw.colours ?? ownerSkin, raw.customBg, raw.customAccent)
-            out.theme = was.theme
-            if let custom = was.custom { out.custom = custom }
-            if !was.colours.isEmpty { out.themeColours = [was.theme: was.colours] }
-        }
         if !isTheme(out.theme) { out.theme = nil }
         if let shape = out.custom?.shape, TvShape(rawValue: shape) == nil { out.custom = nil }
         return out
     }
 
-    public static func colours(saved: TvSaved?, suggestion: String? = nil, ownerTheme: String?, ownerLayout: String?, ownerSkin: String?, app: TvAppColours = .fallback) -> TvColours {
-        resolve(saved: saved, suggestion: suggestion, ownerTheme: ownerTheme, ownerLayout: ownerLayout, ownerSkin: ownerSkin, app: app).colours
+    public static func colours(saved: TvSaved?, suggestion: String? = nil, ownerTheme: String?, app: TvAppColours = .fallback) -> TvColours {
+        resolve(saved: saved, suggestion: suggestion, ownerTheme: ownerTheme, app: app).colours
     }
 
     /// The whole look, as the page's `useLook` works it out.
-    public static func resolve(saved: TvSaved?, suggestion: String? = nil, ownerTheme: String?, ownerLayout: String?, ownerSkin: String?, app: TvAppColours = .fallback) -> TvLookChoice {
-        let mine = upgrade(saved ?? TvSaved(), ownerLayout: ownerLayout, ownerSkin: ownerSkin)
-        let chosen = choose(saved: saved, suggestion: suggestion, ownerTheme: ownerTheme, ownerLayout: ownerLayout, ownerSkin: ownerSkin)
+    public static func resolve(saved: TvSaved?, suggestion: String? = nil, ownerTheme: String?, app: TvAppColours = .fallback) -> TvLookChoice {
+        let mine = upgrade(saved ?? TvSaved())
+        let chosen = choose(saved: saved, suggestion: suggestion, ownerTheme: ownerTheme)
         let custom = chosen.custom ?? TvSaved.Custom(shape: "modern", font: "")
         let shape = chosen.theme == "custom" ? TvShape(rawValue: custom.shape) ?? .modern : TvTheme.byId(chosen.theme)?.shape ?? .box
         let hours = [0, 1.5, 2, 3, 4].contains(mine.hours ?? 0) ? mine.hours ?? 0 : 0
@@ -328,30 +288,6 @@ public enum TvLook {
     }
 
     private static func isTheme(_ id: String?) -> Bool { id.map(themes.contains) ?? false }
-
-    static func fromLegacy(_ layout: String?, _ colours: String?, _ customBg: String?, _ customAccent: String?) -> Legacy {
-        var mine: [String: String] = [:]
-        if let customBg, let customAccent, isHex(customBg), isHex(customAccent) { mine = ["bg": customBg, "accent": customAccent, "hi": customAccent] }
-        if layout == "streaming" {
-            if colours == "theme" { return Legacy(theme: "modern", custom: nil, colours: [:]) }
-            return Legacy(theme: "modern", custom: nil, colours: colours == "custom" ? mine : legacy[colours ?? "midnight"] ?? legacy["midnight"]!)
-        }
-        switch colours {
-        case "satellite": return Legacy(theme: "satellite", custom: nil, colours: [:])
-        case "midnight": return Legacy(theme: "custom", custom: .init(shape: "box", font: ""), colours: legacy["midnight"]!)
-        case "theme": return Legacy(theme: "custom", custom: .init(shape: "box", font: "system"), colours: [:])
-        case "custom": return Legacy(theme: "custom", custom: .init(shape: "box", font: ""), colours: mine)
-        default: return Legacy(theme: "classic", custom: nil, colours: [:])
-        }
-    }
-
-    /// What a theme says for clients that only know the two earlier looks, kept beside it.
-    public static func legacyOf(_ id: String, shape: TvShape) -> (layout: String, colours: String) {
-        if id == "satellite" { return ("classic", "satellite") }
-        if id == "classic" || id == "teletext" { return ("classic", "cable") }
-        if shape == .box { return ("classic", "theme") }
-        return ("streaming", "theme")
-    }
 
     // MARK: Sizes
 
