@@ -96,8 +96,15 @@ final class SDUITests: XCTestCase {
     // MARK: Apple TV's focus, by the remote
 
     @MainActor
+    /// What has the remote's focus; an element that doesn't exist when nothing has it yet.
     private func focused(_ app: XCUIApplication) -> XCUIElement {
-        app.descendants(matching: .any).element(matching: NSPredicate(format: "hasFocus == true"))
+        app.descendants(matching: .any).matching(NSPredicate(format: "hasFocus == true")).firstMatch
+    }
+
+    @MainActor
+    private func focusedId(_ app: XCUIApplication) -> String {
+        let element = focused(app)
+        return element.exists ? element.identifier : ""
     }
 
     @MainActor
@@ -189,12 +196,12 @@ final class SDUITests: XCTestCase {
         let tabs = app.descendants(matching: .any).matching(NSPredicate(format: "identifier BEGINSWITH %@", "sdui.tab."))
         guard tabs.firstMatch.waitForExistence(timeout: 15), tabs.count > 1 else { throw XCTSkip("That library's page has no tabs.") }
         let remote = XCUIRemote.shared
-        let isTab = NSPredicate(format: "identifier BEGINSWITH %@", "sdui.tab.")
-        for _ in 0..<8 where !isTab.evaluate(with: focused(app)) { remote.press(.down) }
-        XCTAssertTrue(isTab.evaluate(with: focused(app)), "the remote never reached the tabs")
-        let first = focused(app).identifier
+        let isTab = NSPredicate(format: "SELF BEGINSWITH %@", "sdui.tab.")
+        for _ in 0..<8 where !isTab.evaluate(with: focusedId(app)) { remote.press(.down) }
+        XCTAssertTrue(isTab.evaluate(with: focusedId(app)), "the remote never reached the tabs")
+        let first = focusedId(app)
         remote.press(.right)
-        let next = focused(app).identifier
+        let next = focusedId(app)
         XCTAssertNotEqual(next, first)
         // Resting on it chooses it.
         let chosen = app.descendants(matching: .any).matching(identifier: next).firstMatch
