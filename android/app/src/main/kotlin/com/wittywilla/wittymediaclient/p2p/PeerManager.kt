@@ -124,9 +124,11 @@ class PeerManager(private val app: WittyApp) {
     // MARK: at home
 
     // At home and signed in: put this device on the server's list, once, and keep where the server is.
-    suspend fun learnAway(api: Api, server: SavedServer, serverHas: (String) -> Boolean) {
-        if (!available || !serverHas("p2p") || isOff(server) || way is PeerWay.Away) return
+    suspend fun learnAway(api: Api, server: SavedServer) {
+        if (!available || isOff(server) || way is PeerWay.Away) return
         try {
+            // Asked here rather than taken from what the app read: right after signing in that may not be back yet.
+            if ("p2p" !in api.capabilities().features) return
             val id = deviceId().ifEmpty { return }
             val answer = api.p2pInfo(id)
             if (!answer.enabled || !PeerRules.isId(answer.serverId)) {

@@ -756,7 +756,7 @@ class Nav(val app: WittyApp, private val s: Map<String, String>) {
         val opened = server ?: return
         val api = app.api
         if (PeerRoute.matches(api.base.toHttpUrlOrNull()?.host, api.base.toHttpUrlOrNull()?.port ?: 0) || api.token.isEmpty()) return
-        app.scope.launch { app.peers.learnAway(api, opened, ::has) }
+        app.scope.launch { app.peers.learnAway(api, opened) }
     }
 
     fun learnAwayNow() = learnAway()
