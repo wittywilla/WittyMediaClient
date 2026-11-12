@@ -109,6 +109,10 @@ fun SduiNode(view: SduiView, parent: SduiView?, topLevel: Boolean = false) {
         SduiFormView(view, side)
         return
     }
+    if (view.node.type == "QR") {
+        SduiQr(view, side)
+        return
+    }
     when (view.type) {
         "Hero" -> SduiHero(view)
         "Shelf" -> SduiShelf(view, side)
