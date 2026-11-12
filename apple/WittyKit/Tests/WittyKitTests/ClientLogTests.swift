@@ -47,6 +47,13 @@ final class ClientLogTests: XCTestCase {
         }
     }
 
+    func testARepeatedWarningIsLetThroughOnceAMinute() {
+        let key = "test-seldom-\(UUID().uuidString)"
+        XCTAssertTrue(ClientLog.shared.seldom(key, every: 60))
+        XCTAssertFalse(ClientLog.shared.seldom(key, every: 60))
+        XCTAssertTrue(ClientLog.shared.seldom(key + "-other", every: 60))
+    }
+
     func testAKnownTokenIsHiddenWithNothingAroundIt() {
         Redact.addSecret("plainwords-that-are-a-token")
         XCTAssertFalse(Redact.clean("the value plainwords-that-are-a-token turned up").contains("plainwords"))

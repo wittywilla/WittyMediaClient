@@ -41,17 +41,19 @@ public enum Redact {
 
     private static let rules: [(NSRegularExpression, String)] = [
         // In an address or a command line: token=..., ?st=..., password=...
-        rule(#"(\b(?:token|access_token|refresh_token|id_token|auth|api[_\-]?key|apikey|password|passwd|pwd|pass|secret|pin|key|st|sig|signature|setup[_\-]?code|recovery[_\-]?code|pair(?:ing)?[_\-]?code|otp|totp)=)[^\&\s"'<>]+"#, "$1\(hidden)"),
+        rule(#"(\b(?:token|access_token|refresh_token|id_token|auth|api[_\-]?key|apikey|password|passwd|pwd|pass|secret|pin|key|k|st|s|member|sig|signature|setup[_\-]?code|recovery[_\-]?code|pair(?:ing)?[_\-]?code|otp|totp)=)[^\&\s"'<>]+"#, "$1\(hidden)"),
         // The same with its name percent-encoded: %74oken=... signs in just the same.
         rule(#"([^\s\&?=;"'<>]{0,24}%[0-9a-f]{2}[^\s\&?=;"'<>]{0,24}=)[^\&\s"'<>]+"#, "$1\(hidden)"),
         // A header, as a line of text.
-        rule(#"\b(proxy-authorization|authorization|set-cookie|cookie|x-wms-token|x-api-key)(\s*[:=]\s*)[^\r\n"']+"#, "$1$2\(hidden)"),
+        rule(#"\b(proxy-authorization|authorization|set-cookie|cookie|x-wms-token|x-wms-pair-secret|x-witty-connect|x-api-key)(\s*[:=]\s*)[^\r\n"']+"#, "$1$2\(hidden)"),
         rule(#"\b(Bearer\s+)[A-Za-z0-9._~+/=\-]+"#, "$1\(hidden)"),
         rule(#"\b(Basic\s+)[A-Za-z0-9+/]*[A-Z0-9+/][A-Za-z0-9+/]{10,}={0,2}"#, "$1\(hidden)", ignoreCase: false),
         // JSON, finished or cut short: "password": "..."
         rule(#"("(?:[a-z_\-]{0,40}(?:token|secret)|password|passwd|api[_\-]?key|apikey|pin|code|setup[_\-]?code|recovery[_\-]?code|pair(?:ing)?[_\-]?code|cookie|authorization)"\s*:\s*)"[^"\\]*(?:\\.[^"\\]*)*(?:"|$)"#, "$1\"\(hidden)\""),
         // A login in an address: rtsp://user:password@camera/
         rule(#"\b([a-z][a-z0-9+.\-]{0,20}://)[^/\s:@]+:[^/\s@]+@"#, "$1\(hidden)@"),
+        // An Xtream login in a catch-up address: /timeshift/<user>/<password>/
+        rule(#"(/timeshift/)[^/\s?#]+/[^/\s?#]+/"#, "$1\(hidden)/\(hidden)/"),
         // A share link's token.
         rule(#"(/(?:api/)?(?:s|share)/)[A-Za-z0-9_\-]{8,}"#, "$1\(hidden)", ignoreCase: false),
         // The sign-in cookie and stream tokens, however they got there.
@@ -339,6 +341,7 @@ public final class ClientLog: @unchecked Sendable {
     private var currentSession = ""
     private var scheduled = false
     private var queuedLines = 0
+    private var lastSeen: [String: Date] = [:]
 
     private static let crashFile = "crash-pending.json"
 
@@ -405,12 +408,32 @@ public final class ClientLog: @unchecked Sendable {
         }
     }
 
-    public func error(_ kind: String, _ message: String, stack: String = "", request: String = "", session: String? = nil) {
-        report("error", kind, message, stack: stack, request: request, session: session)
+    public func error(_ kind: String, _ message: String, stack: String = "", request: String = "", session: String? = nil, page: String = "") {
+        report("error", kind, message, stack: stack, request: request, session: session, page: page)
     }
 
-    public func warn(_ kind: String, _ message: String, stack: String = "", request: String = "", session: String? = nil) {
-        report("warn", kind, message, stack: stack, request: request, session: session)
+    public func warn(_ kind: String, _ message: String, stack: String = "", request: String = "", session: String? = nil, page: String = "") {
+        report("warn", kind, message, stack: stack, request: request, session: session, page: page)
+    }
+
+    /// A warning that can repeat: the same one (kind, what it's about and session) at most once in
+    /// `every` seconds, so a fault that keeps happening is one line, not a flood. `key` is what makes
+    /// two of them the same, when the message carries numbers that change.
+    public func warnSeldom(_ kind: String, _ message: String, key: String? = nil, every: TimeInterval = 60, request: String = "", session: String? = nil, page: String = "") {
+        guard seldom("\(kind)\u{0}\(key ?? message)\u{0}\(session ?? "")\u{0}\(page)", every: every) else { return }
+        report("warn", kind, message, request: request, session: session, page: page)
+    }
+
+    /// Whether something keyed like this may be noted now: once in `every` seconds.
+    public func seldom(_ key: String, every: TimeInterval = 60) -> Bool {
+        let now = Date()
+        lock.lock()
+        defer { lock.unlock() }
+        if let last = lastSeen[key], now.timeIntervalSince(last) < every { return false }
+        if lastSeen.count >= 200 { lastSeen = lastSeen.filter { now.timeIntervalSince($0.value) < every } }
+        if lastSeen.count >= 200 { return false }
+        lastSeen[key] = now
+        return true
     }
 
     /// Only for the file on this device.
@@ -418,8 +441,8 @@ public final class ClientLog: @unchecked Sendable {
         report("info", kind, message, stack: "", request: "", session: "")
     }
 
-    public func report(_ level: String, _ kind: String, _ message: String, stack: String = "", request: String = "", session: String? = nil) {
-        let event = ClientEvent.cleanedUp(level: level, kind: kind, message: message, stack: stack, session: session ?? self.session, request: request)
+    public func report(_ level: String, _ kind: String, _ message: String, stack: String = "", request: String = "", session: String? = nil, page: String = "") {
+        let event = ClientEvent.cleanedUp(level: level, kind: kind, message: message, stack: stack, page: page, session: session ?? self.session, request: request)
         writeLine(event)
         guard level != "info" else { return }
         lock.lock()
