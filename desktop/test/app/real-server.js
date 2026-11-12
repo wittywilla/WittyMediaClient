@@ -165,7 +165,9 @@ async function run() {
   })
 
   await step('the arrows and OK reach a film', async () => {
-    await arrowTowards('a film', "document.querySelector('a[href*=\"/item/\"], a[href*=\"/show/\"]')")
+    // A film's card on screen: the spotlight's More info goes to a film too, but it is the spotlight's
+    // button, not a card in a row, and may be scrolled out of sight.
+    await arrowTowards('a film', "Array.from(document.querySelectorAll('a.card[href*=\"/item/\"], a.card[href*=\"/show/\"]')).find((a) => { const r = a.getBoundingClientRect(); return r.bottom > 0 && r.top < innerHeight })")
     await shot('05-focus-on-card')
     await press('Enter')
     await until('its page', () => inPage("!!Array.from(document.querySelectorAll('button')).find((b) => /play|resume/i.test(b.innerText))"))
