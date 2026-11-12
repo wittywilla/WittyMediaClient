@@ -16,7 +16,7 @@ import kotlinx.serialization.json.doubleOrNull
 // expected, so a newer server's page still reads; nothing here touches Android, so it's tested as plain Kotlin.
 
 // The catalogue revision this app was built against, sent with every request.
-const val SDUI_CATALOG = 2
+const val SDUI_CATALOG = 3
 
 // The only document version this app reads. A client refuses any other.
 const val SDUI_VERSION = 1
@@ -119,6 +119,11 @@ data class SduiTextLimits(val title: Int = 0, val subtitle: Int = 0, val synopsi
 
 // The device profile a page was fitted to. Sizes are in points: dp on a phone or tablet, and a TV's 1920 by 1080
 // canvas, which this app draws at half a dp a point.
+// Where the Dock goes: `bottom` (a bar `height` tall across the foot, outside the page's scroll) or `sheet` (a phone), and
+// the size of the key legend's hints.
+@Serializable
+data class SduiDockSpec(val placement: String = "", val height: Int = 0, val hintSize: Int = 0)
+
 @Serializable
 data class SduiLayout(
     val formFactor: String = "",
@@ -142,6 +147,9 @@ data class SduiLayout(
     // The frame the app draws around the page: the layout option chosen, and its menu (docs/SDUI.md, Layout options).
     // Null from a server without layout options.
     val shell: SduiShell? = null,
+    // The fraction of the next card or slide that shows at the trailing edge of a scrolling row, and the Dock's bar.
+    val peek: Double = 0.0,
+    val dock: SduiDockSpec = SduiDockSpec(),
 ) {
     val compact: Boolean get() = breakpoint == "compact"
     val tv: Boolean get() = formFactor == "tv"

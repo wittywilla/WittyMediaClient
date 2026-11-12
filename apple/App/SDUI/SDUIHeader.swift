@@ -32,10 +32,11 @@ struct SDUIActionRow: View {
                 Button { actor.perform(button.action) } label: {
                     Label(button.label, systemImage: SDUIIcon.symbol(button.icon.isEmpty ? button.id : button.icon, or: "circle"))
                 }
-                .action(primary: button.primary, pill: true)
+                .action(primary: button.primary, selected: button.pressed, pill: true)
                 .focused($inside, equals: button.id)
                 .sduiFocusable(button.id == lead && ownerFocusable ? focus : nil, owner)
                 .accessibilityLabel(button.label)
+                .accessibilityAddTraits(button.pressed ? [.isSelected] : [])
                 .accessibilityIdentifier("sdui.action." + button.id)
             }
         }
@@ -383,12 +384,14 @@ struct SDUIDetailHeaderView: View {
                                                 .frame(width: 44, height: 32)
                                             Text(button.label).sduiFont("caption").lineLimit(1)
                                         }
-                                        .foregroundStyle(palette.text)
+                                        // On (Watch later with the title on the list): in the accent.
+                                        .foregroundStyle(button.pressed ? palette.accentText : palette.text)
                                         .frame(minWidth: 64, minHeight: 56)
                                         .contentShape(Rectangle())
                                     }
                                     .buttonStyle(.plain)
                                     .accessibilityLabel(button.label)
+                                    .accessibilityAddTraits(button.pressed ? [.isSelected] : [])
                                     .accessibilityIdentifier("sdui.action." + button.id)
                                 }
                             }

@@ -465,9 +465,7 @@ private fun Drawer(nav: Nav, open: Boolean, status: Dp, close: () -> Unit) {
                     verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp),
                 ) {
                     ServerMark(28.dp, nav.brandLogo)
-                    val words = if (nav.brandName.isNotEmpty()) buildAnnotatedString { append(nav.brandName) } else buildAnnotatedString {
-                        append("Witty"); withStyle(SpanStyle(color = extra.accentText)) { append("Media") }; append("Server")
-                    }
+                    val words = brandAnnotated(nav.brandName, nav.brandParts, scheme.onSurface, extra.brandAccent)
                     Text(words, color = scheme.onSurface, fontSize = 17.sp, fontWeight = FontWeight.Bold, letterSpacing = (-0.012).em, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 }
                 Text("LIBRARIES", color = extra.hint, fontSize = 11.sp, fontWeight = FontWeight.SemiBold, letterSpacing = 0.07.em, modifier = Modifier.padding(start = 12.dp, end = 12.dp, top = 20.dp, bottom = 8.dp))

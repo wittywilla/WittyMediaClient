@@ -184,7 +184,20 @@ public struct SDUIPageLoader: Sendable {
         return SDUILoaded(document: document, etag: entry.etag, offline: false)
     }
 
+    /// The refusal of a page written for another catalogue revision.
+    public static let otherRevision = APIError(status: 426, message: "This server's pages are for another version of this app. Update the app or the server.",
+                                               code: "sdui-revision")
+
     public func load(_ page: String, params: [String: String], device: SDUIDevice) async throws -> SDUILoaded {
+        let loaded = try await loadAny(page, params: params, device: device)
+        guard SDUI.accepts(loaded.document) else {
+            cache?.remove(SDUIPageLoader.key(page, params, device))
+            throw SDUIPageLoader.otherRevision
+        }
+        return loaded
+    }
+
+    private func loadAny(_ page: String, params: [String: String], device: SDUIDevice) async throws -> SDUILoaded {
         let key = SDUIPageLoader.key(page, params, device)
         let before = kept(page, params: params, device: device)
         do {
@@ -236,6 +249,7 @@ public struct SDUIPageLoader: Sendable {
             return current
         case .new(let diff, let etag, _):
             if let whole = diff.document {
+                guard SDUI.accepts(whole) else { throw SDUIPageLoader.otherRevision }
                 keep(whole, etag: etag, key: key)
                 return SDUILoaded(document: whole, etag: etag, offline: false)
             }
