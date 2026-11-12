@@ -45,7 +45,7 @@ fun MoreInfoSheet(nav: Nav, key: String, start: Long, actions: MoreInfoActions, 
     var failed by remember(key, start) { mutableStateOf("") }
     LaunchedEffect(key, start) {
         runCatching { MoreInfoRules.parse(nav.app.api.programmeInfo(key, start)) }
-            .onSuccess { info = it }.onFailure { failed = problemText(it, "More about this isn't available.") }
+            .onSuccess { info = it }.onFailure { failed = if ((it as? com.wittywilla.wittymediaclient.net.ApiError)?.status == 404) "Details are no longer available." else problemText(it, "More about this isn't available.") }
     }
     BackHandler(onBack = onClose)
     val scheme = MaterialTheme.colorScheme

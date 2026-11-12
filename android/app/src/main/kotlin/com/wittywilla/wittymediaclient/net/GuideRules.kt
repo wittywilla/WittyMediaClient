@@ -276,6 +276,9 @@ data class Recording(
     // On a server with `tv-dvr-rules-2`: no tuner would be free when it starts, and the series it's from.
     val conflict: Boolean = false,
     val ruleTitle: String? = null,
+    // `tv-recording-refs`: the channel and programme to open More info with; absent when the profile may no longer watch it.
+    val channelKey: String? = null,
+    val programme: String? = null,
     val padBefore: Int = 0,
     val padAfter: Int = 0,
 ) {
