@@ -197,7 +197,7 @@ public struct SDUIScreen: Equatable, Sendable {
             case "Page":
                 e.role = "main"
                 e.label = p.text("title")
-            case "Shelf":
+            case "Shelf", "Carousel":
                 collection()
                 e.role = "list"
                 e.label = p.text("title")
@@ -225,7 +225,7 @@ public struct SDUIScreen: Equatable, Sendable {
                 }
                 if p.flag("peek") == true { e.peek = layout.peek }
                 if let seconds = p.whole("autoAdvanceSec") { text("autoAdvance", "\(seconds) s") }
-            case "Tabs":
+            case "Tabs", "CrossBar":
                 e.role = "tablist"
                 e.cards = node.kids.count
             case "Tab":
@@ -337,6 +337,27 @@ public struct SDUIScreen: Equatable, Sendable {
                 text("text", p.text("text"))
                 text("button", p.text("buttonLabel"))
                 e.icon = p.text("icon")
+            case "WidgetGrid":
+                e.role = "group"
+                e.label = page
+                e.columns = p.whole("columns") ?? 4
+                e.cards = node.kids.count
+            case "Widget":
+                e.role = "region"
+                e.label = p.text("title")
+                text("title", p.text("title"))
+                text("kind", p.text("kind"))
+                e.columns = p.whole("w") ?? 0
+                e.cardHeight = p.whole("h") ?? 0
+                e.cards = node.kids.count
+            case "NumberedRow":
+                e.cards = node.kids.count
+                e.role = "list"
+                e.label = p.text("title")
+                text("title", p.text("title"))
+                text("empty", p.text("emptyText"))
+                e.hasMore = p.fields("more") != nil
+                text("numbers", node.kids.map { $0.properties.text("number") }.joined(separator: " "))
             case "Dock":
                 e.role = "toolbar"
                 e.label = p.text("title").isEmpty ? "Options" : p.text("title")
