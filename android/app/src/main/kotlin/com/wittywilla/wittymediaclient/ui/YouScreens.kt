@@ -327,6 +327,7 @@ fun YouSettingScreen(nav: Nav, s: Map<String, String>, screen: YouNative) {
         YouNative.Log -> LogsScreen(nav)
         YouNative.Servers -> ManageServersScreen(nav, s)
         YouNative.Away -> AwayScreen(nav, s)
+        YouNative.PlayingHere -> PlayingHereScreen(nav, s)
     }
 }
 

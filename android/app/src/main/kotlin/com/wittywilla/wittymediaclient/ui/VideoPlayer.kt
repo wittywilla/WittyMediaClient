@@ -369,16 +369,8 @@ fun VideoPlayerScreen(nav: Nav, route: Route.Player) {
             }
         }
 
-        // Skip intro, the whole time the intro is on.
-        val introStart = item?.introStart ?: 0.0
-        val introEnd = item?.introEnd
-        if (introEnd != null && session.filmSec >= introStart && session.filmSec < introEnd - 1 && session.problem.isEmpty()) {
-            Pressable({ session.seekFilm(introEnd) }, Modifier.align(Alignment.BottomEnd).padding(end = 24.dp, bottom = 110.dp).height(44.dp), shape = RoundedCornerShape(10.dp), fill = Color.White, label = "Skip intro", ring = false) {
-                Box(Modifier.padding(horizontal = 20.dp).fillMaxSize(), contentAlignment = Alignment.Center) {
-                    Text("Skip intro ›", color = Color(0xFF111111), fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
-                }
-            }
-        }
+        // Skip intro, recap, adverts or credits, the whole time each is on (SkipOverlay.kt).
+        PhoneSkipButton(session, Modifier.align(Alignment.BottomEnd).padding(end = 24.dp, bottom = 110.dp))
         if (session.watchNextShown) WatchNextCard(nav, session, Modifier.align(Alignment.BottomEnd).padding(start = 16.dp, end = if (maxWidth < 352.dp) 16.dp else 24.dp, bottom = 110.dp))
 
         // The bottom bar.
