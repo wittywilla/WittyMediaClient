@@ -100,6 +100,7 @@ struct RootView: View {
         // moment later: a screen that has just appeared must never ask with the connection before.
         // The profile's limits and screen time, over everything: see Household.swift.
         .modifier(ScreenTimeGuard(household: model.household))
+        .modifier(FirstRunLayers())
         .environment(\.palette, model.palette)
         .environment(\.finish, finish)
         .environment(\.client, model.client)

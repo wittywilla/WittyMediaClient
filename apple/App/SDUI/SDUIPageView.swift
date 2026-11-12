@@ -150,8 +150,11 @@ struct SDUIPageBody: View {
 
     private var layout: SDUILayout { screen.layout }
     /// The page's sections, its Dock aside: the Dock is drawn in its own zone (docs/SDUI.md, Zones and the Dock).
-    private var sections: [SDUIElement] { screen.sections.filter { $0.type != "Dock" } }
-    private var dock: SDUIElement? { screen.sections.first { $0.type == "Dock" && !$0.children.filter { $0.type == "Button" }.isEmpty } }
+    /// A region the shell's placements hide (the hero, the dock) is left out.
+    private var sections: [SDUIElement] {
+        screen.sections.filter { $0.type != "Dock" && !($0.type == "Hero" && center.shell?.shows("hero") == false) }
+    }
+    private var dock: SDUIElement? { center.shell?.shows("dock") == false ? nil : screen.sections.first { $0.type == "Dock" && !$0.children.filter { $0.type == "Button" }.isEmpty } }
     /// A phone's Dock is an Options button that opens its controls as a sheet; elsewhere a bar at the foot.
     private var dockIsSheet: Bool { (layout.dock?.placement ?? (layout.formFactor == "phone" ? "sheet" : "bottom")) == "sheet" }
     @State private var showingDock = false

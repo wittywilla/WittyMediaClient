@@ -199,7 +199,7 @@ struct SDUIActor {
                 }
             default:
                 do {
-                    guard try await center.client.sduiCommand(center.catalog.command(op), item: item) else { return }
+                    guard try await center.client.sduiCommand(center.catalog.command(op), item: item, params: params) else { return }
                     // Then the page is asked for again, and any other page showing the same thing.
                     await store?.refresh(center)
                     center.changed()

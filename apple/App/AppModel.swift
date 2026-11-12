@@ -201,6 +201,8 @@ final class AppModel: ObservableObject {
     }
     /// Every theme the server has, once asked.
     @Published private(set) var themeList: ThemeList?
+    /// Which look and theme an administrator requires of this profile, and for whom: Settings > Appearance shows them locked.
+    @Published private(set) var requiredLook: LookState?
     /// The look this person made with the website's theme maker.
     @Published private(set) var customTheme: ThemeMakerInput?
     private var themeFetch: Task<Void, Never>?
@@ -355,6 +357,8 @@ final class AppModel: ObservableObject {
 
     /// The theme in use: this device's choice, or the server's.
     var effectiveThemeId: String? {
+        // A theme an administrator requires of this profile is the theme, whatever this device chose.
+        if let required = requiredLook?.requiredTheme?.value, !required.isEmpty { return required }
         switch themeChoice {
         case "": return themeId
         case "auto": return systemScheme == .light ? "light" : "default"
@@ -461,8 +465,10 @@ final class AppModel: ObservableObject {
         async let list = try? asking.themeList()
         async let made = try? asking.customTheme()
         async let modules = has("sdui-modules") ? try? asking.themeModules() : nil
-        let (l, m, scopes) = await (list, made, modules)
+        async let look = try? asking.lookState()
+        let (l, m, scopes, required) = await (list, made, modules, look)
         guard client.base == asking.base else { return }
+        if required != requiredLook { requiredLook = required }
         if let l { themeList = l }
         customTheme = m ?? nil
         let palettes = scopes?.tokens ?? [:]
