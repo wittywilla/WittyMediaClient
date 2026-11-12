@@ -7,7 +7,9 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
@@ -62,7 +64,12 @@ fun LookScreen(nav: Nav, s: Map<String, String>) {
         } else {
             GroupedList("", listOf(GroupRow(s["lookServer"].orEmpty(), onClick = { pick(null) }, icon = Symbols.Server, chevron = false, selected = chosen.isEmpty(), detail = list.experiences.firstOrNull { it.id == list.default }?.name.orEmpty(), focusKey = "look-server", requestFocus = chosen.isEmpty(), trailing = { check(chosen.isEmpty()) })))
             GroupedList("", list.experiences.map { e ->
-                GroupRow(e.name, onClick = { pick(e.id) }, chevron = false, selected = chosen == e.id, detail = e.tagline, focusKey = "look-" + e.id, requestFocus = chosen == e.id, trailing = { check(chosen == e.id) })
+                GroupRow(
+                    e.name, onClick = { pick(e.id) }, chevron = false, selected = chosen == e.id, detail = e.tagline, focusKey = "look-" + e.id, requestFocus = chosen == e.id,
+                    // A wireframe of the look's layout in the colours in use: where the menu is, Home, the cards.
+                    leading = { LayoutThumb(com.wittywilla.wittymediaclient.net.ThumbSpecs.forId(e.id), e.name, Modifier.width(88.dp)) },
+                    trailing = { check(chosen == e.id) },
+                )
             })
         }
         if (problem.isNotEmpty()) Note(problem)
@@ -96,11 +103,14 @@ fun FirstLookScreen(nav: Nav, s: Map<String, String>) {
                 if (step == 0) {
                     list.forEachIndexed { i, e ->
                         val on = (state?.choice?.chosen?.ifEmpty { state.choice.current }) == e.id
+                        Row(horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
+                        LayoutThumb(com.wittywilla.wittymediaclient.net.ThumbSpecs.forId(e.id), e.name, Modifier.width(120.dp))
                         WittyButton(e.name + if (e.tagline.isNotEmpty()) " · " + e.tagline else "", {
                             if (busy) return@WittyButton
                             busy = true
                             scope.launch { nav.chooseExperience(e.id); busy = false }
                         }, kind = if (on) ButtonKind.Primary else ButtonKind.Secondary, takeFocus = i == 0, focusKey = "first-" + e.id)
+                        }
                     }
                     WittyButton(s["next"].orEmpty(), { step = 1 }, kind = ButtonKind.Primary, tall = true, focusKey = "first-next")
                 } else {
