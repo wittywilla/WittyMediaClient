@@ -207,23 +207,41 @@ private struct StepRow: View {
     let less: (() -> Void)?
     let more: (() -> Void)?
 
-    private func button(_ symbol: String, _ label: String, _ act: (() -> Void)?) -> some View {
-        Button { act?() } label: {
-            Image(systemName: symbol).font(.body.weight(.semibold)).frame(width: metrics.tv ? 56 : 40, height: metrics.tv ? 56 : 40)
+    @ViewBuilder private func button(_ symbol: String, _ label: String, _ act: (() -> Void)?) -> some View {
+        if metrics.tv {
+            Button { act?() } label: {
+                Image(systemName: symbol).font(.body.weight(.semibold)).frame(width: 56, height: 56)
+            }
+            .action(.secondary, pill: true)
+            .disabled(act == nil)
+            .accessibilityLabel("\(label): \(title)")
+        } else {
+            // A round button no wider than the thumb that presses it, so the row's words keep their room.
+            Button { act?() } label: {
+                Image(systemName: symbol)
+                    .font(.body.weight(.semibold))
+                    .foregroundStyle(act == nil ? palette.textHint : palette.text)
+                    .frame(width: 36, height: 36)
+                    .background(Circle().fill(palette.card))
+                    .frame(width: 44, height: 44)
+                    .contentShape(Circle())
+            }
+            .buttonStyle(.plain)
+            .disabled(act == nil)
+            .accessibilityLabel("\(label): \(title)")
         }
-        .action(.secondary, pill: true)
-        .disabled(act == nil)
-        .accessibilityLabel("\(label): \(title)")
     }
 
     var body: some View {
         SettingRow(title: title, detail: detail) {
-            HStack(spacing: Tokens.Space.s2) {
+            HStack(spacing: metrics.tv ? Tokens.Space.s2 : 0) {
                 button("minus", "Less", less)
                 Text(value)
                     .font(.wmLabel.weight(.semibold))
                     .foregroundStyle(palette.text)
-                    .frame(minWidth: metrics.tv ? 150 : 84)
+                    .frame(minWidth: metrics.tv ? 150 : 64)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.8)
                     .accessibilityLabel("\(title): \(value)")
                 button("plus", "More", more)
             }

@@ -138,7 +138,8 @@ private struct ActionBody<Label: View>: View {
         let fill: Color? = switch kind {
         case .primary: palette.accent
         case .quiet: nil
-        case .secondary: selected ? palette.border : palette.card
+        // Chosen, as the theme draws a selected chip: the accent's tint, with its outline (accentSoft, accentLine).
+        case .secondary: selected ? palette.accent.opacity(0.18) : palette.card
         case .destructive: palette.card
         }
         let ink: Color = switch kind {
@@ -154,6 +155,9 @@ private struct ActionBody<Label: View>: View {
                 .foregroundStyle(ink)
                 .tint(ink)
                 .multilineTextAlignment(.center)
+                // A pill is one line: its words shrink a little rather than break ("min-utes").
+                .lineLimit(pill ? 1 : nil)
+                .minimumScaleFactor(pill ? 0.75 : 1)
                 .padding(.horizontal, kind == .quiet ? (metrics.tv ? Tokens.Space.s4 : Tokens.Space.s2)
                                                      : (metrics.tv ? Tokens.Space.s8 : (pill ? Tokens.Space.s5 : Tokens.Space.s4)))
                 .padding(.vertical, Tokens.Space.s2)
@@ -162,6 +166,13 @@ private struct ActionBody<Label: View>: View {
                 .frame(maxWidth: wide ? .infinity : nil, minHeight: metrics.tv ? (kind == .quiet ? 56 : 66) : (tall ? 52 : metrics.minTarget)),
             pressed: pressed, fill: fill, radius: pill || metrics.tv ? 999 : Tokens.Radius.md
         )
+        .overlay {
+            if selected && kind == .secondary {
+                RoundedRectangle(cornerRadius: pill || metrics.tv ? 999 : Tokens.Radius.md, style: .continuous)
+                    .strokeBorder(palette.accent.opacity(0.45), lineWidth: 1)
+                    .allowsHitTesting(false)
+            }
+        }
         .accessibilityAddTraits(selected ? [.isSelected] : [])
     }
 }

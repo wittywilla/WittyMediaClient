@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (C) 2026 WittyWilla and contributors
+import Combine
 import SwiftUI
 import WittyKit
 
@@ -50,6 +51,10 @@ struct SDUIPageScreen: View {
                 if phase == .ready, chrome == .tabRoot { center.settled() }
             }
             .sduiOnChange(of: center.changes) { _ in Task { await store.refresh(center) } }
+            // Screen time that runs out, or more of it given, changes what the page says about it: ask again.
+            .onReceive(model.household.$time.map { $0?.allowed }.removeDuplicates().dropFirst()) { _ in
+                Task { await store.refresh(center) }
+            }
             .sheet(isPresented: $customising) {
                 if let document = store.document {
                     SDUICustomiseView(document: document, page: store.page) { changed in
