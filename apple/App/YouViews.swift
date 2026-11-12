@@ -124,14 +124,6 @@ struct YouView: View {
                 .rowStyle()
                 .accessibilityIdentifier("row.personalColours")
             }
-            // The server's layout options, where it has them: how the whole app is arranged on this device.
-            if model.has("sdui-layouts"), center.enabled, let layouts = center.navigation?.layouts, !layouts.options.isEmpty {
-                NavigationLink(value: Route.layout) {
-                    RowLabel(icon: "rectangle.3.group", tint: RowTint.teal, title: "Layout", value: layouts.currentLabel)
-                }
-                .rowStyle()
-                .accessibilityIdentifier("row.layout")
-            }
             if model.has("module-settings") {
                 NavigationLink(value: Route.modules) {
                     RowLabel(icon: "puzzlepiece.extension", tint: RowTint.quiet, title: "Modules")

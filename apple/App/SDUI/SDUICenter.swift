@@ -18,15 +18,6 @@ struct SDUIPlace: Hashable {
 /// server and person; made by the shell, which is made again when either changes.
 @MainActor
 final class SDUICenter: ObservableObject {
-    enum Mode: Equatable {
-        /// The server hasn't said yet what it can do, and this app has never seen it say.
-        case unknown
-        case on
-        /// A server without the features: the app's own hand-built screens.
-        case off
-    }
-
-    @Published private(set) var mode: Mode = .unknown
     /// The server's catalogue revision when it isn't the one this app draws.
     @Published private(set) var otherRevision: Int?
     @Published private(set) var navigation: SDUINavigation?
@@ -48,7 +39,6 @@ final class SDUICenter: ObservableObject {
         device = SDUICenter.deviceNow(window: nil)
     }
 
-    var enabled: Bool { mode == .on }
     var router: SDUIRouter { SDUIRouter(rules: catalog.routes) }
     var loader: SDUIPageLoader { SDUIPageLoader(client: client, cache: cache, diffs: features.contains("sdui-diff")) }
 
@@ -102,14 +92,14 @@ final class SDUICenter: ObservableObject {
         guard reload else { return }
         // A breakpoint was crossed: pages and the menu are asked for again with the new window.
         epoch += 1
-        if enabled { Task { await loadMenu() } }
+        Task { await loadMenu() }
     }
 
-    private static func rememberedKey(_ base: String) -> String { "sdui.available|\(base)" }
-
-    /// Called whenever the connection, the person or what the server can do changes.
-    func configure(client: WittyClient, user: Int64, features: Set<String>, known: Bool) {
+    /// Called whenever the connection or the person changes.
+    func configure(client: WittyClient, user: Int64, features: Set<String>) {
         let who = "\(client.base)|\(user)|\(client.token.hashValue)"
+        self.features = features
+        guard who != owner || navigation == nil else { return }
         if who != owner {
             owner = who
             self.client = client
@@ -117,24 +107,8 @@ final class SDUICenter: ObservableObject {
             navigation = nil
             catalog = .builtIn
         }
-        self.features = features
-        let defaults = UserDefaults.standard
-        let next: Mode
-        if known {
-            next = SDUI.available(features) ? .on : .off
-            defaults.set(next == .on, forKey: SDUICenter.rememberedKey(client.base))
-        } else if let before = defaults.object(forKey: SDUICenter.rememberedKey(client.base)) as? Bool {
-            // What this server could do last time, until it says again: the first screen is drawn at once.
-            next = before ? .on : .off
-        } else {
-            next = .unknown
-        }
-        guard next != mode || navigation == nil else { return }
-        mode = next
-        if next == .on {
-            restoreMenu()
-            Task { await loadMenu() }
-        }
+        restoreMenu()
+        Task { await loadMenu() }
     }
 
     private var menuKey: String { "navigation|" + device.cacheName }
@@ -149,16 +123,8 @@ final class SDUICenter: ObservableObject {
         }
     }
 
-    /// The layout option this profile chose for this device, or nil to follow the server's. The menu and every page
-    /// showing are asked for again, so the whole app takes the new layout.
-    func chooseLayout(_ layout: String?) async throws {
-        try await client.setSDUILayout(layout, device: device)
-        await loadMenu()
-        epoch += 1
-    }
-
     /// The app's frame as the server's navigation says it, where it says one.
-    var shell: SDUIShell? { enabled ? navigation?.shell : nil }
+    var shell: SDUIShell? { navigation?.shell }
 
     func loadMenu() async {
         let asking = client, key = menuKey, device = device

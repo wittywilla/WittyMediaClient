@@ -5,18 +5,13 @@ import XCTest
 
 /// Layout options and modules' settings, as the server's docs/SDUI.md and docs/SDUI-MODULES.md describe them.
 final class SDUIModulesTests: XCTestCase {
-    func testTheNavigationCarriesItsFrameAndTheLayoutsOnOffer() throws {
+    func testTheNavigationCarriesItsFrame() throws {
         let json = #"""
         {"version":1,"formFactor":"tablet","items":[],
-         "shell":{"experience":"classic","nav":"sidebar","size":220},
-         "layouts":{"current":"sidebar","options":[{"value":"sidebar","label":"Sidebar"},{"value":"topTabs","label":"Top tabs"},{"nope":1}],
-                    "url":"/api/v1/sdui/layout"}}
+         "shell":{"experience":"classic","nav":"sidebar","size":220}}
         """#
         let navigation = try JSONDecoder().decode(SDUINavigation.self, from: Data(json.utf8))
         XCTAssertEqual(navigation.shell, SDUIShell(experience: "classic", nav: "sidebar", size: 220))
-        XCTAssertEqual(navigation.layouts?.options.map(\.value), ["sidebar", "topTabs"], "an option that can't be read is passed over")
-        XCTAssertNil(navigation.layouts?.chosen)
-        XCTAssertEqual(navigation.layouts?.currentLabel, "Sidebar")
         let tv = try JSONDecoder().decode(SDUIShell.self, from: Data(#"{"experience":"compact","nav":"tvSideMenu","size":120,"open":400}"#.utf8))
         XCTAssertEqual(tv.open, 400)
         XCTAssertTrue(SDUIShell.navs.contains(tv.nav))

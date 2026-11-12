@@ -107,30 +107,22 @@ private struct TabRoot: View {
 
     @ViewBuilder private var first: some View {
         switch tab {
-        // Home and Search are the server's own pages where it has them, and this app's where it doesn't.
-        case .home where center.mode == .on: SDUIPageScreen(place: .home, chrome: .tabRoot)
-        case .search where center.mode == .on: SDUIPageScreen(place: SDUIPlace(page: "search", route: "/search"), chrome: .tabRoot)
-        case .home where center.mode == .unknown, .search where center.mode == .unknown: LoadingView()
+        // Home and Search are the server's own pages.
+        case .home: SDUIPageScreen(place: .home, chrome: .tabRoot)
+        case .search: SDUIPageScreen(place: SDUIPlace(page: "search", route: "/search"), chrome: .tabRoot)
         case .sdui(let id): SDUIEntryRoot(id: id)
-        case .home: HomeView()
         #if os(iOS) || os(visionOS)
-        // The website's other top pages have the strip too.
-        case .search: SearchView().underStrip()
         case .profile: YouView().underStrip()
         #else
-        case .search: SearchView()
         case .profile: YouView()
         #endif
         #if os(tvOS)
         case .libraries: LibrariesPage()
         case .games: GamesTab().moduleScope("wittyplay")
         case .guide: LiveTvTab()
+        // A library's tab is the server's page for it.
         case .library(let id):
-            if let library = model.libraries.first(where: { $0.id == id }) {
-                LibraryScreen(library: library)
-            } else {
-                LoadingView()
-            }
+            SDUIPageScreen(place: SDUIPlace(page: "library", params: ["library": String(id)], route: "/library/\(id)"), chrome: .tabRoot).id(id)
         #else
         case .guide:
             // The guide and live channels: the server's page, under the strip.
@@ -153,37 +145,17 @@ private struct TabRoot: View {
                 .navigationDestination(for: Route.self) { route in
                     switch route {
                     case .sdui(let place): SDUIPageScreen(place: place).id(place)
-                    // A server with its own pages shows them for a library, a title, a show and an album, wherever
-                    // in the app they were opened from: one page of each, never two.
-                    case .library(let library) where center.enabled:
-                        SDUIPageScreen(place: SDUIPlace(page: "library", params: ["library": String(library.id)], route: "/library/\(library.id)")).id(library.id)
-                    case .show(let id) where center.enabled:
-                        SDUIPageScreen(place: SDUIPlace(page: "detail", params: ["show": String(id)], route: "/show/\(id)"))
-                    case .item(let id) where center.enabled:
-                        SDUIPageScreen(place: SDUIPlace(page: "detail", params: ["item": String(id)], route: "/item/\(id)"))
-                    case .listeningAlbum(let library, let album, let artist) where center.enabled:
-                        SDUIPageScreen(place: SDUIPlace(page: "detail", params: ["library": String(library), "album": album, "artist": artist]))
+                    // The server's own pages for a library, a title, a show and an album, wherever in the app they were opened from.
                     case .library(let library):
-                        #if os(tvOS)
-                        LibraryScreen(library: library).plainNavigation()
-                        #else
-                        // A library's page is a top of its own, with the strip and no Back, as on the website. Going from one
-                        // section to another replaces the page in place, so each library is a page of its own (`id`):
-                        // otherwise the last one's shelves, count and choices stayed under the new one's name.
-                        LibraryScreen(library: library).noNavigationBar().id(library.id)
-                        #endif
-                    #if os(iOS) || os(visionOS)
-                    // The website's album and artist pages, over their artwork's colour.
+                        SDUIPageScreen(place: SDUIPlace(page: "library", params: ["library": String(library.id)], route: "/library/\(library.id)")).id(library.id)
+                    case .show(let id):
+                        SDUIPageScreen(place: SDUIPlace(page: "detail", params: ["show": String(id)], route: "/show/\(id)"))
+                    case .item(let id):
+                        SDUIPageScreen(place: SDUIPlace(page: "detail", params: ["item": String(id)], route: "/item/\(id)"))
                     case .listeningAlbum(let library, let album, let artist):
-                        MusicAlbumPage(library: library, album: album, artist: artist).moduleScope("wittyaudio").plainNavigation(overPicture: true)
-                    case .artist(let library, let name): MusicArtistPage(library: library, name: name).moduleScope("wittyaudio").plainNavigation(overPicture: true)
-                    #else
-                    case .listeningAlbum(let library, let album, let artist):
-                        AlbumScreen(library: library, album: album, artist: artist).plainNavigation()
-                    case .artist(let library, let name): ArtistScreen(library: library, name: name).plainNavigation()
-                    #endif
-                    case .show(let id): ShowView(id: id).plainNavigation(overPicture: true)
-                    case .item(let id): ItemView(id: id).plainNavigation(overPicture: true)
+                        SDUIPageScreen(place: SDUIPlace(page: "detail", params: ["library": String(library), "album": album, "artist": artist]))
+                    case .artist(let library, let name):
+                        SDUIPageScreen(place: SDUIPlace(page: "detail", params: ["library": String(library), "artist": name]))
                     // WittyPlay's own screens on every device: the Shelves home, which is a library's page with the
                     // strip and no Back, or a console's collection under its band, and a game's page over its picture.
                     case .gameLibrary(let library, nil): GamesLibraryView(library: library, console: nil).moduleScope("wittyplay").noNavigationBar().id(library.id)
@@ -212,7 +184,6 @@ private struct TabRoot: View {
                     case .away: AwayView().plainNavigation()
                     case .servers: ManageServersView().plainNavigation()
                     case .mediaExtras: MediaSettingsView().plainNavigation()
-                    case .layout: LayoutSettingsView().plainNavigation()
                     case .personalColours: PersonalColoursView().plainNavigation()
                     case .modules: ModulesSettingsView().plainNavigation()
                     case .moduleSettings(let module): ModuleSettingsView(module: module).plainNavigation()
@@ -232,9 +203,8 @@ private struct TabRoot: View {
                         #if os(iOS) || os(visionOS)
                         let playing = model.pagePlaying && model.paths[tab]?.last == .page(path)
                         if let found = model.libraryPage(path) {
-                            // A saved view, or a genre, studio or network from an item's page: the app's own library
-                            // page with that chosen, as the website opens /library/3?genre=Drama.
-                            LibraryView(library: found.library, start: found.state).noNavigationBar().id(path)
+                            // A saved view, or a genre, studio or network from an item's page: the server's library page.
+                            SDUIPageScreen(place: SDUIPlace(page: "library", params: ["library": String(found.library.id)], route: path)).id(path)
                         } else if model.isTopPage(path) {
                             // Collections, Game PCs and modules' pages are sections of their own, under the strip.
                             WebPlayerView(path: path, keptToGames: false).underStrip(path: path, hidden: playing)
@@ -290,10 +260,9 @@ struct LibraryScreen: View {
             #else
             ListeningLibraryView(library: library).moduleScope("wittyaudio")
             #endif
-        } else if library.isPhotos {
-            LibraryView(library: library).moduleScope("wittyphotos")
         } else {
-            LibraryView(library: library)
+            SDUIPageScreen(place: SDUIPlace(page: "library", params: ["library": String(library.id)], route: "/library/\(library.id)"), chrome: .tabRoot)
+                .moduleScope(library.isPhotos ? "wittyphotos" : "")
         }
     }
 }
@@ -347,18 +316,8 @@ private struct TopTabs: View {
         }
         .focusScope(root)
         .background(palette.background.ignoresSafeArea())
-        // Home's first look comes after the bar, which has focus meanwhile as the only thing there. Once,
-        // if nobody has moved it, it goes on to Home's main action.
-        .onChange(of: model.libraries) { _ in
-            // A server's own Home says when its first look has arrived: see below.
-            guard !settled, !center.enabled else { return }
-            settled = true
-            // A moment for Home's first look to be drawn, so its main action is there to take focus.
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
-                if bar == .home { resetFocus(in: root) }
-            }
-        }
-        // The same for a server's own Home, whose first look arrives by itself.
+        // Home's first look comes after the bar, which has focus meanwhile as the only thing there. Once, if nobody has
+        // moved it, it goes on to Home's main action, when the page says it has arrived.
         .sduiOnChange(of: center.settles) { _ in
             guard !settled else { return }
             settled = true
@@ -392,7 +351,7 @@ private struct PillShell: View {
         let lift = typing ? 0 : Tokens.Space.s2
         let bar = nav == .bottomTabs
         return TabView(selection: $model.tab) {
-            ForEach(center.enabled ? center.phoneTabs : AppTab.phoneTabs) { tab in
+            ForEach(center.phoneTabs) { tab in
                 TabRoot(tab: tab)
                     .safeAreaInset(edge: .bottom, spacing: 0) {
                         // The mini player sits above the bar.

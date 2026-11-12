@@ -125,7 +125,7 @@ enum Route: Hashable {
     /// Skipping by itself and canvases, on this device: see MediaPages.swift.
     case mediaExtras
     /// The server's layout options for this device, and modules' settings: see LayoutModulesSettings.swift.
-    case layout, modules
+    case modules
     /// This profile's own colours over the theme: see PersonalColoursView.swift.
     case personalColours
     case moduleSettings(String)
