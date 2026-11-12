@@ -5,6 +5,10 @@ What changed in WittyMediaClient, newest first. What changed before it had a rep
 
 ## Unreleased
 
+- **Desktop: saved servers first.** The server list puts the servers this computer has used on top, the last one used
+  first and with focus, and the servers found on the network below them, so nothing found pushes them out of sight. A
+  switch under the list, **Show saved servers first** (on unless turned off, kept on this computer), brings back the
+  old order. The same setting and wording as the Apple and Android apps.
 - **Apple: signing in to a server for the first time no longer leaves Home and Search spinning.** The server's status was read before the app
   had a connection to it, so it was never asked what it can do; its pages stayed "not known yet" and the menu showed "No libraries yet".
   Opening a server now always asks. Seen on the iPhone and iPad simulators against a 0.8.0-alpha server.

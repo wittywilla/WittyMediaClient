@@ -300,6 +300,23 @@
     return node
   }
 
+  // The device's own setting: saved servers listed above the ones found (on by default).
+  const SAVED_FIRST = 'savedServersFirst'
+  function savedFirst() {
+    try { return localStorage.getItem(SAVED_FIRST) !== '0' } catch (e) { return true }
+  }
+  function savedFirstSwitch() {
+    const box = el('input', { type: 'checkbox', checked: savedFirst() })
+    box.setAttribute('role', 'switch')
+    box.setAttribute('aria-describedby', 'saved-first-hint')
+    box.addEventListener('change', () => {
+      try { localStorage.setItem(SAVED_FIRST, box.checked ? '1' : '0') } catch (e) { /* this visit only */ }
+      listFocus = ''
+      listScreen().then(() => { const again = app.querySelector('.pref input'); if (again) again.focus() })
+    })
+    return el('label', { className: 'pref' }, box, el('span', {}, el('span', { textContent: S.savedServersFirst }), el('small', { id: 'saved-first-hint', className: 'caption', textContent: S.savedServersFirstHint })))
+  }
+
   // Yes or no, with the safe answer first and focused.
   function confirmScreen(title, body, yes, onYes) {
     show({
@@ -383,20 +400,26 @@
     const actions = []
     const current = managed ? recent.find((s) => s.url === managed) : null
     if (current) actions.push(button(fill(S.backToServer, { name: nameOf(current) }), () => bridge.manageBack(), { kind: 'primary', icon: 'back', className: 'manage-back' }))
-    if (bridge.supportsDiscovery) {
-      actions.push(el('h2', {}, S.foundServers, el('span', { className: 'dot', 'aria-hidden': 'true' })), searching, foundList)
-    } else {
-      actions.push(el('div', { className: 'note' }, el('p', { textContent: S.findNotSupported })))
-    }
-    if (toast) actions.push(toastNode())
+    const foundPart = bridge.supportsDiscovery
+      ? [el('h2', {}, S.foundServers, el('span', { className: 'dot', 'aria-hidden': 'true' })), searching, foundList]
+      : [el('div', { className: 'note' }, el('p', { textContent: S.findNotSupported }))]
+    const savedPart = []
+    if (toast) savedPart.push(toastNode())
     if (recent.length) {
-      actions.push(recentHeading, recentList)
+      savedPart.push(recentHeading, recentList)
+      const manage = [savedFirstSwitch(recent.length > 0)]
       if (canForget) {
-        actions.push(el('div', { className: 'links manage', role: 'group', 'aria-label': S.manageServers },
+        manage.unshift(
           button(S.removeOldServers, () => { listFocus = ENTER_ADDRESS; removeOldScreen(recent) }, { kind: 'quiet' }),
-          button(S.removeAllServers, () => { listFocus = ENTER_ADDRESS; removeAllScreen(recent) }, { kind: 'quiet' })))
+          button(S.removeAllServers, () => { listFocus = ENTER_ADDRESS; removeAllScreen(recent) }, { kind: 'quiet' }))
       }
+      savedPart.push(el('div', { className: 'links manage', role: 'group', 'aria-label': S.manageServers }, ...manage))
     }
+    // Saved servers first (the setting, on unless turned off): what this device has used is in
+    // reach at once, the last one used on top, and what is found on the network goes below it.
+    const savedOnTop = savedFirst() && recent.length > 0
+    if (savedOnTop) actions.push(...savedPart, ...foundPart)
+    else actions.push(...foundPart, ...savedPart)
     // The main action until there's a server to choose.
     const enterAddress = button(S.enterAddress, () => { listFocus = ENTER_ADDRESS; addressScreen() }, { icon: 'link', kind: recent.length ? 'secondary' : 'primary', className: 'enter' })
     actions.push(enterAddress)
@@ -428,7 +451,7 @@
         const neighbour = foundList.children[Math.min(focusedIndex, foundList.children.length - 1)]
         const fallback = remembered || neighbour || app.querySelector('.actions button:not([hidden])')
         if (fallback) fallback.focus()
-      } else if (!userMoved && foundList.firstChild) foundList.firstChild.focus()
+      } else if (!userMoved && !savedOnTop && foundList.firstChild) foundList.firstChild.focus()
     }
     const startedAt = Date.now()
     renderFound()
@@ -437,7 +460,13 @@
     if (cameFrom) {
       cameFrom.focus()
       userMoved = true
+    } else if (savedOnTop && !current) {
+      // The last one used has focus, and a server found later doesn't take it.
+      const last = recentList.querySelector('.server')
+      if (last) { last.focus(); userMoved = true }
     }
+    // Opened from the menu while a server is in use: the way back to it comes first.
+    if (current) { const back = app.querySelector('.manage-back'); if (back) { back.focus(); userMoved = true } }
     if (bridge.supportsDiscovery) setTimeout(() => { if (renderFound) renderFound() }, NONE_AFTER_MS + 100)
     return undefined
   }
