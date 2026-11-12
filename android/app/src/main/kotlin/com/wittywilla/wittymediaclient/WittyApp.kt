@@ -54,6 +54,9 @@ class WittyApp : Application(), SingletonImageLoader.Factory {
     // What's playing in the listening service, for the screens that show it.
     val listening by lazy { Listening(this) }
 
+    // Reaching the server from away, peer to peer (p2p/PeerManager.kt).
+    val peers by lazy { com.wittywilla.wittymediaclient.p2p.PeerManager(this) }
+
     // The current connection. Images use its client, so they carry the sign-in.
     @Volatile
     var api: Api = Api("", "")

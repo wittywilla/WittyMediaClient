@@ -85,6 +85,7 @@ import androidx.compose.ui.semantics.CustomAccessibilityAction
 import com.wittywilla.wittymediaclient.net.Address
 import com.wittywilla.wittymediaclient.net.ApiError
 import com.wittywilla.wittymediaclient.net.FoundServer
+import com.wittywilla.wittymediaclient.net.PeerRules
 import com.wittywilla.wittymediaclient.net.Probe
 import com.wittywilla.wittymediaclient.net.Profile
 import com.wittywilla.wittymediaclient.net.Profiles
@@ -189,7 +190,14 @@ fun ConnectScreen(nav: Nav, s: Map<String, String>, message: String) {
         scope.launch {
             val failed = when (val r = probeServer(url, appVersion)) {
                 is Probe.Found -> nav.arrive(r.url, r.status)
-                is Probe.Failed -> reasonText(s, r.reason)
+                // A server this device knows that doesn't answer here may be reached from away.
+                is Probe.Failed -> {
+                    val saved = recent.firstOrNull { it.url == url }
+                    if (r.reason == "unreachable" && saved != null && nav.app.peers.info(saved) != null) {
+                        problem = s["awayConnecting"].orEmpty()
+                        if (nav.tryFromAway(saved)) null else s["errAwayFailed"].orEmpty()
+                    } else reasonText(s, r.reason)
+                }
             }
             if (failed != null) {
                 problem = failed
@@ -201,6 +209,17 @@ fun ConnectScreen(nav: Nav, s: Map<String, String>, message: String) {
     }
 
     fun submit() {
+        // An invite link from the server's Remote Access page, for connecting from away.
+        PeerRules.invite(address)?.let { invite ->
+            if (connecting != null) return
+            connecting = "invite"
+            problem = ""
+            scope.launch {
+                nav.joinInvite(invite)?.let { problem = it }
+                connecting = null
+            }
+            return
+        }
         when (val r = Address.normalize(address)) {
             is Address.Result.Ok -> connect(r.url)
             is Address.Result.Bad -> problem = reasonText(s, r.reason)
@@ -329,6 +348,10 @@ fun ConnectScreen(nav: Nav, s: Map<String, String>, message: String) {
                 kind = if (nothing) ButtonKind.Primary else ButtonKind.Secondary, icon = Symbols.Address, tall = true,
                 requestFocus = firstKey == "enter-address", takeFocus = focusOn == "enter-address", focusKey = "enter-address",
             )
+            // A device that has never been at home with its server: it shows a code to type into the server.
+            if (nav.app.peers.available) {
+                WittyButton(s["joinAway"].orEmpty(), { nav.push(Route.JoinAway) }, Modifier.fillMaxWidth(), kind = ButtonKind.Quiet, icon = Symbols.Globe, focusKey = "join-away")
+            }
             // Where every remembered server can be removed: one, all, or those not reached for a while.
             if (recent.isNotEmpty()) {
                 WittyButton(

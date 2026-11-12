@@ -76,7 +76,7 @@ object ForgetServer {
             ViewPrefsStore.forgetVideos(app)
             LastChannel.forget(app)
         }
-        forgetPeerToPeer(gone.server)
+        forgetPeerToPeer(app, gone.server, gone.signIn)
         val signIn = gone.signIn?.takeIf { it.token.isNotEmpty() } ?: return
         val url = gone.taken.current.ifEmpty { gone.server.url }
         app.scope.launch { withTimeoutOrNull(SIGN_OUT_MS) { signOutThere(url, signIn) } }
@@ -103,8 +103,9 @@ object ForgetServer {
         }
     }
 
-    // Peer-to-peer data for this server (its pairing and relay state). Android has no peer-to-peer yet, so there
-    // is nothing to delete; when it gets it, this is where that server's part goes.
-    @Suppress("UNUSED_PARAMETER")
-    private fun forgetPeerToPeer(server: SavedServer) = Unit
+    // Peer-to-peer data for this server: what was kept for reaching it from away, this device's place on its list
+    // (with the sign-in it had, best effort), and the connection if it was to it (p2p/PeerManager.kt).
+    private fun forgetPeerToPeer(app: WittyApp, server: SavedServer, signIn: SignIn?) {
+        app.scope.launch { app.peers.forgetAway(server, signIn?.token.orEmpty()) }
+    }
 }
