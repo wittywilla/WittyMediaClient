@@ -125,6 +125,8 @@
   "rowControllers": "Controllers",
   "rowTheme": "Theme",
   "rowLook": "Look",
+  "rowEditLayout": "Edit layout",
+  "rowNameAndLogo": "Name and logo",
   "lookHint": "How this app is arranged and finished on this device: the menu, the cards, the type. Theme is chosen separately.",
   "lookServer": "Follow the server",
   "lookNone": "This server has no looks to choose from.",

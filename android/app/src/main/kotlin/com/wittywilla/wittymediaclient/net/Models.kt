@@ -24,8 +24,10 @@ data class ServerStatus(
     val update: String = "",
 )
 
+// `color` is how Design 2 colours a part (net/BrandEditor.kt: fg, accent, token, static, gradient); `accent` stays the
+// short way to ask for the accent kind. `bold` draws the part in the heavy weight.
 @Serializable
-data class BrandPart(val text: String = "", val accent: Boolean = false)
+data class BrandPart(val text: String = "", val accent: Boolean = false, val color: BrandColor? = null, val bold: Boolean = false)
 
 @Serializable
 data class User(

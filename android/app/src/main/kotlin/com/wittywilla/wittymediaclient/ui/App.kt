@@ -493,6 +493,12 @@ class Nav(val app: WittyApp, private val s: Map<String, String>) {
         }
     }
 
+    // After the name editor saved: the server's name, its coloured parts and its logo, asked for again.
+    suspend fun reloadBrand() {
+        val status = runCatching { app.api.status() }.getOrNull() ?: return
+        showBrand(server?.url ?: app.api.base, status)
+    }
+
     // After the profile rearranged its menu, or a page changed what is in it.
     suspend fun reloadSduiNav() {
         val client = sdui ?: return

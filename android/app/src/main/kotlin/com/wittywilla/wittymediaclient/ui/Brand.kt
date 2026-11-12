@@ -170,9 +170,11 @@ private const val GLOW_TALL = 0.6f
 private const val GLOW_ALPHA = 0.16f
 private const val GLOW_FADE = 0.7f
 
-// The server's name, its accent parts in `brandAccent` and the rest in `ink`: the one way every frame draws it.
-fun brandAnnotated(name: String, parts: List<com.wittywilla.wittymediaclient.net.BrandPart>, ink: Color, accent: Color) = buildAnnotatedString {
-    for (part in com.wittywilla.wittymediaclient.net.BrandName.parts(name, parts)) {
-        withStyle(SpanStyle(color = if (part.accent) accent else ink)) { append(part.text) }
-    }
+// The server's name, each part in the colour it carries (fg, accent in `brandAccent`, token, static, gradient; bold parts
+// heavy), the rest in `ink`: the one way every frame draws it (ui/BrandText.kt).
+@Composable
+fun brandAnnotated(name: String, parts: List<com.wittywilla.wittymediaclient.net.BrandPart>, ink: Color, accent: Color): androidx.compose.ui.text.AnnotatedString {
+    val theme = LocalAppTheme.current
+    val shown = com.wittywilla.wittymediaclient.net.BrandName.parts(name, parts)
+    return remember(shown, ink, accent, theme) { buildBrandText(shown, ink, accent, theme) }
 }
