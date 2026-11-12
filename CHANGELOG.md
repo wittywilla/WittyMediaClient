@@ -5,6 +5,14 @@ What changed in WittyMediaClient, newest first. What changed before it had a rep
 
 ## Unreleased
 
+- **Apple TV and Android TV: live TV for long channel lists.** The guide shows a chosen **set** of channels: all of them,
+  favourites, one source, one group of a playlist, or sets of your own made from any channels (renamed, reordered, and shared with
+  everyone by an administrator), remembered on each TV. It shows 25, 50, 75 or 100 channels a page, or all of them scrolling and
+  loaded as they come into view; finds a channel by name; and goes to a dialled number, offering all channels when it isn't in the
+  set. **Watch from the start** plays a programme from its source's archive, and recordings can start early, end late, and for a
+  series follow the title on any channel, record new episodes only and keep the newest few. On a phone or tablet the guide is the
+  server's own page, which has all of this. Each part appears only when the server offers it (`tv-sets`, `tv-guide-paging`,
+  `tv-catchup`, `tv-dvr-rules-2`). Unit-tested and built; not yet run on a simulator or emulator.
 - **Apple: signing in to a server for the first time no longer leaves Home and Search spinning.** The server's status was read before the app
   had a connection to it, so it was never asked what it can do; its pages stayed "not known yet" and the menu showed "No libraries yet".
   Opening a server now always asks. Seen on the iPhone and iPad simulators against a 0.8.0-alpha server.
