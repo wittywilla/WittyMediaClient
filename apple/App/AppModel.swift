@@ -465,7 +465,7 @@ final class AppModel: ObservableObject {
     /// What the owner set, in the guide, and what this account chose, for Apple TV's guide and channels.
     func learnTvLook(from guide: Guide, client: WittyClient) async {
         let saved = try? await client.tvSaved()
-        tvColours = TvLook.colours(saved: saved, ownerTheme: guide.theme, ownerLayout: guide.layout, ownerSkin: guide.skin, app: tvAppColours)
+        tvColours = TvLook.colours(saved: saved, ownerTheme: guide.theme, app: tvAppColours)
         tvLogos = saved?.logos ?? true
     }
 

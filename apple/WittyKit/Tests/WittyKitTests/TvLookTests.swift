@@ -50,8 +50,8 @@ final class TvLookTests: XCTestCase {
     }
 
     func testYourChoiceThenTheAppsThenTheOwners() {
-        func theme(_ saved: TvSaved?, _ owner: String?, suggestion: String? = nil, layout: String? = nil, skin: String? = nil) -> String {
-            TvLook.choice(saved: saved, suggestion: suggestion, ownerTheme: owner, ownerLayout: layout, ownerSkin: skin).theme
+        func theme(_ saved: TvSaved?, _ owner: String?, suggestion: String? = nil) -> String {
+            TvLook.choice(saved: saved, suggestion: suggestion, ownerTheme: owner).theme
         }
         XCTAssertEqual(theme(TvSaved(theme: "teletext"), "listings"), "teletext")
         XCTAssertEqual(theme(nil, "listings"), "listings")
@@ -62,32 +62,13 @@ final class TvLookTests: XCTestCase {
         XCTAssertEqual(theme(nil, nil), "classic")
         // An owner can't start people on someone's Custom.
         XCTAssertEqual(theme(nil, "custom"), "classic")
-        XCTAssertEqual(theme(nil, nil, layout: "classic", skin: "satellite"), "satellite")
-        XCTAssertEqual(TvLook.resolve(saved: nil, suggestion: "modern", ownerTheme: "listings", ownerLayout: nil, ownerSkin: nil).source, .app)
-        XCTAssertEqual(TvLook.resolve(saved: nil, ownerTheme: "listings", ownerLayout: nil, ownerSkin: nil).source, .owner)
+        XCTAssertEqual(TvLook.resolve(saved: nil, suggestion: "modern", ownerTheme: "listings").source, .app)
+        XCTAssertEqual(TvLook.resolve(saved: nil, ownerTheme: "listings").source, .owner)
     }
 
     func testAChangedColourComesWithItsTheme() {
         let saved = TvSaved(theme: "classic", themeColours: ["classic": ["hi": "#ff0000"], "modern": ["hi": "#00ff00"]])
-        XCTAssertEqual(TvLook.choice(saved: saved, ownerTheme: nil, ownerLayout: nil, ownerSkin: nil).colours, ["hi": "#ff0000"])
-    }
-
-    func testALookSavedBeforeThereWereThemes() {
-        func was(_ layout: String?, _ colours: String?, bg: String? = nil, accent: String? = nil) -> (theme: String, colours: [String: String]) {
-            TvLook.choice(saved: TvSaved(layout: layout, colours: colours, customBg: bg, customAccent: accent), ownerTheme: nil, ownerLayout: nil, ownerSkin: nil)
-        }
-        XCTAssertEqual(was("classic", "cable").theme, "classic")
-        XCTAssertEqual(was("classic", "satellite").theme, "satellite")
-        XCTAssertEqual(was("streaming", "theme").theme, "modern")
-        XCTAssertEqual(was("streaming", "cable").colours["hi"], "#ffd60a")
-        let own = was("classic", "custom", bg: "#101010", accent: "#ffb300")
-        XCTAssertEqual(own.theme, "custom")
-        XCTAssertEqual(own.colours, ["bg": "#101010", "accent": "#ffb300", "hi": "#ffb300"])
-        // The old box with the app's colours is Custom on the box's shape, in plain type.
-        let box = TvLook.resolve(saved: TvSaved(layout: "classic", colours: "theme"), ownerTheme: nil, ownerLayout: nil, ownerSkin: nil)
-        XCTAssertEqual(box.theme, "custom")
-        XCTAssertEqual(box.shape, .box)
-        XCTAssertEqual(box.font, "system")
+        XCTAssertEqual(TvLook.choice(saved: saved, ownerTheme: nil).colours, ["hi": "#ff0000"])
     }
 
     func testABadColourIsIgnored() {
@@ -99,12 +80,12 @@ final class TvLookTests: XCTestCase {
         let shapes = Dictionary(uniqueKeysWithValues: TvTheme.all.map { ($0.id, $0.shape) })
         XCTAssertEqual(shapes, ["modern": .modern, "classic": .box, "satellite": .receiver, "teletext": .teletext, "listings": .listings,
                                 "bigpicture": .cinema, "outline": .outline, "compact": .compact, "custom": .modern])
-        let custom = TvLook.resolve(saved: TvSaved(theme: "custom", custom: .init(shape: "listings", font: "mono")), ownerTheme: nil, ownerLayout: nil, ownerSkin: nil)
+        let custom = TvLook.resolve(saved: TvSaved(theme: "custom", custom: .init(shape: "listings", font: "mono")), ownerTheme: nil)
         XCTAssertEqual(custom.shape, .listings)
         XCTAssertEqual(custom.font, "mono")
-        let wrong = TvLook.resolve(saved: TvSaved(theme: "custom", custom: .init(shape: "no such shape")), ownerTheme: nil, ownerLayout: nil, ownerSkin: nil)
+        let wrong = TvLook.resolve(saved: TvSaved(theme: "custom", custom: .init(shape: "no such shape")), ownerTheme: nil)
         XCTAssertEqual(wrong.shape, .modern)
-        XCTAssertEqual(TvLook.resolve(saved: TvSaved(theme: "teletext", custom: .init(shape: "listings", font: "serif")), ownerTheme: nil, ownerLayout: nil, ownerSkin: nil).font, "",
+        XCTAssertEqual(TvLook.resolve(saved: TvSaved(theme: "teletext", custom: .init(shape: "listings", font: "serif")), ownerTheme: nil).font, "",
                        "only Custom takes a type of its own")
     }
 
@@ -123,18 +104,18 @@ final class TvLookTests: XCTestCase {
     }
 
     func testTheOtherChoicesAndTheirDefaults() throws {
-        let plain = TvLook.resolve(saved: nil, ownerTheme: "satellite", ownerLayout: nil, ownerSkin: nil)
+        let plain = TvLook.resolve(saved: nil, ownerTheme: "satellite")
         XCTAssertEqual(plain.density, "normal")
         XCTAssertEqual(plain.hours, 0)
         XCTAssertTrue(plain.nowLine && plain.progress && plain.subtitles && plain.logos && plain.art)
         XCTAssertEqual(plain.preview, "highlight")
         XCTAssertEqual(plain.previewSide, "right")
         XCTAssertFalse(plain.previewSound)
-        XCTAssertEqual(TvLook.resolve(saved: nil, ownerTheme: "bigpicture", ownerLayout: nil, ownerSkin: nil).previewSide, "left", "Big picture starts on the left")
+        XCTAssertEqual(TvLook.resolve(saved: nil, ownerTheme: "bigpicture").previewSide, "left", "Big picture starts on the left")
 
         let json = #"{"theme":"compact","density":"large","hours":3,"nowLine":false,"progress":false,"subtitles":false,"logos":false,"art":false,"preview":"last","previewSide":"left","previewW":500,"previewSound":true}"#
         let saved = try JSONDecoder().decode(TvSaved.self, from: Data(json.utf8))
-        let look = TvLook.resolve(saved: saved, ownerTheme: nil, ownerLayout: nil, ownerSkin: nil)
+        let look = TvLook.resolve(saved: saved, ownerTheme: nil)
         XCTAssertEqual(look.density, "large")
         XCTAssertEqual(look.hours, 3)
         XCTAssertFalse(look.nowLine || look.progress || look.subtitles || look.logos || look.art)
@@ -142,27 +123,7 @@ final class TvLookTests: XCTestCase {
         XCTAssertEqual(look.previewSide, "left")
         XCTAssertEqual(look.previewW, 500)
         XCTAssertTrue(look.previewSound)
-        XCTAssertEqual(TvLook.resolve(saved: TvSaved(hours: 7), ownerTheme: nil, ownerLayout: nil, ownerSkin: nil).hours, 0, "only the hours the page offers")
-    }
-
-    func testAPreviewPlacedBeforeThereWereSides() throws {
-        let old = try JSONDecoder().decode(TvSaved.self, from: Data(#"{"previewPos":"bl","previewSize":"l"}"#.utf8))
-        let look = TvLook.resolve(saved: old, ownerTheme: nil, ownerLayout: nil, ownerSkin: nil)
-        XCTAssertEqual(look.previewSide, "left")
-        XCTAssertEqual(look.previewW, 460)
-    }
-
-    func testWhatAnOlderAppIsToldBesideTheTheme() {
-        // legacyOf in tvThemes.ts, for each theme on its own shape.
-        let want: [String: (String, String)] = ["modern": ("streaming", "theme"), "classic": ("classic", "cable"), "satellite": ("classic", "satellite"), "teletext": ("classic", "cable"),
-                                                "listings": ("streaming", "theme"), "bigpicture": ("streaming", "theme"), "outline": ("streaming", "theme"), "compact": ("streaming", "theme"), "custom": ("streaming", "theme")]
-        for theme in TvTheme.all {
-            let got = TvLook.legacyOf(theme.id, shape: theme.shape)
-            XCTAssertEqual(got.layout, want[theme.id]?.0, theme.id)
-            XCTAssertEqual(got.colours, want[theme.id]?.1, theme.id)
-        }
-        XCTAssertEqual(TvLook.legacyOf("custom", shape: .box).colours, "theme")
-        XCTAssertEqual(TvLook.legacyOf("custom", shape: .box).layout, "classic")
+        XCTAssertEqual(TvLook.resolve(saved: TvSaved(hours: 7), ownerTheme: nil).hours, 0, "only the hours the page offers")
     }
 
     func testAChannelsOwnColourIsMadeVisible() {
