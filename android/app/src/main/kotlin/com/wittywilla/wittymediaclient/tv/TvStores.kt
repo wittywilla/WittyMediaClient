@@ -11,6 +11,15 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.compositeOver
 import androidx.compose.ui.graphics.toArgb
 import com.wittywilla.wittymediaclient.net.Api
+import com.wittywilla.wittymediaclient.net.ChannelSet
+import com.wittywilla.wittymediaclient.net.DialRules
+import com.wittywilla.wittymediaclient.net.GuidePaging
+import com.wittywilla.wittymediaclient.net.LocateRules
+import com.wittywilla.wittymediaclient.net.Located
+import com.wittywilla.wittymediaclient.net.SetRules
+import com.wittywilla.wittymediaclient.net.channelSets
+import com.wittywilla.wittymediaclient.net.liteChannels
+import com.wittywilla.wittymediaclient.net.locateChannel
 import com.wittywilla.wittymediaclient.net.Guide
 import com.wittywilla.wittymediaclient.net.GuideBrand
 import com.wittywilla.wittymediaclient.net.GuideChannel
@@ -144,13 +153,18 @@ object TvLookStore {
     }
 }
 
-// Which channels the guide shows.
+// Which channels the guide shows, on a server without channel sets.
 data class GuideFilter(val kind: String = "", val group: String = "", val favourites: Boolean = false) {
     val isAll: Boolean get() = kind.isEmpty() && group.isEmpty() && !favourites
 }
 
+// Everything that decides which rows the guide has: a change to any of it starts the rows afresh.
+data class GuideView(val filter: GuideFilter = GuideFilter(), val set: String = SetRules.ALL, val search: String = "", val pageSize: Int = GuidePaging.ALL)
+
 // The guide's channels, a page at a time, for the stretch of hours on screen. Only the rows near what's shown are
-// asked for, so a playlist of thousands of channels stays quick.
+// asked for, and the rest let go, so a playlist of ten thousand channels stays quick. On a server with channel sets
+// (`tv-sets`) the rows are a set's; with `tv-guide-paging` they can be narrowed by what's typed, and a channel found by
+// its number. A page size of a number shows that many rows at a time; All scrolls through them all.
 class GuideStore(private val api: Api) {
     val rows = mutableStateMapOf<Int, GuideChannel>()
     var total by mutableStateOf<Int?>(null)
@@ -160,18 +174,95 @@ class GuideStore(private val api: Api) {
     var lineup by mutableStateOf<List<GuideChannel>>(emptyList())
         private set
     var error by mutableStateOf("")
-    var filter by mutableStateOf(GuideFilter())
+    var view by mutableStateOf(GuideView())
+        private set
+    val filter: GuideFilter get() = view.filter
+
+    // What the server can do, once its features are read.
+    var hasSets by mutableStateOf(false)
+        private set
+    var hasPaging by mutableStateOf(false)
+        private set
+
+    // The sets, once asked for, and whether this account may share one.
+    var sets by mutableStateOf<List<ChannelSet>?>(null)
+        private set
+    var canShare by mutableStateOf(false)
+        private set
+
+    // The first row of the page on screen, when paged.
+    var pageOffset by mutableStateOf(0)
         private set
     private var fetchFrom = 0L
     private val loaded = HashSet<String>()
+    private var lineupFor = ""
 
-    // A changed filter starts the rows afresh.
-    fun choose(next: GuideFilter) {
-        if (next == filter) return
-        filter = next
+    val set: String get() = view.set
+    val search: String get() = view.search
+    val pageSize: Int get() = view.pageSize
+    val paged: Boolean get() = view.pageSize > 0
+
+    // Showing everything: nothing chosen to narrow the channels.
+    val showingAll: Boolean get() = view.search.isBlank() && if (hasSets) view.set == SetRules.ALL else view.filter.isAll
+
+    val currentSet: ChannelSet? get() = sets?.firstOrNull { it.id == view.set }
+
+    // The rows the grid has: a page's, or all of them.
+    val firstRow: Int get() = if (paged) pageOffset else 0
+    val rowCount: Int get() = total?.let { GuidePaging.rowsOn(firstRow, view.pageSize, it) } ?: 0
+
+    private val chunk: Int get() = GuidePaging.chunk(view.pageSize, hasPaging)
+
+    fun configure(sets: Boolean, paging: Boolean, pageSize: Int) {
+        hasSets = sets
+        hasPaging = paging
+        val next = view.copy(pageSize = GuidePaging.size(pageSize))
+        if (next != view) start(next)
+    }
+
+    private fun start(next: GuideView) {
+        view = next
         loaded.clear()
         rows.clear()
         total = null
+        pageOffset = 0
+    }
+
+    // A changed filter starts the rows afresh.
+    fun choose(next: GuideFilter) {
+        if (next == view.filter) return
+        start(view.copy(filter = next))
+    }
+
+    fun chooseSet(id: String) {
+        if (id == view.set) return
+        start(view.copy(set = id))
+    }
+
+    fun chooseSearch(words: String) {
+        val w = words.trim()
+        if (w == view.search) return
+        start(view.copy(search = w))
+    }
+
+    fun choosePageSize(size: Int) {
+        val s = GuidePaging.size(size)
+        if (s == view.pageSize) return
+        start(view.copy(pageSize = s))
+    }
+
+    // Everything again, from the start: All on an older server, the All set on a newer one, nothing typed.
+    fun showAll() {
+        start(view.copy(filter = GuideFilter(), set = SetRules.ALL, search = ""))
+    }
+
+    // The page that holds a row; true when that's another page.
+    fun pageFor(row: Int): Boolean {
+        if (!paged) return false
+        val at = GuidePaging.pageStart(row, view.pageSize)
+        if (at == pageOffset) return false
+        pageOffset = at
+        return true
     }
 
     // A new stretch of hours keeps the rows until the new ones come, so the highlight has somewhere to be.
@@ -187,18 +278,27 @@ class GuideStore(private val api: Api) {
     fun refresh() = loaded.clear()
 
     suspend fun ensure(row: Int) {
-        val page = maxOf(0, row) / GuideRules.PAGE
-        val key = "$fetchFrom|${filter.kind}|${filter.group}|${filter.favourites}|$page"
+        val size = chunk
+        val page = maxOf(0, row) / size
+        val asked = view
+        val key = "$fetchFrom|$asked|$page"
         if (!loaded.add(key)) return
-        val asked = filter
+        val query = when {
+            hasSets || hasPaging -> GuidePaging.query(
+                fetchFrom, page * size, size,
+                set = if (hasSets) asked.set else null,
+                q = if (hasPaging) asked.search else "",
+            ).let { q -> if (hasSets) q else q + "&kind=${GuideRules.queryValue(asked.filter.kind)}&group=${GuideRules.queryValue(asked.filter.group)}" + if (asked.filter.favourites) "&favourites=1" else "" }
+            else -> GuideRules.query(fetchFrom, page * size, limit = size, kind = asked.filter.kind, group = asked.filter.group, favourites = asked.filter.favourites)
+        }
         try {
-            val g = api.guidePage(GuideRules.query(fetchFrom, page * GuideRules.PAGE, kind = asked.kind, group = asked.group, favourites = asked.favourites))
-            if (asked != filter) return
+            val g = api.guidePage(query)
+            if (asked != view) return
             TvLookStore.learnOwner(g)
             total = g.total ?: g.channels.size
             val fresh = g.groups.orEmpty()
-            groups = if (asked.isAll) fresh else (groups + fresh).toSortedSet().toList()
-            val at = g.offset ?: (page * GuideRules.PAGE)
+            groups = if (asked.filter.isAll) fresh else (groups + fresh).toSortedSet().toList()
+            val at = g.offset ?: (page * size)
             g.channels.forEachIndexed { i, c -> rows[at + i] = c }
             error = ""
         } catch (e: CancellationException) {
@@ -210,13 +310,63 @@ class GuideStore(private val api: Api) {
         }
     }
 
-    // Every channel's number and name: for favourites, Last, and finding a channel by its key.
-    suspend fun loadLineup() {
-        runCatching { api.lineup() }.getOrNull()?.let { lineup = uniqueChannels(it.channels) }
+    // Lets go of the rows far from those on screen, so scrolling through thousands of channels doesn't keep them all.
+    fun trim(visible: Collection<Int>) {
+        if (paged || rows.size <= chunk * (GuidePaging.KEEP * 2 + 2)) return
+        val keep = GuidePaging.keep(visible, chunk)
+        if (keep.isEmpty()) return
+        val size = chunk
+        rows.keys.filter { it / size !in keep }.forEach { rows.remove(it) }
+        loaded.removeAll { k -> k.substringAfterLast('|').toIntOrNull()?.let { it !in keep } ?: false }
     }
 
-    fun index(key: String): Int? =
-        lineup.filter { GuideRules.matches(it, filter.kind, filter.group, filter.favourites) }.indexOfFirst { it.key == key }.takeIf { it >= 0 }
+    // The sets, and this device's choice among them for this server and account. Unknown or gone: All.
+    suspend fun loadSets(saved: String?): String {
+        val answer = runCatching { api.channelSets() }.getOrNull()
+        if (answer != null) {
+            sets = answer.sets.orEmpty()
+            canShare = answer.canShare
+        }
+        return SetRules.remembered(saved, sets)
+    }
+
+    suspend fun reloadSets() {
+        runCatching { api.channelSets() }.getOrNull()?.let {
+            sets = it.sets.orEmpty()
+            canShare = it.canShare
+        }
+    }
+
+    // Every channel's number and name: for favourites, Last, dialling, and finding a channel by its key. On a newer
+    // server only what that needs, and only the set's.
+    suspend fun loadLineup(force: Boolean = false) {
+        val wanted = if (hasSets) view.set else ""
+        val asking = "$hasPaging|$wanted"
+        if (!force && asking == lineupFor && lineup.isNotEmpty()) return
+        val fresh = runCatching { if (hasPaging) api.liteChannels(if (hasSets) wanted else null) else api.lineup() }.getOrNull() ?: return
+        lineupFor = asking
+        lineup = uniqueChannels(fresh.channels)
+    }
+
+    // A channel's row in what the guide shows.
+    fun index(key: String): Int? {
+        val shown = if (hasSets) lineup else lineup.filter { GuideRules.matches(it, view.filter.kind, view.filter.group, view.filter.favourites) }
+        val narrowed = if (hasPaging && view.search.isNotBlank()) shown.filter { GuidePaging.matches(it, view.search) } else shown
+        return narrowed.indexOfFirst { it.key == key }.takeIf { it >= 0 }
+    }
+
+    // Where a channel (a number or a key) is in what's showing, and in All when it isn't there.
+    suspend fun locate(wanted: String): Located {
+        if (hasPaging) {
+            val here = api.locateChannel(if (hasSets) view.set else null, view.search, wanted)
+            val all = if (here < 0 && !showingAll) api.locateChannel(if (hasSets) SetRules.ALL else null, "", wanted) else null
+            return LocateRules.decide(here, all, showingAll)
+        }
+        val shown = if (hasSets) lineup else lineup.filter { GuideRules.matches(it, view.filter.kind, view.filter.group, view.filter.favourites) }
+        val here = DialRules.locate(shown, wanted)
+        val all = if (here < 0 && !showingAll && !hasSets) DialRules.locate(lineup, wanted) else null
+        return LocateRules.decide(here, all, showingAll)
+    }
 
     // Marks a channel a favourite or not, at once, then tells the server.
     suspend fun setFavourite(channel: GuideChannel, on: Boolean) {

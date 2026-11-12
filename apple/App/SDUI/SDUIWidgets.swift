@@ -346,6 +346,7 @@ struct SDUITextView: View {
 /// A message that stands out: a rounded block in `bg2` with a bar at its leading edge in the tone's colour,
 /// the icon, the title, the text, and one button at the end (below on a phone).
 struct SDUINoticeView: View {
+    @Environment(\.sduiDraw) private var draw
     @EnvironmentObject private var model: AppModel
     @EnvironmentObject private var center: SDUICenter
     @EnvironmentObject private var store: SDUIPageStore
@@ -406,7 +407,7 @@ struct SDUINoticeView: View {
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(palette.panel)
         .overlay(alignment: .leading) { Rectangle().fill(tone).frame(width: 4) }
-        .clipShape(RoundedRectangle(cornerRadius: Tokens.Radius.md, style: .continuous))
+        .clipShape(RoundedRectangle(cornerRadius: draw.radius("Notice"), style: .continuous))
         .padding(.horizontal, layout.margin)
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("sdui.section." + notice.id)
@@ -555,6 +556,7 @@ struct SDUIButtonView: View {
 
 /// A picture from this server at the content's width, at most 960 points, in its shape; a link when it has somewhere to go.
 struct SDUIImageView: View {
+    @Environment(\.sduiDraw) private var draw
     @EnvironmentObject private var model: AppModel
     @EnvironmentObject private var center: SDUICenter
     @EnvironmentObject private var store: SDUIPageStore
@@ -568,7 +570,7 @@ struct SDUIImageView: View {
             .aspectRatio(ratio, contentMode: .fit)
             .frame(maxWidth: 960)
             .overlay { SDUIPicture(picture: element.picture, contain: element.props.text("fit") == "contain") }
-            .clipShape(RoundedRectangle(cornerRadius: element.props.flag("rounded") == false ? 0 : Tokens.Radius.md, style: .continuous))
+            .clipShape(RoundedRectangle(cornerRadius: element.props.flag("rounded") == false ? 0 : draw.radius("Image"), style: .continuous))
     }
 
     var body: some View {
@@ -593,6 +595,7 @@ struct SDUIImageView: View {
 /// again 300 ms after the last keystroke; anywhere else it opens the search page with what was typed. On Apple
 /// TV choosing it brings up the system's own keyboard.
 struct SDUISearchBoxView: View {
+    @Environment(\.sduiDraw) private var draw
     @EnvironmentObject private var model: AppModel
     @EnvironmentObject private var center: SDUICenter
     @EnvironmentObject private var store: SDUIPageStore
@@ -635,7 +638,7 @@ struct SDUISearchBoxView: View {
         #if !os(tvOS)
         .padding(.horizontal, layout.sp("s"))
         .frame(minHeight: 48)
-        .background(RoundedRectangle(cornerRadius: Tokens.Radius.md, style: .continuous).fill(palette.card))
+        .background(RoundedRectangle(cornerRadius: draw.radius("SearchBox"), style: .continuous).fill(palette.card))
         #endif
         .frame(maxWidth: layout.isTV ? 900 : 560, alignment: .leading)
         .frame(maxWidth: .infinity, alignment: .leading)

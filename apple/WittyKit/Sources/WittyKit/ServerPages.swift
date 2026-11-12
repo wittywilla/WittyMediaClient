@@ -178,6 +178,10 @@ public struct GuideChannel: Decodable, Identifiable, Equatable {
     /// The owner's picture for it, as an address on the server. Not every channel has one.
     public let logo: String?
     public let programmes: [GuideProgramme]?
+    /// How many days back its source keeps, for a tuner channel with an archive: see `CatchupRules`.
+    public let catchupDays: Int?
+    /// `ok`, `failing`, or empty when it hasn't been checked.
+    public let health: String?
 
     public var id: String { key }
     public var canTune: Bool { (encrypted ?? "").isEmpty }
@@ -222,6 +226,10 @@ public struct Guide: Decodable, Equatable {
     public let offset: Int?
     /// The channel groups there are, for the guide's filters.
     public let groups: [String]?
+    /// The channel set this page is of, when one was asked for (`tv-sets`).
+    public let set: String?
+    /// Where the channel asked for with `locate` is in the set, or -1 when it isn't there (`tv-guide-paging`).
+    public let located: Int?
 }
 
 /// What GET /tv/{key}/tune answers. AVPlayer always needs `streamUrl`, as it can't set headers.

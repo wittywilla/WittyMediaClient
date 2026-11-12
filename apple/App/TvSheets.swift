@@ -18,8 +18,13 @@ struct GuideDetails: View {
     let ask: GuideAsk
     let now: Int64
     let onWatch: (String) -> Void
+    /// Watching this programme from its start, on a server with catch-up.
+    let onFromStart: (GuideProgramme) -> Void
     let onSaid: (String) -> Void
     @State private var day = false
+    @State private var adding = false
+    /// Recording with options: one programme, or every airing.
+    @State private var recordingWith: RecordAsk?
     @State private var desc = ""
     @State private var list: [GuideProgramme]?
     @State private var error = ""
@@ -51,6 +56,29 @@ struct GuideDetails: View {
             if desc.isEmpty, let id = p?.itemId, let item = try? await client.item(id) { desc = item.overview ?? "" }
         }
         .task(id: day) { if day, list == nil { await loadDay() } }
+        .sheet(isPresented: $adding) { AddToSetSheet(channel: channel, onSaid: onSaid) }
+        .sheet(item: $recordingWith) { r in
+            RecordOptionsSheet(title: r.programme.title, series: r.series, start: RecordingOptions()) { options in
+                do {
+                    if r.series {
+                        try await client.recordSeries(channel: channel.key, title: r.programme.title, options: options)
+                        onSaid("Every airing of \(r.programme.title) will be recorded")
+                    } else {
+                        try await client.record(channel: channel.key, title: r.programme.title, sub: r.programme.sub, start: r.programme.start, stop: r.programme.end, options: options)
+                        onSaid("Recording \(r.programme.title)")
+                    }
+                    return nil
+                } catch {
+                    return (error as? APIError)?.message ?? "That couldn't be recorded."
+                }
+            }
+        }
+    }
+
+    struct RecordAsk: Identifiable {
+        let programme: GuideProgramme
+        let series: Bool
+        var id: String { "\(programme.start)|\(series)" }
     }
 
     @ViewBuilder private var one: some View {
@@ -119,7 +147,13 @@ struct GuideDetails: View {
             if later, channel.canTune, ask.cell.kind == .programme, let p {
                 Button(reminded ? "✓ Reminder set" : "Remind me") { Task { onSaid(await reminders.toggle(channel.key, p)) } }.action(selected: reminded)
             }
-            if channel.canRecord == true, model.household.allows(ProfileFeature.recordings), ask.cell.isBroadcast, ask.cell.end > now, let p {
+            if model.has(TvFeature.catchup), ask.cell.kind != .none, let p, CatchupRules.canWatchFromStart(p, on: channel, now: now) {
+                Button { onFromStart(p) } label: { Label("Watch from the start", systemImage: "backward.end") }.action()
+            }
+            if channel.canRecord == true, model.household.allows(ProfileFeature.recordings), ask.cell.isBroadcast, ask.cell.end > now, let p, model.has(TvFeature.dvrRules) {
+                Button("Record every airing…") { recordingWith = RecordAsk(programme: p, series: true) }.action()
+                Button("Record this…") { recordingWith = RecordAsk(programme: p, series: false) }.action()
+            } else if channel.canRecord == true, model.household.allows(ProfileFeature.recordings), ask.cell.isBroadcast, ask.cell.end > now, let p {
                 Button("Record every airing") {
                     Task {
                         do { try await client.recordSeries(channel: channel.key, title: p.title); onSaid("Every airing of \(p.title) will be recorded"); dismiss() }
@@ -134,6 +168,9 @@ struct GuideDetails: View {
                     }
                 }
                 .action()
+            }
+            if model.has(TvFeature.sets) {
+                Button("Add to set…") { adding = true }.action()
             }
             if model.user?.isAdmin == true, channel.kind == "library" {
                 NavigationLink("Edit channel", value: Route.page("/tv/channels")).action(.quiet)
@@ -211,6 +248,7 @@ struct TvLookPanel: View {
     @Environment(\.palette) private var palette
     @Environment(\.dismiss) private var dismiss
     @ObservedObject private var looks = TvLookStore.shared
+    @ObservedObject private var device = GuideDevice.shared
     @Namespace private var scope
 
     private var look: TvLookChoice { looks.look }
@@ -243,6 +281,13 @@ struct TvLookPanel: View {
                 choice("Row size", value: look.density, options: [("compact", "Compact"), ("normal", "Normal"), ("large", "Large")]) { looks.change(["density": $0], client: client) }
                 choice("Hours across", value: String(look.hours), options: [("0.0", "What fits"), ("1.5", "1½"), ("2.0", "2"), ("3.0", "3"), ("4.0", "4")]) {
                     looks.change(["hours": Double($0) ?? 0], client: client)
+                }
+                VStack(alignment: .leading, spacing: Tokens.Space.s2) {
+                    choice("Channels a page, on this TV", value: String(device.pageSize), options: GuidePaging.sizes.map { (String($0), GuidePaging.sizeName($0)) }) {
+                        device.pageSize = GuidePaging.size(stored: Int($0))
+                    }
+                    Text("All shows every channel in one list that loads as you go. A number shows that many at a time, with the next page below the last.")
+                        .font(.wmSecondary).foregroundStyle(palette.textSecondary)
                 }
                 choice("Preview", value: look.preview, options: [("highlight", "What's highlighted"), ("last", "The last channel"), ("off", "Off")]) { looks.change(["preview": $0], client: client) }
                 choice("Preview side", value: look.previewSide, options: [("left", "Left"), ("right", "Right")]) { looks.change(["previewSide": $0], client: client) }

@@ -17,6 +17,8 @@ struct RecordingsView: View {
     @State private var error = ""
     @State private var asking: Asking?
     @State private var note = ""
+    /// A series rule whose options are being changed (`tv-dvr-rules-2`).
+    @State private var changing: RecordingRule?
     @Namespace private var scope
 
     /// What's being asked before something goes.
@@ -82,6 +84,17 @@ struct RecordingsView: View {
         } message: {
             Text(note)
         }
+        .sheet(item: $changing) { rule in
+            RecordOptionsSheet(title: rule.title, series: true, start: rule.options, onSave: { options in
+                do {
+                    try await client.updateRecordingRule(rule.id, options: options)
+                    await load()
+                    return nil
+                } catch {
+                    return (error as? APIError)?.message ?? "That didn't work. Try again."
+                }
+            }, saveWords: "Save")
+        }
         .alert(item: $asking) { a in
             let r = a.recording
             if a.deleteFile {
@@ -112,6 +125,12 @@ struct RecordingsView: View {
                 Text("\(GuideRules.dayName(r.start)), \(GuideRules.span(r.start, r.stop)) · Channel \(r.number ?? "") \(r.channel)" + (size.isEmpty ? "" : " · " + size))
                     .font(dress.font(18.75)).foregroundStyle(p.soft)
                 if let e = r.error, !e.isEmpty { Text(e).font(dress.font(18.75, .bold)).foregroundStyle(p.err) }
+                if r.conflict == true, r.status == "scheduled" {
+                    Text("No tuner will be free when it starts.").font(dress.font(18.75, .bold)).foregroundStyle(p.err)
+                }
+                if let series = r.ruleTitle, !series.isEmpty {
+                    Text("Part of the series \(series)").font(dress.font(16.25)).foregroundStyle(p.soft)
+                }
             }
             .frame(maxWidth: .infinity, alignment: .leading)
             Text(r.statusWords).font(dress.font(18.75, .bold)).foregroundStyle(r.status == "recording" ? p.accent : p.text)
@@ -135,9 +154,14 @@ struct RecordingsView: View {
         return HStack(spacing: 16) {
             VStack(alignment: .leading, spacing: 2) {
                 Text(rule.title).font(dress.font(25, .bold)).foregroundStyle(p.text)
-                Text("Every airing on \(rule.channel)").font(dress.font(18.75)).foregroundStyle(p.soft)
+                Text(rule.anyChannel == true ? "Every airing, on any channel" : "Every airing on \(rule.channel)").font(dress.font(18.75)).foregroundStyle(p.soft)
+                let options = RecordingOptions(padBefore: rule.padBefore ?? 0, padAfter: rule.padAfter ?? 0, newOnly: rule.newOnly ?? false, keep: rule.keep ?? 0).seriesWords
+                if !options.isEmpty { Text(options).font(dress.font(16.25)).foregroundStyle(p.soft) }
             }
             .frame(maxWidth: .infinity, alignment: .leading)
+            if model.has(TvFeature.dvrRules) {
+                Button("Options") { changing = rule }.buttonStyle(TvButtonStyle(dress: dress))
+            }
             Button("Stop") { stop(rule) }.buttonStyle(TvButtonStyle(dress: dress))
         }
         .padding(.horizontal, 12).padding(.vertical, 8)

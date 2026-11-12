@@ -22,9 +22,21 @@ What changed in WittyMediaClient, newest first. What changed before it had a rep
 - **Android: pages are laid out off the main thread** (a slow TV stick could end the app); TV tabs are chosen as focus rests on them;
   card titles use the title size; an episode's still keeps its shape in its header. The release build was started on a phone, a
   tablet and Android TV.
+- **Android: remote control and watch parties.** The app is a device other apps can play on and control (seen: an Android TV
+  emulator took play and pause from the Remote Protocol and reported its state), and a controller with **Play on…** and a full remote;
+  watch parties can be started, joined by code and kept in step. The controller and parties are unit-tested only.
+- **Android: saved servers first** in the server picker, the last used first and with focus on a TV, the servers found on the
+  network below them; **Show saved servers first** under **You → Servers on this device** turns it off.
 - **Android: removing servers.** A server never reached since this version counts from when it first ran, as on Apple; a video's own
   picture settings and the last TV channel go with their server. On a TV the picker focuses the last-used server.
-
+- **Apple TV and Android TV: live TV for long channel lists.** The guide shows a chosen **set** of channels: all of them,
+  favourites, one source, one group of a playlist, or sets of your own made from any channels (renamed, reordered, and shared with
+  everyone by an administrator), remembered on each TV. It shows 25, 50, 75 or 100 channels a page, or all of them scrolling and
+  loaded as they come into view; finds a channel by name; and goes to a dialled number, offering all channels when it isn't in the
+  set. **Watch from the start** plays a programme from its source's archive, and recordings can start early, end late, and for a
+  series follow the title on any channel, record new episodes only and keep the newest few. On a phone or tablet the guide is the
+  server's own page, which has all of this. Each part appears only when the server offers it (`tv-sets`, `tv-guide-paging`,
+  `tv-catchup`, `tv-dvr-rules-2`). Unit-tested and built; not yet run on a simulator or emulator.
 - **Desktop: secure pairing.** Signing this computer in by having a phone approve it now uses the server's secure
   pairing where it has it (`pair-totp`): a QR code, the code, and a 6-digit PIN that changes every 30 seconds with a
   countdown, which the person approving types. Against an older server it shows the code alone, as before.

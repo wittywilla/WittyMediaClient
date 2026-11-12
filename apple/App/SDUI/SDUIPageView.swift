@@ -42,6 +42,8 @@ struct SDUIPageScreen: View {
             .pageBackground(palette)
             .modifier(SDUIChrome(chrome: chrome, top: center.isTop(place), route: place.route, overPicture: overPicture))
             .environmentObject(store)
+            // Corners and type from the theme, by the catalogue's tokens for each component.
+            .environment(\.sduiDraw, SDUIDraw(catalog: center.catalog, style: model.themeStyle))
             .task { await store.appear(center) }
             .sduiOnChange(of: center.epoch) { _ in Task { await store.load(center) } }
             .sduiOnChange(of: store.phase) { phase in
@@ -237,6 +239,7 @@ struct SDUIPageBody: View {
 
 /// Screen time is over: the page still shows, nothing in it plays, and this says why and when there's time again.
 struct SDUIScreenTimeNote: View {
+    @Environment(\.sduiDraw) private var draw
     @Environment(\.palette) private var palette
     @Environment(\.sduiLayout) private var layout
     let over: SDUIScreenTime
@@ -268,7 +271,7 @@ struct SDUIScreenTimeNote: View {
         .padding(layout.sp("m"))
         .background(palette.panel)
         .overlay(alignment: .leading) { Rectangle().fill(palette.warn).frame(width: 4) }
-        .clipShape(RoundedRectangle(cornerRadius: Tokens.Radius.md, style: .continuous))
+        .clipShape(RoundedRectangle(cornerRadius: draw.radius("Notice"), style: .continuous))
         .padding(.horizontal, layout.margin)
         .accessibilityElement(children: .combine)
         .accessibilityIdentifier("sdui.screentime")

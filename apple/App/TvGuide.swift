@@ -11,10 +11,19 @@ import WittyKit
 // the grid it moves the time. Select watches what's on, or says more about what's later; holding
 // Select offers everything else, and Play/Pause watches the channel.
 
-/// Where focus can be in the grid: a cell, or one of the two edges that move the time.
+/// Where focus can be in the grid: a cell, one of the two edges that move the time, or the edge under a page's
+/// last row that goes on to the next page.
 enum GuideFocus: Hashable {
     case cell(Int, Int64)
     case earlier, later
+    case nextPage
+}
+
+/// A channel number that's not in the set on screen, but is among all channels.
+struct GuideElsewhere: Identifiable {
+    let number: String
+    let row: Int
+    var id: String { number }
 }
 
 /// The highlighted row and the moment in it, as the page keeps them.
@@ -46,6 +55,7 @@ struct GuideView: View {
     @ObservedObject private var live = LiveTv.shared
     @ObservedObject private var reminders = TvReminders.shared
     @ObservedObject private var logos = TvLogos.shared
+    @ObservedObject private var device = GuideDevice.shared
     @State private var from = GuideRules.floorSlot(Int64(Date().timeIntervalSince1970))
     @State private var spot = GuideSpot(row: 0, at: Int64(Date().timeIntervalSince1970))
     @State private var now = Int64(Date().timeIntervalSince1970)
@@ -53,6 +63,11 @@ struct GuideView: View {
     @State private var lookOpen = false
     @State private var searchOpen = false
     @State private var dayOpen = false
+    @State private var setsOpen = false
+    @State private var findOpen = false
+    @State private var goOpen = false
+    @State private var elsewhere: GuideElsewhere?
+    @State private var adding: GuideChannel?
     @State private var toast = ""
     @State private var notices: [String: String] = [:]
     @State private var placed = false
@@ -98,6 +113,11 @@ struct GuideView: View {
         .task { await tick() }
         .onChange(of: focused) { next in arrive(next) }
         .onChange(of: store.filter) { _ in spot = GuideSpot(row: 0, at: spot.at); placed = false }
+        .onChange(of: device.pageSize) { _, size in
+            store.setPageSize(size, keeping: spot.row)
+            moveRow(spot.row)
+        }
+        .onChange(of: model.features) { Task { await applyFeatures() } }
         .onAppear { comeBack() }
         // A look changed on another device shows when this one is picked up again.
         .onChange(of: scenePhase) { phase in
@@ -105,7 +125,23 @@ struct GuideView: View {
         }
         .onDisappear { leaveIfDone() }
         .sheet(item: $ask) { a in
-            GuideDetails(ask: a, now: now, onWatch: { key in ask = nil; watch(key) }, onSaid: say)
+            GuideDetails(ask: a, now: now, onWatch: { key in ask = nil; watch(key) },
+                         onFromStart: { p in ask = nil; fromStart(a.channel, p) }, onSaid: say)
+        }
+        .sheet(item: $adding) { c in AddToSetSheet(channel: c, onSaid: { say($0); Task { await reloadSets() } }) }
+        .sheet(isPresented: $setsOpen) {
+            ChannelSetPicker(sets: store.sets, chosen: store.filter.set, onPick: { id in setsOpen = false; chooseSet(id) },
+                             onChanged: { Task { await reloadSets() } })
+        }
+        .sheet(isPresented: $findOpen) {
+            FindChannelSheet(set: store.filter.set, current: store.filter.q,
+                             onGo: { c in findOpen = false; goToChannel(c.key) }, onFilter: { q in findOpen = false; filterBy(q) })
+        }
+        .sheet(isPresented: $goOpen) { GoToChannelSheet { n in goOpen = false; goToNumber(n) } }
+        .alert(item: $elsewhere) { e in
+            Alert(title: Text(store.filter.q.isEmpty ? "Channel \(e.number) isn't in \(setName)" : "Channel \(e.number) isn't among these"),
+                  message: Text("It's among all channels. Show all channels and go to it?"),
+                  primaryButton: .default(Text("Show all channels")) { showAll(thenRow: e.row) }, secondaryButton: .cancel())
         }
         .sheet(isPresented: $lookOpen) { TvLookPanel() }
         .sheet(isPresented: $searchOpen) { GuideSearch { hit in searchOpen = false; go(to: hit) } }
@@ -125,7 +161,8 @@ struct GuideView: View {
             GuideHero(dress: dress, channel: current, cell: currentCell, programme: currentCell?.programme(at: spot.at),
                       next: GuideRules.next(after: currentCell?.programme(at: spot.at), cell: currentCell, on: current), now: now,
                       preview: previewKey, onWatch: watch, onDetails: { details(day: false) }, onDay: { details(day: true) },
-                      onFavourite: favourite, onStep: { moveRow(spot.row + $0) }, onRecord: record, onSaid: say)
+                      onFavourite: favourite, onStep: { moveRow(spot.row + $0) }, onRecord: record, onSaid: say,
+                      onFromStart: model.has(TvFeature.catchup) ? { if let current, let p = currentCell?.programme(at: spot.at) { fromStart(current, p) } } : nil)
             bar
             if !store.error.isEmpty {
                 Text(store.error).font(dress.font(25, .bold)).foregroundStyle(dress.paint.err)
@@ -151,17 +188,32 @@ struct GuideView: View {
                 .accessibilityAddTraits(.isHeader)
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 16) {
-                    chip("All", on: all) { store.setFilter(.init()) }
-                    if anyFavourite || store.filter.favourites {
-                        chip("★ Favourites", on: store.filter.favourites) { store.setFilter(.init(favourites: !store.filter.favourites)) }
+                    if store.hasSets {
+                        // Sets have all of the filters below in them, and the account's own besides.
+                        Button { setsOpen = true } label: { Label(setName + " ▾", systemImage: "list.bullet") }
+                            .buttonStyle(TvButtonStyle(dress: dress, kind: .chip, on: true, onBar: true))
+                            .accessibilityLabel("Channel set: \(setName)").accessibilityHint("Choose which channels the guide shows")
+                    } else {
+                        chip("All", on: all) { store.setFilter(.init()) }
+                        if anyFavourite || store.filter.favourites {
+                            chip("★ Favourites", on: store.filter.favourites) { store.setFilter(.init(favourites: !store.filter.favourites)) }
+                        }
+                        ForEach(store.groups, id: \.self) { g in
+                            chip(g, on: store.filter.group == g) { store.setFilter(.init(group: store.filter.group == g ? "" : g)) }
+                        }
+                        if hasBoth {
+                            chip("My library", on: store.filter.kind == "library") { store.setFilter(.init(kind: store.filter.kind == "library" ? "" : "library")) }
+                            chip("Live TV", on: store.filter.kind == "tuner") { store.setFilter(.init(kind: store.filter.kind == "tuner" ? "" : "tuner")) }
+                        }
                     }
-                    ForEach(store.groups, id: \.self) { g in
-                        chip(g, on: store.filter.group == g) { store.setFilter(.init(group: store.filter.group == g ? "" : g)) }
+                    if !store.filter.q.isEmpty {
+                        Button { filterBy("") } label: { Text("“\(store.filter.q)” ✕") }
+                            .buttonStyle(TvButtonStyle(dress: dress, kind: .chip, on: true, onBar: true))
+                            .accessibilityLabel("Only channels matching \(store.filter.q). Show every channel")
                     }
-                    if hasBoth {
-                        chip("My library", on: store.filter.kind == "library") { store.setFilter(.init(kind: store.filter.kind == "library" ? "" : "library")) }
-                        chip("Live TV", on: store.filter.kind == "tuner") { store.setFilter(.init(kind: store.filter.kind == "tuner" ? "" : "tuner")) }
-                    }
+                    if store.hasPaging { chip("Find a channel", on: false) { findOpen = true } }
+                    chip("Go to channel", on: false) { goOpen = true }
+                    pages
                 }
                 .padding(.vertical, 10)
                 .padding(.horizontal, 8)
@@ -197,6 +249,23 @@ struct GuideView: View {
         .overlay { barRules }
         .focusSection()
     }
+
+    /// Previous and next page, and which channels these are, when there's more than a page of them.
+    @ViewBuilder private var pages: some View {
+        let total = store.total ?? 0
+        if store.pageSize > 0, total > store.pageSize {
+            let previous = GuidePaging.previous(start: store.pageStart, size: store.pageSize)
+            let next = GuidePaging.next(start: store.pageStart, size: store.pageSize, total: total)
+            Button { if let previous { moveRow(previous) } } label: { Image(systemName: "chevron.up") }
+                .buttonStyle(TvButtonStyle(dress: dress, kind: .icon, onBar: true)).disabled(previous == nil).accessibilityLabel("Previous page")
+            Text(GuidePaging.words(start: store.pageStart, size: store.pageSize, total: total))
+                .font(dress.font(dress.buttonText.size)).foregroundStyle(dress.paint.soft).lineLimit(1).fixedSize()
+            Button { if let next { moveRow(next) } } label: { Image(systemName: "chevron.down") }
+                .buttonStyle(TvButtonStyle(dress: dress, kind: .icon, onBar: true)).disabled(next == nil).accessibilityLabel("Next page")
+        }
+    }
+
+    private var setName: String { ChannelSetRules.name(of: store.filter.set, in: store.sets) }
 
     private var dayLabel: String {
         let n = Int((Calendar.current.startOfDay(for: Date(timeIntervalSince1970: TimeInterval(from))).timeIntervalSince1970 - Double(today)) / 86400)
@@ -253,10 +322,27 @@ struct GuideView: View {
                 ScrollViewReader { scroller in
                     ScrollView(.vertical, showsIndicators: false) {
                         LazyVStack(spacing: 0) {
-                            ForEach(0..<total, id: \.self) { r in
+                            if store.pageSize > 0, let previous = GuidePaging.previous(start: store.pageStart, size: store.pageSize) {
+                                // Up from a page's first row: a press goes back a page, and up again to the bar above.
+                                Button { moveRow(previous + store.pageSize - 1) } label: {
+                                    Label("Previous page · " + GuidePaging.words(start: previous, size: store.pageSize, total: total), systemImage: "chevron.up")
+                                        .frame(maxWidth: .infinity)
+                                }
+                                .buttonStyle(TvButtonStyle(dress: dress, kind: .link))
+                                .padding(.leading, dress.channelWidth)
+                                .padding(.vertical, 4)
+                            }
+                            ForEach(Array(store.shown), id: \.self) { r in
                                 row(r).id(r)
                                     .onAppear { visible.insert(r); Task { await store.ensure(r) } }
                                     .onDisappear { visible.remove(r) }
+                            }
+                            if store.pageSize > 0, GuidePaging.next(start: store.pageStart, size: store.pageSize, total: total) != nil {
+                                // Down past a page's last row goes on to the next, as the edges at the sides move the time.
+                                Button {} label: { Color.clear.frame(height: 6).frame(maxWidth: .infinity) }
+                                    .buttonStyle(TvEdgeStyle()).focused($focused, equals: .nextPage)
+                                    .padding(.leading, dress.channelWidth)
+                                    .accessibilityHidden(true)
                             }
                         }
                     }
@@ -270,7 +356,9 @@ struct GuideView: View {
             // A TV's scroll view draws past its edges, for lifted cards; the grid's rows stop at its own.
             .clipped()
             if total == 0 {
-                Text(store.filter.favourites ? "No favourites yet: hold Select on a channel to make it one." : "No channels match that.")
+                Text(store.filter.favourites || store.sets.first(where: { $0.id == store.filter.set })?.kind == "favourites" ? "No favourites yet: hold Select on a channel to make it one."
+                     : !store.filter.q.isEmpty ? "No channels match “\(store.filter.q)”."
+                     : store.filter.set.hasPrefix("set:") ? "No channels in this set yet. Manage your sets from the set picker." : "No channels match that.")
                     .font(dress.font(25, .bold)).foregroundStyle(p.err).padding(.vertical, 12)
             }
         }
@@ -311,7 +399,9 @@ struct GuideView: View {
                  series: { cell in if let channel, let p = cell.programme { series(channel, p) } },
                  remind: { cell in if let channel, let p = cell.programme { remind(channel, p) } },
                  favourite: { if let channel { favourite(channel) } },
-                 watch: { if let channel { watch(channel.key) } })
+                 watch: { if let channel { watch(channel.key) } },
+                 fromStart: model.has(TvFeature.catchup) ? { cell in if let channel, let p = cell.programme(at: max(cell.start, from)) { fromStart(channel, p) } } : nil,
+                 addToSet: store.hasSets ? { if let channel { adding = channel } } : nil)
             .frame(height: dress.rowHeight)
     }
 
@@ -323,7 +413,11 @@ struct GuideView: View {
         return HStack(spacing: 16) {
             key("A", "Day −", p.keyA) { shift(-86400) }
             key("B", "Day +", p.keyB) { shift(86400) }
-            key("C", kind.isEmpty ? "All" : kind == "library" ? "Library" : "Live TV", p.keyC) { cycleKind() }
+            if store.hasSets {
+                key("C", "Sets", p.keyC) { setsOpen = true }
+            } else {
+                key("C", kind.isEmpty ? "All" : kind == "library" ? "Library" : "Live TV", p.keyC) { cycleKind() }
+            }
             Spacer(minLength: 16)
             Text("▲▼ Channel · ◄► Time · Select Watch · Hold Select for more · Play/Pause Watch the channel")
                 .font(dress.font(17.5)).foregroundStyle(p.soft).lineLimit(1).truncationMode(.tail)
@@ -386,9 +480,11 @@ struct GuideView: View {
     // MARK: What happens
 
     private func start() async {
-        store.use(client)
+        store.use(client, features: model.features)
+        store.setPageSize(device.pageSize, keeping: 0)
         async let lookLoaded: Void = looks.load(client: client, themeId: model.effectiveThemeId, app: model.tvAppColours)
         async let remindersLoaded: Void = reminders.load(client: client)
+        await applySets()
         store.setFrom(from)
         await store.ensure(0)
         await store.loadLineup()
@@ -396,33 +492,103 @@ struct GuideView: View {
         model.channels = store.lineup
         await logos.ask(store.lineup.compactMap(\.brand), client: client)
         if notices.isEmpty, let all = try? await client.legalNoticeWords() { notices = all }
-        placeFirstFocus()
+        await placeFirstFocus()
+    }
+
+    /// The set this device chose on this server, while it's still there; otherwise all channels.
+    private func applySets() async {
+        guard store.hasSets else { return }
+        let id = await store.loadSets(remembered: device.set(for: GuideDevice.setKey(model: model, client: client)))
+        if store.filter.set != id { store.setFilter(.init(set: id)) }
+    }
+
+    /// The server said what it can do after the guide opened: sets and finding channels come on.
+    private func applyFeatures() async {
+        guard model.features != store.features else { return }
+        let hadSets = store.hasSets
+        store.use(client, features: model.features)
+        if store.hasSets, !hadSets {
+            await applySets()
+            await store.ensure(0)
+        }
+    }
+
+    /// The sets again, after one was made, changed or deleted. One on screen that has gone is all channels again.
+    private func reloadSets() async {
+        let id = await store.loadSets(remembered: store.filter.set)
+        if id != store.filter.set { chooseSet(id) }
+    }
+
+    private func chooseSet(_ id: String) {
+        device.remember(id, for: GuideDevice.setKey(model: model, client: client))
+        store.setFilter(.init(set: id))
+        Task { await store.ensure(0); focusCell(row: 0, at: spot.at) }
+    }
+
+    /// Only the channels matching some words, in the set on screen; nothing shows them all again.
+    private func filterBy(_ q: String) {
+        var next = store.filter
+        next.q = q
+        store.setFilter(next)
+        Task { await store.ensure(0); focusCell(row: 0, at: spot.at) }
+    }
+
+    /// All channels, then a row of them.
+    private func showAll(thenRow r: Int) {
+        if store.hasSets {
+            device.remember(ChannelSetRules.all, for: GuideDevice.setKey(model: model, client: client))
+            store.setFilter(.init(set: ChannelSetRules.all))
+        } else {
+            store.setFilter(.init())
+        }
+        Task { await store.ensure(r); moveRow(r) }
+    }
+
+    private func goToChannel(_ key: String) {
+        Task {
+            if let r = await store.locate(key) { moveRow(r) } else { say("That channel isn't among these") }
+        }
+    }
+
+    private func goToNumber(_ number: String) {
+        Task {
+            switch await store.locateNumber(number) {
+            case .here(let r): moveRow(r)
+            case .inAll(let r): elsewhere = GuideElsewhere(number: number, row: r)
+            case .nowhere: say("There's no channel \(number)")
+            }
+        }
     }
 
     /// The channel just watched, in the middle of the rows, at now, with the highlight on it.
-    private func placeFirstFocus() {
+    private func placeFirstFocus() async {
         guard !placed, store.total != nil else { return }
         placed = true
         var r = 0
-        if !GuideReturn.key.isEmpty, let i = store.index(of: GuideReturn.key) { r = i }
+        if !GuideReturn.key.isEmpty, let i = await store.locate(GuideReturn.key) { r = i }
         GuideReturn.key = ""
         let at = Int64(Date().timeIntervalSince1970)
         from = GuideRules.floorSlot(at)
         store.setFrom(from)
         spot = GuideSpot(row: r, at: at)
-        Task {
-            await store.ensure(r)
-            focusCell(row: r, at: at)
-        }
+        store.showPage(holding: r)
+        await store.ensure(r)
+        focusCell(row: r, at: at)
     }
 
     private func comeBack() {
-        guard placed, !GuideReturn.key.isEmpty, let r = store.index(of: GuideReturn.key) else { return }
+        guard placed, !GuideReturn.key.isEmpty else { return }
+        let key = GuideReturn.key
         GuideReturn.key = ""
-        let at = Int64(Date().timeIntervalSince1970)
-        if at >= to || at < from { from = GuideRules.floorSlot(at); store.setFrom(from) }
-        spot = GuideSpot(row: r, at: at)
-        Task { await store.ensure(r); focusCell(row: r, at: at) }
+        Task {
+            guard let r = await store.locate(key) else { return }
+            let at = Int64(Date().timeIntervalSince1970)
+            if at >= to || at < from { from = GuideRules.floorSlot(at); store.setFrom(from) }
+            spot = GuideSpot(row: r, at: at)
+            store.showPage(holding: r)
+            await store.ensure(r)
+            focusCell(row: r, at: at)
+        }
     }
 
     /// Focus on the cell of a row at a moment, once it's drawn.
@@ -446,6 +612,12 @@ struct GuideView: View {
             } else {
                 shift(-GuideRules.slot, at: from - GuideRules.slot)
             }
+        case .nextPage?:
+            if let next = GuidePaging.next(start: store.pageStart, size: store.pageSize, total: store.total ?? 0) {
+                moveRow(next)
+            } else {
+                focusCell(row: spot.row, at: spot.at)
+            }
         case nil:
             break
         }
@@ -466,6 +638,7 @@ struct GuideView: View {
         from = GuideRules.floorSlot(at)
         store.setFrom(from)
         spot = GuideSpot(row: row ?? spot.row, at: at)
+        store.showPage(holding: spot.row)
         reload()
         focusCell(row: spot.row, at: at)
     }
@@ -480,12 +653,14 @@ struct GuideView: View {
     private func moveRow(_ r: Int) {
         let row = max(0, min((store.total ?? 1) - 1, r))
         spot.row = row
+        store.showPage(holding: row)
         Task { await store.ensure(row); focusCell(row: row, at: spot.at) }
     }
 
     private func reload() {
         let rows = visible.isEmpty ? [spot.row] : Array(visible)
-        Task { for r in Set(rows.map { $0 / GuideRules.page * GuideRules.page }) { await store.ensure(r) } }
+        let size = store.fetchSize
+        Task { for r in Set(rows.map { $0 / size * size }) { await store.ensure(r) } }
     }
 
     private func cycleKind() {
@@ -563,15 +738,24 @@ struct GuideView: View {
     }
 
     private func go(to hit: GuideHit) {
-        if let i = store.index(of: hit.channel) {
-            goAt(hit.start, row: i)
-            Task { await store.ensure(i) }
-        } else {
-            store.setFilter(.init())
-            let i = store.lineup.firstIndex { $0.key == hit.channel } ?? 0
-            goAt(hit.start, row: i)
-            Task { await store.ensure(i); focusCell(row: i, at: hit.start) }
+        Task {
+            if let i = await store.locate(hit.channel) {
+                goAt(hit.start, row: i)
+                await store.ensure(i)
+            } else {
+                store.setFilter(.init(set: store.hasSets ? ChannelSetRules.all : ""))
+                let i = await store.locate(hit.channel) ?? 0
+                goAt(hit.start, row: i)
+                await store.ensure(i)
+                focusCell(row: i, at: hit.start)
+            }
         }
+    }
+
+    /// A programme of an archived channel from its start, in the channel's player.
+    private func fromStart(_ channel: GuideChannel, _ p: GuideProgramme) {
+        live.watchFromStart(channel.key, p, client: client)
+        watch(channel.key)
     }
 
     private func say(_ words: String) {
@@ -640,6 +824,8 @@ struct GuideHero: View {
     let onStep: (Int) -> Void
     let onRecord: () -> Void
     let onSaid: (String) -> Void
+    /// "Watch from the start", on a server with catch-up.
+    let onFromStart: (() -> Void)?
     @State private var art: Int64?
 
     private var shape: TvShape { dress.shape }
@@ -855,6 +1041,10 @@ struct GuideHero: View {
                     Button { onWatch(channel.key) } label: { Label("Watch full screen", systemImage: "arrow.up.left.and.arrow.down.right") }
                         .buttonStyle(TvButtonStyle(dress: dress, on: true))
                 }
+            }
+            if let onFromStart, let channel, cell?.kind == .programme, CatchupRules.canWatchFromStart(programme, on: channel, now: now) {
+                Button(action: onFromStart) { Label("Watch from the start", systemImage: "backward.end") }
+                    .buttonStyle(TvButtonStyle(dress: dress))
             }
             if isTitle, let id = programme?.itemId {
                 NavigationLink(value: Route.player(id, startOver: true)) { Label("Start over", systemImage: "backward.end") }
@@ -1181,6 +1371,9 @@ struct GuideRow: View {
     let remind: (GuideCell) -> Void
     let favourite: () -> Void
     let watch: () -> Void
+    /// What's only there on a newer server: watching from the start, and adding the channel to a set.
+    let fromStart: ((GuideCell) -> Void)?
+    let addToSet: (() -> Void)?
 
     var body: some View {
         HStack(spacing: 0) {
@@ -1304,6 +1497,9 @@ struct GuideRow: View {
         Button("More about this") { more(cell, false) }
         Button("The whole day on \(channel.name)") { more(cell, true) }
         if channel.canTune { Button("Watch \(channel.name) now") { watch() } }
+        if let fromStart, cell.kind != .none, CatchupRules.canWatchFromStart(cell.programme(at: max(cell.start, from)), on: channel, now: now) {
+            Button("Watch from the start") { fromStart(cell) }
+        }
         if later, channel.canTune, cell.programme?.kind != "slate" {
             Button(reminded(cell.start) ? "Remove the reminder" : "Remind me") { remind(cell) }
         }
@@ -1312,6 +1508,7 @@ struct GuideRow: View {
             Button("Record every airing") { series(cell) }
         }
         Button(channel.favourite == true ? "Remove from favourites" : "Add to favourites") { favourite() }
+        if let addToSet { Button("Add to set…") { addToSet() } }
     }
 
     private func label(_ channel: GuideChannel, _ cell: GuideCell) -> String {

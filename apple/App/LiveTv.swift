@@ -26,6 +26,8 @@ final class LiveTv: ObservableObject {
     @Published private(set) var playing = false
     /// How far behind the live edge, in seconds, and whether there's room to go back.
     @Published private(set) var behind: Double = 0
+    /// The programme being watched from its start, from the channel's archive (`tv-catchup`); nil when it's live.
+    @Published private(set) var fromStart: GuideProgramme?
 
     private var client = WittyClient(base: "")
     /// One name for this player, so the server can tell when it has gone.
@@ -67,6 +69,7 @@ final class LiveTv: ObservableObject {
         if key == self.key, state != .idle, !isFailed { return }
         if !self.key.isEmpty, self.key != key { leave(self.key) }
         self.key = key
+        fromStart = nil
         info = nil
         state = .tuning
         tuning?.cancel()
@@ -79,9 +82,45 @@ final class LiveTv: ObservableObject {
     /// Tries the channel again after it failed.
     func retry() {
         let was = key
+        if let programme = fromStart {
+            watchFromStart(was, programme, client: client)
+            return
+        }
         key = ""
         state = .idle
         watch(was, client: client)
+    }
+
+    /// A programme from its start, from what the channel's source keeps. The same viewer as live, so the live
+    /// stream of the same channel is left first, and leaving this stops it as leaving live does.
+    func watchFromStart(_ key: String, _ programme: GuideProgramme, client: WittyClient) {
+        self.client = client
+        let was = self.key
+        self.key = key
+        fromStart = programme
+        info = nil
+        state = .tuning
+        tuning?.cancel()
+        player.replaceCurrentItem(with: nil)
+        tuning = Task {
+            if !was.isEmpty { try? await client.leaveChannel(was, viewer: viewer) }
+            await tune(key, from: programme)
+        }
+    }
+
+    /// From watching from the start back to the channel as it is now.
+    func backToLive() {
+        guard fromStart != nil else { return }
+        let channel = key
+        fromStart = nil
+        info = nil
+        state = .tuning
+        tuning?.cancel()
+        player.replaceCurrentItem(with: nil)
+        tuning = Task {
+            try? await client.leaveChannel(channel, viewer: viewer)
+            await tune(channel)
+        }
     }
 
     /// Nothing to show: the stream is left, and the server can stop it.
@@ -92,6 +131,7 @@ final class LiveTv: ObservableObject {
         player.replaceCurrentItem(with: nil)
         if !key.isEmpty { leave(key) }
         key = ""
+        fromStart = nil
         info = nil
         state = .idle
     }
@@ -118,11 +158,16 @@ final class LiveTv: ObservableObject {
         Task { try? await leaving.leaveChannel(key, viewer: name) }
     }
 
-    private func tune(_ key: String) async {
+    private func tune(_ key: String, from programme: GuideProgramme? = nil) async {
         for _ in 0..<20 {
             do {
-                let tuned = try await client.tune(key, viewer: viewer)
-                if Task.isCancelled || key != self.key { return }
+                let tuned: Tuned
+                if let programme {
+                    tuned = try await client.catchup(key, start: programme.start, end: programme.end, viewer: viewer)
+                } else {
+                    tuned = try await client.tune(key, viewer: viewer)
+                }
+                if Task.isCancelled || key != self.key || programme != fromStart { return }
                 guard let address = tuned.streamUrl ?? tuned.url, let url = client.mediaURL(address) else {
                     state = .failed("The server sent an address that can't be used.")
                     return
@@ -139,7 +184,12 @@ final class LiveTv: ObservableObject {
                 if Task.isCancelled || key != self.key { return }
                 // Screen time is up: with the channel on the whole screen, the time-up screen says so.
                 if Household.caught(error, needsScreen: true) { return }
-                state = .failed((error as? APIError)?.message ?? "This channel can't be played right now.")
+                let status = (error as? APIError)?.status ?? 0
+                if programme != nil, status == 404 {
+                    state = .failed("This programme is no longer kept, so it can't be watched from the start.")
+                } else {
+                    state = .failed((error as? APIError)?.message ?? "This channel can't be played right now.")
+                }
                 return
             }
         }
@@ -148,7 +198,8 @@ final class LiveTv: ObservableObject {
 
     /// Asks again what's on, when the programme on the banner has ended.
     func refreshInfo() async {
-        guard !key.isEmpty, let fresh = try? await client.tune(key, viewer: viewer) else { return }
+        // From the start, what's on is the programme chosen: asking would start the live stream instead.
+        guard fromStart == nil, !key.isEmpty, let fresh = try? await client.tune(key, viewer: viewer) else { return }
         if fresh.key == nil || fresh.key == key { info = fresh }
     }
 }

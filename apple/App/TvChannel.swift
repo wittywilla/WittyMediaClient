@@ -42,7 +42,8 @@ struct ChannelPlayer: View {
                 LoadingView()
             }
             if mini {
-                MiniGuide(dress: dress, tuned: key, onTune: tune, onClose: closeMini, onFull: toGuide)
+                MiniGuide(dress: dress, tuned: key, set: chosenSet, onTune: tune, onClose: closeMini, onFull: toGuide,
+                          onLive: live.fromStart == nil ? nil : { closeMini(); live.backToLive(); showBanner() })
                     .padding(.horizontal, 77).padding(.bottom, 92)
                     .frame(maxHeight: .infinity, alignment: .bottom)
             } else if banner {
@@ -53,7 +54,12 @@ struct ChannelPlayer: View {
                 .padding(.horizontal, 77).padding(.bottom, 92)
                 .transition(.opacity)
             }
-            if live.behind > 20, !mini {
+            if let programme = live.fromStart, !mini {
+                Text("From the start of \(programme.title) · Select, then Back to live")
+                    .font(.wmLabel).foregroundStyle(.white).padding(.horizontal, 16).padding(.vertical, 8)
+                    .background(Capsule().fill(.black.opacity(0.6)))
+                    .frame(maxHeight: .infinity, alignment: .top).padding(.top, 60)
+            } else if live.behind > 20, !mini {
                 Text("\(Int((live.behind / 60).rounded())) min behind live · Play/Pause twice for live")
                     .font(.wmLabel).foregroundStyle(.white).padding(.horizontal, 16).padding(.vertical, 8)
                     .background(Capsule().fill(.black.opacity(0.6)))
@@ -73,7 +79,7 @@ struct ChannelPlayer: View {
             }
         }
         .onPlayPauseCommand {
-            if live.playing { live.pause() } else if live.behind > 20, bannerShown > 0 { live.goLive() } else { live.resume() }
+            if live.playing { live.pause() } else if live.fromStart == nil, live.behind > 20, bannerShown > 0 { live.goLive() } else { live.resume() }
             showBanner()
         }
         .onTapGesture { if !mini { mini = true } }
@@ -87,7 +93,12 @@ struct ChannelPlayer: View {
         }
         .task {
             await TvLookStore.shared.load(client: client, themeId: model.effectiveThemeId, app: model.tvAppColours)
-            if let all = try? await client.lineup() { lineup = uniqued(all.channels ?? []) }
+            // Up and down go through the set the guide shows, on a server with sets.
+            if model.has(TvFeature.sets), !chosenSet.isEmpty {
+                if let inSet = try? await client.channelList(set: chosenSet, limit: 20000) { lineup = uniqued(inSet.channels ?? []) }
+            } else if let all = try? await client.lineup() {
+                lineup = uniqued(all.channels ?? [])
+            }
         }
         .task(id: key) {
             await TvLogos.shared.ask(channel?.brand.map { [$0] } ?? [], client: client)
@@ -113,6 +124,8 @@ struct ChannelPlayer: View {
         }
         .onDisappear {
             live.muted = !looks.look.previewSound
+            // The guide's preview is always live: from the start ends with the player.
+            if live.fromStart != nil { live.stop() }
             // Back to the guide: the preview carries on with this channel. Anywhere else: it stops.
             DispatchQueue.main.async {
                 if !model.path.contains(.guide) { live.stop() }
@@ -120,6 +133,13 @@ struct ChannelPlayer: View {
         }
         .toolbar(.hidden, for: .tabBar)
         .navigationBarHidden(true)
+    }
+
+    /// The set this TV shows in the guide, as the server is asked for it; empty for all channels.
+    private var chosenSet: String {
+        guard model.has(TvFeature.sets), let id = GuideDevice.shared.set(for: GuideDevice.setKey(model: model, client: client)),
+              id != ChannelSetRules.all else { return "" }
+        return id
     }
 
     private func failure(_ why: String) -> some View {
@@ -132,6 +152,9 @@ struct ChannelPlayer: View {
                     Button("Watch \(alt.number) \(alt.name) instead") { tune(alt.key) }.buttonStyle(TvButtonStyle(dress: dress, on: true))
                 }
                 Button("Try again") { live.retry() }.buttonStyle(TvButtonStyle(dress: dress))
+                if live.fromStart != nil {
+                    Button("Back to live") { live.backToLive(); showBanner() }.buttonStyle(TvButtonStyle(dress: dress))
+                }
                 Button("Next channel") { step(1) }.buttonStyle(TvButtonStyle(dress: dress))
                 Button("Back to the guide", action: toGuide).buttonStyle(TvButtonStyle(dress: dress))
             }
@@ -268,13 +291,17 @@ struct MiniGuide: View {
     @Environment(\.client) private var client
     let dress: TvDress
     let tuned: String
+    /// The guide's set, or empty for all channels.
+    let set: String
     let onTune: (String) -> Void
     let onClose: () -> Void
     let onFull: () -> Void
+    /// Back to the channel as it is now, while watching a programme from its start.
+    let onLive: (() -> Void)?
     @State private var rows: [GuideChannel]?
     @State private var error = ""
     @FocusState private var focused: String?
-    private static let full = " full guide", close = " close"
+    private static let full = " full guide", close = " close", live = " live"
 
     var body: some View {
         let p = dress.paint
@@ -284,6 +311,9 @@ struct MiniGuide: View {
         VStack(spacing: 0) {
             HStack(spacing: 16) {
                 Text("Now and next").font(dress.font(21.25, .bold)).foregroundStyle(p.accent).frame(maxWidth: .infinity, alignment: .leading)
+                if let onLive {
+                    Button("Back to live", action: onLive).buttonStyle(TvButtonStyle(dress: dress, on: true)).focused($focused, equals: MiniGuide.live)
+                }
                 Button("Full guide", action: onFull).buttonStyle(TvButtonStyle(dress: dress)).focused($focused, equals: MiniGuide.full)
                 Button("Close", action: onClose).buttonStyle(TvButtonStyle(dress: dress)).focused($focused, equals: MiniGuide.close)
             }
@@ -327,7 +357,7 @@ struct MiniGuide: View {
         .focusSection()
         .task {
             do {
-                let g = try await client.guidePage("/guide?hours=4&offset=0&limit=500")
+                let g = try await client.guidePage("/guide?hours=4&offset=0&limit=500" + (set.isEmpty ? "" : "&set=\(WittyClient.queryValue(set))"))
                 rows = uniqued(g.channels ?? [])
             } catch { self.error = (error as? APIError)?.message ?? "The guide couldn't be loaded." }
         }

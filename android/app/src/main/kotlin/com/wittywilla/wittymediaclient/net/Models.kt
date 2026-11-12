@@ -311,6 +311,10 @@ data class GuideChannel(
     // The owner's picture for it, as an address on the server. Not every channel has one.
     val logo: String? = null,
     val programmes: List<GuideProgramme> = emptyList(),
+    // How many days back its source keeps (catch-up, `tv-catchup`), and whether its last check worked: `ok`,
+    // `failing`, or empty when it hasn't been checked.
+    val catchupDays: Int? = null,
+    val health: String? = null,
 ) {
     val canTune: Boolean get() = encrypted.isEmpty()
 }
@@ -326,6 +330,9 @@ data class Guide(
     val total: Int? = null,
     val offset: Int? = null,
     val groups: List<String>? = null,
+    // The channel set it's of (`tv-sets`), and where `locate` found its channel: -1 when it isn't in it.
+    val set: String? = null,
+    val located: Int? = null,
 )
 
 // What GET /tv/{key}/tune answers: the stream, what's on and next, and what the server says about the channel.

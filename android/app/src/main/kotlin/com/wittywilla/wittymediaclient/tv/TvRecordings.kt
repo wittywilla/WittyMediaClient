@@ -37,6 +37,7 @@ import com.wittywilla.wittymediaclient.net.RecordingRule
 import com.wittywilla.wittymediaclient.net.problemText
 import com.wittywilla.wittymediaclient.net.recordingRules
 import com.wittywilla.wittymediaclient.net.recordings
+import com.wittywilla.wittymediaclient.net.DvrRules
 import com.wittywilla.wittymediaclient.net.removeRecording
 import com.wittywilla.wittymediaclient.net.removeRecordingRule
 import com.wittywilla.wittymediaclient.ui.LocalExtraColours
@@ -78,6 +79,9 @@ fun RecordingsScreen(nav: Nav) {
     var error by remember { mutableStateOf("") }
     var asking by remember { mutableStateOf<Asking?>(null) }
     var note by remember { mutableStateOf("") }
+    // A series' options being changed, on a server with `tv-dvr-rules-2`.
+    var changing by remember { mutableStateOf<RecordingRule?>(null) }
+    val rules2 = nav.has("tv-dvr-rules-2")
 
     suspend fun load() {
         try {
@@ -179,7 +183,7 @@ fun RecordingsScreen(nav: Nav) {
             if (rules.isNotEmpty()) {
                 Text("Series", style = dress.font(21.25f, W.Bold), color = p.accent, modifier = Modifier.padding(top = dress.pt(20), bottom = dress.pt(8)).semantics { heading() })
                 Column(verticalArrangement = Arrangement.spacedBy(dress.pt(16))) {
-                    for (rule in rules) RuleRow(dress, rule) { stop(rule) }
+                    for (rule in rules) RuleRow(dress, rule, rules2, onChange = { changing = rule }) { stop(rule) }
                 }
             }
             Text(
@@ -187,6 +191,9 @@ fun RecordingsScreen(nav: Nav) {
                 style = dress.font(16.25f), color = p.soft, modifier = Modifier.padding(top = dress.pt(18)),
             )
         }
+    }
+    changing?.let { rule ->
+        RecordOptions(nav, RecordWhat.Rule(rule), onSaid = { scope.launch { load() } }, onClose = { changing = null })
     }
     if (note.isNotEmpty()) {
         TvDialog("Not in a library yet", note, listOf(TvDialogButton("OK", cancel = true) { note = "" }), onClose = { note = "" })
@@ -235,6 +242,8 @@ private fun RecordingRow(dress: TvDress, r: Recording, admin: Boolean, onPlay: (
                 "${GuideRules.dayName(r.start)}, ${GuideRules.span(r.start, r.stop)} · Channel ${r.number.orEmpty()} ${r.channel}" + if (size.isEmpty()) "" else " · $size",
                 style = dress.font(18.75f), color = p.soft,
             )
+            r.ruleTitle?.takeIf { it.isNotEmpty() && it != r.title }?.let { Text("From the series $it", style = dress.font(18.75f), color = p.soft) }
+            if (r.conflict && !r.isFinished) Text("No tuner will be free when this starts.", style = dress.font(18.75f, W.Bold), color = p.err)
             r.error?.takeIf { it.isNotEmpty() }?.let { Text(it, style = dress.font(18.75f, W.Bold), color = p.err) }
         }
         Text(r.statusWords, style = dress.font(18.75f, W.Bold), color = if (r.status == "recording") p.accent else p.text)
@@ -245,7 +254,7 @@ private fun RecordingRow(dress: TvDress, r: Recording, admin: Boolean, onPlay: (
 }
 
 @Composable
-private fun RuleRow(dress: TvDress, rule: RecordingRule, onStop: () -> Unit) {
+private fun RuleRow(dress: TvDress, rule: RecordingRule, options: Boolean, onChange: () -> Unit, onStop: () -> Unit) {
     val p = dress.paint
     val shape = RoundedCornerShape(dress.pt(dress.radius))
     Row(
@@ -261,8 +270,9 @@ private fun RuleRow(dress: TvDress, rule: RecordingRule, onStop: () -> Unit) {
     ) {
         Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(dress.pt(2))) {
             Text(rule.title, style = dress.font(25f, W.Bold), color = p.text)
-            Text("Every airing on ${rule.channel}", style = dress.font(18.75f), color = p.soft)
+            Text(if (options) DvrRules.ruleWords(rule) else "Every airing on ${rule.channel}", style = dress.font(18.75f), color = p.soft)
         }
+        if (options) TvButton(dress, "Change", onChange)
         TvButton(dress, "Stop", onStop)
     }
 }

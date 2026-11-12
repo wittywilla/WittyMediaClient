@@ -25,6 +25,10 @@ import androidx.media3.ui.PlayerView
 import com.wittywilla.wittymediaclient.R
 import com.wittywilla.wittymediaclient.net.Api
 import com.wittywilla.wittymediaclient.net.ApiError
+import com.wittywilla.wittymediaclient.net.GuidePaging
+import com.wittywilla.wittymediaclient.net.GuideProgramme
+import com.wittywilla.wittymediaclient.net.SetRules
+import com.wittywilla.wittymediaclient.net.catchup
 import com.wittywilla.wittymediaclient.net.Tuned
 import com.wittywilla.wittymediaclient.net.leaveChannel
 import com.wittywilla.wittymediaclient.net.problemText
@@ -67,6 +71,10 @@ object LiveTv {
 
     // How far behind the live edge, in seconds.
     var behind by mutableDoubleStateOf(0.0)
+        private set
+
+    // The programme being watched from its start (catch-up), or null for the channel as it is now.
+    var fromStart by mutableStateOf<GuideProgramme?>(null)
         private set
 
     private var api = Api("", "")
@@ -118,12 +126,29 @@ object LiveTv {
             }
         }
 
-    // Plays a channel, or carries on with it if it's the one already on.
+    // Plays a channel, or carries on with it if it's the one already on. A programme watched from its start goes back
+    // to the channel as it is now.
     fun watch(key: String, api: Api) {
         this.api = api
-        if (key == this.key && state != State.Idle && !isFailed) return
-        if (this.key.isNotEmpty() && this.key != key) leave(this.key)
+        if (key == this.key && state != State.Idle && !isFailed && fromStart == null) return
+        begin(key, null)
+    }
+
+    // Plays a programme from its start, on a channel whose source keeps it (`tv-catchup`).
+    fun watchFromStart(key: String, programme: GuideProgramme, api: Api) {
+        this.api = api
+        if (key == this.key && fromStart == programme && state != State.Idle && !isFailed) return
+        begin(key, programme)
+    }
+
+    private fun begin(key: String, programme: GuideProgramme?) {
+        // The same channel another way (live after catch-up, or the other way round) is left first, and waited for,
+        // so the server can't stop the new stream for the old one.
+        val leaving = this.key.takeIf { it.isNotEmpty() && (it != key || fromStart != programme) }
+        val sameKey = leaving == key
+        if (leaving != null && !sameKey) leave(leaving)
         this.key = key
+        fromStart = programme
         info = null
         why = ""
         state = State.Tuning
@@ -132,16 +157,22 @@ object LiveTv {
             it.stop()
             it.clearMediaItems()
         }
-        tuning = tvScope.launch { tune(key) }
+        val using = api
+        tuning = tvScope.launch {
+            if (sameKey) runCatching { using.leaveChannel(key, viewer) }
+            tune(key, programme)
+        }
         measure()
     }
 
     // Tries the channel again after it failed.
     fun retry() {
         val was = key
+        val programme = fromStart
         key = ""
+        fromStart = null
         state = State.Idle
-        watch(was, api)
+        if (programme != null) watchFromStart(was, programme, api) else watch(was, api)
     }
 
     // Nothing to show: the stream is left, and the server can stop it.
@@ -156,6 +187,7 @@ object LiveTv {
         }
         if (key.isNotEmpty()) leave(key)
         key = ""
+        fromStart = null
         info = null
         why = ""
         state = State.Idle
@@ -180,6 +212,10 @@ object LiveTv {
     }
 
     fun goLive() {
+        if (fromStart != null && key.isNotEmpty()) {
+            begin(key, null)
+            return
+        }
         val p = exo ?: return
         p.seekToDefaultPosition()
         p.play()
@@ -204,11 +240,11 @@ object LiveTv {
         }
     }
 
-    private suspend fun tune(key: String) {
+    private suspend fun tune(key: String, programme: GuideProgramme?) {
         repeat(TUNE_TRIES) {
             try {
-                val tuned = api.tune(key, viewer)
-                if (key != this.key) return
+                val tuned = if (programme != null) api.catchup(key, programme, viewer) else api.tune(key, viewer)
+                if (key != this.key || programme != fromStart) return
                 val address = tuned.streamUrl ?: tuned.url
                 val url = address?.let { runCatching { api.mediaUrl(it) }.getOrNull() }
                 if (url == null) {
@@ -234,7 +270,11 @@ object LiveTv {
                     if (key != this.key) return
                 } else {
                     if (key != this.key) return
-                    why = problemText(e, "This channel can't be played right now.")
+                    why = when {
+                        programme != null && e.status == 404 -> "That programme is no longer kept, so it can't be watched from the start."
+                        programme != null -> problemText(e, "That programme can't be watched from the start right now.")
+                        else -> problemText(e, "This channel can't be played right now.")
+                    }
                     state = State.Failed
                     return
                 }
@@ -251,7 +291,7 @@ object LiveTv {
 
     // Asks again what's on, when the programme on the banner has ended.
     suspend fun refreshInfo() {
-        if (key.isEmpty()) return
+        if (key.isEmpty() || fromStart != null) return
         val fresh = runCatching { api.tune(key, viewer) }.getOrNull() ?: return
         if (fresh.key == null || fresh.key == key) info = fresh
     }
@@ -300,10 +340,11 @@ object LastChannel {
         edit.apply()
     }
 
-    // With no server remembered, every channel is nobody's, the untagged one from before included.
+    // With no server remembered, every channel is nobody's, the untagged one from before included. The guide's
+    // sets are kept for each server, so they go too.
     fun forget(context: Context) {
         val edit = prefs(context).edit()
-        prefs(context).all.keys.filter { it.startsWith(KEY) }.forEach { edit.remove(it) }
+        prefs(context).all.keys.filter { it.startsWith(KEY) || it.startsWith(GuidePrefs.SET_PREFIX) }.forEach { edit.remove(it) }
         edit.apply()
     }
 
@@ -315,4 +356,22 @@ object LastChannel {
             putString(key, channel)
         }.apply()
     }
+}
+
+// The guide's choices that are this device's alone, as the page keeps them in its own storage: the set chosen, for each
+// server and account, and how many channels a page shows.
+object GuidePrefs {
+    const val SET_PREFIX = "wms.tv.set."
+    private const val PAGE_SIZE = "wms.tv.pageSize"
+    private fun prefs(context: Context) = context.getSharedPreferences("wittytv", Context.MODE_PRIVATE)
+
+    fun set(context: Context, server: String, account: Long): String? = prefs(context).getString(SetRules.prefKey(server, account), null)
+
+    fun setSet(context: Context, server: String, account: Long, id: String) {
+        val key = SetRules.prefKey(server, account)
+        prefs(context).edit().apply { if (id == SetRules.ALL) remove(key) else putString(key, id) }.apply()
+    }
+
+    fun pageSize(context: Context): Int = GuidePaging.size(prefs(context).getInt(PAGE_SIZE, GuidePaging.DEFAULT))
+    fun setPageSize(context: Context, size: Int) = prefs(context).edit().putInt(PAGE_SIZE, GuidePaging.size(size)).apply()
 }

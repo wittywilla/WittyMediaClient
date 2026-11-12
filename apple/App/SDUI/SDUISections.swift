@@ -198,6 +198,7 @@ struct SDUIGridView: View {
 
 /// Rows of text with an icon or a small picture: 56 points tall, 44 when dense, 90 on a television.
 struct SDUIListView: View {
+    @Environment(\.sduiDraw) private var draw
     @EnvironmentObject private var center: SDUICenter
     @EnvironmentObject private var store: SDUIPageStore
     @Environment(\.palette) private var palette
@@ -211,7 +212,7 @@ struct SDUIListView: View {
                 SDUISectionError(id: list.id) { Task { await store.retry(list, center: center) } }
             } else if list.state == .deferred {
                 VStack(spacing: layout.sp("xs")) {
-                    ForEach(0..<3, id: \.self) { _ in SkeletonShape(radius: Tokens.Radius.sm).frame(height: layout.isTV ? 90 : 56) }
+                    ForEach(0..<3, id: \.self) { _ in SkeletonShape(radius: draw.radius("ListItem")).frame(height: layout.isTV ? 90 : 56) }
                 }
                 .padding(.horizontal, layout.margin)
             } else if list.children.isEmpty {
@@ -236,6 +237,7 @@ struct SDUIListView: View {
 }
 
 struct SDUIListRow: View {
+    @Environment(\.sduiDraw) private var draw
     @EnvironmentObject private var model: AppModel
     @EnvironmentObject private var center: SDUICenter
     @EnvironmentObject private var store: SDUIPageStore
@@ -265,7 +267,7 @@ struct SDUIListRow: View {
                 let wide = (tall * CGFloat(min(max(picture.ratio, 0.5), 2))).rounded()
                 SDUIPicture(picture: picture, symbol: SDUIIcon.symbol(row.icon, or: "square"), shownWidth: wide)
                     .frame(width: wide, height: tall)
-                    .clipShape(RoundedRectangle(cornerRadius: Tokens.Radius.sm, style: .continuous))
+                    .clipShape(RoundedRectangle(cornerRadius: draw.radius("ListItem", "art"), style: .continuous))
                     .overlay(alignment: .bottom) {
                         if let done = progress {
                             GeometryReader { geo in
@@ -293,7 +295,7 @@ struct SDUIListRow: View {
                                 .foregroundStyle(palette.textSecondary)
                                 .padding(.horizontal, 6)
                                 .padding(.vertical, 1)
-                                .background(RoundedRectangle(cornerRadius: Tokens.Radius.xs, style: .continuous).fill(palette.card))
+                                .background(RoundedRectangle(cornerRadius: draw.radius("Card", "badge"), style: .continuous).fill(palette.card))
                         }
                     }
                     .accessibilityHidden(true)
@@ -335,6 +337,7 @@ struct SDUIListRow: View {
 /// An album's songs, a book's chapters: numbered, with their lengths. On a television the list keeps to the
 /// right two thirds of the screen.
 struct SDUITrackListView: View {
+    @Environment(\.sduiDraw) private var draw
     @EnvironmentObject private var center: SDUICenter
     @EnvironmentObject private var store: SDUIPageStore
     @Environment(\.palette) private var palette
@@ -348,7 +351,7 @@ struct SDUITrackListView: View {
                 SDUISectionError(id: list.id) { Task { await store.retry(list, center: center) } }
             } else if list.state == .deferred {
                 VStack(spacing: layout.sp("xs")) {
-                    ForEach(0..<4, id: \.self) { _ in SkeletonShape(radius: Tokens.Radius.sm).frame(height: layout.isTV ? 66 : 56) }
+                    ForEach(0..<4, id: \.self) { _ in SkeletonShape(radius: draw.radius("TrackList", "row")).frame(height: layout.isTV ? 66 : 56) }
                 }
                 .padding(.horizontal, layout.margin)
             } else {
@@ -426,6 +429,7 @@ struct SDUITrackRow: View {
 /// A show's seasons with the chosen season's episodes. On Apple TV: a row of season pills, then the episodes as
 /// a row of cards. On a touch screen: a season menu, then the episodes one under another, the still at the left.
 struct SDUISeasonListView: View {
+    @Environment(\.sduiDraw) private var draw
     @EnvironmentObject private var model: AppModel
     @EnvironmentObject private var center: SDUICenter
     @EnvironmentObject private var store: SDUIPageStore
@@ -509,7 +513,7 @@ struct SDUISeasonListView: View {
             .foregroundStyle(palette.text)
             .padding(.horizontal, layout.sp("m"))
             .frame(minHeight: 44)
-            .background(RoundedRectangle(cornerRadius: Tokens.Radius.md, style: .continuous).fill(palette.card))
+            .background(RoundedRectangle(cornerRadius: draw.radius("SeasonList", "season"), style: .continuous).fill(palette.card))
         }
         .padding(.horizontal, layout.margin)
         .accessibilityLabel(chosen?.title ?? "Season")
@@ -520,6 +524,7 @@ struct SDUISeasonListView: View {
 /// An episode in a touch screen's list: the still at the left with how far through it is, then the title, the
 /// running time and two lines of what happens.
 struct SDUIEpisodeRow: View {
+    @Environment(\.sduiDraw) private var draw
     @EnvironmentObject private var model: AppModel
     @EnvironmentObject private var center: SDUICenter
     @EnvironmentObject private var store: SDUIPageStore
@@ -543,7 +548,7 @@ struct SDUIEpisodeRow: View {
                             Image(systemName: "checkmark.circle.fill").foregroundStyle(palette.onAccent, palette.accent).padding(4)
                         }
                     }
-                    .clipShape(RoundedRectangle(cornerRadius: Tokens.Radius.sm, style: .continuous))
+                    .clipShape(RoundedRectangle(cornerRadius: draw.radius("SeasonList", "still"), style: .continuous))
                 VStack(alignment: .leading, spacing: 2) {
                     Text(card.shown("title")).sduiFont("title", weight: .medium).foregroundStyle(palette.text).sduiLines(card.lineLimit("title"))
                     if !card.shown("subtitle").isEmpty {
