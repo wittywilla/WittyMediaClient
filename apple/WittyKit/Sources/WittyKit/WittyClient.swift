@@ -831,6 +831,85 @@ public final class WittyClient: @unchecked Sendable {
         _ = try await call("DELETE", "/recording-rules/\(id)")
     }
 
+    // MARK: WittyTV: channel sets, finding a channel, from the start, recording options (ChannelSets.swift)
+
+    /// Every set this profile can show, in the server's order (`tv-sets`).
+    public func channelSets() async throws -> ChannelSetList { try await get("/tv-sets") }
+
+    /// One custom set with its channels in its order.
+    public func channelSet(_ id: String) async throws -> ChannelSetDetail { try await get("/tv-sets/\(try Self.setPath(id))") }
+
+    public func createChannelSet(name: String, channels: [String], shared: Bool) async throws -> ChannelSetDetail {
+        struct Ask: Encodable { let name: String; let channels: [String]; let shared: Bool }
+        return try await ask("POST", "/tv-sets", Ask(name: name, channels: channels, shared: shared))
+    }
+
+    /// Changes what's given: `channels` replaces the list and its order.
+    public func updateChannelSet(_ id: String, name: String? = nil, channels: [String]? = nil, shared: Bool? = nil) async throws {
+        struct Ask: Encodable { let name: String?; let channels: [String]?; let shared: Bool? }
+        try await tell("PUT", "/tv-sets/\(try Self.setPath(id))", Ask(name: name, channels: channels, shared: shared))
+    }
+
+    /// Adds channels to a set, or takes them out, without sending the rest: "Add to set…".
+    public func changeChannelSet(_ id: String, add: [String] = [], remove: [String] = []) async throws {
+        struct Ask: Encodable { let add: [String]; let remove: [String] }
+        try await tell("POST", "/tv-sets/\(try Self.setPath(id))/channels", Ask(add: add, remove: remove))
+    }
+
+    public func deleteChannelSet(_ id: String) async throws {
+        _ = try await call("DELETE", "/tv-sets/\(try Self.setPath(id))")
+    }
+
+    /// This account's order of the custom sets it sees.
+    public func orderChannelSets(_ ids: [String]) async throws {
+        try await tell("PUT", "/tv-sets/order", ["ids": ids])
+    }
+
+    private static func setPath(_ id: String) throws -> String {
+        guard let number = ChannelSetRules.pathId(id) else { throw APIError(status: 0, message: "Only your own sets can be changed.") }
+        return number
+    }
+
+    /// Channels without their schedule, a set's or all of them, matching `q`, with where `locate` is (`tv-guide-paging`).
+    public func channelList(set: String = "", q: String = "", locate: String = "", offset: Int = 0, limit: Int) async throws -> Guide {
+        try await get(GuidePaging.listQuery(set: set, q: q, locate: locate, offset: offset, limit: limit))
+    }
+
+    /// A programme from its start, on a channel whose source keeps it: the same answer as `tune` (`tv-catchup`).
+    public func catchup(_ key: String, start: Int64, end: Int64, viewer: String) async throws -> Tuned {
+        try await get(CatchupRules.query(key: key, start: start, end: end, viewer: viewer))
+    }
+
+    /// Records one programme with some minutes either side (`tv-dvr-rules-2`).
+    public func record(channel: String, title: String, sub: String?, start: Int64, stop: Int64, options: RecordingOptions) async throws {
+        struct Ask: Encodable { let channel: String; let title: String; let sub: String?; let start: Int64; let stop: Int64; let padBefore: Int; let padAfter: Int }
+        try await tell("POST", "/recordings", Ask(channel: channel, title: title, sub: sub, start: start, stop: stop, padBefore: options.padBefore, padAfter: options.padAfter))
+    }
+
+    /// Records every airing of a title, with a series' options (`tv-dvr-rules-2`).
+    public func recordSeries(channel: String, title: String, options: RecordingOptions) async throws {
+        try await tell("POST", "/recording-rules", Self.ruleBody(channel: channel, title: title, options: options))
+    }
+
+    /// Changes a series rule's options.
+    public func updateRecordingRule(_ id: Int64, options: RecordingOptions) async throws {
+        try await tell("PUT", "/recording-rules/\(id)", Self.ruleBody(channel: nil, title: nil, options: options))
+    }
+
+    struct RuleBody: Encodable {
+        let channel: String?
+        let title: String?
+        let anyChannel: Bool
+        let newOnly: Bool
+        let keep: Int
+        let padBefore: Int
+        let padAfter: Int
+    }
+
+    static func ruleBody(channel: String?, title: String?, options o: RecordingOptions) -> RuleBody {
+        RuleBody(channel: channel, title: title, anyChannel: o.anyChannel, newOnly: o.newOnly, keep: o.keep, padBefore: o.padBefore, padAfter: o.padAfter)
+    }
+
     public func reminders() async throws -> [TvReminder] { try await list("/tv/reminders") }
 
     public func addReminder(channel: String, title: String, sub: String?, start: Int64, end: Int64) async throws -> TvReminder {

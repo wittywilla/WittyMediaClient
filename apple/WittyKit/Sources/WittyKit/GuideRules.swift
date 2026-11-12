@@ -166,10 +166,14 @@ public enum GuideRules {
             && (!favourites || channel.favourite == true)
     }
 
-    /// What the server is asked for: a stretch of the schedule, a page of channels, and a filter.
-    public static func query(from: Int64, offset: Int, limit: Int = page, kind: String = "", group: String = "", favourites: Bool = false) -> String {
+    /// What the server is asked for: a stretch of the schedule, a page of channels, and a filter. `set` and `q` are
+    /// only sent when there is one, so an older server is asked exactly what it always was.
+    public static func query(from: Int64, offset: Int, limit: Int = page, kind: String = "", group: String = "", favourites: Bool = false,
+                             set: String = "", q: String = "") -> String {
         "/guide?from=\(from)&hours=\(fetchHours)&offset=\(offset)&limit=\(limit)&kind=\(WittyClient.queryValue(kind))&group=\(WittyClient.queryValue(group))"
             + (favourites ? "&favourites=1" : "")
+            + (set.isEmpty ? "" : "&set=\(WittyClient.queryValue(set))")
+            + (q.isEmpty ? "" : "&q=\(WittyClient.queryValue(q))")
     }
 
     /// The programme after this one on the channel that's worth naming: not a slate or a gap.
@@ -198,6 +202,10 @@ public struct Recording: Decodable, Equatable, Identifiable {
     public let path: String?
     public let sizeBytes: Int64?
     public let ruleId: Int64?
+    /// No tuner would be free when it starts (`tv-dvr-rules-2`).
+    public let conflict: Bool?
+    /// The series rule that made it, by its title.
+    public let ruleTitle: String?
 
     public var isFinished: Bool { status == "done" || status == "failed" }
 
@@ -218,6 +226,17 @@ public struct RecordingRule: Decodable, Equatable, Identifiable {
     public let channelId: Int64?
     public let channel: String
     public let title: String
+    /// What `tv-dvr-rules-2` adds; an older server sends none of them.
+    public let anyChannel: Bool?
+    public let newOnly: Bool?
+    public let keep: Int?
+    public let padBefore: Int?
+    public let padAfter: Int?
+
+    /// Its options as they are, for changing them.
+    public var options: RecordingOptions {
+        RecordingOptions(padBefore: padBefore ?? 0, padAfter: padAfter ?? 0, newOnly: newOnly ?? false, anyChannel: anyChannel ?? false, keep: keep ?? 0)
+    }
 }
 
 /// "Tell me when this starts", kept with the account.
