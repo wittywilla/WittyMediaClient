@@ -11,6 +11,8 @@ public struct SDUICardStyle: Codable, Equatable, Sendable {
     public var shows: [String]?
     public var titleLines: Int?
     public var subtitleLines: Int?
+    /// Which theme tokens draw it: colours, text roles and corners (the server's docs/THEMES.md, SDUI tokens).
+    public var tokens: SDUIStyleTokens?
 
     public init(_ style: String, shape: String, aspect: String, shows: [String], titleLines: Int, subtitleLines: Int) {
         self.style = style
@@ -65,8 +67,26 @@ public struct SDUICatalog: Codable, Equatable, Sendable {
     public var routes: [SDUIRouteRule]
     public var commands: [SDUICommand]
     public var icons: [String]?
+    /// Each component's theme tokens, by its type.
+    public var componentTokens: [String: SDUIStyleTokens] = [:]
+    /// Each text role's typeface and weight, by name in the resolved theme's `type`.
+    public var typeRoles: [String: SDUITypeRole] = [:]
 
-    enum CodingKeys: String, CodingKey { case revision, cardStyles, routes, commands, icons }
+    enum CodingKeys: String, CodingKey { case revision, cardStyles, routes, commands, icons, components, theme }
+
+    private struct Component: Codable { let type: String; let tokens: SDUIStyleTokens? }
+    private struct ThemeVocabulary: Codable { let typeRoles: [String: SDUITypeRole]? }
+
+    public func encode(to encoder: Encoder) throws {
+        var box = encoder.container(keyedBy: CodingKeys.self)
+        try box.encodeIfPresent(revision, forKey: .revision)
+        try box.encode(cardStyles, forKey: .cardStyles)
+        try box.encode(routes, forKey: .routes)
+        try box.encode(commands, forKey: .commands)
+        try box.encodeIfPresent(icons, forKey: .icons)
+        try box.encode(componentTokens.map { Component(type: $0.key, tokens: $0.value) }.sorted { $0.type < $1.type }, forKey: .components)
+        try box.encode(ThemeVocabulary(typeRoles: typeRoles), forKey: .theme)
+    }
 
     public init(from decoder: Decoder) throws {
         let box = try decoder.container(keyedBy: CodingKeys.self)
@@ -79,6 +99,9 @@ public struct SDUICatalog: Codable, Equatable, Sendable {
         routes = rules.isEmpty ? SDUICatalog.builtIn.routes : rules
         commands = ops.isEmpty ? SDUICatalog.builtIn.commands : ops
         icons = try? box.decodeIfPresent([String].self, forKey: .icons)
+        let parts = ((try? box.decodeIfPresent([Loose<Component>].self, forKey: .components)) ?? []).compactMap(\.value)
+        componentTokens = Dictionary(parts.compactMap { part in part.tokens.map { (part.type, $0) } }, uniquingKeysWith: { first, _ in first })
+        typeRoles = (try? box.decodeIfPresent(ThemeVocabulary.self, forKey: .theme))?.typeRoles ?? [:]
     }
 
     public init(cardStyles: [SDUICardStyle], routes: [SDUIRouteRule], commands: [SDUICommand]) {
@@ -145,4 +168,29 @@ public struct SDUICatalog: Codable, Equatable, Sendable {
             SDUICommand("selectTab"),
             SDUICommand("refresh"),
         ])
+}
+
+/// A component's or card style's theme tokens: each coloured part's colour token, each text's role, each rounded
+/// part's shape token.
+public struct SDUIStyleTokens: Codable, Equatable, Sendable {
+    public var colors: [String: String]?
+    public var type: [String: String]?
+    public var shape: [String: String]?
+
+    public init(colors: [String: String]? = nil, type: [String: String]? = nil, shape: [String: String]? = nil) {
+        self.colors = colors
+        self.type = type
+        self.shape = shape
+    }
+}
+
+/// A text role's typeface (`display`, `body` or `mono`) and weight (`body`, `medium`, `strong`, `heading`).
+public struct SDUITypeRole: Codable, Equatable, Sendable {
+    public var family: String
+    public var weight: String
+
+    public init(family: String, weight: String) {
+        self.family = family
+        self.weight = weight
+    }
 }

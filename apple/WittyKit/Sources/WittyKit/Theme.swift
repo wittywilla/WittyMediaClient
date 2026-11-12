@@ -404,3 +404,186 @@ public struct ThemeModules: Decodable, Equatable, Sendable {
 public extension WittyClient {
     func themeModules() async throws -> ThemeModules { try await get("/theme") }
 }
+
+/// `GET /theme`: the colours this account sees with every layer applied (the theme, the administrator's overrides,
+/// the profile's own), its corners, its typefaces and the server's name to draw (the server's docs/THEMES.md).
+public struct ResolvedTheme: Decodable, Equatable, Sendable {
+    public struct Look: Decodable, Equatable, Sendable {
+        public var id: String?
+        public var tokens: [String: String]
+        public var shape: [String: Double]?
+        public var type: ThemeType?
+
+        enum CodingKeys: String, CodingKey { case id, tokens, shape, type }
+        public init(from decoder: Decoder) throws {
+            let box = try decoder.container(keyedBy: CodingKeys.self)
+            id = try? box.decodeIfPresent(String.self, forKey: .id)
+            tokens = (try? box.decodeIfPresent([String: String].self, forKey: .tokens)) ?? [:]
+            shape = try? box.decodeIfPresent([String: Double].self, forKey: .shape)
+            type = try? box.decodeIfPresent(ThemeType.self, forKey: .type)
+        }
+    }
+
+    public struct ThemeType: Decodable, Equatable, Sendable {
+        public var display: [String]
+        public var body: [String]
+        public var mono: [String]
+        public var weights: [String: Int]
+
+        public init(display: [String] = [], body: [String] = [], mono: [String] = [], weights: [String: Int] = [:]) {
+            self.display = display
+            self.body = body
+            self.mono = mono
+            self.weights = weights
+        }
+
+        enum CodingKeys: String, CodingKey { case display, body, mono, weights }
+        public init(from decoder: Decoder) throws {
+            let box = try decoder.container(keyedBy: CodingKeys.self)
+            display = (try? box.decodeIfPresent([String].self, forKey: .display)) ?? []
+            body = (try? box.decodeIfPresent([String].self, forKey: .body)) ?? []
+            mono = (try? box.decodeIfPresent([String].self, forKey: .mono)) ?? []
+            weights = (try? box.decodeIfPresent([String: Int].self, forKey: .weights)) ?? [:]
+        }
+
+        public func families(_ name: String) -> [String] {
+            switch name {
+            case "display": return display
+            case "mono": return mono
+            default: return body
+            }
+        }
+    }
+
+    public struct Brand: Decodable, Equatable, Sendable {
+        public struct Part: Decodable, Equatable, Sendable {
+            public var text: String
+            public var accent: Bool?
+        }
+        public var parts: [Part]
+        public var token: String?
+        public var color: String?
+    }
+
+    public var id: String?
+    public var scheme: String?
+    public var tokens: [String: String]
+    public var shape: [String: Double]
+    public var type: ThemeType?
+    public var brand: Brand?
+    public var variants: [String: Look]
+    public var etag: String?
+
+    enum CodingKeys: String, CodingKey { case id, scheme, tokens, shape, type, brand, variants, etag }
+
+    public init(from decoder: Decoder) throws {
+        let box = try decoder.container(keyedBy: CodingKeys.self)
+        id = try? box.decodeIfPresent(String.self, forKey: .id)
+        scheme = try? box.decodeIfPresent(String.self, forKey: .scheme)
+        tokens = (try? box.decodeIfPresent([String: String].self, forKey: .tokens)) ?? [:]
+        shape = (try? box.decodeIfPresent([String: Double].self, forKey: .shape)) ?? [:]
+        type = try? box.decodeIfPresent(ThemeType.self, forKey: .type)
+        brand = try? box.decodeIfPresent(Brand.self, forKey: .brand)
+        variants = (try? box.decodeIfPresent([String: Look].self, forKey: .variants)) ?? [:]
+        etag = try? box.decodeIfPresent(String.self, forKey: .etag)
+    }
+
+    /// The look to draw: the device's light or dark one when the theme has both, else the theme's own.
+    public func look(dark: Bool) -> Look? {
+        if let pick = variants[dark ? "dark" : "light"] { return pick }
+        return variants.values.first
+    }
+
+    /// The colours to draw with for the device's light or dark setting.
+    public func colors(dark: Bool) -> [String: String] {
+        let picked = look(dark: dark)?.tokens ?? [:]
+        return picked.isEmpty ? tokens : picked
+    }
+
+    /// The corners and type of the look drawn, falling back to the theme's own.
+    public func shape(dark: Bool) -> [String: Double] { look(dark: dark)?.shape ?? shape }
+    public func typefaces(dark: Bool) -> ThemeType? { look(dark: dark)?.type ?? type }
+}
+
+/// A profile's own colours: `GET`, `PUT`, `DELETE /theme/personal`.
+public struct PersonalColours: Codable, Equatable, Sendable {
+    public var tokens: [String: String]
+    public var modules: [String: [String: String]]
+
+    public init(tokens: [String: String] = [:], modules: [String: [String: String]] = [:]) {
+        self.tokens = tokens
+        self.modules = modules
+    }
+
+    enum CodingKeys: String, CodingKey { case tokens, modules }
+    public init(from decoder: Decoder) throws {
+        let box = try decoder.container(keyedBy: CodingKeys.self)
+        tokens = (try? box.decodeIfPresent([String: String].self, forKey: .tokens)) ?? [:]
+        modules = (try? box.decodeIfPresent([String: [String: String]].self, forKey: .modules)) ?? [:]
+    }
+
+    /// The colour names a profile may set, grouped as the website's Settings → Appearance groups them.
+    public static let groups: [(title: String, tokens: [String])] = [
+        ("Surfaces", ["bg", "bg2", "bg3", "bg4"]),
+        ("Text", ["fg", "fg2", "fg3"]),
+        ("Accent", ["accent", "accentText", "accentFg", "brandAccent", "focus"]),
+        ("Status", ["ok", "warn", "danger"]),
+        ("Lines", ["border", "borderStrong", "controlLine"]),
+    ]
+
+    /// What each colour is for, in words for the row.
+    public static func label(_ token: String) -> String {
+        [
+            "bg": "Background", "bg2": "Panels", "bg3": "Cards and fields", "bg4": "Raised parts",
+            "fg": "Text", "fg2": "Secondary text", "fg3": "Hints",
+            "accent": "Accent", "accentText": "Links and highlighted words", "accentFg": "Text on the accent",
+            "brandAccent": "The server's name", "focus": "Focus ring",
+            "ok": "Success", "warn": "Warning", "danger": "Danger",
+            "border": "Hairlines", "borderStrong": "Strong lines", "controlLine": "Outlines of controls",
+        ][token] ?? token
+    }
+}
+
+/// A refusal of a profile's own colours: the text that would be hard to read, and on what.
+public struct ContrastRefusal: Decodable, Equatable, Sendable {
+    public struct Pair: Decodable, Equatable, Sendable {
+        /// The text colour and what it sits on, by token name.
+        public var text: String?
+        public var surface: String?
+        public var ratio: Double?
+        public var need: Double?
+        public var variant: String?
+        public var scope: String?
+    }
+    public var contrast: [Pair]
+
+    enum CodingKeys: String, CodingKey { case contrast }
+    public init(from decoder: Decoder) throws {
+        let box = try decoder.container(keyedBy: CodingKeys.self)
+        contrast = ((try? box.decodeIfPresent([Loose<Pair>].self, forKey: .contrast)) ?? []).compactMap(\.value)
+    }
+
+    /// One line a person can read: "Secondary text on cards and fields: 1.2 to 1, needs 4.5 (light look)".
+    public static func words(_ pair: Pair) -> String {
+        let fg = PersonalColours.label(pair.text ?? "")
+        let bg = PersonalColours.label(pair.surface ?? "")
+        var out = "\(fg) on \(bg.lowercased())"
+        if let ratio = pair.ratio { out += String(format: ": %.1f to 1", ratio) }
+        if let need = pair.need { out += String(format: ", needs %.1f", need) }
+        if let variant = pair.variant, !variant.isEmpty { out += " (\(variant) look)" }
+        return out
+    }
+}
+
+public extension WittyClient {
+    func resolvedTheme() async throws -> ResolvedTheme { try await get("/theme") }
+
+    func personalColours() async throws -> PersonalColours { try await get("/theme/personal") }
+
+    /// Saves them; a 400 with `contrast` is text that would be hard to read, and nothing is saved.
+    func setPersonalColours(_ colours: PersonalColours) async throws {
+        _ = try await call("PUT", "/theme/personal", body: try JSONEncoder().encode(colours))
+    }
+
+    func resetPersonalColours() async throws { _ = try await call("DELETE", "/theme/personal") }
+}
