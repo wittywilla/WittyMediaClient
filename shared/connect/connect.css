@@ -561,3 +561,13 @@ main.compact { padding-top: var(--sp-6); padding-bottom: var(--sp-6); }
 .toast { display: flex; align-items: center; justify-content: space-between; margin-bottom: var(--sp-3); padding: var(--sp-2) var(--sp-2) var(--sp-2) var(--sp-4); border-radius: var(--r-lg); background: var(--bg-3); color: var(--fg); }
 .toast button.undo { flex: none; margin: 0 0 0 var(--sp-3); color: var(--accent-text); font-weight: 600; }
 @media (forced-colors: active) { .toast { border: 1px solid ButtonText; } .list .row > button.remove { opacity: 1; } }
+/* The device's own setting under the saved servers: Show saved servers first. A real checkbox
+   (a switch to screen readers), large enough for a remote's focus ring. */
+.links.manage .pref { display: flex; align-items: flex-start; gap: var(--sp-3); flex-basis: 100%; padding: var(--sp-2) 0; color: var(--fg); cursor: pointer; }
+.links.manage .pref input { flex: none; width: 22px; height: 22px; margin: 2px 0 0; accent-color: var(--accent); }
+.links.manage .pref > span { display: grid; gap: 2px; }
+.links.manage .pref small { color: var(--fg-2); }
+/* Secure pairing's PIN, under the code: the same size, and when it changes. */
+.pair-pin { margin-top: var(--sp-3); }
+.pair-pin .pin-digits { font-variant-numeric: tabular-nums; letter-spacing: .08em; }
+.pair-pin .pin-left { display: block; margin-bottom: var(--sp-2); }

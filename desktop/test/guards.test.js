@@ -171,3 +171,13 @@ test('a server\'s logo is only a picture, and its version a plain word', () => {
   assert.strictEqual(logoVersion('1730800000'), '1730800000')
   for (const bad of ['', 'a b', 'x'.repeat(65), 7, null, 'v1\n']) assert.strictEqual(logoVersion(bad), '', String(bad))
 })
+
+test('secure pairing: a session ID and a PIN are only ever what the server would send', () => {
+  const { validPairSession, validPin } = require('../guards')
+  assert.ok(validPairSession('abcDEF123_-xyz'))
+  assert.ok(!validPairSession('short'))
+  assert.ok(!validPairSession('../../etc/passwd-and-more'))
+  assert.ok(validPin('123456'))
+  assert.ok(!validPin('12a456'))
+  assert.ok(!validPin(123456))
+})
