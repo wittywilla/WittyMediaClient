@@ -85,6 +85,8 @@ struct RootView: View {
         }
         // From here, which redraws with the model, and not from the scene above it, which can draw a
         // moment later: a screen that has just appeared must never ask with the connection before.
+        // The profile's limits and screen time, over everything: see Household.swift.
+        .modifier(ScreenTimeGuard(household: model.household))
         .environment(\.palette, model.palette)
         .environment(\.client, model.client)
         .animation(.easeInOut(duration: 0.2), value: model.effectiveThemeId)

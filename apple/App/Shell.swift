@@ -207,6 +207,7 @@ private struct TabRoot: View {
                     case .twoStep: TwoStepView().plainNavigation()
                     case .devices: DevicesView().plainNavigation()
                     case .signInTv: SignInTvView().plainNavigation()
+                    case .family(let place): FamilyScreen(place: place).plainNavigation()
                     case .theme: ThemeView().plainNavigation()
                     case .away: AwayView().plainNavigation()
                     case .servers: ManageServersView().plainNavigation()

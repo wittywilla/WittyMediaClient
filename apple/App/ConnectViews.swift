@@ -449,138 +449,8 @@ struct MismatchView: View {
 
 // MARK: - 8: sign in with a code
 
-/// The TV shows a code; someone already signed in on a phone or computer approves
-/// it, so nobody has to type a password with a remote. See docs/CLIENT-API.md.
-private struct PairPanel: View {
-    @EnvironmentObject private var model: AppModel
-    @Environment(\.palette) private var palette
-    @Environment(\.metrics) private var metrics
-    let onUsePassword: () -> Void
-    var onBack: (() -> Void)?
-    @State private var round = 0
-    @State private var code = ""
-    @State private var approveAt = ""
-    @State private var qr: CGImage?
-    @State private var problem = ""
-    @State private var starting = true
-    /// The server has handed this device all the codes it will for now: a password is the way in.
-    @State private var limited = false
-    @Namespace private var scope
-    /// The screen's main action, which takes the focus when an answer from the server changes it.
-    @FocusState private var mainAction: Bool
-
-    private func run() async {
-        code = ""
-        problem = ""
-        limited = false
-        qr = nil
-        starting = true
-        defer { starting = false }
-        let start: PairStart
-        do {
-            start = try await model.client.pairStart(device: model.deviceName, platform: model.platformName)
-        } catch let error as APIError where error.status == 429 {
-            limited = true
-            problem = say("pairBusy")
-            return
-        } catch {
-            problem = plainWords(Problem.of(error))
-            return
-        }
-        code = start.code
-        approveAt = start.approveAddress(base: model.client.base) ?? model.client.base
-        qr = QRImage.make(for: approveAt)
-        starting = false
-        var wait = max(start.intervalSec ?? 3, 1)
-        while !Task.isCancelled {
-            do {
-                try await Task.sleep(nanoseconds: UInt64(wait) * 1_000_000_000)
-                let poll = try await model.client.pairPoll(deviceSecret: start.deviceSecret)
-                problem = ""
-                switch poll.status {
-                case "approved":
-                    if let token = poll.token {
-                        model.signedIn(token: token)
-                    } else {
-                        problem = say("pairExpired")
-                        code = ""
-                    }
-                    return
-                case "denied":
-                    problem = say("pairDenied"); code = ""; return
-                case "expired":
-                    problem = say("pairExpired"); code = ""; return
-                case "slow-down":
-                    wait = max(poll.intervalSec ?? wait, wait) + 1
-                default:
-                    break
-                }
-            } catch {
-                let trouble = Problem.of(error)
-                if trouble == .cancelled { return }
-                // The code stays good through a lost connection, so this keeps trying until it expires.
-                problem = plainWords(trouble)
-            }
-        }
-    }
-
-    var body: some View {
-        SignInLayout(back: onBack) {
-            BrandLockup()
-            SignInHeading(title: say("pairTitle"), detail: code.isEmpty ? "" : say("pairHint"))
-            if !code.isEmpty {
-                Text(approveAt)
-                    .font(.wmLabel)
-                    .foregroundStyle(palette.accentText)
-                    .multilineTextAlignment(metrics.tv ? .leading : .center)
-                    .textSelectionIfAvailable()
-                Text(code)
-                    .accessibilityIdentifier("pairCode")
-                    .font(.system(size: metrics.tv ? 72 : 40, weight: .bold, design: .monospaced))
-                    .kerning(metrics.tv ? 16 : 8)
-                    .foregroundStyle(palette.text)
-                    .padding(.horizontal, Tokens.Space.s6)
-                    .padding(.vertical, Tokens.Space.s3)
-                    .background(RoundedRectangle(cornerRadius: Tokens.Radius.lg, style: .continuous).fill(palette.panel))
-                    .accessibilityLabel(code.map(String.init).joined(separator: " "))
-                HStack(spacing: Tokens.Space.s2) {
-                    ProgressView()
-                    Secondary(say("pairWaiting"))
-                }
-            } else if starting && problem.isEmpty {
-                ProgressView().frame(maxWidth: .infinity, minHeight: 80)
-            }
-            if !problem.isEmpty { ProblemLine(problem) }
-        } actions: {
-            if !code.isEmpty, let qr {
-                QRCard(image: qr, caption: say("pairScan"))
-                    .frame(maxWidth: .infinity, alignment: metrics.tv ? .leading : .center)
-            }
-            if code.isEmpty && !problem.isEmpty {
-                if limited {
-                    Button(say("usePassword"), action: onUsePassword).action(.primary, wide: true, tall: true).focused($mainAction)
-                } else {
-                    Button(say("pairNew")) { round += 1 }.action(.primary, wide: true, tall: true).focused($mainAction)
-                }
-            }
-            FlowLayout(spacing: Tokens.Space.s2, centred: !metrics.tv) {
-                if model.canTypeCode { Button(say("codeTitle")) { model.askForCode() }.action(.quiet) }
-                if !limited {
-                    Button(say("usePassword"), action: onUsePassword).action(.quiet).firstFocus(in: scope, when: !code.isEmpty)
-                }
-                Button(say("changeServer")) { model.changeServer() }.action(.quiet)
-            }
-            .remoteSection()
-        }
-        .focusRoot(scope)
-        .task(id: round) { await run() }
-        // When the server says no, the remote's focus goes to what to do about it, once it's on screen.
-        .onChange(of: problem.isEmpty) { empty in
-            guard !empty, code.isEmpty else { return }
-            DispatchQueue.main.async { mainAction = true }
-        }
-    }
-}
+// The TV shows a code, and with a newer server a PIN beside it; someone already signed in on a phone or
+// computer approves it. That screen is PairPanel, in PairDevice.swift.
 
 extension View {
     /// Words that can be copied, where there's a way to copy them.
@@ -782,7 +652,7 @@ struct SignInView: View {
         // One centred column on every device: the face, its names centred under it, then the way in.
         SignInLayout(back: back, centred: true) {
             VStack(spacing: Tokens.Space.s2) {
-                AvatarTile(name: profile.shownName, size: metrics.tv ? 200 : 120)
+                AvatarTile(name: profile.shownName, size: metrics.tv ? 200 : 120, picture: profile.avatar)
                     .padding(.bottom, metrics.tv ? Tokens.Space.s2 : 0)
                 Text(profile.shownName).font(.wmHero).foregroundStyle(palette.text).lineLimit(1)
                 if profile.showsUsername {

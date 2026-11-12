@@ -82,19 +82,32 @@ struct YouView: View {
                 }
             }
             row(.devices, "ipad.and.iphone", RowTint.devices, "rowDevices", value: deviceCount.map(String.init) ?? "")
+            if model.has("profile-avatars"), model.household.allows(ProfileFeature.editProfile) {
+                NavigationLink(value: Route.family(.myPicture)) {
+                    RowLabel(icon: "face.smiling", tint: RowTint.family, title: "Your picture")
+                }
+                .rowStyle()
+            }
         }
         if isAdult {
             ListGroup(title: say("groupHousehold")) {
                 #if !os(tvOS)
                 row(.signInTv, "tv", RowTint.tv, "rowSignInTv")
                 #endif
-                page("/settings/users", "figure.2.and.child.holdinghands", RowTint.family, title: "rowProfiles")
+                if model.has("parental-controls") {
+                    // The app's own pages where the server has them: see ProfileSettings.swift.
+                    row(.family(.profiles), "figure.2.and.child.holdinghands", RowTint.family, "rowProfiles")
+                } else {
+                    page("/settings/users", "figure.2.and.child.holdinghands", RowTint.family, title: "rowProfiles")
+                }
             }
         }
         ListGroup(title: say("groupYours")) {
             page("/review", "sparkles", RowTint.year, title: "rowYourYear")
             page("/collections", "square.stack", RowTint.teal, title: "rowCollections")
-            page("/settings/sharing", "link", RowTint.account, title: "rowShareLinks")
+            if model.household.allows(ProfileFeature.sharing) {
+                page("/settings/sharing", "link", RowTint.account, title: "rowShareLinks")
+            }
             page("/settings/activity", "waveform.path.ecg", RowTint.gold, title: "rowActivity")
             if hasGames {
                 page("/settings/games", "gamecontroller", RowTint.devices, title: "rowGameSettings")
@@ -152,7 +165,7 @@ struct YouView: View {
     @ViewBuilder private var header: some View {
         let size: CGFloat = metrics.tv ? 200 : (metrics.cardWidth > 124 ? 120 : 88)
         VStack(spacing: 0) {
-            AvatarTile(name: user?.shownName ?? "?", size: size)
+            AvatarTile(name: user?.shownName ?? "?", size: size, picture: user?.avatar)
             Text(user?.shownName ?? "")
                 .font(metrics.tv ? .title2.weight(.semibold) : .wmPage)
                 .foregroundStyle(palette.text)
@@ -165,7 +178,7 @@ struct YouView: View {
                     .lineLimit(1)
                     .padding(.top, Tokens.Space.s1)
             }
-            Button { model.signOut() } label: {
+            Button { model.household.startSwitch(model) } label: {
                 Label(say("switchProfile"), systemImage: "person.2")
             }
             .action(.secondary, pill: true)
@@ -305,7 +318,7 @@ struct NamesView: View {
 
     var body: some View {
         SettingsScreen(title: say("rowNames")) {
-            AvatarTile(name: previewName, size: 64)
+            AvatarTile(name: previewName, size: 64, picture: model.user?.avatar)
                 .frame(maxWidth: .infinity)
                 .animation(.easeOut(duration: Tokens.Motion.appear), value: AvatarLook.colour(for: previewName))
             VStack(alignment: .leading, spacing: Tokens.Space.s1) {
@@ -748,174 +761,7 @@ struct DevicesView: View {
 
 // MARK: - Sign in a TV
 
-struct SignInTvView: View {
-    @EnvironmentObject private var model: AppModel
-    @Environment(\.palette) private var palette
-    @Environment(\.client) private var client
-    @Environment(\.dismiss) private var dismiss
-    @State private var code = ""
-    @State private var info: PairInfo?
-    @State private var chosen: Int64?
-    @State private var names: [Int64: String] = [:]
-    @State private var busy = false
-    @State private var wrongTries = 0
-    @State private var problem = ""
-    @State private var outcome: String?
-    @State private var invite: PairInvite?
-
-    private func look(_ digits: String) {
-        guard !busy else { return }
-        busy = true
-        problem = ""
-        Task {
-            do {
-                let found = try await client.pairInfo(code: digits)
-                info = found
-                chosen = found.profiles?.first?.id ?? model.user?.id
-            } catch {
-                wrongTries += 1
-                problem = plainWords(Problem.of(error))
-                code = ""
-            }
-            busy = false
-        }
-    }
-
-    private func answer(approve: Bool) {
-        guard !busy, let info else { return }
-        busy = true
-        problem = ""
-        Task {
-            do {
-                // The code as the TV shows it; the server ignores case, spaces and the dash.
-                let digits = info.code ?? code
-                if approve, let chosen {
-                    try await client.pairApprove(code: digits, userId: chosen)
-                    outcome = say("signInTvDone")
-                } else {
-                    try await client.pairDeny(code: digits)
-                    outcome = say("signInTvDenied")
-                }
-            } catch {
-                problem = plainWords(Problem.of(error))
-            }
-            busy = false
-        }
-    }
-
-    private func makeInvite() {
-        guard !busy, let me = model.user else { return }
-        busy = true
-        problem = ""
-        Task {
-            do { invite = try await client.pairInvite(userId: me.id) } catch { problem = plainWords(Problem.of(error)) }
-            busy = false
-        }
-    }
-
-    private func reset() {
-        code = ""
-        info = nil
-        outcome = nil
-        invite = nil
-        problem = ""
-    }
-
-    private func shownName(_ choice: PairChoice) -> String {
-        if choice.id == model.user?.id { return model.user?.shownName ?? choice.name }
-        return names[choice.id] ?? choice.name
-    }
-
-    @ViewBuilder private func card(_ info: PairInfo) -> some View {
-        HStack(spacing: Tokens.Space.s3) {
-            IconTile(symbol: "tv", hex: RowTint.tv)
-            VStack(alignment: .leading, spacing: 2) {
-                Text(info.deviceName).font(.wmLabel.weight(.semibold)).foregroundStyle(palette.text)
-                let facts = [PlainWords.clean(info.platform ?? "", limit: 40), PlainWords.clean(info.ip ?? "", limit: 64)]
-                    .filter { !$0.isEmpty }.joined(separator: " · ")
-                if !facts.isEmpty { Text(facts).font(.wmSecondary).foregroundStyle(palette.textSecondary) }
-            }
-            Spacer(minLength: 0)
-        }
-        .padding(Tokens.Space.s4)
-        .background(RoundedRectangle(cornerRadius: Tokens.Radius.lg, style: .continuous).fill(palette.panel))
-        .accessibilityElement(children: .combine)
-        SectionTitle(say("signInTvAs"))
-        FlowLayout(spacing: Tokens.Space.s4, rowSpacing: Tokens.Space.s3) {
-            ForEach(info.profiles ?? []) { choice in
-                let picked = chosen == choice.id
-                Button { chosen = choice.id } label: {
-                    VStack(spacing: Tokens.Space.s2) {
-                        AvatarTile(name: shownName(choice), size: 72)
-                            .overlay {
-                                if picked {
-                                    RoundedRectangle(cornerRadius: 72 * 0.22 + 6, style: .continuous)
-                                        .inset(by: -6)
-                                        .strokeBorder(palette.accent, lineWidth: 3)
-                                }
-                            }
-                        Text(shownName(choice)).font(.wmLabel).foregroundStyle(picked ? palette.text : palette.textSecondary).lineLimit(1)
-                    }
-                    .frame(width: 96)
-                    .padding(.vertical, Tokens.Space.s2)
-                }
-                .buttonStyle(.plain)
-                .accessibilityLabel(shownName(choice))
-                .accessibilityAddTraits(picked ? [.isSelected] : [])
-            }
-        }
-        if !problem.isEmpty { ProblemLine(problem) }
-        Button { answer(approve: true) } label: { BusyText(say("signInTvApprove"), busy: busy) }
-            .action(.primary, wide: true, tall: true)
-            .disabled(chosen == nil)
-        Button(say("signInTvDeny")) { answer(approve: false) }
-            .action(.quiet)
-            .frame(maxWidth: .infinity)
-    }
-
-    @ViewBuilder private func inviteCard(_ invite: PairInvite) -> some View {
-        let minutes = max(1, (invite.expiresInSec ?? 600) / 60)
-        Text(invite.code)
-            .font(.system(size: 44, weight: .bold, design: .monospaced))
-            .kerning(8)
-            .foregroundStyle(palette.text)
-            .frame(maxWidth: .infinity)
-            .padding(.vertical, Tokens.Space.s6)
-            .background(RoundedRectangle(cornerRadius: Tokens.Radius.lg, style: .continuous).fill(palette.panel))
-            .accessibilityLabel(invite.code.map(String.init).joined(separator: " "))
-        Secondary(say("signInTvInviteHint").replacingOccurrences(of: "{minutes}", with: "\(minutes)"))
-        Button(say("back")) { reset() }.action(.secondary, wide: true, tall: true)
-    }
-
-    var body: some View {
-        SettingsScreen(title: say("rowSignInTv"), detail: info == nil && invite == nil && outcome == nil ? say("signInTvHint") : "") {
-            if model.user?.isAdult == false {
-                Secondary(say("signInTvAdultOnly"))
-            } else if let outcome {
-                OutcomeLine(words: outcome, good: outcome == say("signInTvDone"))
-                Button(say("signInTvAnother")) { reset() }.action(.secondary, wide: true, tall: true)
-                Button(say("back")) { dismiss() }.action(.primary, wide: true, tall: true)
-            } else if let invite {
-                inviteCard(invite)
-            } else if let info {
-                card(info)
-            } else {
-                LetterCodeEntry(code: $code, checking: busy, wrongTries: wrongTries, onComplete: look)
-                if !problem.isEmpty { ProblemLine(problem) }
-                Button(say("signInTvInvite")) { makeInvite() }
-                    .action(.quiet)
-                    .frame(maxWidth: .infinity)
-            }
-        }
-        .animation(.easeOut(duration: Tokens.Motion.appear), value: info)
-        .task {
-            // The pairing answer has usernames only; the profile list has the names people chose.
-            if let listed = try? await client.profiles().profiles {
-                names = Dictionary(listed.map { ($0.id, $0.shownName) }, uniquingKeysWith: { first, _ in first })
-            }
-        }
-    }
-}
+// SignInTvView is in PairApprove.swift: it scans the code as well as taking it typed.
 
 // MARK: - Theme
 
