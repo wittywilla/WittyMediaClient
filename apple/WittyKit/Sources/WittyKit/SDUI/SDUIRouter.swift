@@ -107,10 +107,13 @@ public struct SDUIRouter: Equatable, Sendable {
     /// Nil for the commands that only ask for the page again (`selectTab`, `refresh`) and for ones this app doesn't know.
     public static func request(for command: SDUICommand?, item: String, params: [String: String] = [:]) -> (method: String, path: String, body: Data?)? {
         guard let command, let method = command.method, let path = command.path, !method.isEmpty, path.hasPrefix("/api/") else { return nil }
-        let usesItem = path.contains("{item}") || (command.body?.contains("{item}") ?? false)
-        // An item's ID goes into a path and a JSON body: only what an ID is made of may.
-        if usesItem {
-            guard !item.isEmpty, item.count <= 128, item.allSatisfy({ $0.isASCII && ($0.isLetter || $0.isNumber || "_.:-~".contains($0)) }) else { return nil }
+        // An item's ID goes into a path and a JSON body: only what an ID is made of may. A command that puts it in its
+        // path needs one; one that only names it in the body (joining a room by its code) may have none.
+        let inPath = path.contains("{item}"), inBody = command.body?.contains("{item}") ?? false
+        if inPath || inBody {
+            let wellFormed = item.count <= 128 && item.allSatisfy { $0.isASCII && ($0.isLetter || $0.isNumber || "_.:-~".contains($0)) }
+            guard wellFormed, !item.isEmpty || !inPath else { return nil }
+            if item.isEmpty, command.body?.contains("\"{item}\"") != true { return nil }
         }
         let declared = command.params ?? []
         func unreserved(_ text: String) -> String {
