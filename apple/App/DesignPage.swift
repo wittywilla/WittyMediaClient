@@ -37,10 +37,25 @@ private struct DesignSizesKey: EnvironmentKey {
 
 private struct DesignRowDrawnKey: EnvironmentKey { static let defaultValue = false }
 
+/// What a card shows over its title instead of its swatches: a look's layout, say (W6's `LayoutThumb`, from the
+/// server's `wire` for the card's `layout`). Nil, or a nil answer, keeps the card's own swatches or symbol.
+struct DesignCardPreview {
+    let make: (DesignPageSpec.Card) -> AnyView?
+}
+
+private struct DesignCardPreviewKey: EnvironmentKey { static let defaultValue: DesignCardPreview? = nil }
+
 extension EnvironmentValues {
     var designSizes: DesignSizes {
         get { self[DesignSizesKey.self] }
         set { self[DesignSizesKey.self] = newValue }
+    }
+
+    /// The slot for a card's preview (see `DesignCardPreview`): set it once over the pages that show look cards, as
+    /// `.environment(\.designCardPreview, DesignCardPreview { card in card.layout.isEmpty ? nil : AnyView(LayoutThumb(…)) })`.
+    var designCardPreview: DesignCardPreview? {
+        get { self[DesignCardPreviewKey.self] }
+        set { self[DesignCardPreviewKey.self] = newValue }
     }
 
     /// Inside a `DesignRowButton`, which draws the row's surface: a row view inside it draws none of its own.
@@ -485,6 +500,7 @@ private struct DesignSpecSection: View {
 struct DesignCard: View {
     @Environment(\.palette) private var palette
     @Environment(\.designSizes) private var sizes
+    @Environment(\.designCardPreview) private var preview
     let card: DesignPageSpec.Card
     let action: () -> Void
 
@@ -496,9 +512,12 @@ struct DesignCard: View {
     var body: some View {
         Button(action: action) {
             VStack(alignment: .leading, spacing: 2) {
-                // A look's layout, as a preview in its colours: W6's LayoutThumb(layout:swatches:) goes here when it lands
-                // (swap this line); until then the swatch strip below stands in for it.
-                if card.swatches.count >= 3 {
+                // A look's layout as a preview in its colours, from the slot (`designCardPreview`); else the swatches.
+                if let shown = preview?.make(card) {
+                    shown
+                        .accessibilityHidden(true)
+                        .padding(.bottom, 4)
+                } else if card.swatches.count >= 3 {
                     HStack(spacing: 3) {
                         RoundedRectangle(cornerRadius: 5).fill(colour(card.swatches[0])).frame(maxWidth: .infinity)
                         RoundedRectangle(cornerRadius: 5).fill(colour(card.swatches[1])).frame(maxWidth: .infinity)
