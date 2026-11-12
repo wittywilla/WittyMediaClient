@@ -404,4 +404,10 @@ data class SduiShell(
     val size: Int = 0,
     val open: Int = 0,
     val drawer: Int = 0,
+    // Where each region of the shell is (brand, nav, search, profile, clock, dock, legend, hero), the experience's with the
+    // administrator's and the profile's laid over it.
+    val placements: Map<String, SduiPlacement> = emptyMap(),
 )
+
+@Serializable
+data class SduiPlacement(val position: String = "", val visible: Boolean? = null, val style: String = "")

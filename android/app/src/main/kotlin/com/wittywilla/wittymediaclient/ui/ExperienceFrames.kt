@@ -88,6 +88,7 @@ private fun EntryMark(nav: Nav, entry: SduiNavItem, route: Route, tint: Color, s
 
 // A column down the side of a phone on its side or a tablet: the sidebar (icons and names) or the rail (icons, names
 // read out). The page colour's panel with a hairline at its edge, as the drawer is.
+@Composable
 fun SideMenu(nav: Nav, closed: Dp, labels: Boolean, top: Dp, bottom: Dp, modifier: Modifier = Modifier) {
     val scheme = MaterialTheme.colorScheme
     val accentText = LocalExtraColours.current.accentText

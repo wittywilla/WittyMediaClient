@@ -486,6 +486,15 @@ class SduiScreen(val document: SduiDocument) {
                     put("size", shell.size)
                     if (shell.open > 0) put("open", shell.open)
                     if (shell.drawer > 0) put("drawer", shell.drawer)
+                    if (shell.placements.isNotEmpty()) put("placements", buildJsonObject {
+                        shell.placements.toSortedMap().forEach { (region, pl) ->
+                            put(region, buildJsonObject {
+                                if (pl.position.isNotEmpty()) put("position", pl.position)
+                                pl.visible?.let { put("visible", it) }
+                                if (pl.style.isNotEmpty()) put("style", pl.style)
+                            })
+                        }
+                    })
                 })
             }
         })
