@@ -4,7 +4,7 @@
 # Runs the iPhone app (or the Apple TV one) in a simulator against two real WittyMediaServers, and checks
 # that removing a server a device remembers takes everything the app kept for it and nothing of the other:
 #
-#   both      a code approved on each server: both are remembered, and the device is signed in to the second
+#   both      a code (with its PIN, when asked) approved on each server: both are remembered, and the device is signed in to the second
 #   other     Manage servers removes the first (with Undo on an iPhone); the second stays signed in, and on
 #             disk only the first server's settings are gone
 #   in use    the server in use is removed: the app asks, signs out, the server ends the sign-in, and

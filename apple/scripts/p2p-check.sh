@@ -4,8 +4,8 @@
 # Runs the Apple TV app (or the iPhone one) in a simulator against a real WittyMediaServer with peer-to-peer
 # connections on, with the real Wittyconnect library, and checks what docs/PLATFORMS.md says of it:
 #
-#   at home   the TV shows a code, which is approved as from a phone; the app puts this device on
-#             the server's list by itself
+#   at home   the TV shows a code (and a PIN, when the server pairs securely), which is approved as
+#             from a phone; the app puts this device on the server's list by itself
 #   away      the server's home address is taken away: the app finds the server peer to peer, is
 #             still signed in, and plays a film through the connection, which the server counts
 #             as from the internet; the app leaves the screen and comes back, and the film goes on

@@ -190,8 +190,12 @@ final class ForgetCheck: XCTestCase {
         app.launch()
         let shown = app.staticTexts["pairCode"]
         XCTAssertTrue(shown.waitForExistence(timeout: 60), "the code to approve never showed for \(base)")
+        // The code without its dash; a server that pairs securely also wants the PIN shown now.
         let code = shown.label.filter { $0.isLetter || $0.isNumber }
-        let approved = try await ask(base, "POST", "/api/v1/pair/approve", token: me.token, body: ["code": code, "userId": me.user, "password": try given("CHECK_PASSWORD")])
+        var approval: [String: Any] = ["code": code, "userId": me.user, "password": try given("CHECK_PASSWORD")]
+        let pin = app.staticTexts["pairPin"]
+        if pin.exists { approval["pin"] = pin.label.filter(\.isNumber) } // read last: it changes every 30 s
+        let approved = try await ask(base, "POST", "/api/v1/pair/approve", token: me.token, body: approval)
         XCTAssertEqual(approved.0, 200, "the server didn't take the approval: \(String(describing: approved.1))")
         _ = try await until("the app's sign-in on \(base)") { try await self.appSignIns(base, token: me.token).subtracting(before).first }
         // Long enough for what it learnt to be written down.

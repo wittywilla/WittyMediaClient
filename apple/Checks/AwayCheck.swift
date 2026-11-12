@@ -6,8 +6,8 @@ import XCTest
 /// peer-to-peer connections on. `apple/scripts/p2p-check.sh` starts the server and runs these in order, taking
 /// the server's home address away between the first and the second:
 ///
-///   testHome   a code shown on the TV is approved, as from a phone; the app then puts this device
-///              on the server's list by itself
+///   testHome   a code shown on the TV is approved, as from a phone (with the PIN beside it, when the
+///              server pairs securely); the app then puts this device on the server's list by itself
 ///   testInvite a device that never met the server takes an invite link in, and is signed in by it
 ///   testJoinFromAway   (only with P2P_CHECK_PUBLIC=1) a TV that has never met the server shows a code,
 ///              which is typed into the server; the two find each other through the public address book
@@ -102,11 +102,15 @@ final class AwayCheck: XCTestCase {
         // The TV shows a code; someone signed in approves it.
         let shown = app.staticTexts["pairCode"]
         XCTAssertTrue(shown.waitForExistence(timeout: 60), "the code to approve never showed")
+        // The code without its dash; a server that pairs securely also wants the PIN shown now.
         let code = shown.label.filter { $0.isLetter || $0.isNumber }
         picture("home-code")
         let me = try await ask("GET", "/api/v1/status").1 as? [String: Any]
         let owner = try XCTUnwrap((me?["user"] as? [String: Any])?["id"] as? Int, "the check's own sign-in isn't one")
-        let approved = try await ask("POST", "/api/v1/pair/approve", body: ["code": code, "userId": owner, "password": try given("CHECK_PASSWORD")])
+        var approval: [String: Any] = ["code": code, "userId": owner, "password": try given("CHECK_PASSWORD")]
+        let pin = app.staticTexts["pairPin"]
+        if pin.exists { approval["pin"] = pin.label.filter(\.isNumber) } // read last: it changes every 30 s
+        let approved = try await ask("POST", "/api/v1/pair/approve", body: approval)
         XCTAssertEqual(approved.0, 200, "the server didn't take the approval: \(String(describing: approved.1))")
 
         // Signed in at home, the app puts this device on the server's list by itself.
