@@ -29,6 +29,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Icon
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
@@ -267,7 +268,7 @@ internal fun KaraokeScreen(nav: Nav, words: LyricsWords, title: String, artist: 
                         verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp),
                     ) {
                         Text("Vocals", color = Color.White, fontSize = if (compact) 13.sp else 15.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.clearAndSetSemantics { })
-                        KarSlider(if (stems.controls.sing) 0.0 else level, "Vocals", Modifier.width(if (compact) 150.dp else 220.dp), stems::setVocals)
+                        KarSlider(if (stems.controls.sing) 0.0 else level, "Vocals", Modifier.width(if (compact) 150.dp else 220.dp), change = stems::setVocals)
                     }
                     NpChip("Sing", on = stems.controls.sing, label = if (stems.controls.sing) "Sing: the voice is off" else "Sing: turn the voice off", onClick = stems::toggleSing)
                     NpChip("More", on = more, label = if (more) "Hide each part's level" else "Each part's level") { more = !more }
@@ -296,10 +297,10 @@ internal fun KaraokeScreen(nav: Nav, words: LyricsWords, title: String, artist: 
     }
 }
 
-// A level from nothing to all of it, in the website's range on black. With a remote or a keyboard it takes focus,
-// shown by a white edge, and left and right move it 5% at a time.
+// A level from nothing to all of it, in the website's range on black ([ink] white there; the row's text colour in the
+// Mix rows). With a remote or a keyboard it takes focus, shown by an edge in [ink], and left and right move it 5% at a time.
 @Composable
-private fun KarSlider(level: Double, label: String, modifier: Modifier = Modifier, change: (Double) -> Unit) {
+private fun KarSlider(level: Double, label: String, modifier: Modifier = Modifier, ink: Color = Color.White, change: (Double) -> Unit) {
     var focused by remember { mutableStateOf(false) }
     val percent = Math.round(level * 100).toDouble()
     Box(
@@ -313,44 +314,52 @@ private fun KarSlider(level: Double, label: String, modifier: Modifier = Modifie
                 } else false
             }
             .focusable()
-            .border(2.dp, if (focused) Color.White else Color.Transparent, RoundedCornerShape(50))
+            .border(2.dp, if (focused) ink else Color.Transparent, RoundedCornerShape(50))
             .padding(horizontal = 8.dp),
     ) {
-        NpSlider(percent, 0.0, 100.0, 1.0, label, "${percent.toInt()}%", true, Modifier.fillMaxWidth()) { change(it / 100) }
+        NpSlider(percent, 0.0, 100.0, 1.0, label, "${percent.toInt()}%", true, Modifier.fillMaxWidth(), fill = ink, track = ink.copy(alpha = TRACK_ALPHA)) { change(it / 100) }
     }
 }
 
-// "More" (`.kar-more`): a level for each part there is, by its name, or Vocals and Music for the quick version;
-// Reset, back to what the server set; and which version is playing, with how far a better one has got.
+// "More" (`.kar-more`), the Mix: a row for each part there is, by its name, with its level as a slider at the row's end
+// (or Vocals and Music for the quick version); then which version is playing, with how far a better one has got, and
+// Reset, back to what the server set. Design 2's rows (DesignPage.kt) on karaoke's own dark stage.
 @Composable
 private fun StemLevels(answer: KaraokeAnswer, stems: com.wittywilla.wittymediaclient.player.KaraokeStems, compact: Boolean) {
     val controls = stems.controls
-    Box(Modifier.fillMaxWidth().padding(horizontal = 12.dp), contentAlignment = Alignment.Center) {
-        Column(
-            Modifier.widthIn(max = 520.dp).fillMaxWidth().clip(RoundedCornerShape(18.dp)).background(Np.chip).padding(horizontal = 16.dp, vertical = 10.dp)
-                .heightIn(max = (LocalConfiguration.current.screenHeightDp * 0.42f).dp).verticalScroll(rememberScrollState())
-                .semantics { contentDescription = "Each part's level" },
-            verticalArrangement = Arrangement.spacedBy(2.dp),
-        ) {
-            KaraokeMix.sliders(answer).forEach { slider ->
-                val level = KaraokeMix.level(answer, controls.levels, slider.id)
-                val silenced = controls.sing && KaraokeMix.isVocals(answer, slider.id)
-                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Text(slider.label, color = Color.White, fontSize = if (compact) 13.sp else 14.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.width(if (compact) 76.dp else 96.dp).clearAndSetSemantics { })
-                    KarSlider(if (silenced) 0.0 else level, slider.label, Modifier.weight(1f)) { stems.setLevel(slider.id, it) }
-                    Text(
-                        "${Math.round((if (silenced) 0.0 else level) * 100)}%", color = Np.fg2, fontSize = 13.sp, textAlign = TextAlign.End,
-                        style = TextStyle(fontFeatureSettings = "tnum"), modifier = Modifier.width(44.dp).clearAndSetSemantics { },
-                    )
-                }
-            }
-            Row(Modifier.fillMaxWidth().padding(top = 6.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                NpChip("Reset", small = true, label = "Reset every level", onClick = stems::reset)
-                Column(Modifier.weight(1f)) {
-                    val quality = KaraokeWords.quality(answer)
-                    if (quality.isNotEmpty()) Text(quality, color = Np.fg2, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
+    val scheme = MaterialTheme.colorScheme
+    DesignSized {
+        val s = LocalDesignSizes.current
+        Box(Modifier.fillMaxWidth().padding(horizontal = 12.dp), contentAlignment = Alignment.Center) {
+            Column(
+                Modifier.widthIn(max = 560.dp).fillMaxWidth()
+                    .heightIn(max = (LocalConfiguration.current.screenHeightDp * 0.42f).dp).verticalScroll(rememberScrollState())
+                    .semantics { contentDescription = "Each part's level" },
+            ) {
+                DesignSection("") {
+                    KaraokeMix.sliders(answer).forEach { slider ->
+                        val level = KaraokeMix.level(answer, controls.levels, slider.id)
+                        val silenced = controls.sing && KaraokeMix.isVocals(answer, slider.id)
+                        val shown = if (silenced) 0.0 else level
+                        DesignRow(
+                            slider.label,
+                            trailing = {
+                                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                                    KarSlider(shown, slider.label, Modifier.width(if (compact) 150.dp else 240.dp), ink = scheme.onSurface) { stems.setLevel(slider.id, it) }
+                                    Text(
+                                        "${Math.round(shown * 100)}%", color = scheme.onSurfaceVariant, fontSize = s.small, fontWeight = FontWeight.Bold, textAlign = TextAlign.End,
+                                        style = TextStyle(fontFeatureSettings = "tnum"), modifier = Modifier.width(44.dp).clearAndSetSemantics { },
+                                    )
+                                }
+                            },
+                        )
+                    }
                     val better = KaraokeWords.improving(answer)
-                    if (better.isNotEmpty()) Text(better, color = Np.fg2, fontSize = 13.sp, modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite })
+                    DesignRow(
+                        KaraokeWords.quality(answer).ifEmpty { "Each part's level" }, sub = better,
+                        modifier = if (better.isNotEmpty()) Modifier.semantics { liveRegion = LiveRegionMode.Polite } else Modifier,
+                        trailing = { DesignChip("Reset", stems::reset, label = "Reset every level") },
+                    )
                 }
             }
         }
@@ -405,3 +414,5 @@ internal fun showBars(activity: Activity, show: Boolean) {
         controller.hide(WindowInsetsCompat.Type.systemBars())
     }
 }
+
+private const val TRACK_ALPHA = 0.28f

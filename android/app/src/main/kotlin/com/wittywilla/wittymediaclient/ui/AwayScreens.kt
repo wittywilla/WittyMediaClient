@@ -2,9 +2,10 @@
 // Copyright (C) 2026 WittyWilla and contributors
 package com.wittywilla.wittymediaclient.ui
 
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRowScope
+import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -16,19 +17,18 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.semantics.LiveRegionMode
-import androidx.compose.ui.semantics.liveRegion
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextAlign
-import androidx.compose.ui.unit.sp
 import com.wittywilla.wittymediaclient.data.SavedServer
 import com.wittywilla.wittymediaclient.p2p.PeerWay
 import kotlinx.coroutines.launch
 
 // "From away", under You, This device: how this device reaches its server when it isn't at home, in the same words
 // and rows as Apple's apps (AwayViews.swift there). Shown only where the connector library is in the app.
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun AwayScreen(nav: Nav, s: Map<String, String>) {
     val peers = nav.app.peers
@@ -52,29 +52,34 @@ fun AwayScreen(nav: Nav, s: Map<String, String>) {
         PeerWay.None -> if (server != null && !com.wittywilla.wittymediaclient.net.PeerRoute.active) s["awayAtHomeNow"].orEmpty() else s["awayNoWay"].orEmpty()
     }
     val trouble = (way as? PeerWay.Away)?.state?.takeIf { !it.connected }?.error.orEmpty()
-    SettingsPage(nav, s["rowAway"].orEmpty(), s["awayHint"].orEmpty()) {
-        GroupedList(
-            "",
-            listOfNotNull(
-                GroupRow(s["awayNow"].orEmpty(), value = now, detail = trouble, focusKey = "away-now", requestFocus = true),
-                GroupRow(s["rowAway"].orEmpty(), value = status, focusKey = "away-state"),
-                if (kept != null && !off && deviceId.isNotEmpty()) GroupRow(s["awayDevice"].orEmpty(), value = "…" + deviceId.takeLast(8), focusKey = "away-device") else null,
-            ),
-        )
-        Text(
-            s[if (off) "awayOffHint" else if (kept != null) "awayReadyHint" else "awaySetUpHint"].orEmpty(),
-            color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.secondary,
-        )
+    // The one thing to do about it: start again where it's turned off, or stop where it's kept.
+    val act: @Composable FlowRowScope.() -> Unit = {
         if (server != null) {
-            when {
-                off -> WittyButton(s["awayStart"].orEmpty(), {
+            if (off) {
+                WittyButton(s["awayStart"].orEmpty(), {
                     peers.startAway(server)
                     nav.learnAwayNow()
                     stamp++
-                }, Modifier.fillMaxWidth(), tall = true, focusKey = "away-start")
-                kept != null -> WittyButton(s["awayStop"].orEmpty(), { asking = true }, Modifier.fillMaxWidth(), kind = ButtonKind.Destructive, tall = true, focusKey = "away-stop")
+                }, kind = ButtonKind.Primary, tall = true, focusKey = "away-start")
+            } else if (kept != null) {
+                WittyButton(s["awayStop"].orEmpty(), { asking = true }, kind = ButtonKind.Destructive, tall = true, focusKey = "away-stop")
             }
         }
+    }
+    // Design 2's page: the connection as rows, what that means, and the action.
+    DesignScreen(
+        s["rowAway"].orEmpty(), nav::pop, eyebrow = s["youTab"].orEmpty(), lead = s["awayHint"].orEmpty(), tag = "away",
+        actions = if (server != null && (off || kept != null)) act else null,
+    ) {
+        DesignSection("") {
+            DesignRow(s["awayNow"].orEmpty(), value = now, sub = trouble, on = way is PeerWay.Away && trouble.isEmpty(), focusKey = "away-now")
+            DesignRow(s["rowAway"].orEmpty(), value = status, on = kept != null && !off, focusKey = "away-state")
+            if (kept != null && !off && deviceId.isNotEmpty()) DesignRow(s["awayDevice"].orEmpty(), value = "…" + deviceId.takeLast(8), focusKey = "away-device")
+        }
+        DesignNote(
+            s[if (off) "awayOffHint" else if (kept != null) "awayReadyHint" else "awaySetUpHint"].orEmpty(),
+            Modifier.padding(top = LocalDesignSizes.current.gap), tone = true,
+        )
     }
     if (asking && server != null) {
         Confirm(
@@ -124,25 +129,29 @@ fun JoinAwayScreen(nav: Nav, s: Map<String, String>) {
             }
         }
     }
-    SignInLayout(
-        onBack = nav::pop,
-        words = {
-            SignInHeading(s["joinAwayTitle"].orEmpty(), detail = s["joinAwayHint"].orEmpty())
-        },
+    DesignScreen(
+        s["joinAwayTitle"].orEmpty(), nav::pop, lead = s["joinAwayHint"].orEmpty(), tag = "join-away",
         actions = {
-            Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(metrics.u(16))) {
-                if (code.isNotEmpty() && !failed) {
-                    Text(
-                        code, color = MaterialTheme.colorScheme.onBackground, fontSize = if (metrics.tv) 72.sp else 40.sp, fontWeight = FontWeight.Bold,
-                        fontFamily = FontFamily.Monospace, textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth(),
-                    )
-                }
-                Note(words, busy = !failed, modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite })
-                if (failed) WittyButton(s["pairNew"].orEmpty(), { attempt++ }, Modifier.fillMaxWidth(), kind = ButtonKind.Primary, tall = true, requestFocus = true, focusKey = "join-new")
-                WittyButton(s["back"].orEmpty(), nav::pop, Modifier.fillMaxWidth(), tall = true, requestFocus = !failed, focusKey = "join-back")
-            }
+            if (failed) WittyButton(s["pairNew"].orEmpty(), { attempt++ }, kind = ButtonKind.Primary, tall = true, requestFocus = true, focusKey = "join-new")
+            WittyButton(s["back"].orEmpty(), nav::pop, kind = ButtonKind.Secondary, tall = true, requestFocus = !failed, focusKey = "join-back")
         },
-    )
+    ) {
+        val ds = LocalDesignSizes.current
+        DesignSection("") {
+            if (code.isNotEmpty() && !failed) {
+                Text(
+                    code, color = MaterialTheme.colorScheme.onSurface, fontSize = ds.title * 1.15f, fontWeight = FontWeight.Bold, fontFamily = FontFamily.Monospace,
+                    modifier = Modifier
+                        .clip(metrics.corner(10))
+                        .background(MaterialTheme.colorScheme.surface)
+                        .padding(horizontal = ds.gap * 2.4f, vertical = ds.gap * 1.2f)
+                        .semantics { contentDescription = code.toList().joinToString(" ") },
+                )
+            }
+            // Said aloud as it changes: waiting, found, or what went wrong.
+            DesignNote(words, busy = !failed, error = failed)
+        }
+    }
 }
 
 // Whether this server is kept for reaching from away (You's row value).

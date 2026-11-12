@@ -5,13 +5,11 @@ package com.wittywilla.wittymediaclient.ui
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -26,7 +24,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
-import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.LinkAnnotation
 import androidx.compose.ui.text.SpanStyle
@@ -36,9 +33,6 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.withLink
 import androidx.compose.ui.text.withStyle
-import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.em
-import androidx.compose.ui.unit.sp
 import com.wittywilla.wittymediaclient.net.BrandLogoAnswer
 import com.wittywilla.wittymediaclient.net.ExtrasFeature
 import com.wittywilla.wittymediaclient.net.WatchLook
@@ -79,43 +73,34 @@ private fun rememberWatch(nav: Nav, itemId: Long, attempt: Int): WatchAnswer {
 @Composable
 private fun ServiceTile(nav: Nav, name: String, logo: BrandLogoAnswer?) {
     val scheme = MaterialTheme.colorScheme
+    val metrics = LocalMetrics.current
     Box(
-        Modifier.size(120.dp, 56.dp).clip(RoundedCornerShape(10.dp)).background(scheme.surfaceVariant).clearAndSetSemantics { contentDescription = name },
+        Modifier.size(metrics.u(120), metrics.u(56)).clip(metrics.corner(10)).background(scheme.surface).clearAndSetSemantics { contentDescription = name },
         contentAlignment = Alignment.Center,
     ) {
-        Box(Modifier.fillMaxSize().padding(horizontal = 12.dp, vertical = 8.dp), contentAlignment = Alignment.Center) {
-            BrandLogo(nav.app.api, name, logo, 96.dp, 40.dp, 12, scheme.onBackground)
+        Box(Modifier.fillMaxSize().padding(horizontal = metrics.u(12), vertical = metrics.u(8)), contentAlignment = Alignment.Center) {
+            BrandLogo(nav.app.api, name, logo, metrics.u(96), metrics.u(40), 12, scheme.onSurface)
         }
     }
 }
 
 // `itemId` is the film or the episode asked about; a show's page gives one of its episodes. Nothing at all on a
-// server without the feature, while it's being asked, or when there's nothing to say.
-@OptIn(ExperimentalLayoutApi::class)
+// server without the feature, while it's being asked, or when there's nothing to say. A section of the title's page
+// in Design 2's parts (DesignPage.kt): its heading, the notes, the versions as chips and the services as tiles.
 @Composable
 fun WhereToWatchSection(nav: Nav, itemId: Long, modifier: Modifier = Modifier) {
     if (itemId <= 0 || !nav.has(ExtrasFeature.WHERE_TO_WATCH)) return
     var attempt by remember(itemId) { mutableIntStateOf(0) }
     val state = rememberWatch(nav, itemId, attempt)
-    val scheme = MaterialTheme.colorScheme
-    val extra = LocalExtraColours.current
-    val tv = LocalMetrics.current.tv
     val admin = nav.me?.isAdmin == true
-    @Composable
-    fun Head() {
-        if (tv) SectionTitle("Where to watch")
-        else Text(
-            "Where to watch", color = scheme.onBackground, fontSize = 17.sp, fontWeight = FontWeight.SemiBold, letterSpacing = (-0.012).em,
-            modifier = Modifier.semantics { heading() },
-        )
-    }
     when (state) {
         WatchAnswer.Asking -> return
         WatchAnswer.Failed -> {
-            Column(modifier, verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                Head()
-                Text("Where else this can be watched couldn't be read from your server.", color = extra.hint, fontSize = if (tv) 16.sp else 13.sp)
-                if (tv) ActionButton("Try again", { attempt++ }, focusKey = "watch-retry") else WebButton("Try again", { attempt++ }, small = true)
+            DesignSized {
+                DesignSection("Where to watch", modifier) {
+                    DesignNote("Where else this can be watched couldn't be read from your server.")
+                    DesignChips { DesignChip("Try again", { attempt++ }, focusKey = "watch-retry") }
+                }
             }
             return
         }
@@ -128,50 +113,48 @@ fun WhereToWatchSection(nav: Nav, itemId: Long, modifier: Modifier = Modifier) {
     val link = WatchLook.offersLink(answer)
     val reason = WatchLook.reasonWords(answer, admin)
     var code by remember(itemId) { mutableStateOf(false) }
-    Column(modifier, verticalArrangement = Arrangement.spacedBy(if (tv) Space.S3 else 12.dp)) {
-        Head()
-        val here = WatchLook.hereWords(answer)
-        if (here.isNotEmpty()) {
-            if (tv) Secondary(here) else Text(here, color = scheme.onBackground, fontSize = 14.sp)
-        }
-        if (others.isNotEmpty()) {
-            FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                others.forEach { v ->
-                    val words = WatchLook.versionWords(v)
-                    if (tv) ActionButton(words, { nav.push(Route.Item(v.itemId)) }, pill = true, focusKey = "watch-version-${v.itemId}")
-                    else WebButton(words, { nav.push(Route.Item(v.itemId)) })
+    DesignSized {
+        val s = LocalDesignSizes.current
+        val scheme = MaterialTheme.colorScheme
+        val extra = LocalExtraColours.current
+        val tv = LocalMetrics.current.tv
+        DesignSection("Where to watch", modifier) {
+            DesignNote(WatchLook.hereWords(answer))
+            if (others.isNotEmpty()) {
+                DesignChips {
+                    others.forEach { v ->
+                        DesignChip(WatchLook.versionWords(v), { nav.push(Route.Item(v.itemId)) }, focusKey = "watch-version-${v.itemId}")
+                    }
                 }
             }
-        }
-        sections.forEach { section ->
-            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                if (tv) Secondary(section.title) else Text(section.title, color = scheme.onSurfaceVariant, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
+            sections.forEach { section ->
+                Text(section.title, color = scheme.onSurfaceVariant, fontSize = s.small, fontWeight = FontWeight.Bold, modifier = Modifier.padding(top = s.gap * 0.6f))
                 FlowRow(
                     Modifier.semantics { contentDescription = "${section.title}: ${section.providers.joinToString { it.name }}" },
-                    horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp),
+                    horizontalArrangement = Arrangement.spacedBy(s.gap * 0.8f), verticalArrangement = Arrangement.spacedBy(s.gap * 0.8f),
                 ) {
                     section.providers.forEach { p -> ServiceTile(nav, p.name, logos[BrandLogoAnswer.key("platform", p.name)]) }
                 }
             }
-        }
-        if (reason.isNotEmpty()) Text(reason, color = extra.hint, fontSize = if (tv) 16.sp else 13.sp)
-        if (sections.isNotEmpty()) {
-            val note = buildAnnotatedString {
-                withStyle(SpanStyle(fontWeight = FontWeight.Bold)) { append("Nothing plays from these services.") }
-                append(" Listed for ${answer.region}. ${answer.attribution}".trimEnd())
-                // A phone or a tablet has a browser for the source's own page. A TV doesn't open anything outside.
-                if (link != null && !tv) {
-                    append(" ")
-                    withLink(LinkAnnotation.Url(link, TextLinkStyles(SpanStyle(color = extra.accentText, textDecoration = TextDecoration.Underline)))) { append("See every offer") }
+            DesignNote(reason)
+            if (sections.isNotEmpty()) {
+                val note = buildAnnotatedString {
+                    withStyle(SpanStyle(fontWeight = FontWeight.Bold)) { append("Nothing plays from these services.") }
+                    append(" Listed for ${answer.region}. ${answer.attribution}".trimEnd())
+                    // A phone or a tablet has a browser for the source's own page. A TV doesn't open anything outside.
+                    if (link != null && !tv) {
+                        append(" ")
+                        withLink(LinkAnnotation.Url(link, TextLinkStyles(SpanStyle(color = extra.accentText, textDecoration = TextDecoration.Underline)))) { append("See every offer") }
+                    }
                 }
+                Text(note, color = scheme.onSurfaceVariant, fontSize = s.small, lineHeight = s.small * 1.5f, modifier = Modifier.padding(top = s.gap * 0.6f).widthIn(max = s.leadWidth))
+                if (link != null && tv) {
+                    DesignChips { DesignChip(if (code) "Hide the code" else "See every offer on a phone", { code = !code }, on = code, focusKey = "watch-offers") }
+                    if (code) QrCard(link, "Scan with a phone's camera to open the list of offers.")
+                }
+                if (!tv) LegalLine(nav, "listings")
+                if (!tv && sections.any { sec -> sec.providers.any { logos[BrandLogoAnswer.key("platform", it.name)]?.has == true } }) LegalLine(nav, "logos")
             }
-            Text(note, color = extra.hint, fontSize = if (tv) 16.sp else 13.sp)
-            if (link != null && tv) {
-                ActionButton(if (code) "Hide the code" else "See every offer on a phone", { code = !code }, pill = true, focusKey = "watch-offers")
-                if (code) QrCard(link, "Scan with a phone's camera to open the list of offers.")
-            }
-            if (!tv) LegalLine(nav, "listings")
-            if (!tv && sections.any { s -> s.providers.any { logos[BrandLogoAnswer.key("platform", it.name)]?.has == true } }) LegalLine(nav, "logos")
         }
     }
 }

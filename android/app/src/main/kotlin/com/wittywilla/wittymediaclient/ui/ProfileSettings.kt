@@ -8,16 +8,13 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
-import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -33,8 +30,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.semantics.heading
-import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
 import com.wittywilla.wittymediaclient.net.Access
@@ -129,12 +124,6 @@ fun limitsSummary(s: Map<String, String>, u: ManagedUser): String {
 
 private fun roleWords(s: Map<String, String>, u: ManagedUser) = s[roleKey(u.isAdmin, u.kind)].orEmpty()
 
-@Composable
-private fun SectionHint(text: String) {
-    if (text.isEmpty()) return
-    Text(text, color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.secondary, modifier = Modifier.padding(horizontal = LocalMetrics.current.u(16)))
-}
-
 // The list: you, then everyone you manage, then what only an administrator has.
 @Composable
 fun ProfilesScreen(nav: Nav, s: Map<String, String>) {
@@ -155,69 +144,58 @@ fun ProfilesScreen(nav: Nav, s: Map<String, String>) {
     }
     val limits = ScreenTimeWatch.limits
     val others = users?.filter { it.id != me.id }
-    SettingsPage(nav, s["rowProfiles"].orEmpty(), s[if (me.isAdmin) "profilesHintAdmin" else "profilesHint"].orEmpty()) {
-        Problem(problem, Modifier.fillMaxWidth())
-        val mine = buildList {
-            add(
-                GroupRow(
-                    avatarName(me.displayName, me.name), onClick = { nav.push(Route.You(YouNative.Names)) }, detail = s["rowNames"].orEmpty(),
-                    leading = { ProfileFace(avatarName(me.displayName, me.name), me.avatar, LocalMetrics.current.u(32)) }, focusKey = "profiles-me", requestFocus = true,
-                ),
+    // Design 2's page (canvas `profiles`), in the order it had: your account, everyone you manage, the parents' PIN,
+    // and the server's own page.
+    val face = LocalMetrics.current.u(32)
+    DesignScreen(s["rowProfiles"].orEmpty(), nav::pop, eyebrow = s["youTab"].orEmpty(), lead = s[if (me.isAdmin) "profilesHintAdmin" else "profilesHint"].orEmpty()) {
+        DesignNote(problem, error = true)
+        DesignSection(s["profilesYours"].orEmpty()) {
+            DesignRow(
+                avatarName(me.displayName, me.name), sub = s["rowNames"].orEmpty(), onClick = { nav.push(Route.You(YouNative.Names)) },
+                leading = { ProfileFace(avatarName(me.displayName, me.name), me.avatar, face) }, focusKey = "profiles-me", requestFocus = true,
             )
             if (nav.has(FEATURE_AVATARS) && Managing.ownLook(me.isAdmin, limits)) {
-                add(GroupRow(s["changePicture"].orEmpty(), onClick = { nav.push(HouseholdRoute(HouseholdScreen.Look(me.id))) }, icon = Symbols.Person, tint = Color(0xFF0A6FB8), focusKey = "profiles-my-picture"))
+                DesignRow(s["changePicture"].orEmpty(), onClick = { nav.push(HouseholdRoute(HouseholdScreen.Look(me.id))) }, focusKey = "profiles-my-picture")
             }
         }
-        GroupedList(s["profilesYours"].orEmpty(), mine)
         when {
-            others == null -> if (problem.isEmpty()) Note(s["loading"].orEmpty(), busy = true)
-            others.isEmpty() -> Note(s[if (limits?.limited == true) "profilesNoneLimited" else "profilesNone"].orEmpty())
+            others == null -> if (problem.isEmpty()) DesignSection("") { Note(s["loading"].orEmpty(), busy = true) }
+            others.isEmpty() -> DesignSection("") { DesignNote(s[if (limits?.limited == true) "profilesNoneLimited" else "profilesNone"].orEmpty(), tone = true) }
             else -> others.forEach { u ->
                 val name = shownName(u)
-                GroupedList(
-                    "$name · ${roleWords(s, u)}",
-                    buildList {
-                        if (Managing.mayRename(me.id, u)) {
-                            add(
-                                GroupRow(
-                                    s["profileLook"].orEmpty(), onClick = { nav.push(HouseholdRoute(HouseholdScreen.Look(u.id))) },
-                                    detail = if (showsUsername(u.displayName, u.name)) text(s, "profileSignsInAs", "name" to u.name) else "",
-                                    leading = { ProfileFace(name, u.avatar, LocalMetrics.current.u(32)) }, focusKey = "look-${u.id}",
-                                ),
-                            )
-                        }
-                        if (Managing.mayLimit(me.id, u)) {
-                            add(GroupRow(s["profileLimits"].orEmpty(), onClick = { nav.push(HouseholdRoute(HouseholdScreen.Limits(u.id))) }, icon = Symbols.ShieldLock, tint = Color(0xFF2E7D3C), detail = limitsSummary(s, u), focusKey = "limits-${u.id}"))
-                            add(GroupRow(s["profileReport"].orEmpty(), onClick = { nav.push(HouseholdRoute(HouseholdScreen.Report(u.id))) }, icon = Symbols.Activity, tint = Color(0xFF99690A), detail = s["profileReportHint"].orEmpty(), focusKey = "report-${u.id}"))
-                        } else if (u.isAdmin) {
-                            add(GroupRow(s["limitsNone"].orEmpty(), detail = s["limitsAdminHint"].orEmpty()))
-                        }
-                    },
-                )
+                DesignSection("$name · ${roleWords(s, u)}") {
+                    if (Managing.mayRename(me.id, u)) {
+                        DesignRow(
+                            s["profileLook"].orEmpty(), onClick = { nav.push(HouseholdRoute(HouseholdScreen.Look(u.id))) },
+                            sub = if (showsUsername(u.displayName, u.name)) text(s, "profileSignsInAs", "name" to u.name) else "",
+                            leading = { ProfileFace(name, u.avatar, face) }, focusKey = "look-${u.id}",
+                        )
+                    }
+                    if (Managing.mayLimit(me.id, u)) {
+                        DesignRow(s["profileLimits"].orEmpty(), onClick = { nav.push(HouseholdRoute(HouseholdScreen.Limits(u.id))) }, sub = limitsSummary(s, u), focusKey = "limits-${u.id}")
+                        DesignRow(s["profileReport"].orEmpty(), onClick = { nav.push(HouseholdRoute(HouseholdScreen.Report(u.id))) }, sub = s["profileReportHint"].orEmpty(), focusKey = "report-${u.id}")
+                    } else if (u.isAdmin) {
+                        DesignRow(s["limitsNone"].orEmpty(), sub = s["limitsAdminHint"].orEmpty())
+                    }
+                }
             }
         }
         if (me.isAdmin) {
-            GroupedList(
-                s["parentsPinTitle"].orEmpty(),
-                listOf(
-                    GroupRow(
-                        s["parentsPinTitle"].orEmpty(), onClick = { nav.push(HouseholdRoute(HouseholdScreen.ParentsPin)) }, icon = Symbols.Key, tint = Color(0xFF3E5BD0),
-                        value = pinSet?.let { s[if (it) "parentsPinIsSet" else "parentsPinNotSet"] }.orEmpty(), focusKey = "parents-pin",
-                    ),
-                ),
-            )
+            DesignSection(s["parentsPinTitle"].orEmpty()) {
+                DesignRow(
+                    s["parentsPinTitle"].orEmpty(), onClick = { nav.push(HouseholdRoute(HouseholdScreen.ParentsPin)) },
+                    value = pinSet?.let { s[if (it) "parentsPinIsSet" else "parentsPinNotSet"] }.orEmpty(), on = pinSet == true, focusKey = "parents-pin",
+                )
+            }
         }
         // Adding and removing profiles and their passwords stay on the server's own page.
         val more = s["profilesOnServer"].orEmpty()
-        GroupedList(
-            "",
-            listOf(
-                GroupRow(
-                    more, onClick = { nav.push(if (nav.app.isTv) Route.OnPhone(more, USERS_PAGE) else Route.Page(USERS_PAGE, s["rowProfiles"].orEmpty())) },
-                    icon = Symbols.Family, tint = Color(0xFFB8500D), detail = s["profilesOnServerHint"].orEmpty(), focusKey = "profiles-server",
-                ),
-            ),
-        )
+        DesignSection("") {
+            DesignRow(
+                more, onClick = { nav.push(if (nav.app.isTv) Route.OnPhone(more, USERS_PAGE) else Route.Page(USERS_PAGE, s["rowProfiles"].orEmpty())) },
+                sub = s["profilesOnServerHint"].orEmpty(), focusKey = "profiles-server",
+            )
+        }
     }
 }
 
@@ -295,50 +273,61 @@ fun LookScreen(nav: Nav, s: Map<String, String>, userId: Long) {
 
     val shown = avatarName(displayName.trim(), username.trim()).ifEmpty { "?" }
     val title = if (self) s["changePicture"].orEmpty() else text(s, "profileLookFor", "name" to (managed?.let(::shownName) ?: "…"))
-    SettingsPage(nav, title, s[if (self) "pictureHint" else "profileLookHint"].orEmpty()) {
-        if (!self && managed == null) {
-            if (problem.isEmpty()) Note(s["loading"].orEmpty(), busy = true) else Problem(problem, Modifier.fillMaxWidth())
-            return@SettingsPage
+    val ready = self || managed != null
+    DesignScreen(
+        title, nav::pop, eyebrow = s["rowProfiles"].orEmpty(), lead = s[if (self) "pictureHint" else "profileLookHint"].orEmpty(),
+        actions = if (!ready) null else ({
+            if (saved) Done(s["saved"].orEmpty())
+            else WittyButton(s["save"].orEmpty(), ::save, kind = ButtonKind.Primary, busy = busy, focusKey = "look-save")
+        }),
+    ) {
+        if (!ready) {
+            DesignSection("") { if (problem.isEmpty()) Note(s["loading"].orEmpty(), busy = true) else DesignNote(problem, error = true) }
+            return@DesignScreen
         }
-        ProfileFace(shown, avatar, metrics.u(if (metrics.tv) 120 else 88), if (metrics.tv) Modifier else Modifier.align(Alignment.CenterHorizontally))
+        DesignSection("") {
+            ProfileFace(shown, avatar, metrics.u(if (metrics.tv) 120 else 88), if (metrics.tv) Modifier else Modifier.align(Alignment.CenterHorizontally))
+        }
         if (!self) {
-            WittyField(displayName, { displayName = it; problem = "" }, s["profileNameLabel"].orEmpty(), icon = Symbols.Badge, imeAction = ImeAction.Next, maxLength = 60)
-            WittyField(username, { username = it; problem = "" }, s["usernameLabel"].orEmpty(), kind = FieldKind.Username, icon = Symbols.Person, imeAction = ImeAction.Done, maxLength = 40)
-            SectionHint(s["profileUsernameHint"].orEmpty())
+            DesignSection("") {
+                WittyField(displayName, { displayName = it; problem = "" }, s["profileNameLabel"].orEmpty(), icon = Symbols.Badge, imeAction = ImeAction.Next, maxLength = 60)
+                WittyField(username, { username = it; problem = "" }, s["usernameLabel"].orEmpty(), kind = FieldKind.Username, icon = Symbols.Person, imeAction = ImeAction.Done, maxLength = 40)
+                DesignNote(s["profileUsernameHint"].orEmpty())
+            }
         }
         if (pictures) {
             val chosen = parseAvatar(avatar)
             val size = metrics.u(if (metrics.tv) 88 else 56)
-            Text(s["pictureTitle"].orEmpty(), color = MaterialTheme.colorScheme.onBackground, style = MaterialTheme.typography.section, modifier = Modifier.semantics { heading() })
-            FlowRow(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(metrics.u(12)), verticalArrangement = Arrangement.spacedBy(metrics.u(12))) {
-                PictureChoice(s["pictureInitial"].orEmpty(), chosen == null, { avatar = "" }, "picture-none", requestFocus = metrics.tv && chosen == null) { Avatar(shown, size) }
-                offeredAvatars(lists?.avatars.orEmpty()).forEach { name ->
-                    val on = chosen?.name == name
-                    PictureChoice(avatarLabel(name), on, { avatar = withPicture(avatar, name) }, "picture-$name", requestFocus = metrics.tv && on) {
-                        ProfileFace(shown, withPicture(avatar, name), size)
+            DesignSection(s["pictureTitle"].orEmpty()) {
+                FlowRow(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(metrics.u(12)), verticalArrangement = Arrangement.spacedBy(metrics.u(12))) {
+                    PictureChoice(s["pictureInitial"].orEmpty(), chosen == null, { avatar = "" }, "picture-none", requestFocus = metrics.tv && chosen == null) { Avatar(shown, size) }
+                    offeredAvatars(lists?.avatars.orEmpty()).forEach { name ->
+                        val on = chosen?.name == name
+                        PictureChoice(avatarLabel(name), on, { avatar = withPicture(avatar, name) }, "picture-$name", requestFocus = metrics.tv && on) {
+                            ProfileFace(shown, withPicture(avatar, name), size)
+                        }
                     }
                 }
             }
             if (chosen != null) {
-                Text(s["pictureColour"].orEmpty(), color = MaterialTheme.colorScheme.onBackground, style = MaterialTheme.typography.section, modifier = Modifier.semantics { heading() })
-                FlowRow(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(metrics.u(12)), verticalArrangement = Arrangement.spacedBy(metrics.u(12))) {
-                    offeredColours(lists?.avatarColours.orEmpty()).forEach { colour ->
-                        PictureChoice(avatarLabel(colour), chosen.colour == colour, { avatar = withColour(avatar, colour) }, "colour-$colour") {
-                            Box(
-                                Modifier
-                                    .size(metrics.u(if (metrics.tv) 56 else 40))
-                                    .clip(CircleShape)
-                                    .background(Color(AVATAR_COLOURS[AVATAR_COLOUR_INDEX.getValue(colour)]))
-                                    .border(1.dp, MaterialTheme.colorScheme.outline, CircleShape),
-                            )
+                DesignSection(s["pictureColour"].orEmpty()) {
+                    FlowRow(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(metrics.u(12)), verticalArrangement = Arrangement.spacedBy(metrics.u(12))) {
+                        offeredColours(lists?.avatarColours.orEmpty()).forEach { colour ->
+                            PictureChoice(avatarLabel(colour), chosen.colour == colour, { avatar = withColour(avatar, colour) }, "colour-$colour") {
+                                Box(
+                                    Modifier
+                                        .size(metrics.u(if (metrics.tv) 56 else 40))
+                                        .clip(CircleShape)
+                                        .background(Color(AVATAR_COLOURS[AVATAR_COLOUR_INDEX.getValue(colour)]))
+                                        .border(1.dp, MaterialTheme.colorScheme.outline, CircleShape),
+                                )
+                            }
                         }
                     }
                 }
             }
         }
-        Problem(problem, Modifier.fillMaxWidth())
-        if (saved) Done(s["saved"].orEmpty())
-        else WittyButton(s["save"].orEmpty(), ::save, Modifier.fillMaxWidth(), kind = ButtonKind.Primary, busy = busy, tall = true, focusKey = "look-save")
+        DesignNote(problem, Modifier.padding(top = LocalDesignSizes.current.gap), error = true)
     }
 }
 
@@ -373,7 +362,6 @@ private const val BY_RATING = ""
 // A profile's limits: what it sees, what it can do, and screen time, as the web's three tabs.
 @Composable
 fun LimitsScreen(nav: Nav, s: Map<String, String>, userId: Long) {
-    val metrics = LocalMetrics.current
     val scope = rememberCoroutineScope()
     val api = nav.app.api
     val me = nav.me ?: run { Screen { Loading() }; return }
@@ -480,148 +468,156 @@ fun LimitsScreen(nav: Nav, s: Map<String, String>, userId: Long) {
         val words = if (age == 0) s["ageForEveryone"].orEmpty() else text(s, "ageUpTo", "n" to age)
         return if (allowed.isEmpty()) words else "$words ($allowed)"
     }
-    val toggle: @Composable (Boolean) -> Unit = { Toggle(it) }
+    val ready = user != null && original != null && Managing.mayLimit(me.id, user)
 
-    SettingsPage(nav, text(s, "limitsFor", "name" to name), s["limitsHint"].orEmpty(), onBack = { if (changed) leaving = true else nav.pop() }) {
+    // Design 2's page, the web's three tabs as chips, then each tab's sections in the order they had.
+    DesignScreen(
+        text(s, "limitsFor", "name" to name), { if (changed) leaving = true else nav.pop() }, eyebrow = s["rowProfiles"].orEmpty(), lead = s["limitsHint"].orEmpty(),
+        actions = if (!ready) null else ({
+            if (saved) Done(s["limitsSaved"].orEmpty())
+            else WittyButton(s["limitsSave"].orEmpty(), ::save, kind = ButtonKind.Primary, busy = busy, enabled = changed, focusKey = "limits-save")
+        }),
+    ) {
         if (user == null || original == null) {
-            if (problem.isEmpty()) Note(s["loading"].orEmpty(), busy = true) else Problem(problem, Modifier.fillMaxWidth())
-            return@SettingsPage
+            DesignSection("") { if (problem.isEmpty()) Note(s["loading"].orEmpty(), busy = true) else DesignNote(problem, error = true) }
+            return@DesignScreen
         }
         if (!Managing.mayLimit(me.id, user)) {
-            Note(s["profileNotYours"].orEmpty())
-            return@SettingsPage
+            DesignSection("") { DesignNote(s["profileNotYours"].orEmpty(), tone = true) }
+            return@DesignScreen
         }
-        Row(Modifier.fillMaxWidth().remoteRow(), horizontalArrangement = Arrangement.spacedBy(metrics.u(8))) {
-            listOf(LimitsTab.See to "limitsTabSee", LimitsTab.Do to "limitsTabDo", LimitsTab.Time to "limitsTabTime").forEachIndexed { i, (which, key) ->
-                WittyButton(
-                    s[key].orEmpty(), { tab = which }, Modifier.weight(1f), kind = if (tab == which) ButtonKind.Primary else ButtonKind.Secondary,
-                    focusKey = "limits-tab-$i", requestFocus = i == 0,
-                )
+        DesignSection("") {
+            DesignChips {
+                listOf(LimitsTab.See to "limitsTabSee", LimitsTab.Do to "limitsTabDo", LimitsTab.Time to "limitsTabTime").forEachIndexed { i, (which, key) ->
+                    DesignChip(s[key].orEmpty(), { tab = which }, on = tab == which, focusKey = "limits-tab-$i", requestFocus = i == 0)
+                }
             }
         }
         when (tab) {
             LimitsTab.See -> {
                 val levels = if (a.maxAge in Managing.AGE_LEVELS) Managing.AGE_LEVELS else (Managing.AGE_LEVELS + a.maxAge)
-                GroupedList(
-                    s["limitsAge"].orEmpty(),
-                    levels.map { age ->
-                        GroupRow(
-                            ageWords(s, age), onClick = { a = a.copy(maxAge = age) }, chevron = false, selected = a.maxAge == age, focusKey = "age-$age",
-                            detail = if (age < 0) s["ageNone"].orEmpty() else Managing.allowedOverall(systems, age), trailing = { CheckMark(a.maxAge == age) },
+                DesignSection(s["limitsAge"].orEmpty()) {
+                    levels.forEach { age ->
+                        DesignRow(
+                            ageWords(s, age), onClick = { a = a.copy(maxAge = age) }, selected = a.maxAge == age, on = a.maxAge == age, focusKey = "age-$age",
+                            sub = if (age < 0) s["ageNone"].orEmpty() else Managing.allowedOverall(systems, age), trailing = { CheckMark(a.maxAge == age) },
                         )
-                    } + listOfNotNull(
-                        if (a.maxAge >= 0) GroupRow(s["limitsUnrated"].orEmpty(), onClick = { a = a.copy(allowUnrated = !a.allowUnrated) }, detail = s["limitsUnratedHint"].orEmpty(), chevron = false, focusKey = "unrated", trailing = { toggle(a.allowUnrated) }) else null,
-                    ),
-                )
-                if (kinds.isNotEmpty()) {
-                    GroupedList(
-                        s["limitsKinds"].orEmpty(),
-                        kinds.flatMap { kind ->
-                            val mine = a.kinds[kind]
-                            listOfNotNull(
-                                GroupRow(kindLabel(kind), onClick = { choosing = Choosing.KindAge(kind) }, detail = if (mine == null) s["kindSame"].orEmpty() else ageChoice(kind, mine.maxAge), focusKey = "kind-$kind"),
-                                if (mine != null && mine.maxAge >= 0) {
-                                    GroupRow(
-                                        text(s, "kindUnrated", "kind" to kindLabel(kind)), onClick = { a = a.copy(kinds = a.kinds + (kind to mine.copy(allowUnrated = !mine.allowUnrated))) },
-                                        chevron = false, focusKey = "kind-unrated-$kind", trailing = { toggle(mine.allowUnrated) },
-                                    )
-                                } else {
-                                    null
-                                },
-                            )
-                        },
-                    )
-                    SectionHint(s["limitsKindsHint"].orEmpty())
+                    }
+                    if (a.maxAge >= 0) {
+                        DesignSwitchRow(s["limitsUnrated"].orEmpty(), a.allowUnrated, { a = a.copy(allowUnrated = it) }, sub = s["limitsUnratedHint"].orEmpty())
+                    }
                 }
-                GroupedList(
-                    s["limitsLists"].orEmpty(),
-                    listOfNotNull(
-                        GroupRow(s["limitsLibraries"].orEmpty(), onClick = { choosing = Choosing.Libraries }, value = if (a.libraries.isEmpty()) s["limitsAll"].orEmpty() else a.libraries.size.toString(), detail = s["limitsLibrariesHint"].orEmpty(), focusKey = "libraries"),
-                        if (genres.isNotEmpty() || a.blockGenres.isNotEmpty()) GroupRow(s["limitsHideGenres"].orEmpty(), onClick = { choosing = Choosing.HideGenres }, value = a.blockGenres.size.takeIf { it > 0 }?.toString().orEmpty(), focusKey = "hide-genres") else null,
-                        if (genres.isNotEmpty() || a.onlyGenres.isNotEmpty()) GroupRow(s["limitsOnlyGenres"].orEmpty(), onClick = { choosing = Choosing.OnlyGenres }, value = a.onlyGenres.size.takeIf { it > 0 }?.toString().orEmpty(), detail = s["limitsOnlyGenresHint"].orEmpty(), focusKey = "only-genres") else null,
-                    ),
-                )
-                GroupedList(
-                    s["limitsCollections"].orEmpty(),
-                    collections.map { c ->
+                if (kinds.isNotEmpty()) {
+                    DesignSection(s["limitsKinds"].orEmpty()) {
+                        kinds.forEach { kind ->
+                            val mine = a.kinds[kind]
+                            DesignRow(
+                                kindLabel(kind), onClick = { choosing = Choosing.KindAge(kind) }, value = if (mine == null) s["kindSame"].orEmpty() else ageChoice(kind, mine.maxAge),
+                                on = mine != null, focusKey = "kind-$kind",
+                            )
+                            if (mine != null && mine.maxAge >= 0) {
+                                DesignSwitchRow(
+                                    text(s, "kindUnrated", "kind" to kindLabel(kind)), mine.allowUnrated,
+                                    { a = a.copy(kinds = a.kinds + (kind to mine.copy(allowUnrated = it))) },
+                                )
+                            }
+                        }
+                        DesignNote(s["limitsKindsHint"].orEmpty())
+                    }
+                }
+                DesignSection(s["limitsLists"].orEmpty()) {
+                    DesignRow(
+                        s["limitsLibraries"].orEmpty(), onClick = { choosing = Choosing.Libraries }, value = if (a.libraries.isEmpty()) s["limitsAll"].orEmpty() else a.libraries.size.toString(),
+                        on = a.libraries.isNotEmpty(), sub = s["limitsLibrariesHint"].orEmpty(), focusKey = "libraries",
+                    )
+                    if (genres.isNotEmpty() || a.blockGenres.isNotEmpty()) {
+                        DesignRow(s["limitsHideGenres"].orEmpty(), onClick = { choosing = Choosing.HideGenres }, value = a.blockGenres.size.takeIf { it > 0 }?.toString().orEmpty(), on = a.blockGenres.isNotEmpty(), focusKey = "hide-genres")
+                    }
+                    if (genres.isNotEmpty() || a.onlyGenres.isNotEmpty()) {
+                        DesignRow(
+                            s["limitsOnlyGenres"].orEmpty(), onClick = { choosing = Choosing.OnlyGenres }, value = a.onlyGenres.size.takeIf { it > 0 }?.toString().orEmpty(),
+                            on = a.onlyGenres.isNotEmpty(), sub = s["limitsOnlyGenresHint"].orEmpty(), focusKey = "only-genres",
+                        )
+                    }
+                }
+                DesignSection(s["limitsCollections"].orEmpty()) {
+                    collections.forEach { c ->
                         val how = when (c.id) {
                             in a.blockCollections -> "exceptionNever"
                             in a.allowCollections -> "exceptionAlways"
                             else -> "exceptionByRating"
                         }
-                        GroupRow(c.name, onClick = { choosing = Choosing.InCollection(c.id, c.name) }, value = s[how].orEmpty(), detail = text(s, if (c.count == 1) "collectionTitle" else "collectionTitles", "n" to c.count), focusKey = "collection-${c.id}")
-                    },
-                )
-                SectionHint(s[if (collections.isEmpty()) "limitsCollectionsNone" else "limitsCollectionsHint"].orEmpty())
-                WittyField(tags, { tags = it }, s["limitsTags"].orEmpty(), imeAction = ImeAction.Done, maxLength = 2000)
-                SectionHint(s["limitsTagsHint"].orEmpty())
+                        DesignRow(
+                            c.name, onClick = { choosing = Choosing.InCollection(c.id, c.name) }, value = s[how].orEmpty(), on = how != "exceptionByRating",
+                            sub = text(s, if (c.count == 1) "collectionTitle" else "collectionTitles", "n" to c.count), focusKey = "collection-${c.id}",
+                        )
+                    }
+                    DesignNote(s[if (collections.isEmpty()) "limitsCollectionsNone" else "limitsCollectionsHint"].orEmpty())
+                }
+                DesignSection("") {
+                    WittyField(tags, { tags = it }, s["limitsTags"].orEmpty(), imeAction = ImeAction.Done, maxLength = 2000)
+                    DesignNote(s["limitsTagsHint"].orEmpty())
+                }
                 val exceptions = a.allowShows.map { Triple(true, it, true) } + a.allowItems.map { Triple(false, it, true) } +
                     a.blockShows.map { Triple(true, it, false) } + a.blockItems.map { Triple(false, it, false) }
-                GroupedList(
-                    s["limitsExceptions"].orEmpty(),
-                    exceptions.map { (show, id, allowed) ->
+                DesignSection(s["limitsExceptions"].orEmpty()) {
+                    exceptions.forEach { (show, id, allowed) ->
                         val title = titles[(if (show) "s" else "i") + id] ?: "…"
-                        GroupRow(title, onClick = { choosing = Choosing.Exception(show, id, title) }, value = s[if (allowed) "exceptionAlways" else "exceptionNever"].orEmpty(), focusKey = "exception-$show-$id")
-                    },
-                )
-                SectionHint(s["limitsExceptionsHint"].orEmpty())
-                WittyField(query, { query = it }, s["limitsExceptionsSearch"].orEmpty(), icon = Symbols.Search, imeAction = ImeAction.Search, maxLength = 80)
-                if (found.isNotEmpty()) {
-                    GroupedList("", found.map { f -> GroupRow(f.title, onClick = { choosing = f }, focusKey = "found-${f.show}-${f.id}") })
+                        DesignRow(title, onClick = { choosing = Choosing.Exception(show, id, title) }, value = s[if (allowed) "exceptionAlways" else "exceptionNever"].orEmpty(), on = true, focusKey = "exception-$show-$id")
+                    }
+                    DesignNote(s["limitsExceptionsHint"].orEmpty())
+                    WittyField(query, { query = it }, s["limitsExceptionsSearch"].orEmpty(), icon = Symbols.Search, imeAction = ImeAction.Search, maxLength = 80)
+                    found.forEach { f -> DesignRow(f.title, onClick = { choosing = f }, focusKey = "found-${f.show}-${f.id}") }
                 }
             }
             LimitsTab.Do -> {
                 val grownUp = user.kind == "adult"
                 // Only the switches this server has.
                 val known = lists?.features.orEmpty()
-                GroupedList(
-                    s["limitsTabDo"].orEmpty(),
-                    FEATURE_SWITCHES.filter { known.isEmpty() || it.id in known }.map { f ->
+                DesignSection(s["limitsTabDo"].orEmpty()) {
+                    FEATURE_SWITCHES.filter { known.isEmpty() || it.id in known }.forEach { f ->
                         val never = f.adultOnly && !grownUp
                         val hint = when {
                             never -> s["featureAdultOnly"].orEmpty()
                             !grownUp && f.id == "comments" -> s["feature_comments_kids"].orEmpty()
                             else -> s["feature_${f.id}_hint"].orEmpty()
                         }
-                        GroupRow(
-                            s["feature_${f.id}"].orEmpty(), onClick = if (never) null else ({ a = a.with(f.id, !a.can(f.id)) }), detail = hint, chevron = false,
-                            focusKey = "feature-${f.id}", trailing = { toggle(!never && a.can(f.id)) },
-                        )
-                    },
-                )
-                GroupedList(
-                    s["liveTvTab"].orEmpty(),
-                    listOf(
-                        GroupRow(s["liveTvTab"].orEmpty(), onClick = { a = a.copy(liveTv = !a.liveTv) }, chevron = false, focusKey = "live-tv", trailing = { toggle(a.liveTv) }),
-                        GroupRow(s["limitsLibraryChannels"].orEmpty(), onClick = if (a.liveTv) ({ a = a.copy(libraryChannels = !a.libraryChannels) }) else null, chevron = false, focusKey = "library-channels", trailing = { toggle(a.liveTv && a.libraryChannels) }),
-                        GroupRow(s["limitsTunerChannels"].orEmpty(), onClick = if (a.liveTv) ({ a = a.copy(tunerChannels = !a.tunerChannels) }) else null, chevron = false, focusKey = "tuner-channels", trailing = { toggle(a.liveTv && a.tunerChannels) }),
-                    ),
-                )
+                        DesignSwitchRow(s["feature_${f.id}"].orEmpty(), !never && a.can(f.id), { a = a.with(f.id, it) }, sub = hint, enabled = !never)
+                    }
+                }
+                DesignSection(s["liveTvTab"].orEmpty()) {
+                    DesignSwitchRow(s["liveTvTab"].orEmpty(), a.liveTv, { a = a.copy(liveTv = it) })
+                    DesignSwitchRow(s["limitsLibraryChannels"].orEmpty(), a.liveTv && a.libraryChannels, { a = a.copy(libraryChannels = it) }, enabled = a.liveTv)
+                    DesignSwitchRow(s["limitsTunerChannels"].orEmpty(), a.liveTv && a.tunerChannels, { a = a.copy(tunerChannels = it) }, enabled = a.liveTv)
+                }
             }
             LimitsTab.Time -> {
                 if (!nav.has(FEATURE_SCREEN_TIME)) {
-                    Note(s["timeNotHere"].orEmpty())
+                    DesignSection("") { DesignNote(s["timeNotHere"].orEmpty(), tone = true) }
                 } else {
-                    SectionHint(s["timeHint"].orEmpty())
-                    GroupedList(
-                        s["timeAllowance"].orEmpty(),
-                        listOf(
-                            GroupRow(s["timeSchoolDays"].orEmpty(), onClick = { choosing = Choosing.Allowance(false) }, value = allowanceWords(s, a.time.schoolDayMinutes), detail = s["timeSchoolDaysHint"].orEmpty(), focusKey = "time-school"),
-                            GroupRow(s["timeWeekends"].orEmpty(), onClick = { choosing = Choosing.Allowance(true) }, value = allowanceWords(s, a.time.weekendMinutes), detail = s["timeWeekendsHint"].orEmpty(), focusKey = "time-weekend"),
-                        ),
-                    )
-                    WittyField(a.time.from, { a = a.copy(time = a.time.copy(from = it.take(5))); problem = "" }, s["timeFrom"].orEmpty(), imeAction = ImeAction.Next, maxLength = 5)
-                    SectionHint(s["timeFromHint"].orEmpty())
-                    WittyField(a.time.schoolNightUntil, { a = a.copy(time = a.time.copy(schoolNightUntil = it.take(5))); problem = "" }, s["timeSchoolNight"].orEmpty(), imeAction = ImeAction.Next, maxLength = 5)
-                    SectionHint(s["timeSchoolNightHint"].orEmpty())
-                    WittyField(a.time.weekendUntil, { a = a.copy(time = a.time.copy(weekendUntil = it.take(5))); problem = "" }, s["timeWeekendNight"].orEmpty(), imeAction = ImeAction.Done, maxLength = 5)
-                    SectionHint(s["timeHolidays"].orEmpty())
+                    DesignSection("") { DesignNote(s["timeHint"].orEmpty()) }
+                    DesignSection(s["timeAllowance"].orEmpty()) {
+                        DesignRow(
+                            s["timeSchoolDays"].orEmpty(), onClick = { choosing = Choosing.Allowance(false) }, value = allowanceWords(s, a.time.schoolDayMinutes),
+                            on = a.time.schoolDayMinutes > 0, sub = s["timeSchoolDaysHint"].orEmpty(), focusKey = "time-school",
+                        )
+                        DesignRow(
+                            s["timeWeekends"].orEmpty(), onClick = { choosing = Choosing.Allowance(true) }, value = allowanceWords(s, a.time.weekendMinutes),
+                            on = a.time.weekendMinutes > 0, sub = s["timeWeekendsHint"].orEmpty(), focusKey = "time-weekend",
+                        )
+                    }
+                    DesignSection("") {
+                        WittyField(a.time.from, { a = a.copy(time = a.time.copy(from = it.take(5))); problem = "" }, s["timeFrom"].orEmpty(), imeAction = ImeAction.Next, maxLength = 5)
+                        DesignNote(s["timeFromHint"].orEmpty())
+                        WittyField(a.time.schoolNightUntil, { a = a.copy(time = a.time.copy(schoolNightUntil = it.take(5))); problem = "" }, s["timeSchoolNight"].orEmpty(), imeAction = ImeAction.Next, maxLength = 5)
+                        DesignNote(s["timeSchoolNightHint"].orEmpty())
+                        WittyField(a.time.weekendUntil, { a = a.copy(time = a.time.copy(weekendUntil = it.take(5))); problem = "" }, s["timeWeekendNight"].orEmpty(), imeAction = ImeAction.Done, maxLength = 5)
+                        DesignNote(s["timeHolidays"].orEmpty())
+                    }
                 }
             }
         }
-        Problem(problem, Modifier.fillMaxWidth())
-        if (saved) Done(s["limitsSaved"].orEmpty())
-        else WittyButton(s["limitsSave"].orEmpty(), ::save, Modifier.fillMaxWidth(), kind = ButtonKind.Primary, busy = busy, enabled = changed, tall = true, focusKey = "limits-save")
+        DesignNote(problem, Modifier.padding(top = LocalDesignSizes.current.gap), error = true)
     }
 
     when (val c = choosing) {
@@ -702,7 +698,6 @@ private const val SEARCH_MOST = 6
 // The report: today and more time, what they watched each day, and what was refused. The last two weeks.
 @Composable
 fun ReportScreen(nav: Nav, s: Map<String, String>, userId: Long) {
-    val metrics = LocalMetrics.current
     val scope = rememberCoroutineScope()
     val context = LocalContext.current
     val api = nav.app.api
@@ -753,47 +748,55 @@ fun ReportScreen(nav: Nav, s: Map<String, String>, userId: Long) {
         "feature" -> text(s, "reportFeature", "what" to (s["feature_$detail"] ?: detail))
         else -> kind
     }
-    SettingsPage(nav, text(s, "reportFor", "name" to name), s["reportHint"].orEmpty()) {
+    // Design 2's report (canvas `parentreport`): today and more time as chips, then each day, then what was refused.
+    DesignScreen(
+        text(s, "reportFor", "name" to name), nav::pop, eyebrow = s["rowProfiles"].orEmpty(), lead = s["reportHint"].orEmpty(),
+        actions = if (report == null) null else ({
+            WittyButton(s["reportClear"].orEmpty(), { clearing = true }, kind = ButtonKind.Destructive, enabled = !busy, focusKey = "report-clear")
+        }),
+    ) {
         val a = report
         if (a == null) {
-            if (problem.isEmpty()) Note(s["loading"].orEmpty(), busy = true) else Problem(problem, Modifier.fillMaxWidth())
-            return@SettingsPage
+            DesignSection("") { if (problem.isEmpty()) Note(s["loading"].orEmpty(), busy = true) else DesignNote(problem, error = true) }
+            return@DesignScreen
         }
         val st: ScreenTime = a.screenTime
         val today = if (st.allowanceSec >= 0) text(s, "reportUsedOf", "used" to durationWords(s, st.usedSec), "of" to durationWords(s, st.allowanceSec)) else text(s, "reportUsed", "used" to durationWords(s, st.usedSec))
-        GroupedList(s["reportToday"].orEmpty(), listOf(GroupRow(today, detail = if (!st.allowed) st.message else "")))
-        if (nav.has(FEATURE_SCREEN_TIME)) {
-            Text(text(s, "reportGive", "name" to name), color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.secondary, modifier = Modifier.padding(horizontal = metrics.u(16)))
-            Row(Modifier.fillMaxWidth().remoteRow(), horizontalArrangement = Arrangement.spacedBy(metrics.u(8))) {
-                ScreenTimeRules.EXTRA_CHOICES.forEachIndexed { i, m ->
-                    val label = text(s, if (m == 60) "extraHour" else "extraMinutes", "n" to m)
-                    WittyButton(label, { act { api.giveTime(userId, m); given = text(s, "reportGiven", "name" to name, "time" to label) } }, Modifier.weight(1f), enabled = !busy, focusKey = "give-$m", requestFocus = i == 0)
+        DesignSection(s["reportToday"].orEmpty()) {
+            DesignRow(today, sub = if (!st.allowed) st.message else "")
+            if (nav.has(FEATURE_SCREEN_TIME)) {
+                DesignNote(text(s, "reportGive", "name" to name))
+                DesignChips {
+                    ScreenTimeRules.EXTRA_CHOICES.forEachIndexed { i, m ->
+                        val label = text(s, if (m == 60) "extraHour" else "extraMinutes", "n" to m)
+                        DesignChip(label, { act { api.giveTime(userId, m); given = text(s, "reportGiven", "name" to name, "time" to label) } }, enabled = !busy, focusKey = "give-$m", requestFocus = i == 0)
+                    }
                 }
+                if (given.isNotEmpty()) Done(given)
             }
-            if (given.isNotEmpty()) Done(given)
+            DesignNote(problem, error = true)
         }
-        Problem(problem, Modifier.fillMaxWidth())
         val days = Managing.reportDays(a)
         if (days.isEmpty()) {
-            GroupedList(s["reportWatched"].orEmpty(), listOf(GroupRow(s["reportNothing"].orEmpty(), detail = s["reportNothingHint"].orEmpty())))
+            DesignSection(s["reportWatched"].orEmpty()) { DesignRow(s["reportNothing"].orEmpty(), sub = s["reportNothingHint"].orEmpty()) }
         }
         days.forEach { day ->
             val total = a.days.firstOrNull { it.day == day }
             val caption = dayWords(day) + (total?.let { " · " + text(s, "reportScreen", "time" to durationWords(s, it.screenSec)) + if (it.extraSec > 0) ", " + text(s, "reportWithExtra", "time" to durationWords(s, it.extraSec)) else "" } ?: "")
-            GroupedList(
-                caption,
-                a.watched.filter { it.day == day }.map { w ->
-                    GroupRow((if (w.showTitle.isNotEmpty()) w.showTitle + ": " else "") + w.title.ifEmpty { s["reportGone"].orEmpty() }, value = durationWords(s, w.seconds.toInt()))
-                }.ifEmpty { listOf(GroupRow(s["reportNoTitles"].orEmpty())) },
-            )
+            DesignSection(caption) {
+                val watched = a.watched.filter { it.day == day }
+                if (watched.isEmpty()) DesignRow(s["reportNoTitles"].orEmpty())
+                watched.forEach { w ->
+                    DesignRow((if (w.showTitle.isNotEmpty()) w.showTitle + ": " else "") + w.title.ifEmpty { s["reportGone"].orEmpty() }, value = durationWords(s, w.seconds.toInt()))
+                }
+            }
         }
-        GroupedList(
-            s["reportRefused"].orEmpty(),
-            a.events.map { e ->
-                GroupRow(eventWords(e.kind, e.title, e.detail), detail = DateFormat.format("EEE ", Date(e.at * 1000)).toString() + DateFormat.getTimeFormat(context).format(Date(e.at * 1000)))
-            }.ifEmpty { listOf(GroupRow(s["reportNothing"].orEmpty())) },
-        )
-        WittyButton(s["reportClear"].orEmpty(), { clearing = true }, Modifier.fillMaxWidth(), kind = ButtonKind.Destructive, tall = true, enabled = !busy, focusKey = "report-clear")
+        DesignSection(s["reportRefused"].orEmpty()) {
+            if (a.events.isEmpty()) DesignRow(s["reportNothing"].orEmpty())
+            a.events.forEach { e ->
+                DesignRow(eventWords(e.kind, e.title, e.detail), sub = DateFormat.format("EEE ", Date(e.at * 1000)).toString() + DateFormat.getTimeFormat(context).format(Date(e.at * 1000)))
+            }
+        }
     }
     if (clearing) {
         AskDialog(
@@ -855,20 +858,30 @@ fun ParentsPinScreen(nav: Nav, s: Map<String, String>) {
             }
         }
     }
-    SettingsPage(nav, s["parentsPinTitle"].orEmpty(), s["parentsPinHint"].orEmpty()) {
+    val confirmed = current.isNotEmpty() && (!me.twoFactor || code.isNotBlank())
+    // Design 2's page: whether it is set, the new PIN, your password (and code), then Set or Change, and Remove.
+    DesignScreen(
+        s["parentsPinTitle"].orEmpty(), nav::pop, eyebrow = s["rowProfiles"].orEmpty(), lead = s["parentsPinHint"].orEmpty(),
+        actions = if (!me.isAdmin) null else ({
+            WittyButton(s[if (isSet == true) "parentsPinChange" else "parentsPinSet"].orEmpty(), { save(pin) }, kind = ButtonKind.Primary, busy = busy, enabled = ScreenTimeRules.pinReady(pin) && confirmed, focusKey = "pin-save")
+            if (isSet == true) WittyButton(s["parentsPinRemove"].orEmpty(), { save("") }, kind = ButtonKind.Destructive, enabled = confirmed && !busy, focusKey = "pin-remove")
+        }),
+    ) {
         if (!me.isAdmin) {
-            Note(s["parentsPinAdminOnly"].orEmpty())
-            return@SettingsPage
+            DesignSection("") { DesignNote(s["parentsPinAdminOnly"].orEmpty(), tone = true) }
+            return@DesignScreen
         }
-        Note(s[if (isSet == true) "parentsPinStateSet" else "parentsPinStateNone"].orEmpty(), busy = isSet == null && problem.isEmpty())
-        WittyField(pin, { pin = ScreenTimeRules.typedPin(it); problem = ""; done = "" }, s[if (isSet == true) "parentsPinNew" else "parentsPinLabel"].orEmpty(), kind = FieldKind.Password, icon = Symbols.Key, imeAction = ImeAction.Next, maxLength = 12)
-        SectionHint(s["parentsPinDigits"].orEmpty())
-        WittyField(current, { current = it; problem = "" }, s["yourPasswordLabel"].orEmpty(), kind = FieldKind.Password, icon = Symbols.Password, imeAction = if (me.twoFactor) ImeAction.Next else ImeAction.Done, isError = wrong > 0 && problem.isNotEmpty(), shake = wrong)
-        if (me.twoFactor) WittyField(code, { code = it.take(32); problem = "" }, s["switchCodeLabel"].orEmpty(), icon = Symbols.ShieldLock, imeAction = ImeAction.Done, maxLength = 32)
-        Problem(problem, Modifier.fillMaxWidth())
-        if (done.isNotEmpty()) Done(done)
-        val confirmed = current.isNotEmpty() && (!me.twoFactor || code.isNotBlank())
-        WittyButton(s[if (isSet == true) "parentsPinChange" else "parentsPinSet"].orEmpty(), { save(pin) }, Modifier.fillMaxWidth(), kind = ButtonKind.Primary, busy = busy, enabled = ScreenTimeRules.pinReady(pin) && confirmed, tall = true, focusKey = "pin-save")
-        if (isSet == true) WittyButton(s["parentsPinRemove"].orEmpty(), { save("") }, Modifier.fillMaxWidth(), kind = ButtonKind.Destructive, enabled = confirmed && !busy, tall = true, focusKey = "pin-remove")
+        DesignSection("") {
+            val state = s[if (isSet == true) "parentsPinStateSet" else "parentsPinStateNone"].orEmpty()
+            if (isSet == null && problem.isEmpty()) Note(state, busy = true) else DesignNote(state, tone = true)
+        }
+        DesignSection("") {
+            WittyField(pin, { pin = ScreenTimeRules.typedPin(it); problem = ""; done = "" }, s[if (isSet == true) "parentsPinNew" else "parentsPinLabel"].orEmpty(), kind = FieldKind.Password, icon = Symbols.Key, imeAction = ImeAction.Next, maxLength = 12)
+            DesignNote(s["parentsPinDigits"].orEmpty())
+            WittyField(current, { current = it; problem = "" }, s["yourPasswordLabel"].orEmpty(), kind = FieldKind.Password, icon = Symbols.Password, imeAction = if (me.twoFactor) ImeAction.Next else ImeAction.Done, isError = wrong > 0 && problem.isNotEmpty(), shake = wrong)
+            if (me.twoFactor) WittyField(code, { code = it.take(32); problem = "" }, s["switchCodeLabel"].orEmpty(), icon = Symbols.ShieldLock, imeAction = ImeAction.Done, maxLength = 32)
+            DesignNote(problem, error = true)
+            if (done.isNotEmpty()) Done(done)
+        }
     }
 }

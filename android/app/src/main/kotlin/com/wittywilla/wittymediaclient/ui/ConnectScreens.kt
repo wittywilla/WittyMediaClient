@@ -2,34 +2,29 @@
 // Copyright (C) 2026 WittyWilla and contributors
 package com.wittywilla.wittymediaclient.ui
 
-import androidx.compose.ui.unit.dp
 import android.view.KeyEvent
 import androidx.compose.foundation.background
-import androidx.compose.ui.text.withStyle
-import androidx.compose.ui.text.buildAnnotatedString
-import androidx.compose.ui.text.SpanStyle
-import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.draw.clip
-import androidx.compose.foundation.layout.heightIn
-import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.foundation.layout.FlowRowScope
 import androidx.compose.foundation.layout.IntrinsicSize
-import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.layout.widthIn
-import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.layout.safeDrawingPadding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.text.selection.SelectionContainer
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -44,9 +39,11 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.autofill.ContentType
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusDirection
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
@@ -57,17 +54,18 @@ import androidx.compose.ui.input.key.nativeKeyCode
 import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.input.key.type
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.semantics.CustomAccessibilityAction
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.contentType
-import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.unit.em
 import com.wittywilla.wittymediaclient.data.LogoCache
 import com.wittywilla.wittymediaclient.data.SavedServer
 import com.wittywilla.wittymediaclient.data.addressNow
@@ -77,12 +75,6 @@ import com.wittywilla.wittymediaclient.data.isStale
 import com.wittywilla.wittymediaclient.data.oldEntryFor
 import com.wittywilla.wittymediaclient.data.reachedWords
 import com.wittywilla.wittymediaclient.data.shownName
-import androidx.compose.foundation.layout.safeDrawingPadding
-import androidx.compose.material3.DropdownMenu
-import androidx.compose.material3.DropdownMenuItem
-import androidx.compose.material3.Icon
-import androidx.compose.runtime.withFrameNanos
-import androidx.compose.ui.semantics.CustomAccessibilityAction
 import com.wittywilla.wittymediaclient.net.Address
 import com.wittywilla.wittymediaclient.net.ApiError
 import com.wittywilla.wittymediaclient.net.FoundServer
@@ -94,9 +86,9 @@ import com.wittywilla.wittymediaclient.net.ServerFinder
 import com.wittywilla.wittymediaclient.net.probeServer
 import com.wittywilla.wittymediaclient.net.problemWords
 import kotlinx.coroutines.CancellationException
-import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import java.io.IOException
 
 // The screens in docs/APP-DESIGN.md, "Signing in", numbered as there. The words are the shared ones in
@@ -136,10 +128,6 @@ fun Modifier.tvLeavable(): Modifier {
 
 private val ARROWS = setOf(KeyEvent.KEYCODE_DPAD_UP, KeyEvent.KEYCODE_DPAD_DOWN, KeyEvent.KEYCODE_DPAD_LEFT, KeyEvent.KEYCODE_DPAD_RIGHT)
 private const val NONE_AFTER_MS = 6000L
-
-// A little more room in a column than its usual spacing.
-@Composable
-private fun Gap(size: Int) = Spacer(Modifier.height(LocalMetrics.current.u(size)))
 
 // 1 and 2. Choose your server, or enter its address.
 @Composable
@@ -270,7 +258,7 @@ fun ConnectScreen(nav: Nav, s: Map<String, String>, message: String) {
         if (it.type == KeyEventType.KeyDown && it.key.nativeKeyCode in ARROWS) moved = true
         false
     }
-    val savedFirst = nav.app.store.savedFirst
+    var savedFirst by remember { mutableStateOf(nav.app.store.savedFirst) }
     // On a TV, the first card takes focus: the server used last, else the first one found, else Enter an address. As
     // servers are found after the screen opens, focus follows the first of them until the person moves it themselves,
     // so it never stays on Enter an address below a long list.
@@ -288,114 +276,172 @@ fun ConnectScreen(nav: Nav, s: Map<String, String>, message: String) {
         focusOn = firstKey
     }
     Box(Modifier.fillMaxSize()) {
-    SignInLayout(
-        words = {
-            Lockup("", null, app = true)
-            SignInHeading(s["findTitle"].orEmpty(), detail = s["findSubtitle"].orEmpty(), display = true)
-            Problem(problem, Modifier.fillMaxWidth())
-            Notice(nav.pickerNotice)
-        },
-        actions = {
-            Column(noticeMoves.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(metrics.u(12))) {
+        // Design 2's connect page: the servers this device has used, those found on the network, then this device's
+        // servers, and the other ways in as the page's actions.
+        DesignPage(
+            s["findTitle"].orEmpty(), eyebrow = APP_NAME, lead = s["findSubtitle"].orEmpty(), foot = s["legalConnect"].orEmpty(), tag = "connect",
+            actions = {
+                WittyButton(
+                    s["enterAddress"].orEmpty(), { showForm = true; problem = "" },
+                    kind = if (nothing) ButtonKind.Primary else ButtonKind.Secondary, icon = Symbols.Address,
+                    requestFocus = firstKey == "enter-address", takeFocus = focusOn == "enter-address", focusKey = "enter-address",
+                )
+                // A device that has never been at home with its server: it shows a code to type into the server.
+                if (nav.app.peers.available) {
+                    WittyButton(s["joinAway"].orEmpty(), { nav.push(Route.JoinAway) }, kind = ButtonKind.Secondary, icon = Symbols.Globe, focusKey = "join-away")
+                }
+            },
+        ) {
+            DesignNote(problem, Modifier.padding(top = LocalDesignSizes.current.gap), error = true)
+            Notice(nav.pickerNotice, Modifier.padding(top = LocalDesignSizes.current.gap))
+            Column(noticeMoves.fillMaxWidth()) {
                 // Saved servers first (the setting under Servers on this device, on unless turned off): what this device
                 // has used is on top, the last used first, so a long list found on the network never pushes it out of
                 // sight. Off, the found servers come first, as before.
                 val foundBlock = @Composable {
-                SectionLabel(s["foundServers"].orEmpty(), Modifier.padding(top = if (savedFirst && recent.isNotEmpty()) metrics.u(8) else 0.dp), searching = !cantSearch && !searchedLong)
-                if (found.isEmpty()) {
-                    when {
-                        cantSearch -> Note(s["findNotSupported"].orEmpty())
-                        searchedLong -> Note(s["findNone"].orEmpty())
-                        else -> Note(s["findSearching"].orEmpty(), busy = true)
-                    }
-                }
-                // Only where it is: a server says nothing about itself until it's added.
-                foundOnly.forEachIndexed { i, server ->
-                    key(server.id) {
-                        ServerCard(
-                            hostAndPort(server.url), s["foundOnNetwork"].orEmpty(), { connect(server.url) }, saved = false,
-                            connecting = connecting == server.url, requestFocus = i == 0 && !moved && (!savedFirst || recent.isEmpty()), focusKey = "found-${server.id}",
-                            takeFocus = focusOn == "found-${server.id}",
-                        )
-                    }
-                }
-                }
-                val savedBlock = @Composable {
-                if (recent.isNotEmpty()) {
-                    Row(Modifier.fillMaxWidth().padding(top = if (savedFirst) 0.dp else metrics.u(8)), verticalAlignment = Alignment.CenterVertically) {
-                        SectionLabel(s["recentServers"].orEmpty(), Modifier.weight(1f))
-                        // A TV has Manage servers and the card's own long press for this.
-                        if (!tv) WittyButton(s[if (editing) "editServersDone" else "editServers"].orEmpty(), { editing = !editing }, kind = ButtonKind.Quiet, focusKey = "edit-servers")
-                    }
-                    recent.forEachIndexed { i, server ->
-                        key(server.url) {
-                            val name = shownName(server)
-                            // Where it's announcing itself now, if that's somewhere new. It still has to prove its key there.
-                            val at = addressNow(server, found)
-                            val removeLabel = fill(s["removeServerNamed"], "name" to name)
-                            val card = @Composable {
-                                Box {
-                                    ServerCard(
-                                        name, server.url, { connect(at) },
-                                        logo = LogoCache.file(context, server.url, server.brandLogo), lastUsed = server.url == last?.url,
-                                        connecting = connecting == at, requestFocus = i == 0 && !moved && (savedFirst || (foundOnly.isEmpty() && found.isNotEmpty())),
-                                        focusKey = "recent-${server.url}",
-                                        reached = reachedWords(s, server.lastSeen, now), stale = isStale(server.lastSeen, now, nav.app.store.recentSince),
-                                        takeFocus = focusOn == "recent-${server.url}",
-                                        onLongClick = { if (tv) asking = server else menuFor = server },
-                                        longClickLabel = if (tv) s["removeServer"] else fill(s["serverOptions"], "name" to name),
-                                        actions = listOf(CustomAccessibilityAction(removeLabel) { if (tv) asking = server else remove(server); true }),
-                                        trailing = if (editing) { { RemoveButton(removeLabel, { remove(server) }) } } else null,
-                                    )
-                                    DropdownMenu(menuFor == server, { menuFor = null }, containerColor = MaterialTheme.colorScheme.surface) {
-                                        DropdownMenuItem(
-                                            text = { Text(s["removeServer"].orEmpty(), color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.label) },
-                                            onClick = { menuFor = null; remove(server) },
-                                            leadingIcon = { Icon(Symbols.Delete, contentDescription = null, tint = MaterialTheme.colorScheme.error) },
-                                        )
-                                    }
-                                }
+                    DesignSection(s["foundServers"].orEmpty()) {
+                        if (found.isEmpty()) {
+                            when {
+                                cantSearch -> DesignNote(s["findNotSupported"].orEmpty())
+                                searchedLong -> DesignNote(s["findNone"].orEmpty())
+                                else -> DesignNote(s["findSearching"].orEmpty(), busy = true)
                             }
-                            if (tv) card() else SwipeToRemove(s["remove"].orEmpty(), { remove(server) }) { card() }
+                        } else if (!cantSearch && !searchedLong) {
+                            // Still looking: more may come.
+                            DesignNote(s["findSearching"].orEmpty(), busy = true)
+                        }
+                        // Only where it is: a server says nothing about itself until it's added.
+                        foundOnly.forEachIndexed { i, server ->
+                            key(server.id) {
+                                ServerCard(
+                                    hostAndPort(server.url), s["foundOnNetwork"].orEmpty(), { connect(server.url) }, saved = false,
+                                    connecting = connecting == server.url, requestFocus = i == 0 && !moved && (!savedFirst || recent.isEmpty()), focusKey = "found-${server.id}",
+                                    takeFocus = focusOn == "found-${server.id}",
+                                )
+                            }
                         }
                     }
                 }
+                val savedBlock = @Composable {
+                    if (recent.isNotEmpty()) {
+                        DesignSection(s["recentServers"].orEmpty()) {
+                            recent.forEachIndexed { i, server ->
+                                key(server.url) {
+                                    val name = shownName(server)
+                                    // Where it's announcing itself now, if that's somewhere new. It still has to prove its key there.
+                                    val at = addressNow(server, found)
+                                    val removeLabel = fill(s["removeServerNamed"], "name" to name)
+                                    val card = @Composable {
+                                        Box {
+                                            ServerCard(
+                                                name, server.url, { connect(at) },
+                                                logo = LogoCache.file(context, server.url, server.brandLogo), lastUsed = server.url == last?.url,
+                                                connecting = connecting == at, requestFocus = i == 0 && !moved && (savedFirst || (foundOnly.isEmpty() && found.isNotEmpty())),
+                                                focusKey = "recent-${server.url}",
+                                                reached = reachedWords(s, server.lastSeen, now), stale = isStale(server.lastSeen, now, nav.app.store.recentSince),
+                                                takeFocus = focusOn == "recent-${server.url}",
+                                                onLongClick = { if (tv) asking = server else menuFor = server },
+                                                longClickLabel = if (tv) s["removeServer"] else fill(s["serverOptions"], "name" to name),
+                                                actions = listOf(CustomAccessibilityAction(removeLabel) { if (tv) asking = server else remove(server); true }),
+                                                trailing = if (editing) { { RemoveButton(removeLabel, { remove(server) }) } } else null,
+                                            )
+                                            DropdownMenu(menuFor == server, { menuFor = null }, containerColor = MaterialTheme.colorScheme.surface) {
+                                                DropdownMenuItem(
+                                                    text = { Text(s["removeServer"].orEmpty(), color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.label) },
+                                                    onClick = { menuFor = null; remove(server) },
+                                                    leadingIcon = { Icon(Symbols.Delete, contentDescription = null, tint = MaterialTheme.colorScheme.error) },
+                                                )
+                                            }
+                                        }
+                                    }
+                                    if (tv) card() else SwipeToRemove(s["remove"].orEmpty(), { remove(server) }) { card() }
+                                }
+                            }
+                            // A TV has Manage servers and the card's own long press for this.
+                            if (!tv) {
+                                DesignChips(Modifier.padding(top = LocalDesignSizes.current.gap * 0.5f)) {
+                                    DesignChip(s[if (editing) "editServersDone" else "editServers"].orEmpty(), { editing = !editing }, on = editing, focusKey = "edit-servers")
+                                }
+                            }
+                        }
+                    }
                 }
                 if (savedFirst) { savedBlock(); foundBlock() } else { foundBlock(); savedBlock() }
             }
-            WittyButton(
-                s["enterAddress"].orEmpty(), { showForm = true; problem = "" }, Modifier.fillMaxWidth().padding(top = metrics.u(8)),
-                kind = if (nothing) ButtonKind.Primary else ButtonKind.Secondary, icon = Symbols.Address, tall = true,
-                requestFocus = firstKey == "enter-address", takeFocus = focusOn == "enter-address", focusKey = "enter-address",
-            )
-            // A device that has never been at home with its server: it shows a code to type into the server.
-            if (nav.app.peers.available) {
-                WittyButton(s["joinAway"].orEmpty(), { nav.push(Route.JoinAway) }, Modifier.fillMaxWidth(), kind = ButtonKind.Quiet, icon = Symbols.Globe, focusKey = "join-away")
-            }
             // Where every remembered server can be removed: one, all, or those not reached for a while.
             if (recent.isNotEmpty()) {
-                WittyButton(
-                    s["manageServers"].orEmpty(), { nav.push(Route.You(YouNative.Servers)) }, Modifier.fillMaxWidth(),
-                    kind = ButtonKind.Quiet, icon = Symbols.Server, focusKey = "manage-servers",
-                )
+                DesignSection(s["thisDevice"].orEmpty()) {
+                    DesignRow(
+                        s["manageServers"].orEmpty(), onClick = { nav.push(Route.You(YouNative.Servers)) }, focusKey = "manage-servers",
+                        leading = { Icon(Symbols.Server, contentDescription = null, tint = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(metrics.u(if (tv) 32 else 22))) },
+                    )
+                    // The order of this list, as Manage servers has it: what this device has used first, or what's found.
+                    DesignSwitchRow(
+                        s["savedServersFirst"].orEmpty(), savedFirst, { savedFirst = it; nav.app.store.savedFirst = it },
+                        sub = s["savedServersFirstHint"].orEmpty(),
+                    )
+                }
             }
-            LegalNote(s["legalConnect"].orEmpty())
-        },
-    )
-    if (!tv) {
-        UndoRemoval(nav, s, Modifier.align(Alignment.BottomCenter).safeDrawingPadding().padding(metrics.u(16))) { recent = nav.app.store.recent }
-    }
+        }
+        if (!tv) {
+            UndoRemoval(nav, s, Modifier.align(Alignment.BottomCenter).safeDrawingPadding().padding(metrics.u(16))) { recent = nav.app.store.recent }
+        }
     }
     asking?.let { server ->
         ConfirmRemove(s, server, inUse = false, onYes = { asking = null; remove(server) }, onNo = { asking = null })
     }
 }
 
+// The app's own name, the eyebrow of the screens before a server is chosen: the words its lockup had.
+private const val APP_NAME = "WittyMediaClient"
+
 // Where a found server is: its host and port, which is all it's called until it's added.
 fun hostAndPort(url: String): String {
     val parsed = url.toHttpUrlOrNull() ?: return url
     val usual = (parsed.scheme == "http" && parsed.port == 80) || (parsed.scheme == "https" && parsed.port == 443)
     return if (usual) parsed.host else "${parsed.host}:${parsed.port}"
+}
+
+// A sign-in screen as a Design 2 page: with Back (the arrow on a phone, the system's and a remote's Back) where
+// there's somewhere to go back to, without it where there isn't.
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun SignInDesign(
+    onBack: (() -> Unit)?,
+    title: String,
+    eyebrow: String = "",
+    lead: String = "",
+    foot: String = "",
+    top: (@Composable () -> Unit)? = null,
+    actions: (@Composable FlowRowScope.() -> Unit)? = null,
+    content: @Composable ColumnScope.() -> Unit,
+) {
+    if (onBack != null) {
+        DesignScreen(title, onBack, eyebrow = eyebrow, lead = lead, foot = foot, actions = actions, top = top, content = content)
+    } else {
+        DesignPage(title, eyebrow = eyebrow, lead = lead, foot = foot, actions = actions, top = top, content = content)
+    }
+}
+
+// This server as itself at the top of the screens that sign in to it: its logo and its name, coloured as the
+// server colours it.
+@Composable
+private fun ServerLockup(nav: Nav) = Lockup(nav.brandName, nav.brandLogo)
+
+// A big code to read across a room or type elsewhere, in the page's panel, read aloud as its digits.
+@Composable
+private fun BigCode(code: String, shown: String = code) {
+    val ds = LocalDesignSizes.current
+    val metrics = LocalMetrics.current
+    Text(
+        shown, color = MaterialTheme.colorScheme.onSurface,
+        style = TextStyle(fontFamily = FontFamily.Monospace, fontWeight = FontWeight.Bold, fontSize = ds.title * 1.15f, letterSpacing = 0.2.em),
+        modifier = Modifier
+            .clip(metrics.corner(10))
+            .background(MaterialTheme.colorScheme.surface)
+            .padding(horizontal = ds.gap * 2.4f, vertical = ds.gap * 1.2f)
+            .semantics { contentDescription = code.toList().joinToString(" ") },
+    )
 }
 
 // 2. Enter your server's address.
@@ -412,22 +458,18 @@ private fun AddressScreen(
 ) {
     val field = remember { FocusRequester() }
     LaunchedEffect(Unit) { runCatching { field.requestFocus() } }
-    SignInLayout(
-        onBack,
-        words = {
-            Lockup("", null, app = true)
-            SignInHeading(s["addressTitle"].orEmpty(), detail = s["addressHint"].orEmpty())
-        },
-        actions = {
+    DesignScreen(
+        s["addressTitle"].orEmpty(), onBack, eyebrow = APP_NAME, lead = s["addressHint"].orEmpty(), foot = s["legalConnect"].orEmpty(), tag = "address",
+        actions = { WittyButton(s["connect"].orEmpty(), onSubmit, kind = ButtonKind.Primary, busy = busy, tall = true) },
+    ) {
+        DesignSection("") {
             WittyField(
                 address, onChange, s["addressLabel"].orEmpty(), kind = FieldKind.Address, icon = Symbols.Address,
                 imeAction = ImeAction.Go, onAction = onSubmit, focusRequester = field,
             )
-            Problem(problem, Modifier.fillMaxWidth())
-            WittyButton(s["connect"].orEmpty(), onSubmit, Modifier.fillMaxWidth(), kind = ButtonKind.Primary, busy = busy, tall = true)
-            LegalNote(s["legalConnect"].orEmpty())
-        },
-    )
+            DesignNote(problem, error = true)
+        }
+    }
 }
 
 // 3. Another machine is answering for a server we know. Only the person can decide, so the safe choice
@@ -435,26 +477,14 @@ private fun AddressScreen(
 @Composable
 fun MismatchScreen(nav: Nav, s: Map<String, String>, server: SavedServer) {
     val scope = rememberCoroutineScope()
-    val metrics = LocalMetrics.current
     var problem by remember { mutableStateOf("") }
     var busy by remember { mutableStateOf(false) }
     // The server this device remembers here, which this one isn't: after a reinstall, that's the one to remove.
     val oldOne = remember(server) { oldEntryFor(server, nav.app.store.recent) }
-    SignInLayout(
-        nav::pop,
-        words = {
-            WarningBadge(metrics.u(64), if (metrics.tv) Modifier else Modifier.align(Alignment.CenterHorizontally))
-            SignInHeading(s["identityTitle"].orEmpty(), detail = s["identityHint"].orEmpty())
-            if (oldOne != null) Note(s["reinstalledHint"].orEmpty())
-            PanelCard {
-                Text(server.url, color = MaterialTheme.colorScheme.onSurface, style = MaterialTheme.typography.label)
-                Text(s["fingerprintLabel"].orEmpty(), color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.caption)
-                Text(server.fingerprint, color = MaterialTheme.colorScheme.onSurface, style = MaterialTheme.typography.secondary.copy(fontFamily = FontFamily.Monospace))
-            }
-        },
+    DesignScreen(
+        s["identityTitle"].orEmpty(), nav::pop, eyebrow = hostAndPort(server.url), lead = s["identityHint"].orEmpty(), tag = "mismatch",
         actions = {
-            Problem(problem, Modifier.fillMaxWidth())
-            WittyButton(s["back"].orEmpty(), nav::pop, Modifier.fillMaxWidth(), kind = ButtonKind.Primary, tall = true, requestFocus = true)
+            WittyButton(s["back"].orEmpty(), nav::pop, kind = ButtonKind.Primary, tall = true, requestFocus = true)
             if (oldOne != null) {
                 WittyButton(
                     s["removeOldOne"].orEmpty(),
@@ -464,7 +494,7 @@ fun MismatchScreen(nav: Nav, s: Map<String, String>, server: SavedServer) {
                         nav.pickerNotice = s["removedOldOne"].orEmpty()
                         nav.reset(Route.Connect())
                     },
-                    Modifier.fillMaxWidth(), tall = true, focusKey = "remove-old-one",
+                    kind = ButtonKind.Secondary, tall = true, focusKey = "remove-old-one",
                 )
             }
             WittyButton(
@@ -476,11 +506,21 @@ fun MismatchScreen(nav: Nav, s: Map<String, String>, server: SavedServer) {
                         busy = false
                     }
                 },
-                Modifier.fillMaxWidth(), kind = ButtonKind.Destructive, busy = busy, tall = true,
+                kind = ButtonKind.Destructive, busy = busy, tall = true,
             )
         },
-    )
+    ) {
+        DesignSection(s["fingerprintLabel"].orEmpty()) {
+            DesignRow(server.url, sub = server.fingerprint)
+        }
+        if (oldOne != null) DesignNote(s["reinstalledHint"].orEmpty(), Modifier.padding(top = LocalDesignSizes.current.gap), tone = true)
+        DesignNote(problem, Modifier.padding(top = LocalDesignSizes.current.gap), error = true)
+    }
 }
+
+// The number pad no wider than reads as a pad: on a TV it would otherwise fill the page.
+@Composable
+private fun padWidth(): Modifier = Modifier.widthIn(max = LocalMetrics.current.u(if (LocalMetrics.current.tv) 600 else 400)).fillMaxWidth()
 
 // 7. A new server is opened with a six-digit code from someone already signed in. See
 // docs/CLIENT-API.md, "The code is typed on the device". The pad is on screen, as a remote has no
@@ -488,7 +528,6 @@ fun MismatchScreen(nav: Nav, s: Map<String, String>, server: SavedServer) {
 @Composable
 fun CodeScreen(nav: Nav, s: Map<String, String>, server: SavedServer) {
     val scope = rememberCoroutineScope()
-    val metrics = LocalMetrics.current
     var entry by remember { mutableStateOf(CodeEntry()) }
     var problem by remember { mutableStateOf("") }
     var wrong by remember { mutableIntStateOf(0) }
@@ -511,80 +550,26 @@ fun CodeScreen(nav: Nav, s: Map<String, String>, server: SavedServer) {
     }
     fun erase() { entry = entry.erased() }
 
+    // Several servers can look alike in the list: the eyebrow says which one the code goes to, and the foot its
+    // fingerprint.
+    val fingerprint = if (server.fingerprint.isEmpty()) "" else "${s["fingerprintLabel"]}: ${server.fingerprint}"
     Box(Modifier.digitKeys(::press, ::erase)) {
-        SignInLayout(
-            nav::pop,
-            words = {
-                SignInHeading(s["codeTitle"].orEmpty(), detail = s["codeHint"].orEmpty())
-                // Several servers can look alike in the list: this says which one the code goes to.
-                ServerPill(server.name.ifEmpty { "WittyMediaServer" }, nav.brandLogo, if (metrics.tv) Modifier else Modifier.align(Alignment.CenterHorizontally))
-                CodeBoxes(entry.digits, entry.busy, wrong, if (metrics.tv) Modifier else Modifier.align(Alignment.CenterHorizontally))
-                // Only there while there's something to say, as on Apple TV, so the words stay centred against the pad.
-                if (entry.busy) {
-                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(metrics.u(8))) {
-                        Spinner(MaterialTheme.colorScheme.onSurfaceVariant, metrics.u(if (metrics.tv) 30 else 16))
-                        Text(s["connecting"].orEmpty(), color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.secondary)
-                    }
-                } else {
-                    Problem(problem, Modifier.fillMaxWidth())
-                }
-            },
+        DesignScreen(
+            s["codeTitle"].orEmpty(), nav::pop, eyebrow = server.name.ifEmpty { "WittyMediaServer" }, lead = s["codeHint"].orEmpty(), foot = fingerprint, tag = "code",
             actions = {
-                NumberPad(::press, ::erase, Modifier.fillMaxWidth(), firstFocus = true)
-                QuietLinks(stacked = true) {
-                    WittyButton(s["usePassword"].orEmpty(), { nav.signInTo(server, SignInWay.Password) }, kind = ButtonKind.Quiet)
-                    WittyButton(s["showCodeInstead"].orEmpty(), { nav.signInTo(server, SignInWay.ShownCode) }, kind = ButtonKind.Quiet)
-                }
-                Fingerprint(s, server.fingerprint)
+                WittyButton(s["usePassword"].orEmpty(), { nav.signInTo(server, SignInWay.Password) }, kind = ButtonKind.Secondary)
+                WittyButton(s["showCodeInstead"].orEmpty(), { nav.signInTo(server, SignInWay.ShownCode) }, kind = ButtonKind.Secondary)
             },
-        )
-    }
-}
-
-@Composable
-private fun Fingerprint(s: Map<String, String>, fingerprint: String) {
-    if (fingerprint.isEmpty()) return
-    val caption = MaterialTheme.typography.caption.copy(fontWeight = FontWeight.Normal)
-    Text(
-        buildAnnotatedString {
-            append("${s["fingerprintLabel"]}: ")
-            withStyle(SpanStyle(fontFamily = FontFamily.Monospace)) { append(fingerprint) }
-        },
-        color = LocalExtraColours.current.hint, style = caption,
-        textAlign = if (LocalMetrics.current.tv) TextAlign.Start else TextAlign.Center, modifier = Modifier.fillMaxWidth(),
-    )
-}
-
-// Quiet buttons side by side where they fit and wrapping where they don't, centred in a column, to the left on
-// a TV. `stacked`: further apart, one under the other when they don't both fit, as the code screen's are.
-@OptIn(ExperimentalLayoutApi::class)
-@Composable
-private fun QuietLinks(stacked: Boolean = false, content: @Composable () -> Unit) {
-    val metrics = LocalMetrics.current
-    FlowRow(
-        Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.spacedBy(metrics.u(if (stacked) 24 else 8), if (metrics.tv) Alignment.Start else Alignment.CenterHorizontally),
-        verticalArrangement = Arrangement.spacedBy(metrics.u(if (stacked) 0 else 8)),
-    ) { content() }
-}
-
-// This server as itself at the foot of the screens that start signing in: its logo and name (larger on a TV,
-// to read from the sofa), with Change server beside them.
-@Composable
-private fun ServerFooter(nav: Nav, s: Map<String, String>, centred: Boolean = !LocalMetrics.current.tv) {
-    val metrics = LocalMetrics.current
-    val name = nav.brandName.ifEmpty { nav.server?.name.orEmpty() }.ifEmpty { "WittyMediaServer" }
-    Row(
-        Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.spacedBy(metrics.u(4), if (centred) Alignment.CenterHorizontally else Alignment.Start),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        ServerMark(metrics.u(if (metrics.tv) 32 else 20), nav.brandLogo, Modifier.padding(end = metrics.u(4)))
-        Text(
-            name, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1,
-            style = if (metrics.tv) MaterialTheme.typography.label.copy(fontWeight = FontWeight.Normal) else MaterialTheme.typography.secondary,
-        )
-        WittyButton(s["changeServer"].orEmpty(), nav::changeServer, kind = ButtonKind.Quiet, focusKey = "change-server")
+        ) {
+            DesignSection("") {
+                CodeBoxes(entry.digits, entry.busy, wrong)
+                // Only there while there's something to say, as on Apple TV.
+                if (entry.busy) DesignNote(s["connecting"].orEmpty(), busy = true) else DesignNote(problem, error = true)
+            }
+            DesignSection("") {
+                NumberPad(::press, ::erase, padWidth(), firstFocus = true)
+            }
+        }
     }
 }
 
@@ -592,7 +577,6 @@ private fun ServerFooter(nav: Nav, s: Map<String, String>, centred: Boolean = !L
 // has to type a password with a remote. See docs/CLIENT-API.md.
 @Composable
 private fun PairScreen(nav: Nav, s: Map<String, String>, onBack: () -> Unit, onUsePassword: () -> Unit) {
-    val metrics = LocalMetrics.current
     var round by remember { mutableIntStateOf(0) }
     var code by remember { mutableStateOf("") }
     var approveAt by remember { mutableStateOf("") }
@@ -653,54 +637,39 @@ private fun PairScreen(nav: Nav, s: Map<String, String>, onBack: () -> Unit, onU
     }
 
     val ended = code.isEmpty() && problem.isNotEmpty()
-    val spacing = with(LocalDensity.current) { metrics.u(if (metrics.tv) 16 else 8).toSp() }
-    val codeSize = with(LocalDensity.current) { metrics.u(if (metrics.tv) 72 else 40).toSp() }
-    SignInLayout(
-        onBack,
-        words = {
-            Lockup(nav.brandName, nav.brandLogo)
-            SignInHeading(s["pairTitle"].orEmpty(), detail = if (code.isNotEmpty()) s["pairHint"].orEmpty() else "")
-            val place = if (metrics.tv) Modifier else Modifier.align(Alignment.CenterHorizontally)
-            if (code.isNotEmpty()) {
-                SelectionContainer(place) {
-                    Text(approveAt, color = LocalExtraColours.current.accentText, style = MaterialTheme.typography.label, textAlign = if (metrics.tv) TextAlign.Start else TextAlign.Center)
-                }
-                Text(
-                    code, color = MaterialTheme.colorScheme.onSurface,
-                    style = TextStyle(fontFamily = FontFamily.Monospace, fontWeight = FontWeight.Bold, fontSize = codeSize, letterSpacing = spacing),
-                    modifier = place
-                        .clip(metrics.corner(14))
-                        .background(MaterialTheme.colorScheme.surface)
-                        .padding(horizontal = metrics.u(24), vertical = metrics.u(12))
-                        .semantics { contentDescription = code.toList().joinToString(" ") },
-                )
-                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(metrics.u(8)), modifier = place) {
-                    Spinner(MaterialTheme.colorScheme.onSurfaceVariant, metrics.u(if (metrics.tv) 30 else 16))
-                    Text(if (waiting) s["errLost"].orEmpty() else s["pairWaiting"].orEmpty(), color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.secondary)
-                }
-            } else if (!ended) {
-                Box(place.heightIn(min = metrics.u(80)), contentAlignment = Alignment.Center) {
-                    Spinner(MaterialTheme.colorScheme.onSurfaceVariant, metrics.u(if (metrics.tv) 40 else 24))
-                }
-            }
-            Problem(problem, Modifier.fillMaxWidth())
-        },
+    DesignScreen(
+        s["pairTitle"].orEmpty(), onBack, lead = if (code.isNotEmpty()) s["pairHint"].orEmpty() else "", tag = "pair",
+        top = { ServerLockup(nav) },
         actions = {
-            if (code.isNotEmpty() && scan.isNotEmpty()) QrCard(scan, s["pairScan"].orEmpty(), if (metrics.tv) Modifier else Modifier.align(Alignment.CenterHorizontally))
             if (ended) {
-                if (limited) WittyButton(s["usePassword"].orEmpty(), onUsePassword, Modifier.fillMaxWidth(), kind = ButtonKind.Primary, tall = true, takeFocus = true, focusKey = "pair-password")
-                else WittyButton(s["pairNew"].orEmpty(), { round++ }, Modifier.fillMaxWidth(), kind = ButtonKind.Primary, tall = true, takeFocus = true, focusKey = "pair-new")
+                if (limited) WittyButton(s["usePassword"].orEmpty(), onUsePassword, kind = ButtonKind.Primary, tall = true, takeFocus = true, focusKey = "pair-password")
+                else WittyButton(s["pairNew"].orEmpty(), { round++ }, kind = ButtonKind.Primary, tall = true, takeFocus = true, focusKey = "pair-new")
             }
-            QuietLinks {
-                val server = nav.server
-                if (server != null && server.publicKey.isNotEmpty()) {
-                    WittyButton(s["codeTitle"].orEmpty(), { nav.push(Route.Code(server)) }, kind = ButtonKind.Quiet, focusKey = "typed-code")
-                }
-                if (!limited) WittyButton(s["usePassword"].orEmpty(), onUsePassword, kind = ButtonKind.Quiet, requestFocus = code.isNotEmpty(), focusKey = "use-password")
-                WittyButton(s["changeServer"].orEmpty(), nav::changeServer, kind = ButtonKind.Quiet, focusKey = "change-server")
+            val server = nav.server
+            if (server != null && server.publicKey.isNotEmpty()) {
+                WittyButton(s["codeTitle"].orEmpty(), { nav.push(Route.Code(server)) }, kind = ButtonKind.Secondary, focusKey = "typed-code")
             }
+            if (!limited) WittyButton(s["usePassword"].orEmpty(), onUsePassword, kind = ButtonKind.Secondary, requestFocus = code.isNotEmpty(), focusKey = "use-password")
+            WittyButton(s["changeServer"].orEmpty(), nav::changeServer, kind = ButtonKind.Secondary, focusKey = "change-server")
         },
-    )
+    ) {
+        val ds = LocalDesignSizes.current
+        DesignSection("") {
+            if (code.isNotEmpty()) {
+                SelectionContainer {
+                    Text(approveAt, color = LocalExtraColours.current.accentText, fontSize = ds.body, fontWeight = FontWeight.Bold)
+                }
+                BigCode(code)
+                DesignNote(if (waiting) s["errLost"].orEmpty() else s["pairWaiting"].orEmpty(), busy = true)
+            } else if (!ended) {
+                Spinner(MaterialTheme.colorScheme.onSurfaceVariant, LocalMetrics.current.u(if (LocalMetrics.current.tv) 40 else 24))
+            }
+            DesignNote(problem, error = true)
+        }
+        if (code.isNotEmpty() && scan.isNotEmpty()) {
+            DesignSection("") { QrCard(scan, s["pairScan"].orEmpty()) }
+        }
+    }
 }
 
 private enum class Step { Usual, Form, Password, Pair }
@@ -858,22 +827,20 @@ fun SignInScreen(nav: Nav, s: Map<String, String>, way: SignInWay) {
     }
 }
 
-// The quiet ways to sign in without a password here.
+// The quiet ways to sign in without a password here, as the page's other actions, then another server.
 @Composable
 private fun CodeLinks(nav: Nav, s: Map<String, String>, onUseCode: () -> Unit, otherAccount: (() -> Unit)? = null) {
-    QuietLinks {
-        if (otherAccount != null) WittyButton(s["otherAccount"].orEmpty(), otherAccount, kind = ButtonKind.Quiet, focusKey = "other-account")
-        WittyButton(s["useCode"].orEmpty(), onUseCode, kind = ButtonKind.Quiet, focusKey = "use-code")
-        // Only a server that has proved its identity can be sent a code.
-        val server = nav.server
-        if (server != null && server.publicKey.isNotEmpty()) {
-            WittyButton(s["codeTitle"].orEmpty(), { nav.push(Route.Code(server)) }, kind = ButtonKind.Quiet, focusKey = "typed-code")
-        }
+    if (otherAccount != null) WittyButton(s["otherAccount"].orEmpty(), otherAccount, kind = ButtonKind.Secondary, focusKey = "other-account")
+    WittyButton(s["useCode"].orEmpty(), onUseCode, kind = ButtonKind.Secondary, focusKey = "use-code")
+    // Only a server that has proved its identity can be sent a code.
+    val server = nav.server
+    if (server != null && server.publicKey.isNotEmpty()) {
+        WittyButton(s["codeTitle"].orEmpty(), { nav.push(Route.Code(server)) }, kind = ButtonKind.Secondary, focusKey = "typed-code")
     }
+    WittyButton(s["changeServer"].orEmpty(), nav::changeServer, kind = ButtonKind.Quiet, focusKey = "change-server")
 }
 
-// 4. Who's watching? Profiles as faces, two across on a phone and as many as fit on a tablet. A TV has
-// them in one centred row.
+// 4. Who's watching? Profiles as faces, as many across as fit, under this server's lockup.
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun WhoStep(
@@ -894,55 +861,24 @@ private fun WhoStep(
             else -> 104
         },
     )
-    val tiles: @Composable () -> Unit = {
-        profiles.forEachIndexed { i, p ->
-            key(p.id) { ProfileTile(p, size, { if (!busy) onPick(p) }, requestFocus = i == 0, focusKey = "profile-${p.id}") }
-        }
-    }
-    // Wrapping rather than scrolling, so nothing clips a lifted, ringed avatar.
-    val grid: @Composable () -> Unit = {
-        FlowRow(
-            Modifier.fillMaxWidth().remoteRow(),
-            horizontalArrangement = Arrangement.spacedBy(metrics.u(if (metrics.tv) 48 else 24), Alignment.CenterHorizontally),
-            verticalArrangement = Arrangement.spacedBy(metrics.u(28)),
-            maxItemsInEachRow = if (metrics.tv || metrics.tablet) Int.MAX_VALUE else 2,
-        ) { tiles() }
-    }
-    if (metrics.tv) {
-        // Everything centred, as on Apple TV: the lockup, the title, the faces, the other ways in in one row,
-        // then this server.
-        TvBackdrop(contentAlignment = Alignment.Center) {
-            Column(
-                Modifier.padding(horizontal = metrics.gutter + metrics.tvSafeSides),
-                horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.spacedBy(metrics.u(40)),
+    DesignPage(
+        s["whoTitle"].orEmpty(), tag = "who", top = { ServerLockup(nav) },
+        actions = { CodeLinks(nav, s, onUseCode, onOtherAccount) },
+    ) {
+        DesignSection("") {
+            // Wrapping rather than scrolling, so nothing clips a lifted, ringed avatar.
+            FlowRow(
+                Modifier.fillMaxWidth().remoteRow().padding(vertical = metrics.u(8)),
+                horizontalArrangement = Arrangement.spacedBy(metrics.u(if (metrics.tv) 48 else 24)),
+                verticalArrangement = Arrangement.spacedBy(metrics.u(28)),
+                maxItemsInEachRow = if (metrics.tv || metrics.tablet) Int.MAX_VALUE else 2,
             ) {
-                Lockup(nav.brandName, nav.brandLogo)
-                SignInHeading(s["whoTitle"].orEmpty(), display = true, centred = true)
-                if (problem.isNotEmpty()) Problem(problem, centred = true)
-                grid()
-                Row(Modifier.remoteRow(), horizontalArrangement = Arrangement.spacedBy(metrics.u(24))) {
-                    WittyButton(s["otherAccount"].orEmpty(), onOtherAccount, kind = ButtonKind.Quiet, focusKey = "other-account")
-                    WittyButton(s["useCode"].orEmpty(), onUseCode, kind = ButtonKind.Quiet, focusKey = "use-code")
-                    val server = nav.server
-                    if (server != null && server.publicKey.isNotEmpty()) {
-                        WittyButton(s["codeTitle"].orEmpty(), { nav.push(Route.Code(server)) }, kind = ButtonKind.Quiet, focusKey = "typed-code")
-                    }
+                profiles.forEachIndexed { i, p ->
+                    key(p.id) { ProfileTile(p, size, { if (!busy) onPick(p) }, requestFocus = i == 0, focusKey = "profile-${p.id}") }
                 }
-                ServerFooter(nav, s, centred = true)
             }
+            DesignNote(problem, error = true)
         }
-        return
-    }
-    SignInPage(wide = metrics.tablet) {
-        Lockup(nav.brandName, nav.brandLogo)
-        SignInHeading(s["whoTitle"].orEmpty(), display = true)
-        Gap(8)
-        grid()
-        Gap(8)
-        Problem(problem, Modifier.fillMaxWidth())
-        CodeLinks(nav, s, onUseCode, onOtherAccount)
-        ServerFooter(nav, s)
     }
 }
 
@@ -968,23 +904,24 @@ private fun PasswordStep(
     val firstLook = LocalFocusMemory.current.last == null
     LaunchedEffect(who.id) { if (firstLook) runCatching { field.requestFocus() } }
     LaunchedEffect(wrongPasswords) { if (wrongPasswords > 0) runCatching { field.requestFocus() } }
-    // One centred column on every device, TVs included: the face with its names centred under it, then the way in.
-    SignInLayout(
-        onBack, centred = true,
-        words = {
-            FaceWithNames(who, metrics.u(if (metrics.tv) 200 else 120), Modifier.align(Alignment.CenterHorizontally))
-            SignInHeading("", detail = s["passwordHint"].orEmpty(), centred = true)
-        },
+    val shown = avatarName(who.displayName, who.name)
+    // The face, then its name as the title, and the username over it where the name isn't it.
+    DesignScreen(
+        shown, onBack, eyebrow = if (showsUsername(who.displayName, who.name)) "@${who.name}" else "", lead = s["passwordHint"].orEmpty(), tag = "password",
+        top = { ProfileFace(shown, who.avatar, metrics.u(if (metrics.tv) 160 else 96)) },
         actions = {
+            WittyButton(s["signIn"].orEmpty(), onSubmit, kind = ButtonKind.Primary, busy = busy, tall = true)
+            ForgotPassword(nav, s)
+        },
+    ) {
+        DesignSection("") {
             WittyField(
                 password, onChange, s["passwordLabel"].orEmpty(), kind = FieldKind.Password, icon = Symbols.Password,
                 imeAction = ImeAction.Go, onAction = onSubmit, focusRequester = field, isError = refused, shake = wrongPasswords,
             )
-            Problem(problem, Modifier.fillMaxWidth())
-            WittyButton(s["signIn"].orEmpty(), onSubmit, Modifier.fillMaxWidth(), kind = ButtonKind.Primary, busy = busy, tall = true)
-            ForgotPassword(nav, s, Modifier.align(Alignment.CenterHorizontally))
-        },
-    )
+            DesignNote(problem, error = true)
+        }
+    }
 }
 
 // docs/APP-DESIGN.md, Avatar 5: wherever a face shows with its names, they're centred under it.
@@ -1033,13 +970,14 @@ private fun FormStep(
     val second = remember { FocusRequester() }
     LaunchedEffect(Unit) { if (!metrics.tv) runCatching { first.requestFocus() } }
     LaunchedEffect(wrongPasswords) { if (wrongPasswords > 0) runCatching { second.requestFocus() } }
-    SignInLayout(
-        onBack,
-        words = {
-            Lockup(nav.brandName, nav.brandLogo)
-            SignInHeading(s["signInTitle"].orEmpty())
-        },
+    SignInDesign(
+        onBack, s["signInTitle"].orEmpty(), top = { ServerLockup(nav) },
         actions = {
+            WittyButton(s["signIn"].orEmpty(), onSubmit, kind = ButtonKind.Primary, busy = busy, tall = true, requestFocus = metrics.tv, focusKey = "sign-in")
+            CodeLinks(nav, s, onUseCode)
+        },
+    ) {
+        DesignSection("") {
             WittyField(
                 name, onName, s["usernameLabel"].orEmpty(), kind = FieldKind.Username, icon = Symbols.Person,
                 imeAction = ImeAction.Next, onAction = { runCatching { second.requestFocus() } }, focusRequester = first,
@@ -1049,12 +987,9 @@ private fun FormStep(
                 password, onPassword, s["passwordLabel"].orEmpty(), kind = FieldKind.Password, icon = Symbols.Password,
                 imeAction = ImeAction.Go, onAction = onSubmit, focusRequester = second, isError = refused, shake = wrongPasswords,
             )
-            Problem(problem, Modifier.fillMaxWidth())
-            WittyButton(s["signIn"].orEmpty(), onSubmit, Modifier.fillMaxWidth(), kind = ButtonKind.Primary, busy = busy, tall = true, requestFocus = metrics.tv, focusKey = "sign-in")
-            CodeLinks(nav, s, onUseCode)
-            ServerFooter(nav, s)
-        },
-    )
+            DesignNote(problem, error = true)
+        }
+    }
 }
 
 // 5, second step: the six digits from an authenticator app. A phone types them with its own number
@@ -1084,25 +1019,30 @@ private fun TwoFactorStep(
     }
     val press = { digit: Char -> if (!checking && !useRecovery) onCode(code + digit) }
     val erase = { if (!checking && !useRecovery) onCode(code.dropLast(1)) }
-    val switch: @Composable (Modifier) -> Unit = { modifier ->
-        WittyButton(
-            s[if (useRecovery) "useAuthenticatorCode" else "useRecoveryCode"].orEmpty(), onSwitch, modifier,
-            kind = ButtonKind.Quiet, focusKey = "recovery-switch",
-        )
-    }
     Box(if (useRecovery) Modifier else Modifier.digitKeys(press, erase)) {
-        SignInLayout(
-            onBack,
-            words = {
-                val centre = if (metrics.tv) Modifier else Modifier.align(Alignment.CenterHorizontally)
-                if (who != null) ProfileFace(avatarName(who.displayName, who.name), who.avatar, metrics.u(if (metrics.tv) 200 else 120), centre)
-                else Lockup(nav.brandName, nav.brandLogo, centre)
+        DesignScreen(
+            s[if (useRecovery) "recoveryTitle" else "twoFactorTitle"].orEmpty(), onBack,
+            lead = s[if (useRecovery) "recoveryHint" else "twoFactorHint"].orEmpty(), tag = "two-factor",
+            top = {
+                if (who != null) ProfileFace(avatarName(who.displayName, who.name), who.avatar, metrics.u(if (metrics.tv) 160 else 96))
+                else ServerLockup(nav)
+            },
+            actions = {
+                if (useRecovery) WittyButton(s["signIn"].orEmpty(), onSubmitRecovery, kind = ButtonKind.Primary, busy = checking, tall = true)
+                WittyButton(
+                    s[if (useRecovery) "useAuthenticatorCode" else "useRecoveryCode"].orEmpty(), onSwitch,
+                    kind = ButtonKind.Secondary, focusKey = "recovery-switch",
+                )
+            },
+        ) {
+            DesignSection("") {
                 if (useRecovery) {
-                    SignInHeading(s["recoveryTitle"].orEmpty(), detail = s["recoveryHint"].orEmpty())
+                    WittyField(
+                        recovery, onRecovery, s["recoveryLabel"].orEmpty(), icon = Symbols.Key, imeAction = ImeAction.Go,
+                        onAction = onSubmitRecovery, focusRequester = recoveryField, isError = problem.isNotEmpty(), shake = wrong, maxLength = RECOVERY_MOST,
+                    )
                 } else {
-                    SignInHeading(s["twoFactorTitle"].orEmpty())
-                    Note(s["twoFactorHint"].orEmpty())
-                    Box(centre) {
+                    Box {
                         CodeBoxes(code, checking, wrong)
                         if (!metrics.tv) {
                             // What the keyboard types into, under the boxes: they show it.
@@ -1118,66 +1058,49 @@ private fun TwoFactorStep(
                             )
                         }
                     }
-                    Problem(problem, Modifier.fillMaxWidth())
                 }
-            },
-            actions = {
-                if (useRecovery) {
-                    WittyField(
-                        recovery, onRecovery, s["recoveryLabel"].orEmpty(), icon = Symbols.Key, imeAction = ImeAction.Go,
-                        onAction = onSubmitRecovery, focusRequester = recoveryField, isError = problem.isNotEmpty(), shake = wrong, maxLength = RECOVERY_MOST,
-                    )
-                    Problem(problem, Modifier.fillMaxWidth())
-                    WittyButton(s["signIn"].orEmpty(), onSubmitRecovery, Modifier.fillMaxWidth(), kind = ButtonKind.Primary, busy = checking, tall = true)
-                } else if (metrics.tv) {
-                    NumberPad(press, erase, Modifier.fillMaxWidth(), firstFocus = true)
-                }
-                switch(if (metrics.tv) Modifier else Modifier.align(Alignment.CenterHorizontally))
-            },
-        )
+                DesignNote(problem, error = true)
+            }
+            if (!useRecovery && metrics.tv) {
+                DesignSection("") { NumberPad(press, erase, padWidth(), firstFocus = true) }
+            }
+        }
     }
 }
 
 // The server takes at most 32 characters of a code.
 private const val RECOVERY_MOST = 32
 
-// What a TV doesn't open itself, such as the help on a forgotten password: a QR card for a phone, with
+// What a TV doesn't open itself, such as the help on a forgotten password: a QR code for a phone, with
 // the address under it, as Apple TV has.
 @Composable
 fun OnPhoneScreen(nav: Nav, s: Map<String, String>, title: String, path: String) {
-    val metrics = LocalMetrics.current
     val address = remember(path) { runCatching { nav.app.api.mediaUrl(path) }.getOrDefault("") }
-    SignInLayout(
-        nav::pop,
-        words = {
-            SignInHeading(title, detail = s["openOnPhone"].orEmpty())
-        },
-        actions = {
-            if (address.isNotEmpty()) QrCard(address, address, if (metrics.tv) Modifier else Modifier.align(Alignment.CenterHorizontally))
-            WittyButton(s["back"].orEmpty(), nav::pop, Modifier.fillMaxWidth(), kind = ButtonKind.Primary, tall = true, takeFocus = true)
-        },
-    )
+    DesignScreen(
+        title, nav::pop, lead = s["openOnPhone"].orEmpty(), tag = "on-phone",
+        actions = { WittyButton(s["back"].orEmpty(), nav::pop, kind = ButtonKind.Primary, tall = true, takeFocus = true) },
+    ) {
+        if (address.isNotEmpty()) DesignSection("") { QrCard(address, address) }
+    }
 }
 
 // "This server isn't set up yet": first-time setup happens in a web browser only, and the app doesn't connect (or try to
 // sign in) until it is done. The address to finish it at, with a QR code of it, then Check again or another server.
 @Composable
 fun SetupRequiredScreen(s: Map<String, String>, address: String, retry: () -> Unit, back: () -> Unit) {
-    val metrics = LocalMetrics.current
-    androidx.activity.compose.BackHandler(onBack = back)
-    SignInLayout(
-        onBack = back,
-        words = {
-            SignInHeading(s["setupNeededTitle"].orEmpty(), detail = s["setupNeededDetail"].orEmpty())
-            QrCard(address, s["pairScan"].orEmpty())
-            Text(
-                address, color = LocalExtraColours.current.accentText, style = MaterialTheme.typography.label,
-                modifier = Modifier.semantics { contentDescription = "Finish setup in a web browser at $address" },
-            )
-        },
+    DesignScreen(
+        s["setupNeededTitle"].orEmpty(), back, eyebrow = hostAndPort(address), lead = s["setupNeededDetail"].orEmpty(), tag = "setup-needed",
         actions = {
             WittyButton(s["setupNeededRetry"].orEmpty(), retry, kind = ButtonKind.Primary, tall = true, requestFocus = true, focusKey = "setup-retry")
             WittyButton(s["back"].orEmpty(), back, kind = ButtonKind.Secondary, tall = true, focusKey = "setup-back")
         },
-    )
+    ) {
+        DesignSection("") {
+            QrCard(address, s["pairScan"].orEmpty())
+            Text(
+                address, color = LocalExtraColours.current.accentText, fontSize = LocalDesignSizes.current.body, fontWeight = FontWeight.Bold,
+                modifier = Modifier.semantics { contentDescription = "Finish setup in a web browser at $address" },
+            )
+        }
+    }
 }
