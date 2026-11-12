@@ -645,11 +645,11 @@ fun GuideScreen(nav: Nav) {
         }
     }
 
-    val previewName = run {
-        val c = current
-        if (c != null && c.key == previewWanted) "${c.number} ${c.name}"
-        else (store.lineup.firstOrNull { it.key == previewWanted } ?: TvChannels.list.firstOrNull { it.key == previewWanted })?.let { "${it.number} ${it.name}" } ?: ""
+    // Looked up when the preview's channel or the lineup changes, not on every press: a lineup can be ten thousand long.
+    val previewFound = remember(previewWanted, store.lineup) {
+        (store.lineup.firstOrNull { it.key == previewWanted } ?: TvChannels.list.firstOrNull { it.key == previewWanted })?.let { "${it.number} ${it.name}" } ?: ""
     }
+    val previewName = current?.takeIf { it.key == previewWanted }?.let { "${it.number} ${it.name}" } ?: previewFound
 
     CompositionLocalProvider(LocalTvApi provides api) {
         BoxWithConstraints(Modifier.fillMaxSize().background(dress.paint.bg)) {
@@ -706,9 +706,9 @@ fun GuideScreen(nav: Nav) {
                     )
                     GuideBar(nav, dress, store, from, now, today, onShift = { shift(it) }, onNow = ::goNow, onJump = { goAt(it) },
                         onDay = { dayOpen = true }, onSearch = { searchOpen = true }, onLook = { lookOpen = true },
-                        onSets = { setPanel = SetPanel.Picker }, onFind = { findOpen = true })
-                    if (store.hasSets || store.paged || store.search.isNotEmpty()) {
-                        GuidePager(dress, store, onCycle = ::cycleSet, onPage = { page(it) }, onClear = { narrow("") })
+                        onSets = { setPanel = SetPanel.Picker }, onFind = { findOpen = true }, onCycle = ::cycleSet)
+                    if (store.paged || store.search.isNotEmpty()) {
+                        GuidePager(dress, store, onPage = { page(it) }, onClear = { narrow("") })
                     }
                     if (store.error.isNotEmpty()) {
                         Text(
@@ -816,13 +816,16 @@ private fun GuideBar(
     onLook: () -> Unit,
     onSets: () -> Unit,
     onFind: () -> Unit,
+    onCycle: (Int) -> Unit = {},
 ) {
     val p = dress.paint
     val shape = dress.shape
     val filter = store.filter
     val all = filter.isAll
-    val hasBoth = store.lineup.any { it.kind == "tuner" } && store.lineup.any { it.kind == "library" }
-    val anyFavourite = store.lineup.any { it.favourite }
+    // What the bar asks of the lineup, worked out when it changes rather than on every press.
+    val lineup = store.lineup
+    val hasBoth = remember(lineup) { lineup.any { it.kind == "tuner" } && lineup.any { it.kind == "library" } }
+    val anyFavourite = remember(lineup) { lineup.any { it.favourite } }
     val title = when (shape) {
         TvShape.Modern -> TvType(25f, W.Bold)
         TvShape.Receiver -> TvType(17.5f, W.Medium)
@@ -877,7 +880,11 @@ private fun GuideBar(
         ) {
             if (store.hasSets) {
                 // Sets take the filters' place: one control, which opens every set to choose from.
+                // The set before and after sit beside the set itself, as on Apple TV, so the guide keeps its height for rows.
+                val cycles = store.sets.orEmpty().size > 1
+                if (cycles) TvIconButton(dress, TvSymbols.ChevronLeft, "The set before", { onCycle(-1) })
                 TvButton(dress, (store.currentSet?.name ?: "All channels") + " ▾", onSets, kind = TvButtonKind.Chip, on = true, onBar = true, icon = Symbols.LiveTv)
+                if (cycles) TvIconButton(dress, Symbols.Next, "The set after", { onCycle(1) })
             } else {
                 Chip(dress, "All", all) { store.choose(GuideFilter()) }
                 if (anyFavourite || filter.favourites) Chip(dress, "★ Favourites", filter.favourites) { store.choose(GuideFilter(favourites = !filter.favourites)) }
@@ -911,7 +918,7 @@ private fun Chip(dress: TvDress, words: String, on: Boolean, action: () -> Unit)
 // Over the grid: the set before and after (what pressing Up from the grid's top row reaches), what was typed to narrow
 // the rows, and, when paged, where the page is with the pages either side.
 @Composable
-private fun GuidePager(dress: TvDress, store: GuideStore, onCycle: (Int) -> Unit, onPage: (Int) -> Unit, onClear: () -> Unit) {
+private fun GuidePager(dress: TvDress, store: GuideStore, onPage: (Int) -> Unit, onClear: () -> Unit) {
     val p = dress.paint
     val total = store.total ?: 0
     Row(
@@ -922,11 +929,6 @@ private fun GuidePager(dress: TvDress, store: GuideStore, onCycle: (Int) -> Unit
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(dress.pt(16)),
     ) {
-        if (store.hasSets && store.sets.orEmpty().size > 1) {
-            TvIconButton(dress, TvSymbols.ChevronLeft, "The set before", { onCycle(-1) })
-            Text(store.currentSet?.name ?: "All channels", style = dress.font(21.25f, W.Bold), color = p.text, maxLines = 1, overflow = TextOverflow.Ellipsis)
-            TvIconButton(dress, Symbols.Next, "The set after", { onCycle(1) })
-        }
         if (store.search.isNotEmpty()) {
             TvButton(dress, "“${store.search}” ✕", onClear, kind = TvButtonKind.Chip, on = true, selected = true)
         }
@@ -1038,12 +1040,20 @@ private fun Key(dress: TvDress, letter: String, words: String, colour: Color, ac
     }
 }
 
+// Whether any channel has a logo to show, which the logos notice goes with: looked through again only when the
+// channels or the logos found change, not each time the highlight moves.
+@Composable
+private fun hasLogos(lineup: List<GuideChannel>): Boolean {
+    val found = TvLogos.known.size
+    return remember(lineup, found) { lineup.any { it.logo?.startsWith("/") == true || TvLogos.info(it.brand)?.has == true } }
+}
+
 // The short notices the owner's channels and logos come with, in the server's words.
 @Composable
 private fun GuideLegal(dress: TvDress, notices: Map<String, String>, lineup: List<GuideChannel>) {
     val shown = listOfNotNull(
         notices["tv"],
-        if (dress.look.logos && lineup.any { it.logo?.startsWith("/") == true || TvLogos.info(it.brand)?.has == true }) notices["logos"] else null,
+        if (dress.look.logos && hasLogos(lineup)) notices["logos"] else null,
     )
     if (shown.isEmpty()) return
     Column(

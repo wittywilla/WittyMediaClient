@@ -167,8 +167,16 @@ object GuideRules {
     }
 
     // "Wed, Nov 4".
-    fun dayName(time: Long, zone: TimeZone = TimeZone.getDefault()): String =
-        SimpleDateFormat("EEE, MMM d", Locale.getDefault()).apply { timeZone = zone }.format(Date(time * 1000))
+    fun dayName(time: Long, zone: TimeZone = TimeZone.getDefault()): String {
+        val f = dayFormat.get()!!
+        if (f.timeZone != zone) f.timeZone = zone
+        return f.format(Date(time * 1000))
+    }
+
+    // One formatter per thread rather than one per call: the guide writes days as the highlight moves.
+    private val dayFormat = object : ThreadLocal<SimpleDateFormat>() {
+        override fun initialValue() = SimpleDateFormat("EEE, MMM d", Locale.getDefault())
+    }
 
     // How the device says times: set from the device's own setting (24-hour or not) when the guide opens.
     @Volatile
