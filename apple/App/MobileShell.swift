@@ -425,7 +425,7 @@ struct FloatingBar: View {
     }
 }
 
-struct BarPressStyle: ButtonStyle {
+private struct BarPressStyle: ButtonStyle {
     @Environment(\.palette) private var palette
 
     func makeBody(configuration: Configuration) -> some View {

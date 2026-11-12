@@ -3,8 +3,6 @@
 import SwiftUI
 import WittyKit
 
-#if !os(tvOS)
-
 // The app's frame on a phone, a tablet and Vision Pro as the server's navigation says it (`navigation.shell`, the
 // server's docs/SDUI.md, Layout options): the floating bar at the bottom (`bottomTabs`, as always), a row of tabs
 // across the top (`topTabs`), or a menu down the side (`sidebar`, or `rail`: its icons only). The app never picks a
@@ -37,8 +35,10 @@ extension EnvironmentValues {
     }
 }
 
+#if !os(tvOS)
 /// What the side menu and the top tabs list: every entry of the server's menu that this app opens, in its order,
 /// with You last; each chooses its tab, or opens its page on Home's stack as the drawer does.
+@MainActor
 struct FrameEntries {
     let center: SDUICenter
     let model: AppModel
@@ -114,7 +114,7 @@ struct SideMenu: View {
                                 .fill(here ? palette.accent.opacity(0.14) : .clear))
                             .contentShape(Rectangle())
                         }
-                        .buttonStyle(BarPressStyle())
+                        .buttonStyle(FramePressStyle())
                         .help(list.label(entry))
                         .accessibilityLabel(list.label(entry))
                         .accessibilityAddTraits(here ? [.isSelected] : [])
@@ -159,7 +159,7 @@ struct TopTabsBar: View {
                         .background(Capsule().fill(here ? palette.accent.opacity(0.16) : .clear))
                         .contentShape(Capsule())
                     }
-                    .buttonStyle(BarPressStyle())
+                    .buttonStyle(FramePressStyle())
                     .accessibilityAddTraits(here ? [.isSelected] : [])
                     .accessibilityIdentifier("frame.entry." + entry.id)
                 }
@@ -182,6 +182,39 @@ struct TopTabsBar: View {
         }
         .accessibilityElement(children: .contain)
         .accessibilityLabel("Menu")
+    }
+}
+/// The top tabs on one tab's stack, so the screens pushed onto it lay out below them; over the page when `overlay`.
+struct TopTabsSlot: ViewModifier {
+    let nav: FrameNav
+    let height: CGFloat
+    let overlay: Bool
+    let shown: Bool
+
+    func body(content: Content) -> some View {
+        if nav != .topTabs {
+            content
+        } else if overlay {
+            content.overlay(alignment: .top) { if shown { TopTabsBar(height: height, overlay: true) } }
+        } else {
+            // Above the stack, not an inset of it: a page pushed onto it lays out below the tabs, its Back with it.
+            VStack(spacing: 0) {
+                if shown { TopTabsBar(height: height, overlay: false) }
+                // The clock's room is the tabs' now: the pages start right under them.
+                content.ignoresSafeArea(.container, edges: shown ? .top : [])
+            }
+        }
+    }
+}
+
+/// A press shows as a faint wash, as the floating bar's does.
+private struct FramePressStyle: ButtonStyle {
+    @Environment(\.palette) private var palette
+
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .background(RoundedRectangle(cornerRadius: Tokens.Radius.md, style: .continuous)
+                .fill(configuration.isPressed ? palette.text.opacity(0.07) : Color.clear))
     }
 }
 #endif

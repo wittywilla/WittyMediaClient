@@ -92,7 +92,7 @@ struct BrowseShell: View {
             PillShell().nowPlayingCover()
             #endif
         }
-        .modifier(SDUIShell(center: center))
+        .modifier(SDUIShellSync(center: center))
         .environmentObject(center)
     }
 }
@@ -400,6 +400,8 @@ private struct PillShell: View {
                         }
                         .padding(.bottom, model.hidesBars || typing || !bar ? 0 : lift)
                     }
+                    .modifier(TopTabsSlot(nav: nav, height: navSize > 0 ? navSize : 48, overlay: center.shell?.overlay == true,
+                                          shown: !model.hidesBars))
                     .toolbar(.hidden, for: .tabBar)
                     .tag(tab)
             }
@@ -417,17 +419,8 @@ private struct PillShell: View {
                     }
                     tabs
                 }
-            case .topTabs:
-                if center.shell?.overlay == true {
-                    tabs.overlay(alignment: .top) {
-                        if !model.hidesBars { TopTabsBar(height: navSize > 0 ? navSize : 48, overlay: true) }
-                    }
-                } else {
-                    tabs.safeAreaInset(edge: .top, spacing: 0) {
-                        if !model.hidesBars { TopTabsBar(height: navSize > 0 ? navSize : 48, overlay: false) }
-                    }
-                }
-            case .bottomTabs:
+            case .topTabs, .bottomTabs:
+                // Top tabs are put on each tab's stack (TopTabsSlot), as the floating bar is.
                 tabs
             }
         }

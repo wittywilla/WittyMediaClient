@@ -43,12 +43,12 @@ struct LayoutSettingsView: View {
         SettingsScreen(title: "Layout", detail: "How the whole app is arranged on this device: where its menu is, and how pages show their titles.") {
             if let choice, !choice.options.isEmpty {
                 ListGroup(title: "", footer: "Only this device changes. Your other devices keep their own.") {
-                    ChoiceRow(title: "As the server has it", detail: choice.chosen == nil ? choice.currentLabel : "", chosen: choice.chosen == nil) {
+                    SettingChoiceRow(title: "As the server has it", detail: choice.chosen == nil ? choice.currentLabel : "", chosen: choice.chosen == nil) {
                         choose(nil)
                     }
                     .accessibilityIdentifier("layout.server")
                     ForEach(choice.options) { option in
-                        ChoiceRow(title: option.label, chosen: choice.chosen == option.value) { choose(option.value) }
+                        SettingChoiceRow(title: option.label, chosen: choice.chosen == option.value) { choose(option.value) }
                             .accessibilityIdentifier("layout." + option.value)
                             .accessibilityHint("One of \(choice.options.count) layouts")
                     }
@@ -231,7 +231,7 @@ private struct ModuleSettingRow: View {
             .accessibilityHint(help.isEmpty ? "Shows the choices" : help)
             if open {
                 ForEach(row.options ?? [], id: \.value) { option in
-                    ChoiceRow(title: "   " + PlainWords.clean(option.label, limit: 80), chosen: value?.string == option.value) {
+                    SettingChoiceRow(title: "   " + PlainWords.clean(option.label, limit: 80), chosen: value?.string == option.value) {
                         open = false
                         save(.string(option.value))
                     }
