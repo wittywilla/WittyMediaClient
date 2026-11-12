@@ -155,7 +155,9 @@ async function run() {
     let link
     await step('an invite link pasted on the connect screen is accepted', async () => {
       const me = await signedIn()
-      const made = await fetch(`${DIRECT}/api/v1/p2p/invite`, { method: 'POST', headers: me.headers, body: '{}' })
+      // An invite that signs the device in as an administrator takes that administrator's
+      // password again (WMC_OTP too, for an account with two-factor sign-in).
+      const made = await fetch(`${DIRECT}/api/v1/p2p/invite`, { method: 'POST', headers: me.headers, body: JSON.stringify({ password: PASSWORD, otp: process.env.WMC_OTP || '' }) })
       assert.ok(made.ok, `no invite: ${made.status}`)
       link = (await made.json()).link
       await typeIntoAddress(link)
