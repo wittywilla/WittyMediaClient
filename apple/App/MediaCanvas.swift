@@ -235,8 +235,10 @@ private struct CanvasPlayerView: UIViewRepresentable {
             let player = AVQueuePlayer()
             player.isMuted = true
             player.volume = 0
+            #if !os(visionOS)
             player.allowsExternalPlayback = false
             player.preventsDisplaySleepDuringVideoPlayback = false
+            #endif
             if #available(iOS 15.0, tvOS 15.0, *) { player.audiovisualBackgroundPlaybackPolicy = .pauses }
             coordinator.player = player
             coordinator.looper = AVPlayerLooper(player: player, templateItem: item)
