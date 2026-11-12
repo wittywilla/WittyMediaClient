@@ -222,6 +222,17 @@ public struct Recording: Decodable, Equatable, Identifiable {
     public let conflict: Bool?
     /// The series rule that made it, by its title.
     public let ruleTitle: String?
+    /// The channel and programme More info opens (`tv-recording-refs`): `channelKey` and `programme` ("tun-12@<start>").
+    /// Absent when the profile may no longer watch the channel: then no More info is offered.
+    public let channelKey: String?
+    public let programme: String?
+
+    /// The channel key and a moment in the programme, when More info can be opened for this recording.
+    public var moreInfo: (channel: String, start: Int64)? {
+        guard let key = channelKey, !key.isEmpty, let programme, let at = programme.lastIndex(of: "@"),
+              let start = Int64(programme[programme.index(after: at)...]), start > 0 else { return nil }
+        return (key, start)
+    }
 
     public var isFinished: Bool { status == "done" || status == "failed" }
 

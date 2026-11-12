@@ -294,6 +294,10 @@ public final class WittyClient: @unchecked Sendable {
                 let reason: String?
                 let retryAfterSec: Int?
             }
+            // A server still being set up answers every route with 503 setup_required: the app says so, on every route.
+            if let setup = SetupRequired.from(status: http.statusCode, body: data), !token.isEmpty {
+                NotificationCenter.default.post(name: .wittySetupRequired, object: nil, userInfo: ["url": setup.url, "base": base])
+            }
             let failure = try? decoder.decode(Failure.self, from: data)
             let words = failure?.error.map { PlainWords.clean($0) } ?? ""
             let message = words.isEmpty ? "The server answered with an error (\(http.statusCode))." : words

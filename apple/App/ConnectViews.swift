@@ -880,6 +880,7 @@ struct SetupRequiredView: View {
     let address: String
     let retry: () -> Void
     let back: () -> Void
+    var backTitle: String = say("back")
 
     var body: some View {
         ZStack {
@@ -892,7 +893,7 @@ struct SetupRequiredView: View {
                     .accessibilityLabel("Finish setup in a web browser at \(address)")
                 HStack(spacing: Tokens.Space.s4) {
                     Button(say("setupNeededRetry"), action: retry).action(.primary, tall: true)
-                    Button(say("back"), action: back).action(.secondary, tall: true)
+                    Button(backTitle, action: back).action(.secondary, tall: true)
                 }
             }
             .padding(Tokens.gutter)
