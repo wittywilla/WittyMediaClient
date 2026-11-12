@@ -13,7 +13,7 @@ struct GuideLegend: View {
     let dress: TvDress
 
     var body: some View {
-        let hints = KeyLegend.hints(.guide, device: input.device)
+        let hints = KeyLegend.hints(.guide, device: input.device ?? .remote)
         HStack(spacing: 18) {
             ForEach(hints) { hint in
                 HStack(spacing: 6) {
