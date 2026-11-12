@@ -153,17 +153,6 @@ public extension WittyClient {
         let data = try await call("PUT", "/sdui/modules/\(module)/settings" + (personal ? "/personal" : ""), body: body)
         return try JSONDecoder().decode(ModuleSettings.self, from: data)
     }
-
-    /// This profile's layout on this device; `nil` follows the server's again.
-    func setSDUILayout(_ layout: String?, device: SDUIDevice) async throws {
-        let query = SDUIQuery.encode(device.appId.map { [("device", $0)] } ?? [])
-        let path = "/sdui/layout" + (query.isEmpty ? "" : "?" + query)
-        if let layout {
-            _ = try await call("PUT", path, body: try JSONEncoder().encode(["layout": layout]))
-        } else {
-            _ = try await call("DELETE", path)
-        }
-    }
 }
 
 public extension SDUIRouter {

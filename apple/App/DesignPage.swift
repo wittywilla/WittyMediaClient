@@ -53,7 +53,8 @@ struct DesignPage<Content: View, Actions: View>: View {
             ScrollView {
                 VStack(alignment: .leading, spacing: 0) {
                     if !eyebrow.isEmpty {
-                        Text(eyebrow.uppercased())
+                        Text(eyebrow)
+                            .textCase(.uppercase)
                             .font(.system(size: sizes.small, weight: .bold))
                             .kerning(sizes.small * 0.08)
                             .foregroundStyle(palette.accentText)
@@ -89,6 +90,8 @@ struct DesignPage<Content: View, Actions: View>: View {
                 .padding(.vertical, metrics.tv ? Tokens.edge : Tokens.Space.s6)
                 .frame(maxWidth: .infinity)
             }
+            // A drag puts the keyboard away, so a number pad (which has no Return) never hides what's under it.
+            .scrollDismissesKeyboardIfAvailable()
             .environment(\.designSizes, sizes)
         }
         .background(palette.background.ignoresSafeArea())
@@ -347,5 +350,132 @@ struct DesignCards<Content: View>: View {
         LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: sizes.gap), count: sizes.columns),
                   alignment: .leading, spacing: sizes.gap) { content() }
             .remoteSection()
+    }
+}
+
+// MARK: - A page from data
+
+/// A `DesignPageSpec` drawn through `DesignPage`: the canvas's `gp` pages as data, not views written by hand. A press of
+/// any row, chip, card or action reports its `id`. Focus starts at the spec's `startFocus` and runs top to bottom; Back
+/// follows the Back ladder: a layer closes (`onBack`), and on the Stage the press is left to the frame, which takes
+/// focus to the Bar. Each part is found by UI tests as `design.<id>`.
+struct DesignSpecPage: View {
+    let spec: DesignPageSpec
+    /// Something on the page was pressed: its `id`.
+    var onPress: (String) -> Void = { _ in }
+    /// The page is a layer and Back closes it.
+    var onBack: (() -> Void)? = nil
+    @FocusState private var focus: String?
+    @Environment(\.metrics) private var metrics
+
+    var body: some View {
+        DesignPage(eyebrow: spec.eyebrow, title: spec.title, lead: spec.lead, foot: spec.foot, identifier: "design.page") {
+            ForEach(Array(spec.sections.enumerated()), id: \.offset) { _, section in
+                DesignSpecSection(section: section, focus: $focus, onPress: onPress)
+            }
+        } actions: {
+            ForEach(spec.actions, id: \.id) { action in
+                Button(action.title) { onPress(action.id) }
+                    .action(primary: action.primary)
+                    .focused($focus, equals: action.id)
+                    .accessibilityIdentifier("design." + action.id)
+            }
+        }
+        .onRemoteBack(spec.back == .closeLayer ? onBack : nil)
+        .onAppear {
+            // A TV starts where the spec says; a touch screen leaves focus alone until a keyboard moves it.
+            guard metrics.tv, let start = spec.startFocus else { return }
+            DispatchQueue.main.async { focus = start }
+        }
+    }
+}
+
+private struct DesignSpecSection: View {
+    @Environment(\.designSizes) private var sizes
+    @Environment(\.metrics) private var metrics
+    let section: DesignPageSpec.Section
+    let focus: FocusState<String?>.Binding
+    let onPress: (String) -> Void
+
+    var body: some View {
+        DesignSection(title: section.heading) {
+            switch section.kind {
+            case .rows:
+                DesignRows {
+                    ForEach(section.rows, id: \.id) { row in
+                        DesignRow(title: row.title, value: row.value, on: row.on, detail: row.detail,
+                                  action: row.pressable ? { onPress(row.id) } : nil)
+                            .focused(focus, equals: row.id)
+                            .accessibilityIdentifier("design." + row.id)
+                    }
+                }
+            case .chips:
+                DesignChips {
+                    ForEach(section.chips, id: \.id) { chip in
+                        DesignChip(title: chip.title, on: chip.on) { onPress(chip.id) }
+                            .focused(focus, equals: chip.id)
+                            .accessibilityIdentifier("design." + chip.id)
+                    }
+                }
+            case .note:
+                DesignNote(text: section.note, tone: section.tone)
+            case .cards:
+                let columns = DesignPageSpec.columns(section, phone: !metrics.tv && sizes.columns == 2,
+                                                     tablet: !metrics.tv && sizes.columns == 3)
+                LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: sizes.gap), count: columns),
+                          alignment: .leading, spacing: sizes.gap) {
+                    ForEach(section.cards, id: \.id) { card in
+                        DesignCard(card: card) { onPress(card.id) }
+                            .focused(focus, equals: card.id)
+                            .accessibilityIdentifier("design." + card.id)
+                    }
+                }
+                .remoteSection()
+            }
+        }
+    }
+}
+
+/// A card of `secC`: three swatches when it has them (a look's or a theme's colours), its title and a line under it,
+/// on `bg2` at the theme's corner, ringed when chosen.
+struct DesignCard: View {
+    @Environment(\.palette) private var palette
+    @Environment(\.designSizes) private var sizes
+    let card: DesignPageSpec.Card
+    let action: () -> Void
+
+    private func colour(_ hex: String) -> Color {
+        guard let c = ThemeColour(hex: hex) else { return .clear }
+        return Color(.sRGB, red: c.red, green: c.green, blue: c.blue, opacity: c.alpha)
+    }
+
+    var body: some View {
+        Button(action: action) {
+            VStack(alignment: .leading, spacing: 2) {
+                if card.swatches.count >= 3 {
+                    HStack(spacing: 3) {
+                        RoundedRectangle(cornerRadius: 5).fill(colour(card.swatches[0])).frame(maxWidth: .infinity)
+                        RoundedRectangle(cornerRadius: 5).fill(colour(card.swatches[1])).frame(maxWidth: .infinity)
+                            .layoutPriority(-1)
+                        RoundedRectangle(cornerRadius: 5).fill(colour(card.swatches[2])).frame(width: sizes.chipHeight * 0.8)
+                    }
+                    .frame(height: sizes.chipHeight * 0.8)
+                    .accessibilityHidden(true)
+                    .padding(.bottom, 4)
+                }
+                Text(card.title).font(.system(size: sizes.small, weight: .heavy)).foregroundStyle(palette.text)
+                    .lineLimit(2).multilineTextAlignment(.leading)
+                if !card.subtitle.isEmpty {
+                    Text(card.subtitle).font(.system(size: sizes.tiny)).foregroundStyle(palette.text.opacity(0.75))
+                        .lineLimit(2).multilineTextAlignment(.leading)
+                }
+            }
+            .padding(sizes.gap)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(DesignRowButton(selected: card.on))
+        .accessibilityLabel([card.title, card.subtitle].filter { !$0.isEmpty }.joined(separator: ", "))
+        .accessibilityAddTraits(card.on ? [.isSelected] : [])
     }
 }

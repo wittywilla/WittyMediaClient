@@ -3,64 +3,8 @@
 import SwiftUI
 import WittyKit
 
-// Two pages of You (this app's Settings) for a server with module SDUI and layout options (the server's
-// docs/SDUI.md, Layout options, and docs/SDUI-MODULES.md, Settings): Layout, the arrangement of the whole app on this
-// device; and Modules, each module's settings drawn with this app's own rows. Neither is a server-driven page, and
-// neither takes a module's colours: they are Settings.
-
-// MARK: - Layout
-
-/// A choice of the server's layout options for this device, the one in force ticked, with "As the server has it" to
-/// follow the administrator's choice again. Saved at once; the menu and the page showing follow.
-struct LayoutSettingsView: View {
-    @EnvironmentObject private var center: SDUICenter
-    @State private var busy = false
-    @State private var problem = ""
-    @State private var said = ""
-
-    private func choose(_ layout: String?) {
-        guard !busy else { return }
-        busy = true
-        problem = ""
-        Task {
-            do {
-                try await center.chooseLayout(layout)
-                said = "Layout: " + (center.navigation?.layouts?.currentLabel ?? "")
-                announce(said)
-            } catch let error as APIError where error.status == 403 {
-                problem = "This profile can't choose its own layout, or the server doesn't offer that one."
-                announce(problem)
-            } catch {
-                problem = plainWords(Problem.of(error))
-                announce(problem)
-            }
-            busy = false
-        }
-    }
-
-    var body: some View {
-        let choice = center.navigation?.layouts
-        SettingsScreen(title: "Layout", detail: "How the whole app is arranged on this device: where its menu is, and how pages show their titles.") {
-            if let choice, !choice.options.isEmpty {
-                ListGroup(title: "", footer: "Only this device changes. Your other devices keep their own.") {
-                    SettingChoiceRow(title: "As the server has it", detail: choice.chosen == nil ? choice.currentLabel : "", chosen: choice.chosen == nil) {
-                        choose(nil)
-                    }
-                    .accessibilityIdentifier("layout.server")
-                    ForEach(choice.options) { option in
-                        SettingChoiceRow(title: option.label, chosen: choice.chosen == option.value) { choose(option.value) }
-                            .accessibilityIdentifier("layout." + option.value)
-                            .accessibilityHint("One of \(choice.options.count) layouts")
-                    }
-                }
-                if !problem.isEmpty { ProblemLine(problem) }
-                if !said.isEmpty, problem.isEmpty { OutcomeLine(words: said).id(said) }
-            } else {
-                NoteCard(words: "This server offers no other layouts.", icon: "rectangle.3.group")
-            }
-        }
-    }
-}
+// Modules, a page of You (this app's Settings): each module's settings (docs/SDUI-MODULES.md, Settings) drawn with this
+// app's own rows. It is not a server-driven page and takes no module's colours: it is Settings.
 
 // MARK: - Modules
 
