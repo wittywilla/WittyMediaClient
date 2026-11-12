@@ -65,6 +65,9 @@ if (location.protocol === 'wittymedia-app:') {
     forgetUndo: () => ipcRenderer.invoke('forget-undo'),
     forgetFinish: () => ipcRenderer.invoke('forget-finish'),
     serverMenu: (url, at) => ipcRenderer.send('server-menu', url, at),
+    // Opened from the menu while a server is in use (Manage servers): which one, and back to it.
+    managing: () => ipcRenderer.invoke('managing'),
+    manageBack: () => ipcRenderer.send('manage-back'),
     onForgetAsk: (ask) => {
       ipcRenderer.removeAllListeners('forget-ask')
       ipcRenderer.on('forget-ask', (_e, url) => ask(url))

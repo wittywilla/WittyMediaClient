@@ -6,6 +6,7 @@
 
   document.getElementById('stay').addEventListener('click', close)
   document.getElementById('change').addEventListener('click', () => window.wittyBar.menu('change-server'))
+  document.getElementById('manage').addEventListener('click', () => window.wittyBar.menu('manage-servers'))
   document.getElementById('quit').addEventListener('click', () => window.wittyBar.menu('quit'))
 
   document.addEventListener('keydown', (e) => {
@@ -24,6 +25,7 @@
 
   window.wittyBar.onMenu(({ hasServer }) => {
     document.getElementById('change').hidden = !hasServer
+    document.getElementById('manage').hidden = !hasServer
     document.getElementById('stay').focus()
   })
   window.wittyBar.onTheme((t) => {

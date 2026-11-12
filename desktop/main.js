@@ -123,6 +123,7 @@ function copyDiagnostics() {
 function showHelpMenu(at) {
   const { width, height } = win.getContentBounds()
   Menu.buildFromTemplate([
+    ...(server ? [{ label: 'Manage servers…', click: manageServers }, { type: 'separator' }] : []),
     { label: 'Open logs folder', click: openLogs },
     { label: 'Copy diagnostic info', click: copyDiagnostics },
     { type: 'separator' },
@@ -235,6 +236,7 @@ function showConnect(query) {
 
 function showServer(url) {
   endDiscovery()
+  managing = ''
   server = new URL(url).origin
   lastServer = server
   shown = null
@@ -706,9 +708,12 @@ function forgetServers(urls) {
   const { state: next, taken } = servers.takeOut(saved, wanted)
   if (!taken.length) return { ok: true, removed: [] }
   saved = next
+  // The server in use went with them: the app no longer opens it, unless Undo puts it back.
+  const inUse = saved.server && taken.some((t) => servers.originsOf(t.entry, p2p.originFor).includes(new URL(saved.server).origin) || t.entry.url === saved.server) ? saved.server : ''
+  if (inUse) saved.server = ''
   saveState()
-  log.info('app', `${taken.length === 1 ? 'A server was' : `${taken.length} servers were`} removed from this computer`)
-  undoable = { taken, timer: setTimeout(finishForgetting, UNDO_MS) }
+  log.info('app', `${taken.length === 1 ? 'A server was' : `${taken.length} servers were`} removed from this computer${inUse ? ', the one in use among them' : ''}`)
+  undoable = { taken, inUse, timer: setTimeout(finishForgetting, UNDO_MS) }
   return { ok: true, removed: taken.map((t) => t.entry.url), undoMs: UNDO_MS }
 }
 
@@ -716,6 +721,7 @@ function undoForget() {
   if (!undoable) return { ok: false }
   clearTimeout(undoable.timer)
   saved = servers.putBack(saved, undoable.taken)
+  if (undoable.inUse && !saved.server) saved.server = undoable.inUse
   undoable = null
   saveState()
   return { ok: true }
@@ -902,6 +908,29 @@ async function leaveServer() {
   closeTunnel()
 }
 
+// ---------------------------------------------------------------- managing servers
+
+// The list of remembered servers, opened from the menu while a server is in use. Nothing is
+// left: the sign-in stays, and Back returns to the server. The one in use can be removed from
+// here too (it is then signed out, after the time to undo); the list says which it is.
+let managing = ''
+function manageServers() {
+  if (!saved.server) { if (!server) showConnect(); return }
+  managing = saved.server
+  showConnect({ manage: '1' })
+}
+
+// Back from the list to the server in use, if it is still remembered.
+function backFromManaging() {
+  const url = managing
+  managing = ''
+  if (url && saved.server === url) return startUp()
+  return showConnect()
+}
+
+// What the list shows about the server in use while managing: its address, or '' for none.
+const managedNow = () => (managing && saved.server === managing ? managing : '')
+
 // What the last run was using, if it still is who it was.
 async function startUp() {
   await clearMergedAway()
@@ -1012,7 +1041,7 @@ function servePages() {
 // The Mac's menu bar, which is where the title bar's Help is on a Mac.
 function macMenu() {
   return Menu.buildFromTemplate(mac.menu({
-    connected: Boolean(server), changeServer: () => leaveServer(), zoom: zoomPage, openLogs, copyDiagnostics,
+    connected: Boolean(server), changeServer: () => leaveServer(), manageServers, zoom: zoomPage, openLogs, copyDiagnostics,
   }))
 }
 
@@ -1110,6 +1139,9 @@ ipcMain.handle('probe', (e, url) => (fromConnect(e) ? probe(String(url)) : { err
 ipcMain.handle('recent', (e) => (fromConnect(e) ? recentForPage() : []))
 ipcMain.handle('forget', (e, urls) => (fromConnect(e) ? forgetServers(urls) : { ok: false }))
 ipcMain.handle('forget-undo', (e) => (fromConnect(e) ? undoForget() : { ok: false }))
+// Opened from the menu while a server is in use: which one, and the way back to it.
+ipcMain.handle('managing', (e) => (fromConnect(e) ? { url: managedNow() } : { url: '' }))
+ipcMain.on('manage-back', (e) => { if (fromConnect(e)) backFromManaging() })
 // The undo on screen has gone, or the person said yes to a question that had no undo.
 ipcMain.handle('forget-finish', async (e) => { if (fromConnect(e)) await finishForgetting(); return { ok: true } })
 // Right-click on a remembered server. The page does the removing, as it does for its own button.
@@ -1181,6 +1213,7 @@ ipcMain.on('tv-menu', (e, action) => {
   if (!TV || !tvMenu || e.sender !== tvMenu.webContents) return
   if (action === 'close') closeTvMenu()
   else if (action === 'change-server') { closeTvMenu(); leaveServer() }
+  else if (action === 'manage-servers') { closeTvMenu(); manageServers() }
   else if (action === 'quit') win.close()
 })
 

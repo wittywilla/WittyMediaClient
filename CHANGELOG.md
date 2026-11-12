@@ -5,6 +5,11 @@ What changed in WittyMediaClient, newest first. What changed before it had a rep
 
 ## Unreleased
 
+- **Desktop: Manage servers from the menu.** **Server → Manage Servers…** on a Mac, **Manage servers…** in the title bar's
+  Help menu on Windows and Linux, and in TV mode's menu open the list of servers this computer remembers without leaving
+  the one in use: it is marked **In use**, **Back to** it (or Escape) returns to it still signed in, and it can be removed
+  from there too, after a question that says it signs out of it here (with the usual Undo). Undoing the removal of
+  several servers now says "3 servers are back." instead of reading out every name.
 - **Karaoke from a song's separate parts, on Android and Apple.** On a server with `karaoke-auto` (WittyMediaServer 0.8.0-alpha), opening
   karaoke on a song asks the server once, and the server makes a karaoke version by itself: a quick one in seconds, and a properly separated one
   behind it when its owner has a separator installed. The apps play the parts in place of the song, in step to the sample (Android: decoded and
