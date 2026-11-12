@@ -17,7 +17,7 @@ enum ServerWords {
 
     static func name(_ server: SavedServer) -> String { server.name.isEmpty ? "WittyMediaServer" : server.name }
 
-    static func address(_ server: SavedServer) -> String { PeerInfo.isPlaceholder(server.url) ? say("awayOnly") : server.url }
+    static func address(_ server: SavedServer) -> String { PeerInfo.isPlaceholder(server.url) ? ServerCard.peerRemote : server.url }
 
     static func names(_ servers: [SavedServer]) -> String { servers.map(name).joined(separator: ", ") }
 
@@ -111,18 +111,15 @@ struct RememberedServers<Card: View>: View {
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: sizes.gap * 0.6) {
-            HStack(spacing: Tokens.Space.s2) {
-                Text("Saved").font(.wm(size: sizes.body, weight: .heavy)).foregroundStyle(palette.text)
-                    .accessibilityAddTraits(.isHeader)
-                Spacer(minLength: 0)
-                #if !os(tvOS)
+        VStack(alignment: .leading, spacing: sizes.gap * 0.8) {
+            #if os(tvOS)
+            ConnectSectionLabel(title: "Your servers")
+            #else
+            ConnectSectionLabel(title: "Your servers", trailing: AnyView(
                 Button(say(editing ? "editServersDone" : "editServers")) { withAnimation(.easeOut(duration: 0.2)) { editing.toggle() } }
                     .action(.quiet)
-                    .accessibilityIdentifier("editServers")
-                #endif
-            }
-            .padding(.bottom, sizes.gap * 0.4)
+                    .accessibilityIdentifier("editServers")))
+            #endif
             ForEach(servers) { row($0) }
         }
         .confirmRemoval(of: $asking) { server in

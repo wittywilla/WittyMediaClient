@@ -526,6 +526,9 @@ struct ServerCard: View {
     var stale = false
     let action: () -> Void
 
+    /// A saved server this device reaches peer to peer, from anywhere (the canvas's connect page).
+    static let peerRemote = "Peer to peer · remote"
+
     /// What a found server is called here: where it is, host and port.
     static func place(_ url: String) -> String {
         guard let parts = URLComponents(string: url), let host = parts.host else { return url }
@@ -537,7 +540,7 @@ struct ServerCard: View {
         return saved.name.isEmpty ? "WittyMediaServer" : saved.name
     }
 
-    private var place: String { saved == nil ? say("foundOnNetwork") : PeerInfo.isPlaceholder(url) ? say("awayOnly") : url }
+    private var place: String { saved == nil ? say("foundOnNetwork") : PeerInfo.isPlaceholder(url) ? ServerCard.peerRemote : url }
 
     /// On a TV the time shares the address's line, so a list of servers is no taller than it was.
     private var detail: String { metrics.tv && !reached.isEmpty ? "\(place) · \(reached)" : place }

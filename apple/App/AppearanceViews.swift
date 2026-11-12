@@ -40,10 +40,16 @@ final class AppearanceModel: ObservableObject {
     /// The themes on offer, with the colours to draw a swatch: the server's list, or the built-in ones before it answers.
     static func themes(_ list: ThemeList?) -> [AppearancePage.ThemeChoice] {
         if let themes = list?.themes, !themes.isEmpty {
+            // The canvas's order: the built-in themes as drawn, then the person's own imports by name.
+            let order = ["default", "midnight", "cinema", "evergreen", "oled", "light", "paper", "contrast", "aeroday", "aeroaurora",
+                         "aeromeadow", "aerosunset", "cable", "satellite", "teletext"]
             return themes.map { t in
-                .init(id: t.id, name: t.shownName, dark: t.scheme != "light",
+                AppearancePage.ThemeChoice(id: t.id, name: t.shownName, dark: t.scheme != "light",
                       swatches: [t.preview?.bg ?? "#0f1115", t.preview?.surface ?? "#1f232c", t.preview?.accent ?? "#7955ff"],
                       imported: t.builtin == false)
+            }.sorted { a, b in
+                let x = order.firstIndex(of: a.id) ?? order.count, y = order.firstIndex(of: b.id) ?? order.count
+                return x == y ? a.name < b.name : x < y
             }
         }
         return SharedData.themes.map { t in

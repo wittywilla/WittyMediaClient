@@ -25,39 +25,139 @@ extension AppModel {
 
 struct AwayView: View {
     @EnvironmentObject private var model: AppModel
+    @Environment(\.client) private var client
+    @Environment(\.dismiss) private var dismiss
     @State private var confirmStop = false
     @State private var busy = false
+    /// An invite made here: its link, and whether its QR code is showing.
+    @State private var invite: PeerInviteLink?
+    @State private var showQR = false
+    @State private var inviting = false
+    @State private var inviteProblem = ""
+    /// The server wants an administrator's password (and code) again before it makes an invite that signs in as one.
+    @State private var needsPassword = false
+    @State private var needsCode = false
+    @State private var password = ""
+    @State private var otp = ""
+    @State private var wantPassword = false
 
     private var problem: String {
         if case .away(let state) = model.way, !state.connected { return PlainWords.clean(state.error ?? "", limit: 300) }
         return ""
     }
 
-    var body: some View {
-        SettingsScreen(title: say("rowAway"), detail: say("awayHint")) {
-            ListGroup(title: "", footer: model.awayReady ? say("awayReadyHint") : model.awayOff ? say("awayOffHint") : say("awaySetUpHint")) {
-                // A row to press: it looks again at how the server can be reached. It also gives a remote
-                // somewhere to land on a screen that may have nothing else to press.
-                Button {
-                    Task { await model.peers.settle() }
-                } label: {
-                    RowLabel(icon: model.way.isAway ? "dot.radiowaves.left.and.right" : "house", tint: "#0e7c6f", title: say("awayNow"),
-                             value: model.wayWords.isEmpty ? say("awayNoWay") : model.wayWords, detail: problem, chevron: false)
+    private var peerValue: String { model.awayReady ? say("on") : model.awayOff ? say("off") : say("awayNotSetUp") }
+
+    /// Asks the server for an invite that signs a device in as this profile. The link is shown, never kept or logged.
+    private func makeInvite(qr: Bool) {
+        guard !inviting, let me = model.user else { return }
+        inviting = true
+        inviteProblem = ""
+        let sentPassword = !password.isEmpty
+        Task {
+            do {
+                invite = try await client.peerInvite(userId: me.id, password: password, otp: otp)
+                showQR = qr
+                needsPassword = false
+                password = ""
+                otp = ""
+                announce("Invite made. It works once, for \(invite?.minutes ?? 15) minutes.")
+            } catch let error as APIError where !error.isExpiredSignIn {
+                switch PairRefusal.of(error, sentPassword: sentPassword) {
+                case .passwordRequired(let twoFactor):
+                    needsPassword = true
+                    needsCode = twoFactor
+                    wantPassword = true
+                case .wrongPassword:
+                    inviteProblem = error.message
+                    password = ""
+                    otp = ""
+                    wantPassword = true
+                default:
+                    inviteProblem = error.message
                 }
-                .rowStyle()
-                RowLabel(icon: "arrow.triangle.branch", tint: "#3e5bd0", title: say("rowAway"),
-                         value: model.awayReady ? say("awayReady") : model.awayOff ? say("off") : say("awayNotSetUp"), chevron: false)
-                if model.awayReady, !model.awayDeviceID.isEmpty {
-                    // The end of the name the server's own list shows for this device.
-                    RowLabel(icon: "key", tint: "#5d6474", title: say("awayDevice"), value: "…" + model.awayDeviceID.suffix(8), chevron: false)
+            } catch {
+                inviteProblem = model.handle(error)
+            }
+            inviting = false
+        }
+    }
+
+    var body: some View {
+        DesignPage(eyebrow: "You · From away", title: "Reach your server from anywhere",
+                   lead: "A private, peer-to-peer connection between your devices. Nothing is opened on your router.",
+                   identifier: "away") {
+            DesignSection(title: "Connection") {
+                DesignRows {
+                    DesignRow(title: "Peer to peer", value: peerValue, on: model.awayReady,
+                              detail: "Between your devices, end to end encrypted")
+                    // A row to press: it looks again at how the server can be reached. It also gives a remote
+                    // somewhere to land on a screen that may have nothing else to press.
+                    DesignRow(title: "Connected to", value: model.wayWords.isEmpty ? say("awayNoWay") : model.wayWords,
+                              on: model.way.isAway, detail: problem.isEmpty ? model.brandName : problem) {
+                        Task { await model.peers.settle() }
+                    }
+                    .accessibilityIdentifier("away.now")
+                    if model.awayReady, !model.awayDeviceID.isEmpty {
+                        // The end of the name the server's own list shows for this device.
+                        DesignRow(title: say("awayDevice"), value: "…" + model.awayDeviceID.suffix(8))
+                    }
+                }
+                DesignNote(text: model.awayReady ? say("awayReadyHint") : model.awayOff ? say("awayOffHint") : say("awaySetUpHint"))
+            }
+            if model.awayReady, model.user?.isAdult != false {
+                DesignSection(title: "Invite someone") {
+                    DesignChips {
+                        DesignChip(title: "Create an invite link", on: true, symbol: "link") { makeInvite(qr: false) }
+                            .accessibilityIdentifier("away.invite")
+                        DesignChip(title: "Show a QR code", symbol: "qrcode") {
+                            if invite != nil { showQR = true } else { makeInvite(qr: true) }
+                        }
+                        .accessibilityIdentifier("away.inviteQR")
+                    }
+                    if needsPassword {
+                        DesignNote(text: "An invite that signs a device in as an administrator needs your password again.")
+                        OutlinedField(label: "Your password", text: $password, kind: .password, icon: "lock", request: $wantPassword) {
+                            makeInvite(qr: showQR)
+                        }
+                        if needsCode { OutlinedField(label: "Code from your authenticator app", text: $otp, icon: "lock.shield") }
+                        Button { makeInvite(qr: showQR) } label: { BusyText("Create the invite", busy: inviting) }
+                            .action(primary: true)
+                            .disabled(password.isEmpty || inviting)
+                    }
+                    if !inviteProblem.isEmpty { ProblemLine(inviteProblem) }
+                    if let invite {
+                        DesignRows {
+                            DesignRow(title: "Invite link", value: "\(invite.minutes) min", on: true,
+                                      detail: "Works once. Send it the way you’d send a password.")
+                        }
+                        Text(invite.link)
+                            .font(.system(.footnote, design: .monospaced))
+                            .textSelectionIfAvailable()
+                            .accessibilityIdentifier("away.inviteLink")
+                        #if os(iOS)
+                        ShareLink(item: invite.link) { Label("Share the invite", systemImage: "square.and.arrow.up") }
+                            .action()
+                        #endif
+                        if showQR, let image = QRImage.make(for: invite.link) {
+                            QRCard(image: image, caption: "Scan it with the WittyMediaClient camera, under Connect to a remote server.")
+                        }
+                    }
                 }
             }
-            if model.awayReady {
-                Button { confirmStop = true } label: {
-                    BusyText(say("awayStop"), busy: busy)
+            DesignSection(title: "Join") {
+                DesignChips {
+                    DesignChip(title: "Join another server", symbol: "arrow.right.circle") { model.changeServer() }
                 }
-                .action(.destructive, wide: true, tall: true)
-                .padding(.top, Tokens.Space.s2)
+            }
+            DesignSection(title: "") {
+                DesignNote(text: "Only people you invite can join. You can end an invite or remove a device at any time.", tone: true)
+            }
+        } actions: {
+            Button("Done") { dismiss() }.action(primary: true)
+            if model.awayReady {
+                Button { confirmStop = true } label: { BusyText(say("awayStop"), busy: busy) }
+                    .action(.destructive)
             } else if model.awayOff {
                 Button {
                     guard !busy else { return }
@@ -66,11 +166,8 @@ struct AwayView: View {
                         await model.startAway()
                         busy = false
                     }
-                } label: {
-                    BusyText(say("awayStart"), busy: busy)
-                }
-                .action(.secondary, wide: true, tall: true)
-                .padding(.top, Tokens.Space.s2)
+                } label: { BusyText(say("awayStart"), busy: busy) }
+                    .action()
             }
         }
         .confirmationDialog(say("awayStop"), isPresented: $confirmStop, titleVisibility: .visible) {
@@ -133,33 +230,38 @@ struct JoinAwayPanel: View {
     }
 
     var body: some View {
-        SignInLayout(back: back) {
-            BrandLockup(app: true)
-            SignInHeading(title: say("joinAwayTitle"), detail: code.isEmpty ? "" : say("joinAwayHint"))
+        DesignPage(eyebrow: "Connect to a remote server", title: "Join with a code",
+                   lead: code.isEmpty ? "" : say("joinAwayHint"), identifier: "joinAway") {
             if !code.isEmpty {
-                Text(code)
-                    .accessibilityIdentifier("joinCode")
-                    .font(.wm(size: metrics.tv ? 72 : 40, weight: .bold, design: .monospaced))
-                    .kerning(metrics.tv ? 8 : 4)
-                    .foregroundStyle(palette.text)
-                    .padding(.horizontal, Tokens.Space.s6)
-                    .padding(.vertical, Tokens.Space.s3)
-                    .background(RoundedRectangle(cornerRadius: Tokens.Radius.lg, style: .continuous).fill(palette.panel))
-                    .accessibilityLabel(code.map(String.init).joined(separator: " "))
-                HStack(spacing: Tokens.Space.s2) {
-                    ProgressView()
-                    Secondary(finding ? say("joinAwayFinding") : say("joinAwayWaiting"))
+                DesignSection(title: "") {
+                    Text(code)
+                        .accessibilityIdentifier("joinCode")
+                        .font(.wm(size: metrics.tv ? 72 : 40, weight: .bold, design: .monospaced))
+                        .kerning(metrics.tv ? 8 : 4)
+                        .foregroundStyle(palette.text)
+                        .padding(.horizontal, Tokens.Space.s6)
+                        .padding(.vertical, Tokens.Space.s3)
+                        .background(RoundedRectangle(cornerRadius: Tokens.Radius.md, style: .continuous).fill(palette.card))
+                        .accessibilityLabel(code.map(String.init).joined(separator: " "))
+                    HStack(spacing: Tokens.Space.s2) {
+                        ProgressView()
+                        DesignNote(text: finding ? say("joinAwayFinding") : say("joinAwayWaiting"))
+                    }
                 }
             }
-            if !problem.isEmpty { ProblemLine(problem) }
+            if !problem.isEmpty { DesignSection(title: "") { ProblemLine(problem) } }
+            DesignSection(title: "") {
+                DesignNote(text: "Peer to peer connects this device straight to your server from anywhere, end to end encrypted. Nothing is opened on your router.", tone: true)
+                LegalNote()
+            }
         } actions: {
             if code.isEmpty && !problem.isEmpty {
-                Button(say("pairNew")) { round += 1 }.action(.primary, wide: true, tall: true).focused($mainAction)
+                Button(say("pairNew")) { round += 1 }.action(primary: true).focused($mainAction)
             }
-            Button(say("back"), action: back).action(code.isEmpty && !problem.isEmpty ? .quiet : .secondary, wide: true, tall: true)
+            Button(say("back"), action: back).action()
                 .firstFocus(in: scope, when: problem.isEmpty)
-            LegalNote()
         }
+        .onRemoteBack(back)
         .focusRoot(scope)
         .task(id: round) { await run() }
         .onChange(of: problem) { if !$0.isEmpty { mainAction = true } }

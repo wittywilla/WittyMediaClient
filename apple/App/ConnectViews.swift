@@ -42,6 +42,9 @@ struct ConnectView: View {
     @State private var busy = false
     @State private var connectingTo = ""
     @State private var showForm = false
+    /// The form is for an invite link (Join with a link or code), not an address.
+    @State private var formForInvite = false
+    @State private var scanning = false
     @State private var showJoin = false
     @State private var showManage = false
     /// A server that hasn't been set up: its address, for the screen that says to finish in a browser.
@@ -74,7 +77,7 @@ struct ConnectView: View {
                 problem = away
             } else if reason == "not-set-up" {
                 // Setup is web-only: the app doesn't connect until it is done, and says where to finish it.
-                notSetUp = url
+                notSetUp = (url.hasSuffix("/") ? String(url.dropLast()) : url) + "/setup"
             } else {
                 problem = reasonText(reason)
             }
@@ -170,8 +173,10 @@ struct ConnectView: View {
     }
 
     /// Servers found on the network that this device hasn't used: where each one is, and nothing else until it's added.
+    /// Servers found on the network that this device hasn't used: where each one is, and Connect.
     @ViewBuilder private func foundSection(_ others: [SavedServer]) -> some View {
-        DesignSection(title: "Found on this network") {
+        ConnectSectionLabel(title: "On this network")
+        VStack(spacing: Tokens.Space.s3) {
             if found.isEmpty {
                 HStack(spacing: Tokens.Space.s2) {
                     if searching { ProgressView().tint(palette.textSecondary) }
@@ -179,13 +184,28 @@ struct ConnectView: View {
                 }
                 .accessibilityElement(children: .combine)
             }
-            DesignRows {
-                ForEach(foundOnly(others)) { server in
-                    ServerCard(url: server.url, connecting: connectingTo == server.url) { Task { await connect(server.url) } }
-                        .focused($spot, equals: .found(server.id))
-                }
+            ForEach(foundOnly(others)) { server in
+                ServerTile(name: ServerCard.place(server.url), line: say("foundOnNetwork"), reach: .found,
+                           connecting: connectingTo == server.url) { Task { await connect(server.url) } }
+                    .focused($spot, equals: .found(server.id))
+                    .accessibilityIdentifier("connect.found." + server.id)
             }
         }
+        .remoteSection()
+    }
+
+    /// How a saved server is reached now: peer to peer from anywhere, on this network, or neither just now.
+    private func reach(_ server: SavedServer) -> ServerReach {
+        if PeerInfo.isPlaceholder(server.url) { return .peer }
+        let onNetwork = found.contains { $0.url == server.url || (!server.serverId.isEmpty && $0.id == server.serverId) }
+        return onNetwork ? .home : .saved
+    }
+
+    /// A saved server's line: where it is and when it was last reached.
+    private func line(_ server: SavedServer, _ how: ServerReach) -> String {
+        if how == .peer { return "From anywhere · " + ServerWords.reached(server) }
+        let place = ServerCard.place(ServerBook.address(of: server, found: found))
+        return ServerBook.isStale(server, now: ServerBook.now()) ? "\(place) · \(say("staleServer"))" : "\(place) · \(ServerWords.reached(server))"
     }
 
     /// Servers this device has used, the last one used first when they're listed first.
@@ -194,41 +214,69 @@ struct ConnectView: View {
         RememberedServers(servers: others, removed: { removed($0, from: others) }) { server in
             // Found on the network at another address than the one remembered: that is where it is now.
             let at = ServerBook.address(of: server, found: found)
-            ServerCard(saved: server, url: server.url, lastUsed: server.url == model.lastUsedURL,
-                       connecting: connectingTo == at, reached: ServerWords.reached(server),
-                       stale: ServerBook.isStale(server, now: ServerBook.now())) { Task { await connect(at) } }
+            let how = reach(server)
+            ServerTile(saved: server, name: server.name.isEmpty ? "WittyMediaServer" : server.name, line: line(server, how), reach: how,
+                       selected: server.url == model.lastUsedURL, connecting: connectingTo == at) { Task { await connect(at) } }
                 .focused($spot, equals: .recent(server.url))
                 .firstFocus(in: scope, when: server.url == first)
+                .accessibilityIdentifier("connect.saved." + server.url)
         }
         .remoteSection()
-        .padding(.top, Tokens.Space.s6)
     }
 
-    /// Enter an address, Join from away: the other ways in, as chips.
-    private func otherWays(_ none: Bool) -> some View {
-        DesignSection(title: "") {
-            DesignChips {
-                DesignChip(title: say("enterAddress"), on: none, symbol: "link") {
-                    showForm = true
-                    error = ""
-                }
-                .focused($spot, equals: .enterAddress)
+    private func openForm(invite: Bool) {
+        formForInvite = invite
+        showForm = true
+        error = ""
+    }
+
+    /// What the camera read: an invite link joins from away; a server's address connects. Nothing else is sent anywhere.
+    private func scanned(_ text: String) {
+        scanning = false
+        let read = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        if let invite = PeerConnect.invite(from: read) {
+            Task { await join(invite) }
+        } else if case .ok(let url) = Address.normalize(read), read.lowercased().hasPrefix("http") {
+            Task { await connect(url) }
+        } else {
+            error = "That QR code isn’t an invite or a server’s address."
+        }
+    }
+
+    /// The canvas's "Connect from anywhere" panel: peer to peer, made obvious, with the ways in as real buttons. On a TV:
+    /// a code to type in on a phone, or an address, the first focused.
+    private func remoteWays(_ none: Bool) -> some View {
+        ConnectAnywherePanel {
+            // Always shown, so the way in is never hidden: a copy built without peer to peer says so when it's chosen.
+            #if os(tvOS)
+            Button { showJoin = true; error = "" } label: { Label("Join with a link or code", systemImage: "link") }
+                .action(primary: true, wide: true)
+                .focused($spot, equals: .joinAway)
                 .firstFocus(in: scope, when: none)
-                // For a device that has never been at home with its server: it shows a code to type in there.
-                if PeerLibrary.available {
-                    DesignChip(title: say("joinAway"), symbol: "dot.radiowaves.left.and.right") {
-                        showJoin = true
-                        error = ""
-                    }
-                    .focused($spot, equals: .joinAway)
-                }
-            }
+                .accessibilityIdentifier("connect.join")
+            #else
+            Button { openForm(invite: true) } label: { Label("Join with a link or code", systemImage: "link") }
+                .action(primary: true, wide: true)
+                .focused($spot, equals: .joinAway)
+                .accessibilityIdentifier("connect.join")
+            #if os(iOS)
+            // Without a camera (a simulator, say) the sheet says so and points to pasting the link.
+            Button { scanning = true } label: { Label("Scan a QR code", systemImage: "qrcode.viewfinder") }
+                .action(wide: true)
+                .accessibilityIdentifier("connect.scan")
+            #endif
+            #endif
+            Button { openForm(invite: false) } label: { Label(say("enterAddress"), systemImage: "keyboard") }
+                .action(wide: true)
+                .focused($spot, equals: .enterAddress)
+                .accessibilityIdentifier("connect.address")
         }
     }
 
     /// Show saved servers first, and somewhere to forget a server that needs no gesture to find.
     private func onThisDevice(_ any: Bool) -> some View {
-        DesignSection(title: "On this device") {
+        VStack(alignment: .leading, spacing: 0) {
+            ConnectSectionLabel(title: "On this device")
             DesignRows {
                 DesignRow(title: "Show saved servers first", value: savedFirst ? "On" : "Off", on: savedFirst) {
                     savedFirst.toggle()
@@ -251,12 +299,8 @@ struct ConnectView: View {
         // top, so nobody scrolls past the network's to reach their own; what's found on the network is below them.
         let others = savedFirst ? ServerOrder.recentFirst(listed, lastUsed: model.lastUsedURL) : listed
         let savedOnTop = savedFirst && !others.isEmpty
-        return DesignPage(eyebrow: "Welcome", title: "Choose your server",
-                          lead: savedOnTop || others.isEmpty
-                              ? "Saved servers come first. Servers found on your network are below."
-                              : "Servers found on your network come first. Saved servers are below.",
-                          identifier: "connect") {
-            if !error.isEmpty { DesignSection(title: "") { DesignNote(text: error, tone: true) } }
+        return ConnectFrame {
+            if !error.isEmpty { DesignNote(text: error, tone: true).padding(.top, Tokens.Space.s4) }
             if savedOnTop {
                 savedSection(others)
                 foundSection(others)
@@ -264,25 +308,44 @@ struct ConnectView: View {
                 foundSection(others)
                 if !others.isEmpty { savedSection(others) }
             }
-            otherWays(found.isEmpty && others.isEmpty)
+            remoteWays(found.isEmpty && others.isEmpty)
             onThisDevice(!others.isEmpty)
-            DesignSection(title: "") { LegalNote() }
+            LegalNote().padding(.top, Tokens.Space.s6)
         }
     }
 
-    @ViewBuilder private var addressWords: some View {
-        BrandLockup(app: true)
-        SignInHeading(title: say("addressTitle"), detail: say("addressHint"))
-        if PeerLibrary.available { Secondary(say("inviteHint")) }
-    }
-
-    @ViewBuilder private var addressActions: some View {
-        OutlinedField(label: say("addressLabel"), text: $address, kind: .address, icon: "link", request: $wantField, onSubmit: submit)
-        if !error.isEmpty { ProblemLine(error) }
-        // Never disabled: on a TV that would take the focus away from under the person.
-        Button { if !busy { submit() } } label: { BusyText(say("connect"), busy: busy) }
-            .action(.primary, wide: true, tall: true)
-        LegalNote()
+    /// Enter an address, or (`formForInvite`) paste an invite: one field, Connect, and the way back.
+    private var addressPage: some View {
+        DesignPage(eyebrow: formForInvite ? "Connect to a remote server" : "Welcome",
+                   title: formForInvite ? "Join with a link or code" : say("addressTitle"),
+                   lead: formForInvite
+                       ? (PeerLibrary.available
+                           ? "Paste the invite link your server’s owner sent you. It works once, for a short time, and connects peer to peer from anywhere."
+                           : "This copy of WittyMediaClient was built without peer to peer, so an invite can’t be used here. Enter your server’s address instead, or install a copy built with it.")
+                       : say("addressHint") + (PeerLibrary.available ? " " + say("inviteHint") : ""),
+                   identifier: "connect.form") {
+            DesignSection(title: "") {
+                OutlinedField(label: formForInvite ? "Invite link" : say("addressLabel"), text: $address, kind: .address,
+                              icon: "link", request: $wantField, onSubmit: submit)
+                if !error.isEmpty { ProblemLine(error) }
+            }
+            if formForInvite, PeerLibrary.available {
+                DesignSection(title: "") {
+                    DesignChips {
+                        DesignChip(title: "Show a code on this device instead", symbol: "qrcode") {
+                            showForm = false
+                            showJoin = true
+                        }
+                    }
+                }
+            }
+            DesignSection(title: "") { LegalNote() }
+        } actions: {
+            // Never disabled: on a TV that would take the focus away from under the person.
+            Button { if !busy { submit() } } label: { BusyText(say("connect"), busy: busy) }
+                .action(primary: true)
+            Button(say("back"), action: closeForm).action()
+        }
     }
 
     var body: some View {
@@ -296,13 +359,19 @@ struct ConnectView: View {
             } else if showJoin {
                 JoinAwayPanel(back: closeJoin)
             } else if showForm {
-                SignInLayout(back: closeForm) { addressWords } actions: { addressActions }
+                addressPage
                     .task { wantField = true }
             } else {
                 findPage(others)
             }
         }
         .serverUndo()
+        #if os(iOS)
+        .sheet(isPresented: $scanning) {
+            ScannerSheet(looking: "an invite", hint: "Point the camera at the invite’s QR code on the other screen.",
+                         instead: "The camera couldn’t be started. Paste the invite link instead.") { scanned($0) }
+        }
+        #endif
         .focusRoot(scope)
         .onChange(of: spot) { focusChanged($0) }
         .onRemoteBack(notSetUp != nil ? { notSetUp = nil } : showManage ? { closeManage() } : showJoin ? { closeJoin() } : showForm ? { closeForm() } : nil)
