@@ -297,8 +297,9 @@ struct SDUIOfflineNote: View {
     }
 }
 
-/// Under a server-driven title page: the app's own sections for a disc (DiscSections.swift on a phone and a tablet;
-/// why this title is the film on Apple TV). Nothing for anything that isn't a disc.
+/// Under a server-driven title page, the app's own parts the server's page doesn't draw: where to watch it and an
+/// administrator's media tools for every title, and a disc's own sections (DiscSections.swift on a phone and a tablet;
+/// why this title is the film on Apple TV).
 private struct SDUIDiscExtras: View {
     @EnvironmentObject private var model: AppModel
     @Environment(\.client) private var client
@@ -308,7 +309,11 @@ private struct SDUIDiscExtras: View {
     @State private var found: (item: Item, facts: ItemFacts)?
 
     var body: some View {
-        Group {
+        VStack(alignment: .leading, spacing: Tokens.Space.s4) {
+            if let found {
+                // Where to watch it, and an administrator's canvas and skip markers (MediaPages.swift).
+                MediaItemExtras(item: found.item)
+            }
             if let found, TitleLook.isDisc(found.item) {
                 let page = width > 0 ? width : 400
                 #if os(tvOS)
