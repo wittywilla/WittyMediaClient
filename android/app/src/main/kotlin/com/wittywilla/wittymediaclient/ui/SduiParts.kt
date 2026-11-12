@@ -162,16 +162,21 @@ fun SduiDockBar(view: SduiView, side: Dp) {
 @Composable
 private fun SduiDock(view: SduiView, side: Dp) {
     val env = LocalSdui.current
-    val scheme = MaterialTheme.colorScheme
-    Column(
-        Modifier.fillMaxWidth().padding(horizontal = side).elevated(1, RoundedCornerShape(env.pt(14)), env.pt(14))
+    val keys = view.children.filter { it.type == "KeyLegend" }
+    // On a TV the bar sits on the picture's safe area, not on the screen's edge.
+    val foot = if (env.tv) env.pt(env.layout.safeArea.bottom) else 0.dp
+    Row(
+        Modifier.fillMaxWidth().padding(horizontal = side).padding(bottom = foot).elevated(1, RoundedCornerShape(env.pt(14)), env.pt(14))
             .defaultMinSize(minHeight = if (env.tv) env.pt(DesignTokens.Tv.DOCK_HEIGHT) else 0.dp)
             .padding(horizontal = env.space("m"), vertical = env.space("s")).focusGroup(),
-        verticalArrangement = Arrangement.spacedBy(env.space("s")),
+        horizontalArrangement = Arrangement.spacedBy(env.space("m")), verticalAlignment = Alignment.CenterVertically,
     ) {
-        Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(env.space("s")), verticalAlignment = Alignment.CenterVertically) {
-            view.children.forEach { SduiNode(it, view) }
+        // The buttons scroll when there are too many; the key legend keeps its place at the trailing end.
+        Row(Modifier.weight(1f, fill = false).horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(env.space("s")), verticalAlignment = Alignment.CenterVertically) {
+            view.children.filter { it.type != "KeyLegend" }.forEach { SduiNode(it, view) }
         }
+        Spacer(Modifier.weight(1f))
+        keys.forEach { SduiNode(it, view) }
     }
 }
 
