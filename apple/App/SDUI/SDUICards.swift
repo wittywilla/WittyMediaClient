@@ -268,7 +268,7 @@ struct SDUISeeAllCard: View {
 
     var body: some View {
         Button(action: action) {
-            RoundedRectangle(cornerRadius: draw.radius("Card", style: style), style: .continuous)
+            RoundedRectangle(cornerRadius: draw.radius("Card"), style: .continuous)
                 .fill(palette.card)
                 .frame(width: width, height: height)
                 .overlay {
