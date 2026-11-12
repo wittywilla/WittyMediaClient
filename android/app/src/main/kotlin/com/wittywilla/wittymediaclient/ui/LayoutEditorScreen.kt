@@ -450,14 +450,14 @@ private fun CanvasPage(env: Env) {
             zones.top.forEach { id -> key(id) { ItemBox(env, ItemRef.region(id), Modifier.weight(1f)) } }
         }
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(gap)) {
-            if (zones.left.isNotEmpty()) Column(Modifier.width(metrics.u(112).coerceAtLeast(104.dp)), verticalArrangement = Arrangement.spacedBy(gap)) {
+            if (zones.left.isNotEmpty()) Column(Modifier.width(metrics.u(112).coerceAtLeast(136.dp)), verticalArrangement = Arrangement.spacedBy(gap)) {
                 zones.left.forEach { id -> key(id) { ItemBox(env, ItemRef.region(id), Modifier.fillMaxWidth()) } }
             }
             Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(gap)) {
                 zones.body.forEach { id -> key(id) { ItemBox(env, ItemRef.region(id), Modifier.fillMaxWidth(), tall = id == "hero") } }
                 ed.doc.page?.sections?.filter { !it.hidden }?.forEach { section -> key(section.id) { ItemBox(env, ItemRef.section(section.id), Modifier.fillMaxWidth()) } }
             }
-            if (zones.right.isNotEmpty()) Column(Modifier.width(metrics.u(112).coerceAtLeast(104.dp)), verticalArrangement = Arrangement.spacedBy(gap)) {
+            if (zones.right.isNotEmpty()) Column(Modifier.width(metrics.u(112).coerceAtLeast(136.dp)), verticalArrangement = Arrangement.spacedBy(gap)) {
                 zones.right.forEach { id -> key(id) { ItemBox(env, ItemRef.region(id), Modifier.fillMaxWidth()) } }
             }
         }
