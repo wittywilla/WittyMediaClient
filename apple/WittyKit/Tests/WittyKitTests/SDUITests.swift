@@ -343,11 +343,11 @@ final class SDUITests: XCTestCase {
 
     func testWhatADeviceSaysAboutItself() {
         let hd = SDUIDevice.appleTV(pixelsWide: 1920, reducedMotion: false, views: ["guide"])
-        XCTAssertEqual(SDUIQuery.encode(hd.query), "catalog=2&platform=tvos&formFactor=tv&deviceClass=hd&views=guide")
+        XCTAssertEqual(SDUIQuery.encode(hd.query), "catalog=3&platform=tvos&formFactor=tv&deviceClass=hd&views=guide")
         let uhd = SDUIDevice.appleTV(pixelsWide: 3840, reducedMotion: true, hdr: true, views: [])
-        XCTAssertEqual(SDUIQuery.encode(uhd.query), "catalog=2&platform=tvos&formFactor=tv&deviceClass=4k&capabilities=reducedMotion%2Chdr")
+        XCTAssertEqual(SDUIQuery.encode(uhd.query), "catalog=3&platform=tvos&formFactor=tv&deviceClass=4k&capabilities=reducedMotion%2Chdr")
         let phone = SDUIDevice.touch(pad: false, width: 393, height: 852, reducedMotion: false, locale: "en-GB", views: ["guide"])
-        XCTAssertEqual(SDUIQuery.encode(phone.query), "catalog=2&platform=ios&formFactor=phone&viewport=393x852&views=guide&capabilities=touch&locale=en-GB")
+        XCTAssertEqual(SDUIQuery.encode(phone.query), "catalog=3&platform=ios&formFactor=phone&viewport=393x852&views=guide&capabilities=touch&locale=en-GB")
         // An iPad sharing its screen is still a tablet, with the part of the screen it has.
         let split = SDUIDevice.touch(pad: true, width: 507, height: 1024, reducedMotion: false, views: [])
         let full = SDUIDevice.touch(pad: true, width: 1366, height: 1024, reducedMotion: false, views: [])
@@ -361,16 +361,16 @@ final class SDUITests: XCTestCase {
         var few = phone
         few.components = []
         XCTAssertTrue(SDUIQuery.encode(few.query).contains("components=none"))
-        XCTAssertEqual(SDUIQuery.page(["q": "a b&c", "tab": ""], hd), "q=a%20b%26c&catalog=2&platform=tvos&formFactor=tv&deviceClass=hd&views=guide")
+        XCTAssertEqual(SDUIQuery.page(["q": "a b&c", "tab": ""], hd), "q=a%20b%26c&catalog=3&platform=tvos&formFactor=tv&deviceClass=hd&views=guide")
     }
 
     func testOnlyTheServersOwnAddressesAreAskedFor() {
         let device = SDUIDevice.appleTV(pixelsWide: 1920, reducedMotion: false, views: [])
         XCTAssertEqual(SDUIQuery.path(fromServer: "/api/v1/sdui/pages/home/sections/jump/items?cursor=12", device: device),
-                       "/sdui/pages/home/sections/jump/items?cursor=12&catalog=2&platform=tvos&formFactor=tv&deviceClass=hd")
+                       "/sdui/pages/home/sections/jump/items?cursor=12&catalog=3&platform=tvos&formFactor=tv&deviceClass=hd")
         XCTAssertEqual(SDUIQuery.path(fromServer: "/api/sdui/pages/home/personal", device: nil), "/sdui/pages/home/personal")
         XCTAssertEqual(SDUIQuery.path(fromServer: "/api/v1/sdui/pages/x/sections/y/items?cursor=0&platform=web", device: device),
-                       "/sdui/pages/x/sections/y/items?cursor=0&platform=web&catalog=2&formFactor=tv&deviceClass=hd")
+                       "/sdui/pages/x/sections/y/items?cursor=0&platform=web&catalog=3&formFactor=tv&deviceClass=hd")
         for bad in ["https://example.com/api/v1/sdui/x", "/api/v1/users", "/api/v1/sdui/../users", "//example.com/api/v1/sdui/x", "/api/v1/sdui/x y", ""] {
             XCTAssertNil(SDUIQuery.path(fromServer: bad, device: device), bad)
         }
@@ -639,7 +639,7 @@ final class SDUITests: XCTestCase {
         XCTAssertFalse(first.offline)
         let second = try await loader.load("home", params: ["tab": "a"], device: device)
         XCTAssertEqual(second.document, first.document, "a 304 is the page that was kept")
-        XCTAssertEqual(server.requests.map(\.path), Array(repeating: "/api/v1/sdui/pages/home?tab=a&catalog=2&platform=tvos&formFactor=tv&deviceClass=hd&views=guide", count: 2))
+        XCTAssertEqual(server.requests.map(\.path), Array(repeating: "/api/v1/sdui/pages/home?tab=a&catalog=3&platform=tvos&formFactor=tv&deviceClass=hd&views=guide", count: 2))
         XCTAssertNotNil(loader.kept("home", params: ["tab": "a"], device: device))
         XCTAssertNil(loader.kept("home", params: ["tab": "b"], device: device))
     }
@@ -697,7 +697,7 @@ final class SDUITests: XCTestCase {
         let first = try await loader.load("home", params: [:], device: device)
         let same = try await loader.refresh("home", params: [:], device: device, current: first)
         XCTAssertEqual(same, first)
-        XCTAssertTrue(server.requests.last?.path.hasPrefix("/api/v1/sdui/pages/home/diff?since=%22e1%22&catalog=2") ?? false, server.requests.last?.path ?? "")
+        XCTAssertTrue(server.requests.last?.path.hasPrefix("/api/v1/sdui/pages/home/diff?since=%22e1%22&catalog=3") ?? false, server.requests.last?.path ?? "")
 
         mode.answer = ##"{"etag":"\"e2\"","since":"\"e1\"","patches":[{"op":"remove","path":"#jump:3"}]}"##
         let patched = try await loader.refresh("home", params: [:], device: device, current: first)
@@ -743,12 +743,12 @@ final class SDUITests: XCTestCase {
         let nothing = try await client.sduiCommand(SDUICatalog.builtIn.command("refresh"), item: "12")
         XCTAssertFalse(nothing)
         XCTAssertEqual(server.requests.map { $0.line.split(separator: " ").prefix(2).joined(separator: " ") }, [
-            "GET /api/v1/sdui/pages/home/sections/jump/items?cursor=2&catalog=2&platform=tvos&formFactor=tv&deviceClass=hd",
-            "GET /api/v1/sdui/navigation?catalog=2&platform=tvos&formFactor=tv&deviceClass=hd",
+            "GET /api/v1/sdui/pages/home/sections/jump/items?cursor=2&catalog=3&platform=tvos&formFactor=tv&deviceClass=hd",
+            "GET /api/v1/sdui/navigation?catalog=3&platform=tvos&formFactor=tv&deviceClass=hd",
             "GET /api/v1/sdui/pages/home/personal",
             "PUT /api/v1/sdui/pages/home/personal",
             "DELETE /api/v1/sdui/navigation/personal",
-            "GET /api/v1/sdui/topshelf?catalog=2&platform=tvos&deviceClass=4k",
+            "GET /api/v1/sdui/topshelf?catalog=3&platform=tvos&deviceClass=4k",
             "GET /api/v1/sdui/catalog",
             "DELETE /api/v1/items/12/progress",
         ])

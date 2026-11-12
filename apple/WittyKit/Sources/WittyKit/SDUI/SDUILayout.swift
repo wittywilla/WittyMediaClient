@@ -47,6 +47,24 @@ public struct SDUILayout: Codable, Equatable, Sendable {
         public var repeats: Int?
     }
 
+    public struct Dock: Codable, Equatable, Sendable {
+        public var placement: String
+        public var height: Int
+        public var hintSize: Int
+        public init(placement: String = "sheet", height: Int = 0, hintSize: Int = 12) {
+            self.placement = placement
+            self.height = height
+            self.hintSize = hintSize
+        }
+        public init(from decoder: Decoder) throws {
+            let box = try decoder.container(keyedBy: CodingKeys.self)
+            placement = (try? box.decodeIfPresent(String.self, forKey: .placement)) ?? "sheet"
+            height = (try? box.decodeIfPresent(Int.self, forKey: .height)) ?? 0
+            hintSize = (try? box.decodeIfPresent(Int.self, forKey: .hintSize)) ?? 12
+        }
+        enum CodingKeys: String, CodingKey { case placement, height, hintSize }
+    }
+
     public struct TextLimits: Codable, Equatable, Sendable {
         public var title: Int?
         public var subtitle: Int?
@@ -72,12 +90,17 @@ public struct SDUILayout: Codable, Equatable, Sendable {
     public var externalLinks: Bool?
     public var reducedMotion: Bool?
     public var truncated: Bool?
+    /// How much of the next card (or slide) shows at the trailing edge of a row that scrolls, as a fraction of its width.
+    public var peek: Double
+    /// Where the Dock goes ("bottom": a bar `height` points tall across the foot of the screen; "sheet": no bar) and the
+    /// key legend's text size.
+    public var dock: Dock
     /// The frame the app draws around the page: the layout option chosen and its menu (docs/SDUI.md, Layout options).
     public var shell: SDUIShell?
 
     enum CodingKeys: String, CodingKey {
         case formFactor, canvas, scale, breakpoint, safeArea, focusEngine, density, spacing, text, cards, hero
-        case imageWidths, budget, textLimits, externalLinks, reducedMotion, truncated, shell
+        case imageWidths, budget, textLimits, externalLinks, reducedMotion, truncated, shell, peek, dock
         case deviceClass = "class"
     }
 
@@ -101,6 +124,8 @@ public struct SDUILayout: Codable, Equatable, Sendable {
         externalLinks = try? box.decodeIfPresent(Bool.self, forKey: .externalLinks)
         reducedMotion = try? box.decodeIfPresent(Bool.self, forKey: .reducedMotion)
         truncated = try? box.decodeIfPresent(Bool.self, forKey: .truncated)
+        peek = (try? box.decodeIfPresent(Double.self, forKey: .peek)) ?? 0
+        dock = (try? box.decodeIfPresent(Dock.self, forKey: .dock)) ?? Dock()
         shell = try? box.decodeIfPresent(SDUIShell.self, forKey: .shell)
     }
 
@@ -122,6 +147,8 @@ public struct SDUILayout: Codable, Equatable, Sendable {
         self.hero = hero
         self.imageWidths = imageWidths
         self.budget = budget
+        self.peek = 0
+        self.dock = Dock()
     }
 
     /// What a page without a layout is laid out with: a phone's. A real page always carries its own.

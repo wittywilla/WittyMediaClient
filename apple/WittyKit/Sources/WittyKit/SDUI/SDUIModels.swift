@@ -2,423 +2,196 @@
 // Copyright (C) 2026 WittyWilla and contributors
 import Foundation
 
-// What the server sends for a server-driven page: the server's docs/SDUI.md, "The rendered document".
-// Every type here reads what it knows and ignores the rest, so a newer server's additions do no harm.
+/// How a card style is drawn: what it shows of what a card carries, in reading order (which is also the order
+/// of its accessibility label), and how many lines its title and subtitle may take.
+public struct SDUICardStyle: Codable, Equatable, Sendable {
+    public var style: String
+    public var shape: String?
+    public var aspect: String?
+    public var shows: [String]?
+    public var titleLines: Int?
+    public var subtitleLines: Int?
+    /// Which theme tokens draw it: colours, text roles and corners (the server's docs/THEMES.md, SDUI tokens).
+    public var tokens: SDUIStyleTokens?
 
-/// The catalogue revision this app was built against. Sent with every request (`catalog=2`), so a newer
-/// server sends nothing this app can't draw.
-public enum SDUI {
-    public static let catalog = 2
-    public static let version = 1
-    /// The features in `/capabilities` that the app's server-driven pages need, all of them.
-    public static let neededFeatures: Set<String> = ["sdui-pages", "sdui-catalog", "sdui-navigation", "sdui-personal"]
-    public static let topShelfFeature = "sdui-topshelf"
+    public init(_ style: String, shape: String, aspect: String, shows: [String], titleLines: Int, subtitleLines: Int) {
+        self.style = style
+        self.shape = shape
+        self.aspect = aspect
+        self.shows = shows
+        self.titleLines = titleLines
+        self.subtitleLines = subtitleLines
+    }
 
-    /// Whether a server with these features has server-driven pages for this app.
-    public static func available(_ features: Set<String>) -> Bool { neededFeatures.isSubset(of: features) }
+    /// What a style this app doesn't know is drawn as: its shape, with the title and subtitle under the picture.
+    public static let unknown = SDUICardStyle("", shape: "", aspect: "", shows: ["title", "subtitle"], titleLines: 1, subtitleLines: 1)
 }
 
-/// A page rendered for one profile on one device.
-public struct SDUIDocument: Codable, Equatable, Sendable {
-    public var version: Int
-    public var catalog: Int?
-    public var page: SDUIPageInfo
-    public var layout: SDUILayout
-    public var theme: SDUIThemeScope?
-    public var root: SDUINode
-    public var screenTime: SDUIScreenTime?
-    public var personal: SDUIPersonalInfo?
-    public var meta: SDUIMeta?
-
-    enum CodingKeys: String, CodingKey { case version, catalog, page, layout, theme, root, screenTime, personal, meta }
-
-    public init(version: Int = SDUI.version, catalog: Int? = SDUI.catalog, page: SDUIPageInfo, layout: SDUILayout,
-                theme: SDUIThemeScope? = nil, root: SDUINode, screenTime: SDUIScreenTime? = nil,
-                personal: SDUIPersonalInfo? = nil, meta: SDUIMeta? = nil) {
-        self.version = version
-        self.catalog = catalog
-        self.page = page
-        self.layout = layout
-        self.theme = theme
-        self.root = root
-        self.screenTime = screenTime
-        self.personal = personal
-        self.meta = meta
-    }
-
-    public init(from decoder: Decoder) throws {
-        let box = try decoder.container(keyedBy: CodingKeys.self)
-        version = try box.decodeIfPresent(Int.self, forKey: .version) ?? 0
-        // A version this app doesn't know is refused: the one thing a client must not try to draw.
-        guard version == SDUI.version else {
-            throw DecodingError.dataCorruptedError(forKey: .version, in: box, debugDescription: "This page needs a newer app.")
-        }
-        catalog = try? box.decodeIfPresent(Int.self, forKey: .catalog)
-        page = (try? box.decodeIfPresent(SDUIPageInfo.self, forKey: .page)) ?? SDUIPageInfo()
-        layout = (try? box.decodeIfPresent(SDUILayout.self, forKey: .layout)) ?? SDUILayout.fallback
-        theme = try? box.decodeIfPresent(SDUIThemeScope.self, forKey: .theme)
-        root = try box.decode(SDUINode.self, forKey: .root)
-        screenTime = try? box.decodeIfPresent(SDUIScreenTime.self, forKey: .screenTime)
-        personal = try? box.decodeIfPresent(SDUIPersonalInfo.self, forKey: .personal)
-        meta = try? box.decodeIfPresent(SDUIMeta.self, forKey: .meta)
-    }
-}
-
-public struct SDUIPageInfo: Codable, Equatable, Sendable {
-    public var id: String
-    public var kind: String
-    public var title: String
-    public var icon: String?
-    public var route: String?
-    public var variant: String?
-    /// What the page was opened with, to send again with a refresh.
-    public var params: [String: String]?
-
-    public init(id: String = "", kind: String = "", title: String = "", icon: String? = nil, route: String? = nil,
-                variant: String? = nil, params: [String: String]? = nil) {
-        self.id = id
-        self.kind = kind
-        self.title = title
-        self.icon = icon
-        self.route = route
-        self.variant = variant
-        self.params = params
-    }
-
-    enum CodingKeys: String, CodingKey { case id, kind, title, icon, route, variant, params }
-
-    public init(from decoder: Decoder) throws {
-        let box = try decoder.container(keyedBy: CodingKeys.self)
-        id = (try? box.decodeIfPresent(String.self, forKey: .id)) ?? ""
-        kind = (try? box.decodeIfPresent(String.self, forKey: .kind)) ?? ""
-        title = (try? box.decodeIfPresent(String.self, forKey: .title)) ?? ""
-        icon = try? box.decodeIfPresent(String.self, forKey: .icon)
-        route = try? box.decodeIfPresent(String.self, forKey: .route)
-        variant = try? box.decodeIfPresent(String.self, forKey: .variant)
-        // Parameters are text, but a number would do no harm.
-        if let loose = try? box.decodeIfPresent([String: JSONValue].self, forKey: .params) {
-            var out: [String: String] = [:]
-            for (key, value) in loose {
-                if let text = value.string { out[key] = text } else if let n = value.int { out[key] = String(n) }
-            }
-            params = out
-        }
-    }
-}
-
-public struct SDUIThemeScope: Codable, Equatable, Sendable {
-    public var scope: String?
-    public var tokens: [String: String]?
-    public init(scope: String? = nil, tokens: [String: String]? = nil) {
-        self.scope = scope
-        self.tokens = tokens
-    }
-}
-
-/// Present when the profile's screen time is over: pages still draw, nothing in them plays.
-public struct SDUIScreenTime: Codable, Equatable, Sendable {
-    public var reason: String?
-    public var message: String?
-    /// When there is time again, in Unix seconds.
-    public var nextAt: Int64?
-}
-
-public struct SDUIMeta: Codable, Equatable, Sendable {
-    public var etag: String?
-    public var generatedAt: String?
-    public var source: String?
-    public var configRevision: Int?
-    public var ttlSeconds: Int?
-}
-
-/// What the profile may change about a page, and what it has changed.
-public struct SDUIPersonalInfo: Codable, Equatable, Sendable {
-    public struct Section: Codable, Equatable, Identifiable, Sendable {
-        public var id: String
-        public var title: String?
-        public var hidden: Bool?
-        public var pinned: Bool?
-        public var locked: Bool?
-        /// Nothing in it now, so it isn't on the page.
-        public var empty: Bool?
-
-        public init(id: String, title: String? = nil, hidden: Bool? = nil, pinned: Bool? = nil, locked: Bool? = nil,
-                    empty: Bool? = nil) {
-            self.id = id
-            self.title = title
-            self.hidden = hidden
-            self.pinned = pinned
-            self.locked = locked
-            self.empty = empty
-        }
-    }
-
-    public var editable: Bool?
-    public var allow: [String]?
-    public var sections: [Section]?
-    public var density: String?
-    public var url: String?
-
-    public init(editable: Bool? = nil, allow: [String]? = nil, sections: [Section]? = nil, density: String? = nil, url: String? = nil) {
-        self.editable = editable
-        self.allow = allow
-        self.sections = sections
-        self.density = density
-        self.url = url
-    }
-}
-
-public struct SDUIFocus: Codable, Equatable, Hashable, Sendable {
-    public var order: Int
-    public var group: String?
-    public var isDefault: Bool?
-
-    enum CodingKeys: String, CodingKey {
-        case order, group
-        case isDefault = "default"
-    }
-
-    public init(order: Int, group: String? = nil, isDefault: Bool? = nil) {
-        self.order = order
-        self.group = group
-        self.isDefault = isDefault
-    }
-
-    public init(from decoder: Decoder) throws {
-        let box = try decoder.container(keyedBy: CodingKeys.self)
-        order = (try? box.decodeIfPresent(Int.self, forKey: .order)) ?? 0
-        group = try? box.decodeIfPresent(String.self, forKey: .group)
-        isDefault = try? box.decodeIfPresent(Bool.self, forKey: .isDefault)
-    }
-}
-
-/// What activating a node does. A type this app doesn't know does nothing.
-public struct SDUIAction: Codable, Equatable, Hashable, Sendable {
-    public var type: String
-    public var to: String?
-    public var item: String?
-    public var url: String?
-    public var op: String?
-    public var params: SDUIProps?
-
-    public init(type: String, to: String? = nil, item: String? = nil, url: String? = nil, op: String? = nil, params: SDUIProps? = nil) {
-        self.type = type
-        self.to = to
-        self.item = item
-        self.url = url
-        self.op = op
-        self.params = params
-    }
-
-    enum CodingKeys: String, CodingKey { case type, to, item, url, op, params }
-
-    public init(from decoder: Decoder) throws {
-        let box = try decoder.container(keyedBy: CodingKeys.self)
-        type = (try? box.decodeIfPresent(String.self, forKey: .type)) ?? ""
-        to = try? box.decodeIfPresent(String.self, forKey: .to)
-        // An item's ID is text, but a number is read too.
-        if let text = try? box.decodeIfPresent(String.self, forKey: .item) {
-            item = text
-        } else if let n = try? box.decodeIfPresent(Int64.self, forKey: .item) {
-            item = String(n)
-        }
-        url = try? box.decodeIfPresent(String.self, forKey: .url)
-        op = try? box.decodeIfPresent(String.self, forKey: .op)
-        params = try? box.decodeIfPresent(SDUIProps.self, forKey: .params)
-    }
-}
-
-/// One component of a page. `type` is whatever the server sent: one this app doesn't know is drawn as a
-/// plain column of its children.
-public struct SDUINode: Codable, Equatable, Identifiable, Sendable {
-    public var type: String
-    public var id: String
-    public var props: SDUIProps?
-    public var children: [SDUINode]?
-    public var action: SDUIAction?
-    public var focus: SDUIFocus?
-    public var state: String?
-    public var scope: String?
-    public var tokens: [String: String]?
-
-    public init(type: String, id: String, props: SDUIProps? = nil, children: [SDUINode]? = nil, action: SDUIAction? = nil,
-                focus: SDUIFocus? = nil, state: String? = nil, scope: String? = nil, tokens: [String: String]? = nil) {
-        self.type = type
-        self.id = id
-        self.props = props
-        self.children = children
-        self.action = action
-        self.focus = focus
-        self.state = state
-        self.scope = scope
-        self.tokens = tokens
-    }
-
-    enum CodingKeys: String, CodingKey { case type, id, props, children, action, focus, state, scope, tokens }
-
-    public init(from decoder: Decoder) throws {
-        let box = try decoder.container(keyedBy: CodingKeys.self)
-        type = (try? box.decodeIfPresent(String.self, forKey: .type)) ?? ""
-        id = (try? box.decodeIfPresent(String.self, forKey: .id)) ?? ""
-        props = try? box.decodeIfPresent(SDUIProps.self, forKey: .props)
-        // A child that can't be read at all is left out; the rest of the page still draws.
-        if let loose = try? box.decodeIfPresent([Loose<SDUINode>].self, forKey: .children) {
-            children = loose.compactMap(\.value)
-        }
-        action = try? box.decodeIfPresent(SDUIAction.self, forKey: .action)
-        focus = try? box.decodeIfPresent(SDUIFocus.self, forKey: .focus)
-        state = try? box.decodeIfPresent(String.self, forKey: .state)
-        scope = try? box.decodeIfPresent(String.self, forKey: .scope)
-        tokens = try? box.decodeIfPresent([String: String].self, forKey: .tokens)
-    }
-
-    public var kids: [SDUINode] { children ?? [] }
-    public var properties: SDUIProps { props ?? [:] }
-}
-
-/// Something in a list that may not be readable: the list keeps the ones that are.
-struct Loose<T: Decodable>: Decodable {
-    let value: T?
-    init(from decoder: Decoder) throws { value = try? T(from: decoder) }
-}
-
-/// A page of a section's items: the answer to `props.more.url`, a season's own address, or a deferred section's.
-public struct SDUISectionItems: Codable, Equatable, Sendable {
-    public var version: Int?
-    public var section: String?
-    public var items: [SDUINode]?
-    public var next: String?
-    /// The items take the place of the ones there (another season).
-    public var replace: Bool?
-    /// On a first page: the section's own props as they are now.
-    public var props: SDUIProps?
-    public var state: String?
-}
-
-/// One entry of the main menu.
-public struct SDUINavItem: Codable, Equatable, Identifiable, Hashable, Sendable {
-    public var id: String
-    public var label: String
-    public var icon: String?
-    /// `page` or `native`. Anything else is opened by its route.
-    public var kind: String
+/// One row of the catalogue's routes table: which page, or which of the app's own screens, shows a place in the app.
+public struct SDUIRouteRule: Codable, Equatable, Sendable {
+    public var pattern: String
     public var page: String?
+    public var native: String?
+    /// `{name}` is a part of the route, `?name` a query parameter, anything else is itself.
     public var params: [String: String]?
-    public var screen: String?
-    public var route: String?
-    /// `primary`, `more` or `end`.
-    public var placement: String?
 
-    public init(id: String, label: String, icon: String? = nil, kind: String, page: String? = nil, params: [String: String]? = nil,
-                screen: String? = nil, route: String? = nil, placement: String? = nil) {
-        self.id = id
-        self.label = label
-        self.icon = icon
-        self.kind = kind
+    public init(_ pattern: String, page: String? = nil, native: String? = nil, params: [String: String]? = nil) {
+        self.pattern = pattern
         self.page = page
+        self.native = native
         self.params = params
-        self.screen = screen
-        self.route = route
-        self.placement = placement
     }
-
-    public var isSettings: Bool { kind == "native" && screen == "settings" }
 }
 
-public struct SDUINavigation: Codable, Equatable, Sendable {
-    public var version: Int?
-    public var formFactor: String?
-    public var etag: String?
-    public var items: [SDUINavItem]
-    /// For a profile that may rearrange the menu: every entry it could have, in its order, hidden ones included.
-    public var personal: SDUIPersonalInfo?
-    /// The frame the app draws around its pages: the layout option in force and its menu.
-    public var shell: SDUIShell?
-    /// What this profile may choose on this device, for the Layout row in the app's own Settings.
-    public var layouts: SDUILayoutChoice?
+/// One of the catalogue's commands: a request the app makes for the profile, then asks for the page again.
+public struct SDUICommand: Codable, Equatable, Sendable {
+    public var op: String
+    public var label: String?
+    public var method: String?
+    /// With `{item}` where the item's ID goes.
+    public var path: String?
+    public var body: String?
 
-    public init(items: [SDUINavItem], formFactor: String? = nil, etag: String? = nil, personal: SDUIPersonalInfo? = nil,
-                shell: SDUIShell? = nil, layouts: SDUILayoutChoice? = nil) {
-        self.version = SDUI.version
-        self.items = items
-        self.formFactor = formFactor
-        self.etag = etag
-        self.personal = personal
-        self.shell = shell
-        self.layouts = layouts
+    public init(_ op: String, method: String? = nil, path: String? = nil, body: String? = nil) {
+        self.op = op
+        self.method = method
+        self.path = path
+        self.body = body
     }
-
-    enum CodingKeys: String, CodingKey { case version, formFactor, etag, items, personal, shell, layouts }
-
-    public init(from decoder: Decoder) throws {
-        let box = try decoder.container(keyedBy: CodingKeys.self)
-        version = try? box.decodeIfPresent(Int.self, forKey: .version)
-        formFactor = try? box.decodeIfPresent(String.self, forKey: .formFactor)
-        etag = try? box.decodeIfPresent(String.self, forKey: .etag)
-        items = ((try? box.decodeIfPresent([Loose<SDUINavItem>].self, forKey: .items)) ?? []).compactMap(\.value)
-        personal = try? box.decodeIfPresent(SDUIPersonalInfo.self, forKey: .personal)
-        shell = try? box.decodeIfPresent(SDUIShell.self, forKey: .shell)
-        layouts = try? box.decodeIfPresent(SDUILayoutChoice.self, forKey: .layouts)
-    }
-
-    public func placed(_ placement: String) -> [SDUINavItem] { items.filter { ($0.placement ?? "primary") == placement } }
 }
 
-/// A picture as a page names it: the address already carries the width to ask for.
-public struct SDUIImageRef: Equatable, Hashable, Sendable {
-    public var url: String
-    public var width: Int
-    public var height: Int
-    public var aspect: String
-    public var kind: String
+/// The parts of `GET /sdui/catalog` an app that draws pages needs. Everything else in it is for editors.
+public struct SDUICatalog: Codable, Equatable, Sendable {
+    public var revision: Int?
+    public var cardStyles: [SDUICardStyle]
+    public var routes: [SDUIRouteRule]
+    public var commands: [SDUICommand]
+    public var icons: [String]?
+    /// Each component's theme tokens, by its type.
+    public var componentTokens: [String: SDUIStyleTokens] = [:]
+    /// Each text role's typeface and weight, by name in the resolved theme's `type`.
+    public var typeRoles: [String: SDUITypeRole] = [:]
 
-    public init?(_ value: JSONValue?) {
-        guard let fields = value?.object, let url = fields["url"]?.string, !url.isEmpty else { return nil }
-        self.url = url
-        width = fields.whole("width") ?? 0
-        height = fields.whole("height") ?? 0
-        aspect = fields.text("aspect")
-        kind = fields.text("kind")
-    }
+    enum CodingKeys: String, CodingKey { case revision, cardStyles, routes, commands, icons, components, theme }
 
-    /// Width over height, from `aspect` ("16/9") or the two sizes. 1 when neither says.
-    public var ratio: Double { SDUILayout.ratio(aspect) ?? (width > 0 && height > 0 ? Double(width) / Double(height) : 1) }
-}
+    private struct Component: Codable { let type: String; let tokens: SDUIStyleTokens? }
+    private struct ThemeVocabulary: Codable { let typeRoles: [String: SDUITypeRole]? }
 
-/// The layout options a profile may choose on this device (`navigation.layouts`, `GET /sdui/layout`'s `choice`).
-/// `chosen` is the profile's own choice for this device; nil means it follows the server's.
-public struct SDUILayoutChoice: Codable, Equatable, Sendable {
-    public struct Option: Codable, Equatable, Identifiable, Sendable {
-        public var value: String
-        public var label: String
-        public var id: String { value }
-
-        public init(value: String, label: String) {
-            self.value = value
-            self.label = label
-        }
-    }
-
-    public var current: String
-    public var chosen: String?
-    public var options: [Option]
-    public var url: String?
-
-    public init(current: String, chosen: String? = nil, options: [Option], url: String? = nil) {
-        self.current = current
-        self.chosen = chosen
-        self.options = options
-        self.url = url
+    public func encode(to encoder: Encoder) throws {
+        var box = encoder.container(keyedBy: CodingKeys.self)
+        try box.encodeIfPresent(revision, forKey: .revision)
+        try box.encode(cardStyles, forKey: .cardStyles)
+        try box.encode(routes, forKey: .routes)
+        try box.encode(commands, forKey: .commands)
+        try box.encodeIfPresent(icons, forKey: .icons)
+        try box.encode(componentTokens.map { Component(type: $0.key, tokens: $0.value) }.sorted { $0.type < $1.type }, forKey: .components)
+        try box.encode(ThemeVocabulary(typeRoles: typeRoles), forKey: .theme)
     }
 
     public init(from decoder: Decoder) throws {
         let box = try decoder.container(keyedBy: CodingKeys.self)
-        current = (try? box.decodeIfPresent(String.self, forKey: .current)) ?? "sidebar"
-        chosen = try? box.decodeIfPresent(String.self, forKey: .chosen)
-        options = ((try? box.decodeIfPresent([Loose<Option>].self, forKey: .options)) ?? []).compactMap(\.value)
-        url = try? box.decodeIfPresent(String.self, forKey: .url)
+        revision = try? box.decodeIfPresent(Int.self, forKey: .revision)
+        let styles = ((try? box.decodeIfPresent([Loose<SDUICardStyle>].self, forKey: .cardStyles)) ?? []).compactMap(\.value)
+        let rules = ((try? box.decodeIfPresent([Loose<SDUIRouteRule>].self, forKey: .routes)) ?? []).compactMap(\.value)
+        let ops = ((try? box.decodeIfPresent([Loose<SDUICommand>].self, forKey: .commands)) ?? []).compactMap(\.value)
+        // A catalogue without a table keeps the one this app was built with.
+        cardStyles = styles.isEmpty ? SDUICatalog.builtIn.cardStyles : styles
+        routes = rules.isEmpty ? SDUICatalog.builtIn.routes : rules
+        commands = ops.isEmpty ? SDUICatalog.builtIn.commands : ops
+        icons = try? box.decodeIfPresent([String].self, forKey: .icons)
+        let parts = ((try? box.decodeIfPresent([Loose<Component>].self, forKey: .components)) ?? []).compactMap(\.value)
+        componentTokens = Dictionary(parts.compactMap { part in part.tokens.map { (part.type, $0) } }, uniquingKeysWith: { first, _ in first })
+        typeRoles = (try? box.decodeIfPresent(ThemeVocabulary.self, forKey: .theme))?.typeRoles ?? [:]
     }
 
-    /// The label of the layout in force, for the row's value.
-    public var currentLabel: String { options.first { $0.value == current }?.label ?? current }
+    public init(cardStyles: [SDUICardStyle], routes: [SDUIRouteRule], commands: [SDUICommand]) {
+        revision = SDUI.catalog
+        self.cardStyles = cardStyles
+        self.routes = routes
+        self.commands = commands
+    }
+
+    public func cardStyle(_ name: String) -> SDUICardStyle? { cardStyles.first { $0.style == name } }
+    public func command(_ op: String) -> SDUICommand? { commands.first { $0.op == op } }
+
+    /// Catalogue revision 2 as this app was built against it: what's used until the server's own has been
+    /// read, and when it can't be. The same tables as the server's docs/SDUI.md, "Card styles", "Routes", "Commands".
+    public static let builtIn = SDUICatalog(
+        cardStyles: [
+            SDUICardStyle("poster", shape: "poster", aspect: "2/3", shows: ["title", "subtitle", "progress", "watched", "unwatched", "badges"], titleLines: 1, subtitleLines: 1),
+            SDUICardStyle("landscape", shape: "landscape", aspect: "16/9", shows: ["title", "subtitle", "badges"], titleLines: 1, subtitleLines: 1),
+            SDUICardStyle("progress", shape: "landscape", aspect: "16/9", shows: ["title", "subtitle", "progress", "remaining"], titleLines: 1, subtitleLines: 1),
+            SDUICardStyle("episode", shape: "landscape", aspect: "16/9", shows: ["title", "subtitle", "synopsis", "progress", "watched"], titleLines: 1, subtitleLines: 1),
+            SDUICardStyle("square", shape: "square", aspect: "1/1", shows: ["title", "subtitle"], titleLines: 1, subtitleLines: 1),
+            SDUICardStyle("album", shape: "square", aspect: "1/1", shows: ["title", "subtitle"], titleLines: 1, subtitleLines: 1),
+            SDUICardStyle("circle", shape: "circle", aspect: "1/1", shows: ["title"], titleLines: 2, subtitleLines: 0),
+            SDUICardStyle("person", shape: "circle", aspect: "1/1", shows: ["title", "subtitle"], titleLines: 1, subtitleLines: 1),
+            SDUICardStyle("book", shape: "poster", aspect: "2/3", shows: ["title", "subtitle", "progress"], titleLines: 2, subtitleLines: 1),
+            SDUICardStyle("game", shape: "poster", aspect: "3/4", shows: ["title", "subtitle", "badges"], titleLines: 1, subtitleLines: 1),
+            SDUICardStyle("photo", shape: "square", aspect: "1/1", shows: [], titleLines: 0, subtitleLines: 0),
+            SDUICardStyle("channel", shape: "landscape", aspect: "16/9", shows: ["number", "title", "now", "next", "progress"], titleLines: 1, subtitleLines: 2),
+            SDUICardStyle("tile", shape: "landscape", aspect: "16/9", shows: ["title", "count"], titleLines: 1, subtitleLines: 0),
+            SDUICardStyle("chip", shape: "chip", aspect: "", shows: ["title"], titleLines: 1, subtitleLines: 0),
+        ],
+        routes: [
+            SDUIRouteRule("/", page: "home"),
+            SDUIRouteRule("/libraries", page: "libraries"),
+            SDUIRouteRule("/library/{library}", page: "library", params: ["library": "{library}"]),
+            SDUIRouteRule("/item/{item}", page: "detail", params: ["item": "{item}"]),
+            SDUIRouteRule("/show/{show}", page: "detail", params: ["show": "{show}"]),
+            SDUIRouteRule("/album/{library}", page: "detail", params: ["album": "?album", "artist": "?artist", "library": "{library}"]),
+            SDUIRouteRule("/collections/{collection}", page: "detail", params: ["collection": "{collection}"]),
+            SDUIRouteRule("/collections", page: "collections"),
+            SDUIRouteRule("/search", page: "search", params: ["q": "?q"]),
+            SDUIRouteRule("/tv", page: "livetv"),
+            SDUIRouteRule("/music", page: "music"),
+            SDUIRouteRule("/photos", page: "photos"),
+            SDUIRouteRule("/books", page: "books"),
+            SDUIRouteRule("/games", page: "games"),
+            SDUIRouteRule("/page/{id}", page: "{id}"),
+            SDUIRouteRule("/settings", native: "settings"),
+            SDUIRouteRule("/settings/{section}", native: "settings"),
+            SDUIRouteRule("/tv/guide", native: "guide"),
+            SDUIRouteRule("/tv/recordings", native: "guide"),
+            SDUIRouteRule("/tv/watch/{key}", native: "livePlayer"),
+            SDUIRouteRule("/watch/{item}", native: "player"),
+            SDUIRouteRule("/play/{item}", native: "player"),
+            SDUIRouteRule("/read/{item}", native: "reader"),
+            SDUIRouteRule("/game/{item}", native: "game"),
+            SDUIRouteRule("/you", native: "profiles"),
+            SDUIRouteRule("/pair", native: "pair"),
+        ],
+        commands: [
+            SDUICommand("watchLater.add", method: "POST", path: "/api/v1/collections/watch-later/items", body: "{\"items\":[{item}]}"),
+            SDUICommand("watched.set", method: "POST", path: "/api/v1/items/{item}/progress", body: "{\"watched\":true}"),
+            SDUICommand("watched.clear", method: "DELETE", path: "/api/v1/items/{item}/progress"),
+            SDUICommand("selectTab"),
+            SDUICommand("control.open"),
+            SDUICommand("refresh"),
+        ])
+}
+
+/// A component's or card style's theme tokens: each coloured part's colour token, each text's role, each rounded
+/// part's shape token.
+public struct SDUIStyleTokens: Codable, Equatable, Sendable {
+    public var colors: [String: String]?
+    public var type: [String: String]?
+    public var shape: [String: String]?
+
+    public init(colors: [String: String]? = nil, type: [String: String]? = nil, shape: [String: String]? = nil) {
+        self.colors = colors
+        self.type = type
+        self.shape = shape
+    }
+}
+
+/// A text role's typeface (`display`, `body` or `mono`) and weight (`body`, `medium`, `strong`, `heading`).
+public struct SDUITypeRole: Codable, Equatable, Sendable {
+    public var family: String
+    public var weight: String
+
+    public init(family: String, weight: String) {
+        self.family = family
+        self.weight = weight
+    }
 }

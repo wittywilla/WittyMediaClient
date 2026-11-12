@@ -166,6 +166,7 @@ public struct SDUICatalog: Codable, Equatable, Sendable {
             SDUICommand("watched.set", method: "POST", path: "/api/v1/items/{item}/progress", body: "{\"watched\":true}"),
             SDUICommand("watched.clear", method: "DELETE", path: "/api/v1/items/{item}/progress"),
             SDUICommand("selectTab"),
+            SDUICommand("control.open"),
             SDUICommand("refresh"),
         ])
 }
