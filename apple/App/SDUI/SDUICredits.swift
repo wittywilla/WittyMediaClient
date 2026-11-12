@@ -92,12 +92,20 @@ struct SDUICreditsView: View {
             ScrollView(.horizontal, showsIndicators: false) {
                 LazyHStack(alignment: .top, spacing: layout.isTV ? 40 : layout.sp("m")) {
                     ForEach(part.cards) { card in
-                        Button { actor.perform(card.action) } label: { PersonCard(card: card, side: portrait) }
-                            .personButtonStyle()
-                            .sduiFocusable(card.isFocusable ? focus : nil, card.id)
-                            // A button is one element already; wrapping it in another hides it from a TV's focus.
-                            .accessibilityLabel(card.label)
-                            .accessibilityIdentifier("sdui.card." + card.id)
+                        if card.action != nil {
+                            Button { actor.perform(card.action) } label: { PersonCard(card: card, side: portrait) }
+                                .personButtonStyle()
+                                .sduiFocusable(card.isFocusable ? focus : nil, card.id)
+                                // A button is one element already; wrapping it in another hides it from a TV's focus.
+                                .accessibilityLabel(card.label)
+                                .accessibilityIdentifier("sdui.card." + card.id)
+                        } else {
+                            // With no route the card opens nothing: not a button, and no stop for focus.
+                            PersonCard(card: card, side: portrait)
+                                .accessibilityElement(children: .ignore)
+                                .accessibilityLabel(card.label)
+                                .accessibilityIdentifier("sdui.card." + card.id)
+                        }
                     }
                     if credits.hasMore, part.id == parts.first(where: \.isPeople)?.id {
                         Button(action: askForAll) { ShowAllTile(side: portrait) }
@@ -227,6 +235,12 @@ private struct PersonCard: View {
             if !card.shown("subtitle").isEmpty {
                 Text(card.shown("subtitle")).sduiFont("caption").foregroundStyle(palette.textSecondary)
                     .lineLimit(2).multilineTextAlignment(.center)
+            }
+            // The style shows badges (a friend's presence, say): read as they are, in the label already.
+            if let badge = card.badges.first {
+                Text(badge).sduiFont("caption", weight: .semibold).foregroundStyle(palette.accentText)
+                    .lineLimit(1)
+                    .accessibilityHidden(true)
             }
         }
         .frame(width: side)
