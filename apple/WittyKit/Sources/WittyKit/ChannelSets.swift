@@ -247,6 +247,24 @@ public enum GuidePaging {
         return row - row % size
     }
 
+    /// How many rows either side of the highlighted one are drawn when every channel is in one list.
+    public static let drawnAround = 40
+
+    /// The rows actually drawn of a list shown all at once: those near the highlighted row, with blank space of the
+    /// same height standing in for the rest. Apple TV's focus engine looks over every focusable view in a scroll view
+    /// each time the remote is pressed, and the list itself is compared row by row each time the highlight moves; with
+    /// ten thousand rows of programmes that's slow, and the focus can skip rows it hasn't laid out. The window moves in
+    /// steps of a quarter of its size, so most presses leave it as it was.
+    public static func drawn(_ shown: Range<Int>, around row: Int, radius: Int = drawnAround) -> Range<Int> {
+        let width = radius * 2 + 1
+        guard shown.count > width, radius > 0 else { return shown }
+        let step = max(1, radius / 2)
+        let at = min(max(row, shown.lowerBound), shown.upperBound - 1)
+        let centre = at - (at - shown.lowerBound) % step
+        let low = min(max(shown.lowerBound, centre - radius), shown.upperBound - width)
+        return low..<(low + width)
+    }
+
     /// The rows a page shows.
     public static func rows(start: Int, size: Int, total: Int) -> Range<Int> {
         let total = max(0, total)

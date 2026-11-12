@@ -26,6 +26,34 @@ final class ChannelSetsTests: XCTestCase {
         try JSONDecoder().decode(GuideChannel.self, from: Data(json.utf8))
     }
 
+    func testOnlyRowsNearTheHighlightAreDrawnInALongList() {
+        let all = 0..<10_000
+        // A short list, or a page, is drawn whole.
+        XCTAssertEqual(GuidePaging.drawn(0..<50, around: 10), 0..<50)
+        // Every highlighted row is inside what's drawn, with rows to move to either side, and the window keeps its size.
+        for row in [0, 1, 39, 40, 41, 500, 5_001, 9_959, 9_960, 9_999] {
+            let drawn = GuidePaging.drawn(all, around: row)
+            XCTAssertTrue(drawn.contains(row), "row \(row) not in \(drawn)")
+            XCTAssertEqual(drawn.count, 81)
+            if row > 0 { XCTAssertTrue(drawn.contains(row - 1)) }
+            if row < 9_999 { XCTAssertTrue(drawn.contains(row + 1)) }
+            XCTAssertTrue(all.contains(drawn.lowerBound) && drawn.upperBound <= all.upperBound)
+        }
+        // It moves in steps, so most single presses keep it where it was.
+        let windows = Set((1_000..<1_100).map { GuidePaging.drawn(all, around: $0) })
+        XCTAssertLessThanOrEqual(windows.count, 6)
+        // A row asked for beyond the ends is held to them.
+        XCTAssertEqual(GuidePaging.drawn(all, around: -5).lowerBound, 0)
+        XCTAssertEqual(GuidePaging.drawn(all, around: 20_000).upperBound, 10_000)
+    }
+
+    func testTimesAreWrittenTheSameWayEveryTime() {
+        let at: Int64 = 1_800_000_000
+        XCTAssertEqual(GuideRules.clock(at), GuideRules.clock(at))
+        XCTAssertFalse(GuideRules.clock(at).isEmpty)
+        XCTAssertEqual(GuideRules.span(at, at + 1800), "\(GuideRules.clock(at)) to \(GuideRules.clock(at + 1800))")
+    }
+
     func testTheSetsAsTheServerSendsThem() throws {
         let list = try sets()
         XCTAssertTrue(list.canShare)

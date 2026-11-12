@@ -19,10 +19,14 @@ final class TvLookStore: ObservableObject {
     private var suggestion: String?
     private var app = TvAppColours.fallback
     private var askedFor = ""
-    @Published private(set) var look = TvLook.resolve(saved: nil, ownerTheme: nil, ownerLayout: nil, ownerSkin: nil)
+    @Published private(set) var look = TvLook.resolve(saved: nil, ownerTheme: nil, ownerLayout: nil, ownerSkin: nil) {
+        didSet { dress = TvDress(look) }
+    }
     @Published private(set) var loaded = false
 
-    var dress: TvDress { TvDress(look) }
+    /// The look worked out into colours and sizes once, when it changes: the guide asks for it hundreds of times each
+    /// time the highlight moves, and working it out reads every colour from its hex code.
+    private(set) var dress = TvDress(TvLook.resolve(saved: nil, ownerTheme: nil, ownerLayout: nil, ownerSkin: nil))
 
     /// Asks the server what this account chose, and what the app's theme suggests.
     func load(client: WittyClient, themeId: String?, app: TvAppColours) async {
@@ -95,7 +99,16 @@ final class GuideStore: ObservableObject {
     @Published private(set) var rows: [Int: GuideChannel] = [:]
     @Published private(set) var total: Int?
     @Published private(set) var groups: [String] = []
-    @Published private(set) var lineup: [GuideChannel] = []
+    @Published private(set) var lineup: [GuideChannel] = [] {
+        didSet {
+            lineupHasBoth = lineup.contains { $0.kind == "tuner" } && lineup.contains { $0.kind == "library" }
+            lineupAnyFavourite = lineup.contains { $0.favourite == true }
+        }
+    }
+    /// What the guide's bar asks of the lineup, worked out when it changes rather than each time the highlight
+    /// moves: a lineup can be ten thousand channels long.
+    private(set) var lineupHasBoth = false
+    private(set) var lineupAnyFavourite = false
     @Published var error = ""
     @Published private(set) var filter = Filter()
     /// Rows a page, or 0 for all of them in one list; and the first row of the page on screen.

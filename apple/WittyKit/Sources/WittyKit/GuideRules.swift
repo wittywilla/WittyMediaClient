@@ -136,18 +136,34 @@ public enum GuideRules {
 
     /// "Wed, Nov 4".
     public static func dayName(_ time: Int64) -> String {
-        let f = DateFormatter()
-        f.setLocalizedDateFormatFromTemplate("EEEMMMd")
-        return f.string(from: Date(timeIntervalSince1970: TimeInterval(time)))
+        dayFormat.string(from: Date(timeIntervalSince1970: TimeInterval(time)))
     }
+
+    private static let dayFormat: DateFormatter = {
+        let f = DateFormatter()
+        f.locale = .autoupdatingCurrent
+        f.timeZone = .autoupdatingCurrent
+        f.calendar = .autoupdatingCurrent
+        f.setLocalizedDateFormatFromTemplate("EEEMMMd")
+        return f
+    }()
 
     /// "8:30 PM", as the device says times.
     public static func clock(_ time: Int64) -> String {
+        clockFormat.string(from: Date(timeIntervalSince1970: TimeInterval(time)))
+    }
+
+    /// One formatter for every time the guide writes: making one is far dearer than using it, and the guide writes
+    /// a time for each programme on screen every time the highlight moves. It follows the device's settings as they change.
+    private static let clockFormat: DateFormatter = {
         let f = DateFormatter()
+        f.locale = .autoupdatingCurrent
+        f.timeZone = .autoupdatingCurrent
+        f.calendar = .autoupdatingCurrent
         f.timeStyle = .short
         f.dateStyle = .none
-        return f.string(from: Date(timeIntervalSince1970: TimeInterval(time)))
-    }
+        return f
+    }()
 
     public static func span(_ start: Int64, _ end: Int64) -> String { "\(clock(start)) to \(clock(end))" }
 

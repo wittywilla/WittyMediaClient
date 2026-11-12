@@ -71,6 +71,9 @@ struct GuideView: View {
     @State private var adding: GuideChannel?
     @State private var toast = ""
     @State private var notices: [String: String] = [:]
+    /// Whether any channel has a logo to show, which the logos notice goes with. Worked out when the channels or the
+    /// logos change, not each time the highlight moves: the channel list can be ten thousand long.
+    @State private var logosShown = false
     @State private var placed = false
     @State private var visible = Set<Int>()
     @FocusState private var focused: GuideFocus?
@@ -111,6 +114,9 @@ struct GuideView: View {
         .toolbar(.hidden, for: .tabBar)
         .task { await start() }
         .task(id: previewWanted) { await settlePreview() }
+        .task(id: "\(store.lineup.count)|\(logos.known.count)") {
+            logosShown = store.lineup.contains { $0.logo?.hasPrefix("/") == true || logos.info($0.brand)?.has == true }
+        }
         .task { await tick() }
         .onChange(of: focused) { next in arrive(next) }
         .onChange(of: store.filter) { _ in spot = GuideSpot(row: 0, at: spot.at); placed = false }
@@ -184,8 +190,8 @@ struct GuideView: View {
     private var bar: some View {
         let p = dress.paint
         let all = store.filter.isAll
-        let hasBoth = store.lineup.contains { $0.kind == "tuner" } && store.lineup.contains { $0.kind == "library" }
-        let anyFavourite = store.lineup.contains { $0.favourite == true }
+        let hasBoth = store.lineupHasBoth
+        let anyFavourite = store.lineupAnyFavourite
         return HStack(spacing: 16) {
             dress.words("Guide", barTitle.size, barTitle.weight, smallCaps: true).foregroundColor(barTitleColour)
                 .tvCase(dress.capitals, tracking: dress.shape == .receiver ? 2.4 : 0)
@@ -330,7 +336,11 @@ struct GuideView: View {
         let total = store.total ?? 0
         return VStack(spacing: 0) {
             GuideTimes(dress: dress, from: from, now: now, slots: slots)
-            ZStack(alignment: .topLeading) {
+            // The edges that move the time sit beside the rows, not over them: the focus engine passes over anything
+            // another view covers, so a layer across the rows, even an empty one, left only the rows off the screen
+            // to move to, and each press went a screenful at a time.
+            HStack(spacing: 0) {
+                edge(.earlier)
                 ScrollViewReader { scroller in
                     ScrollView(.vertical, showsIndicators: false) {
                         LazyVStack(spacing: 0) {
@@ -344,10 +354,18 @@ struct GuideView: View {
                                 .padding(.leading, dress.channelWidth)
                                 .padding(.vertical, 4)
                             }
-                            ForEach(Array(store.shown), id: \.self) { r in
+                            // A long list draws only the rows near the highlight, with blank space for the rest: see GuidePaging.drawn.
+                            let drawn = store.pageSize > 0 ? store.shown : GuidePaging.drawn(store.shown, around: spot.row)
+                            if drawn.lowerBound > store.shown.lowerBound {
+                                Color.clear.frame(height: CGFloat(drawn.lowerBound - store.shown.lowerBound) * dress.rowHeight)
+                            }
+                            ForEach(drawn, id: \.self) { r in
                                 row(r).id(r)
                                     .onAppear { visible.insert(r); Task { await store.ensure(r) } }
                                     .onDisappear { visible.remove(r) }
+                            }
+                            if drawn.upperBound < store.shown.upperBound {
+                                Color.clear.frame(height: CGFloat(store.shown.upperBound - drawn.upperBound) * dress.rowHeight)
                             }
                             if store.pageSize > 0, GuidePaging.next(start: store.pageStart, size: store.pageSize, total: total) != nil {
                                 // Down past a page's last row goes on to the next, as the edges at the sides move the time.
@@ -366,8 +384,9 @@ struct GuideView: View {
                         DispatchQueue.main.async { withAnimation(nil) { scroller.scrollTo(spot.row, anchor: .center) } }
                     }
                 }
-                edges
+                edge(.later)
             }
+            .padding(.horizontal, -TvGuideEdge.width)
             .frame(maxHeight: .infinity)
             // A TV's scroll view draws past its edges, for lifted cards; the grid's rows stop at its own.
             .clipped()
@@ -388,27 +407,18 @@ struct GuideView: View {
         .focusSection()
     }
 
-    /// The grid's two edges: moving onto one is moving the time.
-    private var edges: some View {
-        HStack(spacing: 0) {
-            Button {} label: { Color.clear.frame(width: 6).frame(maxHeight: .infinity) }
-                .buttonStyle(TvEdgeStyle()).focused($focused, equals: .earlier)
-                .padding(.leading, dress.channelWidth - 10)
-                .accessibilityHidden(true)
-            Spacer(minLength: 0)
-            Button {} label: { Color.clear.frame(width: 6).frame(maxHeight: .infinity) }
-                .buttonStyle(TvEdgeStyle()).focused($focused, equals: .later)
-                .accessibilityHidden(true)
-        }
-        // Just outside the cells on both sides: the focus engine only goes to what's wholly beside it.
-        .padding(.trailing, -10)
+    /// One of the grid's two edges, either side of the rows: moving onto one is moving the time.
+    private func edge(_ which: GuideFocus) -> some View {
+        Button {} label: { Color.clear.frame(width: TvGuideEdge.width).frame(maxHeight: .infinity) }
+            .buttonStyle(TvEdgeStyle()).focused($focused, equals: which)
+            .accessibilityHidden(true)
     }
 
     @ViewBuilder private func row(_ r: Int) -> some View {
         let channel = store.rows[r]
         GuideRow(dress: dress, index: r, channel: channel, from: from, to: to, perSecond: perSecond, now: now,
                  current: r == spot.row, focusAt: r == spot.row ? spot.at : nil, logo: logos.info(channel?.brand),
-                 reminded: { channel.map { c in { reminders.has(c.key, $0) } } ?? { _ in false } }(),
+                 remindedAt: channel.map { c in Set(reminders.list.lazy.filter { $0.channel == c.key }.map(\.start)) } ?? [],
                  focused: $focused,
                  activate: activate, more: { cell, day in if let channel { ask = GuideAsk(channel: channel, programme: cell.programme(at: spot.at), cell: cell, day: day) } },
                  record: { cell in if let channel, let p = cell.programme { record(channel, p) } },
@@ -418,6 +428,7 @@ struct GuideView: View {
                  watch: { if let channel { watch(channel.key) } },
                  fromStart: model.has(TvFeature.catchup) ? { cell in if let channel, let p = cell.programme(at: max(cell.start, from)) { fromStart(channel, p) } } : nil,
                  addToSet: store.hasSets ? { if let channel { adding = channel } } : nil)
+            .equatable()
             .frame(height: dress.rowHeight)
     }
 
@@ -471,7 +482,7 @@ struct GuideView: View {
     }
 
     private var legal: some View {
-        let shown = [notices["tv"], dress.look.logos && store.lineup.contains { $0.logo?.hasPrefix("/") == true || logos.info($0.brand)?.has == true } ? notices["logos"] : nil].compactMap { $0 }
+        let shown = [notices["tv"], dress.look.logos && logosShown ? notices["logos"] : nil].compactMap { $0 }
         return VStack(alignment: .leading, spacing: 4) {
             ForEach(shown, id: \.self) { Text($0).font(.system(size: 13.75)).foregroundStyle(dress.paint.soft).lineLimit(2) }
         }
@@ -1372,6 +1383,39 @@ struct ChannelLogo: View {
     var shown: Bool { url != nil }
 }
 
+/// The width of the grid's time edges.
+enum TvGuideEdge { static let width: CGFloat = 6 }
+
+/// A row is drawn again only when what it shows changes. Each press moves the highlight from one row to the next,
+/// and without this every row on the screen was worked out again, since what it's handed includes closures, which
+/// can't be compared. Those read the guide's own state when they're called, so an older copy does the same.
+extension GuideRow: Equatable {
+    static func == (a: GuideRow, b: GuideRow) -> Bool {
+        a.index == b.index && a.current == b.current && a.focusAt == b.focusAt && a.from == b.from && a.to == b.to
+            && a.perSecond == b.perSecond && a.now == b.now && a.channel == b.channel && a.logo == b.logo
+            && a.remindedAt == b.remindedAt && a.dress.look == b.dress.look
+            && (a.fromStart == nil) == (b.fromStart == nil) && (a.addToSet == nil) == (b.addToSet == nil)
+    }
+}
+
+/// Where a row's cells go across the screen: each one's width, and any space before it that no cell covers.
+enum GuideTrack {
+    struct Placed { let cell: GuideCell; let width: CGFloat; let gap: CGFloat }
+
+    static func place(_ cells: [GuideCell], from: Int64, to: Int64, perSecond: Double) -> [Placed] {
+        var out: [Placed] = []
+        var x: CGFloat = 0
+        for cell in cells {
+            let start = max(cell.start, from), end = min(cell.end, to)
+            guard end > start else { continue }
+            let left = CGFloat(Double(start - from) * perSecond), width = CGFloat(Double(end - start) * perSecond)
+            out.append(Placed(cell: cell, width: width, gap: max(0, left - x)))
+            x = left + width
+        }
+        return out
+    }
+}
+
 /// One channel's row: who it is, then its programmes.
 struct GuideRow: View {
     @Environment(\.client) private var client
@@ -1386,7 +1430,8 @@ struct GuideRow: View {
     let current: Bool
     let focusAt: Int64?
     let logo: LogoInfo?
-    let reminded: (Int64) -> Bool
+    /// When this channel's programmes that have a reminder start.
+    let remindedAt: Set<Int64>
     var focused: FocusState<GuideFocus?>.Binding
     let activate: (GuideChannel, GuideCell) -> Void
     let more: (GuideCell, Bool) -> Void
@@ -1494,22 +1539,26 @@ struct GuideRow: View {
     private var track: some View {
         let cells = GuideRules.cells(channel, from: from, to: to, pointsPerSecond: perSecond)
         let focusedCell = focusAt.flatMap { GuideRules.cell(at: $0, in: cells) }
+        // Cells side by side, each with a frame of its own. Placed by padding from the row's start instead, every cell's
+        // frame ran back to the start of the row, so the frames lay on top of each other, and the focus engine could
+        // find no cell in another row to move to among those drawn: only rows not drawn yet, a screenful away.
+        let placed = GuideTrack.place(cells, from: from, to: to, perSecond: perSecond)
         return ZStack(alignment: .topLeading) {
             if dress.shape == .modern || dress.shape == .outline { dress.paint.bg }
             if let channel {
-                ForEach(Array(cells.enumerated()), id: \.element.start) { i, cell in
-                    let start = max(cell.start, from), end = min(cell.end, to)
-                    let x = CGFloat(Double(start - from) * perSecond), w = CGFloat(Double(end - start) * perSecond)
-                    Button { activate(channel, cell) } label: { EmptyView() }
-                        .buttonStyle(GuideCellStyle(dress: dress, channel: channel, cell: cell, from: from, to: to, now: now, width: w,
-                                                    highlighted: cell == focusedCell, evenRow: index % 2 == 1, reminded: reminded(cell.start)))
-                        .frame(width: max(1, w))
-                        .padding(.leading, x)
-                        .focused(focused, equals: .cell(index, cell.start))
-                        .onPlayPauseCommand { watch() }
-                        .contextMenu { menu(channel, cell) }
-                        .accessibilityLabel(label(channel, cell))
-                        .accessibilityAddTraits(i == 0 ? [] : [])
+                HStack(spacing: 0) {
+                    ForEach(placed, id: \.cell.start) { spot in
+                        let cell = spot.cell
+                        Button { activate(channel, cell) } label: { EmptyView() }
+                            .buttonStyle(GuideCellStyle(dress: dress, channel: channel, cell: cell, from: from, to: to, now: now, width: spot.width,
+                                                        highlighted: cell == focusedCell, evenRow: index % 2 == 1, reminded: remindedAt.contains(cell.start)))
+                            .frame(width: max(1, spot.width))
+                            .focused(focused, equals: .cell(index, cell.start))
+                            .onPlayPauseCommand { watch() }
+                            .contextMenu { menu(channel, cell) }
+                            .accessibilityLabel(label(channel, cell))
+                            .padding(.leading, spot.gap)
+                    }
                 }
             }
         }
@@ -1525,7 +1574,7 @@ struct GuideRow: View {
             Button("Watch from the start") { fromStart(cell) }
         }
         if later, channel.canTune, cell.programme?.kind != "slate" {
-            Button(reminded(cell.start) ? "Remove the reminder" : "Remind me") { remind(cell) }
+            Button(remindedAt.contains(cell.start) ? "Remove the reminder" : "Remind me") { remind(cell) }
         }
         if channel.canRecord == true, cell.isBroadcast, cell.end > now {
             Button("Record this") { record(cell) }
