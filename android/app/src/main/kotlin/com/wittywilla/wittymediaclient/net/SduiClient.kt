@@ -243,6 +243,14 @@ class SduiClient(private val transport: SduiTransport, val device: SduiDevice, p
         send("DELETE", url)
     }
 
+    // Experiences: the catalogue, the one in force on this device with what may be chosen, and choosing (docs/CLIENT-API.md).
+    suspend fun experiences(): SduiExperienceList = json.decodeFromString(SduiExperienceList.serializer(), send("GET", "$ROOT/experiences"))
+    suspend fun experienceState(): SduiExperienceState = json.decodeFromString(SduiExperienceState.serializer(), send("GET", device.on("$ROOT/experience")))
+    suspend fun chooseExperience(id: String?) {
+        if (id == null) send("DELETE", device.on("$ROOT/experience"))
+        else send("PUT", device.on("$ROOT/experience"), buildJsonObject { put("experience", id) }.toString())
+    }
+
     // Carries out one of the catalogue's commands for an item.
     suspend fun command(spec: SduiCommandSpec, item: String) {
         val request = SduiCommands.request(spec, item) ?: return

@@ -391,6 +391,18 @@ class Api(val base: String, val token: String, private val quick: Boolean = fals
 
     // Themes: docs/APP-DESIGN.md, Themes. The list and each theme's tokens are public; the person's own look is theirs.
     suspend fun themes(): ThemeList = get("/themes")
+
+    // The resolved theme with its `look` (experience and theme in force, what an administrator requires).
+    suspend fun resolvedTheme(): kotlinx.serialization.json.JsonObject = json.parseToJsonElement(call("GET", "/theme")).jsonObject
+
+    // Import a theme ZIP for this profile (POST /themes/mine, or /themes for an administrator's, the server's).
+    suspend fun importTheme(zip: ByteArray, forEveryone: Boolean): String? = withContext(Dispatchers.IO) {
+        val request = Request.Builder().url("$base$API" + if (forEveryone) "/themes" else "/themes/mine")
+            .post(zip.toRequestBody("application/zip".toMediaType())).build()
+        http.newCall(request).execute().use { res ->
+            if (res.code in 200..299) null else errorText(res.code, res.peekBody(64 * 1024).string())
+        }
+    }
     suspend fun themeTokens(id: String): ThemeTokens = get("/themes/${query(id)}/tokens.json")
 
     // /me/ui is the web's own settings, any JSON: only customTheme is read, and one that doesn't parse is none.
