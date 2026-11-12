@@ -11,6 +11,12 @@ import org.junit.Test
 
 // Commands that take values beyond the item (catalogue revision 6): they fill {name} in the path and body.
 class CommandParamsTest {
+    private var before = 0
+
+    // From revision 16 a template holds {item} inside its JSON string.
+    @org.junit.Before fun revision() { before = SduiCommands.serverRevision; SduiCommands.serverRevision = 16 }
+    @org.junit.After fun restore() { SduiCommands.serverRevision = before }
+
     private val room = SduiCommandSpec(
         "wittyplay.room.create", "POST", "/api/v1/rooms/{game}/new?code={code}", """{"name":"{name}","slots":"{slots}","item":"{item}"}""",
         listOf(SduiCommandParam("game", "string", true), SduiCommandParam("code"), SduiCommandParam("name"), SduiCommandParam("slots", "int")),
