@@ -456,18 +456,19 @@ private struct TimeUpScreen: View {
 
     /// A parent gives more time: how much, then their PIN (or their name and password).
     private var ask: some View {
-        DesignPage(eyebrow: who, title: "Ask a parent", lead: "A parent can give this profile more time today.",
+        DesignPage(eyebrow: "Ask a parent", title: "Add more time",
+                   lead: "A parent or administrator can give \(who.isEmpty ? "this profile" : who) more time today.",
                    identifier: "time-up-asking") {
-            DesignSection(title: "How much more") {
+            DesignSection(title: "How long") {
                 DesignChips {
                     ForEach(ScreenTimeRules.extras, id: \.self) { choice in
                         DesignChip(title: ScreenTimeRules.extraLabel(choice), on: minutes == choice) { minutes = choice }
                     }
                 }
                 .accessibilityElement(children: .contain)
-                .accessibilityLabel("How much more")
+                .accessibilityLabel("How long")
             }
-            DesignSection(title: usesPassword ? "A parent’s name and password" : "The parents’ PIN") {
+            DesignSection(title: "Parent") {
                 if usesPassword {
                     OutlinedField(label: "A parent’s username", text: $name, kind: .name, icon: "person", request: $wantName)
                     OutlinedField(label: "Their password", text: $password, kind: .password, icon: "lock", invalid: !problem.isEmpty) { give() }
@@ -480,7 +481,7 @@ private struct TimeUpScreen: View {
                 if !problem.isEmpty { ProblemLine(problem) }
             }
         } actions: {
-            Button { give() } label: { BusyText("Give more time", busy: busy) }
+            Button { give() } label: { BusyText("Give time", busy: busy) }
                 .action(primary: true)
                 .disabled(!ready || busy)
             if household.hasParentPin {

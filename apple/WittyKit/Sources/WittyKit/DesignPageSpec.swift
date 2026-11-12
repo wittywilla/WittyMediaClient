@@ -22,9 +22,12 @@ public struct DesignPageSpec: Codable, Equatable, Sendable {
     public var layer: Bool
     /// Where focus starts: an item's `id`. Empty is the first thing that can take focus, top to bottom.
     public var start: String
+    /// The page is a form (the server's `Form`): its controls run nothing as they change, and Save sends every named
+    /// value at once. Nil: each control reports its change as it's made.
+    public var form: Form?
 
     public init(eyebrow: String = "", title: String, lead: String = "", sections: [Section] = [], actions: [Action] = [],
-                foot: String = "", layer: Bool = false, start: String = "") {
+                foot: String = "", layer: Bool = false, start: String = "", form: Form? = nil) {
         self.eyebrow = eyebrow
         self.title = title
         self.lead = lead
@@ -33,6 +36,7 @@ public struct DesignPageSpec: Codable, Equatable, Sendable {
         self.foot = foot
         self.layer = layer
         self.start = start
+        self.form = form
     }
 
     // MARK: Parts
@@ -74,14 +78,18 @@ public struct DesignPageSpec: Codable, Equatable, Sendable {
         public var detail: String
         /// Whether pressing it does something; a row that only says something isn't a stop for focus.
         public var pressable: Bool
+        /// A switch, a choice, a field or a slider in the row (catalogue revision 8, Forms and controls); nil for none.
+        public var control: Control?
 
-        public init(id: String = "", title: String, value: String = "", on: Bool = false, detail: String = "", pressable: Bool = true) {
+        public init(id: String = "", title: String, value: String = "", on: Bool = false, detail: String = "", pressable: Bool = true,
+                    control: Control? = nil) {
             self.id = id.isEmpty ? DesignPageSpec.slug(title) : id
             self.title = title
             self.value = value
             self.on = on
             self.detail = detail
             self.pressable = pressable
+            self.control = control
         }
     }
 
@@ -109,8 +117,10 @@ public struct DesignPageSpec: Codable, Equatable, Sendable {
         public var swatches: [String]
         /// The wireframe of a look's layout (the server's `wire` of the experience), drawn in the swatches' colours instead of the three swatches (`LayoutThumb`).
         public var wire: LayoutWire?
+        /// A symbol over the title (an SF Symbol name on Apple), for a card that is a way to do something; empty for none.
+        public var symbol: String
 
-        public init(id: String = "", title: String, subtitle: String = "", on: Bool = false, swatches: [String] = [],
+        public init(id: String = "", title: String, subtitle: String = "", on: Bool = false, swatches: [String] = [], symbol: String = "",
                     wire: LayoutWire? = nil) {
             self.id = id.isEmpty ? DesignPageSpec.slug(title) : id
             self.title = title
@@ -118,6 +128,7 @@ public struct DesignPageSpec: Codable, Equatable, Sendable {
             self.on = on
             self.swatches = swatches
             self.wire = wire
+            self.symbol = symbol
         }
     }
 
@@ -132,6 +143,107 @@ public struct DesignPageSpec: Codable, Equatable, Sendable {
             self.title = title
             self.primary = primary
         }
+    }
+
+    /// A control in a row, as the server sends it (`control: {type, name, value, ...}`).
+    public struct Control: Codable, Equatable, Sendable {
+        public enum Kind: String, Codable, Sendable { case `switch`, select, field, slider }
+        public struct Option: Codable, Equatable, Sendable {
+            public var value: String
+            public var label: String
+            public init(value: String, label: String) { self.value = value; self.label = label }
+        }
+
+        public var kind: Kind
+        /// The name its value goes under, in a form's Save.
+        public var name: String
+        /// As words: "true" or "false" for a switch, a choice's value, a field's text, a slider's number.
+        public var value: String
+        public var options: [Option]
+        public var placeholder: String
+        public var maxLength: Int?
+        public var multiline: Bool
+        /// A field's keyboard: text, number, url or search.
+        public var input: String
+        public var min: Double?
+        public var max: Double?
+        public var step: Double?
+
+        public init(kind: Kind, name: String, value: String = "", options: [Option] = [], placeholder: String = "",
+                    maxLength: Int? = nil, multiline: Bool = false, input: String = "text",
+                    min: Double? = nil, max: Double? = nil, step: Double? = nil) {
+            self.kind = kind
+            self.name = name
+            self.value = value
+            self.options = options
+            self.placeholder = placeholder
+            self.maxLength = maxLength
+            self.multiline = multiline
+            self.input = input
+            self.min = min
+            self.max = max
+            self.step = step
+        }
+
+        public var isOn: Bool { value == "true" }
+
+        /// What the row shows at its end: On or Off, the chosen option's label, the number.
+        public var shown: String {
+            switch kind {
+            case .switch: return isOn ? "On" : "Off"
+            case .select: return options.first { $0.value == value }?.label ?? value
+            case .field: return value
+            case .slider:
+                guard let number = Double(value) else { return value }
+                return number.rounded() == number ? String(Int(number)) : String(format: "%.1f", number)
+            }
+        }
+
+        /// A switch's next value.
+        public var flipped: String { isOn ? "false" : "true" }
+
+        /// The choice after (or before) this one, round again at the end: how a remote changes a select in place.
+        public func option(after step: Int) -> String {
+            guard !options.isEmpty else { return value }
+            let at = options.firstIndex { $0.value == value } ?? -1
+            let next = ((at + step) % options.count + options.count) % options.count
+            return options[next].value
+        }
+
+        /// A slider moved one step up or down, kept between its ends.
+        public func stepped(_ by: Int) -> String {
+            let lo = min ?? 0, hi = max ?? 100, unit = (step ?? 1) > 0 ? (step ?? 1) : 1
+            let now = Double(value) ?? lo
+            let moved = Swift.min(hi, Swift.max(lo, now + Double(by) * unit))
+            return moved.rounded() == moved ? String(Int(moved)) : String(moved)
+        }
+
+        /// A field's text, no longer than it may be.
+        public func clipped(_ text: String) -> String {
+            guard let maxLength, maxLength > 0, text.count > maxLength else { return text }
+            return String(text.prefix(maxLength))
+        }
+    }
+
+    /// The server's `Form`: a Save (and maybe a Cancel) at its foot instead of the page's actions.
+    public struct Form: Codable, Equatable, Sendable {
+        public var submitLabel: String
+        public var cancelLabel: String
+        public init(submitLabel: String = "Save", cancelLabel: String = "") {
+            self.submitLabel = submitLabel
+            self.cancelLabel = cancelLabel
+        }
+    }
+
+    /// Every named control's value as the page starts, for a form's Save.
+    public var initialValues: [String: String] {
+        var out: [String: String] = [:]
+        for section in sections where section.kind == .rows {
+            for row in section.rows {
+                if let control = row.control, !control.name.isEmpty { out[control.name] = control.value }
+            }
+        }
+        return out
     }
 
     // MARK: The canvas's builders
@@ -157,7 +269,7 @@ public struct DesignPageSpec: Codable, Equatable, Sendable {
         var out: [String] = []
         for section in sections {
             switch section.kind {
-            case .rows: out += section.rows.filter(\.pressable).map(\.id)
+            case .rows: out += section.rows.filter { $0.pressable || $0.control != nil }.map(\.id)
             case .chips: out += section.chips.map(\.id)
             case .cards: out += section.cards.map(\.id)
             case .note: break
@@ -228,7 +340,7 @@ public extension DesignPageSpec.Action {
 // MARK: - Reading a spec sent as JSON
 
 extension DesignPageSpec {
-    private enum Keys: String, CodingKey { case eyebrow, title, lead, sections, actions, foot, layer, start }
+    private enum Keys: String, CodingKey { case eyebrow, title, lead, sections, actions, foot, layer, start, form }
 
     public init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: Keys.self)
@@ -239,7 +351,8 @@ extension DesignPageSpec {
                   actions: try c.decodeIfPresent([Action].self, forKey: .actions) ?? [],
                   foot: try c.decodeIfPresent(String.self, forKey: .foot) ?? "",
                   layer: try c.decodeIfPresent(Bool.self, forKey: .layer) ?? false,
-                  start: try c.decodeIfPresent(String.self, forKey: .start) ?? "")
+                  start: try c.decodeIfPresent(String.self, forKey: .start) ?? "",
+                  form: try c.decodeIfPresent(Form.self, forKey: .form))
     }
 }
 
@@ -260,14 +373,15 @@ extension DesignPageSpec.Section {
 }
 
 extension DesignPageSpec.Row {
-    private enum Keys: String, CodingKey { case id, title, value, on, detail, pressable }
+    private enum Keys: String, CodingKey { case id, title, value, on, detail, pressable, control }
 
     public init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: Keys.self)
         self.init(id: try c.decodeIfPresent(String.self, forKey: .id) ?? "", title: try c.decode(String.self, forKey: .title),
                   value: try c.decodeIfPresent(String.self, forKey: .value) ?? "", on: try c.decodeIfPresent(Bool.self, forKey: .on) ?? false,
                   detail: try c.decodeIfPresent(String.self, forKey: .detail) ?? "",
-                  pressable: try c.decodeIfPresent(Bool.self, forKey: .pressable) ?? true)
+                  pressable: try c.decodeIfPresent(Bool.self, forKey: .pressable) ?? true,
+                  control: try c.decodeIfPresent(DesignPageSpec.Control.self, forKey: .control))
     }
 }
 
@@ -282,7 +396,7 @@ extension DesignPageSpec.Chip {
 }
 
 extension DesignPageSpec.Card {
-    private enum Keys: String, CodingKey { case id, title, subtitle, on, swatches, wire }
+    private enum Keys: String, CodingKey { case id, title, subtitle, on, swatches, symbol, wire }
 
     public init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: Keys.self)
@@ -290,6 +404,7 @@ extension DesignPageSpec.Card {
                   subtitle: try c.decodeIfPresent(String.self, forKey: .subtitle) ?? "",
                   on: try c.decodeIfPresent(Bool.self, forKey: .on) ?? false,
                   swatches: try c.decodeIfPresent([String].self, forKey: .swatches) ?? [],
+                  symbol: try c.decodeIfPresent(String.self, forKey: .symbol) ?? "",
                   wire: try? c.decodeIfPresent(LayoutWire.self, forKey: .wire))
     }
 }
@@ -301,5 +416,50 @@ extension DesignPageSpec.Action {
         let c = try decoder.container(keyedBy: Keys.self)
         self.init(id: try c.decodeIfPresent(String.self, forKey: .id) ?? "", title: try c.decode(String.self, forKey: .title),
                   primary: try c.decodeIfPresent(Bool.self, forKey: .primary) ?? false)
+    }
+}
+
+extension DesignPageSpec.Control {
+    private enum Keys: String, CodingKey { case type, kind, name, value, options, placeholder, maxLength, multiline, input, min, max, step }
+
+    /// As the server sends it: `type` (or `kind`), and a value that may be a bool, a string or a number.
+    public init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: Keys.self)
+        let kind = try c.decodeIfPresent(Kind.self, forKey: .type) ?? c.decode(Kind.self, forKey: .kind)
+        var value = ""
+        if let flag = try? c.decode(Bool.self, forKey: .value) {
+            value = flag ? "true" : "false"
+        } else if let number = try? c.decode(Double.self, forKey: .value) {
+            value = number.rounded() == number ? String(Int(number)) : String(number)
+        } else {
+            value = (try? c.decode(String.self, forKey: .value)) ?? ""
+        }
+        self.init(kind: kind, name: try c.decodeIfPresent(String.self, forKey: .name) ?? "", value: value,
+                  options: try c.decodeIfPresent([Option].self, forKey: .options) ?? [],
+                  placeholder: try c.decodeIfPresent(String.self, forKey: .placeholder) ?? "",
+                  maxLength: try c.decodeIfPresent(Int.self, forKey: .maxLength),
+                  multiline: try c.decodeIfPresent(Bool.self, forKey: .multiline) ?? false,
+                  input: try c.decodeIfPresent(String.self, forKey: .input) ?? "text",
+                  min: try c.decodeIfPresent(Double.self, forKey: .min), max: try c.decodeIfPresent(Double.self, forKey: .max),
+                  step: try c.decodeIfPresent(Double.self, forKey: .step))
+    }
+
+    public func encode(to encoder: Encoder) throws {
+        var c = encoder.container(keyedBy: Keys.self)
+        try c.encode(kind, forKey: .type)
+        try c.encode(name, forKey: .name)
+        switch kind {
+        case .switch: try c.encode(isOn, forKey: .value)
+        case .slider: try c.encode(Double(value) ?? 0, forKey: .value)
+        default: try c.encode(value, forKey: .value)
+        }
+        try c.encode(options, forKey: .options)
+        try c.encode(placeholder, forKey: .placeholder)
+        try c.encodeIfPresent(maxLength, forKey: .maxLength)
+        try c.encode(multiline, forKey: .multiline)
+        try c.encode(input, forKey: .input)
+        try c.encodeIfPresent(min, forKey: .min)
+        try c.encodeIfPresent(max, forKey: .max)
+        try c.encodeIfPresent(step, forKey: .step)
     }
 }

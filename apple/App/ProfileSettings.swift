@@ -90,43 +90,86 @@ final class ProfileDesk: ObservableObject {
     }
 }
 
+// MARK: - Page and groups
+
+/// A page of People's (the canvas's profile page): "Settings · People" over its title, then its groups.
+private struct ProfilePage<Content: View>: View {
+    let title: String
+    var detail = ""
+    @ViewBuilder var content: Content
+
+    var body: some View {
+        DesignPage(eyebrow: "Settings · People", title: title, lead: detail) {
+            VStack(alignment: .leading, spacing: Tokens.Space.s3) { content }
+        }
+    }
+}
+
+/// A group of rows: a heading, the rows a little apart, and a note under them.
+private struct ProfileGroup<Content: View>: View {
+    @Environment(\.designSizes) private var sizes
+    let title: String
+    var footer = ""
+    @ViewBuilder var content: Content
+
+    var body: some View {
+        DesignSection(title: title) {
+            VStack(spacing: sizes.gap * 0.6) { content }.remoteSection()
+            if !footer.isEmpty { DesignNote(text: footer) }
+        }
+    }
+}
+
 // MARK: - Rows
 
-/// A row with no icon: its words, a second line, and whatever it's set to at the end. The same height, hairline
-/// and focus as the icon rows in SettingsKit.
+/// A Design 2 row: its title in bold, a second line under it, and whatever it's set to at the end, on `bg2` at the
+/// theme's corner. Inside a `DesignRowButton` the button draws that surface and its focus.
 struct SettingRow<Trailing: View>: View {
     @Environment(\.palette) private var palette
-    @Environment(\.metrics) private var metrics
-    @Environment(\.displayScale) private var displayScale
+    @Environment(\.designSizes) private var sizes
+    @Environment(\.designRowDrawn) private var drawn
     let title: String
     var detail = ""
     @ViewBuilder var trailing: Trailing
 
     var body: some View {
-        HStack(spacing: Tokens.Space.s3) {
+        let row = HStack(spacing: sizes.gap) {
             VStack(alignment: .leading, spacing: 2) {
-                Text(title).font(metrics.tv ? .body : .subheadline).foregroundStyle(palette.text)
+                Text(title).font(.system(size: sizes.body, weight: .bold)).foregroundStyle(palette.text)
                     .fixedSize(horizontal: false, vertical: true)
                 if !detail.isEmpty {
-                    Text(detail).font(.wmSecondary).foregroundStyle(palette.textSecondary).fixedSize(horizontal: false, vertical: true)
+                    Text(detail).font(.system(size: sizes.tiny)).foregroundStyle(palette.text.opacity(0.7))
+                        .fixedSize(horizontal: false, vertical: true)
                 }
             }
-            Spacer(minLength: Tokens.Space.s2)
+            Spacer(minLength: sizes.gap)
             trailing
         }
-        .padding(.horizontal, Tokens.Space.s4)
-        .padding(.vertical, Tokens.Space.s2)
-        .frame(minHeight: metrics.tv ? 72 : 52)
-        .overlay(alignment: .bottom) {
-            Rectangle().fill(palette.border).frame(height: 1 / max(displayScale, 1)).padding(.leading, Tokens.Space.s4).accessibilityHidden(true)
-        }
+        .padding(.horizontal, sizes.gap * 1.6)
+        .padding(.vertical, sizes.gap * 0.6)
+        .frame(maxWidth: .infinity, minHeight: sizes.rowHeight, alignment: .leading)
         .contentShape(Rectangle())
+        if drawn { row } else { row.designRowSurface() }
+    }
+}
+
+/// What a row is set to, at its end: in the accent when it's on.
+private struct RowValue: View {
+    @Environment(\.palette) private var palette
+    @Environment(\.designSizes) private var sizes
+    let words: String
+    var on = false
+
+    var body: some View {
+        Text(words).font(.system(size: sizes.small, weight: .bold))
+            .foregroundStyle(on ? palette.accentText : palette.textSecondary)
+            .multilineTextAlignment(.trailing)
+            .lineLimit(2)
     }
 }
 
 /// On or off, changed by pressing the row: a finger and a remote both can.
 struct SwitchRow: View {
-    @Environment(\.palette) private var palette
     let title: String
     var detail = ""
     let isOn: Bool
@@ -135,27 +178,18 @@ struct SwitchRow: View {
 
     var body: some View {
         Button(action: flip) {
-            SettingRow(title: title, detail: detail) {
-                Capsule()
-                    .fill(isOn ? palette.accent : palette.border)
-                    .frame(width: 46, height: 28)
-                    .overlay(alignment: isOn ? .trailing : .leading) {
-                        Circle().fill(isOn ? palette.onAccent : palette.textSecondary).frame(width: 22, height: 22).padding(3)
-                    }
-                    .animation(.easeOut(duration: Tokens.Motion.press), value: isOn)
-                    .accessibilityHidden(true)
-            }
+            SettingRow(title: title, detail: detail) { RowValue(words: say(isOn ? "on" : "off"), on: isOn) }
         }
-        .rowStyle()
+        .designRowStyle()
         .disabled(fixed)
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(detail.isEmpty ? title : "\(title). \(detail)")
-        .accessibilityValue(say(isOn ? "on" : "off"))
+        .designSwitch(say(isOn ? "on" : "off"))
         .accessibilityAddTraits(.isButton)
     }
 }
 
-/// One of a set: the chosen one has the tick.
+/// One of a set: the chosen one is ringed and ticked.
 struct SettingChoiceRow: View {
     @Environment(\.palette) private var palette
     let title: String
@@ -167,15 +201,20 @@ struct SettingChoiceRow: View {
         Button(action: pick) {
             SettingRow(title: title, detail: detail) {
                 Image(systemName: "checkmark")
-                    .font(.subheadline.weight(.semibold))
+                    .font(.subheadline.weight(.bold))
                     .foregroundStyle(palette.accentText)
                     .opacity(chosen ? 1 : 0)
                     .accessibilityHidden(true)
             }
         }
-        .rowStyle()
+        .designRowStyle(selected: chosen)
         .accessibilityAddTraits(chosen ? [.isSelected] : [])
     }
+}
+
+private extension View {
+    /// A pressable row of these pages: Design 2's surface, press and TV focus.
+    func designRowStyle(selected: Bool = false) -> some View { buttonStyle(DesignRowButton(selected: selected)) }
 }
 
 /// A row that opens a page, with what it's set to beside the chevron.
@@ -189,11 +228,11 @@ private struct LinkRow: View {
     var body: some View {
         NavigationLink(value: Route.family(to)) {
             SettingRow(title: title, detail: detail) {
-                if !value.isEmpty { Text(value).font(.wmSecondary).foregroundStyle(palette.textSecondary).lineLimit(1) }
+                if !value.isEmpty { RowValue(words: value) }
                 Image(systemName: "chevron.right").font(.footnote.weight(.semibold)).foregroundStyle(palette.textHint).accessibilityHidden(true)
             }
         }
-        .rowStyle()
+        .designRowStyle()
     }
 }
 
@@ -316,34 +355,34 @@ struct ProfilesView: View {
             .frame(minHeight: metrics.tv ? 80 : 60)
             .contentShape(Rectangle())
         }
-        .rowStyle()
+        .designRowStyle()
         .accessibilityIdentifier("profile-\(user.name)")
     }
 
     var body: some View {
         let admin = model.user?.isAdmin == true
-        SettingsScreen(title: say("rowProfiles"),
+        ProfilePage(title: say("rowProfiles"),
                        detail: admin ? "Everyone on this server. Limits are applied by the server, in every app."
                                      : "The Kids profiles you look after. Limits are applied by the server, in every app.") {
             if let users = desk.users {
                 if users.isEmpty {
                     Secondary("There are no profiles here for you to manage yet. If adding one is refused, the administrator keeps that to themselves.")
                 } else {
-                    ListGroup(title: "") {
+                    ProfileGroup(title: "") {
                         ForEach(users) { row($0) }
                     }
                 }
-                ListGroup(title: "") {
+                ProfileGroup(title: "") {
                     NavigationLink(value: Route.family(.addProfile)) {
                         RowLabel(icon: "plus", tint: "#2e7d3c", title: "Add a profile")
                     }
-                    .rowStyle()
+                    .designRowStyle()
                     .accessibilityIdentifier("profile-add")
                     if admin {
                         NavigationLink(value: Route.family(.parentPin)) {
                             RowLabel(icon: "lock.rectangle", tint: "#3e5bd0", title: "Parents’ PIN", value: pinSet.map { $0 ? "Set" : "Not set" } ?? "")
                         }
-                        .rowStyle()
+                        .designRowStyle()
                         .accessibilityIdentifier("parents-pin")
                     }
                 }
@@ -399,7 +438,7 @@ struct ManagedProfileView: View {
     var body: some View {
         let user = desk.user(id)
         let access = desk.draft(id)
-        SettingsScreen(title: user?.shownName ?? "") {
+        ProfilePage(title: user?.shownName ?? "") {
             if let user {
                 HStack(spacing: Tokens.Space.s4) {
                     AvatarTile(name: user.shownName, size: metrics.tv ? 120 : 72, picture: user.avatar)
@@ -410,20 +449,20 @@ struct ManagedProfileView: View {
                     Spacer(minLength: 0)
                 }
                 .accessibilityElement(children: .combine)
-                ListGroup(title: "") {
+                ProfileGroup(title: "") {
                     LinkRow(title: "Name and picture", to: .look(id))
                     if user.canBeLimited(by: model.user?.id) {
                         LinkRow(title: user.isAdult ? "Password" : "Password or PIN", value: user.hasPassword == true ? "Set" : "None", to: .secret(id))
                     }
                 }
                 if user.canBeLimited(by: model.user?.id) {
-                    ListGroup(title: "Limits") {
+                    ProfileGroup(title: "Limits") {
                         LinkRow(title: "What they see", value: LimitWords.ageLabel(access.maxAge), to: .limits(id, .see))
                         LinkRow(title: "What they can do", value: access.off.isEmpty ? "Everything" : "\(access.off.count) off", to: .limits(id, .allowed))
                         LinkRow(title: "Screen time", value: timeSummary(access), to: .limits(id, .time))
                     }
                     SaveBar(id: id)
-                    ListGroup(title: "", footer: "What they watched and when, and what was refused. Kept only for profiles with limits.") {
+                    ProfileGroup(title: "", footer: "What they watched and when, and what was refused. Kept only for profiles with limits.") {
                         LinkRow(title: "Report", to: .report(id))
                     }
                     if !problem.isEmpty { ProblemLine(problem) }
@@ -480,18 +519,18 @@ struct ProfileLimitsView: View {
     @ViewBuilder private var see: some View {
         let a = access
         let levels = ageLevels
-        ListGroup(title: "What may they watch?") {
+        ProfileGroup(title: "What may they watch?") {
             ForEach(levels, id: \.age) { level in
                 SettingChoiceRow(title: level.label, detail: level.hint, chosen: a.maxAge == level.age) { desk.edit(id) { $0.maxAge = level.age } }
                     .accessibilityIdentifier("age-\(level.age)")
             }
         }
         if a.maxAge >= 0 {
-            ListGroup(title: "", footer: "Home videos and unmatched files have no rating. They stay hidden under an age limit unless this is on.") {
+            ProfileGroup(title: "", footer: "Home videos and unmatched files have no rating. They stay hidden under an age limit unless this is on.") {
                 SwitchRow(title: "Also show titles without a rating", isOn: a.allowUnrated) { desk.edit(id) { $0.allowUnrated.toggle() } }
             }
         }
-        ListGroup(title: "") {
+        ProfileGroup(title: "") {
             LinkRow(title: "A different age for some kinds", detail: "Films, TV shows, games, music or books.",
                     value: a.kinds.isEmpty ? "" : "\(a.kinds.count)", to: .limits(id, .kinds))
             LinkRow(title: "Hide genres", value: a.blockGenres.isEmpty ? "" : "\(a.blockGenres.count)", to: .limits(id, .hideGenres))
@@ -501,7 +540,7 @@ struct ProfileLimitsView: View {
                     to: .limits(id, .collections))
         }
         if !desk.libraries.isEmpty {
-            ListGroup(title: "Libraries", footer: "Only the libraries turned on. Leave them all off for every library.") {
+            ProfileGroup(title: "Libraries", footer: "Only the libraries turned on. Leave them all off for every library.") {
                 ForEach(desk.libraries) { library in
                     SwitchRow(title: library.name, isOn: a.libraries.contains(library.id)) {
                         desk.edit(id) { access in
@@ -511,7 +550,7 @@ struct ProfileLimitsView: View {
                 }
             }
         }
-        ListGroup(title: "Live TV") {
+        ProfileGroup(title: "Live TV") {
             SwitchRow(title: "Live TV", isOn: a.liveTv) { desk.edit(id) { $0.liveTv.toggle() } }
             SwitchRow(title: "Channels made from this server’s libraries", isOn: a.liveTv && a.libraryChannels, fixed: !a.liveTv) {
                 desk.edit(id) { $0.libraryChannels.toggle() }
@@ -538,7 +577,7 @@ struct ProfileLimitsView: View {
         Secondary("A kind left alone follows the age limit for everything else.")
         ForEach(desk.lists?.kinds ?? ["film", "tv", "game", "music", "book"], id: \.self) { kind in
             let mine = a.kinds[kind]
-            ListGroup(title: LimitWords.kindLabel(kind)) {
+            ProfileGroup(title: LimitWords.kindLabel(kind)) {
                 SettingChoiceRow(title: "The same as everything else", chosen: mine == nil) { desk.edit(id) { $0.kinds[kind] = nil } }
                 ForEach(LimitWords.ages(for: kind, in: systems, including: mine?.maxAge), id: \.self) { age in
                     SettingChoiceRow(title: LimitWords.ageChoice(age, kind: kind, in: systems), chosen: mine?.maxAge == age) {
@@ -565,7 +604,7 @@ struct ProfileLimitsView: View {
         if all.isEmpty {
             Secondary("This server’s films and shows have no genres yet.")
         } else {
-            ListGroup(title: "") {
+            ProfileGroup(title: "") {
                 ForEach(all, id: \.self) { genre in
                     SwitchRow(title: genre, isOn: chosen.contains(genre)) { toggle(list, genre) }
                 }
@@ -579,7 +618,7 @@ struct ProfileLimitsView: View {
         if desk.collections.isEmpty {
             Secondary("There are no collections yet. Make one under Collections, add titles to it, and it can be allowed or hidden here as a whole.")
         } else {
-            ListGroup(title: "", footer: "Press a collection to change how its titles are treated.") {
+            ProfileGroup(title: "", footer: "Press a collection to change how its titles are treated.") {
                 ForEach(desk.collections) { collection in
                     let rule = a.rule(forCollection: collection.id)
                     let count = collection.count ?? 0
@@ -588,11 +627,11 @@ struct ProfileLimitsView: View {
                         desk.edit(id) { $0.setRule(rule.isEmpty ? "allow" : (rule == "allow" ? "block" : ""), forCollection: collection.id) }
                     } label: {
                         SettingRow(title: collection.name, detail: count == 1 ? "1 title" : "\(count) titles") {
-                            Text(rule == "allow" ? "Always allow" : (rule == "block" ? "Never allow" : "By their rating"))
-                                .font(.wmLabel.weight(.semibold))
+                            RowValue(words: rule == "allow" ? "Always allow" : (rule == "block" ? "Never allow" : "By their rating"),
+                                     on: !rule.isEmpty)
                         }
                     }
-                    .rowStyle()
+                    .designRowStyle()
                 }
             }
         }
@@ -603,7 +642,7 @@ struct ProfileLimitsView: View {
     @ViewBuilder private var allowed: some View {
         let a = access
         let kind = desk.user(id)?.kind
-        ListGroup(title: "", footer: "Installing modules, changing settings and managing libraries are always for administrators. Signing in a TV is always for adults.") {
+        ProfileGroup(title: "", footer: "Installing modules, changing settings and managing libraries are always for administrators. Signing in a TV is always for adults.") {
             ForEach(LimitWords.featureSwitches(profileKind: kind, offered: desk.lists?.features), id: \.feature.id) { entry in
                 SwitchRow(title: entry.feature.label, detail: entry.feature.hint, isOn: !entry.fixedOff && a.allows(entry.feature.id), fixed: entry.fixedOff) {
                     desk.edit(id) { $0.set(entry.feature.id, on: !a.allows(entry.feature.id)) }
@@ -652,13 +691,13 @@ struct ProfileLimitsView: View {
     @ViewBuilder private var time: some View {
         let rules = access.time ?? TimeRules()
         Secondary("Time is counted by the server while this profile is playing something, on any device. When it runs out, what is playing stops and the profile is told why. A parent can give more.")
-        ListGroup(title: "How long each day") {
+        ProfileGroup(title: "How long each day") {
             StepRow(title: "School days", detail: "Monday to Friday.", value: TimeRules.allowanceLabel(rules.schoolDayMinutes),
                     less: stepAllowance(\.schoolDayMinutes, by: -1), more: stepAllowance(\.schoolDayMinutes, by: 1))
             StepRow(title: "Weekends", detail: "Saturday and Sunday.", value: TimeRules.allowanceLabel(rules.weekendMinutes),
                     less: stepAllowance(\.weekendMinutes, by: -1), more: stepAllowance(\.weekendMinutes, by: 1))
         }
-        ListGroup(title: "When", footer: "School holidays aren’t known to the server: change these when they start.") {
+        ProfileGroup(title: "When", footer: "School holidays aren’t known to the server: change these when they start.") {
             timeRow("Not before", "With a bedtime and nothing here, the day starts at 6:00.", \.from, first: 7 * 60)
             timeRow("Bedtime on school nights", "Sunday to Thursday evenings.", \.schoolNightUntil, first: 20 * 60)
             timeRow("Bedtime on Fridays and Saturdays", "", \.weekendUntil, first: 21 * 60)
@@ -678,7 +717,7 @@ struct ProfileLimitsView: View {
     }
 
     var body: some View {
-        SettingsScreen(title: title) {
+        ProfilePage(title: title) {
             if desk.user(id) == nil {
                 if desk.users == nil { ProgressView().frame(maxWidth: .infinity) } else { Secondary("That profile is no longer here.") }
             } else {
@@ -739,7 +778,7 @@ struct ProfileLookView: View {
 
     var body: some View {
         let user = desk.user(id)
-        SettingsScreen(title: "Name and picture") {
+        ProfilePage(title: "Name and picture") {
             if let user {
                 OutlinedField(label: "Profile name", text: $display, icon: "person.text.rectangle")
                 Secondary("What they’re called around the app.")
@@ -799,7 +838,7 @@ struct ProfileSecretView: View {
     var body: some View {
         let user = desk.user(id)
         let adult = user?.isAdult ?? true
-        SettingsScreen(title: adult ? "Password" : "Password or PIN",
+        ProfilePage(title: adult ? "Password" : "Password or PIN",
                        detail: adult ? "A new password for \(user?.shownName ?? "this account"). Its other devices are signed out."
                                      : "A Kids or Guest profile can have a short PIN, or nothing: with none it opens with a tap on your home network only.") {
             if let user {
@@ -867,7 +906,7 @@ struct AddProfileView: View {
     }
 
     var body: some View {
-        SettingsScreen(title: "Add a profile", detail: "Each person gets their own watch progress, history, lists and picture.") {
+        ProfilePage(title: "Add a profile", detail: "Each person gets their own watch progress, history, lists and picture.") {
             if kinds.count > 1 {
                 HStack(spacing: Tokens.Space.s2) {
                     ForEach(kinds, id: \.self) { choice in
@@ -883,7 +922,7 @@ struct AddProfileView: View {
             OutlinedField(label: kind == "adult" ? say("passwordLabel") : "Password or PIN (optional)", text: $password, kind: .password, icon: "lock")
             if kind != "adult" {
                 Secondary("With none, the profile opens with a tap on your home network only.")
-                ListGroup(title: "What may they watch?", footer: "Everything else about their limits can be set once the profile is made.") {
+                ProfileGroup(title: "What may they watch?", footer: "Everything else about their limits can be set once the profile is made.") {
                     ForEach(LimitWords.ageLevels, id: \.age) { level in
                         SettingChoiceRow(title: level.label, detail: level.hint, chosen: age == level.age) { age = level.age }
                     }
@@ -998,7 +1037,7 @@ struct ProfileReportView: View {
         }
         ForEach(days, id: \.self) { day in
             let name = ReportWords.date(day: day, calendar: .current).map { Self.dayName.string(from: $0) } ?? "\(day)"
-            ListGroup(title: name, footer: ReportWords.dayTotal((a.days ?? []).first { $0.day == day })) {
+            ProfileGroup(title: name, footer: ReportWords.dayTotal((a.days ?? []).first { $0.day == day })) {
                 ForEach(Array((a.watched ?? []).filter { $0.day == day }.enumerated()), id: \.offset) { _, row in
                     line(ReportWords.watched(row), ReportWords.duration(row.seconds ?? 0))
                 }
@@ -1008,7 +1047,7 @@ struct ProfileReportView: View {
         if (a.events ?? []).isEmpty {
             Secondary("Nothing.")
         } else {
-            ListGroup(title: "") {
+            ProfileGroup(title: "") {
                 ForEach(Array((a.events ?? []).enumerated()), id: \.offset) { _, event in
                     line(ReportWords.event(event), event.at.map { Self.moment.string(from: Date(timeIntervalSince1970: TimeInterval($0))) } ?? "")
                 }
@@ -1019,7 +1058,7 @@ struct ProfileReportView: View {
 
     var body: some View {
         let name = desk.user(id)?.shownName ?? "This profile"
-        SettingsScreen(title: "\(name): the last two weeks") {
+        ProfilePage(title: "\(name): the last two weeks") {
             if let activity { report(activity) } else if problem.isEmpty { ProgressView().frame(maxWidth: .infinity) }
             if !problem.isEmpty { ProblemLine(problem) }
         }
@@ -1076,7 +1115,7 @@ struct ParentPinView: View {
     var body: some View {
         let detail = "When a profile’s screen time runs out, a parent can type this PIN on that device to give it more time today. It does nothing else, so it can be short. "
             + (isSet == true ? "A PIN is set." : "No PIN is set: a parent’s own username and password work instead.")
-        SettingsScreen(title: "Parents’ PIN", detail: detail) {
+        ProfilePage(title: "Parents’ PIN", detail: detail) {
             OutlinedField(label: isSet == true ? "New PIN" : "PIN", text: Binding(get: { pin }, set: { pin = ScreenTimeRules.cleanPin($0) }),
                           kind: .password, icon: "lock.rectangle")
             Secondary("4 to 12 digits.")
