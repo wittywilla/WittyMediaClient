@@ -364,7 +364,7 @@ private struct PillShell: View {
                         .padding(.bottom, model.hidesBars || typing || !bar ? 0 : lift)
                     }
                     .modifier(TopTabsSlot(nav: nav, height: navSize > 0 ? navSize : 48, overlay: center.shell?.overlay == true,
-                                          shown: !model.hidesBars))
+                                          shown: !model.hidesBars, finish: FrameNav.finish(center.shell)))
                     .toolbar(.hidden, for: .tabBar)
                     .tag(tab)
             }
@@ -375,10 +375,16 @@ private struct PillShell: View {
     var body: some View {
         Group {
             switch nav {
-            case .sidebar, .rail:
+            case .sidebar:
+                HStack(spacing: 0) {
+                    if !model.hidesBars { SideMenu(width: navSize > 0 ? navSize : 240, iconsOnly: false) }
+                    tabs
+                }
+            case .rail, .railDrawer, .ornament:
+                // The rail, and a headset's ornament: the same closed and open menu, the ornament floating at the leading edge.
                 HStack(spacing: 0) {
                     if !model.hidesBars {
-                        SideMenu(width: navSize > 0 ? navSize : (nav == .rail ? 72 : 220), iconsOnly: nav == .rail)
+                        RailMenu(closed: navSize > 0 ? navSize : 76, open: CGFloat(center.shell?.open ?? 240), drawerWidth: CGFloat(center.shell?.drawer ?? 0))
                     }
                     tabs
                 }

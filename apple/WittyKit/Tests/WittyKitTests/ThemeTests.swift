@@ -92,3 +92,27 @@ final class ThemeTests: XCTestCase {
         XCTAssertGreaterThanOrEqual(theme.onAccent.contrast(with: theme.accent), 4.5)
     }
 }
+
+final class BrandColourTests: XCTestCase {
+    private let fg = ThemeColour(hex: "#ffffff")!, accent = ThemeColour(hex: "#7955ff")!
+
+    func testEachKindOfPartColour() throws {
+        let json = ##"{"parts":[{"text":"Witty"},{"text":"Media","color":{"kind":"accent"}},{"text":"A","color":{"kind":"token","token":"ok"},"bold":true},{"text":"B","color":{"kind":"static","hex":"#ff0000"}},{"text":"C","color":{"kind":"gradient","stops":["#ff0000","#0000ff"],"angle":90}}],"mark":{"kind":"initials","shown":"WMS"}}"##
+        let brand = try JSONDecoder().decode(ResolvedTheme.Brand.self, from: Data(json.utf8))
+        let colors = ["ok": "#00ff00"]
+        XCTAssertNil(brand.parts[0].color)
+        XCTAssertEqual(brand.parts[1].color?.resolved(colors: colors, fg: fg, accent: accent).solid, accent)
+        XCTAssertEqual(brand.parts[2].color?.resolved(colors: colors, fg: fg, accent: accent).solid.hex, "#00ff00")
+        XCTAssertEqual(brand.parts[2].bold, true)
+        XCTAssertEqual(brand.parts[3].color?.resolved(colors: colors, fg: fg, accent: accent).solid.hex, "#ff0000", "a fixed colour doesn't follow the theme")
+        let gradient = brand.parts[4].color?.resolved(colors: colors, fg: fg, accent: accent)
+        XCTAssertEqual(gradient?.stops.map(\.hex), ["#ff0000", "#0000ff"])
+        XCTAssertEqual(brand.mark?.characters(name: "Witty Media Server"), "WMS")
+    }
+
+    func testAnUnreadableColourIsTheTextColour() {
+        let c = ResolvedTheme.BrandColour(kind: "token", token: "nope")
+        XCTAssertEqual(c.resolved(colors: [:], fg: fg, accent: accent).solid, fg)
+        XCTAssertEqual(ResolvedTheme.Mark(kind: "letter").characters(name: "orchid"), "O")
+    }
+}
