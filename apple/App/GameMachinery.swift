@@ -188,7 +188,7 @@ final class GamePictureRenderer: NSObject, MTKViewDelegate {
             describe.colorAttachments[0].pixelFormat = view.colorPixelFormat
             pipeline = try device.makeRenderPipelineState(descriptor: describe)
         } catch {
-            ClientLog.shared.warn("games", "The picture couldn't be set up: \((error as NSError).code)")
+            ClientLog.shared.warn("game", "The picture couldn't be set up: \((error as NSError).code)")
             return nil
         }
         let s = MTLSamplerDescriptor()

@@ -51,6 +51,14 @@ final class PartySession: ObservableObject {
 
     var bestRttMs: Double { time.rttMs }
 
+    /// A watch party in the logs, the same id as the server's: "party-" and the room's id.
+    static func logSession(_ roomID: String) -> String {
+        let id = roomID.filter { $0.isASCII && ($0.isLetter || $0.isNumber || "-_.:".contains($0)) }
+        return id.isEmpty ? "" : "party-" + id.prefix(58)
+    }
+
+    var logSession: String { Self.logSession(room?.id ?? "") }
+
     func use(_ client: WittyClient, info: SyncInfo?) {
         self.client = client
         if let info {
@@ -86,6 +94,7 @@ final class PartySession: ObservableObject {
         do {
             try await join(room: kept)
         } catch {
+            ClientLog.shared.warn("party", "Sitting back down in the watch party failed: \((error as? APIError)?.status ?? 0)", session: Self.logSession(kept))
             defaults.removeObject(forKey: Self.roomKey)
         }
     }
@@ -215,8 +224,14 @@ final class PartySession: ObservableObject {
                 }
             } catch let refused as APIError {
                 refusal = refused
+                if !Task.isCancelled {
+                    ClientLog.shared.warnSeldom("party", "The watch party's events were refused: \(refused.status) \(refused.code)", session: Self.logSession(current.id))
+                }
             } catch {
                 // The connection dropped, or said nothing for a minute.
+                if !Task.isCancelled, !(error is CancellationError) {
+                    ClientLog.shared.warnSeldom("party", "The watch party's events stopped: \((error as? URLError)?.code.rawValue ?? 0)", session: Self.logSession(current.id))
+                }
             }
             guard !Task.isCancelled else { return }
             switch SyncLife.after(closed: closed, refusal: refusal, backoff: &backoff) {
@@ -233,12 +248,16 @@ final class PartySession: ObservableObject {
                     room = again
                     onRoom?(again)
                 } catch let refused as APIError {
+                    ClientLog.shared.warnSeldom("party", "Rejoining the watch party was refused: \(refused.status) \(refused.code)", session: Self.logSession(current.id))
                     if case .over(let words) = SyncLife.after(closed: nil, refusal: refused, backoff: &backoff) {
                         gone(words)
                         return
                     }
                 } catch {
                     // Still no network: round again.
+                    if !Task.isCancelled, !(error is CancellationError) {
+                        ClientLog.shared.warnSeldom("party", "Rejoining the watch party failed: \((error as? URLError)?.code.rawValue ?? 0)", session: Self.logSession(current.id))
+                    }
                 }
             }
         }
@@ -441,6 +460,11 @@ final class PartyFollower: PlaybackSteering {
         guard let behind = orders.behind, Self.now() - logged >= 5000 else { return }
         logged = Self.now()
         ClientLog.shared.info("party", String(format: "Drift %+.3f s, rate %.2f, round trip %.0f ms.", -behind, rate, party.bestRttMs))
+        // Far enough off that it had to jump: worth the server knowing, once a minute at most.
+        if abs(behind) >= party.drift.seekSec {
+            ClientLog.shared.warnSeldom("party", String(format: "Far out of step with the watch party: %+.0f ms (round trip %.0f ms)", -behind * 1000, party.bestRttMs),
+                                        key: "drift", session: party.logSession)
+        }
     }
 
     // MARK: What the viewer does
@@ -458,7 +482,10 @@ final class PartyFollower: PlaybackSteering {
                 try await self?.party.command(type, positionSec: positionSec, rate: rate, ifSeq: ifSeq)
             } catch {
                 // The end of the queue, said by every player at once, is nothing to tell anyone.
-                if (error as? APIError)?.code != "end-of-queue" { self?.hub?.say(SyncWords.refusal(error)) }
+                if (error as? APIError)?.code != "end-of-queue" {
+                    self?.hub?.say(SyncWords.refusal(error))
+                    ClientLog.shared.warnSeldom("party", "A watch party command failed: \(type.prefix(40)): \((error as? APIError)?.status ?? 0)", session: self?.party.logSession)
+                }
             }
         }
     }

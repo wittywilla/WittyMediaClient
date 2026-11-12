@@ -66,6 +66,7 @@ struct GuideView: View {
     @State private var setsOpen = false
     @State private var findOpen = false
     @State private var goOpen = false
+    @State private var dialled: String?
     @State private var elsewhere: GuideElsewhere?
     @State private var adding: GuideChannel?
     @State private var toast = ""
@@ -137,7 +138,10 @@ struct GuideView: View {
             FindChannelSheet(set: store.filter.set, current: store.filter.q,
                              onGo: { c in findOpen = false; goToChannel(c.key) }, onFilter: { q in findOpen = false; filterBy(q) })
         }
-        .sheet(isPresented: $goOpen) { GoToChannelSheet { n in goOpen = false; goToNumber(n) } }
+        // The number is gone to once the sheet has gone: an offer to show all channels made while it's still closing never shows.
+        .sheet(isPresented: $goOpen, onDismiss: { if let n = dialled { dialled = nil; goToNumber(n) } }) {
+            GoToChannelSheet { n in dialled = n; goOpen = false }
+        }
         .alert(item: $elsewhere) { e in
             Alert(title: Text(store.filter.q.isEmpty ? "Channel \(e.number) isn't in \(setName)" : "Channel \(e.number) isn't among these"),
                   message: Text("It's among all channels. Show all channels and go to it?"),
@@ -190,9 +194,17 @@ struct GuideView: View {
                 HStack(spacing: 16) {
                     if store.hasSets {
                         // Sets have all of the filters below in them, and the account's own besides.
+                        if store.sets.count > 1 {
+                            Button { cycleSet(-1) } label: { Image(systemName: "chevron.left") }
+                                .buttonStyle(TvButtonStyle(dress: dress, kind: .icon, onBar: true)).accessibilityLabel("The set before")
+                        }
                         Button { setsOpen = true } label: { Label(setName + " ▾", systemImage: "list.bullet") }
                             .buttonStyle(TvButtonStyle(dress: dress, kind: .chip, on: true, onBar: true))
                             .accessibilityLabel("Channel set: \(setName)").accessibilityHint("Choose which channels the guide shows")
+                        if store.sets.count > 1 {
+                            Button { cycleSet(1) } label: { Image(systemName: "chevron.right") }
+                                .buttonStyle(TvButtonStyle(dress: dress, kind: .icon, onBar: true)).accessibilityLabel("The set after")
+                        }
                     } else {
                         chip("All", on: all) { store.setFilter(.init()) }
                         if anyFavourite || store.filter.favourites {
@@ -348,6 +360,10 @@ struct GuideView: View {
                     }
                     .onChange(of: spot.row) { r in
                         if case .cell = focused {} else { withAnimation(nil) { scroller.scrollTo(r, anchor: .center) } }
+                    }
+                    // A new page size, chosen in Look, keeps the highlighted row on screen for when the focus comes back.
+                    .onChange(of: store.pageSize) { _ in
+                        DispatchQueue.main.async { withAnimation(nil) { scroller.scrollTo(spot.row, anchor: .center) } }
                     }
                 }
                 edges
@@ -523,6 +539,14 @@ struct GuideView: View {
         device.remember(id, for: GuideDevice.setKey(model: model, client: client))
         store.setFilter(.init(set: id))
         Task { await store.ensure(0); focusCell(row: 0, at: spot.at) }
+    }
+
+    /// The set before or after, from the bar, as the picker would choose it.
+    private func cycleSet(_ step: Int) {
+        let current = store.filter.set.isEmpty ? ChannelSetRules.all : store.filter.set
+        guard let next = ChannelSetRules.cycle(current, in: store.sets, by: step) else { return }
+        chooseSet(next)
+        say(ChannelSetRules.name(of: next, in: store.sets))
     }
 
     /// Only the channels matching some words, in the set on screen; nothing shows them all again.

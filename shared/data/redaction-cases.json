@@ -20,6 +20,15 @@
     { "input": "stream st1.PLANTEDstream17 and st_PLANTEDstream18 ended", "gone": ["PLANTEDstream17", "PLANTEDstream18"], "kept": ["ended"] },
     { "input": "share link /s/PLANTEDshare19", "gone": ["PLANTEDshare19"], "kept": ["share link"] },
     { "input": "Basic QUxBRERJTjpvcGVuIHNlc2FtZQ==", "gone": ["QUxBRERJTjpvcGVuIHNlc2FtZQ"], "kept": ["Basic"] },
+    { "input": "invite wittymedia://p2p/AbCdEf123456?s=PLANTEDinvite22&n=Den&a=1", "gone": ["PLANTEDinvite22"], "kept": ["wittymedia://p2p/AbCdEf123456?s=", "n=Den", "a=1"] },
+    { "input": "{\"code\":\"K7QM-2XHD\",\"peer\":\"den\"}", "gone": ["K7QM-2XHD"], "kept": ["\"peer\":\"den\""] },
+    { "input": "scanned wms://pair?id=p-42&k=PLANTEDcheck23", "gone": ["PLANTEDcheck23"], "kept": ["wms://pair?id=p-42"] },
+    { "input": "GET /api/auth/pair/p-42/info?k=PLANTEDcheck24 answered 404", "gone": ["PLANTEDcheck24"], "kept": ["/api/auth/pair/p-42/info", "answered 404"] },
+    { "input": "X-Witty-Connect: PLANTEDconnect25", "gone": ["PLANTEDconnect25"], "kept": ["X-Witty-Connect"] },
+    { "input": "X-WMS-Pair-Secret: PLANTEDpair26", "gone": ["PLANTEDpair26"], "kept": ["X-WMS-Pair-Secret"] },
+    { "input": "POST /SyncPlay/Join?room=r-9&member=PLANTEDmember27", "gone": ["PLANTEDmember27"], "kept": ["/SyncPlay/Join?room=r-9"] },
+    { "input": "GET http://iptv.example:8080/timeshift/PLANTEDuser28/PLANTEDpass29/60/2026-11-12:20-00/1234.ts", "gone": ["PLANTEDuser28", "PLANTEDpass29"], "kept": ["iptv.example:8080/timeshift/", "/60/2026-11-12:20-00/1234.ts"] },
+    { "input": "items=5&focus=on and the rank=2 dots=3", "gone": [], "kept": ["items=5&focus=on and the rank=2 dots=3"] },
     { "input": "POST /api/v1/items/12/playback answered 500", "gone": [], "kept": ["POST /api/v1/items/12/playback answered 500"] },
     { "input": "net::ERR_CONNECTION_REFUSED, exit code 3, the key things to do", "gone": [], "kept": ["net::ERR_CONNECTION_REFUSED, exit code 3, the key things to do"] }
   ]

@@ -5,6 +5,17 @@ What changed in WittyMediaClient, newest first. What changed before it had a rep
 
 ## Unreleased
 
+- **What goes wrong is reported to the server's log, filed where it belongs.** Pages that don't load and parts of a page
+  the app doesn't know (kind `sdui`, once for each type), connections from away that fall back to a relay or drop
+  (`p2p`, filed under `p2p-` and the end of this device's peer ID), karaoke's parts (`karaoke`), remote control
+  (`remote`, under `rc-` and the device's id), watch parties, and a player far out of step with one (`party`, under
+  `party-` and the room), and games, whose session id is set while they play (`game`). A fault that keeps happening
+  is sent at most once a minute. Every app's log now also hides invite secrets, join codes, the pairing check `k=`,
+  the `X-Witty-Connect` and `X-WMS-Pair-Secret` headers, SyncPlay's `member=` and Xtream logins in `/timeshift/`.
+- **Desktop: From away, on and off.** **Server → Stop Connecting from Away** on a Mac (in the Help menu on Windows and
+  Linux, and TV mode's menu) takes this computer off the server's list of devices that may reach it from away; reached
+  from away right now, it goes back to the server list. **Connect from Away Again** puts it back. The choice is kept
+  for that server. As the Apple apps' You → From away.
 - **The app has its icons, and a new logo.** The family's mark is now orbitw: a ring with its own coloured dot and
   what each app is inside. This app's is a screen on a stand carrying a small ring with the W and a mint dot; a
   server's is the W in its orbit with an amber dot, so the two are told apart at a glance. iPhone and iPad have an

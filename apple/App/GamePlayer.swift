@@ -366,6 +366,8 @@ final class GamePlayerModel: ObservableObject {
             return
         }
         self.session = session
+        // What goes wrong while it plays is filed under the game's session on the server.
+        ClientLog.shared.session = session.id
         aspect = session.aspect ?? (Double(session.width ?? 4) / Double(max(1, session.height ?? 3)))
         frame = (Double(session.width ?? 0), Double(session.height ?? 0))
         turns = session.turns ?? 0
@@ -403,6 +405,7 @@ final class GamePlayerModel: ObservableObject {
         // Screen time is up: the time-up screen says so and closes the game.
         if Household.caught(error) { return }
         let words = (error as? APIError)?.message ?? plainWords(Problem.of(error))
+        ClientLog.shared.warn("game", "The game couldn't start: \((error as? APIError)?.status ?? 0) \(String(describing: type(of: error)))", session: session?.id ?? "")
         phase = .failed(words.isEmpty ? "This game couldn't start." : words)
     }
 
@@ -875,7 +878,10 @@ final class GamePlayerModel: ObservableObject {
         transport?.close()
         pipeline?.sound.stop()
         watchdog?.invalidate()
-        if let session { try? await client.stopGame(session.id) }
+        if let session {
+            Self.endLogSession(session.id)
+            try? await client.stopGame(session.id)
+        }
         busy = false
         leave = true
     }
@@ -889,7 +895,15 @@ final class GamePlayerModel: ObservableObject {
         transport?.close()
         pipeline?.sound.stop()
         watchdog?.invalidate()
-        if let session { Task.detached { [client] in try? await client.stopGame(session.id) } }
+        if let session {
+            Self.endLogSession(session.id)
+            Task.detached { [client] in try? await client.stopGame(session.id) }
+        }
+    }
+
+    /// The log's session back to none, unless something else has started since.
+    private static func endLogSession(_ id: String) {
+        if ClientLog.shared.session == id { ClientLog.shared.session = "" }
     }
 
     /// The app going to the background lets go of everything; the game waits for a minute.

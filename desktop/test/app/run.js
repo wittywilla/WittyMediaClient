@@ -11,6 +11,13 @@
 // the system from suspending the app is only noted down.
 // Set WMC_SHOTS to a folder to get a picture of each screen.
 const electron = require('electron')
+// Whether the screen is locked: every window is then hidden from its page. macOS says so in the
+// console session's flags, which Electron's idle state doesn't always report.
+function screenLocked() {
+  if (electron.powerMonitor.getSystemIdleState(1) === 'locked') return true
+  if (process.platform !== 'darwin') return false
+  try { return /"CGSSessionScreenIsLocked"=Yes/.test(require('node:child_process').execFileSync('ioreg', ['-n', 'Root', '-d1'], { encoding: 'utf8' })) } catch { return false }
+}
 const { app, session, shell, BaseWindow, Menu, powerSaveBlocker, webContents } = electron
 const assert = require('node:assert')
 const crypto = require('node:crypto')
@@ -304,9 +311,17 @@ async function seeded(url) {
       await until('the page to learn it is hidden', async () => (await inPage('document.visibilityState')) === 'hidden')
       await until('it to pause', () => audio('a.paused'))
       await until('the system to be let go', () => blocks.running.size === 0)
+      // Shown, and in front: a window covered by other apps' windows is still hidden to the page on
+      // macOS, and a test can't count on taking the focus from whatever the person is using.
+      win.setAlwaysOnTop(true)
       win.show()
       await inPage("delete document.documentElement.dataset.backgroundPlay; 0")
-      await until('visible again', async () => (await inPage('document.visibilityState')) === 'visible')
+      // A locked screen hides every window from its page, whatever the app does: that can't be checked then.
+      if (screenLocked()) console.log('      (the screen is locked, so being visible again is not checked)')
+      else await until('visible again', async () => (await inPage('document.visibilityState')) === 'visible').catch(async (e) => {
+        throw new Error(`${e.message} (window visible ${win.isVisible()}, minimised ${win.isMinimized()}, focused ${win.isFocused()}, page says ${await inPage('document.visibilityState')})`)
+      })
+      win.setAlwaysOnTop(false)
     })
   }
   if (scenario === 'other') {
@@ -952,12 +967,18 @@ async function onTv() {
     await onHeading(S.findTitle)
   })
   await step('on a TV, the code boxes are on the left and the number pad on the right', async () => {
+    // :focus only matches while the window has the system's focus, which another app in front or a
+    // sleeping display takes away; the page is told it has it, as a TV's own window always does.
+    const page = views().page
+    if (!page.debugger.isAttached()) page.debugger.attach('1.3')
+    await page.debugger.sendCommand('Emulation.setFocusEmulationEnabled', { enabled: true })
     await typeAddress(url)
     await onHeading(S.codeTitle)
     assert.strictEqual(await halves('.code', '.pad'), true)
     // A focused key fills with text instead of taking a ring.
     const key1 = () => inPage('(() => { const s = getComputedStyle(document.activeElement); return [document.activeElement.textContent, s.outlineStyle, s.backgroundColor].join() })()')
-    await until('the key to fill', async () => (await key1()) === '1,none,rgb(232, 234, 240)')
+    let seen = ''
+    await until('the key to fill', async () => (seen = await key1()) === '1,none,rgb(232, 234, 240)').catch((e) => { throw new Error(`${e.message} (focus, outline, fill: ${seen})`) })
     await key('4')
     await shot('tv-code')
   })
@@ -969,7 +990,7 @@ async function onTv() {
   })
   await step('with Reduce Motion nothing moves by itself, and in forced colours the QR code stays black on white', async () => {
     const { debugger: devtools } = views().page
-    devtools.attach('1.3')
+    if (!devtools.isAttached()) devtools.attach('1.3')
     const media = (name, value) => devtools.sendCommand('Emulation.setEmulatedMedia', { features: [{ name, value }] })
     await media('prefers-reduced-motion', 'reduce')
     assert.strictEqual(await inPage("getComputedStyle(document.querySelector('.waiting .spinner')).animationName"), 'none')

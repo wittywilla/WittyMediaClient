@@ -58,6 +58,15 @@ final class ChannelSetsTests: XCTestCase {
         XCTAssertEqual(ChannelSetRules.sections([]), [])
     }
 
+    func testTheSetBeforeAndAfterGoRound() throws {
+        let list = try sets().sets
+        XCTAssertEqual(ChannelSetRules.cycle("all", in: list, by: 1), "fav")
+        XCTAssertEqual(ChannelSetRules.cycle("all", in: list, by: -1), "grp:News", "round from the first to the last")
+        XCTAssertEqual(ChannelSetRules.cycle("grp:News", in: list, by: 1), "all")
+        XCTAssertEqual(ChannelSetRules.cycle("set:404", in: list, by: 1), "all", "a set that has gone")
+        XCTAssertNil(ChannelSetRules.cycle("all", in: [], by: 1))
+    }
+
     func testTheRememberedSetFallsBackToAll() throws {
         let list = try sets().sets
         XCTAssertEqual(ChannelSetRules.chosen("set:7", in: list), "set:7")

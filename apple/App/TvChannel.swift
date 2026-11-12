@@ -23,11 +23,13 @@ struct ChannelPlayer: View {
     @State private var lineup: [GuideChannel] = []
     @State private var bannerShown = 0
     @FocusState private var focused: Bool
+    @FocusState private var failureFocused: Bool
 
     init(start: String) { _key = State(initialValue: start) }
 
     private var dress: TvDress { looks.dress }
     private var channel: GuideChannel? { lineup.first { $0.key == key } ?? model.channels.first { $0.key == key } }
+    private var failedHere: Bool { live.isFailed && live.key == key }
 
     var body: some View {
         ZStack(alignment: .bottom) {
@@ -36,9 +38,7 @@ struct ChannelPlayer: View {
             if live.key == key, live.playing, live.info?.now?.kind == "slate" {
                 SlateCard(name: live.info?.name ?? channel?.name ?? "", next: live.info?.next).frame(maxHeight: .infinity)
             }
-            if case .failed(let why) = live.state, live.key == key {
-                failure(why)
-            } else if live.key != key || !live.playing {
+            if !failedHere, live.key != key || !live.playing {
                 LoadingView()
             }
             if mini {
@@ -66,9 +66,11 @@ struct ChannelPlayer: View {
                     .frame(maxHeight: .infinity, alignment: .top).padding(.top, 60)
             }
         }
-        .focusable(!mini)
+        // A channel that failed gives the focus to its buttons, which the remote couldn't reach inside a focusable player.
+        .focusable(!mini && !failedHere)
         .focused($focused)
-        .onMoveCommand { direction in
+        // None when it failed, so the arrows move between its buttons.
+        .onMoveCommand(perform: failedHere ? nil : { direction in
             guard !mini else { return }
             switch direction {
             case .up: step(1)
@@ -77,13 +79,17 @@ struct ChannelPlayer: View {
             case .right: live.seek(by: 10); showBanner()
             @unknown default: break
             }
-        }
+        })
         .onPlayPauseCommand {
             if live.playing { live.pause() } else if live.fromStart == nil, live.behind > 20, bannerShown > 0 { live.goLive() } else { live.resume() }
             showBanner()
         }
-        .onTapGesture { if !mini { mini = true } }
+        .onTapGesture { if !mini, !failedHere { mini = true } }
         .onExitCommand(perform: mini ? { closeMini() } : nil)
+        // Over the player, not in it: inside the focusable player its buttons were out of the remote's reach.
+        .overlay {
+            if case .failed(let why) = live.state, live.key == key { failure(why) }
+        }
         .onAppear {
             focused = true
             GuideReturn.key = key
@@ -119,6 +125,9 @@ struct ChannelPlayer: View {
             showBanner()
         }
         .onChange(of: live.playing) { on in if on { showBanner() } }
+        .onChange(of: failedHere) { failed in
+            DispatchQueue.main.async { if failed { failureFocused = true } else { focused = true } }
+        }
         .onChange(of: scenePhase) { phase in
             if phase == .active { live.resume() } else { live.pause() }
         }
@@ -151,7 +160,7 @@ struct ChannelPlayer: View {
                 if let alt = channel?.alternative {
                     Button("Watch \(alt.number) \(alt.name) instead") { tune(alt.key) }.buttonStyle(TvButtonStyle(dress: dress, on: true))
                 }
-                Button("Try again") { live.retry() }.buttonStyle(TvButtonStyle(dress: dress))
+                Button("Try again") { live.retry() }.buttonStyle(TvButtonStyle(dress: dress)).focused($failureFocused)
                 if live.fromStart != nil {
                     Button("Back to live") { live.backToLive(); showBanner() }.buttonStyle(TvButtonStyle(dress: dress))
                 }

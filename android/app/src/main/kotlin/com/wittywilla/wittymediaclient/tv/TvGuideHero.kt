@@ -91,6 +91,8 @@ fun GuideHero(
     onStep: (Int) -> Unit,
     onRecord: () -> Unit,
     onSaid: (String) -> Unit,
+    // Watching the highlighted programme from its start, from the source's archive (`tv-catchup`); null where it can't be.
+    onFromStart: (() -> Unit)? = null,
 ) {
     val p = dress.paint
     val shape = dress.shape
@@ -138,7 +140,7 @@ fun GuideHero(
         ) {
             if (dress.look.previewSide == "left" && dress.look.preview != "off") GuidePreview(nav, dress, preview, previewName, onWatch)
             Column(Modifier.weight(1f)) {
-                HeroMain(nav, dress, channel, cell, programme, next, now, onWatch, onDetails, onDay, onFavourite, onStep, onRecord, onSaid)
+                HeroMain(nav, dress, channel, cell, programme, next, now, onWatch, onDetails, onDay, onFavourite, onStep, onRecord, onSaid, onFromStart)
             }
             if (dress.look.previewSide == "right" && dress.look.preview != "off") GuidePreview(nav, dress, preview, previewName, onWatch)
             if (showsClock) HeroClock(dress, now)
@@ -196,6 +198,8 @@ private fun HeroMain(
     onStep: (Int) -> Unit,
     onRecord: () -> Unit,
     onSaid: (String) -> Unit,
+    // Watching the highlighted programme from its start, from the source's archive (`tv-catchup`); null where it can't be.
+    onFromStart: (() -> Unit)? = null,
 ) {
     val p = dress.paint
     val shape = dress.shape
@@ -235,7 +239,7 @@ private fun HeroMain(
     channel?.notices.orEmpty().forEach {
         Text(it, style = dress.font(dress.heroFacts).copy(shadow = shadow), color = p.soft, maxLines = 2, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = dress.pt(4)))
     }
-    HeroActions(nav, dress, channel, cell, programme, now, onWatch, onDetails, onDay, onFavourite, onStep, onRecord, onSaid)
+    HeroActions(nav, dress, channel, cell, programme, now, onWatch, onDetails, onDay, onFavourite, onStep, onRecord, onSaid, onFromStart)
 }
 
 @Composable
@@ -411,6 +415,8 @@ private fun HeroActions(
     onStep: (Int) -> Unit,
     onRecord: () -> Unit,
     onSaid: (String) -> Unit,
+    // Watching the highlighted programme from its start, from the source's archive (`tv-catchup`); null where it can't be.
+    onFromStart: (() -> Unit)? = null,
 ) {
     val p = dress.paint
     val shape = dress.shape
@@ -437,6 +443,7 @@ private fun HeroActions(
                 TvButton(dress, "Watch full screen", { onWatch(channel.key) }, on = true, icon = TvSymbols.FullScreen)
             }
         }
+        if (onFromStart != null) TvButton(dress, "Watch from the start", onFromStart, icon = TvSymbols.StartOver)
         if (isTitle && itemId != null) {
             TvButton(dress, "Start over", { nav.push(Route.Player(itemId, startOver = true)) }, icon = TvSymbols.StartOver)
             TvButton(dress, if (isFilm) "Open the film" else "Open the show", { nav.push(programme?.showId?.let { Route.Show(it) } ?: Route.Item(itemId)) }, icon = Symbols.Movie)

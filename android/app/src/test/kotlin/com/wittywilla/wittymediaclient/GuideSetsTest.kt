@@ -277,7 +277,7 @@ class GuideSetsTest {
         assertFalse("a slate", CatchupRules.canWatchFromStart(archive, started.copy(kind = "slate"), now))
         assertFalse("can't be tuned", CatchupRules.canWatchFromStart(archive.copy(encrypted = "protected"), started, now))
         assertFalse(CatchupRules.canWatchFromStart(archive, null, now))
-        assertEquals("/tv/tun-5/catchup?start=913600&end=915400&viewer=v-1", CatchupRules.path("tun-5", yesterday, "v-1"))
+        assertEquals("/tv/tun-5/catchup?start=913600&end=915400&streamToken=1&viewer=v-1", CatchupRules.path("tun-5", yesterday, "v-1"))
     }
 
     @Test
