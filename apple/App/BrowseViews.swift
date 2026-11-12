@@ -733,6 +733,7 @@ private struct TvShowView: View {
                         }
                         .remoteSection()
                         ForEach(uniqued(detail.episodes ?? []).filter { $0.season == selected }) { episodeRow($0) }
+                        MediaShowExtras(show: detail.show.id, episode: detail.episodes?.first?.id).padding(.top, Tokens.Space.s4)
                     }
                     .padding(.horizontal, metrics.gutter)
                     .padding(.top, Tokens.Space.s4)
@@ -845,6 +846,7 @@ private struct TvItemView: View {
             if let overview = item.overview, !overview.isEmpty {
                 Text(overview).foregroundStyle(palette.textSecondary).fixedSize(horizontal: false, vertical: true)
             }
+            MediaItemExtras(item: item)
         }
     }
 
@@ -878,7 +880,11 @@ private struct TvItemView: View {
                         .padding(.bottom, Tokens.Space.s6)
                         .frame(maxWidth: .infinity, alignment: .leading)
                         // The picture behind, fading into the page, as on Home. It scrolls with the page.
-                        .background(alignment: .top) { PageBackdrop(url: client.backdropURL(item), height: 340 + top) }
+                        .background(alignment: .top) {
+                            PageBackdrop(url: client.backdropURL(item), height: 340 + top)
+                                .overlay { CanvasLayer(item: item.id, active: !model.listening.screenShown, shade: palette.background.opacity(0.55)) }
+                                .mask(LinearGradient(stops: [.init(color: .black, location: 0.2), .init(color: .clear, location: 1)], startPoint: .top, endPoint: .bottom))
+                        }
                     }
                     .ignoresSafeArea(edges: .top)
                 }

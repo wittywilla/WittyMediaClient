@@ -211,6 +211,7 @@ private struct TabRoot: View {
                     case .theme: ThemeView().plainNavigation()
                     case .away: AwayView().plainNavigation()
                     case .servers: ManageServersView().plainNavigation()
+                    case .mediaExtras: MediaSettingsView().plainNavigation()
                     #if os(tvOS)
                     case .topMenu: TopMenuView().plainNavigation()
                     #else

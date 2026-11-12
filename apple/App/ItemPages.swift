@@ -73,12 +73,15 @@ struct TitlePress: ButtonStyle {
 /// way down, so there's no line where it ends, and a shade of the page's colour rises over it from the bottom.
 /// Above phone width it's the whole picture under the website's stronger shade.
 private struct TitleBackdrop: View {
+    @EnvironmentObject private var model: AppModel
     @Environment(\.client) private var client
     @Environment(\.palette) private var palette
     @Environment(\.displayScale) private var displayScale
     let url: URL?
     let height: CGFloat
     var wide = false
+    /// The title whose canvas loops over the still picture, when it has one: see MediaCanvas.swift.
+    var canvas: Int64?
     @State private var image: CGImage?
 
     private var fade: [Gradient.Stop] {
@@ -114,6 +117,7 @@ private struct TitleBackdrop: View {
             }
         }
         .frame(height: height)
+        .overlay { CanvasLayer(item: canvas, active: !model.listening.screenShown) }
         .clipped()
         .mask(LinearGradient(stops: fade, startPoint: .top, endPoint: .bottom))
         .overlay(LinearGradient(stops: shade, startPoint: .bottom, endPoint: .top))
@@ -1325,6 +1329,7 @@ struct ItemPage: View {
                 TitleExtrasView(target: .item, attached: attached, listings: listings, libraryId: item.libraryId, logos: logos, legal: legal)
                     .padding(.top, Tokens.Space.s4)
             }
+            MediaItemExtras(item: item).padding(.top, Tokens.Space.s4)
             if TitleLook.isDisc(item) {
                 DiscSections(item: item, disc: facts.disc, admin: isAdmin, playable: TitleLook.playable(item, facts), page: width, column: column,
                              say: say)
@@ -1347,7 +1352,7 @@ struct ItemPage: View {
         let frameHue = TitleLook.isFrame(poster: facts.poster) ? TitleLook.artHue(item.title) : nil
         ScrollView {
             VStack(alignment: .leading, spacing: 0) {
-                TitleBackdrop(url: backdrop, height: CGFloat(layout.heroHeight), wide: layout.wide)
+                TitleBackdrop(url: backdrop, height: CGFloat(layout.heroHeight), wide: layout.wide, canvas: item.id)
                 if layout.wide {
                     // The website's `.detail` grid: the poster in a column of its own, and the words beside it.
                     HStack(alignment: .top, spacing: CGFloat(layout.gap)) {
@@ -1823,6 +1828,7 @@ struct ShowPage: View {
                 TitleExtrasView(target: .show, attached: attached, listings: listings, libraryId: facts.libraryId, logos: logos, legal: legal)
                     .padding(.top, overview.isEmpty ? Tokens.Space.s6 : Tokens.Space.s5)
             }
+            MediaShowExtras(show: detail.show.id, episode: detail.episodes?.first?.id).padding(.top, Tokens.Space.s4)
             seasonTabs(detail, selected: selected).padding(.top, Tokens.Space.s6)
             viewSwitch(current: view, own: !own.isEmpty).padding(.top, Tokens.Space.s2).padding(.bottom, Tokens.Space.s3)
             if view == "list" {
@@ -1868,7 +1874,7 @@ struct ShowPage: View {
         let show = detail.show
         ScrollView {
             VStack(alignment: .leading, spacing: 0) {
-                TitleBackdrop(url: client.backdropURL(show), height: CGFloat(layout.heroHeight), wide: layout.wide)
+                TitleBackdrop(url: client.backdropURL(show), height: CGFloat(layout.heroHeight), wide: layout.wide, canvas: detail.episodes?.first?.id)
                 if layout.wide {
                     // The website's `.detail` grid: the poster in a column of its own, and the words beside it.
                     HStack(alignment: .top, spacing: CGFloat(layout.gap)) {

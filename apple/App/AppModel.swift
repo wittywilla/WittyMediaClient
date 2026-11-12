@@ -122,6 +122,8 @@ enum Route: Hashable {
     case away
     /// The servers this device remembers, to remove: see ManageServersViews.swift.
     case servers
+    /// Skipping by itself and canvases, on this device: see MediaPages.swift.
+    case mediaExtras
     /// Apple TV's choice of libraries for the top menu: see YouViews.swift.
     case topMenu
     /// WittyPlay on Apple TV: a games library or one console's games in it, a game's page, and a
@@ -603,6 +605,7 @@ final class AppModel: ObservableObject {
         do {
             let result = try await client.login(name: name, password: given.string(forKey: "WMCPassword") ?? "", device: deviceName)
             signedIn(token: result.token, user: result.user)
+            openForMediaTests()
         } catch {
             stage = .signIn(.usual)
         }
