@@ -42,7 +42,8 @@ object DockKeys {
     const val FILTER = 'F'
     const val RECORDINGS = 'R'
     const val RECORD = 'E'
-    val ORDER = listOf(LOOK, DAY, CHANNELS, FILTER, RECORDINGS, RECORD)
+    const val INFO = 'I'
+    val ORDER = listOf(LOOK, DAY, CHANNELS, FILTER, RECORDINGS, RECORD, INFO)
 
     // The key that opens the dock itself rather than a button of it: the options keys and a pad's Start.
     fun opensDock(code: Int): Boolean = code == KeyEvent.KEYCODE_MENU || code == KeyEvent.KEYCODE_BUTTON_X ||
