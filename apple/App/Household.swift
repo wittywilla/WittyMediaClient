@@ -258,7 +258,9 @@ extension AppModel {
     /// `myPicture`, `profile:<id>`, `look:<id>`, `secret:<id>`, `report:<id>`, `limits:<id>:<page>` and
     /// `player:<item id>`.
     func openForTests() {
-        guard stage == .browsing, !AppModel.openedForTests, let wanted = UserDefaults.standard.string(forKey: "WMCOpen") else { return }
+        // A route (`/library/3`) is the other test hook's, in AppModel.openWaitingLink: this one takes names.
+        guard stage == .browsing, !AppModel.openedForTests, let wanted = UserDefaults.standard.string(forKey: "WMCOpen"),
+              !wanted.hasPrefix("/") else { return }
         AppModel.openedForTests = true
         let parts = wanted.split(separator: ":").map(String.init)
         let id = parts.count > 1 ? Int64(parts[1]) ?? 0 : 0
@@ -281,6 +283,7 @@ extension AppModel {
         case "limits": route = .family(.limits(id, parts.count > 2 ? LimitsPage(rawValue: parts[2]) ?? .see : .see))
         default: route = nil
         }
+        guard route != nil || parts.first == "switch" else { return }
         tab = .profile
         if let route { paths[.profile] = [route] }
         if parts.first == "switch" { household.startSwitch(self) }

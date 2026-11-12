@@ -3,116 +3,172 @@
 import SwiftUI
 import WittyKit
 
-// The Dock and the key legend (the server's docs/SDUI.md, Dock and KeyLegend; docs/plans/DESIGN-2.md section 4). The page's
-// Dock is its last section: on a TV, a tablet and a computer a bar `layout.dock.height` tall across the foot of the screen,
-// outside the page's scroll, with its buttons at the start and the legend at the end; on a phone no bar, but an Options
-// button that opens the same controls as a sheet. Its buttons are ordinary Buttons whose `control.open` command the page
-// answers (SDUIControls.swift).
+// A page's Dock and its key legend (catalogue revision 3; the server's docs/SDUI.md, Zones and the Dock, Dock,
+// KeyLegend): the persistent controls of one screen. On Apple TV and an iPad, a bar at the foot that never moves, with
+// the remote's keys at its end on a TV; on an iPhone, an Options button that opens them as a sheet.
 
-/// The key legend: each hint's glyph for the input in use, and what it does. Not drawn for touch alone.
-struct SDUIKeyLegendView: View {
-    @Environment(\.palette) private var palette
-    @Environment(\.sduiLayout) private var layout
-    @ObservedObject private var input = InputInUse.shared
-    let legend: SDUIElement
-
-    private static let actions: [String: InputAction] = ["select": .select, "back": .back, "options": .options, "search": .search,
-                                                          "tabs": .tabNext, "page": .pageDown, "top": .top, "dock": .dock, "help": .help]
-
-    var body: some View {
-        let shown = KeyLegend.visible(device: input.device, touchInUse: input.device == nil, askedFor: !layout.phone)
-        if shown, let device = input.device {
-            HStack(spacing: layout.sp("l")) {
-                ForEach(Array(legend.keys.enumerated()), id: \.offset) { _, key in
-                    if let action = Self.actions[key.action], let glyph = KeyMap.glyph(device, action) {
-                        HStack(spacing: layout.sp("xs")) {
-                            Text(glyph)
-                                .font(.system(size: CGFloat(layout.dock.hintSize) * 0.84, weight: .bold, design: .rounded))
-                                .foregroundStyle(palette.text)
-                                .padding(.horizontal, 8)
-                                .frame(minWidth: CGFloat(layout.dock.hintSize) * 1.5, minHeight: CGFloat(layout.dock.hintSize) * 1.4)
-                                .overlay { RoundedRectangle(cornerRadius: Tokens.Radius.xs, style: .continuous).strokeBorder(palette.control, lineWidth: 1.5) }
-                            Text(key.label).font(.system(size: CGFloat(layout.dock.hintSize))).foregroundStyle(palette.textSecondary).lineLimit(1)
-                        }
-                        .accessibilityElement(children: .combine)
-                    }
-                }
-            }
-            // Its keys are in every control's hint, so it is hidden from assistive technology.
-            .accessibilityHidden(true)
-            .accessibilityIdentifier("sdui.legend")
-        }
-    }
-}
-
-/// The Dock as a bar: elevation 1 (the panel colour and a hairline) with its buttons in one row and the legend after them.
-struct SDUIDockView: View {
+/// The Dock as a bar at the foot of the page, outside its scroll.
+struct SDUIDockBar: View {
+    @EnvironmentObject private var model: AppModel
+    @EnvironmentObject private var center: SDUICenter
+    @EnvironmentObject private var store: SDUIPageStore
     @Environment(\.palette) private var palette
     @Environment(\.sduiLayout) private var layout
     let dock: SDUIElement
+    let height: CGFloat
+    let focus: FocusState<String?>.Binding?
+
+    private var buttons: [SDUIElement] { dock.children.filter { $0.type == "Button" } }
+    private var legend: SDUIElement? { dock.children.first { $0.type == "KeyLegend" } }
 
     var body: some View {
-        HStack(spacing: layout.sp("m")) {
-            ForEach(dock.children.filter { $0.type == "Button" }) { SDUIButtonView(button: $0).sduiInRow() }
-            Spacer(minLength: layout.sp("m"))
-            ForEach(dock.children.filter { $0.type == "KeyLegend" }) { SDUIKeyLegendView(legend: $0) }
+        HStack(spacing: layout.sp("s")) {
+            ForEach(buttons) { button in
+                Button { SDUIActor(model: model, center: center, store: store).perform(button.action) } label: {
+                    Label(button.props.text("label"), systemImage: SDUIIcon.symbol(button.icon, or: "slider.horizontal.3"))
+                        .lineLimit(1)
+                }
+                .action(pill: true)
+                .sduiFocusable(button.isFocusable ? focus : nil, button.id)
+                .accessibilityIdentifier("sdui.dock." + button.id)
+                .accessibilityHint(legend.map { SDUIKeyLegend.hint($0) } ?? "")
+            }
+            Spacer(minLength: layout.sp("s"))
+            #if os(tvOS)
+            // A remote is always in use on a TV: its keys are always shown.
+            if let legend { SDUIKeyLegend(legend: legend) }
+            #endif
         }
         .padding(.horizontal, layout.margin)
+        .frame(height: max(height, 52))
         .frame(maxWidth: .infinity)
-        .frame(height: CGFloat(layout.dock.height))
-        .background(palette.panel)
-        .overlay(alignment: .top) { Rectangle().fill(palette.border).frame(height: 1) }
-        #if os(tvOS)
-        .focusSection()
-        #endif
+        .background {
+            ZStack {
+                #if !os(tvOS)
+                Rectangle().fill(.regularMaterial)
+                #endif
+                palette.panel.opacity(0.92)
+            }
+            .overlay(alignment: .top) { Rectangle().fill(palette.border).frame(height: 1) }
+            .ignoresSafeArea(edges: .bottom)
+        }
+        .remoteSection()
         .accessibilityElement(children: .contain)
         .accessibilityLabel(dock.label)
-        .accessibilityIdentifier("sdui.dock")
+        .accessibilityAddTraits(.isHeader)
     }
 }
 
-/// The phone's Dock: an Options button at the end of the page's header that opens the controls as a sheet.
-struct SDUIDockOptions: View {
-    @Environment(\.sduiLayout) private var layout
-    let dock: SDUIElement
-    @State private var open = false
-
-    var body: some View {
-        HStack {
-            Spacer()
-            Button { open = true } label: { Label(dock.label, systemImage: "slider.horizontal.3") }
-                .action(pill: true)
-                .accessibilityIdentifier("sdui.dock.options")
-        }
-        .padding(.horizontal, layout.margin)
-        .sheet(isPresented: $open) {
-            DockSheet(dock: dock) { open = false }
-        }
-    }
-}
-
-private struct DockSheet: View {
-    @Environment(\.palette) private var palette
-    @Environment(\.sduiLayout) private var layout
+/// An iPhone's Dock: the same controls, in order, as a sheet.
+struct SDUIDockSheet: View {
+    @EnvironmentObject private var model: AppModel
+    @EnvironmentObject private var center: SDUICenter
     @EnvironmentObject private var store: SDUIPageStore
+    @Environment(\.palette) private var palette
     let dock: SDUIElement
     let close: () -> Void
 
     var body: some View {
-        VStack(alignment: .leading, spacing: layout.sp("s")) {
-            Text(dock.label).sduiFont("heading").foregroundStyle(palette.text).accessibilityAddTraits(.isHeader)
-            ForEach(dock.children.filter { $0.type == "Button" }) { button in
-                SDUIButtonView(button: button).sduiInRow()
+        NavigationStack {
+            List(dock.children.filter { $0.type == "Button" }) { button in
+                Button {
+                    close()
+                    // The sheet goes before the control's own sheet comes.
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) {
+                        SDUIActor(model: model, center: center, store: store).perform(button.action)
+                    }
+                } label: {
+                    Label(button.props.text("label"), systemImage: SDUIIcon.symbol(button.icon, or: "slider.horizontal.3"))
+                        .foregroundStyle(palette.text)
+                }
+                .accessibilityIdentifier("sdui.dock." + button.id)
             }
-            Spacer(minLength: 0)
+            .navigationTitle(dock.label)
+            #if !os(tvOS)
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar { ToolbarItem(placement: .cancellationAction) { Button("Close", action: close) } }
+            #endif
         }
-        .padding(layout.margin)
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-        .background(palette.panel.ignoresSafeArea())
-        // Choosing a control closes the sheet, and the page opens what was chosen.
-        .sduiOnChange(of: store.control) { if $0 != nil { close() } }
-        #if os(iOS) || os(visionOS)
         .presentationDetents([.medium])
-        #endif
+    }
+}
+
+/// The remote's keys and what they do, at the end of a TV's Dock. Hidden from VoiceOver: the keys are each control's hint.
+struct SDUIKeyLegend: View {
+    @Environment(\.palette) private var palette
+    @Environment(\.sduiLayout) private var layout
+    let legend: SDUIElement
+
+    private struct Entry: Hashable { let action: String; let label: String }
+
+    private var entries: [Entry] {
+        legend.props.items("entries").compactMap { value in
+            guard let fields = value.object else { return nil }
+            return Entry(action: fields.text("action"), label: PlainWords.clean(fields.text("label"), limit: 30))
+        }
+    }
+
+    /// The Siri Remote's button for an action.
+    static func glyph(_ action: String) -> String {
+        switch action {
+        case "select": return "circle.circle"
+        case "back": return "chevron.backward.circle"
+        case "options", "dock": return "playpause.circle"
+        case "search": return "mic.circle"
+        case "tabs", "top": return "tv.circle"
+        case "page": return "arrow.up.arrow.down.circle"
+        default: return "questionmark.circle"
+        }
+    }
+
+    static func hint(_ legend: SDUIElement) -> String {
+        legend.props.items("entries").compactMap { $0.object?.text("label") }.joined(separator: ", ")
+    }
+
+    var body: some View {
+        let size = CGFloat(layout.dock?.hintSize ?? 25)
+        HStack(spacing: size) {
+            ForEach(entries, id: \.self) { entry in
+                HStack(spacing: size * 0.3) {
+                    Image(systemName: SDUIKeyLegend.glyph(entry.action))
+                    Text(entry.label)
+                }
+                .font(.system(size: size))
+                .foregroundStyle(palette.textSecondary)
+            }
+        }
+        .accessibilityHidden(true)
+    }
+}
+
+/// A Dock's Jump to a letter: A to Z and #.
+struct SDUILetterPicker: View {
+    @Environment(\.palette) private var palette
+    @Environment(\.dismiss) private var dismiss
+    let choose: (String) -> Void
+
+    private static let letters = (65...90).map { String(UnicodeScalar($0)!) } + ["#"]
+
+    var body: some View {
+        NavigationStack {
+            ScrollView {
+                LazyVGrid(columns: [GridItem(.adaptive(minimum: 64), spacing: Tokens.Space.s3)], spacing: Tokens.Space.s3) {
+                    ForEach(SDUILetterPicker.letters, id: \.self) { letter in
+                        Button { choose(letter) } label: {
+                            Text(letter).font(.title3.weight(.semibold)).frame(minWidth: 44, minHeight: 44)
+                        }
+                        .action(pill: true)
+                        .accessibilityLabel(letter == "#" ? "Numbers and symbols" : letter)
+                    }
+                }
+                .padding(Tokens.Space.s4)
+            }
+            .navigationTitle("Jump to a letter")
+            #if !os(tvOS)
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar { ToolbarItem(placement: .cancellationAction) { Button("Close") { dismiss() } } }
+            #endif
+        }
+        .presentationDetents([.medium, .large])
     }
 }

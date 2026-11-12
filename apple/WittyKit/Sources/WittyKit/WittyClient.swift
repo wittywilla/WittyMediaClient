@@ -307,9 +307,10 @@ public final class WittyClient: @unchecked Sendable {
     }
 
     /// Only for a signed-in connection: an address being tried has its own words on
-    /// screen. A sign-in that has run out and a stream already gone are normal.
+    /// screen. A sign-in that has run out, a stream already gone and a module that isn't installed (424, which is
+    /// how the app learns whether Game PCs and the like are there) are normal.
     private func reportFailure(_ place: String, method: String, status: Int, message: String, request: String) {
-        guard !token.isEmpty, status != 401, !(method == "DELETE" && status == 404) else { return }
+        guard !token.isEmpty, status != 401, status != 424, !(method == "DELETE" && status == 404) else { return }
         ClientLog.shared.report(status >= 500 ? "error" : "warn", "request", "\(place) answered \(status): \(message)", request: request)
     }
 

@@ -36,9 +36,15 @@ struct SDUINodeView: View {
         case "SearchBox": SDUISearchBoxView(box: element)
         case "List": SDUIListView(list: element)
         case "ListItem": SDUIListRow(row: element, dense: false)
+        case "Dock": EmptyView()
+        // A key legend outside a Dock: a TV's remote is always in use; touch alone never shows one.
+        case "KeyLegend":
+            #if os(tvOS)
+            SDUIKeyLegend(legend: element).padding(.horizontal, element.depth > 0 ? 0 : 60)
+            #else
+            EmptyView()
+            #endif
         case "NativeView": SDUINativeView(native: element)
-        case "Dock": SDUIDockView(dock: element)
-        case "KeyLegend": SDUIKeyLegendView(legend: element)
         case "Page": SDUIColumn(children: element.children)
         default: SDUIStackView(stack: element)
         }
@@ -120,7 +126,7 @@ struct SDUIShelfView: View {
     private var shownWidth: CGFloat {
         guard shelf.peek > 0, !isChips, pageWidth > 0 else { return cardWidth }
         let available = Double(pageWidth - layout.margin)
-        let items = shelf.children.count + (shelf.seeAllCard ? 1 : 0)
+        let items = shelf.children.count + (!shelf.seeAll.isEmpty && (shelf.seeAllCard || layout.isTV) ? 1 : 0)
         let whole = TvGeometry.wholeCards(available: available, width: Double(cardWidth), gap: Double(layout.gap))
         return CGFloat(TvGeometry.peekWidth(available: available, nominal: Double(cardWidth), gap: Double(layout.gap), peek: shelf.peek, hasMore: items > whole))
     }
@@ -139,7 +145,8 @@ struct SDUIShelfView: View {
                 if store.busy.contains(shelf.id) {
                     SkeletonShape().frame(width: shownWidth, height: shownHeight)
                 }
-                if shelf.seeAllCard, !shelf.seeAll.isEmpty, !isChips {
+                // See all as the row's last card where the row says so (always on a TV, where it's how the remote gets there).
+                if !shelf.seeAll.isEmpty, !isChips, shelf.seeAllCard || layout.isTV {
                     SDUISeeAllCard(width: shownWidth, height: shownHeight, title: shelf.shown("title")) { actor.open(route: shelf.seeAll) }
                 }
             }
@@ -161,10 +168,9 @@ struct SDUIGridView: View {
     @EnvironmentObject private var store: SDUIPageStore
     @Environment(\.palette) private var palette
     @Environment(\.sduiLayout) private var layout
-    @Environment(\.sduiListView) private var asList
     let grid: SDUIElement
 
-    private var columns: Int { asList ? 1 : max(grid.columns, 1) }
+    private var columns: Int { max(grid.columns, 1) }
     private var ratio: CGFloat { grid.cardHeight > 0 ? CGFloat(grid.cardWidth) / CGFloat(grid.cardHeight) : 2.0 / 3.0 }
     private var loading: Bool { grid.state == .deferred || (store.busy.contains(grid.id) && grid.children.isEmpty) }
 
@@ -177,6 +183,17 @@ struct SDUIGridView: View {
                 cells(placeholders: columns * 2)
             } else if grid.state == .empty || grid.children.isEmpty {
                 Text(grid.shown("empty")).sduiFont("caption").foregroundStyle(palette.textSecondary).padding(.horizontal, layout.margin)
+            } else if store.listed.contains(grid.id) {
+                // The Dock's View: the same titles as a list, a line each with its picture.
+                LazyVStack(spacing: layout.isTV ? layout.sp("xs") : 0) {
+                    ForEach(Array(grid.children.enumerated()), id: \.element.id) { index, card in
+                        SDUIListRow(row: card, dense: false)
+                            .onAppear {
+                                if grid.hasMore, index >= grid.children.count - 6 { Task { await store.more(grid, center: center) } }
+                            }
+                    }
+                }
+                .remoteSection()
             } else {
                 cells(placeholders: store.busy.contains(grid.id) ? columns : 0)
             }
@@ -190,17 +207,7 @@ struct SDUIGridView: View {
     private func cells(placeholders: Int) -> some View {
         let isChips = grid.cardStyle == "chip"
         let items = Array(repeating: GridItem(.flexible(), spacing: layout.gap, alignment: .top), count: columns)
-        if asList && !isChips {
-            return AnyView(LazyVStack(alignment: .leading, spacing: layout.sp("xs")) {
-                ForEach(Array(grid.children.enumerated()), id: \.element.id) { index, card in
-                    SDUICardRow(card: card)
-                        .onAppear { if grid.hasMore, index >= grid.children.count - 10 { Task { await store.more(grid, center: center) } } }
-                }
-            }
-            .padding(.horizontal, layout.margin)
-            .remoteSection())
-        }
-        return AnyView(LazyVGrid(columns: isChips ? [GridItem(.adaptive(minimum: 120), spacing: layout.gap, alignment: .leading)] : items,
+        return LazyVGrid(columns: isChips ? [GridItem(.adaptive(minimum: 120), spacing: layout.gap, alignment: .leading)] : items,
                          alignment: .leading, spacing: layout.gap) {
             ForEach(Array(grid.children.enumerated()), id: \.element.id) { index, card in
                 SDUICardView(card: card, width: CGFloat(max(grid.cardWidth, 1)), height: CGFloat(max(grid.cardHeight, 1)), fills: true)
@@ -215,7 +222,7 @@ struct SDUIGridView: View {
         }
         .padding(.horizontal, layout.margin)
         .padding(.vertical, layout.isTV ? Tokens.focusRoom / 2 : 0)
-        .remoteSection())
+        .remoteSection()
     }
 }
 

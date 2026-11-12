@@ -42,7 +42,7 @@ struct SDUIActor {
             return true
             #endif
         case .play(let item, _): return Int64(item) != nil
-        case .command(let op, _, _): return center.catalog.command(op) != nil
+        case .command(let op, _, _): return op == "control.open" || center.catalog.command(op) != nil
         default: return true
         }
     }
@@ -193,8 +193,10 @@ struct SDUIActor {
             case "refresh":
                 await store?.refresh(center)
             case "control.open":
-                // The page opens the control itself (SDUIControls.swift).
-                if let control = params["control"], !control.isEmpty { store?.control = SDUIControlRequest(control: control, target: params["target"] ?? "") }
+                // A Dock's control: handled here, never sent (docs/SDUI.md, Zones and the Dock).
+                if let control = params["control"], let target = params["target"] {
+                    store?.open(control: control, target: target, profile: String(model.user?.id ?? 0))
+                }
             default:
                 do {
                     guard try await center.client.sduiCommand(center.catalog.command(op), item: item) else { return }

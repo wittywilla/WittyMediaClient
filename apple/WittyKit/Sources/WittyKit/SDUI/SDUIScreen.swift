@@ -30,12 +30,6 @@ public struct SDUIOption: Equatable, Identifiable, Sendable {
     }
 }
 
-/// One hint of a key legend ("Select", "Back", "Options").
-public struct LegendKey: Equatable, Sendable {
-    public var action: String
-    public var label: String
-}
-
 /// One control of a `FilterBar`: the sort, or a filter with what's chosen now ("" for any).
 public struct SDUIFilterField: Equatable, Identifiable, Sendable {
     public var id: String
@@ -102,9 +96,10 @@ public struct SDUIElement: Equatable, Identifiable, Sendable {
     public var columns = 0
     public var hasMore = false
     public var seeAll = ""
-    /// See all is the row's last card, and how much of the next card shows at the trailing edge (a fraction of its width).
+    /// See all is the row's last card.
     public var seeAllCard = false
-    public var peek = 0.0
+    /// The fraction of the next card or slide that shows at the trailing edge; 0 for none.
+    public var peek: Double = 0
     /// The picture asked for, and the icon drawn when there is none.
     public var picture: SDUIImageRef?
     public var poster: SDUIImageRef?
@@ -114,8 +109,6 @@ public struct SDUIElement: Equatable, Identifiable, Sendable {
     /// A progress bar's fill, in whole percent.
     public var progress: Int?
     public var buttons: [SDUIButtonModel] = []
-    /// A key legend's hints: the action each stands for and what it says.
-    public var keys: [LegendKey] = []
     public var filters: [SDUIFilterField] = []
     public var seasons: [SDUISeason] = []
     public var facts: [String] = []
@@ -190,7 +183,7 @@ public struct SDUIScreen: Equatable, Sendable {
                 if let sent = p.whole("columns") { e.columns = layout.gridColumns(cardWidth: e.cardWidth, sent: sent, window: window) }
                 e.hasMore = p.fields("more") != nil && e.state != .deferred && e.state != .error
                 e.seeAll = p.fields("seeAll")?.text("route") ?? ""
-                e.seeAllCard = p.fields("seeAll") != nil && p.flag("seeAllCard") == true
+                if !e.seeAll.isEmpty { e.seeAllCard = p.flag("seeAllCard") == true }
                 if node.type == "Shelf", p.flag("peek") != false { e.peek = layout.peek }
                 text("title", p.text("title"))
                 text("subtitle", p.text("subtitle"))
@@ -230,19 +223,6 @@ public struct SDUIScreen: Equatable, Sendable {
                 }
                 if p.flag("peek") == true { e.peek = layout.peek }
                 if let seconds = p.whole("autoAdvanceSec") { text("autoAdvance", "\(seconds) s") }
-            case "Dock":
-                e.role = "toolbar"
-                e.label = p.text("title").isEmpty ? "Options" : p.text("title")
-                e.cards = node.kids.count
-                e.buttons = node.kids.filter { $0.type == "Button" }.map {
-                    SDUIButtonModel(id: $0.id, label: $0.properties.text("label"), icon: $0.properties.text("icon"), primary: false, action: $0.action)
-                }
-                e.cardHeight = layout.dock.height
-                text("placement", p.text("placement"))
-            case "KeyLegend":
-                e.keys = p.items("entries").compactMap(\.object).map { LegendKey(action: $0.text("action"), label: $0.text("label")) }
-                text("keys", e.keys.map(\.label).joined(separator: " \u{00B7} "))
-                e.textSize = layout.dock.hintSize
             case "Tabs":
                 e.role = "tablist"
                 e.cards = node.kids.count
@@ -350,6 +330,17 @@ public struct SDUIScreen: Equatable, Sendable {
                 text("text", p.text("text"))
                 text("button", p.text("buttonLabel"))
                 e.icon = p.text("icon")
+            case "Dock":
+                e.role = "toolbar"
+                e.label = p.text("title").isEmpty ? "Options" : p.text("title")
+                e.cards = node.kids.count
+                e.cardHeight = layout.dock?.height ?? 0
+                text("placement", p.text("placement"))
+            case "KeyLegend":
+                e.role = "none"
+                let keys = p.items("entries").compactMap { $0.object?.text("label") }
+                text("keys", keys.joined(separator: " · "))
+                e.textSize = layout.dock?.hintSize ?? 0
             case "Button":
                 e.role = "button"
                 e.label = p.text("label")

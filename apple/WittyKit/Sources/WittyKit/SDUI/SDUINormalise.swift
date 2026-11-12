@@ -81,9 +81,10 @@ public extension SDUIElement {
 
     /// The labels of its buttons in order, the primary one starred; a filter bar's controls; a show's seasons.
     var buttonWords: [String] {
-        if type == "Dock" { return buttons.map(\.label) }
         if !filters.isEmpty { return filters.map(\.summary) }
         if !seasons.isEmpty { return seasons.map { ($0.selected ? "*" : "") + $0.title } }
+        // A Dock's buttons are its Button children's labels, as written.
+        if type == "Dock" { return children.filter { $0.type == "Button" }.map { $0.props.text("label") } }
         return buttons.map { ($0.primary ? "*" : "") + $0.label }
     }
 
