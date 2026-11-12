@@ -246,6 +246,7 @@ private struct ServerUndoBanner: ViewModifier {
 
 /// Every server the device remembers, each with Remove, and the two ways to remove several.
 struct ManageServersList: View {
+    @AppStorage(ServerOrder.key) private var savedFirst = true
     @EnvironmentObject private var model: AppModel
     @Environment(\.metrics) private var metrics
     /// The last one went. The list of servers closes this on a TV, where an empty page has nothing to focus.
@@ -318,6 +319,17 @@ struct ManageServersList: View {
     var body: some View {
         let all = servers
         Group {
+            // How the list of servers is ordered when choosing one: saved ones first, or found ones first.
+            ListGroup(title: "", footer: say("savedServersFirstHint")) {
+                Button { savedFirst.toggle() } label: {
+                    RowLabel(icon: "arrow.up.to.line", tint: "#0a6fb8", title: say("savedServersFirst"),
+                             value: say(savedFirst ? "on" : "off"), chevron: false)
+                }
+                .rowStyle()
+                .accessibilityValue(say(savedFirst ? "on" : "off"))
+                .accessibilityAddTraits(savedFirst ? [.isSelected] : [])
+                .accessibilityIdentifier("savedServersFirst")
+            }
             if all.isEmpty {
                 NoteCard(words: say("noServersRemembered"), icon: "server.rack")
             } else {
@@ -361,6 +373,21 @@ struct ManageServersList: View {
             Text(ServerWords.fill("removeOldConfirmBody", ["period": say("staleDays\(oldDays)"), "count": "\(old.count)",
                                                            "names": ServerWords.names(old)]) + inUseNote(old))
         }
+    }
+}
+
+/// Whether the list of servers shows the ones this device has used above the ones found on the network. On by
+/// default; kept on this device only.
+enum ServerOrder {
+    static let key = "savedServersFirst"
+    static var savedFirst: Bool { UserDefaults.standard.object(forKey: key) as? Bool ?? true }
+
+    /// The servers used before, the last one used first, then the rest in the order they were kept.
+    static func recentFirst(_ servers: [SavedServer], lastUsed: String) -> [SavedServer] {
+        guard let at = servers.firstIndex(where: { $0.url == lastUsed }), at > 0 else { return servers }
+        var out = servers
+        out.insert(out.remove(at: at), at: 0)
+        return out
     }
 }
 

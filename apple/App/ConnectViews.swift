@@ -52,6 +52,7 @@ struct ConnectView: View {
     @State private var lastSpot: Spot?
     @FocusState private var spot: Spot?
     @State private var wantField = false
+    @AppStorage(ServerOrder.key) private var savedFirst = true
     @Namespace private var scope
 
     /// A server that moves to https gets one more go, at the address it asked for.
@@ -142,7 +143,8 @@ struct ConnectView: View {
     /// row only exists after this update, so the focus has to wait for the next one.
     private func show(_ servers: [FoundServer]) {
         found = servers
-        guard !moved, let first = servers.first else { return }
+        // Saved servers on top keep the focus on the last one used: a server turning up below doesn't take it.
+        guard !moved, !(savedFirst && !model.recent.isEmpty), let first = servers.first else { return }
         let target = Spot.found(first.id)
         offered = target
         DispatchQueue.main.async { spot = target }
@@ -167,27 +169,59 @@ struct ConnectView: View {
         if !error.isEmpty { ProblemLine(error) }
     }
 
-    @ViewBuilder private func findActions(_ others: [SavedServer]) -> some View {
+    /// Servers found on the network that this device hasn't used: where each one is, and nothing else until it's added.
+    @ViewBuilder private func foundSection(_ others: [SavedServer]) -> some View {
+        SearchingCaption(words: say("foundServers"), searching: searching)
+            .padding(.top, savedFirst && !others.isEmpty ? Tokens.Space.s2 : 0)
+        if found.isEmpty {
+            NoteCard(words: refused ? say("findNotSupported") : searchedLong ? say("findNone") : say("findSearching"),
+                     busy: searching, icon: refused ? "wifi.slash" : "magnifyingglass")
+        }
+        ForEach(foundOnly(others)) { server in
+            ServerCard(url: server.url, connecting: connectingTo == server.url) { Task { await connect(server.url) } }
+                .focused($spot, equals: .found(server.id))
+        }
+    }
+
+    /// Servers this device has used, the last one used first when they're listed first.
+    @ViewBuilder private func savedSection(_ others: [SavedServer]) -> some View {
+        let first = savedFirst ? others.first?.url : nil
+        RememberedServers(servers: others, removed: { removed($0, from: others) }) { server in
+            // Found on the network at another address than the one remembered: that is where it is now.
+            let at = ServerBook.address(of: server, found: found)
+            ServerCard(saved: server, url: server.url, lastUsed: server.url == model.lastUsedURL,
+                       connecting: connectingTo == at, reached: ServerWords.reached(server),
+                       stale: ServerBook.isStale(server, now: ServerBook.now())) { Task { await connect(at) } }
+                .focused($spot, equals: .recent(server.url))
+                .firstFocus(in: scope, when: server.url == first)
+        }
+    }
+
+    private var manageButton: some View {
+        // Somewhere to remove servers that needs no gesture to find.
+        Button {
+            showManage = true
+            error = ""
+        } label: {
+            Label(say("manageServers"), systemImage: "slider.horizontal.3")
+        }
+        .action(.quiet, wide: true)
+        .focused($spot, equals: .manage)
+    }
+
+    @ViewBuilder private func findActions(_ listed: [SavedServer]) -> some View {
+        // With "Show saved servers first" (the usual), the servers used before come first, the last one used at the
+        // top, so nobody scrolls past the network's to reach their own; what's found on the network is below them.
+        let others = savedFirst ? ServerOrder.recentFirst(listed, lastUsed: model.lastUsedURL) : listed
+        let savedOnTop = savedFirst && !others.isEmpty
         VStack(alignment: .leading, spacing: Tokens.Space.s3) {
-            SearchingCaption(words: say("foundServers"), searching: searching)
-            if found.isEmpty {
-                NoteCard(words: refused ? say("findNotSupported") : searchedLong ? say("findNone") : say("findSearching"),
-                         busy: searching, icon: refused ? "wifi.slash" : "magnifyingglass")
-            }
-            // A found server says nothing about itself until it's added: only where it is.
-            ForEach(foundOnly(others)) { server in
-                ServerCard(url: server.url, connecting: connectingTo == server.url) { Task { await connect(server.url) } }
-                    .focused($spot, equals: .found(server.id))
-            }
-            if !others.isEmpty {
-                RememberedServers(servers: others, removed: { removed($0, from: others) }) { server in
-                    // Found on the network at another address than the one remembered: that is where it is now.
-                    let at = ServerBook.address(of: server, found: found)
-                    ServerCard(saved: server, url: server.url, lastUsed: server.url == model.lastUsedURL,
-                               connecting: connectingTo == at, reached: ServerWords.reached(server),
-                               stale: ServerBook.isStale(server, now: ServerBook.now())) { Task { await connect(at) } }
-                        .focused($spot, equals: .recent(server.url))
-                }
+            if savedOnTop {
+                savedSection(others)
+                manageButton
+                foundSection(others)
+            } else {
+                foundSection(others)
+                if !others.isEmpty { savedSection(others) }
             }
         }
         Button {
@@ -198,7 +232,7 @@ struct ConnectView: View {
         }
         .action(found.isEmpty && others.isEmpty ? .primary : .secondary, wide: true, tall: true)
         .focused($spot, equals: .enterAddress)
-        .firstFocus(in: scope, when: found.isEmpty)
+        .firstFocus(in: scope, when: found.isEmpty && !savedOnTop)
         .padding(.top, Tokens.Space.s2)
         // For a device that has never been at home with its server: it shows a code to type in there.
         if PeerLibrary.available {
@@ -211,17 +245,7 @@ struct ConnectView: View {
             .action(.quiet, wide: true)
             .focused($spot, equals: .joinAway)
         }
-        // Somewhere to remove servers that needs no gesture to find.
-        if !others.isEmpty {
-            Button {
-                showManage = true
-                error = ""
-            } label: {
-                Label(say("manageServers"), systemImage: "slider.horizontal.3")
-            }
-            .action(.quiet, wide: true)
-            .focused($spot, equals: .manage)
-        }
+        if !others.isEmpty && !savedOnTop { manageButton }
         LegalNote()
     }
 
@@ -280,7 +304,9 @@ struct ConnectView: View {
             // until the first press: the first card, or Enter an address, takes it.
             try? await Task.sleep(nanoseconds: 700_000_000)
             if spot == nil, !showForm, !showJoin, !showManage {
-                spot = found.first.map { .found($0.id) } ?? model.recent.first.map { .recent($0.url) } ?? .enterAddress
+                let saved = ServerOrder.recentFirst(model.recent, lastUsed: model.lastUsedURL).first.map { Spot.recent($0.url) }
+                let near = found.first.map { Spot.found($0.id) }
+                spot = (savedFirst ? saved ?? near : near ?? saved) ?? .enterAddress
             }
             try? await Task.sleep(nanoseconds: 5_300_000_000)
             #else
