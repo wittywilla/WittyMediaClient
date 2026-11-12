@@ -424,27 +424,6 @@ class Nav(val app: WittyApp, private val s: Map<String, String>) {
         else { reset(Route.Home); push(route) }
     }
 
-    // The profile's layout on this device, from You's Layout row; null follows the server again. The menu and every
-    // page are asked for again in it.
-    suspend fun chooseLayout(layout: String?): String? {
-        val client = sdui ?: return null
-        val url = sduiNav?.layouts?.url?.ifEmpty { null } ?: return null
-        return try {
-            client.chooseLayout(url, layout)
-            sduiMade = null
-            sduiMadeFor = null
-            sduiReadFor = null
-            // What pages last showed was in the other layout.
-            shown.clear()
-            loadSdui()
-            null
-        } catch (e: ApiError) {
-            e.message
-        } catch (_: IOException) {
-            s["errLost"]
-        }
-    }
-
     // Counts up when what every page shows has changed underneath them (more screen time was given): the server's pages
     // on screen ask again.
     var pagesStamp by androidx.compose.runtime.mutableIntStateOf(0)

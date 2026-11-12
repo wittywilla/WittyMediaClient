@@ -172,16 +172,6 @@ fun TvShell(nav: Nav, content: @Composable () -> Unit) {
         }
     }
     if (InputInUse.helpOpen) KeyHelpSheet { InputInUse.helpOpen = false }
-    // The layout option's frame: a menu down the side where the server says so (LayoutFrames.kt), else the top menu.
-    if (nav.sduiNav != null && menuStyle(nav, tv = true) == "tvSideMenu") {
-        val metrics = LocalMetrics.current
-        val shell = nav.sduiNav?.shell
-        Row(Modifier.fillMaxSize().then(keys)) {
-            TvSideMenu(nav, metrics.u(shell?.size?.takeIf { it > 0 } ?: 120), metrics.u(shell?.open?.takeIf { it > 0 } ?: 400))
-            Box(Modifier.weight(1f)) { CompositionLocalProvider(LocalTvBar provides bar) { content() } }
-        }
-        return
-    }
     Column(Modifier.fillMaxSize().then(keys)) {
         TvTopBar(nav, bar, libraries)
         Box(Modifier.weight(1f)) { CompositionLocalProvider(LocalTvBar provides bar) { content() } }
