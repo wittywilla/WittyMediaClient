@@ -92,7 +92,7 @@ struct BrowseShell: View {
             PillShell().nowPlayingCover()
             #endif
         }
-        .modifier(SDUIShell(center: center))
+        .modifier(SDUIShellSync(center: center))
         .environmentObject(center)
     }
 }
@@ -123,7 +123,7 @@ private struct TabRoot: View {
         #endif
         #if os(tvOS)
         case .libraries: LibrariesPage()
-        case .games: GamesTab()
+        case .games: GamesTab().moduleScope("wittyplay")
         case .guide: LiveTvTab()
         case .library(let id):
             if let library = model.libraries.first(where: { $0.id == id }) {
@@ -186,8 +186,8 @@ private struct TabRoot: View {
                     case .item(let id): ItemView(id: id).plainNavigation(overPicture: true)
                     // WittyPlay's own screens on every device: the Shelves home, which is a library's page with the
                     // strip and no Back, or a console's collection under its band, and a game's page over its picture.
-                    case .gameLibrary(let library, nil): GamesLibraryView(library: library, console: nil).noNavigationBar().id(library.id)
-                    case .gameLibrary(let library, let console): GamesLibraryView(library: library, console: console).plainNavigation(overPicture: true)
+                    case .gameLibrary(let library, nil): GamesLibraryView(library: library, console: nil).moduleScope("wittyplay").noNavigationBar().id(library.id)
+                    case .gameLibrary(let library, let console): GamesLibraryView(library: library, console: console).moduleScope("wittyplay").plainNavigation(overPicture: true)
                     case .game(let id): GameDetailView(id: id).plainNavigation(overPicture: true)
                     #if os(tvOS)
                     // A new identity for each game, so a second one gets a new player.
@@ -212,6 +212,10 @@ private struct TabRoot: View {
                     case .away: AwayView().plainNavigation()
                     case .servers: ManageServersView().plainNavigation()
                     case .mediaExtras: MediaSettingsView().plainNavigation()
+                    case .layout: LayoutSettingsView().plainNavigation()
+                    case .personalColours: PersonalColoursView().plainNavigation()
+                    case .modules: ModulesSettingsView().plainNavigation()
+                    case .moduleSettings(let module): ModuleSettingsView(module: module).plainNavigation()
                     #if os(tvOS)
                     case .topMenu: TopMenuView().plainNavigation()
                     #else
@@ -278,10 +282,10 @@ struct LibraryScreen: View {
 
     var body: some View {
         if library.hasGameScreens {
-            GamesLibraryView(library: library, console: nil)
+            GamesLibraryView(library: library, console: nil).moduleScope("wittyplay")
         } else if library.hasListeningScreens {
             #if os(iOS) || os(visionOS)
-            MusicLibraryPage(library: library)
+            MusicLibraryPage(library: library).moduleScope("wittyaudio")
             #else
             ListeningLibraryView(library: library)
             #endif
@@ -306,17 +310,37 @@ private struct TopTabs: View {
     /// Whether Home's first look has arrived.
     @State private var settled = false
 
+    /// The server's layout may put the menu down the side: see TvSideMenu.swift.
+    private var side: SDUIShell? { center.shell?.nav == "tvSideMenu" ? center.shell : nil }
+
+    private var page: some View {
+        TabRoot(tab: model.tab, toBar: { bar = model.tab })
+            .id(model.tab)
+            .safeAreaInset(edge: .bottom) { MiniPlayerSlot(tab: model.tab) }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            // Focus starts on the tab's own main action, not on the menu.
+            .prefersDefaultFocus(in: root)
+    }
+
     var body: some View {
-        VStack(spacing: 0) {
-            if model.path.isEmpty {
-                TvTopBar(focus: $bar).ignoresSafeArea(.container, edges: .horizontal)
+        Group {
+            if let side {
+                let closed = CGFloat(side.size > 0 ? side.size : 120)
+                ZStack(alignment: .leading) {
+                    page.padding(.leading, model.path.isEmpty ? closed : 0)
+                    if model.path.isEmpty {
+                        TvSideMenu(focus: $bar, closed: closed, open: CGFloat(max(side.open ?? 400, side.size)))
+                            .ignoresSafeArea(.container, edges: .vertical)
+                    }
+                }
+            } else {
+                VStack(spacing: 0) {
+                    if model.path.isEmpty {
+                        TvTopBar(focus: $bar).ignoresSafeArea(.container, edges: .horizontal)
+                    }
+                    page
+                }
             }
-            TabRoot(tab: model.tab, toBar: { bar = model.tab })
-                .id(model.tab)
-                .safeAreaInset(edge: .bottom) { MiniPlayerSlot(tab: model.tab) }
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
-                // Focus starts on the tab's own main action, not on the bar above it.
-                .prefersDefaultFocus(in: root)
         }
         .focusScope(root)
         .background(palette.background.ignoresSafeArea())
@@ -356,10 +380,15 @@ private struct PillShell: View {
     @State private var typing = false
     @Environment(\.scenePhase) private var scenePhase
 
-    var body: some View {
+    /// The menu's style and breadth from the server's navigation: see ShellFrame.swift.
+    private var nav: FrameNav { FrameNav.of(center.shell) }
+    private var navSize: CGFloat { CGFloat(max(center.shell?.size ?? 0, 0)) }
+
+    private var tabs: some View {
         // 8 above the home indicator's room, as the website's bar (shell.css: bottom 8 + the safe area).
         let lift = typing ? 0 : Tokens.Space.s2
-        TabView(selection: $model.tab) {
+        let bar = nav == .bottomTabs
+        return TabView(selection: $model.tab) {
             ForEach(center.enabled ? center.phoneTabs : AppTab.phoneTabs) { tab in
                 TabRoot(tab: tab)
                     .safeAreaInset(edge: .bottom, spacing: 0) {
@@ -368,12 +397,32 @@ private struct PillShell: View {
                             MiniPlayerSlot(tab: tab)
                             // A video left for the rest of the app plays on here, as in the website's dock.
                             if let video = model.video, !model.hidesBars { VideoDock(playback: video, clock: video.clockface) }
-                            if !model.hidesBars && !typing { FloatingBar() }
+                            if bar && !model.hidesBars && !typing { FloatingBar() }
                         }
-                        .padding(.bottom, model.hidesBars || typing ? 0 : lift)
+                        .padding(.bottom, model.hidesBars || typing || !bar ? 0 : lift)
                     }
+                    .modifier(TopTabsSlot(nav: nav, height: navSize > 0 ? navSize : 48, overlay: center.shell?.overlay == true,
+                                          shown: !model.hidesBars))
                     .toolbar(.hidden, for: .tabBar)
                     .tag(tab)
+            }
+        }
+        .environment(\.frameNav, nav)
+    }
+
+    var body: some View {
+        Group {
+            switch nav {
+            case .sidebar, .rail:
+                HStack(spacing: 0) {
+                    if !model.hidesBars {
+                        SideMenu(width: navSize > 0 ? navSize : (nav == .rail ? 72 : 220), iconsOnly: nav == .rail)
+                    }
+                    tabs
+                }
+            case .topTabs, .bottomTabs:
+                // Top tabs are put on each tab's stack (TopTabsSlot), as the floating bar is.
+                tabs
             }
         }
         .background {

@@ -201,7 +201,7 @@ final class AwayCheck: XCTestCase {
     /// by it, shows it the invite, and signs in with the code that comes back.
     func testInvite() async throws {
         let before = try await forgetDevices()
-        let made = try await ask("POST", "/api/v1/p2p/invite", body: [:])
+        let made = try await ask("POST", "/api/v1/p2p/invite", body: ["password": try given("CHECK_PASSWORD")]) // an administrator's invite takes the password again
         let link = try XCTUnwrap((made.1 as? [String: Any])?["link"] as? String, "the server made no invite: \(made)")
         app.launchArguments = ["-WittyCheckInvite", link]
         app.launch()

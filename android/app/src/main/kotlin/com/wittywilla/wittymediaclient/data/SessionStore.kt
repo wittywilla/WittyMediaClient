@@ -235,6 +235,10 @@ class SessionStore(context: Context) {
         return generator.generateKey()
     }
 
+    // For other secrets of this device's own (the peer-to-peer key): sealed with the same Keystore key.
+    internal fun seal(plain: String): String? = encrypt(plain)
+    internal fun unseal(stored: String): String = decrypt(stored)
+
     // Some devices' Keystores fail outright. That has to end in signing in again, not a crash, and
     // it never falls back to keeping the token in the clear.
     private fun encrypt(plain: String): String? = try {

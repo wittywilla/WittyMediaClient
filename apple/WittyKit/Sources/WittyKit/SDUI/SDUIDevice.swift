@@ -19,6 +19,9 @@ public struct SDUIDevice: Equatable, Hashable, Sendable {
     public var components: [String]?
     /// The app's own views a `NativeView` can name.
     public var views: [String]
+    /// This installation's own name for itself (`device=`), so a profile's layout choice is kept for this device:
+    /// letters, digits, `-` and `_`, made up once, never anything that identifies the hardware.
+    public var appId: String?
 
     public init(platform: String, formFactor: String, deviceClass: String? = nil, viewport: SDUILayout.Size? = nil,
                 locale: String? = nil, capabilities: [String] = [], components: [String]? = nil, views: [String] = []) {
@@ -53,6 +56,17 @@ public struct SDUIDevice: Equatable, Hashable, Sendable {
         return SDUIDevice(platform: "ios", formFactor: pad ? "tablet" : "phone", viewport: size, locale: locale, capabilities: has, views: views)
     }
 
+    /// A name the server takes for `device=`: 1 to 64 letters, digits, `-` and `_`.
+    public static func isAppId(_ name: String) -> Bool {
+        (1...64).contains(name.count) && name.allSatisfy { ($0.isASCII && ($0.isLetter || $0.isNumber)) || $0 == "-" || $0 == "_" }
+    }
+
+    /// A new name for this installation: the platform and twelve random letters and digits.
+    public static func newAppId(platform: String) -> String {
+        let letters = Array("abcdefghijklmnopqrstuvwxyz0123456789")
+        return "apple-\(platform)-" + String((0..<12).map { _ in letters.randomElement() ?? "x" })
+    }
+
     /// The breakpoint of the window, when it's known.
     public var breakpoint: String? { viewport.map { SDUILayout.breakpoint(width: Double($0.width)) } }
 
@@ -65,6 +79,7 @@ public struct SDUIDevice: Equatable, Hashable, Sendable {
         if !views.isEmpty { out.append(("views", views.joined(separator: ","))) }
         if !capabilities.isEmpty { out.append(("capabilities", capabilities.joined(separator: ","))) }
         if let locale, !locale.isEmpty { out.append(("locale", locale)) }
+        if let appId, SDUIDevice.isAppId(appId) { out.append(("device", appId)) }
         return out
     }
 

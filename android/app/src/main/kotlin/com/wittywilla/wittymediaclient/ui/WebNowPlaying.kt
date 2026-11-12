@@ -432,6 +432,8 @@ fun WebNowPlaying(nav: Nav) {
     ) {
         // Behind everything but the glow: the visualizer, when the server has it and it's on.
         if (vizHere && vizLoaded && viz.viz) VisualizerBackground(style, viz.slow, tint, listening.isPlaying)
+        // Or the song's canvas, dimmed so the words stay readable, when it has one and this device may play it.
+        else CanvasBackdrop(nav, trackId, Modifier.fillMaxSize().graphicsLayer { alpha = 0.45f })
         Column(Modifier.fillMaxSize()) {
             // The top bar: Close at the start; the volume (not on a phone, which has its own), Add to a playlist,
             // Sleep, Queue, Like and More at the end. Between them on a tablet, what's playing and from where.

@@ -139,6 +139,9 @@ data class SduiLayout(
     val externalLinks: Boolean = false,
     val reducedMotion: Boolean = false,
     val truncated: Boolean = false,
+    // The frame the app draws around the page: the layout option chosen, and its menu (docs/SDUI.md, Layout options).
+    // Null from a server without layout options.
+    val shell: SduiShell? = null,
 ) {
     val compact: Boolean get() = breakpoint == "compact"
     val tv: Boolean get() = formFactor == "tv"
@@ -210,7 +213,24 @@ data class SduiNavigation(
     val formFactor: String = "",
     val etag: String = "",
     val items: List<SduiNavItem> = emptyList(),
+    // The frame the app draws its menu in (Layout options in docs/SDUI.md), and what this profile may choose on this
+    // device. Both null from a server without layout options.
+    val shell: SduiShell? = null,
+    val layouts: SduiLayouts? = null,
 )
+
+// The layouts this profile may choose on this device, for You's Layout row: the one in use, the one chosen here (empty:
+// following the server), the choices, and where a choice is saved.
+@Serializable
+data class SduiLayouts(
+    val current: String = "",
+    val chosen: String = "",
+    val options: List<SduiChoice> = emptyList(),
+    val url: String = "",
+)
+
+@Serializable
+data class SduiChoice(val value: String = "", val label: String = "")
 
 @Serializable
 data class SduiNavItem(
@@ -364,3 +384,15 @@ fun aspectOf(text: String): Float {
     val h = parts.getOrNull(1)?.trim()?.toFloatOrNull() ?: return 0f
     return if (h <= 0f) 0f else w / h
 }
+
+// The layout option a page is drawn in: its name (sidebar, topTabs, tvRows, compactList, streaming…), the menu's
+// style (sidebar, rail, bottomTabs, topTabs, tvTopMenu, tvSideMenu), whether that menu lies over the page, its
+// breadth in points, and how wide a TV's side menu opens while it has focus.
+@Serializable
+data class SduiShell(
+    val layout: String = "",
+    val nav: String = "",
+    val overlay: Boolean = false,
+    val size: Int = 0,
+    val open: Int = 0,
+)

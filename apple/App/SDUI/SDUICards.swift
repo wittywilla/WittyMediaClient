@@ -8,6 +8,7 @@ import WittyKit
 /// it's the system's card: it lifts and tilts with the remote. On a touch screen a long press opens its menu.
 /// A style this app doesn't know is drawn as its shape: the picture, with the title and subtitle under it.
 struct SDUICardView: View {
+    @Environment(\.sduiDraw) private var draw
     @EnvironmentObject private var model: AppModel
     @EnvironmentObject private var center: SDUICenter
     @EnvironmentObject private var store: SDUIPageStore
@@ -67,10 +68,19 @@ struct SDUICardView: View {
 
     private var chip: some View {
         Button { actor.perform(card.action) } label: {
-            Text(card.shown("title").isEmpty ? card.title : card.shown("title"))
-                .sduiFont("body", weight: .medium)
-                .lineLimit(1)
-                .foregroundStyle(palette.text)
+            HStack(spacing: layout.sp("xs")) {
+                // A library's chip has its kind's icon before its name.
+                if !card.icon.isEmpty || !card.props.text("icon").isEmpty {
+                    Image(systemName: SDUIIcon.symbol(card.icon.isEmpty ? card.props.text("icon") : card.icon, or: "folder"))
+                        .font(.system(size: layout.isTV ? 26 : 15, weight: .medium))
+                        .foregroundStyle(palette.textSecondary)
+                        .accessibilityHidden(true)
+                }
+                Text(card.shown("title").isEmpty ? card.title : card.shown("title"))
+                    .sduiFont("body", weight: .medium)
+                    .lineLimit(1)
+                    .foregroundStyle(palette.text)
+            }
                 .padding(.horizontal, layout.sp("m"))
                 .frame(minHeight: layout.isTV ? 66 : 44)
                 .background(Capsule().fill(palette.card))
@@ -120,7 +130,7 @@ struct SDUICardView: View {
     }
 
     private var picture: some View {
-        let clip = isCircle ? AnyShape(Circle()) : AnyShape(RoundedRectangle(cornerRadius: Tokens.Radius.md, style: .continuous))
+        let clip = isCircle ? AnyShape(Circle()) : AnyShape(RoundedRectangle(cornerRadius: draw.radius("Card", style: style), style: .continuous))
         return Color.clear
             .aspectRatio(width / max(height, 1), contentMode: .fit)
             .frame(width: fills ? nil : width)
@@ -154,7 +164,7 @@ struct SDUICardView: View {
             .foregroundStyle(onImage)
             .padding(.horizontal, 6)
             .padding(.vertical, 2)
-            .background(RoundedRectangle(cornerRadius: Tokens.Radius.xs, style: .continuous).fill(palette.scrim))
+            .background(RoundedRectangle(cornerRadius: draw.radius("Card", "badge", style: style), style: .continuous).fill(palette.scrim))
             .accessibilityHidden(true)
     }
 
@@ -194,7 +204,7 @@ struct SDUICardView: View {
                 .overlay(alignment: .bottom) {
                     if shows("progress"), let percent = card.progress { ProgressStrip(fraction: Double(percent) / 100).padding(layout.sp("xs")) }
                 }
-                .clipShape(RoundedRectangle(cornerRadius: Tokens.Radius.md, style: .continuous))
+                .clipShape(RoundedRectangle(cornerRadius: draw.radius("Card", style: style), style: .continuous))
             HStack(spacing: layout.sp("xs")) {
                 if shows("number") { Text(card.shown("number")).foregroundStyle(palette.textSecondary) }
                 if shows("title") { Text(card.shown("title")).foregroundStyle(palette.text) }
@@ -241,13 +251,14 @@ struct SDUICardView: View {
                 }
                 .padding(layout.sp("s"))
             }
-            .clipShape(RoundedRectangle(cornerRadius: Tokens.Radius.md, style: .continuous))
+            .clipShape(RoundedRectangle(cornerRadius: draw.radius("Card", style: style), style: .continuous))
             .contentShape(Rectangle())
     }
 }
 
 /// The last card of a television's row: "See all", in the row's shape.
 struct SDUISeeAllCard: View {
+    @Environment(\.sduiDraw) private var draw
     @Environment(\.palette) private var palette
     @Environment(\.sduiLayout) private var layout
     let width: CGFloat
@@ -257,7 +268,7 @@ struct SDUISeeAllCard: View {
 
     var body: some View {
         Button(action: action) {
-            RoundedRectangle(cornerRadius: Tokens.Radius.md, style: .continuous)
+            RoundedRectangle(cornerRadius: draw.radius("Card"), style: .continuous)
                 .fill(palette.card)
                 .frame(width: width, height: height)
                 .overlay {

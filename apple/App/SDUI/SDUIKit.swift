@@ -92,6 +92,7 @@ private struct SDUIScope: ViewModifier {
 /// system has one: the profile's numbers are the sizes at the default setting.
 private struct SDUIRoleFont: ViewModifier {
     @Environment(\.sduiLayout) private var layout
+    @Environment(\.sduiDraw) private var draw
     @Environment(\.dynamicTypeSize) private var typeSize
     let role: String
     let weight: Font.Weight?
@@ -110,13 +111,16 @@ private struct SDUIRoleFont: ViewModifier {
         // Read so that this is worked out again when the person changes their text size.
         _ = typeSize
         let size = UIFontMetrics(forTextStyle: SDUIRoleFont.style(role)).scaledValue(for: CGFloat(layout.textSize(role)))
-        let heavy: Font.Weight = ["pageTitle", "heading"].contains(role) ? .bold : (role == "title" ? .semibold : .regular)
-        return content.font(.system(size: size, weight: weight ?? heavy))
+        // The size is the device's (layout.text); the typeface and weight the theme's (docs/THEMES.md, Shape and type).
+        return content.font(draw.font(role, size: size, weight: weight))
     }
 }
 
 extension View {
     func sduiScope(_ tokens: [String: String]) -> some View { modifier(SDUIScope(tokens: tokens)) }
+
+    /// A module's own screen, drawn by this app, in the module's colours from the theme (`/theme` modules).
+    func moduleScope(_ module: String) -> some View { modifier(ModuleScope(module: module)) }
 
     /// One of the five text roles: `pageTitle`, `heading`, `title`, `body`, `caption`.
     func sduiFont(_ role: String, weight: Font.Weight? = nil) -> some View { modifier(SDUIRoleFont(role: role, weight: weight)) }
@@ -201,6 +205,7 @@ struct SDUIPicture: View {
 /// Grey rounded rectangles of a card's size, as many as are at least partly on screen: a row whose items
 /// are on their way. They pulse unless motion is reduced (SkeletonShape follows the system's setting).
 struct SDUIPlaceholderRow: View {
+    @Environment(\.sduiDraw) private var draw
     @Environment(\.sduiLayout) private var layout
     let count: Int
     let width: CGFloat
@@ -210,7 +215,7 @@ struct SDUIPlaceholderRow: View {
     var body: some View {
         HStack(alignment: .top, spacing: layout.gap) {
             ForEach(0..<max(count, 1), id: \.self) { _ in
-                SkeletonShape(radius: circle ? width / 2 : Tokens.Radius.md).frame(width: width, height: height)
+                SkeletonShape(radius: circle ? width / 2 : draw.radius("Card")).frame(width: width, height: height)
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -296,5 +301,111 @@ extension View {
             self.onChange(of: value, perform: action)
         }
         #endif
+    }
+}
+
+private struct ModuleScope: ViewModifier {
+    @EnvironmentObject private var model: AppModel
+    let module: String
+
+    func body(content: Content) -> some View {
+        content.sduiScope(model.modulePalettes[module] ?? [:])
+    }
+}
+
+// MARK: - The theme's corners and type
+
+/// The resolved theme's corners, typefaces and the server's name (`GET /theme`), on a server that has them.
+struct ThemeStyle: Equatable {
+    var shape: [String: Double]
+    var type: ResolvedTheme.ThemeType?
+    var brand: ResolvedTheme.Brand?
+}
+
+/// How a server-driven node is drawn from the theme (the server's docs/THEMES.md, SDUI tokens): a component's rounded
+/// part → its shape token in the catalogue → that token's corner in the resolved theme; a text role → its typeface and
+/// weight. Against a server without them, the same corners and weights the app always drew.
+struct SDUIDraw {
+    var catalog: SDUICatalog = .builtIn
+    var style: ThemeStyle?
+
+    /// The corners this app drew before themes said: the default theme's own (radius 10).
+    static let fallback: [String: Double] = [
+        "radius": 10, "card": Double(Tokens.Radius.md), "button": Double(Tokens.Radius.md), "field": Double(Tokens.Radius.md),
+        "row": Double(Tokens.Radius.md), "thumb": Double(Tokens.Radius.sm), "badge": Double(Tokens.Radius.xs),
+        "image": Double(Tokens.Radius.lg), "sheet": Double(Tokens.Radius.lg), "dialog": 20, "chip": 999, "pill": 999,
+    ]
+
+    /// A rounded part's corner in points: `part` of `component` (or of the card style, which comes first).
+    func radius(_ component: String, _ part: String = "corner", style cardStyle: String? = nil) -> CGFloat {
+        let name = cardStyle.flatMap { catalog.cardStyle($0)?.tokens?.shape?[part] }
+            ?? catalog.componentTokens[component]?.shape?[part]
+            ?? SDUIDraw.defaultShape(component, part)
+        let value = style?.shape[name] ?? SDUIDraw.fallback[name] ?? Double(Tokens.Radius.md)
+        return CGFloat(max(0, min(value, 999)))
+    }
+
+    /// The part's shape token where the catalogue doesn't say (an older server).
+    private static func defaultShape(_ component: String, _ part: String) -> String {
+        switch part {
+        case "badge", "code": return "badge"
+        case "art", "thumb": return component == "Banner" ? "card" : "thumb"
+        case "button": return "button"
+        case "season", "chip", "segment": return "chip"
+        case "row": return "row"
+        case "still", "poster": return "card"
+        default:
+            switch component {
+            case "Hero", "Banner", "Image", "NativeView": return "image"
+            case "Button": return "button"
+            case "SearchBox": return "field"
+            case "ListItem": return "row"
+            default: return "card"
+            }
+        }
+    }
+
+    /// A text role's typeface: the first of the theme's families this device has, else the system's.
+    func font(_ role: String, size: CGFloat, weight explicit: Font.Weight?) -> Font {
+        let typeRole = catalog.typeRoles[role] ?? SDUIDraw.defaultRoles[role] ?? SDUITypeRole(family: "body", weight: "body")
+        let weight = explicit ?? SDUIDraw.weight(style?.type?.weights[typeRole.weight] ?? SDUIDraw.defaultWeights[typeRole.weight] ?? 400)
+        let monospaced = typeRole.family == "mono"
+        for family in style?.type?.families(typeRole.family) ?? [] {
+            let name = family.trimmingCharacters(in: .whitespaces)
+            if ["system-ui", "-apple-system", "sans-serif", "ui-sans-serif", "BlinkMacSystemFont"].contains(name) { break }
+            if ["ui-monospace", "monospace", "SFMono-Regular"].contains(name) { return .system(size: size, weight: weight, design: .monospaced) }
+            if UIFont(name: name, size: size) != nil { return .custom(name, fixedSize: size).weight(weight) }
+        }
+        return .system(size: size, weight: weight, design: monospaced ? .monospaced : .default)
+    }
+
+    static let defaultRoles: [String: SDUITypeRole] = [
+        "pageTitle": SDUITypeRole(family: "display", weight: "heading"), "heading": SDUITypeRole(family: "display", weight: "heading"),
+        "title": SDUITypeRole(family: "body", weight: "strong"), "body": SDUITypeRole(family: "body", weight: "body"),
+        "caption": SDUITypeRole(family: "body", weight: "body"), "badge": SDUITypeRole(family: "body", weight: "strong"),
+    ]
+    static let defaultWeights: [String: Int] = ["body": 400, "medium": 500, "strong": 600, "heading": 700]
+
+    /// A CSS weight as the system's nearest.
+    static func weight(_ css: Int) -> Font.Weight {
+        switch css {
+        case ..<250: return .thin
+        case ..<350: return .light
+        case ..<450: return .regular
+        case ..<550: return .medium
+        case ..<640: return .semibold
+        case ..<750: return .bold
+        case ..<850: return .heavy
+        default: return .black
+        }
+    }
+}
+
+private struct SDUIDrawKey: EnvironmentKey { static let defaultValue = SDUIDraw() }
+
+extension EnvironmentValues {
+    var sduiDraw: SDUIDraw {
+        get { self[SDUIDrawKey.self] }
+        set { self[SDUIDrawKey.self] = newValue }
     }
 }

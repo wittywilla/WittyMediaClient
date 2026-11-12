@@ -486,8 +486,12 @@ fun ShowScreen(nav: Nav, s: Map<String, String>, id: Long) {
             d == null -> Loading()
             else -> {
                 val selected = season ?: d.seasons.firstOrNull()?.number
+                // Finding intros for an administrator, where to watch, and the show's canvas (TitleAdmin.kt, CanvasLoop.kt).
+                val made = rememberShowExtras(nav, id) { attempt++ }
+                val anEpisode = (d.episodes.firstOrNull { it.id == d.nextUpId } ?: d.episodes.firstOrNull())?.id ?: 0L
                 // The picture behind, fading into the page, as on an item.
                 ServerImage(nav.app.api.showBackdropUrl(d.show), 960.dp, 16f / 9f, Modifier.fillMaxWidth().height(BACKDROP_HEIGHT).alpha(0.4f))
+                CanvasBackdrop(nav, anEpisode, Modifier.fillMaxWidth().height(BACKDROP_HEIGHT).alpha(0.4f))
                 Box(Modifier.fillMaxWidth().height(BACKDROP_HEIGHT).background(Brush.verticalGradient(0.2f to Color.Transparent, 1f to MaterialTheme.colorScheme.background)))
                 LazyColumn(
                     Modifier.safeDrawingPadding(),
@@ -513,6 +517,7 @@ fun ShowScreen(nav: Nav, s: Map<String, String>, id: Long) {
                             }
                         }
                     }
+                    item(key = "extras") { TvShowExtras(nav, anEpisode, made) }
                     items(d.episodes.filter { it.season == selected }.distinctBy { it.id }, key = { it.id }) { ep ->
                         val watched = ep.progress?.watched == true
                         FocusBox(
@@ -572,8 +577,11 @@ fun ItemScreen(nav: Nav, s: Map<String, String>, id: Long) {
             it == null && error.isNotEmpty() -> LoadFailed(nav, error) { attempt++ }
             it == null -> Loading()
             else -> Box(Modifier.fillMaxSize().verticalScroll(rememberScrollState())) {
+                // Making a canvas for an administrator, where to watch, and the title's canvas (TitleAdmin.kt, CanvasLoop.kt).
+                val made = rememberItemExtras(nav, it.id)
                 // The picture behind, fading into the page, as on Home.
                 ServerImage(nav.app.api.backdropUrl(it), 960.dp, 16f / 9f, Modifier.fillMaxWidth().height(BACKDROP_HEIGHT).alpha(0.4f))
+                CanvasBackdrop(nav, it.id, Modifier.fillMaxWidth().height(BACKDROP_HEIGHT).alpha(0.4f), made.canvasAgain)
                 Box(Modifier.fillMaxWidth().height(BACKDROP_HEIGHT).background(Brush.verticalGradient(0.2f to Color.Transparent, 1f to MaterialTheme.colorScheme.background)))
                 val upright = !metrics.tv && LocalConfiguration.current.screenWidthDp < UPRIGHT_BELOW_DP
                 FlowRow(
@@ -603,6 +611,7 @@ fun ItemScreen(nav: Nav, s: Map<String, String>, id: Long) {
                         ActionButton("Open", { nav.replace(Route.Page(it.pagePath())) }, primary = true, pill = true, icon = Icons.Filled.PlayArrow, requestFocus = true)
                     }
                     if (it.overview.isNotEmpty()) Text(it.overview, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    if (it.hasOwnScreen && !it.isRigGame) TvItemExtras(nav, it, made)
                 }
             }
             }

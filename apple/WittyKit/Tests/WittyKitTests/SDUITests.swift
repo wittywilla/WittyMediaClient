@@ -158,6 +158,11 @@ final class SDUITests: XCTestCase {
         XCTAssertNil(SDUIRouter.request(for: catalog.command("watched.set"), item: "12/../../users"))
         XCTAssertNil(SDUIRouter.request(for: catalog.command("watched.set"), item: #"1"}"#))
         XCTAssertNil(SDUIRouter.request(for: SDUICommand("x", method: "POST", path: "https://example.com/"), item: "1"))
+        // A newer catalogue puts the ID in a JSON string: a show's ID goes in as it is, and so does a number.
+        let quoted = SDUICommand("watchLater.add", method: "POST", path: "/api/v1/collections/watch-later/items", body: #"{"items":["{item}"]}"#)
+        XCTAssertEqual(SDUIRouter.request(for: quoted, item: "show-5")?.body.map { String(decoding: $0, as: UTF8.self) }, #"{"items":["show-5"]}"#)
+        XCTAssertEqual(SDUIRouter.request(for: quoted, item: "12")?.body.map { String(decoding: $0, as: UTF8.self) }, #"{"items":["12"]}"#)
+        XCTAssertEqual(SDUIRouter.request(for: catalog.command("watched.set"), item: "show-5")?.path, "/api/v1/items/show-5/progress")
     }
 
     // MARK: Patches

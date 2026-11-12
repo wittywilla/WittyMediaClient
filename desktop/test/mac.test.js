@@ -41,14 +41,14 @@ test('a window that moved, changed size or was minimised has changed', () => {
 test('the menu bar has the system\'s menus, the server\'s and Help', () => {
   const done = []
   const items = menu({
-    connected: true, changeServer: () => done.push('change'), zoom: (step) => done.push(step),
+    connected: true, changeServer: () => done.push('change'), manageServers: () => done.push('manage'), zoom: (step) => done.push(step),
     openLogs: () => done.push('logs'), copyDiagnostics: () => done.push('copy'),
   })
   assert.deepStrictEqual(items.map((m) => m.role || m.label), ['appMenu', 'editMenu', 'View', 'Server', 'windowMenu', 'help'])
   const all = items.flatMap((m) => m.submenu || [])
   const named = (label) => all.filter((i) => i.label === label)
-  for (const i of [...named('Actual Size'), ...named('Zoom In'), ...named('Zoom Out'), ...named('Change server'), ...named('Open logs folder'), ...named('Copy diagnostic info')]) i.click()
-  assert.deepStrictEqual(done, [0, 1, 1, -1, 'change', 'logs', 'copy'])
+  for (const i of [...named('Actual Size'), ...named('Zoom In'), ...named('Zoom Out'), ...named('Change server'), ...named('Manage Servers…'), ...named('Open logs folder'), ...named('Copy diagnostic info')]) i.click()
+  assert.deepStrictEqual(done, [0, 1, 1, -1, 'change', 'manage', 'logs', 'copy'])
   assert.ok(all.some((i) => i.role === 'togglefullscreen'))
   // An installed copy has no way to open the developer tools, and nothing here reloads.
   assert.ok(!all.some((i) => /reload|devtools/i.test(i.role || '')))
@@ -58,6 +58,18 @@ test('Change server is only offered with a server open', () => {
   const change = (connected) => menu({ connected }).flatMap((m) => m.submenu || []).find((i) => i.id === 'change-server')
   assert.strictEqual(change(true).enabled, true)
   assert.strictEqual(change(false).enabled, false)
+})
+
+test('Manage Servers is always offered: with a server open it keeps it, and Back returns to it', () => {
+  const manage = (connected) => menu({ connected }).flatMap((m) => m.submenu || []).find((i) => i.id === 'manage-servers')
+  assert.notStrictEqual(manage(true).enabled, false)
+  assert.notStrictEqual(manage(false).enabled, false)
+  const main = read('main.js')
+  assert.match(main, /function manageServers\(\)/)
+  assert.match(main, /ipcMain\.on\('manage-back'/)
+  // Removing the server in use stops it opening, and Undo puts that back too.
+  assert.match(main, /if \(inUse\) saved\.server = ''/)
+  assert.match(main, /if \(undoable\.inUse && !saved\.server\) saved\.server = undoable\.inUse/)
 })
 
 test('on a Mac the title bar leaves the window\'s buttons and Help to the system', () => {

@@ -13,6 +13,7 @@ import kotlinx.serialization.SerializationException
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
@@ -76,8 +77,21 @@ class Api(val base: String, val token: String, private val quick: Boolean = fals
         .addInterceptor(Interceptor { chain ->
             val req = chain.request()
             val same = server != null && req.url.host == server.host && req.url.port == server.port && req.url.scheme == server.scheme
-            chain.proceed(if (same && token.isNotEmpty()) req.newBuilder().header("Authorization", "Bearer $token").build() else req)
+            var out = if (same && token.isNotEmpty()) req.newBuilder().header("Authorization", "Bearer $token").build() else req
+            // A server reached from away: the local address wants its secret, and a failure there may mean the
+            // connection needs finding again (PeerRoute).
+            val away = PeerRoute.matches(req.url.host, req.url.port)
+            if (away) out = out.newBuilder().header(PeerRules.SECRET_HEADER, PeerRoute.secret).build()
+            val res = try {
+                chain.proceed(out)
+            } catch (e: IOException) {
+                if (away) PeerRoute.trouble()
+                throw e
+            }
+            if (away && res.header(PeerRules.ERROR_HEADER) != null) PeerRoute.trouble()
+            res
         })
+        .addInterceptor(ScreenTimeTap) // screen time left and parental refusals, heard in one place
         .build()
 
     private fun errorText(status: Int, text: String) =
@@ -310,6 +324,21 @@ class Api(val base: String, val token: String, private val quick: Boolean = fals
     // The query is the website's: sort, desc, seed and the filters, already encoded.
     suspend fun browse(library: Long, query: String, offset: Int, limit: Int): BrowsePage = get("/browse?library=$library&$query&offset=$offset&limit=$limit")
     suspend fun facets(library: Long): Map<String, List<Facet>> = get("/browse/facets?library=$library")
+    // MARK: peer to peer (docs/P2P.md on the server, "The app's side")
+
+    // Whether the server takes connections from away, and whether this device's key is on its list.
+    suspend fun p2pInfo(device: String): PeerServerInfo = json.decodeFromString(call("GET", "/p2p?device=" + java.net.URLEncoder.encode(device, "UTF-8")))
+
+    // Puts this device's key on the server's list, for the signed-in account.
+    suspend fun p2pEnrol(device: String, name: String, platform: String) {
+        call("POST", "/p2p/devices", JsonObject(mapOf("id" to JsonPrimitive(device), "name" to JsonPrimitive(name), "platform" to JsonPrimitive(platform))).toString())
+    }
+
+    // Takes this device's key off the list.
+    suspend fun p2pForget(device: String) {
+        call("DELETE", "/p2p/devices/" + java.net.URLEncoder.encode(device, "UTF-8"))
+    }
+
     suspend fun scan(library: Long) { call("POST", "/libraries/$library/scan", "{}") }
     fun encode(text: String): String = query(text)
     suspend fun collections(): List<Collection> = getList("/collections")

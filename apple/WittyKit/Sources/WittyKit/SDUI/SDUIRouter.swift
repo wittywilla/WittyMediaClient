@@ -106,9 +106,13 @@ public struct SDUIRouter: Equatable, Sendable {
         guard let command, let method = command.method, let path = command.path, !method.isEmpty, path.hasPrefix("/api/") else { return nil }
         // An item's ID goes into a path and a JSON body: only what an ID is made of may.
         guard !item.isEmpty, item.count <= 128, item.allSatisfy({ $0.isASCII && ($0.isLetter || $0.isNumber || "_.:-~".contains($0)) }) else { return nil }
+        // A newer catalogue writes `"{item}"` inside a JSON string, which takes the ID as it is (a show's `show-5` too);
+        // an older one wrote it bare, where a number goes in as a number and anything else as a string.
         let number = Int64(item)
-        let inBody = number.map(String.init) ?? "\"\(item)\""
-        let body = command.body.map { $0.replacingOccurrences(of: "{item}", with: inBody) }
+        let bare = number.map(String.init) ?? "\"\(item)\""
+        let body = command.body.map { template in
+            template.replacingOccurrences(of: "\"{item}\"", with: "\"\(item)\"").replacingOccurrences(of: "{item}", with: bare)
+        }
         return (method.uppercased(), path.replacingOccurrences(of: "{item}", with: item), body.flatMap { $0.data(using: .utf8) })
     }
 

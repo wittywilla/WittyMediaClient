@@ -29,6 +29,7 @@ extension User {
 
 struct YouView: View {
     @EnvironmentObject private var model: AppModel
+    @EnvironmentObject private var center: SDUICenter
     @Environment(\.palette) private var palette
     @Environment(\.metrics) private var metrics
     @Environment(\.client) private var client
@@ -116,6 +117,28 @@ struct YouView: View {
         }
         ListGroup(title: say("groupDevice")) {
             row(.theme, "paintpalette", RowTint.teal, "rowTheme", value: ThemeView.name(of: model.themeChoice, server: model.themeId, list: model.themeList))
+            if model.has("theme-personal") {
+                NavigationLink(value: Route.personalColours) {
+                    RowLabel(icon: "paintbrush", tint: RowTint.teal, title: "Your colours")
+                }
+                .rowStyle()
+                .accessibilityIdentifier("row.personalColours")
+            }
+            // The server's layout options, where it has them: how the whole app is arranged on this device.
+            if model.has("sdui-layouts"), center.enabled, let layouts = center.navigation?.layouts, !layouts.options.isEmpty {
+                NavigationLink(value: Route.layout) {
+                    RowLabel(icon: "rectangle.3.group", tint: RowTint.teal, title: "Layout", value: layouts.currentLabel)
+                }
+                .rowStyle()
+                .accessibilityIdentifier("row.layout")
+            }
+            if model.has("module-settings") {
+                NavigationLink(value: Route.modules) {
+                    RowLabel(icon: "puzzlepiece.extension", tint: RowTint.quiet, title: "Modules")
+                }
+                .rowStyle()
+                .accessibilityIdentifier("row.modules")
+            }
             NavigationLink(value: Route.mediaExtras) {
                 RowLabel(icon: "forward.end", tint: RowTint.gold, title: "Skipping and moving pictures")
             }

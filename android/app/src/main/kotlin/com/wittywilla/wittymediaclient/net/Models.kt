@@ -33,6 +33,8 @@ data class User(
     val twoFactor: Boolean = false,
     val isAdmin: Boolean = false,
     val kind: String = "adult",
+    // The picture this profile chose, as "name:colour", or empty for its initial (ui/AvatarPictureRules.kt).
+    val avatar: String = "",
 )
 
 @Serializable
@@ -43,6 +45,7 @@ data class Profile(
     val displayName: String = "",
     val kind: String = "adult",
     val hasPassword: Boolean = true,
+    val avatar: String = "",
 )
 
 @Serializable

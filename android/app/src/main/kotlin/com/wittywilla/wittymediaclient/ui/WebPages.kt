@@ -273,7 +273,7 @@ private fun MoreButton(onClick: () -> Unit) {
 // The picture across the top: 38% of the height (240 to 560), a quarter of the way down the picture, fading out from
 // 40% down under a shade of the page. Only the shade where there's no picture.
 @Composable
-private fun DetailHero(url: String?) {
+private fun DetailHero(url: String?, moving: (@Composable () -> Unit)? = null) {
     HeroPage()
     val page = MaterialTheme.colorScheme.background
     Box(Modifier.fillMaxWidth().height(detailHeight(LocalConfiguration.current.screenHeightDp))) {
@@ -285,6 +285,8 @@ private fun DetailHero(url: String?) {
             },
             placeholderless = true, alignment = BiasAlignment(0f, -0.5f),
         )
+        // The title's canvas, over the still picture and under the shade, when it has one (CanvasLoop.kt).
+        moving?.invoke()
         Box(Modifier.fillMaxSize().background(Brush.verticalGradient(0f to page.copy(alpha = 0.15f), 0.35f to page.copy(alpha = 0.35f), 0.7f to page.copy(alpha = 0.7f), 1f to page)))
     }
 }
@@ -459,14 +461,16 @@ fun PhoneItem(nav: Nav, s: Map<String, String>, id: Long) {
     val column = columnWidth(LocalConfiguration.current.screenWidthDp)
     val scroll = rememberScrollState()
     TracksScroll(scroll)
-    val rows = TitleLook.moreRows(it, facts, admin).map { row -> itemSheetRow(nav, it, row, playable) }
+    // What an administrator can have the server make for this title, and the job's card (TitleAdmin.kt).
+    val made = rememberItemExtras(nav, it.id)
+    val rows = TitleLook.moreRows(it, facts, admin).map { row -> itemSheetRow(nav, it, row, playable) } + made.sheetRows()
     val credit = TitleLook.credit(facts.provider, facts.providerId)
     val scrambled = disc && facts.disc?.scrambled == true
     val poster = if (facts.poster.isNullOrEmpty()) null else api.posterUrl(it)
     val backdrop = if (facts.poster.isNullOrEmpty() && facts.backdrop.isNullOrEmpty()) null else api.backdropUrl(it)
     Box(Modifier.fillMaxSize()) {
         Column(Modifier.fillMaxSize().verticalScroll(scroll).padding(bottom = LocalBottomRoom.current)) {
-            DetailHero(backdrop)
+            DetailHero(backdrop) { CanvasBackdrop(nav, it.id, Modifier.fillMaxSize(), made.canvasAgain) }
             Column(Modifier.pullUp(96.dp).padding(horizontal = 16.dp).widthIn(max = 720.dp)) {
                 TitlePoster(poster, if (TitleLook.isFrame(facts.poster)) it.title else null)
                 Column(Modifier.padding(top = 20.dp)) {
@@ -498,6 +502,7 @@ fun PhoneItem(nav: Nav, s: Map<String, String>, id: Long) {
                             if (rows.isNotEmpty()) MoreButton { more = true }
                         }
                     }
+                    ExtrasJobCard(made.job, Modifier.padding(top = 16.dp))
                     if (it.overview.isNotEmpty()) Text(it.overview, color = scheme.onBackground, fontSize = 15.sp, lineHeight = 24.sp, modifier = Modifier.padding(top = 24.dp))
                     if (credit != null) FinePrint(credit, Modifier.padding(top = if (it.overview.isEmpty()) 24.dp else 20.dp))
                     if (scrambled) {
@@ -512,6 +517,7 @@ fun PhoneItem(nav: Nav, s: Map<String, String>, id: Long) {
                     }
                     FactsTable(TitleLook.facts(it, facts, admin), column, Modifier.padding(top = 24.dp))
                     attached?.let { a -> TitleExtras(nav, TitleTarget.Item, a, listings, it.libraryId, logos, Modifier.padding(top = 16.dp)) }
+                    if (!it.isRigGame) WhereToWatchSection(nav, it.id, Modifier.padding(top = 16.dp))
                     val show = it.showId
                     if (show != null) TitleBackLink("Back to ${it.showTitle.orEmpty()}", Modifier.padding(top = 32.dp)) { nav.push(Route.Show(show, it.season ?: -1)) }
                     else TitleBackLink("Back to library", Modifier.padding(top = 32.dp)) { nav.openLibraryPage(it.libraryId) }
@@ -590,6 +596,9 @@ fun PhoneShow(nav: Nav, s: Map<String, String>, id: Long, asked: Int? = null) {
     val column = columnWidth(LocalConfiguration.current.screenWidthDp)
     val scroll = rememberScrollState()
     TracksScroll(scroll)
+    // Finding the show's intros and credits, for an administrator, and the job's card (TitleAdmin.kt).
+    val made = rememberShowExtras(nav, show.id) { attempt++ }
+    val anEpisode = (next ?: detail.episodes.firstOrNull())?.id ?: 0L
     fun setView(chosen: String) {
         chosenView = chosen
         // An administrator's choice is the show's, for everyone.
@@ -599,7 +608,7 @@ fun PhoneShow(nav: Nav, s: Map<String, String>, id: Long, asked: Int? = null) {
     }
     Box(Modifier.fillMaxSize()) {
         Column(Modifier.fillMaxSize().verticalScroll(scroll).padding(bottom = LocalBottomRoom.current)) {
-            DetailHero(api.showBackdropUrl(show))
+            DetailHero(api.showBackdropUrl(show)) { CanvasBackdrop(nav, anEpisode, Modifier.fillMaxSize()) }
             Column(Modifier.pullUp(96.dp).padding(horizontal = 16.dp).widthIn(max = 720.dp)) {
                 TitlePoster(api.showPosterUrl(show))
                 Column(Modifier.padding(top = 20.dp)) {
@@ -614,8 +623,10 @@ fun PhoneShow(nav: Nav, s: Map<String, String>, id: Long, asked: Int? = null) {
                         if (canSave(nav)) WebButton("Save", { save = true }, WebButtonKind.Secondary, WebIcons.Plus)
                         if (admin) MoreButton { more = true }
                     }
+                    ExtrasJobCard(made.job, Modifier.padding(top = 16.dp))
                     if (show.overview.isNotEmpty()) Text(show.overview, color = scheme.onBackground, fontSize = 15.sp, lineHeight = 24.sp, modifier = Modifier.padding(top = 24.dp))
                     attached?.let { a -> TitleExtras(nav, TitleTarget.Show, a, listings, facts.libraryId, logos, Modifier.padding(top = if (show.overview.isEmpty()) 24.dp else 20.dp)) }
+                    WhereToWatchSection(nav, anEpisode, Modifier.padding(top = 16.dp))
                     // The seasons, 108 wide, 12 apart, scrolling sideways; then Other videos for the episodes with none.
                     LazyRow(
                         Modifier.padding(top = 24.dp), contentPadding = PaddingValues(start = 2.dp, end = 2.dp, top = 4.dp, bottom = 12.dp),
@@ -642,7 +653,7 @@ fun PhoneShow(nav: Nav, s: Map<String, String>, id: Long, asked: Int? = null) {
                 SheetRow("Artwork", WebIcons.Image) { nav.push(Route.Page(TitleLook.editPath(TitleTarget.Show, show.id, "artwork"))) },
                 SheetRow("Edit", WebIcons.Edit) { nav.push(Route.Page(TitleLook.editPath(TitleTarget.Show, show.id, "match"))) },
                 SheetRow("Refresh", WebIcons.Refresh) { nav.push(Route.Page(TitleLook.editPath(TitleTarget.Show, show.id))) },
-            )) { more = false }
+            ) + made.sheetRows()) { more = false }
         }
         if (save) SaveDialog(nav, 0, show.id, close = { save = false })
     }

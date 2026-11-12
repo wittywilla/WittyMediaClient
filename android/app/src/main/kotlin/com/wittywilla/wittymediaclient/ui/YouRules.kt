@@ -6,7 +6,7 @@ package com.wittywilla.wittymediaclient.ui
 // Apart from the screen, so it can be tested without one. Rows the server would refuse are left out,
 // not greyed.
 
-enum class YouNative { Names, Password, TwoStep, Devices, SignInTv, Theme, TopMenu, Licences, Log, Servers }
+enum class YouNative { Names, Password, TwoStep, Devices, SignInTv, Theme, TopMenu, Licences, Log, Servers, Away, Profiles, PlayingHere, Layout, Modules }
 
 sealed interface YouOpens {
     data class Native(val screen: YouNative) : YouOpens
@@ -28,6 +28,16 @@ data class YouWho(
     // The server offers two-step sign-in to this profile.
     val twoStepAvailable: Boolean,
     val onTv: Boolean,
+    // The app can reach a server from away (the connector library is in it).
+    val fromAway: Boolean = false,
+    // The server offers layouts this profile may choose between on this device (the navigation's `layouts`).
+    val layouts: Boolean = false,
+    // The server's modules have settings to show (`module-settings`).
+    val moduleSettings: Boolean = false,
+    // The server has parental controls this app can show itself: Profiles is then the app's own screen.
+    val nativeProfiles: Boolean = false,
+    // What this profile's limits turn off (GET /me/limits): rows for those aren't offered.
+    val off: Set<String> = emptySet(),
 )
 
 private const val QUIET = "#5d6474"
@@ -49,7 +59,8 @@ fun youGroups(who: YouWho): List<YouGroup> {
     // A TV is what gets signed in, so it doesn't sign in TVs.
     val household = listOfNotNull(
         if (who.adult && !who.onTv) native("rowSignInTv", "tv", "#bd2f85", YouNative.SignInTv) else null,
-        if (who.adult) page("rowProfiles", "family_restroom", "#b8500d", "/settings/users") else null,
+        if (who.adult && who.nativeProfiles) native("rowProfiles", "family_restroom", "#b8500d", YouNative.Profiles) else null,
+        if (who.adult && !who.nativeProfiles) page("rowProfiles", "family_restroom", "#b8500d", "/settings/users") else null,
     )
     if (household.isNotEmpty()) groups += YouGroup("groupHousehold", household)
     groups += YouGroup(
@@ -57,20 +68,28 @@ fun youGroups(who: YouWho): List<YouGroup> {
         listOfNotNull(
             page("rowYourYear", "auto_awesome", "#c9302f", "/review"),
             page("rowCollections", "library_books", "#0e7c6f", "/collections"),
-            page("rowShareLinks", "link", "#0a6fb8", "/settings/sharing"),
+            if ("sharing" !in who.off) page("rowShareLinks", "link", "#0a6fb8", "/settings/sharing") else null,
             page("rowActivity", "monitoring", "#99690a", "/settings/activity"),
-            if (who.hasGames) page("rowGameSettings", "sports_esports", "#7f46b8", "/settings/games") else null,
-            if (who.hasGames) page("rowControllers", "gamepad", "#3e5bd0", "/controllers") else null,
+            if (who.hasGames && "games" !in who.off) page("rowGameSettings", "sports_esports", "#7f46b8", "/settings/games") else null,
+            if (who.hasGames && "games" !in who.off) page("rowControllers", "gamepad", "#3e5bd0", "/controllers") else null,
         ),
     )
+    // What the server's modules let this profile set (Settings, Modules, in the app's own style).
+    if (who.moduleSettings) groups += YouGroup("groupModules", listOf(native("rowModuleSettings", "extension", "#7f46b8", YouNative.Modules)))
     groups += YouGroup(
         "groupDevice",
         listOfNotNull(
             native("rowTheme", "palette", "#0e7c6f", YouNative.Theme),
+            // Where the menu is and how pages look, on this device (the server's layout options).
+            if (who.layouts) native("rowLayout", "toolbar", "#0e7c6f", YouNative.Layout) else null,
             // Which libraries join the bar along the top: a TV's alone.
             if (who.onTv) native("rowTopMenu", "toolbar", "#bd2f85", YouNative.TopMenu) else null,
             // The servers this device remembers, to remove the ones no longer wanted.
             native("rowServers", "dns", QUIET, YouNative.Servers),
+            // How this device reaches the server when it isn't at home: peer to peer.
+            if (who.fromAway) native("rowAway", "settings_input_antenna", "#0a6fb8", YouNative.Away) else null,
+            // Skipping intros and credits by itself, and artwork that moves: this device's own (YouPlaying.kt).
+            native("rowPlayingHere", "smart_display", "#3e5bd0", YouNative.PlayingHere),
         ),
     )
     if (who.admin) {

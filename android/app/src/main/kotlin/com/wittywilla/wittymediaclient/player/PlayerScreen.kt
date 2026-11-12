@@ -107,6 +107,8 @@ import com.wittywilla.wittymediaclient.ui.Radius
 import com.wittywilla.wittymediaclient.ui.Route
 import com.wittywilla.wittymediaclient.ui.ServerImage
 import com.wittywilla.wittymediaclient.ui.Space
+import com.wittywilla.wittymediaclient.ui.TvSkipNotice
+import com.wittywilla.wittymediaclient.ui.rememberTvSkipping
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -206,6 +208,7 @@ fun PlayerScreen(nav: Nav, id: Long, startOver: Boolean) {
 
     // Decided here rather than in the listener: the listener only hears what the player says.
     fun onFailure(e: PlaybackException) {
+        if (ScreenTimeWatch.playbackFailed(e)) return // this profile's time is up: the notice says so
         val code = (e.cause as? HttpDataSource.InvalidResponseCodeException)?.responseCode
         val recovery = recoveryFor(e.errorCode, code)
         val wait = if (recovery == Recovery.GiveUp || (recovery == Recovery.Convert && ask.convert)) null else budget.next()
@@ -425,8 +428,9 @@ fun PlayerScreen(nav: Nav, id: Long, startOver: Boolean) {
         }
         filmSec = target
     }
-    // Where the intro ends, while it's on.
-    fun introEnd(): Double? = stream?.intro?.takeIf { filmSec >= it.startSec && filmSec < it.endSec - 1 }?.endSec
+    // Where the intro, recap, adverts or credits end, while one is on, from every source the server marks (SkipTracker.kt).
+    val skipping = rememberTvSkipping(nav, id, { stream?.intro }, { filmSec }, { stream?.durationSec ?: 0.0 }, { playing && problem.isEmpty() }, { stream?.nextId }, ::seekFilm)
+    fun introEnd(): Double? = skipping.now?.toSec
     fun playPause() { if (player.isPlaying) player.pause() else player.play() }
     fun playNext() { stream?.nextId?.let(nav::playInstead) }
 
@@ -473,7 +477,7 @@ fun PlayerScreen(nav: Nav, id: Long, startOver: Boolean) {
 
     val current = stream
     val duration = current?.durationSec ?: 0.0
-    val nextDue = watchNextDue(filmSec, duration, current?.nextId != null)
+    val nextDue = watchNextDue(filmSec, duration, current?.nextId != null) || (current?.nextId != null && skipping.upNextDue(filmSec))
     // Once, so that someone who hides them during the credits isn't argued with.
     LaunchedEffect(nextDue) { if (nextDue && !watchNextShown) { watchNextShown = true; controls = true } }
 
@@ -550,6 +554,7 @@ fun PlayerScreen(nav: Nav, id: Long, startOver: Boolean) {
                 filmSec = filmSec,
                 durationSec = duration,
                 introEndSec = introEnd(),
+                skipLabel = skipping.label,
                 nextDue = nextDue,
                 hasNext = current?.nextId != null,
                 hasAudioChoice = (current?.audio?.size ?: 0) > 1,
@@ -577,7 +582,7 @@ fun PlayerScreen(nav: Nav, id: Long, startOver: Boolean) {
             // A remote's OK is sent here from onKey, and focus stays where the arrows keep seeking.
             introEnd()?.let { end ->
                 ActionButton(
-                    "Skip intro", { seekFilm(end) }, primary = true, pill = true,
+                    skipping.label, { seekFilm(end) }, primary = true, pill = true,
                     modifier = Modifier
                         .align(Alignment.BottomEnd)
                         .safeDrawingPadding()
@@ -586,6 +591,7 @@ fun PlayerScreen(nav: Nav, id: Long, startOver: Boolean) {
                 )
             }
         }
+        TvSkipNotice(skipping, Modifier.align(Alignment.TopCenter))
     }
 }
 
@@ -672,6 +678,7 @@ private fun Controls(
     filmSec: Double,
     durationSec: Double,
     introEndSec: Double?,
+    skipLabel: String,
     nextDue: Boolean,
     hasNext: Boolean,
     hasAudioChoice: Boolean,
@@ -704,7 +711,7 @@ private fun Controls(
     ) {
         Text(title, color = Color.White, style = MaterialTheme.typography.titleLarge)
         if (subtitle.isNotEmpty()) Text(subtitle, color = Color(0xFFD0D0D8), style = MaterialTheme.typography.bodyMedium)
-        if (introEndSec != null) ActionButton("Skip intro", { onSeekTo(introEndSec) }, primary = true, requestFocus = true, focusKey = "c-skip")
+        if (introEndSec != null) ActionButton(skipLabel, { onSeekTo(introEndSec) }, primary = true, requestFocus = true, focusKey = "c-skip")
         if (nextDue) ActionButton("Next episode", onNext, primary = true, requestFocus = introEndSec == null, focusKey = "c-next-due")
         if (canSeek) SeekBar(filmSec, durationSec, onTouched, onSeekTo)
         FlowRow(horizontalArrangement = Arrangement.spacedBy(Space.S2), verticalArrangement = Arrangement.spacedBy(Space.S2), itemVerticalAlignment = Alignment.CenterVertically) {

@@ -54,6 +54,9 @@ class WittyApp : Application(), SingletonImageLoader.Factory {
     // What's playing in the listening service, for the screens that show it.
     val listening by lazy { Listening(this) }
 
+    // Reaching the server from away, peer to peer (p2p/PeerManager.kt).
+    val peers by lazy { com.wittywilla.wittymediaclient.p2p.PeerManager(this) }
+
     // The current connection. Images use its client, so they carry the sign-in.
     @Volatile
     var api: Api = Api("", "")
@@ -67,6 +70,15 @@ class WittyApp : Application(), SingletonImageLoader.Factory {
 
     // How this device is named in the server's list of sign-ins.
     val deviceName: String get() = "${Build.MANUFACTURER} ${Build.MODEL}".take(60)
+    // This app's own name for this device in a profile's layout choice (docs/SDUI.md, Layout options): made once,
+    // at random, letters and digits only, and nothing to do with the hardware.
+    val layoutDeviceName: String by lazy {
+        val prefs = getSharedPreferences("wms.device", MODE_PRIVATE)
+        prefs.getString("name", null) ?: ("android-" + java.util.UUID.randomUUID().toString().replace("-", "").take(12)).also {
+            prefs.edit().putString("name", it).apply()
+        }
+    }
+
     val platformName: String get() = if (isTv) "Android TV" else "Android"
 
     override fun onCreate() {

@@ -198,6 +198,7 @@ struct SDUIGridView: View {
 
 /// Rows of text with an icon or a small picture: 56 points tall, 44 when dense, 90 on a television.
 struct SDUIListView: View {
+    @Environment(\.sduiDraw) private var draw
     @EnvironmentObject private var center: SDUICenter
     @EnvironmentObject private var store: SDUIPageStore
     @Environment(\.palette) private var palette
@@ -211,7 +212,7 @@ struct SDUIListView: View {
                 SDUISectionError(id: list.id) { Task { await store.retry(list, center: center) } }
             } else if list.state == .deferred {
                 VStack(spacing: layout.sp("xs")) {
-                    ForEach(0..<3, id: \.self) { _ in SkeletonShape(radius: Tokens.Radius.sm).frame(height: layout.isTV ? 90 : 56) }
+                    ForEach(0..<3, id: \.self) { _ in SkeletonShape(radius: draw.radius("ListItem")).frame(height: layout.isTV ? 90 : 56) }
                 }
                 .padding(.horizontal, layout.margin)
             } else if list.children.isEmpty {
@@ -236,6 +237,7 @@ struct SDUIListView: View {
 }
 
 struct SDUIListRow: View {
+    @Environment(\.sduiDraw) private var draw
     @EnvironmentObject private var model: AppModel
     @EnvironmentObject private var center: SDUICenter
     @EnvironmentObject private var store: SDUIPageStore
@@ -245,14 +247,38 @@ struct SDUIListRow: View {
     let row: SDUIElement
     let dense: Bool
 
-    private var height: CGFloat { layout.isTV ? 90 : (dense ? 44 : 56) }
+    /// With a picture, the row is as tall as a small poster; without, a line of text.
+    private var height: CGFloat {
+        if row.picture != nil { return layout.isTV ? 150 : (dense ? 64 : 84) }
+        return layout.isTV ? 90 : (dense ? 44 : 56)
+    }
+    private var picHeight: CGFloat { height - (layout.isTV ? 20 : 12) }
+    /// How far through it is, 0 to 1, when it has been started.
+    private var progress: CGFloat? {
+        guard let done = row.props["progress"]?.double, done > 0, done < 1 else { return nil }
+        return CGFloat(done)
+    }
 
     private var label: some View {
         HStack(spacing: layout.sp("s")) {
-            if row.picture != nil {
-                SDUIPicture(picture: row.picture, symbol: SDUIIcon.symbol(row.icon, or: "square"), shownWidth: height - 12)
-                    .frame(width: height - 12, height: height - 12)
-                    .clipShape(RoundedRectangle(cornerRadius: Tokens.Radius.sm, style: .continuous))
+            if let picture = row.picture {
+                // In the item's own shape: a poster upright, a still wide, a cover square (docs/SDUI.md, Layout options).
+                let tall = picHeight
+                let wide = (tall * CGFloat(min(max(picture.ratio, 0.5), 2))).rounded()
+                SDUIPicture(picture: picture, symbol: SDUIIcon.symbol(row.icon, or: "square"), shownWidth: wide)
+                    .frame(width: wide, height: tall)
+                    .clipShape(RoundedRectangle(cornerRadius: draw.radius("ListItem", "art"), style: .continuous))
+                    .overlay(alignment: .bottom) {
+                        if let done = progress {
+                            GeometryReader { geo in
+                                Capsule().fill(palette.accent).frame(width: geo.size.width * done, height: 3)
+                            }
+                            .frame(height: 3)
+                            .padding(.horizontal, 3)
+                            .padding(.bottom, 3)
+                            .accessibilityHidden(true)
+                        }
+                    }
             } else if !row.icon.isEmpty {
                 Image(systemName: SDUIIcon.symbol(row.icon)).foregroundStyle(palette.textSecondary).frame(width: 28).accessibilityHidden(true)
             }
@@ -260,6 +286,19 @@ struct SDUIListRow: View {
                 Text(row.shown("title")).sduiFont("body", weight: .medium).foregroundStyle(palette.text).sduiLines(row.lineLimit("title"))
                 if !row.shown("subtitle").isEmpty {
                     Text(row.shown("subtitle")).sduiFont("caption").foregroundStyle(palette.textSecondary).sduiLines(row.lineLimit("subtitle"))
+                }
+                if !row.badges.isEmpty {
+                    HStack(spacing: 4) {
+                        ForEach(Array(row.badges.prefix(2).enumerated()), id: \.offset) { _, badge in
+                            Text(PlainWords.clean(badge, limit: 24))
+                                .font(.system(size: CGFloat(layout.text["badge"] ?? layout.textSize("caption")), weight: .semibold))
+                                .foregroundStyle(palette.textSecondary)
+                                .padding(.horizontal, 6)
+                                .padding(.vertical, 1)
+                                .background(RoundedRectangle(cornerRadius: draw.radius("Card", "badge"), style: .continuous).fill(palette.card))
+                        }
+                    }
+                    .accessibilityHidden(true)
                 }
             }
             Spacer(minLength: layout.sp("s"))
@@ -288,7 +327,8 @@ struct SDUIListRow: View {
         }
         .padding(.horizontal, layout.margin - (layout.isTV ? layout.sp("s") : 0))
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel(row.label)
+        .accessibilityLabel(([row.label] + row.badges.prefix(2).map { $0 } + (progress.map { ["\(Int(($0 * 100).rounded())) percent watched"] } ?? []))
+            .filter { !$0.isEmpty }.joined(separator: ", "))
     }
 }
 
@@ -297,6 +337,7 @@ struct SDUIListRow: View {
 /// An album's songs, a book's chapters: numbered, with their lengths. On a television the list keeps to the
 /// right two thirds of the screen.
 struct SDUITrackListView: View {
+    @Environment(\.sduiDraw) private var draw
     @EnvironmentObject private var center: SDUICenter
     @EnvironmentObject private var store: SDUIPageStore
     @Environment(\.palette) private var palette
@@ -310,7 +351,7 @@ struct SDUITrackListView: View {
                 SDUISectionError(id: list.id) { Task { await store.retry(list, center: center) } }
             } else if list.state == .deferred {
                 VStack(spacing: layout.sp("xs")) {
-                    ForEach(0..<4, id: \.self) { _ in SkeletonShape(radius: Tokens.Radius.sm).frame(height: layout.isTV ? 66 : 56) }
+                    ForEach(0..<4, id: \.self) { _ in SkeletonShape(radius: draw.radius("TrackList", "row")).frame(height: layout.isTV ? 66 : 56) }
                 }
                 .padding(.horizontal, layout.margin)
             } else {
@@ -388,6 +429,7 @@ struct SDUITrackRow: View {
 /// A show's seasons with the chosen season's episodes. On Apple TV: a row of season pills, then the episodes as
 /// a row of cards. On a touch screen: a season menu, then the episodes one under another, the still at the left.
 struct SDUISeasonListView: View {
+    @Environment(\.sduiDraw) private var draw
     @EnvironmentObject private var model: AppModel
     @EnvironmentObject private var center: SDUICenter
     @EnvironmentObject private var store: SDUIPageStore
@@ -471,7 +513,7 @@ struct SDUISeasonListView: View {
             .foregroundStyle(palette.text)
             .padding(.horizontal, layout.sp("m"))
             .frame(minHeight: 44)
-            .background(RoundedRectangle(cornerRadius: Tokens.Radius.md, style: .continuous).fill(palette.card))
+            .background(RoundedRectangle(cornerRadius: draw.radius("SeasonList", "season"), style: .continuous).fill(palette.card))
         }
         .padding(.horizontal, layout.margin)
         .accessibilityLabel(chosen?.title ?? "Season")
@@ -482,6 +524,7 @@ struct SDUISeasonListView: View {
 /// An episode in a touch screen's list: the still at the left with how far through it is, then the title, the
 /// running time and two lines of what happens.
 struct SDUIEpisodeRow: View {
+    @Environment(\.sduiDraw) private var draw
     @EnvironmentObject private var model: AppModel
     @EnvironmentObject private var center: SDUICenter
     @EnvironmentObject private var store: SDUIPageStore
@@ -505,7 +548,7 @@ struct SDUIEpisodeRow: View {
                             Image(systemName: "checkmark.circle.fill").foregroundStyle(palette.onAccent, palette.accent).padding(4)
                         }
                     }
-                    .clipShape(RoundedRectangle(cornerRadius: Tokens.Radius.sm, style: .continuous))
+                    .clipShape(RoundedRectangle(cornerRadius: draw.radius("SeasonList", "still"), style: .continuous))
                 VStack(alignment: .leading, spacing: 2) {
                     Text(card.shown("title")).sduiFont("title", weight: .medium).foregroundStyle(palette.text).sduiLines(card.lineLimit("title"))
                     if !card.shown("subtitle").isEmpty {

@@ -449,6 +449,7 @@ class GamePlay(
     // The connection dropped. Within the server's minute the game is still there: connect again.
     private fun lost(status: Int) {
         if (stopped || away) return
+        com.wittywilla.wittymediaclient.player.ScreenTimeWatch.check() // the server ends a game when a profile's time is up
         transport = null
         if (!gotPicture) {
             if (status == 404) {

@@ -118,6 +118,7 @@ fun sduiDeviceFor(app: WittyApp, config: Configuration, reduceMotion: Boolean): 
         // The guide's grid is the app's own on a TV, and the server's own page inside the app elsewhere. The photo
         // timeline, the map and cover flow aren't here, so the server sends what stands in for them.
         views = listOf("guide"),
+        device = app.layoutDeviceName,
     )
 }
 

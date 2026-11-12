@@ -106,6 +106,7 @@ object LiveTv {
 
                 override fun onPlayerError(error: PlaybackException) {
                     if (key.isEmpty()) return
+                    if (com.wittywilla.wittymediaclient.player.ScreenTimeWatch.playbackFailed(error)) return // this profile's time is up: the notice says so
                     why = "This channel can't be played right now."
                     state = State.Failed
                 }

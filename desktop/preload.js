@@ -65,6 +65,9 @@ if (location.protocol === 'wittymedia-app:') {
     forgetUndo: () => ipcRenderer.invoke('forget-undo'),
     forgetFinish: () => ipcRenderer.invoke('forget-finish'),
     serverMenu: (url, at) => ipcRenderer.send('server-menu', url, at),
+    // Opened from the menu while a server is in use (Manage servers): which one, and back to it.
+    managing: () => ipcRenderer.invoke('managing'),
+    manageBack: () => ipcRenderer.send('manage-back'),
     onForgetAsk: (ask) => {
       ipcRenderer.removeAllListeners('forget-ask')
       ipcRenderer.on('forget-ask', (_e, url) => ask(url))
@@ -74,6 +77,7 @@ if (location.protocol === 'wittymedia-app:') {
     // A code shown here for a phone to approve. The secret that collects the sign-in stays in the app.
     pairStart: (url) => ipcRenderer.invoke('pair-start', url),
     pairPoll: () => ipcRenderer.invoke('pair-poll'),
+    pairPin: () => ipcRenderer.invoke('pair-pin'),
     pairStop: () => ipcRenderer.send('pair-stop'),
     // An invite link to a server away from home, and giving up on reaching one.
     invite: (link) => ipcRenderer.invoke('p2p-invite', link),

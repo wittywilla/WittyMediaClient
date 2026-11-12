@@ -129,8 +129,8 @@ private fun TabButton(nav: Nav, tab: Tab, modifier: Modifier = Modifier, wide: B
             } else {
                 // The person's avatar, ringed in the accent's words colour while You is chosen.
                 val me = nav.me
-                Avatar(
-                    if (me == null) "?" else avatarName(me.displayName, me.name), metrics.u(28),
+                ProfileFace(
+                    if (me == null) "?" else avatarName(me.displayName, me.name), me?.avatar, metrics.u(28),
                     if (active) Modifier.ringOutside(CircleShape, scheme.onPrimary, 0.dp, metrics.u(2).coerceAtLeast(1.dp)) else Modifier,
                 )
             }

@@ -13,6 +13,13 @@ What changed in WittyMediaClient, newest first. What changed before it had a rep
   series follow the title on any channel, record new episodes only and keep the newest few. On a phone or tablet the guide is the
   server's own page, which has all of this. Each part appears only when the server offers it (`tv-sets`, `tv-guide-paging`,
   `tv-catchup`, `tv-dvr-rules-2`). Unit-tested and built; not yet run on a simulator or emulator.
+- **Desktop: secure pairing.** Signing this computer in by having a phone approve it now uses the server's secure
+  pairing where it has it (`pair-totp`): a QR code, the code, and a 6-digit PIN that changes every 30 seconds with a
+  countdown, which the person approving types. Against an older server it shows the code alone, as before.
+- **Desktop: saved servers first.** The server list puts the servers this computer has used on top, the last one used
+  first and with focus, and the servers found on the network below them, so nothing found pushes them out of sight. A
+  switch under the list, **Show saved servers first** (on unless turned off, kept on this computer), brings back the
+  old order. The same setting and wording as the Apple and Android apps.
 - **Apple: signing in to a server for the first time no longer leaves Home and Search spinning.** The server's status was read before the app
   had a connection to it, so it was never asked what it can do; its pages stayed "not known yet" and the menu showed "No libraries yet".
   Opening a server now always asks. Seen on the iPhone and iPad simulators against a 0.8.0-alpha server.
@@ -23,6 +30,11 @@ What changed in WittyMediaClient, newest first. What changed before it had a rep
 - **Apple TV: the server picker scrolls** when many servers are found, so **Manage servers** stays reachable, and it takes focus by itself
   after the server in use is removed. A server never reached is no longer counted among those "not reached for N days", as on the desktop and
   Android. **Customise** lists menu entries the profile hid by their names. Server-driven cards' titles use the title size on every device.
+- **Desktop: Manage servers from the menu.** **Server → Manage Servers…** on a Mac, **Manage servers…** in the title bar's
+  Help menu on Windows and Linux, and in TV mode's menu open the list of servers this computer remembers without leaving
+  the one in use: it is marked **In use**, **Back to** it (or Escape) returns to it still signed in, and it can be removed
+  from there too, after a question that says it signs out of it here (with the usual Undo). Undoing the removal of
+  several servers now says "3 servers are back." instead of reading out every name.
 - **Karaoke from a song's separate parts, on Android and Apple.** On a server with `karaoke-auto` (WittyMediaServer 0.8.0-alpha), opening
   karaoke on a song asks the server once, and the server makes a karaoke version by itself: a quick one in seconds, and a properly separated one
   behind it when its owner has a separator installed. The apps play the parts in place of the song, in step to the sample (Android: decoded and

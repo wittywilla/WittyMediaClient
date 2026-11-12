@@ -55,6 +55,25 @@ final class SDUICenter: ObservableObject {
     static let nativeViews = ["guide"]
 
     static func deviceNow(window: CGSize?) -> SDUIDevice {
+        var device = deviceKind(window: window)
+        device.appId = appId
+        return device
+    }
+
+    /// This installation's own name with the server, made up once: a profile's layout is kept for it.
+    static var appId: String {
+        let key = "sdui.deviceId"
+        if let kept = UserDefaults.standard.string(forKey: key), SDUIDevice.isAppId(kept) { return kept }
+        #if os(tvOS)
+        let made = SDUIDevice.newAppId(platform: "tv")
+        #else
+        let made = SDUIDevice.newAppId(platform: UIDevice.current.userInterfaceIdiom == .pad ? "pad" : "phone")
+        #endif
+        UserDefaults.standard.set(made, forKey: key)
+        return made
+    }
+
+    private static func deviceKind(window: CGSize?) -> SDUIDevice {
         let locale = Locale.preferredLanguages.first
         #if os(tvOS)
         // The screen's own pixels: 3840 across on an Apple TV 4K showing 4K, 1920 on an Apple TV HD or a 4K set to 1080p.
@@ -127,6 +146,17 @@ final class SDUICenter: ObservableObject {
             catalog = known
         }
     }
+
+    /// The layout option this profile chose for this device, or nil to follow the server's. The menu and every page
+    /// showing are asked for again, so the whole app takes the new layout.
+    func chooseLayout(_ layout: String?) async throws {
+        try await client.setSDUILayout(layout, device: device)
+        await loadMenu()
+        epoch += 1
+    }
+
+    /// The app's frame as the server's navigation says it, where it says one.
+    var shell: SDUIShell? { enabled ? navigation?.shell : nil }
 
     func loadMenu() async {
         let asking = client, key = menuKey, device = device
