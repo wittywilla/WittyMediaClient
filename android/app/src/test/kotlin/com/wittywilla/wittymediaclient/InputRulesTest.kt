@@ -192,3 +192,29 @@ class WindowClassesTest {
         assertEquals(com.wittywilla.wittymediaclient.ui.WindowClass.Large, c(2400))
     }
 }
+
+class TrackLabelsTest {
+    private val labels = com.wittywilla.wittymediaclient.net.TrackLabels
+    private fun t(language: String? = null, label: String? = null, channels: Int = 0, height: Int = 0, bitrate: Int = 0) =
+        com.wittywilla.wittymediaclient.net.TrackInfo(language, label, channels, height, bitrate)
+
+    @Test fun `audio says the language and the layout`() {
+        assertEquals("English, 5.1", labels.audio(t("en", channels = 6), 1))
+        assertEquals("Stereo", labels.audio(t(channels = 2), 1))
+        assertEquals("Commentary, Stereo", labels.audio(t("und", "Commentary", 2), 2))
+        assertEquals("Track 3", labels.audio(t(), 3))
+    }
+
+    @Test fun `subtitles say the language, and what the stream calls them when that says more`() {
+        assertEquals("French", labels.subtitle(t("fr"), 1))
+        assertEquals("English (SDH)", labels.subtitle(t("en", "SDH"), 1))
+        assertEquals("English", labels.subtitle(t("en", "English"), 1))
+        assertEquals("Subtitles 2", labels.subtitle(t(), 2))
+    }
+
+    @Test fun `quality is the height, with the bitrate when two are as tall`() {
+        assertEquals("1080p", labels.quality(t(height = 1080)))
+        assertEquals("720p, 2.5 Mb/s", labels.quality(t(height = 720, bitrate = 2_500_000), true))
+        assertEquals("Picture", labels.quality(t()))
+    }
+}
