@@ -28,6 +28,33 @@ final class ScreenshotTests: XCTestCase {
         }
     }
 
+    /// A look, as the server has it for this installation: `WMC_DEVICE_ID` names the installation (the app takes it as its own name
+    /// with the server, `-sdui.deviceId`), and the script that runs this sets that name's experience first
+    /// (`PUT /sdui/experience?device=<name>`). The pictures are named after `WMC_LOOK`.
+    @MainActor
+    func testLook() throws {
+        let env = ProcessInfo.processInfo.environment
+        guard let device = env["WMC_DEVICE_ID"], !device.isEmpty else { throw XCTSkip("No installation name: set TEST_RUNNER_WMC_DEVICE_ID.") }
+        let look = env["WMC_LOOK"] ?? "look"
+        let app = try launchApp(extra: ["-sdui.deviceId", device])
+        _ = app.descendants(matching: .any).matching(NSPredicate(format: "identifier BEGINSWITH %@", "sdui.page.home")).firstMatch.waitForExistence(timeout: 40)
+        Thread.sleep(forTimeInterval: 3)
+        shoot("\(look)-1-home")
+        #if os(tvOS)
+        XCUIRemote.shared.press(.down); Thread.sleep(forTimeInterval: 0.6)
+        XCUIRemote.shared.press(.down); Thread.sleep(forTimeInterval: 0.8)
+        shoot("\(look)-2-shelf")
+        // Back to the menu: along it, to its second place.
+        XCUIRemote.shared.press(.menu); Thread.sleep(forTimeInterval: 0.8)
+        XCUIRemote.shared.press(.left); Thread.sleep(forTimeInterval: 0.8)
+        shoot("\(look)-3-menu")
+        #else
+        // A library's entry in the menu (a rail opens its drawer), where there is one.
+        let library = app.descendants(matching: .any).matching(NSPredicate(format: "identifier BEGINSWITH %@", "frame.entry.lib")).firstMatch
+        if library.waitForExistence(timeout: 3) { library.tap(); Thread.sleep(forTimeInterval: 1.5); shoot("\(look)-2-library-entry") }
+        #endif
+    }
+
     #if os(tvOS)
     /// Presses, one after another, with a moment between for focus to settle and the lift to finish.
     @MainActor
