@@ -212,8 +212,29 @@ the AGPL-3.0-or-later; each app has to get it its own way.
 | **Apple TV** | **Simulator.** `apple/scripts/p2p-check.sh` runs the real app with the real library against a real server: a code shown on the TV is approved, and the app puts the device on the server's list by itself; with the home address taken away the app finds the server peer to peer, still signed in, and plays a film through the connection, which the server counts as from the internet; it leaves the screen and comes back, and the film goes on; and a TV that never met the server joins by a code it shows. **Never on a real Apple TV**, and never across two routers: [below](#on-apple-tv-iphone-and-ipad) |
 | **iPhone, iPad** | **Simulator**, iPhone. The same code and the same check (`p2p-check.sh ios`): paired at home, found peer to peer with the home address gone, a film played through the connection, and the app heard from again over it after leaving the screen (a phone pauses a film when its app leaves the screen). **Not looked at:** the server's own pages in the web view from away, music carrying on with the screen off, an iPad. Never on a real one |
 | **Apple Vision Pro** | **Not there.** The library has no visionOS build, so the app builds without the feature and is as it was |
-| **Android** | **Not started.** The same script builds `wittyconnect.aar` with the NDK (not tried: this machine has none). What remains is what the Apple row lists, in Kotlin: the `.aar` in `app/libs`, the key in the Keystore, OkHttp and Media3 pointed at `http://127.0.0.1:<port>` with the secret header, `127.0.0.1` allowed in `network_security.xml`, `NetworkCallback` for network changes. On Android 11 and later Go can't list network cards the usual way, which the library is expected to cope with and hasn't been seen to |
+| **Android**, phone, tablet, TV | **Emulator**, phone. With the library built in (`android/scripts/build-wittyconnect.sh`), against a real server: signed in at home, the phone put itself on the server's list; the server's address was then taken away (it listened on 127.0.0.1 only, which also stops its network announcement) and the app, started again, reached it peer to peer and played a film through the connection. Not tried: a TV or tablet emulator from away, Join from away by a code, an invite link, Stop and Connect again, leaving the screen while away, two real routers |
 | **A web browser** | **Can't.** A page can't open the connections this needs. From away it takes an app |
+
+### On Android phones, tablets and Android TV
+
+**The library.** `bash android/scripts/build-wittyconnect.sh` builds Wittyconnect from the server's source (WITTYMEDIASERVER_SRC, or a
+checkout beside this repository) with the Go project's gomobile into `android/app/libs` (not committed): `wittyconnect.aar`, one shared
+library for each processor the APKs are split by (arm64, 32-bit ARM, x86-64 and x86), and its licences, which go into the app beside
+the others. It needs Go, the Android SDK and its NDK (`sdkmanager 'ndk;27.2.12479018'`). The build finds it by itself: with it, the
+bridge in `src/p2p` is compiled; without it, the one in `src/nop2p` that says it isn't there, and the app builds and runs the same with
+nothing about connecting from away shown. R8 keeps the library's Java side whole (`app/proguard-rules.pro`), as its Go side calls it
+by name. It adds about 10 MB to each processor's APK.
+
+**How the app uses it**, as Apple's apps do: `p2p/PeerManager.kt` chooses the way, the server's own address first; peer to peer when
+that doesn't answer and this device is on the server's list (`net/PeerRules.kt` has the rules and their tests). From away the app's
+requests go to `http://127.0.0.1:<port>` (`net/PeerRoute.kt`): its own requests and pictures with the secret in a header, the players
+(Android's own HTTP) with the secret as a cookie the app hands to every request for that address, and nowhere else. Home again by
+itself when the address answers, tried every 45 seconds and at once when the library says the server is on this network or Android
+says the network changed (Android 7 and later). Off the screen the connection closes unless music is playing, and opens again on the
+same port on coming back. The key is sealed with the Android Keystore, as the sign-in is. **You → On this device → From away** has the
+same rows as Apple's: Now, From away (Ready, Off, Not set up), This device, and Stop connecting from away or Connect from away again.
+The server picker takes an invite link in its address box and has **Join from away**, which shows a code for someone signed in to type
+into the server. Removing a server takes its part too: what was kept, and this device's place on its list.
 
 ### On Apple TV, iPhone and iPad
 

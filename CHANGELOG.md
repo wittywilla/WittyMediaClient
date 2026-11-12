@@ -5,6 +5,26 @@ What changed in WittyMediaClient, newest first. What changed before it had a rep
 
 ## Unreleased
 
+- **Android: from away, peer to peer.** With WittyMediaServer 0.8.0-alpha's connector built into the app
+  (`android/scripts/build-wittyconnect.sh`), a phone, tablet or TV that is on its server's list reaches it from anywhere, as the Apple
+  apps do: home first, then peer to peer, back home by itself. **You → From away**, invite links in the address box, and **Join from
+  away** for a device that has never been home. Seen on a phone emulator with the server's address taken away: reconnected, and a film
+  played through the connection.
+- **Android: layout options.** The menu is drawn as the server's layout says: a sidebar or a rail down the side, tabs across the top
+  (over the page in the streaming style), the phone's tab bar, Android TV's top menu, or a menu down a TV's side that opens with focus.
+  **You → Layout** chooses for this device. Seen on a tablet (sidebar, top tabs) and Android TV (compact list with its side menu).
+- **Android: modules' settings** under **You → Modules**, in the app's own controls; a module's pages and rows are drawn as any page.
+- **Android: pairing with a QR code and a PIN, switching profile, parental controls and screen time, skip markers, canvases and Where to
+  Watch**, brought in from the paused branches and built for phone, tablet and TV. The extras branch's own karaoke mixer was left out in
+  favour of the merged karaoke. Unit-tested; not yet walked through on an emulator.
+- **Android karaoke:** parts in any PCM format, channel count and sample rate; the app's equaliser, preamp and volume leveling apply to
+  them; a slider is heard in about 0.15 s; they keep playing in the background; a TV's Now Playing has Karaoke, usable with the remote.
+- **Android: pages are laid out off the main thread** (a slow TV stick could end the app); TV tabs are chosen as focus rests on them;
+  card titles use the title size; an episode's still keeps its shape in its header. The release build was started on a phone, a
+  tablet and Android TV.
+- **Android: removing servers.** A server never reached since this version counts from when it first ran, as on Apple; a video's own
+  picture settings and the last TV channel go with their server. On a TV the picker focuses the last-used server.
+
 - **Desktop: secure pairing.** Signing this computer in by having a phone approve it now uses the server's secure
   pairing where it has it (`pair-totp`): a QR code, the code, and a 6-digit PIN that changes every 30 seconds with a
   countdown, which the person approving types. Against an older server it shows the code alone, as before.
