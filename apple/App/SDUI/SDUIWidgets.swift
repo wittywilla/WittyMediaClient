@@ -53,6 +53,7 @@ struct SDUITabsView: View {
                     .sduiFocusable(tab.isFocusable ? focus : nil, tab.id)
                     .accessibilityLabel(tab.props.text("label"))
                     .accessibilityAddTraits(tab.id == chosen?.id ? [.isSelected] : [])
+                    .accessibilityIdentifier("sdui.tab." + tab.id)
             }
         }
         .frame(maxWidth: .infinity)
@@ -90,6 +91,7 @@ struct SDUITabsView: View {
                         .buttonStyle(.plain)
                         .accessibilityLabel(tab.props.text("label"))
                         .accessibilityAddTraits(here ? [.isSelected] : [])
+                        .accessibilityIdentifier("sdui.tab." + tab.id)
                     }
                 }
                 .padding(.horizontal, layout.margin)

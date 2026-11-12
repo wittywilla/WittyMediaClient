@@ -179,5 +179,40 @@ final class SDUITests: XCTestCase {
         remote.press(.select)
         page(app, startingWith: "search").shown(20)
     }
+    /// A tab of a library page is chosen by resting on it with the remote. Skips unless the environment names a
+    /// library whose page has tabs (TEST_RUNNER_WMC_TABS_LIBRARY, a music library's id).
+    @MainActor
+    func testAppleTVTabsChooseByResting() throws {
+        guard let library = ProcessInfo.processInfo.environment["WMC_TABS_LIBRARY"] else { throw XCTSkip("Set TEST_RUNNER_WMC_TABS_LIBRARY.") }
+        let app = try launchApp(extra: ["-WMCOpen", "/library/\(library)"])
+        page(app, startingWith: "library").shown(40)
+        let tabs = app.descendants(matching: .any).matching(NSPredicate(format: "identifier BEGINSWITH %@", "sdui.tab."))
+        guard tabs.firstMatch.waitForExistence(timeout: 15), tabs.count > 1 else { throw XCTSkip("That library's page has no tabs.") }
+        let remote = XCUIRemote.shared
+        let isTab = NSPredicate(format: "identifier BEGINSWITH %@", "sdui.tab.")
+        for _ in 0..<8 where !isTab.evaluate(with: focused(app)) { remote.press(.down) }
+        XCTAssertTrue(isTab.evaluate(with: focused(app)), "the remote never reached the tabs")
+        let first = focused(app).identifier
+        remote.press(.right)
+        let next = focused(app).identifier
+        XCTAssertNotEqual(next, first)
+        // Resting on it chooses it.
+        let chosen = app.descendants(matching: .any).matching(identifier: next).firstMatch
+        let end = Date().addingTimeInterval(5)
+        while Date() < end, !chosen.isSelected { usleep(250_000) }
+        XCTAssertTrue(chosen.isSelected, "resting on a tab didn't choose it")
+    }
+
+    /// A link that plays (Top Shelf's Play, a shared link) opens the player. TEST_RUNNER_WMC_PLAY_ITEM names a video.
+    @MainActor
+    func testAppleTVALinkThatPlaysOpensThePlayer() throws {
+        guard let item = ProcessInfo.processInfo.environment["WMC_PLAY_ITEM"] else { throw XCTSkip("Set TEST_RUNNER_WMC_PLAY_ITEM.") }
+        let app = try launchApp()
+        page(app, startingWith: "home").shown(40)
+        app.open(try XCTUnwrap(URL(string: "wittymedia://route/%2Fwatch%2F\(item)")))
+        let open = XCUIApplication(bundleIdentifier: "com.apple.springboard").buttons["Open"]
+        if open.waitForExistence(timeout: 3) { XCUIRemote.shared.press(.select) }
+        XCTAssertTrue(named(app, "player").waitForExistence(timeout: 30), "the link didn't open the player")
+    }
     #endif
 }

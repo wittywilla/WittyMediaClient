@@ -712,6 +712,8 @@ private struct PlayerHost: UIViewControllerRepresentable {
         let controller = AVPlayerViewController()
         controller.player = playback.player
         controller.delegate = context.coordinator
+        // For the UI tests: the player is on screen.
+        controller.view.accessibilityIdentifier = "player"
         #if os(tvOS)
         // Lets the TV switch to the film's frame rate and dynamic range. It may go dark for a moment.
         controller.appliesPreferredDisplayCriteriaAutomatically = true
