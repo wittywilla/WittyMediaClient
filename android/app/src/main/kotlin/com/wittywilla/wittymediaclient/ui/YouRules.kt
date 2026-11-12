@@ -6,7 +6,7 @@ package com.wittywilla.wittymediaclient.ui
 // Apart from the screen, so it can be tested without one. Rows the server would refuse are left out,
 // not greyed.
 
-enum class YouNative { Names, Password, TwoStep, Devices, SignInTv, Theme, TopMenu, Licences, Log, Servers, Away, Profiles, PlayingHere, Layout, Modules, RemoteControl, WatchParty }
+enum class YouNative { Names, Password, TwoStep, Devices, SignInTv, Theme, TopMenu, Licences, Log, Servers, Away, Profiles, PlayingHere, Modules, RemoteControl, WatchParty }
 
 sealed interface YouOpens {
     data class Native(val screen: YouNative) : YouOpens
@@ -30,8 +30,6 @@ data class YouWho(
     val onTv: Boolean,
     // The app can reach a server from away (the connector library is in it).
     val fromAway: Boolean = false,
-    // The server offers layouts this profile may choose between on this device (the navigation's `layouts`).
-    val layouts: Boolean = false,
     // The server's modules have settings to show (`module-settings`).
     val moduleSettings: Boolean = false,
     // The server has parental controls this app can show itself: Profiles is then the app's own screen.
@@ -87,8 +85,6 @@ fun youGroups(who: YouWho): List<YouGroup> {
         "groupDevice",
         listOfNotNull(
             native("rowTheme", "palette", "#0e7c6f", YouNative.Theme),
-            // Where the menu is and how pages look, on this device (the server's layout options).
-            if (who.layouts) native("rowLayout", "toolbar", "#0e7c6f", YouNative.Layout) else null,
             // Which libraries join the bar along the top: a TV's alone.
             if (who.onTv) native("rowTopMenu", "toolbar", "#bd2f85", YouNative.TopMenu) else null,
             // The servers this device remembers, to remove the ones no longer wanted.

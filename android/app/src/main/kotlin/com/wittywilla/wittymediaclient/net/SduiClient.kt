@@ -243,13 +243,6 @@ class SduiClient(private val transport: SduiTransport, val device: SduiDevice, p
         send("DELETE", url)
     }
 
-    // This profile's layout on this device (Layout options): one of the navigation's `layouts.options`, or null to
-    // follow the server again. Every page and the menu change with it, so they are all asked for again.
-    suspend fun chooseLayout(url: String, layout: String?) {
-        if (layout == null) send("DELETE", device.on(url))
-        else send("PUT", device.on(url), buildJsonObject { put("layout", layout) }.toString())
-    }
-
     // Carries out one of the catalogue's commands for an item.
     suspend fun command(spec: SduiCommandSpec, item: String) {
         val request = SduiCommands.request(spec, item) ?: return
