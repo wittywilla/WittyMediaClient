@@ -2,6 +2,7 @@
 // Copyright (C) 2026 WittyWilla and contributors
 package com.wittywilla.wittymediaclient.ui
 
+import androidx.compose.ui.unit.dp
 import android.view.KeyEvent
 import androidx.compose.foundation.background
 import androidx.compose.ui.text.withStyle
