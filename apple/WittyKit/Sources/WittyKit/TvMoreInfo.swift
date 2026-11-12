@@ -62,7 +62,7 @@ public struct ProgrammeInfo: Decodable, Equatable, Sendable {
 
         enum CodingKeys: String, CodingKey {
             case start, end, kind, title, sub, desc, genres, rating, year, season, episode, lengthMin, studio, language, country
-            case audio, hd, premiere, new, repeat, scores
+            case audio, hd, premiere, new, `repeat`, scores
         }
 
         public init(from decoder: Decoder) throws {
@@ -87,7 +87,7 @@ public struct ProgrammeInfo: Decodable, Equatable, Sendable {
             hd = (try? c.decodeIfPresent(Bool.self, forKey: .hd)) ?? false
             premiere = (try? c.decodeIfPresent(Bool.self, forKey: .premiere)) ?? false
             new = (try? c.decodeIfPresent(Bool.self, forKey: .new)) ?? false
-            repeated = (try? c.decodeIfPresent(Bool.self, forKey: .repeat)) ?? false
+            repeated = (try? c.decodeIfPresent(Bool.self, forKey: .`repeat`)) ?? false
             scores = (try? c.decodeIfPresent([Score].self, forKey: .scores)) ?? []
         }
 
@@ -248,6 +248,11 @@ public struct ProgrammeInfo: Decodable, Equatable, Sendable {
     }
 }
 
+public extension TvFeature {
+    /// `GET /tv/{key}/programme`: WittyTV More info.
+    static let programmeInfo = "tv-programme-info"
+}
+
 public extension WittyClient {
     /// One programme in full; `start` is any moment in it, in Unix seconds. A 404 means it isn't there for this profile.
     func programmeInfo(channel key: String, start: Int64) async throws -> ProgrammeInfo {
@@ -348,5 +353,14 @@ public enum MoreInfo {
         f.timeZone = zone
         f.setLocalizedDateFormatFromTemplate("EEE d MMM")
         return f.string(from: date) + " " + clock(unix, zone: zone)
+    }
+}
+
+public extension WittyClient {
+    /// Adds a library title (or a show) to Watch later, or takes it off (`POST`/`DELETE /collections/watch-later/items`).
+    func setWatchLater(item: Int64?, show: Int64?, on: Bool) async throws {
+        struct Body: Encodable { let items: [Int64]; let shows: [Int64] }
+        let body = Body(items: item.map { [$0] } ?? [], shows: show.map { [$0] } ?? [])
+        _ = try await call(on ? "POST" : "DELETE", "/collections/watch-later/items", body: try JSONEncoder().encode(body))
     }
 }

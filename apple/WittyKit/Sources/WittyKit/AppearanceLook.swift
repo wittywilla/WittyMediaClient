@@ -200,7 +200,7 @@ public extension WittyClient {
     func importTheme(_ zip: Data, name: String, forServer: Bool) async throws -> ThemeList.ThemeSummary {
         let path = (forServer ? "/themes" : "/themes/mine") + "?name=" + WittyClient.pathPart(name)
         let answer = try await send("POST", path, body: zip, headers: ["Content-Type": "application/zip"])
-        return try decoder.decode(ThemeList.ThemeSummary.self, from: answer.data)
+        return try JSONDecoder().decode(ThemeList.ThemeSummary.self, from: answer.data)
     }
 }
 

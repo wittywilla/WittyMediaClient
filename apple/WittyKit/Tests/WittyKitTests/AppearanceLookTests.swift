@@ -120,3 +120,73 @@ final class AppearanceLookTests: XCTestCase {
         XCTAssertNil((try JSONSerialization.jsonObject(with: policy.body()) as? [String: Any])?["required"])
     }
 }
+
+final class TvProblemPageTests: XCTestCase {
+    func testKindFromTheServersWordsAndTheChannel() {
+        XCTAssertEqual(TvProblem.kind(why: "That channel can't be played.", security: nil), .wontPlay)
+        XCTAssertEqual(TvProblem.kind(why: "x", security: "encrypted"), .encrypted)
+        XCTAssertEqual(TvProblem.kind(why: "No tuner is free right now.", security: nil), .noTuner)
+    }
+
+    func testAlwaysAWayForward() {
+        let page = TvProblem.spec(why: "The tuner lost the signal.", kind: .wontPlay, number: "4", name: "Kids Cove",
+                                  alternative: .init(number: "104", name: "Kids Cove HD"), fromStart: nil)
+        XCTAssertEqual(page.eyebrow, "WittyTV · Ch 4 Kids Cove")
+        XCTAssertEqual(page.lead, "The tuner lost the signal.")
+        XCTAssertEqual(page.actions.map(\.id), ["alternative", "try-again", "next-channel", "back-to-the-guide"])
+        XCTAssertEqual(page.startFocus, "alternative")
+        XCTAssertEqual(page.back, .closeLayer)
+    }
+
+    func testEncryptedOffersNoRetryAndNotesWhatToDo() {
+        let page = TvProblem.spec(why: "Encrypted.", kind: .encrypted, number: "9", name: "Pay", alternative: nil, fromStart: nil)
+        XCTAssertFalse(page.actions.contains { $0.id == "try-again" })
+        XCTAssertEqual(page.sections.first?.heading, "What can I do?")
+        XCTAssertEqual(page.actions.last?.id, "back-to-the-guide")
+    }
+
+    func testBackToLiveOnlyWhenWatchingFromTheStart() {
+        let page = TvProblem.spec(why: "x", kind: .wontPlay, number: "", name: "News", alternative: nil, fromStart: "Show")
+        XCTAssertTrue(page.actions.contains { $0.id == "back-to-live" })
+    }
+}
+
+final class MoreInfoSpecTests: XCTestCase {
+    private func info(credits: String = "") throws -> ProgrammeInfo {
+        let json = """
+        {"channel":{"key":"c4","number":4,"name":"Four","catchupDays":7},
+         "programme":{"start":1000,"end":4600,"kind":"broadcast","title":"The Quiet Orchard","sub":"Low Tide","desc":"A village.","genres":["Drama"],"rating":"PG","year":2024,"advisory":"Mild peril","new":true},
+         "actions":{"watch":true,"record":true,"remind":true,"fromStart":true,"open":true,"watchLater":true},
+         "library":{"itemId":9},
+         \(credits)
+         "trailers":[{"itemId":12,"title":"Trailer","type":"trailer","durationSec":95}],
+         "schedule":[{"channel":"c5","channelName":"Five","start":9000,"this":false},{"channel":"c4","channelName":"Four","start":1000,"this":true}]}
+        """
+        return try JSONDecoder().decode(ProgrammeInfo.self, from: Data(json.utf8))
+    }
+
+    func testCastWithoutAPersonIdIsNotOpenable() throws {
+        let i = try info(credits: #""credits":{"cast":[{"personId":5,"name":"Mara","character":"Nell"},{"personId":0,"name":"Guide Only","character":"Jon","source":"guide"},{"name":"No Id"}],"guests":[],"crew":[]},"#)
+        let spec = MoreInfo.spec(i, now: Date(timeIntervalSince1970: 500))
+        let cast = spec.sections.first { $0.heading == "Cast" }!.rows
+        XCTAssertEqual(cast.map(\.pressable), [true, false, false])
+        XCTAssertEqual(cast[0].id, "person-5")
+        XCTAssertFalse(spec.focusOrder.contains { $0.hasPrefix("guide-") })
+        XCTAssertEqual(Set(cast.map(\.id)).count, 3)
+    }
+
+    func testButtonsAreTheOnesTheServerOffered() throws {
+        let spec = MoreInfo.spec(try info(), now: Date(timeIntervalSince1970: 500))
+        XCTAssertEqual(spec.actions.map(\.title), ["Watch", "Watch from the start", "Record", "Remind me", "Open item page", "Add to watch list"])
+        XCTAssertTrue(spec.layer)
+    }
+
+    func testAdvisoryIsNeverShownAndOtherAiringsAre() throws {
+        let spec = MoreInfo.spec(try info(), now: Date(timeIntervalSince1970: 500))
+        let all = spec.sections.flatMap { $0.rows.map(\.title) + $0.rows.map(\.value) + [$0.note] }
+        XCTAssertFalse(all.contains { $0.contains("peril") })
+        XCTAssertEqual(spec.sections.first { $0.heading == "Also on" }?.rows.count, 1)
+        XCTAssertEqual(spec.eyebrow, "WittyTV · Ch 4 · Four")
+        XCTAssertEqual(spec.title, "The Quiet Orchard")
+    }
+}
