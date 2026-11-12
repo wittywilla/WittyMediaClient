@@ -248,7 +248,7 @@ private struct TabRoot: View {
                     case .album(let library, let name):
                         AlbumView(library: library, name: name)
                     case .photo(let library, let id):
-                        PhotoView(library: library, id: id)
+                        PhotoView(library: library, id: id).moduleScope("wittyphotos")
                     case .guide:
                         GuideView()
                     case .channel(let key):
@@ -276,7 +276,8 @@ private struct TabRoot: View {
     }
 }
 
-/// A library's own screen: games, music, audiobooks and podcasts have theirs, everything else its posters.
+/// A library's own screen: games, music, audiobooks and podcasts have theirs, everything else its posters. A
+/// module's library (games, music, photos) is drawn in that module's colours.
 struct LibraryScreen: View {
     let library: Library
 
@@ -289,6 +290,8 @@ struct LibraryScreen: View {
             #else
             ListeningLibraryView(library: library)
             #endif
+        } else if library.isPhotos {
+            LibraryView(library: library).moduleScope("wittyphotos")
         } else {
             LibraryView(library: library)
         }

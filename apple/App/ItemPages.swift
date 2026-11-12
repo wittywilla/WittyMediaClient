@@ -1297,7 +1297,8 @@ struct ItemPage: View {
             }
             meta(item).padding(.bottom, Tokens.Space.s5)
             if !error.isEmpty { ProblemLine(error).padding(.bottom, Tokens.Space.s3) }
-            if item.isRigGame { RigPlayPanel(item: item).padding(.bottom, Tokens.Space.s5) }
+            // A game on someone's PC is WittyCouch's, and its panel takes that module's colours.
+            if item.isRigGame { RigPlayPanel(item: item).moduleScope("wittycouch").padding(.bottom, Tokens.Space.s5) }
             if wide { wideActions(item) } else { actions(item) }
             if !overview.isEmpty {
                 Text(overview)
@@ -1331,8 +1332,10 @@ struct ItemPage: View {
             }
             MediaItemExtras(item: item).padding(.top, Tokens.Space.s4)
             if TitleLook.isDisc(item) {
+                // The disc's own sections, in the colours of the module that plays it.
                 DiscSections(item: item, disc: facts.disc, admin: isAdmin, playable: TitleLook.playable(item, facts), page: width, column: column,
                              say: say)
+                    .moduleScope(item.isBluray ? "wittybluray" : "wittydvd")
             }
             Group {
                 if let show = item.showId {

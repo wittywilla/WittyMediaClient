@@ -798,7 +798,7 @@ private struct TvItemView: View {
     @ViewBuilder private func actions(_ item: Item) -> some View {
         if item.isRigGame {
             if let tagline = item.tagline, !tagline.isEmpty { Secondary(tagline) }
-            RigPlayPanel(item: item)
+            RigPlayPanel(item: item).moduleScope("wittycouch")
         } else if item.isPlayable {
             // The server decides where Resume goes; nothing to resume means start at the beginning.
             HStack(spacing: Tokens.Space.s3) {
