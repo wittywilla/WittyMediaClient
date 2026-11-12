@@ -47,6 +47,7 @@ import com.wittywilla.wittymediaclient.data.entryFor
 import com.wittywilla.wittymediaclient.data.SavedServer
 import com.wittywilla.wittymediaclient.diag.ClientLog
 import com.wittywilla.wittymediaclient.net.Api
+import com.wittywilla.wittymediaclient.net.BrandPart
 import com.wittywilla.wittymediaclient.net.ApiError
 import com.wittywilla.wittymediaclient.net.SduiClient
 import com.wittywilla.wittymediaclient.net.SduiDevice
@@ -200,6 +201,8 @@ class Nav(val app: WittyApp, private val s: Map<String, String>) {
     var brandName by mutableStateOf("")
         private set
     var brandLogo by mutableStateOf("")
+        private set
+    var brandParts by mutableStateOf<List<BrandPart>>(emptyList())
         private set
 
     // Who is signed in, for the avatar on the You tab.
@@ -654,6 +657,7 @@ class Nav(val app: WittyApp, private val s: Map<String, String>) {
 
     private fun showBrand(base: String, status: ServerStatus) {
         brandName = status.brandName
+        brandParts = status.brandParts
         brandLogo = brandLogoUrl(base, status.brandLogo)
     }
 
@@ -669,6 +673,7 @@ class Nav(val app: WittyApp, private val s: Map<String, String>) {
 
     private fun forgetBrand() {
         brandName = ""
+        brandParts = emptyList()
         brandLogo = ""
     }
 
@@ -1177,7 +1182,8 @@ fun AppRoot(app: WittyApp) {
     val saveable = rememberSaveableStateHolder()
     val scope = rememberCoroutineScope()
     val width = LocalConfiguration.current.screenWidthDp
-    val metrics = if (app.isTv) TvMetrics else if (width >= TABLET_WIDTH_DP) TabletMetrics else PhoneMetrics
+    val windowClass = WindowClasses.of(width)
+    val metrics = if (app.isTv) TvMetrics else if (windowClass >= WindowClass.Medium) TabletMetrics.copy(gutter = if (windowClass == WindowClass.Large) Space.S10 else Space.S8) else PhoneMetrics
     val reduceMotion = remember { runCatching { Settings.Global.getFloat(context.contentResolver, Settings.Global.ANIMATOR_DURATION_SCALE, 1f) == 0f }.getOrDefault(false) }
 
     // The person's choice on this device, else the server's. Automatic follows the device's light or dark; Made by you
@@ -1203,7 +1209,7 @@ fun AppRoot(app: WittyApp) {
         onDispose { }
     }
 
-    WittyTheme(theme, metrics, reduceMotion, strings) {
+    WittyTheme(theme, metrics, reduceMotion, strings, nav.brandParts) {
         LaunchedEffect(Unit) { nav.startUp() }
         DisposableEffect(Unit) {
             app.onGuideKey = nav::openGuide
@@ -1362,15 +1368,19 @@ fun AppRoot(app: WittyApp) {
         // On a phone or tablet every page in the website's shell has the shell's own mini bar.
         val tabs = !metrics.tv && (route == Route.Home || route == Route.Search || route == Route.Profile || route is Route.Library ||
             route is Route.Show || route is Route.Item || route is Route.Album || route is Route.Artist || route is Route.Sdui || route is Route.OwnItem)
-        if (hasQueue && route.hasMiniPlayer && !tabs) {
-            Column(Modifier.fillMaxSize()) {
-                Box(Modifier.weight(1f).consumeWindowInsets(WindowInsets.navigationBars)) { showing() }
-                // Its colour goes on under the system's bar, so the bar has a page behind it.
-                Box(Modifier.background(MaterialTheme.colorScheme.surface).navigationBarsPadding()) { MiniPlayer(nav) }
+        // A keyboard on a tablet or a Chromebook: the same keys as everywhere (net/InputRules.kt).
+        Box(Modifier.fillMaxSize().then(if (metrics.tv) Modifier else windowKeys(nav))) {
+            if (hasQueue && route.hasMiniPlayer && !tabs) {
+                Column(Modifier.fillMaxSize()) {
+                    Box(Modifier.weight(1f).consumeWindowInsets(WindowInsets.navigationBars)) { showing() }
+                    // Its colour goes on under the system's bar, so the bar has a page behind it.
+                    Box(Modifier.background(MaterialTheme.colorScheme.surface).navigationBarsPadding()) { MiniPlayer(nav) }
+                }
+            } else {
+                showing()
             }
-        } else {
-            showing()
         }
+        if (InputInUse.helpOpen && !metrics.tv) KeyHelpSheet { InputInUse.helpOpen = false }
         // A WittyTV reminder comes up on whatever's showing, once someone is signed in.
         if (metrics.tv && route.signedIn) TvReminderAlert(nav)
         // Screen time and what a profile's limits turn off, over every screen and every player.
@@ -1380,7 +1390,6 @@ fun AppRoot(app: WittyApp) {
     }
 }
 
-private const val TABLET_WIDTH_DP = 600
 private const val BAR_CELLS = 5
 const val AUTO_THEME = "auto"
 private const val LIGHT_THEME = "light"

@@ -14,6 +14,8 @@ data class ServerStatus(
     val version: String = "",
     val setupRequired: Boolean = false,
     val brandName: String = "",
+    // The name's parts in order, those with `accent` drawn in the theme's brandAccent (docs/CLIENT-API.md, Themes).
+    val brandParts: List<BrandPart> = emptyList(),
     // The version of the server's own logo, or empty for the app's mark.
     val brandLogo: String = "",
     val theme: String = "default",
@@ -21,6 +23,9 @@ data class ServerStatus(
     // A newer version the server's update check found, for administrators only; empty for none.
     val update: String = "",
 )
+
+@Serializable
+data class BrandPart(val text: String = "", val accent: Boolean = false)
 
 @Serializable
 data class User(

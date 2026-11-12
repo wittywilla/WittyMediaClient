@@ -8,7 +8,7 @@ import Foundation
 /// The catalogue revision this app was built against. Sent with every request (`catalog=2`), so a newer
 /// server sends nothing this app can't draw.
 public enum SDUI {
-    public static let catalog = 2
+    public static let catalog = 4
     public static let version = 1
     /// The features in `/capabilities` that the app's server-driven pages need, all of them.
     public static let neededFeatures: Set<String> = ["sdui-pages", "sdui-catalog", "sdui-navigation", "sdui-personal"]
@@ -16,6 +16,10 @@ public enum SDUI {
 
     /// Whether a server with these features has server-driven pages for this app.
     public static func available(_ features: Set<String>) -> Bool { neededFeatures.isSubset(of: features) }
+
+    /// A document this app can draw: written for its own catalogue revision (docs/SDUI.md: a client built for another
+    /// revision refuses it). A document that names none is from before revisions were checked.
+    public static func accepts(_ document: SDUIDocument) -> Bool { document.catalog == nil || document.catalog == catalog }
 }
 
 /// A page rendered for one profile on one device.

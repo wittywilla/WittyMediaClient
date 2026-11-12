@@ -94,8 +94,10 @@ fun Wordmark(brandName: String, modifier: Modifier = Modifier, app: Boolean = fa
         MaterialTheme.typography.headline.copy(fontWeight = FontWeight.Bold)
     }
     val ink = MaterialTheme.colorScheme.onBackground
-    if (!app && brandName.isNotEmpty()) {
-        Text(brandName, color = ink, style = style, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = modifier)
+    val coloured = LocalBrandParts.current
+    if (!app && (brandName.isNotEmpty() || coloured.isNotEmpty())) {
+        val brand = LocalExtraColours.current.brandAccent
+        Text(brandAnnotated(brandName, coloured, ink, brand), style = style, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = modifier)
         return
     }
     val accent = LocalExtraColours.current.accentText
@@ -167,3 +169,10 @@ private const val GLOW_WIDE = 0.7f
 private const val GLOW_TALL = 0.6f
 private const val GLOW_ALPHA = 0.16f
 private const val GLOW_FADE = 0.7f
+
+// The server's name, its accent parts in `brandAccent` and the rest in `ink`: the one way every frame draws it.
+fun brandAnnotated(name: String, parts: List<com.wittywilla.wittymediaclient.net.BrandPart>, ink: Color, accent: Color) = buildAnnotatedString {
+    for (part in com.wittywilla.wittymediaclient.net.BrandName.parts(name, parts)) {
+        withStyle(SpanStyle(color = if (part.accent) accent else ink)) { append(part.text) }
+    }
+}

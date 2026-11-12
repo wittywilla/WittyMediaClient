@@ -10,6 +10,10 @@ import WittyKit
 // grid, half an hour to a column. The remote moves the highlight cell by cell; past either edge of
 // the grid it moves the time. Select watches what's on, or says more about what's later; holding
 // Select offers everything else, and Play/Pause watches the channel.
+//
+// WittyTV has four fixed places (docs/plans/DESIGN-2.md section 4), whichever look it has: the Preview (the top of the
+// page, at the side the look chooses), the Grid, the Dock under the grid (Look, Day, Channels, Filter, Recordings,
+// Record), and in the player the banner and mini guide (TvChannel.swift). The look restyles them and never moves them.
 
 /// Where focus can be in the grid: a cell, one of the two edges that move the time, or the edge under a page's
 /// last row that goes on to the next page.
@@ -66,6 +70,11 @@ struct GuideView: View {
     @State private var setsOpen = false
     @State private var findOpen = false
     @State private var goOpen = false
+    @State private var channelsOpen = false
+    @State private var filterOpen = false
+    @State private var recordOpen = false
+    /// What a sheet of the Dock asked for, done once it has gone (a second sheet can't open over it).
+    @State private var afterSheet: (() -> Void)?
     @State private var dialled: String?
     @State private var elsewhere: GuideElsewhere?
     @State private var adding: GuideChannel?
@@ -153,9 +162,40 @@ struct GuideView: View {
                   message: Text("It's among all channels. Show all channels and go to it?"),
                   primaryButton: .default(Text("Show all channels")) { showAll(thenRow: e.row) }, secondaryButton: .cancel())
         }
+        .sheet(isPresented: $channelsOpen, onDismiss: runAfterSheet) {
+            GuideChannelsSheet(setName: store.hasSets ? setName : nil, canFind: store.hasPaging, isAdmin: model.user?.isAdmin == true,
+                               total: store.total ?? 0, pageStart: store.pageStart, pageSize: store.pageSize) { action in
+                afterSheet = {
+                    switch action {
+                    case .sets: setsOpen = true
+                    case .find: findOpen = true
+                    case .go: goOpen = true
+                    case .edit: model.path.append(Route.page("/tv/channels"))
+                    }
+                }
+                channelsOpen = false
+            }
+        }
+        .sheet(isPresented: $filterOpen, onDismiss: runAfterSheet) {
+            GuideFilterSheet(store: store, setFilter: { store.setFilter($0); focusAfterFilter() },
+                             onSearch: { afterSheet = { searchOpen = true }; filterOpen = false },
+                             onClearWords: { filterBy(""); filterOpen = false })
+        }
+        .confirmationDialog(currentCell?.programme(at: spot.at)?.title ?? "This programme", isPresented: $recordOpen, titleVisibility: .visible) {
+            if let current, let p = currentCell?.programme(at: spot.at), currentCell?.kind == .programme {
+                Button("Record this") { record(current, p) }
+                Button("Record every airing") { series(current, p) }
+                Button("Remind me") { remind(current, p) }
+            }
+            Button("Cancel", role: .cancel) {}
+        }
         .sheet(isPresented: $lookOpen) { TvLookPanel() }
         .sheet(isPresented: $searchOpen) { GuideSearch { hit in searchOpen = false; go(to: hit) } }
         .confirmationDialog("Day", isPresented: $dayOpen) {
+            Button("Now") { goNow() }
+            ForEach(GuideRules.jumps(now: now), id: \.label) { j in Button(j.label) { goAt(j.at) } }
+            Button("Half an hour earlier") { shift(-GuideRules.slot) }
+            Button("Half an hour later") { shift(GuideRules.slot) }
             ForEach(0..<15, id: \.self) { n in
                 Button(n == 0 ? "Today" : n == 1 ? "Tomorrow" : GuideRules.dayName(today + Int64(n) * 86400 + 3600)) { goDay(n) }
             }
@@ -173,114 +213,77 @@ struct GuideView: View {
                       preview: previewKey, onWatch: watch, onDetails: { details(day: false) }, onDay: { details(day: true) },
                       onFavourite: favourite, onStep: { moveRow(spot.row + $0) }, onRecord: record, onSaid: say,
                       onFromStart: model.has(TvFeature.catchup) ? { if let current, let p = currentCell?.programme(at: spot.at) { fromStart(current, p) } } : nil)
-            bar
             if !store.error.isEmpty {
                 Text(store.error).font(dress.font(25, .bold)).foregroundStyle(dress.paint.err)
                     .frame(maxWidth: .infinity, alignment: .leading).padding(.horizontal, dress.edge).padding(.vertical, 8).background(dress.paint.panel)
             }
             grid
-            if [.box, .receiver, .teletext, .listings].contains(dress.shape) { footer }
+            dock
             legal
         }
         .padding(.bottom, dress.foot / 2)
     }
 
-    // MARK: The strip between the top and the grid
+    // MARK: The Dock, under the grid
 
-    private var bar: some View {
+    /// One row that never moves: Look, Day, Channels, Filter, Recordings, Record. Down from the grid's last row reaches it, and
+    /// Up goes back to the cell the highlight was on. A fastext look (teletext, the receiver, the set-top box) shows the
+    /// four coloured keys on the first four, as those screens do.
+    private var dock: some View {
+        let on = !store.filter.isAll
+        let canRecord = currentCell?.kind == .programme && current != nil
+        let keys = dress.shape == .receiver || dress.shape == .teletext || dress.shape == .box
         let p = dress.paint
-        let all = store.filter.isAll
-        let hasBoth = store.lineupHasBoth
-        let anyFavourite = store.lineupAnyFavourite
+        let colours = [p.keyA, p.keyB, p.keyC, p.keyC]
         return HStack(spacing: 16) {
-            dress.words("Guide", barTitle.size, barTitle.weight, smallCaps: true).foregroundColor(barTitleColour)
-                .tvCase(dress.capitals, tracking: dress.shape == .receiver ? 2.4 : 0)
-                .accessibilityAddTraits(.isHeader)
-            ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: 16) {
-                    if store.hasSets {
-                        // Sets have all of the filters below in them, and the account's own besides.
-                        if store.sets.count > 1 {
-                            Button { cycleSet(-1) } label: { Image(systemName: "chevron.left") }
-                                .buttonStyle(TvButtonStyle(dress: dress, kind: .icon, onBar: true)).accessibilityLabel("The set before")
-                        }
-                        Button { setsOpen = true } label: { Label(setName + " ▾", systemImage: "list.bullet") }
-                            .buttonStyle(TvButtonStyle(dress: dress, kind: .chip, on: true, onBar: true))
-                            .accessibilityLabel("Channel set: \(setName)").accessibilityHint("Choose which channels the guide shows")
-                        if store.sets.count > 1 {
-                            Button { cycleSet(1) } label: { Image(systemName: "chevron.right") }
-                                .buttonStyle(TvButtonStyle(dress: dress, kind: .icon, onBar: true)).accessibilityLabel("The set after")
-                        }
-                    } else {
-                        chip("All", on: all) { store.setFilter(.init()) }
-                        if anyFavourite || store.filter.favourites {
-                            chip("★ Favourites", on: store.filter.favourites) { store.setFilter(.init(favourites: !store.filter.favourites)) }
-                        }
-                        ForEach(store.groups, id: \.self) { g in
-                            chip(g, on: store.filter.group == g) { store.setFilter(.init(group: store.filter.group == g ? "" : g)) }
-                        }
-                        if hasBoth {
-                            chip("My library", on: store.filter.kind == "library") { store.setFilter(.init(kind: store.filter.kind == "library" ? "" : "library")) }
-                            chip("Live TV", on: store.filter.kind == "tuner") { store.setFilter(.init(kind: store.filter.kind == "tuner" ? "" : "tuner")) }
-                        }
-                    }
-                    if !store.filter.q.isEmpty {
-                        Button { filterBy("") } label: { Text("“\(store.filter.q)” ✕") }
-                            .buttonStyle(TvButtonStyle(dress: dress, kind: .chip, on: true, onBar: true))
-                            .accessibilityLabel("Only channels matching \(store.filter.q). Show every channel")
-                    }
-                    if store.hasPaging { chip("Find a channel", on: false) { findOpen = true } }
-                    chip("Go to channel", on: false) { goOpen = true }
-                    pages
-                }
-                .padding(.vertical, 10)
-                .padding(.horizontal, 8)
+            dockButton("Look", "paintpalette", key: keys ? ("A", colours[0]) : nil) { lookOpen = true }
+            dockButton(dayLabel, "calendar", key: keys ? ("B", colours[1]) : nil) { dayOpen = true }
+            dockButton("Channels", "list.bullet", key: keys ? ("C", colours[2]) : nil) { channelsOpen = true }
+            dockButton("Filter", "line.3.horizontal.decrease.circle", on: on, key: keys ? ("D", colours[3]) : nil) { filterOpen = true }
+            if model.household.allows(ProfileFeature.recordings) {
+                NavigationLink(value: Route.recordings) { Label("Recordings", systemImage: "recordingtape") }
+                    .buttonStyle(TvButtonStyle(dress: dress, onBar: true))
             }
-            .frame(maxWidth: .infinity, alignment: .leading)
-            HStack(spacing: 16) {
-                Button { shift(-GuideRules.slot) } label: { Image(systemName: "chevron.left") }
-                    .buttonStyle(TvButtonStyle(dress: dress, kind: .icon, onBar: true)).accessibilityLabel("Half an hour earlier")
-                Button("Now") { goNow() }.buttonStyle(TvButtonStyle(dress: dress, on: GuideRules.floorSlot(now) == from, onBar: true))
-                Button { shift(GuideRules.slot) } label: { Image(systemName: "chevron.right") }
-                    .buttonStyle(TvButtonStyle(dress: dress, kind: .icon, onBar: true)).accessibilityLabel("Half an hour later")
-                ForEach(GuideRules.jumps(now: now), id: \.label) { j in
-                    Button(j.label) { goAt(j.at) }.buttonStyle(TvButtonStyle(dress: dress, kind: .link, onBar: true))
-                }
-                Button { dayOpen = true } label: { Text(dayLabel + " ▾") }.buttonStyle(TvButtonStyle(dress: dress, onBar: true))
-                Button { searchOpen = true } label: { Image(systemName: "magnifyingglass") }
-                    .buttonStyle(TvButtonStyle(dress: dress, kind: .icon, onBar: true)).accessibilityLabel("Search the schedule")
-                Button("Look") { lookOpen = true }.buttonStyle(TvButtonStyle(dress: dress, onBar: true))
-                if model.household.allows(ProfileFeature.recordings) {
-                    NavigationLink(value: Route.recordings) { Text("Recordings") }.buttonStyle(TvButtonStyle(dress: dress, onBar: true))
-                }
-                if model.user?.isAdmin == true {
-                    NavigationLink(value: Route.page("/tv/channels")) { Label("Edit channels", systemImage: "gearshape") }
-                        .buttonStyle(TvButtonStyle(dress: dress, onBar: true))
-                }
+            if model.household.allows(ProfileFeature.recordings) {
+                dockButton("Record", "record.circle") { recordOpen = true }.disabled(!canRecord)
             }
-            .padding(.vertical, 10)
-            .fixedSize(horizontal: true, vertical: false)
+            Spacer(minLength: 16)
+            GuideLegend(dress: dress)
         }
+        .padding(.vertical, 10)
         .padding(.horizontal, dress.edge - 8)
         .frame(maxWidth: .infinity)
         .background(barFill)
         .overlay { barRules }
         .focusSection()
+        .accessibilityElement(children: .contain)
+        .accessibilityLabel("Controls for the guide")
+        .accessibilityIdentifier("tv.dock")
     }
 
-    /// Previous and next page, and which channels these are, when there's more than a page of them.
-    @ViewBuilder private var pages: some View {
-        let total = store.total ?? 0
-        if store.pageSize > 0, total > store.pageSize {
-            let previous = GuidePaging.previous(start: store.pageStart, size: store.pageSize)
-            let next = GuidePaging.next(start: store.pageStart, size: store.pageSize, total: total)
-            Button { if let previous { moveRow(previous) } } label: { Image(systemName: "chevron.up") }
-                .buttonStyle(TvButtonStyle(dress: dress, kind: .icon, onBar: true)).disabled(previous == nil).accessibilityLabel("Previous page")
-            Text(GuidePaging.words(start: store.pageStart, size: store.pageSize, total: total))
-                .font(dress.font(dress.buttonText.size)).foregroundStyle(dress.paint.soft).lineLimit(1).fixedSize()
-            Button { if let next { moveRow(next) } } label: { Image(systemName: "chevron.down") }
-                .buttonStyle(TvButtonStyle(dress: dress, kind: .icon, onBar: true)).disabled(next == nil).accessibilityLabel("Next page")
+    private func dockButton(_ words: String, _ symbol: String, on: Bool = false, key: (String, Color)? = nil, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            HStack(spacing: 8) {
+                if let key {
+                    Text(key.0).font(dress.font(15, .bold)).foregroundStyle(dress.paint.keyText)
+                        .frame(width: 26, height: 26)
+                        .background(dress.shape == .receiver || dress.shape == .teletext ? AnyView(Rectangle().fill(key.1)) : AnyView(Circle().fill(key.1)))
+                }
+                Label(words, systemImage: symbol).labelStyle(.titleAndIcon)
+            }
         }
+        .buttonStyle(TvButtonStyle(dress: dress, on: on, onBar: true))
+        .accessibilityIdentifier("tv.dock." + words.lowercased())
+    }
+
+    private func runAfterSheet() {
+        guard let later = afterSheet else { return }
+        afterSheet = nil
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.3, execute: later)
+    }
+
+    private func focusAfterFilter() {
+        Task { await store.ensure(0); focusCell(row: 0, at: spot.at) }
     }
 
     private var setName: String { ChannelSetRules.name(of: store.filter.set, in: store.sets) }
@@ -288,22 +291,6 @@ struct GuideView: View {
     private var dayLabel: String {
         let n = Int((Calendar.current.startOfDay(for: Date(timeIntervalSince1970: TimeInterval(from))).timeIntervalSince1970 - Double(today)) / 86400)
         return n < 0 ? "Yesterday" : n == 0 ? "Today" : n == 1 ? "Tomorrow" : GuideRules.dayName(from)
-    }
-
-    private var barTitle: (size: CGFloat, weight: Font.Weight) {
-        switch dress.shape {
-        case .modern: return (25, .bold)
-        case .receiver: return (17.5, .medium)
-        case .teletext: return (18.75, .bold)
-        case .listings: return (30, .bold)
-        case .outline: return (25, .light)
-        case .compact: return (17.5, .bold)
-        default: return (21.25, .bold)
-        }
-    }
-
-    private var barTitleColour: Color {
-        [.modern, .listings, .cinema, .outline, .compact].contains(dress.shape) ? dress.paint.text : dress.paint.accent
     }
 
     @ViewBuilder private var barFill: some View {
@@ -314,19 +301,15 @@ struct GuideView: View {
         }
     }
 
+    /// The Dock's rule along its top, as each look draws its own.
     @ViewBuilder private var barRules: some View {
         switch dress.shape {
-        case .receiver: Rule(edge: .bottom, colour: dress.paint.panel2)
-        case .listings: Rule(edge: .bottom, colour: dress.paint.text)
+        case .box: Rule(edge: .top, colour: dress.paint.line, width: 3)
+        case .receiver: Rule(edge: .top, colour: dress.paint.line)
+        case .listings: Rule(edge: .top, colour: dress.paint.text)
         case .cinema: Rule(edge: .top, colour: dress.paint.panel2)
         default: EmptyView()
         }
-    }
-
-    private func chip(_ words: String, on: Bool, action: @escaping () -> Void) -> some View {
-        Button(action: action) { Text(words) }
-            .buttonStyle(TvButtonStyle(dress: dress, kind: .chip, on: on, onBar: true))
-            .accessibilityAddTraits(on ? [.isSelected] : [])
     }
 
     // MARK: The grid
@@ -434,53 +417,6 @@ struct GuideView: View {
 
     // MARK: Underneath
 
-    private var footer: some View {
-        let p = dress.paint
-        let kind = store.filter.kind
-        return HStack(spacing: 16) {
-            key("A", "Day −", p.keyA) { shift(-86400) }
-            key("B", "Day +", p.keyB) { shift(86400) }
-            if store.hasSets {
-                key("C", "Sets", p.keyC) { setsOpen = true }
-            } else {
-                key("C", kind.isEmpty ? "All" : kind == "library" ? "Library" : "Live TV", p.keyC) { cycleKind() }
-            }
-            Spacer(minLength: 16)
-            Text("▲▼ Channel · ◄► Time · Select Watch · Hold Select for more · Play/Pause Watch the channel")
-                .font(dress.font(17.5)).foregroundStyle(p.soft).lineLimit(1).truncationMode(.tail)
-                .italic(dress.shape == .listings)
-        }
-        .padding(.horizontal, dress.edge)
-        .padding(.vertical, 6)
-        .background {
-            switch dress.shape {
-            case .box: LinearGradient(colors: [p.panel, p.bg], startPoint: .top, endPoint: .bottom)
-            default: p.bg
-            }
-        }
-        .overlay {
-            switch dress.shape {
-            case .box: Rule(edge: .top, colour: p.line, width: 3)
-            case .receiver: Rule(edge: .top, colour: p.line)
-            case .listings: Rule(edge: .top, colour: p.text)
-            default: EmptyView()
-            }
-        }
-        .focusSection()
-    }
-
-    private func key(_ letter: String, _ words: String, _ colour: Color, action: @escaping () -> Void) -> some View {
-        Button(action: action) {
-            HStack(spacing: 6) {
-                Text(letter).font(dress.font(15, .bold)).foregroundStyle(dress.paint.keyText)
-                    .frame(width: 26, height: 26)
-                    .background(dress.shape == .receiver || dress.shape == .teletext ? AnyView(Rectangle().fill(colour)) : AnyView(Circle().fill(colour)))
-                Text(words)
-            }
-        }
-        .buttonStyle(TvButtonStyle(dress: dress, kind: .link))
-    }
-
     private var legal: some View {
         let shown = [notices["tv"], dress.look.logos && logosShown ? notices["logos"] : nil].compactMap { $0 }
         return VStack(alignment: .leading, spacing: 4) {
@@ -550,14 +486,6 @@ struct GuideView: View {
         device.remember(id, for: GuideDevice.setKey(model: model, client: client))
         store.setFilter(.init(set: id))
         Task { await store.ensure(0); focusCell(row: 0, at: spot.at) }
-    }
-
-    /// The set before or after, from the bar, as the picker would choose it.
-    private func cycleSet(_ step: Int) {
-        let current = store.filter.set.isEmpty ? ChannelSetRules.all : store.filter.set
-        guard let next = ChannelSetRules.cycle(current, in: store.sets, by: step) else { return }
-        chooseSet(next)
-        say(ChannelSetRules.name(of: next, in: store.sets))
     }
 
     /// Only the channels matching some words, in the set on screen; nothing shows them all again.
@@ -696,11 +624,6 @@ struct GuideView: View {
         let rows = visible.isEmpty ? [spot.row] : Array(visible)
         let size = store.fetchSize
         Task { for r in Set(rows.map { $0 / size * size }) { await store.ensure(r) } }
-    }
-
-    private func cycleKind() {
-        let k = store.filter.kind
-        store.setFilter(.init(kind: k.isEmpty ? "library" : k == "library" ? "tuner" : ""))
     }
 
     /// The clock, a little at a time, and the guide kept current while it's open.

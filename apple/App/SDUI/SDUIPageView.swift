@@ -147,7 +147,13 @@ struct SDUIPageBody: View {
     @Namespace private var scope
 
     private var layout: SDUILayout { screen.layout }
-    private var sections: [SDUIElement] { screen.sections }
+    /// The page's sections, its Dock aside: the Dock is drawn in its own zone (docs/SDUI.md, Zones and the Dock).
+    private var sections: [SDUIElement] { screen.sections.filter { $0.type != "Dock" } }
+    private var dock: SDUIElement? { screen.sections.first { $0.type == "Dock" && !$0.children.filter { $0.type == "Button" }.isEmpty } }
+    /// A phone's Dock is an Options button that opens its controls as a sheet; elsewhere a bar at the foot.
+    private var dockIsSheet: Bool { (layout.dock?.placement ?? (layout.formFactor == "phone" ? "sheet" : "bottom")) == "sheet" }
+    @State private var showingDock = false
+    @State private var jumpTarget: String?
 
     /// The app's own view fills the rest of the page; nothing follows it.
     private var nativeAt: Int? {
@@ -198,6 +204,7 @@ struct SDUIPageBody: View {
     }
 
     private var scrolling: some View {
+        ScrollViewReader { proxy in
         ScrollView {
             LazyVStack(alignment: .leading, spacing: CGFloat(layout.sectionGap)) {
                 #if !os(tvOS)
@@ -210,6 +217,13 @@ struct SDUIPageBody: View {
                         .accessibilityAddTraits(.isHeader)
                         .accessibilityHeading(.h1)
                         .padding(.horizontal, layout.margin)
+                }
+                if let dock, dockIsSheet {
+                    // A phone's Dock: one Options button that opens its controls.
+                    Button { showingDock = true } label: { Label(dock.label, systemImage: "slider.horizontal.3") }
+                        .action(pill: true)
+                        .padding(.horizontal, layout.margin)
+                        .accessibilityIdentifier("sdui.dock.options")
                 }
                 if let over = screen.document.screenTime { SDUIScreenTimeNote(over: over) }
                 if offline { SDUIOfflineNote() }
@@ -242,10 +256,44 @@ struct SDUIPageBody: View {
         .ignoresSafeArea(.container, edges: .horizontal)
         #else
         .refreshable { await store.refresh(center) }
+        #if os(iOS)
+        // Not on visionOS, which has no on-screen keyboard to put away.
         .scrollDismissesKeyboard(.immediately)
         #endif
+        #endif
+        // A jump to a letter brings its first title into view.
+        .sduiOnChange(of: store.scrollTo) { target in
+            guard let target else { return }
+            withAnimation(.easeOut(duration: Tokens.Motion.focus)) { proxy.scrollTo(target, anchor: .top) }
+            #if os(tvOS)
+            focused = target
+            #endif
+            store.scrollTo = nil
+        }
+        }
+        // A bar at the foot that never moves: outside the page's scroll.
+        .safeAreaInset(edge: .bottom, spacing: 0) {
+            if let dock, !dockIsSheet { SDUIDockBar(dock: dock, height: CGFloat(layout.dock?.height ?? 64), focus: layout.focusEngine ? $focused : nil) }
+        }
+        .sheet(isPresented: $showingDock) {
+            if let dock { SDUIDockSheet(dock: dock) { showingDock = false } }
+        }
+        .onReceive(store.$control) { request in
+            guard let request, request.control == "jump" else { return }
+            store.control = nil
+            jumpTarget = request.target
+        }
+        .sheet(item: Binding(get: { jumpTarget.map { SDUIJumpTarget(grid: $0) } }, set: { jumpTarget = $0?.grid })) { target in
+            SDUILetterPicker { letter in
+                jumpTarget = nil
+                Task { await store.jump(to: letter, in: target.grid, center: center) }
+            }
+        }
+        .onAppear { store.loadViews(profile: String(model.user?.id ?? 0)) }
     }
 }
+
+private struct SDUIJumpTarget: Identifiable { let grid: String; var id: String { grid } }
 
 /// Screen time is over: the page still shows, nothing in it plays, and this says why and when there's time again.
 struct SDUIScreenTimeNote: View {

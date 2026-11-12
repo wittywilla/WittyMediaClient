@@ -6,6 +6,8 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.hoverable
+import androidx.compose.foundation.interaction.collectIsHoveredAsState
 import androidx.compose.ui.semantics.CustomAccessibilityAction
 import androidx.compose.ui.semantics.customActions
 import androidx.compose.foundation.interaction.MutableInteractionSource
@@ -100,6 +102,7 @@ private const val PRESS_SCALE = 0.97f
 private const val PRESS_ALPHA = 0.85f
 private const val DISABLED_ALPHA = 0.55f
 private const val FOCUS_TRIES = 4
+private const val HOVER_WASH = 0.08f
 
 // A ring around something, `gap` out from its edge, drawn outside it so nothing moves when it shows. It's
 // concentric: each corner is the thing's own radius plus the distance out, so a radius 14 key's 4-wide ring 4 out
@@ -149,10 +152,15 @@ fun Pressable(
     longClickLabel: String? = null,
     // What else can be done to it, for a screen reader's menu of actions: what a swipe does, for one.
     actions: List<CustomAccessibilityAction> = emptyList(),
+    // One focus language (docs/plans/DESIGN-2.md): media takes a ring, a lift and a little growth; a control on a TV takes
+    // a fill of the text colour (its words turn to the page's colour: `content` is told it is active) and no ring.
+    focusStyle: FocusStyle = FocusStyle.RingLift,
     content: @Composable (active: Boolean) -> Unit,
 ) {
     val interaction = remember { MutableInteractionSource() }
     val pressed by interaction.collectIsPressedAsState()
+    // A mouse or trackpad over it (a tablet or a Chromebook): a light wash of the text colour, as the website's hover.
+    val hovered by interaction.collectIsHoveredAsState()
     // From the focus system itself: focus given on a screen's first frame can come before an
     // interaction stream is listened to, and would never show.
     var focused by remember { mutableStateOf(false) }
@@ -174,7 +182,9 @@ fun Pressable(
         }
     }
     val showsFocus = focused && keyboard
+    val filled = showsFocus && focusStyle == FocusStyle.Fill && metrics.focusFill
     val grow = when {
+        filled -> 1f
         reduce || !grows -> 1f
         showsFocus -> metrics.focusScale
         pressed -> pressScale
@@ -182,6 +192,7 @@ fun Pressable(
     }
     val dim = (if (pressed) pressAlpha else 1f) * (if (enabled) 1f else disabledAlpha)
     val ringColour = MaterialTheme.colorScheme.onBackground
+    val lift = if (showsFocus && !reduce && !filled) metrics.focusLift else 0.dp
     // On a TV the ring has room kept for it round the thing, and sits right against it, as Apple TV draws
     // it: so a focused button and its neighbours never move, and both TVs measure the same.
     val tvRoom = metrics.tv && ring
@@ -189,10 +200,10 @@ fun Pressable(
         modifier
             // Above its neighbours, so they don't cover its ring.
             .zIndex(if (showsFocus) 1f else 0f)
-            .graphicsLayer { scaleX = grow; scaleY = grow; alpha = dim }
+            .graphicsLayer { scaleX = grow; scaleY = grow; alpha = dim; translationY = -lift.toPx() }
             .then(if (tvRoom) Modifier.padding(metrics.focusRing) else Modifier)
             .then(
-                if (ring && showsFocus) Modifier.ringOutside(shape, ringColour, if (tvRoom) 0.dp else metrics.focusRing, metrics.focusRing)
+                if (ring && showsFocus && !filled) Modifier.ringOutside(shape, ringColour, if (tvRoom) 0.dp else metrics.focusRing, metrics.focusRing)
                 else Modifier,
             )
             .focusRequester(requester)
@@ -208,7 +219,10 @@ fun Pressable(
                 if (actions.isNotEmpty()) customActions = actions
             }
             .then(if (clip) Modifier.clip(shape) else Modifier)
-            .background(fill, shape)
+            .background(if (filled) MaterialTheme.colorScheme.onBackground else fill, shape)
+            .hoverable(interaction)
+            .then(if (hovered && !metrics.tv && enabled) Modifier.background(MaterialTheme.colorScheme.onBackground.copy(alpha = HOVER_WASH), shape) else Modifier)
+            .optionsKey(if (enabled) onLongClick else null)
             .then(
                 if (onLongClick == null) Modifier.clickable(interactionSource = interaction, indication = null, role = Role.Button) { if (enabled) onClick() }
                 else Modifier.combinedClickable(
@@ -221,6 +235,9 @@ fun Pressable(
 }
 
 enum class ButtonKind { Primary, Secondary, Quiet, Destructive }
+
+// How a thing shows it has focus (docs/plans/DESIGN-2.md, section 2, `focus.style`).
+enum class FocusStyle { RingLift, Fill }
 
 // docs/APP-DESIGN.md, "Buttons". Tall is the sign-in screens' 52. While busy, a spinner in the words'
 // colour takes their place and the button keeps its size, and its focus on a TV.
@@ -273,7 +290,10 @@ fun WittyButton(
         shape = if (pill || metrics.tv) Radius.FULL else LocalMetrics.current.corner(10), fill = fill,
         label = if (busy) text else null, state = if (busy) LocalWords.current["connecting"] else null,
         focusKey = focusKey, requestFocus = requestFocus, takeFocus = takeFocus, focusRequester = focusRequester, enabled = enabled,
-    ) {
+        focusStyle = FocusStyle.Fill,
+    ) { active ->
+        // Under a fill of the text colour the words are the page's colour.
+        val shown = if (active && metrics.focusFill) scheme.background else ink
         Box(
             Modifier
                 .defaultMinSize(minHeight = height)
@@ -285,10 +305,10 @@ fun WittyButton(
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(metrics.u(8)),
             ) {
-                if (icon != null) Icon(icon, contentDescription = null, tint = ink, modifier = Modifier.size(metrics.u(if (metrics.tv) 30 else 20)))
-                Text(text, color = ink, style = style, textAlign = TextAlign.Center)
+                if (icon != null) Icon(icon, contentDescription = null, tint = shown, modifier = Modifier.size(metrics.u(if (metrics.tv) 30 else 20)))
+                Text(text, color = shown, style = style, textAlign = TextAlign.Center)
             }
-            if (busy) Spinner(ink, metrics.u(if (metrics.tv) 30 else 20))
+            if (busy) Spinner(shown, metrics.u(if (metrics.tv) 30 else 20))
         }
     }
 }

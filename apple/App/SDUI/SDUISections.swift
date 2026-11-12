@@ -36,6 +36,14 @@ struct SDUINodeView: View {
         case "SearchBox": SDUISearchBoxView(box: element)
         case "List": SDUIListView(list: element)
         case "ListItem": SDUIListRow(row: element, dense: false)
+        case "Dock": EmptyView()
+        // A key legend outside a Dock: a TV's remote is always in use; touch alone never shows one.
+        case "KeyLegend":
+            #if os(tvOS)
+            SDUIKeyLegend(legend: element).padding(.horizontal, element.depth > 0 ? 0 : 60)
+            #else
+            EmptyView()
+            #endif
         case "NativeView": SDUINativeView(native: element)
         case "Page": SDUIColumn(children: element.children)
         default: SDUIStackView(stack: element)
@@ -79,6 +87,7 @@ struct SDUIShelfView: View {
     @EnvironmentObject private var store: SDUIPageStore
     @Environment(\.palette) private var palette
     @Environment(\.sduiLayout) private var layout
+    @Environment(\.sduiWidth) private var pageWidth
     let shelf: SDUIElement
 
     private var cardWidth: CGFloat { CGFloat(shelf.cardWidth > 0 ? shelf.cardWidth : 160) }
@@ -92,7 +101,7 @@ struct SDUIShelfView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: layout.sp("s")) {
-            SDUISectionHeading(element: shelf, seeAll: shelf.seeAll.isEmpty ? nil : { actor.open(route: shelf.seeAll) })
+            SDUISectionHeading(element: shelf, seeAll: shelf.seeAll.isEmpty || shelf.seeAllCard ? nil : { actor.open(route: shelf.seeAll) })
             if shelf.state == .error {
                 SDUISectionError(id: shelf.id) { Task { await store.retry(shelf, center: center) } }
             } else if loading {
@@ -111,23 +120,35 @@ struct SDUIShelfView: View {
         .task(id: shelf.stateName) { await store.fill(shelf, center: center) }
     }
 
+    /// The width a card is drawn at. A row that scrolls shows whole cards and a slice of the next (`peek`, a fraction of a
+    /// card's width, from the page's layout), so the person can see there is more: the cards are the page's own size, nudged to
+    /// the nearest that makes that fit.
+    private var shownWidth: CGFloat {
+        guard shelf.peek > 0, !isChips, pageWidth > 0 else { return cardWidth }
+        let available = Double(pageWidth - layout.margin)
+        let items = shelf.children.count + (!shelf.seeAll.isEmpty && (shelf.seeAllCard || layout.isTV) ? 1 : 0)
+        let whole = TvGeometry.wholeCards(available: available, width: Double(cardWidth), gap: Double(layout.gap))
+        return CGFloat(TvGeometry.peekWidth(available: available, nominal: Double(cardWidth), gap: Double(layout.gap), peek: shelf.peek, hasMore: items > whole))
+    }
+
+    private var shownHeight: CGFloat { cardHeight * shownWidth / max(cardWidth, 1) }
+
     private var row: some View {
         ScrollView(.horizontal, showsIndicators: false) {
             LazyHStack(alignment: .top, spacing: layout.gap) {
                 ForEach(Array(shelf.children.enumerated()), id: \.element.id) { index, card in
-                    SDUICardView(card: card, width: cardWidth, height: cardHeight)
+                    SDUICardView(card: card, width: shownWidth, height: shownHeight)
                         .onAppear {
                             if shelf.hasMore, index >= shelf.children.count - perScreen { Task { await store.more(shelf, center: center) } }
                         }
                 }
                 if store.busy.contains(shelf.id) {
-                    SkeletonShape().frame(width: cardWidth, height: cardHeight)
+                    SkeletonShape().frame(width: shownWidth, height: shownHeight)
                 }
-                #if os(tvOS)
-                if !shelf.seeAll.isEmpty, !isChips {
-                    SDUISeeAllCard(width: cardWidth, height: cardHeight, title: shelf.shown("title")) { actor.open(route: shelf.seeAll) }
+                // See all as the row's last card where the row says so (always on a TV, where it's how the remote gets there).
+                if !shelf.seeAll.isEmpty, !isChips, shelf.seeAllCard || layout.isTV {
+                    SDUISeeAllCard(width: shownWidth, height: shownHeight, title: shelf.shown("title")) { actor.open(route: shelf.seeAll) }
                 }
-                #endif
             }
             .padding(.horizontal, layout.margin)
             // The room a focused card needs to lift without being cut off.
@@ -162,6 +183,17 @@ struct SDUIGridView: View {
                 cells(placeholders: columns * 2)
             } else if grid.state == .empty || grid.children.isEmpty {
                 Text(grid.shown("empty")).sduiFont("caption").foregroundStyle(palette.textSecondary).padding(.horizontal, layout.margin)
+            } else if store.listed.contains(grid.id) {
+                // The Dock's View: the same titles as a list, a line each with its picture.
+                LazyVStack(spacing: layout.isTV ? layout.sp("xs") : 0) {
+                    ForEach(Array(grid.children.enumerated()), id: \.element.id) { index, card in
+                        SDUIListRow(row: card, dense: false)
+                            .onAppear {
+                                if grid.hasMore, index >= grid.children.count - 6 { Task { await store.more(grid, center: center) } }
+                            }
+                    }
+                }
+                .remoteSection()
             } else {
                 cells(placeholders: store.busy.contains(grid.id) ? columns : 0)
             }

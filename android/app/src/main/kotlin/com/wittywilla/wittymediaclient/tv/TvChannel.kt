@@ -110,6 +110,10 @@ fun ChannelScreen(nav: Nav, start: String) {
     var key by remember { mutableStateOf(start) }
     var banner by remember { mutableStateOf(true) }
     var mini by remember { mutableStateOf(false) }
+    // The player's Dock: audio, subtitles, quality and Look (docs/plans/DESIGN-2.md, section 4).
+    var dock by remember { mutableStateOf(false) }
+    var dockMenu by remember { mutableStateOf<PlayerMenu?>(null) }
+    var lookOpen by remember { mutableStateOf(false) }
     var lineup by remember { mutableStateOf<List<GuideChannel>>(emptyList()) }
     var bannerShown by remember { mutableIntStateOf(0) }
     var now by remember { mutableLongStateOf(nowSeconds()) }
@@ -127,6 +131,10 @@ fun ChannelScreen(nav: Nav, start: String) {
 
     fun closeMini() {
         mini = false
+    }
+    fun closeDock() {
+        dock = false
+        dockMenu = null
     }
 
     fun tune(next: String) {
@@ -205,8 +213,8 @@ fun ChannelScreen(nav: Nav, start: String) {
     LifecycleEventEffect(Lifecycle.Event.ON_START) { LiveTv.resume() }
     LifecycleEventEffect(Lifecycle.Event.ON_STOP) { LiveTv.pause() }
     // Focus on the picture whenever the mini guide isn't up, for the remote's arrows.
-    LaunchedEffect(mini) {
-        if (mini) return@LaunchedEffect
+    LaunchedEffect(mini, dock) {
+        if (mini || dock) return@LaunchedEffect
         repeat(4) {
             withFrameNanos { }
             runCatching { screen.requestFocus() }
@@ -222,7 +230,8 @@ fun ChannelScreen(nav: Nav, start: String) {
             }
         }
     }
-    BackHandler(enabled = mini) { closeMini() }
+    // Back closes the topmost: a menu of the Dock, then the Dock, then the mini guide; then it leaves for the guide.
+    BackHandler(enabled = mini || dock) { if (dock) closeDock() else closeMini() }
 
     val failedHere = LiveTv.state == LiveTv.State.Failed && LiveTv.key == key
     // Back on the picture once it's tuning again, so the arrows change channel.
@@ -234,7 +243,7 @@ fun ChannelScreen(nav: Nav, start: String) {
                 .background(Color.Black)
                 .focusRequester(screen)
                 .onKeyEvent { e ->
-                    if (mini || e.type != KeyEventType.KeyDown) return@onKeyEvent false
+                    if (mini || dock || e.type != KeyEventType.KeyDown) return@onKeyEvent false
                     val code = e.nativeKeyEvent.keyCode
                     // A channel that failed: the arrows and Select are for its buttons.
                     if (failedHere && code in listOf(KeyEvent.KEYCODE_DPAD_UP, KeyEvent.KEYCODE_DPAD_DOWN, KeyEvent.KEYCODE_DPAD_LEFT, KeyEvent.KEYCODE_DPAD_RIGHT,
@@ -247,9 +256,13 @@ fun ChannelScreen(nav: Nav, start: String) {
                     when (code) {
                         KeyEvent.KEYCODE_DPAD_UP, KeyEvent.KEYCODE_CHANNEL_UP -> { step(1); true }
                         KeyEvent.KEYCODE_DPAD_DOWN, KeyEvent.KEYCODE_CHANNEL_DOWN -> { step(-1); true }
-                        KeyEvent.KEYCODE_DPAD_LEFT -> { LiveTv.seek(-10.0); showBanner(); true }
-                        KeyEvent.KEYCODE_DPAD_RIGHT -> { LiveTv.seek(10.0); showBanner(); true }
-                        KeyEvent.KEYCODE_DPAD_CENTER, KeyEvent.KEYCODE_ENTER, KeyEvent.KEYCODE_NUMPAD_ENTER -> { mini = true; true }
+                        // Left opens the mini guide and Right the Dock; OK shows the banner. What the arrows did before, going
+                        // back and on in what the server keeps of the channel, is the media keys'.
+                        KeyEvent.KEYCODE_DPAD_LEFT -> { mini = true; true }
+                        KeyEvent.KEYCODE_DPAD_RIGHT, KeyEvent.KEYCODE_MENU, KeyEvent.KEYCODE_BUTTON_X, KeyEvent.KEYCODE_BUTTON_START -> { dock = true; true }
+                        KeyEvent.KEYCODE_MEDIA_REWIND -> { LiveTv.seek(-10.0); showBanner(); true }
+                        KeyEvent.KEYCODE_MEDIA_FAST_FORWARD -> { LiveTv.seek(30.0); showBanner(); true }
+                        KeyEvent.KEYCODE_DPAD_CENTER, KeyEvent.KEYCODE_ENTER, KeyEvent.KEYCODE_NUMPAD_ENTER -> { showBanner(); true }
                         KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE, KeyEvent.KEYCODE_MEDIA_PLAY, KeyEvent.KEYCODE_MEDIA_PAUSE -> {
                             // From the start, Play/Pause only pauses: live is a choice of its own, under Select.
                             if (LiveTv.playing) LiveTv.pause() else if (fromStart == null && LiveTv.behind > 20 && bannerShown > 0) LiveTv.goLive() else LiveTv.resume()
@@ -259,7 +272,7 @@ fun ChannelScreen(nav: Nav, start: String) {
                         else -> false
                     }
                 }
-                .focusable(!mini && !failedHere),
+                .focusable(!mini && !dock && !failedHere),
         ) {
             LivePicture(Modifier.fillMaxSize())
             if (LiveTv.key == key && LiveTv.playing && LiveTv.info?.now?.kind == "slate") {
@@ -273,7 +286,9 @@ fun ChannelScreen(nav: Nav, start: String) {
                 Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { Spinner(Color.White, dress.pt(64)) }
             }
             Box(Modifier.fillMaxSize().padding(start = dress.pt(SIDE), end = dress.pt(SIDE), bottom = dress.pt(BOTTOM)), contentAlignment = Alignment.BottomCenter) {
-                if (mini) {
+                if (dock) {
+                    PlayerDock(dress, onLook = { lookOpen = true }, onMenu = { dockMenu = it }, onClose = ::closeDock)
+                } else if (mini) {
                     MiniGuide(dress, key, onTune = ::tune, onClose = ::closeMini, onFull = ::toGuide, fromStart = fromStart != null, onLive = { closeMini(); LiveTv.goLive(); showBanner() })
                 } else {
                     AnimatedVisibility(banner, enter = fadeIn(), exit = fadeOut()) {
@@ -286,10 +301,21 @@ fun ChannelScreen(nav: Nav, start: String) {
                     DialBox(dress, dialled, dialMiss)
                 }
             }
+            dockMenu?.let { m ->
+                val list = when (m) { PlayerMenu.Audio -> LiveTvTracks.audio(); PlayerMenu.Subtitles -> LiveTvTracks.subtitles(); PlayerMenu.Quality -> LiveTvTracks.quality() }
+                val close = { dockMenu = null }
+                BackHandler(onBack = close)
+                TvDialog(
+                    when (m) { PlayerMenu.Audio -> "Audio"; PlayerMenu.Subtitles -> "Subtitles"; PlayerMenu.Quality -> "Quality" }, null,
+                    list.map { c -> TvDialogButton(if (c.selected) "${c.label} (on)" else c.label, preferred = c.selected) { c.choose(); close() } } + TvDialogButton("Close", cancel = true, action = close),
+                    close, stacked = true,
+                )
+            }
+            if (lookOpen) TvLookPanel(nav, onClose = { lookOpen = false })
             if (fromStart != null && !mini) {
                 Box(Modifier.fillMaxSize().padding(top = dress.pt(60)), contentAlignment = Alignment.TopCenter) {
                     Text(
-                        "From the start of ${fromStart.title} · Select, then Live, for the channel as it is now",
+                        "From the start of ${fromStart.title} · Left, then Live, for the channel as it is now",
                         style = MaterialTheme.typography.label, color = Color.White,
                         modifier = Modifier.background(Color.Black.copy(alpha = 0.6f), CircleShape).padding(horizontal = dress.pt(16), vertical = dress.pt(8)),
                     )
@@ -304,6 +330,33 @@ fun ChannelScreen(nav: Nav, start: String) {
                 }
             }
         }
+    }
+}
+
+// Which of the player Dock's choices is open.
+private enum class PlayerMenu { Audio, Subtitles, Quality }
+
+// The banner's Dock: Audio, Subtitles, Quality and Look in one row, drawn in the account's WittyTV look. A choice that
+// the channel doesn't have is dimmed, not left out, so the row never changes. Back closes it.
+@Composable
+private fun PlayerDock(dress: TvDress, onLook: () -> Unit, onMenu: (PlayerMenu) -> Unit, onClose: () -> Unit) {
+    val first = remember { FocusRequester() }
+    LaunchedEffect(Unit) { repeat(4) { withFrameNanos { }; runCatching { first.requestFocus() } } }
+    val audio = LiveTvTracks.audio().size > 1
+    val subs = LiveTvTracks.subtitles().isNotEmpty()
+    val quality = LiveTvTracks.quality().isNotEmpty()
+    Row(
+        Modifier
+            .background(dress.paint.panel, RoundedCornerShape(dress.pt(14)))
+            .padding(horizontal = dress.pt(16), vertical = dress.pt(12))
+            .focusGroup(),
+        horizontalArrangement = Arrangement.spacedBy(dress.pt(16)),
+    ) {
+        TvButton(dress, "Audio", { onMenu(PlayerMenu.Audio) }, enabled = audio, focusRequester = first)
+        TvButton(dress, "Subtitles", { onMenu(PlayerMenu.Subtitles) }, enabled = subs)
+        TvButton(dress, "Quality", { onMenu(PlayerMenu.Quality) }, enabled = quality)
+        TvButton(dress, "Look", onLook)
+        TvButton(dress, "Close", onClose, kind = TvButtonKind.Link)
     }
 }
 

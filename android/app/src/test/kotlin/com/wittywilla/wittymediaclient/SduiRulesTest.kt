@@ -245,9 +245,9 @@ class SduiRulesTest {
         val client = SduiClient(server, tv, SduiMemoryStore())
         runBlocking { client.page("library", mapOf("library" to "3", "genre" to "Sci Fi", "tab" to "")) }
         val asked = server.asked.single()
-        assertTrue(asked, asked.startsWith("GET /api/v1/sdui/pages/library?genre=Sci+Fi&library=3&catalog=2&platform=androidtv&formFactor=tv&deviceClass=4k&locale=en-GB&capabilities=reducedMotion&components=Hero%2CTabs%2CTab%2CFilterBar%2CDetailHeader%2CSeasonList%2CTrackList%2CTrack%2CBanner%2CSplit%2CSearchBox%2CNativeView&views=guide"))
+        assertTrue(asked, asked.startsWith("GET /api/v1/sdui/pages/library?genre=Sci+Fi&library=3&catalog=3&platform=androidtv&formFactor=tv&deviceClass=4k&locale=en-GB&capabilities=reducedMotion&views=guide"))
         // A section's own address gets the same parameters, and keeps the ones it came with.
-        assertEquals("/x/items?cursor=12&catalog=9&platform=android&formFactor=phone&viewport=411x891&components=none", SduiDevice("android", "phone", viewport = "411x891", components = emptyList()).on("/x/items?cursor=12&catalog=9"))
+        assertEquals("/x/items?cursor=12&catalog=9&platform=android&formFactor=phone&viewport=411x891", SduiDevice("android", "phone", viewport = "411x891").on("/x/items?cursor=12&catalog=9"))
         assertEquals("compact", SduiDevice.breakpoint(599))
         assertEquals("medium", SduiDevice.breakpoint(600))
         assertEquals("expanded", SduiDevice.breakpoint(840))

@@ -29,7 +29,6 @@ data class SduiDevice(
     val viewport: String = "",
     val locale: String = "",
     val capabilities: List<String> = emptyList(),
-    val components: List<String> = SDUI_OPTIONAL_COMPONENTS,
     val views: List<String> = emptyList(),
     // A stable name of this app's own on this device, so a profile's layout can be chosen per device. Never
     // anything that identifies the hardware.
@@ -44,7 +43,6 @@ data class SduiDevice(
             if (viewport.isNotEmpty()) add("viewport" to viewport)
             if (locale.isNotEmpty()) add("locale" to locale)
             if (capabilities.isNotEmpty()) add("capabilities" to capabilities.joinToString(","))
-            add("components" to components.joinToString(",").ifEmpty { "none" })
             if (views.isNotEmpty()) add("views" to views.joinToString(","))
             if (device.isNotEmpty()) add("device" to device)
         }

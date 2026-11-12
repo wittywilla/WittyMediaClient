@@ -72,6 +72,7 @@ class MainActivity : ComponentActivity() {
         // A game on screen reads controllers first: see games/GameInput.kt.
         if (GameInputHub.key(event)) return true
         if (event.action == KeyEvent.ACTION_DOWN) {
+            com.wittywilla.wittymediaclient.ui.InputInUse.note(event.keyCode)
             (application as WittyApp).lastPad = if (event.device?.supportsSource(InputDevice.SOURCE_GAMEPAD) == true) event.deviceId else -1
         }
         if (event.keyCode == KeyEvent.KEYCODE_GUIDE) {
@@ -86,6 +87,12 @@ class MainActivity : ComponentActivity() {
             }
         }
         return super.dispatchKeyEvent(event)
+    }
+
+    // A touch puts the key legend away: nothing in it shows on a touch screen.
+    override fun dispatchTouchEvent(ev: MotionEvent): Boolean {
+        if (ev.action == MotionEvent.ACTION_DOWN) com.wittywilla.wittymediaclient.ui.InputInUse.touched()
+        return super.dispatchTouchEvent(ev)
     }
 
     // A controller's sticks, triggers and hat, while a game is on screen.

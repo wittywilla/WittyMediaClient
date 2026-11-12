@@ -96,8 +96,15 @@ final class SDUITests: XCTestCase {
     // MARK: Apple TV's focus, by the remote
 
     @MainActor
+    /// What has the remote's focus; an element that doesn't exist when nothing has it yet.
     private func focused(_ app: XCUIApplication) -> XCUIElement {
-        app.descendants(matching: .any).element(matching: NSPredicate(format: "hasFocus == true"))
+        app.descendants(matching: .any).matching(NSPredicate(format: "hasFocus == true")).firstMatch
+    }
+
+    @MainActor
+    private func focusedId(_ app: XCUIApplication) -> String {
+        let element = focused(app)
+        return element.exists ? element.identifier : ""
     }
 
     @MainActor
@@ -189,12 +196,12 @@ final class SDUITests: XCTestCase {
         let tabs = app.descendants(matching: .any).matching(NSPredicate(format: "identifier BEGINSWITH %@", "sdui.tab."))
         guard tabs.firstMatch.waitForExistence(timeout: 15), tabs.count > 1 else { throw XCTSkip("That library's page has no tabs.") }
         let remote = XCUIRemote.shared
-        let isTab = NSPredicate(format: "identifier BEGINSWITH %@", "sdui.tab.")
-        for _ in 0..<8 where !isTab.evaluate(with: focused(app)) { remote.press(.down) }
-        XCTAssertTrue(isTab.evaluate(with: focused(app)), "the remote never reached the tabs")
-        let first = focused(app).identifier
+        let isTab = NSPredicate(format: "SELF BEGINSWITH %@", "sdui.tab.")
+        for _ in 0..<8 where !isTab.evaluate(with: focusedId(app)) { remote.press(.down) }
+        XCTAssertTrue(isTab.evaluate(with: focusedId(app)), "the remote never reached the tabs")
+        let first = focusedId(app)
         remote.press(.right)
-        let next = focused(app).identifier
+        let next = focusedId(app)
         XCTAssertNotEqual(next, first)
         // Resting on it chooses it.
         let chosen = app.descendants(matching: .any).matching(identifier: next).firstMatch
@@ -213,6 +220,34 @@ final class SDUITests: XCTestCase {
         let open = XCUIApplication(bundleIdentifier: "com.apple.springboard").buttons["Open"]
         if open.waitForExistence(timeout: 3) { XCUIRemote.shared.press(.select) }
         XCTAssertTrue(named(app, "player").waitForExistence(timeout: 30), "the link didn't open the player")
+    }
+    /// A library page's Dock (revision 3): Down from the grid reaches it; View shows the titles as a list and back
+    /// again; Jump to a letter opens the letters. Uses TEST_RUNNER_WMC_TABS_LIBRARY's neighbour, a films library:
+    /// TEST_RUNNER_WMC_DOCK_LIBRARY.
+    @MainActor
+    func testAppleTVDockSwitchesViewAndOpensTheLetters() throws {
+        guard let library = ProcessInfo.processInfo.environment["WMC_DOCK_LIBRARY"] else { throw XCTSkip("Set TEST_RUNNER_WMC_DOCK_LIBRARY.") }
+        let app = try launchApp(extra: ["-WMCOpen", "/library/\(library)"])
+        page(app, startingWith: "library").shown(40)
+        let view = app.descendants(matching: .any).matching(NSPredicate(format: "identifier ENDSWITH %@", ":view")).firstMatch
+        guard view.waitForExistence(timeout: 15) else { throw XCTSkip("That library's page has no Dock.") }
+        let cards = app.descendants(matching: .any).matching(NSPredicate(format: "identifier BEGINSWITH %@", "sdui.card."))
+        XCTAssertGreaterThan(cards.count, 0, "the grid has no cards")
+        let remote = XCUIRemote.shared
+        for _ in 0..<12 where !view.hasFocus {
+            remote.press(focusedId(app).hasPrefix("sdui.dock.") ? .right : .down)
+        }
+        XCTAssertTrue(view.hasFocus, "the remote never reached the Dock's View")
+        remote.press(.select)
+        let end = Date().addingTimeInterval(5)
+        while Date() < end, cards.count > 0 { usleep(250_000) }
+        XCTAssertEqual(cards.count, 0, "View didn't switch the grid to a list")
+        remote.press(.select)
+        XCTAssertTrue(cards.firstMatch.waitForExistence(timeout: 5), "View didn't switch back to the grid")
+        remote.press(.right)
+        remote.press(.select)
+        XCTAssertTrue(app.buttons["M"].waitForExistence(timeout: 5), "Jump to a letter didn't open the letters")
+        remote.press(.menu)
     }
     #endif
 }

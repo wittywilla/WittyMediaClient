@@ -32,10 +32,11 @@ struct SDUIActionRow: View {
                 Button { actor.perform(button.action) } label: {
                     Label(button.label, systemImage: SDUIIcon.symbol(button.icon.isEmpty ? button.id : button.icon, or: "circle"))
                 }
-                .action(primary: button.primary, pill: true)
+                .action(primary: button.primary, selected: button.pressed, pill: true)
                 .focused($inside, equals: button.id)
                 .sduiFocusable(button.id == lead && ownerFocusable ? focus : nil, owner)
                 .accessibilityLabel(button.label)
+                .accessibilityAddTraits(button.pressed ? [.isSelected] : [])
                 .accessibilityIdentifier("sdui.action." + button.id)
             }
         }
@@ -190,6 +191,18 @@ struct SDUIHeroView: View {
             }
             .tabViewStyle(.page(indexDisplayMode: slides.count > 1 ? .always : .never))
             .frame(height: size.height)
+            // A slice of the next slide at the trailing edge (`peek`): there is more to swipe to.
+            .overlay(alignment: .trailing) {
+                if hero.peek > 0, index + 1 < slides.count {
+                    SDUIPicture(picture: slides[index + 1].picture, symbol: "film", shownWidth: size.width)
+                        .frame(width: size.width, height: size.height)
+                        .frame(width: size.width * CGFloat(hero.peek), alignment: .leading)
+                        .clipped()
+                        .overlay(alignment: .leading) { Rectangle().fill(palette.background).frame(width: 2) }
+                        .allowsHitTesting(false)
+                        .accessibilityHidden(true)
+                }
+            }
             // A finger on it holds it where it is.
             .simultaneousGesture(DragGesture(minimumDistance: 4).onChanged { _ in held = true }.onEnded { _ in held = false })
             if let slide = current, !slide.buttons.isEmpty {
@@ -371,12 +384,14 @@ struct SDUIDetailHeaderView: View {
                                                 .frame(width: 44, height: 32)
                                             Text(button.label).sduiFont("caption").lineLimit(1)
                                         }
-                                        .foregroundStyle(palette.text)
+                                        // On (Watch later with the title on the list): in the accent.
+                                        .foregroundStyle(button.pressed ? palette.accentText : palette.text)
                                         .frame(minWidth: 64, minHeight: 56)
                                         .contentShape(Rectangle())
                                     }
                                     .buttonStyle(.plain)
                                     .accessibilityLabel(button.label)
+                                    .accessibilityAddTraits(button.pressed ? [.isSelected] : [])
                                     .accessibilityIdentifier("sdui.action." + button.id)
                                 }
                             }

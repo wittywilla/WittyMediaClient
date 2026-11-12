@@ -87,6 +87,7 @@ import com.wittywilla.wittymediaclient.net.child
 import com.wittywilla.wittymediaclient.net.image
 import com.wittywilla.wittymediaclient.net.int
 import com.wittywilla.wittymediaclient.net.isOn
+import com.wittywilla.wittymediaclient.net.ShelfRules
 import com.wittywilla.wittymediaclient.net.objects
 import com.wittywilla.wittymediaclient.net.str
 import com.wittywilla.wittymediaclient.tv.TvLayer
@@ -126,7 +127,56 @@ fun SduiNode(view: SduiView, parent: SduiView?, topLevel: Boolean = false) {
         "Image" -> SduiImageBlock(view, Modifier.padding(horizontal = side))
         "SearchBox" -> SduiSearchBox(view, Modifier.padding(horizontal = side))
         "NativeView" -> SduiNativeView(view)
+        "Dock" -> SduiDockBar(view, side)
+        "KeyLegend" -> Box(Modifier.padding(horizontal = side)) { KeyLegendRow() }
         else -> SduiStack(view, side)
+    }
+}
+
+// The Dock at the foot of the page: a bar `layout.dock.height` tall that never scrolls, or on a phone (`sheet`) an Options
+// button that opens its controls as a sheet.
+@Composable
+fun SduiDockBar(view: SduiView, side: Dp) {
+    val env = LocalSdui.current
+    if (env.layout.dock.placement != "sheet") {
+        SduiDock(view, side)
+        return
+    }
+    var open by remember { mutableStateOf(false) }
+    // A control pressed in the sheet hands over to what it opens.
+    LaunchedEffect(env.control.value) { if (env.control.value != null) open = false }
+    Box(Modifier.fillMaxWidth().padding(horizontal = side, vertical = env.space("s")), contentAlignment = Alignment.CenterEnd) {
+        WebButton("Options", { open = true }, WebButtonKind.Ghost, small = true)
+    }
+    if (open) WebSheet(view.label, { open = false }, fromRight = false) {
+        Column(Modifier.padding(env.space("m")), verticalArrangement = Arrangement.spacedBy(env.space("s"))) {
+            view.children.filter { it.type == "Button" }.forEach { button ->
+                SduiNode(button, view)
+            }
+        }
+    }
+}
+
+// The screen's Dock: its buttons in one row that never moves, and the key legend of the input in use under them (which a
+// touch screen doesn't show).
+@Composable
+private fun SduiDock(view: SduiView, side: Dp) {
+    val env = LocalSdui.current
+    val keys = view.children.filter { it.type == "KeyLegend" }
+    // On a TV the bar sits on the picture's safe area, not on the screen's edge.
+    val foot = if (env.tv) env.pt(env.layout.safeArea.bottom) else 0.dp
+    Row(
+        Modifier.fillMaxWidth().padding(horizontal = side).padding(bottom = foot).elevated(1, RoundedCornerShape(env.pt(14)), env.pt(14))
+            .defaultMinSize(minHeight = if (env.tv) env.pt(DesignTokens.Tv.Dock.height.toFloat()) else 0.dp)
+            .padding(horizontal = env.space("m"), vertical = env.space("s")).focusGroup(),
+        horizontalArrangement = Arrangement.spacedBy(env.space("m")), verticalAlignment = Alignment.CenterVertically,
+    ) {
+        // The buttons scroll when there are too many; the key legend keeps its place at the trailing end.
+        Row(Modifier.weight(1f, fill = false).horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(env.space("s")), verticalAlignment = Alignment.CenterVertically) {
+            view.children.filter { it.type != "KeyLegend" }.forEach { SduiNode(it, view) }
+        }
+        Spacer(Modifier.weight(1f))
+        keys.forEach { SduiNode(it, view) }
     }
 }
 
@@ -140,7 +190,7 @@ fun SduiSectionHead(view: SduiView, side: Dp, seeAll: Boolean = true) {
     val scheme = MaterialTheme.colorScheme
     val title = view.text["title"]
     val subtitle = view.text["subtitle"]
-    val all = view.seeAll.takeIf { seeAll && it.isNotEmpty() && !env.tv }
+    val all = view.seeAll.takeIf { seeAll && it.isNotEmpty() && !view.seeAllCard }
     if (title == null && subtitle == null && all == null) return
     Row(Modifier.fillMaxWidth().padding(horizontal = side).padding(bottom = env.space(if (env.tv) "s" else if (all != null) "xs" else "s")), verticalAlignment = Alignment.CenterVertically) {
         Column(Modifier.weight(1f)) {
@@ -229,7 +279,12 @@ fun SduiShelf(view: SduiView, side: Dp) {
             view.empty || view.children.isEmpty() -> SduiEmptyLine(view, edge)
             else -> {
                 val state = rememberLazyListState()
-                val wide = env.pt(view.cardWidth.takeIf { it > 0 } ?: 120)
+                val layoutWidth = env.pt(view.cardWidth.takeIf { it > 0 } ?: 120)
+                // The next card peeks in by the layout's fraction of its width (layout.peek; net/ShelfRules.kt).
+                val wide = ShelfRules.cardWidth(
+                    visible = (span.content + span.side).value, gap = env.pt(env.layout.cardGap).value, width = layoutWidth.value,
+                    peek = view.peek.toFloat(), count = view.children.size + if (view.seeAllCard) 1 else 0,
+                ).dp
                 val nearEnd by remember(view.children.size) { derivedStateOf { (state.layoutInfo.visibleItemsInfo.lastOrNull()?.index ?: 0) >= view.children.size - 4 } }
                 if (view.hasMore && nearEnd) LaunchedEffect(view.children.size) { env.more(view.id, false) }
                 val ring = if (env.tv) LocalMetrics.current.focusRing else 0.dp
@@ -243,8 +298,8 @@ fun SduiShelf(view: SduiView, side: Dp) {
                     if (view.hasMore && view.id in env.loading) item(key = "~loading", contentType = "placeholder") {
                         SduiPlaceholder(wide, env.pt(view.cardHeight.takeIf { it > 0 } ?: 180), "")
                     }
-                    // A TV has no heading link: See all is the row's last card.
-                    if (env.tv && view.seeAll.isNotEmpty() && !view.hasMore) item(key = "~see-all", contentType = "see-all") {
+                    // See all as the row's last card, in the shape of its cards, where the node asks for it.
+                    if (view.seeAllCard && view.seeAll.isNotEmpty() && !view.hasMore) item(key = "~see-all", contentType = "see-all") {
                         val tall = env.pt(view.cardHeight.takeIf { it > 0 } ?: 180)
                         val words = view.props.child("seeAll")?.str("label").orEmpty().ifEmpty { "See all" }
                         Pressable({ env.act(SduiAction(type = "navigate", to = view.seeAll)) }, Modifier.width(wide), shape = RoundedCornerShape(env.pt(10)), fill = MaterialTheme.colorScheme.surface, label = "$words, ${view.label}", focusKey = view.id + "~see-all") {
@@ -645,6 +700,12 @@ fun SduiFilterBar(view: SduiView, side: Dp) {
     val fields = p.objects("fields")
     // Which list is open: "sort", or a field's ID.
     var open by remember { mutableStateOf<String?>(null) }
+    // The Dock's Sort and Filter open the choices of the bar that drives the grid (control.open).
+    val asked = env.control.value?.takeIf { it.kind == "sort" || it.kind == "filter" }
+    if (asked != null) LaunchedEffect(asked) {
+        open = if (asked.kind == "sort" && sort != null) "sort" else fields.firstOrNull()?.str("id") ?: if (sort != null) "sort" else null
+        env.control.value = null
+    }
     Column(Modifier.fillMaxWidth().semantics { contentDescription = view.label }) {
         if (!env.tv) view.text["count"]?.let { Text(it, color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = env.size("caption"), modifier = Modifier.padding(horizontal = side).padding(bottom = env.space("xs"))) }
         Row(
