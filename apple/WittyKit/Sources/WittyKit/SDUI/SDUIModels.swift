@@ -8,7 +8,7 @@ import Foundation
 /// The catalogue revision this app was built against. Sent with every request (`catalog=6`), so a newer
 /// server sends nothing this app can't draw.
 public enum SDUI {
-    public static let catalog = 6
+    public static let catalog = 7
     public static let version = 1
     /// The features in `/capabilities` that the app's server-driven pages need, all of them.
     public static let neededFeatures: Set<String> = ["sdui-pages", "sdui-catalog", "sdui-navigation", "sdui-personal"]
@@ -312,9 +312,11 @@ public struct SDUINavItem: Codable, Equatable, Identifiable, Hashable, Sendable 
     public var route: String?
     /// `primary`, `more` or `end`.
     public var placement: String?
+    /// The second column a library opens beside a rail that has a drawer: its name, icon and count, and the views it offers.
+    public var drawer: SDUINavDrawer?
 
     public init(id: String, label: String, icon: String? = nil, kind: String, page: String? = nil, params: [String: String]? = nil,
-                screen: String? = nil, route: String? = nil, placement: String? = nil) {
+                screen: String? = nil, route: String? = nil, placement: String? = nil, drawer: SDUINavDrawer? = nil) {
         self.id = id
         self.label = label
         self.icon = icon
@@ -324,9 +326,27 @@ public struct SDUINavItem: Codable, Equatable, Identifiable, Hashable, Sendable 
         self.screen = screen
         self.route = route
         self.placement = placement
+        self.drawer = drawer
     }
 
     public var isSettings: Bool { kind == "native" && screen == "settings" }
+}
+
+/// A library's drawer beside the rail: headed by its name, icon and item count, listing its views (each opens as the library's page
+/// with its parameters).
+public struct SDUINavDrawer: Codable, Equatable, Hashable, Sendable {
+    public struct View: Codable, Equatable, Hashable, Identifiable, Sendable {
+        public var id: String
+        public var label: String
+        public var icon: String?
+        public var params: [String: String]?
+        public var route: String?
+    }
+
+    public var title: String
+    public var icon: String?
+    public var count: Int?
+    public var views: [View]
 }
 
 public struct SDUINavigation: Codable, Equatable, Sendable {

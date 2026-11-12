@@ -348,7 +348,7 @@ struct AudioBar: View {
 private enum NPPanel { case queue, lyrics, sound, read }
 
 /// The menus that open under a button, as the website's pop-ups.
-private enum NPMenu: Hashable { case addThis, addQueue, sleep, more, volume, shuffle }
+private enum NPMenu: Hashable { case addThis, addQueue, sleep, more, volume }
 
 private struct MenuAnchors: PreferenceKey {
     static var defaultValue: [NPMenu: Anchor<CGRect>] = [:]
@@ -488,6 +488,9 @@ struct PhoneNowPlaying: View {
     @State private var video: MusicLink?
     @State private var karaoke = false
     @State private var viz = VisualizerPrefs()
+    @ObservedObject private var store = MusicShowStore.shared
+    @StateObject private var canvasStatus = CanvasStatus()
+    @State private var effectsOpen = false
     @State private var vizLoaded = false
     @State private var vizHere = true
     /// What shuffle is showing now, if it's on.
@@ -496,7 +499,7 @@ struct PhoneNowPlaying: View {
     private var now: QueuedTrack? { listening.now }
     private var music: Bool { !(now?.keepsPlace ?? false) }
     private var lyricsWanted: Bool { music && (panel == .lyrics || panel == .read || karaoke) }
-    private var style: String { shownStyle.isEmpty ? viz.nativeStyle : shownStyle }
+    private var prefs: VisualizerPrefs { viz }
 
     /// Kept for the person on the server, with their other interface choices.
     private func setViz(_ change: (inout VisualizerPrefs) -> Void) {
@@ -554,7 +557,7 @@ struct PhoneNowPlaying: View {
             let insets = EdgeInsets(top: safe.top, leading: 0, bottom: safe.bottom, trailing: 0)
             KaraokeView(item: item, lyrics: words.lyrics, loading: loading, glow: glow,
                         offset: words.offset, setOffset: { (offset: Double) in words.setOffset(offset, client: client) }, close: { karaoke = false },
-                        insets: insets)
+                        insets: insets, viz: viz, vizHere: vizHere && vizLoaded, canvas: canvasStatus)
                 .transition(.move(edge: .bottom))
         }
     }
@@ -568,10 +571,8 @@ struct PhoneNowPlaying: View {
             ZStack(alignment: .top) {
                 Color.black
                 glowLayer(full)
-                CanvasLayer(item: music ? now?.item.id : nil, active: !karaoke, shade: Color.black.opacity(0.5))
-                if vizHere, vizLoaded, viz.viz {
-                    VisualizerBackground(style: style, slow: viz.slow, colour: glow, playing: listening.isPlaying)
-                }
+                MusicBackdrop(item: music ? now?.item.id : nil, prefs: viz, shownStyle: shownStyle, colour: glow,
+                              playing: listening.isPlaying, visualizer: vizHere && vizLoaded, active: !karaoke)
                 VStack(spacing: 0) {
                     header(phone: phone, compact: compact, width: geo.size.width)
                         .padding(.top, safe.top + max(14 - safe.top, 0))
@@ -599,7 +600,7 @@ struct PhoneNowPlaying: View {
         .onChange(of: vizLoaded) { loaded in
             guard loaded, listening.screenWithVisualizer else { return }
             listening.screenWithVisualizer = false
-            if !viz.viz { setViz { $0.viz = true } }
+            if vizHere { store.show = .viz }
         }
         .task(id: now.map { client.posterURL($0.item) } ?? nil) { await loadArt() }
         .task(id: now?.item.libraryId) { await loadLikes() }
@@ -609,6 +610,12 @@ struct PhoneNowPlaying: View {
             vizHere = prefs?.visualizer != false
             if let saved = try? await client.interfaceChoice("musicPlayer", as: VisualizerPrefs.self) { viz = saved }
             vizLoaded = true
+        }
+        .task(id: music ? now?.item.id : nil) {
+            await canvasStatus.load(item: music ? now?.item.id : nil, client: client, enabled: model.has(MediaFeature.canvas))
+        }
+        .sheet(isPresented: $effectsOpen) {
+            VisualizerPickerView(prefs: viz, change: { setViz($0) }, close: { effectsOpen = false })
         }
         .task(id: music ? now?.item.id : nil) {
             extras = []
@@ -625,13 +632,13 @@ struct PhoneNowPlaying: View {
         .onChange(of: lyricsWanted) { _ in words.want(now?.item.id, wanted: lyricsWanted, client: client, model: model) }
         .onChange(of: now?.item.id) { _ in words.want(now?.item.id, wanted: lyricsWanted, client: client, model: model) }
         // Shuffle: only ever because someone chose it, among the player's own styles.
-        .task(id: "\(viz.viz)-\(viz.shuffleEvery)-\(viz.style)") {
+        .task(id: "\(store.show)-\(viz.shuffleEvery)-\(viz.style)") {
             shownStyle = ""
-            guard viz.viz, viz.shuffleEvery > 0 else { return }
+            guard store.show == .viz, viz.shuffleEvery > 0 else { return }
             while !Task.isCancelled {
                 try? await Task.sleep(nanoseconds: UInt64(viz.shuffleEvery) * 1_000_000_000)
                 guard !Task.isCancelled else { return }
-                let others = VisualizerPrefs.styles.map(\.id).filter { $0 != style }
+                let others = VisualizerEffects.picker.map(\.id).filter { $0 != (shownStyle.isEmpty ? viz.style : shownStyle) }
                 shownStyle = others.randomElement() ?? shownStyle
             }
         }
@@ -942,58 +949,24 @@ struct PhoneNowPlaying: View {
         }
     }
 
-    /// Lyrics, Karaoke and Read, the visualizer's choices and the speed. On a narrow screen the words come first:
-    /// they're what a thumb came here for.
+    /// What fills the art's place (Album art, Canvas video, Visualizer), Lyrics, Karaoke and Read, the effects and the
+    /// speed. On a narrow screen the words come first: they're what a thumb came here for.
     private func tools(compact: Bool) -> some View {
         FlowRow(spacing: compact ? 6 : 8, lineSpacing: compact ? 6 : 8) {
             if compact { wordsChips }
-            if vizHere {
-                Button { setViz { $0.viz.toggle() } } label: {
+            MusicShowToggle(canvas: canvasStatus, visualizer: vizHere, compact: compact)
+            if vizHere, store.show == .viz {
+                Button { effectsOpen = true } label: {
                     HStack(spacing: 8) {
-                        Image(systemName: "waveform").font(.system(size: 20))
-                        Text("Visualizer")
+                        Image(systemName: "waveform").font(.system(size: 18))
+                        Text(prefs.effect.name)
                     }
-                    .font(.system(size: 15, weight: .semibold))
-                    .foregroundStyle(NPInk.fg)
-                    .padding(.horizontal, 18)
-                    .frame(minHeight: compact ? 44 : 48)
-                    .background(Capsule().fill(viz.viz ? glow.opacity(0.45) : NPInk.plate))
-                    .overlay(Capsule().strokeBorder(viz.viz ? Color.white : Color.white.opacity(0.45), lineWidth: 2))
                 }
-                .buttonStyle(BarPressStyle())
-                .accessibilityAddTraits(viz.viz ? [.isSelected] : [])
-                if viz.viz {
-                    HStack(spacing: 2) {
-                        ForEach(VisualizerPrefs.styles, id: \.id) { choice in
-                            let on = style == choice.id
-                            Button(choice.name) {
-                                shownStyle = ""
-                                setViz {
-                                    $0.style = choice.id
-                                    $0.viz = true
-                                }
-                                UIAccessibility.post(notification: .announcement, argument: "Visualizer: \(choice.name)")
-                            }
-                            .font(.system(size: 14, weight: .semibold))
-                            .foregroundStyle(on ? Color.black : NPInk.fg)
-                            .padding(.horizontal, 16).frame(minHeight: 40)
-                            .background(Capsule().fill(on ? Color.white : .clear))
-                            .accessibilityAddTraits(on ? [.isSelected] : [])
-                        }
-                    }
-                    .padding(3)
-                    .background(Capsule().fill(NPInk.chip))
-                    .accessibilityElement(children: .contain)
-                    .accessibilityLabel("Visualizer style")
-                }
+                .buttonStyle(NPChipStyle(on: effectsOpen))
+                .accessibilityLabel("Visualizer effects, now \(prefs.effect.name)")
             }
-            if !compact {
-                if vizHere, viz.viz { vizExtras }
-                if vizHere { NPInk.line.frame(width: 1, height: 30).padding(.horizontal, 4) }
-                wordsChips
-            }
+            if !compact { wordsChips }
             speedChoice
-            if compact, vizHere, viz.viz { vizExtras }
         }
         .padding(.top, 2).padding(.bottom, 6)
     }
@@ -1031,28 +1004,6 @@ struct PhoneNowPlaying: View {
             .accessibilityHint("Read the words, or the album's booklet")
             .accessibilityAddTraits(panel == .read ? [.isSelected] : [])
         }
-    }
-
-    /// Slow, and changing style by itself.
-    @ViewBuilder private var vizExtras: some View {
-        Button { setViz { $0.slow.toggle() } } label: {
-            HStack(spacing: 8) {
-                Image(systemName: "tortoise").font(.system(size: 18))
-                Text("Slow")
-            }
-        }
-        .buttonStyle(NPChipStyle(on: viz.slow))
-        .accessibilityHint("A slower, gentler pace")
-        .accessibilityAddTraits(viz.slow ? [.isSelected] : [])
-        Button { toggle(.shuffle) } label: {
-            HStack(spacing: 8) {
-                Image(systemName: "shuffle").font(.system(size: 16))
-                Text(viz.shuffleEvery > 0 ? VisualizerPrefs.everyWords(viz.shuffleEvery).replacingOccurrences(of: "Every ", with: "") : "Styles")
-            }
-        }
-        .buttonStyle(NPChipStyle(on: viz.shuffleEvery > 0 || menu == .shuffle))
-        .anchorPreference(key: MenuAnchors.self, value: .bounds) { [.shuffle: $0] }
-        .accessibilityLabel(viz.shuffleEvery > 0 ? "Shuffling visualizers: \(VisualizerPrefs.everyWords(viz.shuffleEvery))" : "Shuffle visualizers")
     }
 
     private var speedChoice: some View {
@@ -1130,8 +1081,6 @@ struct PhoneNowPlaying: View {
                 ScrollView { moreRows }.frame(maxHeight: maxHeight)
             case .volume:
                 VolumeCard()
-            case .shuffle:
-                ScrollView { shuffleRows }.frame(maxHeight: maxHeight)
             }
         }
         .padding(6)
@@ -1161,18 +1110,6 @@ struct PhoneNowPlaying: View {
         }
     }
 
-    private var shuffleRows: some View {
-        VStack(alignment: .leading, spacing: 1) {
-            Text("Change style by itself. It stays still unless you choose this.")
-                .font(.system(size: 13)).foregroundStyle(NPInk.fg2).padding(.horizontal, 12).padding(.vertical, 6)
-            ForEach(VisualizerPrefs.shuffleChoices, id: \.self) { every in
-                NPMenuRow(words: VisualizerPrefs.everyWords(every), chosen: viz.shuffleEvery == every) {
-                    setViz { $0.shuffleEvery = every }
-                    menu = nil
-                }
-            }
-        }
-    }
 
     private var moreRows: some View {
         VStack(spacing: 1) {
@@ -1435,92 +1372,6 @@ private struct QueuePanelView: View {
 
 // MARK: - The words
 
-/// A song's words, shared by Lyrics, Read and karaoke, and asked for only when one of them is open (lyrics.ts).
-@MainActor
-final class LyricsModel: ObservableObject {
-    @Published private(set) var lyrics: Lyrics?
-    @Published private(set) var loading = false
-    @Published private(set) var failed = ""
-    @Published private(set) var offset = 0.0
-    private var itemId: Int64?
-    private var held: [Int64: Lyrics] = [:]
-    private var task: Task<Void, Never>?
-    private var saving: Task<Void, Never>?
-
-    /// The words of this song, if they're wanted now.
-    func want(_ id: Int64?, wanted: Bool, client: WittyClient, model: AppModel) {
-        failed = ""
-        guard let id, wanted else {
-            if id != itemId {
-                task?.cancel()
-                loading = false
-                itemId = id
-                lyrics = id.flatMap { held[$0] }
-                offset = lyrics?.offsetMs ?? 0
-            }
-            return
-        }
-        if itemId == id, lyrics != nil || loading { return }
-        itemId = id
-        if let have = held[id] {
-            lyrics = have
-            offset = have.offsetMs ?? 0
-            return
-        }
-        lyrics = nil
-        load(id, client: client, model: model)
-    }
-
-    /// After someone has corrected them.
-    func reload(client: WittyClient, model: AppModel) {
-        guard let itemId else { return }
-        held[itemId] = nil
-        lyrics = nil
-        load(itemId, client: client, model: model)
-    }
-
-    private func load(_ id: Int64, client: WittyClient, model: AppModel) {
-        task?.cancel()
-        loading = true
-        task = Task { [weak self] in
-            // The server was busy with another song: ask again after a while, a few times.
-            for attempt in 0..<5 {
-                do {
-                    let found = try await client.lyrics(item: id)
-                    guard let self, !Task.isCancelled, self.itemId == id else { return }
-                    if found.retry == true, attempt < 4 {
-                        try? await Task.sleep(nanoseconds: 3_000_000_000)
-                        continue
-                    }
-                    if (found.failed ?? "").isEmpty { self.held[id] = found }
-                    self.lyrics = found
-                    self.offset = found.offsetMs ?? 0
-                    self.loading = false
-                    return
-                } catch {
-                    guard let self, !Task.isCancelled, self.itemId == id else { return }
-                    self.failed = model.handle(error)
-                    self.loading = false
-                    return
-                }
-            }
-        }
-    }
-
-    /// The listener's own timing, saved a moment after the last change.
-    func setOffset(_ ms: Double, client: WittyClient) {
-        guard let itemId else { return }
-        let clamped = max(-120_000, min(120_000, ms))
-        offset = clamped
-        saving?.cancel()
-        saving = Task {
-            try? await Task.sleep(nanoseconds: 500_000_000)
-            guard !Task.isCancelled else { return }
-            try? await client.setLyricsOffset(item: itemId, ms: clamped)
-        }
-    }
-}
-
 private struct LyricsPanelView: View {
     @EnvironmentObject private var listening: Listening
     @EnvironmentObject private var model: AppModel
@@ -1531,6 +1382,7 @@ private struct LyricsPanelView: View {
     let close: () -> Void
     let go: (Route) -> Void
     let said: (String) -> Void
+    @ObservedObject private var store = MusicShowStore.shared
     @State private var index = -1
     @State private var heldUntil = Date.distantPast
     @State private var fixing = false
@@ -1565,9 +1417,14 @@ private struct LyricsPanelView: View {
                     empty(LyricWords.none(lyrics), links: lyrics.online != true && lyrics.tried != true && (lyrics.failed ?? "").isEmpty)
                 }
             }
-            if !lines.isEmpty {
+            if let lyrics, !loading, lyrics.hasWords {
+                LyricsModeToggle(timed: !lines.isEmpty)
+                    .padding(.horizontal, 18).padding(.vertical, 6)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+            }
+            if !lines.isEmpty, store.lyrics.effective(timed: true) == .follow {
                 lineList(lines, offset: offset)
-            } else if let plain = lyrics?.plain, !plain.isEmpty {
+            } else if let plain = lyrics?.plain ?? (lines.isEmpty ? nil : lines.map(\.text).joined(separator: "\n")), !plain.isEmpty {
                 ScrollView {
                     Text(plain).font(.system(size: 17)).foregroundStyle(NPInk.fg)
                         .lineSpacing(17 * 0.55 - 4)

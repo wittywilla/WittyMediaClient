@@ -22,6 +22,8 @@ struct ChannelPlayer: View {
     @State private var mini = false
     @State private var dockOpen = false
     @State private var lookOpen = false
+    /// WittyTV More info: the channel and a moment in the programme (Unix seconds).
+    @State private var info: MoreInfoAsk?
     @State private var lineup: [GuideChannel] = []
     @State private var bannerShown = 0
     @FocusState private var focused: Bool
@@ -45,6 +47,7 @@ struct ChannelPlayer: View {
             }
             if mini {
                 MiniGuide(dress: dress, tuned: key, set: chosenSet, onTune: tune, onClose: closeMini, onFull: toGuide,
+                          onInfo: model.has(TvFeature.programmeInfo) ? { c in info = MoreInfoAsk(channel: c, start: Int64(Date().timeIntervalSince1970)) } : nil,
                           onLive: live.fromStart == nil ? nil : { closeMini(); live.backToLive(); showBanner() })
                     .padding(.horizontal, 77).padding(.bottom, 92)
                     .frame(maxHeight: .infinity, alignment: .bottom)
@@ -57,7 +60,8 @@ struct ChannelPlayer: View {
                 .transition(.opacity)
             }
             if dockOpen {
-                ChannelDock(dress: dress, live: live, onGuide: toGuide, onLook: { lookOpen = true }, onClose: closeDock)
+                ChannelDock(dress: dress, live: live, onGuide: toGuide, onLook: { lookOpen = true }, onClose: closeDock,
+                            onInfo: model.has(TvFeature.programmeInfo) ? { info = MoreInfoAsk(channel: key, start: live.info?.now?.start ?? Int64(Date().timeIntervalSince1970)) } : nil)
                     .frame(maxHeight: .infinity, alignment: .bottom)
             }
             if let programme = live.fromStart, !mini, !dockOpen {
@@ -95,6 +99,9 @@ struct ChannelPlayer: View {
         .onTapGesture { if !mini, !dockOpen, !failedHere { showBanner() } }
         .onExitCommand(perform: mini ? { closeMini() } : nil)
         .sheet(isPresented: $lookOpen) { TvLookPanel() }
+        .sheet(item: $info) { ask in
+            MoreInfoSheet(channel: ask.channel, start: ask.start, onWatch: { _ in info = nil }, onFromStart: { _, _ in info = nil })
+        }
         // Over the player, not in it: inside the focusable player its buttons were out of the remote's reach.
         .overlay {
             if case .failed(let why) = live.state, live.key == key { failure(why) }
@@ -160,28 +167,26 @@ struct ChannelPlayer: View {
         return id
     }
 
+    /// When the channel can't play: what happened in the server's words and always a way forward (a Design 2 page).
     private func failure(_ why: String) -> some View {
-        let p = dress.paint
-        return VStack(spacing: 16) {
-            Text(channel.map { "Channel \($0.number ?? "") \($0.name)" } ?? "This channel").font(.wmSection)
-            Text(why).multilineTextAlignment(.center)
-            HStack(spacing: 16) {
-                if let alt = channel?.alternative {
-                    Button("Watch \(alt.number) \(alt.name) instead") { tune(alt.key) }.buttonStyle(TvButtonStyle(dress: dress, on: true))
-                }
-                Button("Try again") { live.retry() }.buttonStyle(TvButtonStyle(dress: dress)).focused($failureFocused)
-                if live.fromStart != nil {
-                    Button("Back to live") { live.backToLive(); showBanner() }.buttonStyle(TvButtonStyle(dress: dress))
-                }
-                Button("Next channel") { step(1) }.buttonStyle(TvButtonStyle(dress: dress))
-                Button("Back to the guide", action: toGuide).buttonStyle(TvButtonStyle(dress: dress))
+        let ch = channel
+        let kind = TvProblem.kind(why: why, security: ch?.security?.state)
+        let spec = TvProblem.spec(why: why, kind: kind, number: ch?.number ?? "", name: ch?.name ?? "This channel",
+                                  alternative: ch?.alternative.map { .init(number: "\($0.number)", name: $0.name) },
+                                  fromStart: live.fromStart?.title, security: ch?.security.map { ($0.label, $0.detail) })
+        return DesignSpecPage(spec: spec, onPress: { id in
+            switch id {
+            case "alternative": if let alt = ch?.alternative { tune(alt.key) }
+            case "try-again": live.retry()
+            case "back-to-live": live.backToLive(); showBanner()
+            case "next-channel": step(1)
+            case "back-to-the-guide": toGuide()
+            default: break
             }
-        }
-        .foregroundStyle(p.text)
-        .padding(32)
-        .background(RoundedRectangle(cornerRadius: 14).fill(p.panel))
-        .frame(maxHeight: .infinity)
+        }, onBack: toGuide)
+        .background(model.palette.background.ignoresSafeArea())
         .focusSection()
+        .accessibilityIdentifier("tv.channel.problem")
     }
 
     /// Back to the guide this came from, or to one in this player's place: leaving a guide opened from
@@ -319,6 +324,8 @@ struct MiniGuide: View {
     let onTune: (String) -> Void
     let onClose: () -> Void
     let onFull: () -> Void
+    /// More info about what is on a channel of the list (a menu item on its row).
+    var onInfo: ((String) -> Void)? = nil
     /// Back to the channel as it is now, while watching a programme from its start.
     let onLive: (() -> Void)?
     @State private var rows: [GuideChannel]?
@@ -356,6 +363,7 @@ struct MiniGuide: View {
                                     // A scroll view keeps Up at its top row: from there it goes to the buttons above.
                                     .onMoveCommand { if $0 == .up, c.key == rows.first?.key { focused = MiniGuide.full } }
                                     .disabled(!c.canTune)
+                                    .contextMenu { if let onInfo { Button("More info") { onInfo(c.key) } } }
                                     .id(c.key)
                             }
                         }
