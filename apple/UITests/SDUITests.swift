@@ -162,5 +162,22 @@ final class SDUITests: XCTestCase {
         remote.press(.up)
         XCTAssertEqual(focused(app).identifier, chosen, "coming back to the row didn't return to the card it was left on")
     }
+    /// With a layout whose menu is down the side (`tvSideMenu`), left from the page reaches the menu, which opens with
+    /// the places' names, and choosing one shows it. Skips itself unless the test server gives Apple TV that layout.
+    @MainActor
+    func testAppleTVSideMenuOpensWithFocus() throws {
+        let app = try launchApp()
+        page(app, startingWith: "home").shown(40)
+        let home = named(app, "frame.entry.home")
+        guard home.waitForExistence(timeout: 10) else { throw XCTSkip("The server's layout for Apple TV has its menu at the top.") }
+        let remote = XCUIRemote.shared
+        for _ in 0..<4 where !home.hasFocus { remote.press(.left) }
+        XCTAssertTrue(home.hasFocus, "left from the page didn't reach the side menu's Home")
+        // Open, the menu shows names beside its icons.
+        XCTAssertTrue(app.staticTexts["Search"].firstMatch.waitForExistence(timeout: 5), "the menu didn't open with its names")
+        remote.press(.down)
+        remote.press(.select)
+        page(app, startingWith: "search").shown(20)
+    }
     #endif
 }
