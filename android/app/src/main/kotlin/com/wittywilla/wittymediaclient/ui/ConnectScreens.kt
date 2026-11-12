@@ -303,7 +303,7 @@ fun ConnectScreen(nav: Nav, s: Map<String, String>, message: String) {
                                         logo = LogoCache.file(context, server.url, server.brandLogo), lastUsed = server.url == last?.url,
                                         connecting = connecting == at, requestFocus = foundOnly.isEmpty() && found.isNotEmpty() && i == 0 && !moved,
                                         focusKey = "recent-${server.url}",
-                                        reached = reachedWords(s, server.lastSeen, now), stale = isStale(server.lastSeen, now),
+                                        reached = reachedWords(s, server.lastSeen, now), stale = isStale(server.lastSeen, now, nav.app.store.recentSince),
                                         takeFocus = focusOn == "recent-${server.url}",
                                         onLongClick = { if (tv) asking = server else menuFor = server },
                                         longClickLabel = if (tv) s["removeServer"] else fill(s["serverOptions"], "name" to name),

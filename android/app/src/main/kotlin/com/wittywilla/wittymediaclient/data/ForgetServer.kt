@@ -37,8 +37,9 @@ class Forgotten internal constructor(
 //   web view             its cookies and what its pages stored
 //   on the server        the sign-in is ended there too, once Undo is no longer offered
 //
-// Two things are kept by a video's or channel's number, with no server's name on them (settings "wms.view" for a
-// video's own picture settings, "wittytv" for the last channel), so they go when the last server does. The sound
+// Two things are kept by a video's or channel's number (settings "wms.view" for a video's own picture settings,
+// "wittytv" for the last channel): under the server's tag, so they go with it; the untagged ones from before go
+// when the last server does. The sound
 // settings, the streaming choice, WittyPlay's device name and the app's own log are this device's, and stay.
 object ForgetServer {
     private const val SIGN_OUT_MS = 3000L
@@ -68,6 +69,9 @@ object ForgetServer {
         if (gone.plan.wasCurrent) app.forgetImages()
         runCatching { File(app.cacheDir, "booklets").deleteRecursively() }
         gone.plan.urls.forEach { forgetWeb(app, it) }
+        val tags = gone.plan.removed.flatMap(::serverTags).distinct()
+        ViewPrefsStore.forgetServer(app, tags)
+        LastChannel.forgetServer(app, tags)
         if (app.store.recent.isEmpty() && app.store.server.isEmpty()) {
             ViewPrefsStore.forgetVideos(app)
             LastChannel.forget(app)

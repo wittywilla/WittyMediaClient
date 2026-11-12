@@ -20,6 +20,7 @@ import java.util.concurrent.atomic.AtomicReference
 // count of frames, not a matter of which player started when. The music player itself carries on, unheard, as the
 // clock (KaraokeStems keeps this in step with it). Everything but the thread's own loop is safe to call from the
 // main thread, and none of it waits.
+@androidx.annotation.OptIn(markerClass = [androidx.media3.common.util.UnstableApi::class])
 internal class StemMixer(private val files: List<File>, private val failed: (StemMixer, String) -> Unit) {
     // Where to go, asked for at `atNanos` (System.nanoTime) with the song moving at `speed`, or standing still.
     private class Seek(val us: Long, val atNanos: Long, val moving: Boolean, val speed: Float)

@@ -24,6 +24,8 @@ import com.wittywilla.wittymediaclient.data.reached
 import com.wittywilla.wittymediaclient.data.reachedServer
 import com.wittywilla.wittymediaclient.data.reachedWords
 import com.wittywilla.wittymediaclient.data.rememberServer
+import com.wittywilla.wittymediaclient.data.serverTag
+import com.wittywilla.wittymediaclient.data.serverTags
 import com.wittywilla.wittymediaclient.net.FoundServer
 import com.wittywilla.wittymediaclient.net.json
 import com.wittywilla.wittymediaclient.ui.YouNative
@@ -342,5 +344,33 @@ class ServerRulesTest {
             assertEquals(YouOpens.Native(YouNative.Servers), device.single { it.key == "rowServers" }.opens)
             assertEquals("rowTheme", device.first().key)
         }
+    }
+
+    @Test
+    fun aServerNeverReachedCountsFromWhenThisVersionFirstRan() {
+        val day = 24L * 60 * 60 * 1000
+        val since = 1_000L * day
+        val old = SavedServer("http://a:9797", "A")
+        val seen = SavedServer("http://b:9797", "B", lastSeen = since + 5 * day)
+        // Thirty days after this version first ran, the one never reached is offered; the one reached five days in isn't.
+        val now = since + 31 * day
+        assertEquals(listOf(old), notReachedFor(listOf(old, seen), 30, now, since))
+        // Without a first-run time it's never offered, as before.
+        assertEquals(emptyList<SavedServer>(), notReachedFor(listOf(old), 30, now))
+        assertFalse(isStale(0, now, since))
+        assertTrue(isStale(0, since + 91 * day, since))
+    }
+
+    @Test
+    fun aServersTagIsByItsIdElseItsAddress() {
+        val byId = SavedServer("http://a:9797", "A", serverId = "srv-1")
+        val moved = SavedServer("http://b:9797", "A", serverId = "srv-1")
+        val noId = SavedServer("http://c:9797", "C")
+        assertEquals(serverTag(byId), serverTag(moved))
+        assertEquals(12, serverTag(noId).length)
+        assertTrue(serverTag(byId) != serverTag(noId))
+        // A removed server takes the keys under its ID and under its address.
+        assertEquals(listOf(serverTag(byId), serverTag(SavedServer("http://a:9797", ""))), serverTags(byId))
+        assertEquals("", serverTag(null))
     }
 }
