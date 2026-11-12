@@ -261,25 +261,25 @@ public enum ScreenTimeRules {
         switch time.reason {
         case "bedtime": return "That’s all for tonight"
         case "early": return "It’s a bit early"
-        default: return "Screen time is up"
+        default: return "That’s all for today"
         }
     }
 
     /// The server's own sentence, or a plain one when it sent none.
     public static func message(_ time: ScreenTime) -> String {
         let said = PlainWords.clean(time.message ?? "", limit: 300)
-        return said.isEmpty ? "This profile can’t watch any more right now." : said
+        return said.isEmpty ? "Screen time is over." : said
     }
 
-    /// When playing may start again: "You can watch again at 7:00." today, "tomorrow at" otherwise, and
+    /// When playing may start again: "It starts again at 7:00." today, "tomorrow at" otherwise, and
     /// nothing when the server named no time or it is further off than that.
     public static func nextWords(_ time: ScreenTime, now: Date, calendar: Calendar = .current, clock: (Date) -> String) -> String {
         guard let nextAt = time.nextAt, nextAt > 0 else { return "" }
         let next = Date(timeIntervalSince1970: TimeInterval(nextAt))
         guard next > now else { return "" }
-        if calendar.isDate(next, inSameDayAs: now) { return "You can watch again at \(clock(next))." }
+        if calendar.isDate(next, inSameDayAs: now) { return "It starts again at \(clock(next))." }
         if let tomorrow = calendar.date(byAdding: .day, value: 1, to: now), calendar.isDate(next, inSameDayAs: tomorrow) {
-            return "You can watch again tomorrow at \(clock(next))."
+            return "It starts again tomorrow at \(clock(next))."
         }
         return ""
     }

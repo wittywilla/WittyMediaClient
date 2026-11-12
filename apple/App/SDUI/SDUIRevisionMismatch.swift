@@ -10,8 +10,6 @@ import WittyKit
 struct SDUIRevisionMismatch: View {
     @EnvironmentObject private var model: AppModel
     @EnvironmentObject private var center: SDUICenter
-    @Environment(\.palette) private var palette
-    @Environment(\.metrics) private var metrics
     /// The server's catalogue revision, when it said.
     let server: Int?
 
@@ -25,25 +23,15 @@ struct SDUIRevisionMismatch: View {
     }
 
     var body: some View {
-        VStack(spacing: Tokens.Space.s5) {
-            Image(systemName: "arrow.triangle.2.circlepath")
-                .font(.system(size: metrics.tv ? 72 : 44, weight: .medium))
-                .foregroundStyle(palette.accentText)
-                .accessibilityHidden(true)
-            EmptyMessage(title: "Update the app or the server", detail: detail)
-            HStack(spacing: Tokens.Space.s3) {
-                Button("Try again") { Task { await center.loadMenu(); center.changed() } }
-                    .action(primary: true)
-                    .accessibilityIdentifier("sdui.revision.retry")
-                Button(say("changeServer")) { model.changeServer() }
-                    .action()
-            }
-            .remoteSection()
+        DesignPage(eyebrow: "Update needed", title: "Update the app or the server", lead: detail,
+                   foot: "You can still reach Settings from the menu.", identifier: "sdui.revision") {
+            EmptyView()
+        } actions: {
+            Button("Try again") { Task { await center.loadMenu(); center.changed() } }
+                .action(primary: true)
+                .accessibilityIdentifier("sdui.revision.retry")
+            Button(say("changeServer")) { model.changeServer() }
+                .action()
         }
-        .padding(Tokens.Space.s6)
-        .frame(maxWidth: 640)
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .accessibilityElement(children: .contain)
-        .accessibilityIdentifier("sdui.revision")
     }
 }
