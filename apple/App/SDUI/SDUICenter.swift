@@ -172,6 +172,11 @@ final class SDUICenter: ObservableObject {
             cache?.write("catalog", etag: etag, body: body)
             if value != catalog { catalog = value }
         }
+        // A server whose catalogue is another revision writes pages this app refuses: its own screens instead.
+        if freshCatalog != nil, let revision = catalog.revision, revision != SDUI.catalog, mode == .on {
+            ClientLog.shared.warn("sdui", "the server's catalogue is revision \(revision), this app draws \(SDUI.catalog): its own screens")
+            mode = .off
+        }
     }
 
     /// Something a page shows has changed underneath it.
