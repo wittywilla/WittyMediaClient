@@ -66,9 +66,11 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import androidx.compose.ui.window.DialogWindowProvider
+import com.wittywilla.wittymediaclient.net.CatchupRules
 import com.wittywilla.wittymediaclient.net.GuideCell
 import com.wittywilla.wittymediaclient.net.GuideChannel
 import com.wittywilla.wittymediaclient.net.GuideHit
+import com.wittywilla.wittymediaclient.net.GuidePaging
 import com.wittywilla.wittymediaclient.net.GuideProgramme
 import com.wittywilla.wittymediaclient.net.GuideRules
 import com.wittywilla.wittymediaclient.net.TvLook
@@ -291,6 +293,10 @@ fun GuideDetails(
     onRecord: (GuideChannel, GuideProgramme) -> Unit,
     onSeries: (GuideChannel, GuideProgramme) -> Unit,
     onClose: () -> Unit,
+    // Watching a programme from its start (`tv-catchup`), and putting the channel in a set (`tv-sets`): null where
+    // the server can't.
+    onFromStart: ((GuideChannel, GuideProgramme) -> Unit)? = null,
+    onAddToSet: ((GuideChannel) -> Unit)? = null,
 ) {
     val api = nav.app.api
     val scheme = MaterialTheme.colorScheme
@@ -331,10 +337,25 @@ fun GuideDetails(
             if (day) DayList(channel, list, error, now, onSaid) else OneProgramme(channel, ask, p, desc)
             val later = ask.cell.start > now
             val reminded = p != null && TvReminders.has(channel.key, p.start)
+            // The programme from its start, when the server keeps it: first when it has ended.
+            val startOver: (() -> Unit)? = if (!day && onFromStart != null && p != null && ask.cell.kind == GuideCell.Kind.Programme && CatchupRules.canWatchFromStart(channel, p, now)) {
+                { onFromStart(channel, p) }
+            } else {
+                null
+            }
+            val fromStart = startOver != null
+            val ended = p != null && p.end <= now
             FlowRow(horizontalArrangement = Arrangement.spacedBy(metrics.u(16)), verticalArrangement = Arrangement.spacedBy(metrics.u(16))) {
-                if (channel.canTune) {
-                    SheetButton("Watch channel now", { onWatch(channel.key) }, kind = if (channel.alternative == null) SheetKind.Primary else SheetKind.Secondary, icon = TvSymbols.Play, takeFocus = true)
+                if (startOver != null && ended) {
+                    SheetButton("Watch from the start", startOver, kind = SheetKind.Primary, icon = TvSymbols.Play, takeFocus = true)
                 }
+                if (channel.canTune) {
+                    SheetButton(
+                        "Watch channel now", { onWatch(channel.key) }, kind = if (channel.alternative == null && !(fromStart && ended)) SheetKind.Primary else SheetKind.Secondary,
+                        icon = TvSymbols.Play, takeFocus = !(fromStart && ended),
+                    )
+                }
+                if (startOver != null && !ended) SheetButton("Watch from the start", startOver)
                 channel.alternative?.let { alt -> SheetButton("Watch ${alt.number} ${alt.name} instead", { onWatch(alt.key) }, kind = SheetKind.Primary, icon = TvSymbols.Play) }
                 if (later && channel.canTune && ask.cell.kind == GuideCell.Kind.Programme && p != null) {
                     SheetButton(if (reminded) "✓ Reminder set" else "Remind me", { scope.launch { onSaid(TvReminders.toggle(channel.key, p)) } }, selected = reminded)
@@ -343,6 +364,7 @@ fun GuideDetails(
                     SheetButton("Record every airing", { onSeries(channel, p); onClose() })
                     SheetButton("Record this", { onRecord(channel, p); onClose() })
                 }
+                if (onAddToSet != null) SheetButton("Add to set…", { onAddToSet(channel) })
                 if (nav.me?.isAdmin == true && channel.kind == "library") {
                     SheetButton("Edit channel", { onClose(); nav.push(Route.OnPhone("Edit channel", "/tv/channels")) }, kind = SheetKind.Quiet)
                 }
@@ -477,7 +499,7 @@ fun GuideSearch(nav: Nav, onGo: (GuideHit) -> Unit, onClose: () -> Unit) {
 // once and is kept with the account, as on the page.
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
-fun TvLookPanel(nav: Nav, onClose: () -> Unit) {
+fun TvLookPanel(nav: Nav, onClose: () -> Unit, pageSize: Int? = null, onPageSize: (Int) -> Unit = {}) {
     val api = nav.app.api
     val scheme = MaterialTheme.colorScheme
     val metrics = LocalMetrics.current
@@ -522,6 +544,11 @@ fun TvLookPanel(nav: Nav, onClose: () -> Unit) {
                 Choice("Row size", look.density, listOf("compact" to "Compact", "normal" to "Normal", "large" to "Large")) { change("density", it) }
                 Choice("Hours across", look.hours.toString(), listOf("0.0" to "What fits", "1.5" to "1½", "2.0" to "2", "3.0" to "3", "4.0" to "4")) {
                     change("hours", it.toDoubleOrNull() ?: 0.0)
+                }
+                if (pageSize != null) {
+                    Choice("Channels at a time, on this device", pageSize.toString(), GuidePaging.SIZES.map { it.toString() to GuidePaging.label(it) }) {
+                        onPageSize(it.toIntOrNull() ?: GuidePaging.ALL)
+                    }
                 }
                 Choice("Preview", look.preview, listOf("highlight" to "What's highlighted", "last" to "The last channel", "off" to "Off")) { change("preview", it) }
                 Choice("Preview side", look.previewSide, listOf("left" to "Left", "right" to "Right")) { change("previewSide", it) }

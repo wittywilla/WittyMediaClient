@@ -265,6 +265,11 @@ data class Recording(
     val path: String? = null,
     val sizeBytes: Long? = null,
     val ruleId: Long? = null,
+    // On a server with `tv-dvr-rules-2`: no tuner would be free when it starts, and the series it's from.
+    val conflict: Boolean = false,
+    val ruleTitle: String? = null,
+    val padBefore: Int = 0,
+    val padAfter: Int = 0,
 ) {
     val isFinished: Boolean get() = status == "done" || status == "failed"
 
@@ -282,7 +287,19 @@ data class Recording(
 
 // Every airing of a title on a channel.
 @Serializable
-data class RecordingRule(val id: Long = 0, val channelId: Long? = null, val channel: String = "", val title: String = "")
+data class RecordingRule(
+    val id: Long = 0,
+    val channelId: Long? = null,
+    val channel: String = "",
+    val title: String = "",
+    // On a server with `tv-dvr-rules-2`: on whichever channel shows it, only episodes it hasn't recorded, how many to
+    // keep (0 keeps all), and minutes before and after.
+    val anyChannel: Boolean = false,
+    val newOnly: Boolean = false,
+    val keep: Int = 0,
+    val padBefore: Int = 0,
+    val padAfter: Int = 0,
+)
 
 // "Tell me when this starts", kept with the account.
 @Serializable

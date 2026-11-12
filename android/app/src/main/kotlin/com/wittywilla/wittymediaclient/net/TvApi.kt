@@ -77,6 +77,58 @@ suspend fun Api.recordSeries(channel: String, title: String) {
     call("POST", "/recording-rules", json.encodeToString(SeriesAsk.serializer(), SeriesAsk(channel, title)))
 }
 
+// A recording's options, on a server with `tv-dvr-rules-2`: minutes before and after.
+@Serializable
+private data class PaddedRecordAsk(
+    val channel: String,
+    val title: String,
+    val sub: String?,
+    val start: Long,
+    val stop: Long,
+    val padBefore: Int,
+    val padAfter: Int,
+)
+
+// A series' options, on a server with `tv-dvr-rules-2`.
+@Serializable
+data class SeriesOptions(
+    val anyChannel: Boolean = false,
+    val newOnly: Boolean = false,
+    val keep: Int = 0,
+    val padBefore: Int = 0,
+    val padAfter: Int = 0,
+)
+
+@Serializable
+private data class SeriesAskWith(
+    val channel: String,
+    val title: String,
+    val anyChannel: Boolean,
+    val newOnly: Boolean,
+    val keep: Int,
+    val padBefore: Int,
+    val padAfter: Int,
+)
+
+// Records one programme, starting and ending a few minutes either side of it.
+suspend fun Api.record(channel: String, title: String, sub: String?, start: Long, stop: Long, padBefore: Int, padAfter: Int) {
+    val ask = PaddedRecordAsk(channel, title, sub, start, stop, DvrRules.pad(padBefore), DvrRules.pad(padAfter))
+    call("POST", "/recordings", json.encodeToString(PaddedRecordAsk.serializer(), ask))
+}
+
+// Records a title with its options.
+suspend fun Api.recordSeries(channel: String, title: String, options: SeriesOptions) {
+    val o = options
+    val ask = SeriesAskWith(channel, title, o.anyChannel, o.newOnly, DvrRules.keep(o.keep), DvrRules.pad(o.padBefore), DvrRules.pad(o.padAfter))
+    call("POST", "/recording-rules", json.encodeToString(SeriesAskWith.serializer(), ask))
+}
+
+// Changes a series' options.
+suspend fun Api.changeRecordingRule(id: Long, options: SeriesOptions) {
+    val o = options.copy(keep = DvrRules.keep(options.keep), padBefore = DvrRules.pad(options.padBefore), padAfter = DvrRules.pad(options.padAfter))
+    call("PUT", "/recording-rules/$id", json.encodeToString(SeriesOptions.serializer(), o))
+}
+
 suspend fun Api.removeRecordingRule(id: Long) {
     call("DELETE", "/recording-rules/$id")
 }
@@ -89,6 +141,62 @@ suspend fun Api.addReminder(channel: String, title: String, sub: String?, start:
 suspend fun Api.removeReminder(id: Long) {
     call("DELETE", "/tv/reminders/$id")
 }
+
+// Channel sets (`tv-sets`, at /tv-sets): which channels the guide shows, in which order.
+suspend fun Api.channelSets(): ChannelSets = read("/tv-sets")
+
+suspend fun Api.channelSet(id: String): ChannelSetDetail = read("/tv-sets/${setPath(id)}")
+
+private fun setPath(id: String): String = GuideRules.pathPart(SetRules.number(id) ?: id)
+
+// A new set of this account's own; `shared` (an administrator's) shows it to every profile.
+suspend fun Api.makeChannelSet(name: String, channels: List<String>, shared: Boolean): ChannelSet {
+    val body = buildJsonObject {
+        put("name", name.trim())
+        put("channels", buildJsonArray { channels.forEach { add(JsonPrimitive(it)) } })
+        put("shared", shared)
+    }
+    return json.decodeFromString(call("POST", "/tv-sets", body.toString()))
+}
+
+// Changes any of a set's name, channels (all of them, in their order) and sharing.
+suspend fun Api.changeChannelSet(id: String, name: String? = null, channels: List<String>? = null, shared: Boolean? = null) {
+    val body = buildJsonObject {
+        if (name != null) put("name", name.trim())
+        if (channels != null) put("channels", buildJsonArray { channels.forEach { add(JsonPrimitive(it)) } })
+        if (shared != null) put("shared", shared)
+    }
+    call("PUT", "/tv-sets/${setPath(id)}", body.toString())
+}
+
+// Adds some channels to a set and takes others out, leaving the rest where they are.
+suspend fun Api.changeSetChannels(id: String, adding: List<String>, removing: List<String> = emptyList()) {
+    val body = buildJsonObject {
+        put("add", buildJsonArray { adding.forEach { add(JsonPrimitive(it)) } })
+        put("remove", buildJsonArray { removing.forEach { add(JsonPrimitive(it)) } })
+    }
+    call("POST", "/tv-sets/${setPath(id)}/channels", body.toString())
+}
+
+suspend fun Api.removeChannelSet(id: String) {
+    call("DELETE", "/tv-sets/${setPath(id)}")
+}
+
+// This account's order of the custom sets it sees.
+suspend fun Api.orderChannelSets(ids: List<String>) {
+    val body = buildJsonObject { put("ids", buildJsonArray { ids.forEach { add(JsonPrimitive(it)) } }) }
+    call("PUT", "/tv-sets/order", body.toString())
+}
+
+// Every channel of a set (or those matching `q`), with only what the picker and dialling need (`tv-guide-paging`).
+suspend fun Api.liteChannels(set: String?, q: String = "", limit: Int = 20000): Guide = read(GuidePaging.liteQuery(set, q, limit))
+
+// Where a channel (a number or a key) is in a set, after `q`: -1 when it isn't there.
+suspend fun Api.locateChannel(set: String?, q: String, wanted: String): Int =
+    read<Guide>(GuidePaging.liteQuery(set, q, limit = 1, locate = wanted)).located ?: -1
+
+// A programme from its start, on a channel that keeps an archive (`tv-catchup`): the same answer as tune.
+suspend fun Api.catchup(key: String, programme: GuideProgramme, viewer: String): Tuned = read(CatchupRules.path(key, programme, viewer))
 
 @Serializable
 private data class LogoAnswer(val logos: List<LogoInfo>? = null)

@@ -53,6 +53,9 @@ import androidx.compose.ui.input.key.onKeyEvent
 import androidx.compose.ui.input.key.type
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalView
+import androidx.compose.ui.semantics.LiveRegionMode
+import androidx.compose.ui.semantics.liveRegion
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
@@ -61,6 +64,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.text.withStyle
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LifecycleEventEffect
+import com.wittywilla.wittymediaclient.net.DialRules
 import com.wittywilla.wittymediaclient.net.GuideChannel
 import com.wittywilla.wittymediaclient.net.GuideProgramme
 import com.wittywilla.wittymediaclient.net.GuideRules
@@ -111,6 +115,10 @@ fun ChannelScreen(nav: Nav, start: String) {
     var now by remember { mutableLongStateOf(nowSeconds()) }
     val screen = remember { FocusRequester() }
     val channel = lineup.firstOrNull { it.key == key } ?: TvChannels.list.firstOrNull { it.key == key }
+    // A number being typed on the remote's digits, to go straight to that channel.
+    var dialled by remember { mutableStateOf("") }
+    var dialMiss by remember { mutableStateOf("") }
+    val fromStart = LiveTv.fromStart?.takeIf { LiveTv.key == key }
 
     fun showBanner() {
         banner = true
@@ -148,8 +156,23 @@ fun ChannelScreen(nav: Nav, start: String) {
     LaunchedEffect(Unit) {
         GuideReturn.key = key
         LiveTv.muted = false
-        LiveTv.watch(key, api)
+        // A programme asked for from its start is already starting: anything else is the channel as it is now.
+        if (LiveTv.fromStart == null || LiveTv.key != key) LiveTv.watch(key, api)
         LastChannel.remember(context, key)
+    }
+    // The digits typed go to their channel once the remote has been still for a moment.
+    LaunchedEffect(dialled) {
+        if (dialled.isEmpty()) return@LaunchedEffect
+        delay(DialRules.WAIT_MS)
+        val list = lineup.ifEmpty { TvChannels.list }
+        val at = DialRules.locate(list, dialled)
+        if (at >= 0 && list[at].canTune) tune(list[at].key) else dialMiss = "There's no channel $dialled"
+        dialled = ""
+    }
+    LaunchedEffect(dialMiss) {
+        if (dialMiss.isEmpty()) return@LaunchedEffect
+        delay(3000)
+        dialMiss = ""
     }
     LaunchedEffect(api) {
         TvLookStore.load(api, nav.effectiveThemeId(dark), appColours)
@@ -192,10 +215,10 @@ fun ChannelScreen(nav: Nav, start: String) {
     DisposableEffect(Unit) {
         onDispose {
             LiveTv.muted = !TvLookStore.look.previewSound
-            // Back to the guide: the preview carries on with this channel. Anywhere else: it stops.
+            // Back to the guide: the preview carries on with this channel, as it is now. Anywhere else: it stops.
             view.post {
                 val toGuide = nav.current == Route.LiveTv || (nav.current as? TvRoute)?.screen == TvScreen.Guide || (nav.current as? TvRoute)?.screen is TvScreen.Channel
-                if (!toGuide) LiveTv.stop()
+                if (!toGuide) LiveTv.stop() else if (LiveTv.fromStart != null) LiveTv.goLive()
             }
         }
     }
@@ -209,14 +232,21 @@ fun ChannelScreen(nav: Nav, start: String) {
                 .focusRequester(screen)
                 .onKeyEvent { e ->
                     if (mini || e.type != KeyEventType.KeyDown) return@onKeyEvent false
-                    when (e.nativeKeyEvent.keyCode) {
+                    val code = e.nativeKeyEvent.keyCode
+                    if (code in KeyEvent.KEYCODE_0..KeyEvent.KEYCODE_9 || code in KeyEvent.KEYCODE_NUMPAD_0..KeyEvent.KEYCODE_NUMPAD_9) {
+                        val digit = '0' + if (code >= KeyEvent.KEYCODE_NUMPAD_0) code - KeyEvent.KEYCODE_NUMPAD_0 else code - KeyEvent.KEYCODE_0
+                        dialled = DialRules.append(dialled, digit)
+                        return@onKeyEvent true
+                    }
+                    when (code) {
                         KeyEvent.KEYCODE_DPAD_UP, KeyEvent.KEYCODE_CHANNEL_UP -> { step(1); true }
                         KeyEvent.KEYCODE_DPAD_DOWN, KeyEvent.KEYCODE_CHANNEL_DOWN -> { step(-1); true }
                         KeyEvent.KEYCODE_DPAD_LEFT -> { LiveTv.seek(-10.0); showBanner(); true }
                         KeyEvent.KEYCODE_DPAD_RIGHT -> { LiveTv.seek(10.0); showBanner(); true }
                         KeyEvent.KEYCODE_DPAD_CENTER, KeyEvent.KEYCODE_ENTER, KeyEvent.KEYCODE_NUMPAD_ENTER -> { mini = true; true }
                         KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE, KeyEvent.KEYCODE_MEDIA_PLAY, KeyEvent.KEYCODE_MEDIA_PAUSE -> {
-                            if (LiveTv.playing) LiveTv.pause() else if (LiveTv.behind > 20 && bannerShown > 0) LiveTv.goLive() else LiveTv.resume()
+                            // From the start, Play/Pause only pauses: live is a choice of its own, under Select.
+                            if (LiveTv.playing) LiveTv.pause() else if (fromStart == null && LiveTv.behind > 20 && bannerShown > 0) LiveTv.goLive() else LiveTv.resume()
                             showBanner()
                             true
                         }
@@ -232,20 +262,33 @@ fun ChannelScreen(nav: Nav, start: String) {
                 }
             }
             if (LiveTv.state == LiveTv.State.Failed && LiveTv.key == key) {
-                Failure(dress, channel, LiveTv.why, onTune = ::tune, onNext = { step(1) }, onGuide = ::toGuide)
+                Failure(dress, channel, LiveTv.why, fromStart != null, onTune = ::tune, onNext = { step(1) }, onGuide = ::toGuide)
             } else if (LiveTv.key != key || !LiveTv.playing) {
                 Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { Spinner(Color.White, dress.pt(64)) }
             }
             Box(Modifier.fillMaxSize().padding(start = dress.pt(SIDE), end = dress.pt(SIDE), bottom = dress.pt(BOTTOM)), contentAlignment = Alignment.BottomCenter) {
                 if (mini) {
-                    MiniGuide(dress, key, onTune = ::tune, onClose = ::closeMini, onFull = ::toGuide)
+                    MiniGuide(dress, key, onTune = ::tune, onClose = ::closeMini, onFull = ::toGuide, fromStart = fromStart != null, onLive = { closeMini(); LiveTv.goLive(); showBanner() })
                 } else {
                     AnimatedVisibility(banner, enter = fadeIn(), exit = fadeOut()) {
-                        ChannelBanner(dress, channel, if (LiveTv.key == key) LiveTv.info else null, now)
+                        ChannelBanner(dress, channel, if (LiveTv.key == key) LiveTv.info else null, now, fromStart = fromStart != null)
                     }
                 }
             }
-            if (LiveTv.behind > 20 && !mini) {
+            if (dialled.isNotEmpty() || dialMiss.isNotEmpty()) {
+                Box(Modifier.fillMaxSize().padding(top = dress.pt(60), end = dress.pt(SIDE)), contentAlignment = Alignment.TopEnd) {
+                    DialBox(dress, dialled, dialMiss)
+                }
+            }
+            if (fromStart != null && !mini) {
+                Box(Modifier.fillMaxSize().padding(top = dress.pt(60)), contentAlignment = Alignment.TopCenter) {
+                    Text(
+                        "From the start of ${fromStart.title} · Select, then Live, for the channel as it is now",
+                        style = MaterialTheme.typography.label, color = Color.White,
+                        modifier = Modifier.background(Color.Black.copy(alpha = 0.6f), CircleShape).padding(horizontal = dress.pt(16), vertical = dress.pt(8)),
+                    )
+                }
+            } else if (LiveTv.behind > 20 && !mini) {
                 Box(Modifier.fillMaxSize().padding(top = dress.pt(60)), contentAlignment = Alignment.TopCenter) {
                     Text(
                         "${(LiveTv.behind / 60).roundToInt()} min behind live · Play/Pause twice for live",
@@ -259,7 +302,7 @@ fun ChannelScreen(nav: Nav, start: String) {
 }
 
 @Composable
-private fun Failure(dress: TvDress, channel: GuideChannel?, why: String, onTune: (String) -> Unit, onNext: () -> Unit, onGuide: () -> Unit) {
+private fun Failure(dress: TvDress, channel: GuideChannel?, why: String, fromStart: Boolean, onTune: (String) -> Unit, onNext: () -> Unit, onGuide: () -> Unit) {
     val p = dress.paint
     Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
         Column(
@@ -276,6 +319,7 @@ private fun Failure(dress: TvDress, channel: GuideChannel?, why: String, onTune:
             Row(horizontalArrangement = Arrangement.spacedBy(dress.pt(16))) {
                 channel?.alternative?.let { alt -> TvButton(dress, "Watch ${alt.number} ${alt.name} instead", { onTune(alt.key) }, on = true) }
                 TvButton(dress, "Try again", { LiveTv.retry() })
+                if (fromStart) TvButton(dress, "Watch live", { LiveTv.goLive() }, on = true)
                 TvButton(dress, "Next channel", onNext)
                 TvButton(dress, "Back to the guide", onGuide)
             }
@@ -286,7 +330,7 @@ private fun Failure(dress: TvDress, channel: GuideChannel?, why: String, onTune:
 // The banner every box of the era showed on a change of channel: the channel, what's on and how far through, what's
 // next and the time.
 @Composable
-fun ChannelBanner(dress: TvDress, channel: GuideChannel?, info: Tuned?, now: Long) {
+fun ChannelBanner(dress: TvDress, channel: GuideChannel?, info: Tuned?, now: Long, fromStart: Boolean = false) {
     val p = dress.paint
     val shape = dress.shape
     val programme = info?.now
@@ -332,7 +376,8 @@ fun ChannelBanner(dress: TvDress, channel: GuideChannel?, info: Tuned?, now: Lon
                 programme?.sub ?: if (info == null) "Tuning…" else if (programme == null) "No guide data" else "",
                 style = dress.font(18.75f, W.Bold), color = p.accent, maxLines = 1, overflow = TextOverflow.Ellipsis,
             )
-            if (programme != null) {
+            if (fromStart) Text("Watching from the start", style = dress.font(16.25f, W.Bold), color = p.accent, maxLines = 1)
+            if (programme != null && !fromStart) {
                 val small = dress.font(16.25f)
                 Row(Modifier.padding(top = dress.pt(4)), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(dress.pt(8))) {
                     Text(tvClock(programme.start), style = small, color = p.soft, maxLines = 1)
@@ -355,7 +400,15 @@ fun ChannelBanner(dress: TvDress, channel: GuideChannel?, info: Tuned?, now: Lon
 // A few channels over the picture, with what's on them now and next, without leaving what's playing. Up and down move,
 // Select tunes, Back closes.
 @Composable
-fun MiniGuide(dress: TvDress, tuned: String, onTune: (String) -> Unit, onClose: () -> Unit, onFull: () -> Unit) {
+fun MiniGuide(
+    dress: TvDress,
+    tuned: String,
+    onTune: (String) -> Unit,
+    onClose: () -> Unit,
+    onFull: () -> Unit,
+    fromStart: Boolean = false,
+    onLive: () -> Unit = {},
+) {
     val p = dress.paint
     val shape = dress.shape
     val api = LocalTvApi.current
@@ -390,6 +443,7 @@ fun MiniGuide(dress: TvDress, tuned: String, onTune: (String) -> Unit, onClose: 
             horizontalArrangement = Arrangement.spacedBy(dress.pt(16)),
         ) {
             Text("Now and next", style = dress.font(21.25f, W.Bold), color = p.accent, modifier = Modifier.weight(1f))
+            if (fromStart) TvButton(dress, "Live", onLive, on = true)
             TvButton(dress, "Full guide", onFull)
             TvButton(dress, "Close", onClose)
         }
@@ -457,4 +511,22 @@ private fun MiniRow(dress: TvDress, channel: GuideChannel, on: GuideProgramme?, 
             modifier = Modifier.width(dress.pt(260)),
         )
     }
+}
+
+// The number being typed on the remote, or why it went nowhere, in the corner as a box of the era showed it.
+@Composable
+fun DialBox(dress: TvDress, typed: String, miss: String) {
+    val p = dress.paint
+    val corner = RoundedCornerShape(dress.pt(dress.radius))
+    Text(
+        if (typed.isNotEmpty()) typed + "–" else miss,
+        style = dress.font(if (typed.isNotEmpty()) 50f else 25f, W.Bold, digits = dress.shape == TvShape.Receiver, tabular = true),
+        color = if (typed.isNotEmpty()) p.accent else p.text, maxLines = 1,
+        modifier = Modifier
+            .clip(corner)
+            .background(p.bg)
+            .strokeInside(p.line, dress.pt(2), dress.pt(dress.radius))
+            .padding(horizontal = dress.pt(20), vertical = dress.pt(10))
+            .semantics { liveRegion = LiveRegionMode.Polite },
+    )
 }

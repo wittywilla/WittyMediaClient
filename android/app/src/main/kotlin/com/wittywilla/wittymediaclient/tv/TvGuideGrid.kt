@@ -200,6 +200,10 @@ class CellActions(
     // Past the grid's left or right edge, which moves the time. True when it was taken.
     val earlier: () -> Boolean,
     val later: () -> Boolean,
+    // Up past a page's first row or down past its last, which turns the page; and a remote's page or channel keys.
+    val up: (row: Int) -> Boolean = { false },
+    val down: (row: Int) -> Boolean = { false },
+    val page: (by: Int) -> Boolean = { false },
     val requester: (row: Int, start: Long) -> FocusRequester,
     val forget: (row: Int, start: Long, FocusRequester) -> Unit,
 )
@@ -360,6 +364,10 @@ private fun GuideCellView(
             when (e.nativeKeyEvent.keyCode) {
                 KeyEvent.KEYCODE_DPAD_LEFT -> first && actions.earlier()
                 KeyEvent.KEYCODE_DPAD_RIGHT -> last && actions.later()
+                KeyEvent.KEYCODE_DPAD_UP -> actions.up(row)
+                KeyEvent.KEYCODE_DPAD_DOWN -> actions.down(row)
+                KeyEvent.KEYCODE_PAGE_DOWN, KeyEvent.KEYCODE_CHANNEL_UP -> actions.page(1)
+                KeyEvent.KEYCODE_PAGE_UP, KeyEvent.KEYCODE_CHANNEL_DOWN -> actions.page(-1)
                 KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE, KeyEvent.KEYCODE_MEDIA_PLAY -> {
                     actions.watch(channel)
                     true
