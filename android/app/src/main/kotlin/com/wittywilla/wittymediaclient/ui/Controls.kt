@@ -6,6 +6,8 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.hoverable
+import androidx.compose.foundation.interaction.collectIsHoveredAsState
 import androidx.compose.ui.semantics.CustomAccessibilityAction
 import androidx.compose.ui.semantics.customActions
 import androidx.compose.foundation.interaction.MutableInteractionSource
@@ -100,6 +102,7 @@ private const val PRESS_SCALE = 0.97f
 private const val PRESS_ALPHA = 0.85f
 private const val DISABLED_ALPHA = 0.55f
 private const val FOCUS_TRIES = 4
+private const val HOVER_WASH = 0.08f
 
 // A ring around something, `gap` out from its edge, drawn outside it so nothing moves when it shows. It's
 // concentric: each corner is the thing's own radius plus the distance out, so a radius 14 key's 4-wide ring 4 out
@@ -156,6 +159,8 @@ fun Pressable(
 ) {
     val interaction = remember { MutableInteractionSource() }
     val pressed by interaction.collectIsPressedAsState()
+    // A mouse or trackpad over it (a tablet or a Chromebook): a light wash of the text colour, as the website's hover.
+    val hovered by interaction.collectIsHoveredAsState()
     // From the focus system itself: focus given on a screen's first frame can come before an
     // interaction stream is listened to, and would never show.
     var focused by remember { mutableStateOf(false) }
@@ -215,6 +220,8 @@ fun Pressable(
             }
             .then(if (clip) Modifier.clip(shape) else Modifier)
             .background(if (filled) MaterialTheme.colorScheme.onBackground else fill, shape)
+            .hoverable(interaction)
+            .then(if (hovered && !metrics.tv && enabled) Modifier.background(MaterialTheme.colorScheme.onBackground.copy(alpha = HOVER_WASH), shape) else Modifier)
             .optionsKey(if (enabled) onLongClick else null)
             .then(
                 if (onLongClick == null) Modifier.clickable(interactionSource = interaction, indication = null, role = Role.Button) { if (enabled) onClick() }

@@ -180,3 +180,15 @@ class ShelfRulesTest {
         assertEquals(210f, com.wittywilla.wittymediaclient.net.ShelfRules.cardWidth(0f, 12f, 210f, 0.18f, 9), 0f)
     }
 }
+
+class WindowClassesTest {
+    @Test fun `window width classes follow the breakpoints`() {
+        val c = com.wittywilla.wittymediaclient.ui.WindowClasses::of
+        assertEquals(com.wittywilla.wittymediaclient.ui.WindowClass.Compact, c(360))
+        assertEquals(com.wittywilla.wittymediaclient.ui.WindowClass.Compact, c(599))
+        assertEquals(com.wittywilla.wittymediaclient.ui.WindowClass.Medium, c(600))
+        assertEquals(com.wittywilla.wittymediaclient.ui.WindowClass.Expanded, c(840))
+        assertEquals(com.wittywilla.wittymediaclient.ui.WindowClass.Large, c(1200))
+        assertEquals(com.wittywilla.wittymediaclient.ui.WindowClass.Large, c(2400))
+    }
+}
