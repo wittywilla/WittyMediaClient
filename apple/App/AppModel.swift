@@ -126,6 +126,8 @@ enum Route: Hashable {
     case mediaExtras
     /// The server's layout options for this device, and modules' settings: see LayoutModulesSettings.swift.
     case layout, modules
+    /// This profile's own colours over the theme: see PersonalColoursView.swift.
+    case personalColours
     case moduleSettings(String)
     /// Apple TV's choice of libraries for the top menu: see YouViews.swift.
     case topMenu
@@ -259,7 +261,12 @@ final class AppModel: ObservableObject {
             guard client.base == asking.base else { return }
             if let caps {
                 let found = Set(caps.features ?? [])
-                if found != features { features = found }
+                if found != features {
+                    let newTheme = found.contains("theme-derived") && !features.contains("theme-derived")
+                    features = found
+                    // The theme's layers can be asked for now.
+                    if newTheme { refreshTheme() }
+                }
             }
             featuresKnown = true
         }
@@ -401,13 +408,35 @@ final class AppModel: ObservableObject {
         let asking = client
         guard !asking.base.isEmpty else { return }
         themeFetch?.cancel()
+        let following = themeChoice.isEmpty
+        let resolving = has("theme-derived") || has("theme-shape-type")
+        let dark = systemScheme != .light
         themeFetch = Task { [weak self] in
+            // A server with the theme engine's layers says the colours this account sees: the theme with the
+            // administrator's overrides and the profile's own colours over it. Followed when this device follows
+            // the server's theme; its corners, typefaces and name are used either way.
+            if resolving, let resolved = try? await asking.resolvedTheme(), !Task.isCancelled, let self, self.client.base == asking.base {
+                self.themeStyle = ThemeStyle(shape: resolved.shape(dark: dark), type: resolved.typefaces(dark: dark), brand: resolved.brand)
+                if following, self.themeChoice.isEmpty {
+                    let colors = resolved.colors(dark: dark)
+                    if !colors.isEmpty {
+                        let tokens = ThemeTokens(id: resolved.look(dark: dark)?.id ?? id, scheme: dark ? "dark" : "light", colors: colors)
+                        if let data = try? JSONEncoder().encode(tokens) { self.defaults.set(data, forKey: self.tokensKey(id)) }
+                        self.appTheme = ThemeTranslator.translate(tokens, preview: self.preview(id))
+                        return
+                    }
+                }
+            }
             guard let tokens = try? await asking.themeTokens(id), !Task.isCancelled, let self,
                   self.client.base == asking.base, (self.effectiveThemeId ?? "default") == id else { return }
             if let data = try? JSONEncoder().encode(tokens) { self.defaults.set(data, forKey: self.tokensKey(id)) }
             self.appTheme = ThemeTranslator.translate(tokens, preview: self.preview(id))
         }
     }
+
+    /// The resolved theme's corners, typefaces and the server's name, on a server that has them: what server-driven
+    /// pages draw with (SDUI/SDUIKit.swift). Nil keeps what the app draws by itself.
+    @Published private(set) var themeStyle: ThemeStyle?
 
     /// What themes the server has, and the person's own, once signed in.
     func loadThemes() async {
@@ -840,6 +869,7 @@ final class AppModel: ObservableObject {
         server = ""
         client = WittyClient(base: "")
         themeId = nil
+        themeStyle = nil
         features = []
         featuresKnown = false
         featuresAsked = ""

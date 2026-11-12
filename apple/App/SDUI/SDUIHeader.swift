@@ -217,6 +217,7 @@ struct SDUIHeroView: View {
 /// On a phone the backdrop is at the top with everything under it and a full-width main button; a tablet has
 /// the poster beside the words.
 struct SDUIDetailHeaderView: View {
+    @Environment(\.sduiDraw) private var draw
     @EnvironmentObject private var model: AppModel
     @EnvironmentObject private var center: SDUICenter
     @EnvironmentObject private var store: SDUIPageStore
@@ -294,7 +295,7 @@ struct SDUIDetailHeaderView: View {
             if style == "poster", header.poster != nil {
                 SDUIPicture(picture: header.poster, shownWidth: 300)
                     .frame(width: 300, height: 450)
-                    .clipShape(RoundedRectangle(cornerRadius: Tokens.Radius.md, style: .continuous))
+                    .clipShape(RoundedRectangle(cornerRadius: draw.radius("DetailHeader", "poster"), style: .continuous))
             }
             VStack(alignment: .leading, spacing: layout.sp("s")) {
                 Spacer(minLength: 0)
@@ -343,7 +344,7 @@ struct SDUIDetailHeaderView: View {
                     let side: CGFloat = wide ? 200 : 110
                     SDUIPicture(picture: header.poster, shownWidth: side)
                         .frame(width: side, height: side / CGFloat(header.poster?.ratio ?? 2.0 / 3.0))
-                        .clipShape(RoundedRectangle(cornerRadius: Tokens.Radius.md, style: .continuous))
+                        .clipShape(RoundedRectangle(cornerRadius: draw.radius("DetailHeader", "poster"), style: .continuous))
                 }
                 VStack(alignment: .leading, spacing: layout.sp("m")) {
                     words
@@ -391,6 +392,7 @@ struct SDUIDetailHeaderView: View {
 
 /// One wide promotional block: a picture, a title, a line of text and one button. The whole banner is the button.
 struct SDUIBannerView: View {
+    @Environment(\.sduiDraw) private var draw
     @EnvironmentObject private var model: AppModel
     @EnvironmentObject private var center: SDUICenter
     @EnvironmentObject private var store: SDUIPageStore
@@ -440,13 +442,13 @@ struct SDUIBannerView: View {
                         palette.panel
                     }
                 }
-                .clipShape(RoundedRectangle(cornerRadius: Tokens.Radius.lg, style: .continuous))
+                .clipShape(RoundedRectangle(cornerRadius: draw.radius("Banner"), style: .continuous))
         } else if compact {
             // A 96-point row with a square picture.
             HStack(spacing: layout.sp("s")) {
                 if hasPicture {
                     SDUIPicture(picture: banner.picture, shownWidth: 96).frame(width: 96, height: 96)
-                        .clipShape(RoundedRectangle(cornerRadius: Tokens.Radius.md, style: .continuous))
+                        .clipShape(RoundedRectangle(cornerRadius: draw.radius("Banner", "thumb"), style: .continuous))
                 } else if !banner.icon.isEmpty {
                     Image(systemName: SDUIIcon.symbol(banner.icon)).font(.system(size: 28, weight: .medium)).foregroundStyle(palette.accentText)
                         .frame(width: 64, height: 64)
@@ -456,7 +458,7 @@ struct SDUIBannerView: View {
             }
             .padding(layout.sp("s"))
             .frame(maxWidth: .infinity, minHeight: 96, alignment: .leading)
-            .background(RoundedRectangle(cornerRadius: Tokens.Radius.lg, style: .continuous).fill(palette.panel))
+            .background(RoundedRectangle(cornerRadius: draw.radius("Banner"), style: .continuous).fill(palette.panel))
         } else {
             // A full-width 16/9 card.
             let width = max(pageWidth - layout.margin * 2, 200)
@@ -472,7 +474,7 @@ struct SDUIBannerView: View {
                     }
                 }
                 .overlay(alignment: .bottomLeading) { words(over: hasPicture).padding(layout.sp("m")) }
-                .clipShape(RoundedRectangle(cornerRadius: Tokens.Radius.lg, style: .continuous))
+                .clipShape(RoundedRectangle(cornerRadius: draw.radius("Banner"), style: .continuous))
         }
     }
 

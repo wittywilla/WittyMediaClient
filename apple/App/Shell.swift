@@ -213,6 +213,7 @@ private struct TabRoot: View {
                     case .servers: ManageServersView().plainNavigation()
                     case .mediaExtras: MediaSettingsView().plainNavigation()
                     case .layout: LayoutSettingsView().plainNavigation()
+                    case .personalColours: PersonalColoursView().plainNavigation()
                     case .modules: ModulesSettingsView().plainNavigation()
                     case .moduleSettings(let module): ModuleSettingsView(module: module).plainNavigation()
                     #if os(tvOS)

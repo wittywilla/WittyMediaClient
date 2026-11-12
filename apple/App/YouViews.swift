@@ -117,6 +117,13 @@ struct YouView: View {
         }
         ListGroup(title: say("groupDevice")) {
             row(.theme, "paintpalette", RowTint.teal, "rowTheme", value: ThemeView.name(of: model.themeChoice, server: model.themeId, list: model.themeList))
+            if model.has("theme-personal") {
+                NavigationLink(value: Route.personalColours) {
+                    RowLabel(icon: "paintbrush", tint: RowTint.teal, title: "Your colours")
+                }
+                .rowStyle()
+                .accessibilityIdentifier("row.personalColours")
+            }
             // The server's layout options, where it has them: how the whole app is arranged on this device.
             if model.has("sdui-layouts"), center.enabled, let layouts = center.navigation?.layouts, !layouts.options.isEmpty {
                 NavigationLink(value: Route.layout) {

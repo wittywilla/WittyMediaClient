@@ -52,11 +52,23 @@ struct Wordmark: View {
     /// The app's own name rather than a server's.
     var app = false
     var name = ""
+    /// The server's name as its theme draws it (`GET /theme` `brand`): parts, some in the brand's colour.
+    var brand: ResolvedTheme.Brand?
+
+    private func parts(_ brand: ResolvedTheme.Brand) -> Text {
+        let accent = brand.color.flatMap { ThemeColour(hex: $0) }.map { Color(.sRGB, red: $0.red, green: $0.green, blue: $0.blue, opacity: $0.alpha) }
+            ?? palette.accentText
+        return brand.parts.reduce(Text("")) { line, part in
+            line + Text(part.text).foregroundColor(part.accent == true ? accent : palette.text)
+        }
+    }
 
     var body: some View {
         let last = app ? "Client" : "Server"
         Group {
-            if app || name.isEmpty {
+            if !app, let brand, !brand.parts.isEmpty {
+                parts(brand)
+            } else if app || name.isEmpty {
                 Text("Witty").foregroundColor(palette.text)
                     + Text("Media").foregroundColor(palette.accentText)
                     + Text(last).foregroundColor(palette.text)
@@ -68,7 +80,7 @@ struct Wordmark: View {
         .font(metrics.tv ? .system(size: 48, weight: .bold) : .wmHero.weight(.bold))
         .lineLimit(1)
         .minimumScaleFactor(0.7)
-        .accessibilityLabel(app ? "WittyMediaClient" : (name.isEmpty ? "WittyMediaServer" : name))
+        .accessibilityLabel(app ? "WittyMediaClient" : (brand.map { $0.parts.map(\.text).joined() } ?? (name.isEmpty ? "WittyMediaServer" : name)))
     }
 }
 
@@ -82,7 +94,7 @@ struct BrandLockup: View {
     var body: some View {
         HStack(spacing: metrics.tv ? Tokens.Space.s5 : 10) {
             BrandMark(size: metrics.tv ? 72 : 32, logo: app ? nil : model.client.brandLogoURL(version: model.brandLogo))
-            Wordmark(app: app, name: model.brandName)
+            Wordmark(app: app, name: model.brandName, brand: model.themeStyle?.brand)
         }
         .accessibilityElement(children: .combine)
     }
