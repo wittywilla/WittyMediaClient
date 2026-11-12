@@ -97,6 +97,7 @@ struct SDUIDockSheet: View {
 struct SDUIKeyLegend: View {
     @Environment(\.palette) private var palette
     @Environment(\.sduiLayout) private var layout
+    @EnvironmentObject private var center: SDUICenter
     let legend: SDUIElement
 
     private struct Entry: Hashable { let action: String; let label: String }
@@ -127,8 +128,9 @@ struct SDUIKeyLegend: View {
 
     var body: some View {
         let size = CGFloat(layout.dock?.hintSize ?? 25)
-        HStack(spacing: size) {
-            ForEach(entries, id: \.self) { entry in
+        // The legend is a region of the shell: hidden where its placement says so.
+        HStack(spacing: center.shell?.shows("legend") == false ? 0 : size) {
+            ForEach(center.shell?.shows("legend") == false ? [] : entries, id: \.self) { entry in
                 HStack(spacing: size * 0.3) {
                     Image(systemName: SDUIKeyLegend.glyph(entry.action))
                     Text(entry.label)

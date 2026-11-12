@@ -384,7 +384,7 @@ private struct PillShell: View {
                 // The rail, and a headset's ornament: the same closed and open menu, the ornament floating at the leading edge.
                 HStack(spacing: 0) {
                     if !model.hidesBars {
-                        RailMenu(closed: navSize > 0 ? navSize : 76, open: CGFloat(center.shell?.open ?? 240))
+                        RailMenu(closed: navSize > 0 ? navSize : 76, open: CGFloat(center.shell?.open ?? 240), drawerWidth: CGFloat(center.shell?.drawer ?? 0))
                     }
                     tabs
                 }
