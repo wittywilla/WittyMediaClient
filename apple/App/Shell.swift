@@ -175,8 +175,8 @@ private struct TabRoot: View {
                     #if os(iOS) || os(visionOS)
                     // The website's album and artist pages, over their artwork's colour.
                     case .listeningAlbum(let library, let album, let artist):
-                        MusicAlbumPage(library: library, album: album, artist: artist).plainNavigation(overPicture: true)
-                    case .artist(let library, let name): MusicArtistPage(library: library, name: name).plainNavigation(overPicture: true)
+                        MusicAlbumPage(library: library, album: album, artist: artist).moduleScope("wittyaudio").plainNavigation(overPicture: true)
+                    case .artist(let library, let name): MusicArtistPage(library: library, name: name).moduleScope("wittyaudio").plainNavigation(overPicture: true)
                     #else
                     case .listeningAlbum(let library, let album, let artist):
                         AlbumScreen(library: library, album: album, artist: artist).plainNavigation()
@@ -188,7 +188,7 @@ private struct TabRoot: View {
                     // strip and no Back, or a console's collection under its band, and a game's page over its picture.
                     case .gameLibrary(let library, nil): GamesLibraryView(library: library, console: nil).moduleScope("wittyplay").noNavigationBar().id(library.id)
                     case .gameLibrary(let library, let console): GamesLibraryView(library: library, console: console).moduleScope("wittyplay").plainNavigation(overPicture: true)
-                    case .game(let id): GameDetailView(id: id).plainNavigation(overPicture: true)
+                    case .game(let id): GameDetailView(id: id).moduleScope("wittyplay").plainNavigation(overPicture: true)
                     #if os(tvOS)
                     // A new identity for each game, so a second one gets a new player.
                     case .playGame(let id, let start): GamePlayerScreen(id: id, start: start).id("\(id)\(start)")
@@ -288,7 +288,7 @@ struct LibraryScreen: View {
             #if os(iOS) || os(visionOS)
             MusicLibraryPage(library: library).moduleScope("wittyaudio")
             #else
-            ListeningLibraryView(library: library)
+            ListeningLibraryView(library: library).moduleScope("wittyaudio")
             #endif
         } else if library.isPhotos {
             LibraryView(library: library).moduleScope("wittyphotos")
