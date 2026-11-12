@@ -257,6 +257,8 @@ class PeerManager(private val app: WittyApp) {
     }
 
     private fun watchNetwork() {
+        // Android 7 and later say when the default network changes; on 6 a failed request is the only sign (trouble).
+        if (android.os.Build.VERSION.SDK_INT < 24) return
         val connectivity = app.getSystemService(ConnectivityManager::class.java) ?: return
         var first = true
         runCatching {

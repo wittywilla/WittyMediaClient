@@ -430,6 +430,15 @@ class SduiScreen(val document: SduiDocument) {
             put("contentWidth", layout.contentWidth)
             put("sectionGap", layout.sectionGap)
             put("scope", document.theme?.scope.orEmpty())
+            layout.shell?.let { shell ->
+                put("shell", buildJsonObject {
+                    put("layout", shell.layout)
+                    put("nav", shell.nav)
+                    if (shell.overlay) put("overlay", true)
+                    put("size", shell.size)
+                    if (shell.open > 0) put("open", shell.open)
+                })
+            }
         })
         put("visible", buildJsonArray { visible.forEach { add(element(it)) } })
         put("focus", buildJsonObject {
