@@ -223,8 +223,17 @@ struct TvSignInPage<Words: View, Actions: View>: View {
             HStack(alignment: .center, spacing: Tokens.Space.s16) {
                 VStack(alignment: .leading, spacing: Tokens.Space.s5) { words }
                     .frame(maxWidth: .infinity, alignment: .leading)
-                VStack(alignment: .leading, spacing: Tokens.Space.s4) { actions }
-                    .frame(maxWidth: .infinity, alignment: .leading)
+                // A long list (many servers found on the network) scrolls as the remote moves down it, and stays
+                // centred while it fits; the focus rings may grow past the column's edges.
+                GeometryReader { geo in
+                    ScrollView(.vertical, showsIndicators: false) {
+                        VStack(alignment: .leading, spacing: Tokens.Space.s4) { actions }
+                            .padding(.vertical, Tokens.Space.s4)
+                            .frame(maxWidth: .infinity, minHeight: geo.size.height, alignment: .leading)
+                    }
+                    .unclippedScroll()
+                }
+                .frame(maxWidth: .infinity)
             }
             .padding(.horizontal, metrics.gutter)
             .padding(.vertical, metrics.edge)
@@ -755,5 +764,12 @@ struct QRCard: View {
                 .background(RoundedRectangle(cornerRadius: Tokens.Radius.lg, style: .continuous).fill(Color.white))
             Text(caption).font(.caption.weight(.medium)).foregroundStyle(palette.textSecondary)
         }
+    }
+}
+
+extension View {
+    /// Focus rings and lifted cards may grow past a scroll view's edges where the system allows it.
+    @ViewBuilder func unclippedScroll() -> some View {
+        if #available(iOS 17, tvOS 17, visionOS 1, *) { self.scrollClipDisabled() } else { self }
     }
 }

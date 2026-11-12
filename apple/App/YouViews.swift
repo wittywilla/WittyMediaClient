@@ -91,9 +91,9 @@ struct YouView: View {
         }
         if isAdult {
             ListGroup(title: say("groupHousehold")) {
-                #if !os(tvOS)
+                // Every device signed in can let another one in: a TV approves a phone's or another TV's code
+                // and PIN typed with the remote, as a phone does (the camera is the phone's extra way).
                 row(.signInTv, "tv", RowTint.tv, "rowSignInTv")
-                #endif
                 if model.has("parental-controls") {
                     // The app's own pages where the server has them: see ProfileSettings.swift.
                     row(.family(.profiles), "figure.2.and.child.holdinghands", RowTint.family, "rowProfiles")
