@@ -309,17 +309,37 @@ private struct TopTabs: View {
     /// Whether Home's first look has arrived.
     @State private var settled = false
 
+    /// The server's layout may put the menu down the side: see TvSideMenu.swift.
+    private var side: SDUIShell? { center.shell?.nav == "tvSideMenu" ? center.shell : nil }
+
+    private var page: some View {
+        TabRoot(tab: model.tab, toBar: { bar = model.tab })
+            .id(model.tab)
+            .safeAreaInset(edge: .bottom) { MiniPlayerSlot(tab: model.tab) }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            // Focus starts on the tab's own main action, not on the menu.
+            .prefersDefaultFocus(in: root)
+    }
+
     var body: some View {
-        VStack(spacing: 0) {
-            if model.path.isEmpty {
-                TvTopBar(focus: $bar).ignoresSafeArea(.container, edges: .horizontal)
+        Group {
+            if let side {
+                let closed = CGFloat(side.size > 0 ? side.size : 120)
+                ZStack(alignment: .leading) {
+                    page.padding(.leading, model.path.isEmpty ? closed : 0)
+                    if model.path.isEmpty {
+                        TvSideMenu(focus: $bar, closed: closed, open: CGFloat(max(side.open ?? 400, side.size)))
+                            .ignoresSafeArea(.container, edges: .vertical)
+                    }
+                }
+            } else {
+                VStack(spacing: 0) {
+                    if model.path.isEmpty {
+                        TvTopBar(focus: $bar).ignoresSafeArea(.container, edges: .horizontal)
+                    }
+                    page
+                }
             }
-            TabRoot(tab: model.tab, toBar: { bar = model.tab })
-                .id(model.tab)
-                .safeAreaInset(edge: .bottom) { MiniPlayerSlot(tab: model.tab) }
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
-                // Focus starts on the tab's own main action, not on the bar above it.
-                .prefersDefaultFocus(in: root)
         }
         .focusScope(root)
         .background(palette.background.ignoresSafeArea())
@@ -359,10 +379,15 @@ private struct PillShell: View {
     @State private var typing = false
     @Environment(\.scenePhase) private var scenePhase
 
-    var body: some View {
+    /// The menu's style and breadth from the server's navigation: see ShellFrame.swift.
+    private var nav: FrameNav { FrameNav.of(center.shell) }
+    private var navSize: CGFloat { CGFloat(max(center.shell?.size ?? 0, 0)) }
+
+    private var tabs: some View {
         // 8 above the home indicator's room, as the website's bar (shell.css: bottom 8 + the safe area).
         let lift = typing ? 0 : Tokens.Space.s2
-        TabView(selection: $model.tab) {
+        let bar = nav == .bottomTabs
+        return TabView(selection: $model.tab) {
             ForEach(center.enabled ? center.phoneTabs : AppTab.phoneTabs) { tab in
                 TabRoot(tab: tab)
                     .safeAreaInset(edge: .bottom, spacing: 0) {
@@ -371,12 +396,39 @@ private struct PillShell: View {
                             MiniPlayerSlot(tab: tab)
                             // A video left for the rest of the app plays on here, as in the website's dock.
                             if let video = model.video, !model.hidesBars { VideoDock(playback: video, clock: video.clockface) }
-                            if !model.hidesBars && !typing { FloatingBar() }
+                            if bar && !model.hidesBars && !typing { FloatingBar() }
                         }
-                        .padding(.bottom, model.hidesBars || typing ? 0 : lift)
+                        .padding(.bottom, model.hidesBars || typing || !bar ? 0 : lift)
                     }
                     .toolbar(.hidden, for: .tabBar)
                     .tag(tab)
+            }
+        }
+        .environment(\.frameNav, nav)
+    }
+
+    var body: some View {
+        Group {
+            switch nav {
+            case .sidebar, .rail:
+                HStack(spacing: 0) {
+                    if !model.hidesBars {
+                        SideMenu(width: navSize > 0 ? navSize : (nav == .rail ? 72 : 220), iconsOnly: nav == .rail)
+                    }
+                    tabs
+                }
+            case .topTabs:
+                if center.shell?.overlay == true {
+                    tabs.overlay(alignment: .top) {
+                        if !model.hidesBars { TopTabsBar(height: navSize > 0 ? navSize : 48, overlay: true) }
+                    }
+                } else {
+                    tabs.safeAreaInset(edge: .top, spacing: 0) {
+                        if !model.hidesBars { TopTabsBar(height: navSize > 0 ? navSize : 48, overlay: false) }
+                    }
+                }
+            case .bottomTabs:
+                tabs
             }
         }
         .background {
