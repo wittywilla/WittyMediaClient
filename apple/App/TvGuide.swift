@@ -66,6 +66,7 @@ struct GuideView: View {
     @State private var setsOpen = false
     @State private var findOpen = false
     @State private var goOpen = false
+    @State private var dialled: String?
     @State private var elsewhere: GuideElsewhere?
     @State private var adding: GuideChannel?
     @State private var toast = ""
@@ -137,7 +138,10 @@ struct GuideView: View {
             FindChannelSheet(set: store.filter.set, current: store.filter.q,
                              onGo: { c in findOpen = false; goToChannel(c.key) }, onFilter: { q in findOpen = false; filterBy(q) })
         }
-        .sheet(isPresented: $goOpen) { GoToChannelSheet { n in goOpen = false; goToNumber(n) } }
+        // The number is gone to once the sheet has gone: an offer to show all channels made while it's still closing never shows.
+        .sheet(isPresented: $goOpen, onDismiss: { if let n = dialled { dialled = nil; goToNumber(n) } }) {
+            GoToChannelSheet { n in dialled = n; goOpen = false }
+        }
         .alert(item: $elsewhere) { e in
             Alert(title: Text(store.filter.q.isEmpty ? "Channel \(e.number) isn't in \(setName)" : "Channel \(e.number) isn't among these"),
                   message: Text("It's among all channels. Show all channels and go to it?"),
@@ -348,6 +352,10 @@ struct GuideView: View {
                     }
                     .onChange(of: spot.row) { r in
                         if case .cell = focused {} else { withAnimation(nil) { scroller.scrollTo(r, anchor: .center) } }
+                    }
+                    // A new page size, chosen in Look, keeps the highlighted row on screen for when the focus comes back.
+                    .onChange(of: store.pageSize) { _ in
+                        DispatchQueue.main.async { withAnimation(nil) { scroller.scrollTo(spot.row, anchor: .center) } }
                     }
                 }
                 edges

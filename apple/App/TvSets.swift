@@ -79,7 +79,12 @@ struct ChannelSetPicker: View {
         }
         .focusRoot(scope)
         .background(palette.background.ignoresSafeArea())
-        .sheet(isPresented: $managing) { ChannelSetsManager(onChanged: onChanged) }
+        // Over the picker's own sheet a second sheet is a narrow one, too narrow for a set's row: the whole screen instead.
+        .fullScreenCover(isPresented: $managing) {
+            ChannelSetsManager(onChanged: onChanged)
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .background(palette.background.ignoresSafeArea())
+        }
     }
 }
 

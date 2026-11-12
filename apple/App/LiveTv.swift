@@ -188,7 +188,10 @@ final class LiveTv: ObservableObject {
                 if programme != nil, status == 404 {
                     state = .failed("This programme is no longer kept, so it can't be watched from the start.")
                 } else {
-                    state = .failed((error as? APIError)?.message ?? "This channel can't be played right now.")
+                    // A tuner's own reason ("the stream answered 404 …") is said after what it means.
+                    let reason = (error as? APIError)?.message ?? ""
+                    state = .failed(reason.isEmpty ? "This channel can't be played right now."
+                                    : reason.first?.isLowercase == true ? "This channel can't be played right now: \(reason)." : reason)
                 }
                 return
             }
