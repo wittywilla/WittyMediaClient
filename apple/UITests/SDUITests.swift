@@ -72,10 +72,11 @@ final class SDUITests: XCTestCase {
         let customise = named(app, "sdui.customise")
         #if os(tvOS)
         let remote = XCUIRemote.shared
-        for _ in 0..<40 where !customise.hasFocus {
+        // Rows below come as the page scrolls: Customise exists only once it's near.
+        for _ in 0..<40 where !(customise.exists && customise.hasFocus) {
             remote.press(.down)
         }
-        XCTAssertTrue(customise.hasFocus, "Customise is the last stop of the page")
+        XCTAssertTrue(customise.exists && customise.hasFocus, "Customise is the last stop of the page")
         remote.press(.select)
         app.buttons["Done"].firstMatch.shown(20)
         remote.press(.menu)
