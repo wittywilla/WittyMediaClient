@@ -53,7 +53,8 @@ struct DesignPage<Content: View, Actions: View>: View {
             ScrollView {
                 VStack(alignment: .leading, spacing: 0) {
                     if !eyebrow.isEmpty {
-                        Text(eyebrow.uppercased())
+                        Text(eyebrow)
+                            .textCase(.uppercase)
                             .font(.system(size: sizes.small, weight: .bold))
                             .kerning(sizes.small * 0.08)
                             .foregroundStyle(palette.accentText)
@@ -89,6 +90,8 @@ struct DesignPage<Content: View, Actions: View>: View {
                 .padding(.vertical, metrics.tv ? Tokens.edge : Tokens.Space.s6)
                 .frame(maxWidth: .infinity)
             }
+            // A drag puts the keyboard away, so a number pad (which has no Return) never hides what's under it.
+            .scrollDismissesKeyboardIfAvailable()
             .environment(\.designSizes, sizes)
         }
         .background(palette.background.ignoresSafeArea())
