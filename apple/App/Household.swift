@@ -422,106 +422,87 @@ private struct TimeUpScreen: View {
         return formatter
     }()
 
-    @ViewBuilder private var why: some View {
-        let next = ScreenTimeRules.nextWords(time, now: Date()) { TimeUpScreen.clock.string(from: $0) }
-        Image(systemName: time.reason == "bedtime" ? "moon.stars.fill" : "hourglass.bottomhalf.filled")
-            .font(.system(size: metrics.tv ? 64 : 40, weight: .semibold))
-            .foregroundStyle(palette.accentText)
-            .accessibilityHidden(true)
-        Text(ScreenTimeRules.title(time))
-            .font(.wmPage)
-            .foregroundStyle(palette.text)
-            .multilineTextAlignment(.center)
-            .accessibilityAddTraits(.isHeader)
-            .accessibilityIdentifier("time-up-title")
-        Text(ScreenTimeRules.message(time))
-            .font(.body)
-            .foregroundStyle(palette.text)
-            .multilineTextAlignment(.center)
-            .fixedSize(horizontal: false, vertical: true)
-        if !next.isEmpty {
-            Text(next).font(.wmSecondary).foregroundStyle(palette.textSecondary).multilineTextAlignment(.center)
-        }
-        VStack(spacing: Tokens.Space.s3) {
-            Button("Ask a parent") {
-                asking = true
-                if usesPassword { wantName = true } else { wantPin = true }
-            }
-            .action(.primary, wide: true, tall: true)
-            .focused($onMain)
-            .firstFocus(in: scope)
-            Button("Switch profile") {
-                household.dismissTimeUp()
-                household.startSwitch(model)
-            }
-            .action(.secondary, wide: true, tall: true)
-            Button("OK") { household.dismissTimeUp() }.action(.secondary, wide: true, tall: true)
-        }
-        .padding(.top, Tokens.Space.s2)
-        .remoteSection()
+    /// The profile's name, the page's eyebrow.
+    private var who: String {
+        guard let user = model.user else { return "" }
+        let shown = PlainWords.clean(user.displayName ?? "", limit: 40)
+        return shown.isEmpty ? user.name : shown
     }
 
-    @ViewBuilder private var ask: some View {
-        Text("Ask a parent")
-            .font(.wmPage)
-            .foregroundStyle(palette.text)
-            .accessibilityAddTraits(.isHeader)
-        Text("A parent can give this profile more time today.")
-            .font(.body)
-            .foregroundStyle(palette.textSecondary)
-            .multilineTextAlignment(.center)
-        HStack(spacing: Tokens.Space.s2) {
-            ForEach(ScreenTimeRules.extras, id: \.self) { choice in
-                Button(ScreenTimeRules.extraLabel(choice)) { minutes = choice }
-                    .action(selected: minutes == choice, pill: true)
+    /// Why, and when it starts again; then Ask a parent, Switch profile and OK.
+    private var why: some View {
+        let next = ScreenTimeRules.nextWords(time, now: Date()) { TimeUpScreen.clock.string(from: $0) }
+        let lead = [ScreenTimeRules.message(time), next].filter { !$0.isEmpty }.joined(separator: " ")
+        return DesignPage(eyebrow: who, title: ScreenTimeRules.title(time), lead: lead, identifier: "time-up") {
+            DesignSection(title: "") {
+                DesignChips {
+                    DesignChip(title: "Ask a parent", on: true) {
+                        asking = true
+                        if usesPassword { wantName = true } else { wantPin = true }
+                    }
+                    .focused($onMain)
+                    .firstFocus(in: scope)
+                    .accessibilityIdentifier("time-up-ask")
+                    DesignChip(title: "Switch profile") {
+                        household.dismissTimeUp()
+                        household.startSwitch(model)
+                    }
+                }
             }
+        } actions: {
+            Button("OK") { household.dismissTimeUp() }.action()
         }
-        .remoteSection()
-        .accessibilityElement(children: .contain)
-        .accessibilityLabel("How much more")
-        if usesPassword {
-            OutlinedField(label: "A parent’s username", text: $name, kind: .name, icon: "person", request: $wantName)
-            OutlinedField(label: "Their password", text: $password, kind: .password, icon: "lock", invalid: !problem.isEmpty) { give() }
-                .shake(wrongTries)
-        } else {
-            OutlinedField(label: "The parents’ PIN", text: Binding(get: { pin }, set: { pin = ScreenTimeRules.cleanPin($0) }),
-                          kind: .password, icon: "lock", request: $wantPin, invalid: !problem.isEmpty) { give() }
-                .shake(wrongTries)
-        }
-        if !problem.isEmpty { ProblemLine(problem) }
-        Button { give() } label: { BusyText("Give more time", busy: busy) }
-            .action(.primary, wide: true, tall: true)
-            .disabled(!ready || busy)
-        if household.hasParentPin {
-            Button(byPassword ? "Use the parents’ PIN instead" : "Use a parent’s password instead") {
-                byPassword.toggle()
+    }
+
+    /// A parent gives more time: how much, then their PIN (or their name and password).
+    private var ask: some View {
+        DesignPage(eyebrow: who, title: "Ask a parent", lead: "A parent can give this profile more time today.",
+                   identifier: "time-up-asking") {
+            DesignSection(title: "How much more") {
+                DesignChips {
+                    ForEach(ScreenTimeRules.extras, id: \.self) { choice in
+                        DesignChip(title: ScreenTimeRules.extraLabel(choice), on: minutes == choice) { minutes = choice }
+                    }
+                }
+                .accessibilityElement(children: .contain)
+                .accessibilityLabel("How much more")
+            }
+            DesignSection(title: usesPassword ? "A parent’s name and password" : "The parents’ PIN") {
+                if usesPassword {
+                    OutlinedField(label: "A parent’s username", text: $name, kind: .name, icon: "person", request: $wantName)
+                    OutlinedField(label: "Their password", text: $password, kind: .password, icon: "lock", invalid: !problem.isEmpty) { give() }
+                        .shake(wrongTries)
+                } else {
+                    OutlinedField(label: "The parents’ PIN", text: Binding(get: { pin }, set: { pin = ScreenTimeRules.cleanPin($0) }),
+                                  kind: .password, icon: "lock", request: $wantPin, invalid: !problem.isEmpty) { give() }
+                        .shake(wrongTries)
+                }
+                if !problem.isEmpty { ProblemLine(problem) }
+            }
+        } actions: {
+            Button { give() } label: { BusyText("Give more time", busy: busy) }
+                .action(primary: true)
+                .disabled(!ready || busy)
+            if household.hasParentPin {
+                Button(byPassword ? "Use the parents’ PIN instead" : "Use a parent’s password instead") {
+                    byPassword.toggle()
+                    problem = ""
+                }
+                .action()
+            }
+            Button(say("back")) {
+                asking = false
                 problem = ""
             }
-            .action(.quiet)
+            .action()
         }
-        Button(say("back")) {
-            asking = false
-            problem = ""
-        }
-        .action(.quiet)
     }
 
     var body: some View {
-        ZStack {
-            palette.background.opacity(0.94).ignoresSafeArea()
-            ScrollView {
-                VStack(spacing: Tokens.Space.s4) {
-                    if asking { ask } else { why }
-                }
-                .padding(Tokens.Space.s8)
-                .frame(maxWidth: metrics.tv ? 760 : 440)
-                .background(RoundedRectangle(cornerRadius: Tokens.Radius.lg, style: .continuous).fill(palette.panel))
-                .padding(Tokens.Space.s6)
-                .frame(maxWidth: .infinity)
-                .padding(.vertical, metrics.tv ? Tokens.Space.s16 : Tokens.Space.s10)
-            }
-            .scrollDismissesKeyboardIfAvailable()
+        Group {
+            if asking { ask } else { why }
         }
+        .scrollDismissesKeyboardIfAvailable()
         .focusRoot(scope)
         // Back on a remote is OK: the time is still up, and the screen comes back with the next thing played.
         .onRemoteBack {

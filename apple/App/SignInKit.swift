@@ -495,6 +495,7 @@ private struct ProfileTileContent: View {
 struct ServerCard: View {
     @Environment(\.palette) private var palette
     @Environment(\.metrics) private var metrics
+    @Environment(\.designSizes) private var sizes
     /// An added server: its own logo and name. Without one, a server only found: its address and nothing it says.
     var saved: SavedServer?
     let url: String
@@ -521,19 +522,13 @@ struct ServerCard: View {
     /// On a TV the time shares the address's line, so a list of servers is no taller than it was.
     private var detail: String { metrics.tv && !reached.isEmpty ? "\(place) · \(reached)" : place }
 
-    private func pill(_ words: String) -> some View {
-        Text(words)
-            .font(.caption2.weight(.semibold))
-            .foregroundStyle(palette.textSecondary)
-            .padding(.horizontal, 6)
-            .padding(.vertical, 2)
-            .background(Capsule().fill(palette.border))
-    }
+    /// The row's value on the right: Last used in the accent, or how old it is.
+    private var value: String { lastUsed ? say("lastUsed") : stale ? say("staleServer") : "" }
 
     var body: some View {
-        let mark: CGFloat = metrics.tv ? 56 : 40
+        let mark: CGFloat = metrics.tv ? 48 : 32
         Button(action: action) {
-            HStack(spacing: Tokens.Space.s3) {
+            HStack(spacing: sizes.gap) {
                 if let saved {
                     ServerLogo(server: saved, size: mark)
                 } else {
@@ -541,31 +536,27 @@ struct ServerCard: View {
                         .font(.system(size: mark * 0.45, weight: .medium))
                         .foregroundStyle(palette.textSecondary)
                         .frame(width: mark, height: mark)
-                        .background(RoundedRectangle(cornerRadius: mark * 14 / 64, style: .continuous).fill(palette.border))
                         .accessibilityHidden(true)
                 }
                 VStack(alignment: .leading, spacing: 2) {
-                    HStack(spacing: Tokens.Space.s2) {
-                        Text(name).font(.wmLabel.weight(.semibold)).foregroundStyle(palette.text).lineLimit(1)
-                        if lastUsed { pill(say("lastUsed")) }
-                        if stale { pill(say("staleServer")) }
-                    }
-                    Text(detail).font(.wmSecondary).foregroundStyle(palette.textSecondary).lineLimit(1)
-                    if !metrics.tv && !reached.isEmpty {
-                        Text(reached).font(.wmSecondary).foregroundStyle(palette.textHint).lineLimit(1)
-                    }
+                    Text(name).font(.system(size: sizes.body, weight: .bold)).foregroundStyle(palette.text).lineLimit(1)
+                    Text(metrics.tv || reached.isEmpty ? detail : "\(detail) · \(reached)")
+                        .font(.system(size: sizes.tiny)).foregroundStyle(palette.text.opacity(0.7)).lineLimit(2)
                 }
-                Spacer(minLength: 0)
+                Spacer(minLength: sizes.gap)
                 if connecting {
                     ProgressView().tint(palette.textSecondary)
-                } else {
-                    Image(systemName: "chevron.right").font(.footnote.weight(.semibold)).foregroundStyle(palette.textHint)
+                } else if !value.isEmpty {
+                    Text(value).font(.system(size: sizes.small, weight: .bold))
+                        .foregroundStyle(lastUsed ? palette.accentText : palette.textSecondary)
                 }
             }
-            .padding(Tokens.Space.s4)
-            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.horizontal, sizes.gap * 1.6)
+            .padding(.vertical, sizes.gap * 0.6)
+            .frame(maxWidth: .infinity, minHeight: sizes.rowHeight, alignment: .leading)
+            .contentShape(Rectangle())
         }
-        .buttonStyle(SurfaceStyle(fill: palette.card, radius: Tokens.Radius.lg))
+        .buttonStyle(DesignRowButton())
         .accessibilityLabel(([name, place, reached] + (lastUsed ? [say("lastUsed")] : []) + (stale ? [say("staleServer")] : []))
             .filter { !$0.isEmpty }.joined(separator: ", "))
     }

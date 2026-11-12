@@ -14,6 +14,8 @@ final class SDUIPageStore: ObservableObject {
         case failed(String)
         /// 404: the page, library or title isn't there, or isn't this profile's to see.
         case missing
+        /// The server writes pages for another catalogue revision than this app draws.
+        case otherRevision
     }
 
     @Published private(set) var phase: Phase = .loading
@@ -119,6 +121,12 @@ final class SDUIPageStore: ObservableObject {
     private weak var lastCenter: SDUICenter?
 
     private func fail(_ error: Error, center: SDUICenter) {
+        if let refusal = error as? APIError, refusal.code == SDUIPageLoader.otherRevision.code {
+            working = nil
+            screen = nil
+            phase = .otherRevision
+            return
+        }
         let refusal = error as? APIError
         // A page that isn't there is an answer, not a fault; the rest is noted, the same one at most once a minute.
         if refusal?.status != 404 {
