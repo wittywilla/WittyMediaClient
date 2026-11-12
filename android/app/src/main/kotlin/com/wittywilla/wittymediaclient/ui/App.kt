@@ -445,6 +445,10 @@ class Nav(val app: WittyApp, private val s: Map<String, String>) {
     var requiredTheme by mutableStateOf<SduiRequired?>(null)
         private set
 
+    // The finished look from `GET /theme`: type set, finish amounts, scene, glass and gloss recipes.
+    var look by mutableStateOf(com.wittywilla.wittymediaclient.net.Look.NONE)
+        private set
+
     // The chooser offered the first time the app connects to a server, after the profile is chosen.
     var firstLook by mutableStateOf(false)
 
@@ -458,6 +462,7 @@ class Nav(val app: WittyApp, private val s: Map<String, String>) {
         kotlinx.coroutines.withContext(io) { runCatching { client.experienceState() } }.onSuccess { if (sdui === client) experienceState = it }
         kotlinx.coroutines.withContext(io) { runCatching { app.api.resolvedTheme() } }.onSuccess {
             requiredTheme = SduiLook.requiredTheme(it)
+            look = com.wittywilla.wittymediaclient.net.Look.from(it)
             // A required theme is the one drawn.
             requiredTheme?.let { r -> if (themeChoice != r.value) { themeChoice = r.value; wantTheme(r.value) } }
         }
@@ -1245,7 +1250,7 @@ fun AppRoot(app: WittyApp) {
         onDispose { }
     }
 
-    WittyTheme(theme, metrics, reduceMotion, strings, nav.brandParts) {
+    WittyTheme(theme, metrics, reduceMotion, strings, nav.brandParts, nav.look) {
         LaunchedEffect(Unit) { nav.startUp() }
         DisposableEffect(Unit) {
             app.onGuideKey = nav::openGuide

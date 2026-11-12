@@ -155,6 +155,8 @@ fun Pressable(
     // One focus language (docs/plans/DESIGN-2.md): media takes a ring, a lift and a little growth; a control on a TV takes
     // a fill of the text colour (its words turn to the page's colour: `content` is told it is active) and no ring.
     focusStyle: FocusStyle = FocusStyle.RingLift,
+    // A primary button takes the look's gloss.
+    glossy: Boolean = false,
     content: @Composable (active: Boolean) -> Unit,
 ) {
     val interaction = remember { MutableInteractionSource() }
@@ -220,6 +222,7 @@ fun Pressable(
             }
             .then(if (clip) Modifier.clip(shape) else Modifier)
             .background(if (filled) MaterialTheme.colorScheme.onBackground else fill, shape)
+            .then(if (glossy) Modifier.gloss(shape) else Modifier)
             .hoverable(interaction)
             .then(if (hovered && !metrics.tv && enabled) Modifier.background(MaterialTheme.colorScheme.onBackground.copy(alpha = HOVER_WASH), shape) else Modifier)
             .optionsKey(if (enabled) onLongClick else null)
@@ -290,7 +293,7 @@ fun WittyButton(
         shape = if (pill || metrics.tv) Radius.FULL else LocalMetrics.current.corner(10), fill = fill,
         label = if (busy) text else null, state = if (busy) LocalWords.current["connecting"] else null,
         focusKey = focusKey, requestFocus = requestFocus, takeFocus = takeFocus, focusRequester = focusRequester, enabled = enabled,
-        focusStyle = FocusStyle.Fill,
+        focusStyle = FocusStyle.Fill, glossy = kind == ButtonKind.Primary,
     ) { active ->
         // Under a fill of the text colour the words are the page's colour.
         val shown = if (active && metrics.focusFill) scheme.background else ink
