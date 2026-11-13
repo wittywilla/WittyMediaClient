@@ -69,6 +69,14 @@ targetTemplates:
       - package: LiveKitWebRTC
       # Go's own name lookups, inside Wittyconnect, use the system's resolver.
       - sdk: libresolv.tbd
+    # Peer to peer isn't a step to remember: before compiling, the library is put in apple/Frameworks when it
+    # isn't there, from this Mac's cache or built once (Go and a WittyMediaServer checkout beside this one, or
+    # WITTYMEDIASERVER_SRC). Without them the build carries on, with a warning that it can't connect from away.
+    preBuildScripts:
+      - name: Wittyconnect (peer to peer)
+        basedOnDependencyAnalysis: false
+        script: |
+          bash "${SRCROOT}/scripts/build-wittyconnect.sh" --if-missing --if-available
     # The same Licences page shows what is inside Wittyconnect, from the file written beside the library when
     # it is built. Copied by hand, as it is only there when the library is.
     postBuildScripts:
