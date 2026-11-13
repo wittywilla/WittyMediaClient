@@ -74,11 +74,15 @@ mkdir -p "$out"
 revision="$(cd "$source" && git rev-parse HEAD 2>/dev/null || echo unknown)"
 # One build for every checkout and worktree on this Mac: the library is the same for the same server source.
 cache="${WITTYCONNECT_CACHE:-$HOME/Library/Caches/WittyMediaClient/wittyconnect}/$revision"
+# Xcode doesn't compile a file again because `canImport(Wittyconnect)` would now answer otherwise: the file that
+# asks is touched, so a build after the library arrives has it.
+arrived() { touch "$PWD/App/PeerLibrary.swift" 2>/dev/null || true; }
 copy_from() {
   rm -rf "$out/Wittyconnect.xcframework"
   cp -R "$1/Wittyconnect.xcframework" "$out/"
   cp -f "$1/THIRD-PARTY-NOTICES.wittyconnect.txt" "$out/" 2>/dev/null || true
   echo "$revision" > "$out/Wittyconnect.source-revision.txt"
+  arrived
 }
 if [ "$only_missing" = 1 ] && [ "$revision" != unknown ] && [ -d "$cache/Wittyconnect.xcframework" ]; then
   copy_from "$cache"
@@ -102,4 +106,5 @@ else
     cp -R "$out/Wittyconnect.xcframework" "$out/THIRD-PARTY-NOTICES.wittyconnect.txt" "$cache/"
   fi
 fi
+arrived
 echo "Done: $out/Wittyconnect.xcframework"
