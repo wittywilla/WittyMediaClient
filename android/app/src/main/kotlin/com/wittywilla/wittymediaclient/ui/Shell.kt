@@ -143,7 +143,9 @@ private const val TAB_HEIGHT = 52
 
 // Pages below the tabs: the website's shell on a phone or tablet; on a TV, as before.
 @Composable
-fun PageShell(nav: Nav, content: @Composable () -> Unit) {
+fun PageShell(nav: Nav, page: @Composable () -> Unit) {
+    // A stacked page keeps the status bar and dock the page before it asked for, while it is of the same theme scope.
+    val content: @Composable () -> Unit = { SduiRegionsFrame(nav, page) }
     if (LocalMetrics.current.tv) content() else PhoneShell(nav, content)
 }
 

@@ -74,9 +74,10 @@ struct MetricsForWidth: ViewModifier {
 struct SurfaceStyle: ButtonStyle {
     var fill: Color? = nil
     var radius: CGFloat = Tokens.Radius.md
+    var role: FinishRole = .card
 
     func makeBody(configuration: Configuration) -> some View {
-        SurfaceBody(label: configuration.label, pressed: configuration.isPressed, fill: fill, radius: radius)
+        SurfaceBody(label: configuration.label, pressed: configuration.isPressed, fill: fill, radius: radius, role: role)
     }
 }
 
@@ -90,6 +91,7 @@ private struct SurfaceBody<Label: View>: View {
     let pressed: Bool
     let fill: Color?
     let radius: CGFloat
+    var role: FinishRole = .card
 
     var body: some View {
         let shape = RoundedRectangle(cornerRadius: radius, style: .continuous)
@@ -97,7 +99,7 @@ private struct SurfaceBody<Label: View>: View {
         // On a TV the ring stands a gap off the thing and is concentric with its corner (the tokens' tv.focus).
         let room = metrics.tv ? metrics.focusRing + CGFloat(DesignTokens.Tv.Focus.gap) : 0
         label
-            .background(fill.map { shape.fill($0) })
+            .finished(shape, fill: fill, role: role)
             .contentShape(shape)
             .padding(room)
             .overlay {
@@ -107,6 +109,7 @@ private struct SurfaceBody<Label: View>: View {
                 }
             }
             .scaleEffect(ring && !reduceMotion ? metrics.focusScale : 1)
+            .finishGlow(ring, colour: palette.tvRing)
             .opacity(enabled ? (pressed ? 0.8 : 1) : 0.55)
             .modifier(KeysFocusRing(radius: radius))
     }
@@ -130,6 +133,7 @@ struct KeysFocusRing: ViewModifier {
                 RoundedRectangle(cornerRadius: radius + offset + width, style: .continuous)
                     .strokeBorder(palette.focus, lineWidth: width)
                     .padding(-(offset + width))
+                    .finishGlow(true, colour: palette.focus)
                     .allowsHitTesting(false)
                     .accessibilityHidden(true)
             }
@@ -202,7 +206,8 @@ private struct ActionBody<Label: View>: View {
                 // On a TV every button is a pill as tall as the system's text field, so a field and its buttons
                 // are one family: docs/APP-DESIGN.md, Buttons.
                 .frame(maxWidth: wide ? .infinity : nil, minHeight: metrics.tv ? (kind == .quiet ? 56 : 66) : (tall ? 52 : metrics.minTarget)),
-            pressed: pressed, fill: fill, radius: pill || metrics.tv ? 999 : Tokens.Radius.md
+            pressed: pressed, fill: fill, radius: pill || metrics.tv ? 999 : Tokens.Radius.md,
+            role: kind == .primary ? .accent : .button
         )
         .overlay {
             if selected && kind == .secondary {

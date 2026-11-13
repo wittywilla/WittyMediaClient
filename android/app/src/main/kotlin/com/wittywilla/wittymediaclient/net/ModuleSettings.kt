@@ -112,6 +112,6 @@ suspend fun Api.saveModuleSetting(path: String, body: String): ModuleSettingsVie
 data class SettingsSlot(val slot: String = "", val pages: List<SettingsSlotPage> = emptyList())
 
 @Serializable
-data class SettingsSlotPage(val module: String = "", val label: String = "", val id: String = "", val title: String = "", val icon: String = "", val url: String = "")
+data class SettingsSlotPage(val module: String = "", val label: String = "", val id: String = "", val title: String = "", val icon: String = "", val url: String = "", val route: String = "")
 
 suspend fun Api.settingsSlot(slot: String): SettingsSlot = json.decodeFromString(call("GET", "/sdui/slots/$slot"))

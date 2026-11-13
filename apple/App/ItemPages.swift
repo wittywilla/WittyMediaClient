@@ -198,7 +198,7 @@ private struct TitleHeading: View {
                     .frame(width: shown, height: shown / aspect)
             } else {
                 Text(title)
-                    .font(.system(size: size, weight: .semibold))
+                    .font(.wm(size: size, weight: .semibold))
                     .tracking(-0.022 * size)
                     .foregroundStyle(palette.text)
                     .shadow(color: .black.opacity(0.45), radius: 6, y: 2)
@@ -268,7 +268,7 @@ extension View {
     fileprivate func factDot(_ shown: Bool, _ palette: Palette) -> some View {
         overlay(alignment: .leading) {
             if shown {
-                Text("·").font(.system(size: 14)).foregroundStyle(palette.textHint).fixedSize().offset(x: -10).accessibilityHidden(true)
+                Text("·").font(.wm(size: 14)).foregroundStyle(palette.textHint).fixedSize().offset(x: -10).accessibilityHidden(true)
             }
         }
     }
@@ -328,7 +328,7 @@ private struct TitleSmallButtonBody<Label: View>: View {
         }
         label
             .labelStyle(TitleSmallLabelStyle())
-            .font(.system(size: 13, weight: .semibold))
+            .font(.wm(size: 13, weight: .semibold))
             .foregroundStyle(kind == .primary ? palette.onAccent : palette.text)
             .lineLimit(1)
             .padding(.horizontal, Tokens.Space.s3)
@@ -345,7 +345,7 @@ private struct TitleSmallButtonBody<Label: View>: View {
 private struct TitleSmallLabelStyle: LabelStyle {
     func makeBody(configuration: Configuration) -> some View {
         HStack(spacing: 6) {
-            configuration.icon.font(.system(size: 12, weight: .semibold)).frame(width: 16, height: 16)
+            configuration.icon.font(.wm(size: 12, weight: .semibold)).frame(width: 16, height: 16)
             configuration.title
         }
     }
@@ -438,7 +438,7 @@ struct TitleTableHead: View {
     var body: some View {
         TitleTableCell(line: palette.text.opacity(0.2), head: true) {
             Text(words.uppercased())
-                .font(.system(size: 11, weight: .semibold))
+                .font(.wm(size: 11, weight: .semibold))
                 .tracking(0.77)
                 .foregroundStyle(palette.textHint)
                 .fixedSize()
@@ -480,7 +480,7 @@ private struct TitleToast: View {
     var body: some View {
         let shape = RoundedRectangle(cornerRadius: Tokens.Radius.md, style: .continuous)
         Text(words)
-            .font(.system(size: 14, weight: .medium))
+            .font(.wm(size: 14, weight: .medium))
             .foregroundStyle(palette.text)
             .fixedSize(horizontal: false, vertical: true)
             .padding(.vertical, Tokens.Space.s3)
@@ -501,7 +501,7 @@ private struct TitlePill: View {
 
     var body: some View {
         Text(words)
-            .font(.system(size: 11, weight: .semibold))
+            .font(.wm(size: 11, weight: .semibold))
             .tracking(0.22)
             .foregroundStyle(palette.textSecondary)
             .lineLimit(1)
@@ -518,7 +518,7 @@ private struct TitleStar: View {
 
     var body: some View {
         HStack(spacing: 3) {
-            Image(systemName: "star.fill").font(.system(size: 12)).foregroundStyle(palette.warn).frame(width: 14, height: 14)
+            Image(systemName: "star.fill").font(.wm(size: 12)).foregroundStyle(palette.warn).frame(width: 14, height: 14)
             Text(String(format: "%.1f", rating))
         }
         .accessibilityElement(children: .ignore)
@@ -559,7 +559,7 @@ private struct TitleBrandMark: View {
                 }
             } else {
                 Text(name)
-                    .font(.system(size: size, weight: .semibold))
+                    .font(.wm(size: size, weight: .semibold))
                     .tracking(-0.012 * size)
                     .multilineTextAlignment(.center)
                     .lineLimit(box.height < 30 ? 1 : nil)
@@ -610,7 +610,7 @@ private struct TitleFinePrint: View {
 
     var body: some View {
         Text(words)
-            .font(.system(size: 12))
+            .font(.wm(size: 12))
             .lineSpacing(4)
             .foregroundStyle(palette.textHint)
             .tint(palette.accentText)
@@ -639,8 +639,8 @@ private struct TitleBackLink: View {
     var body: some View {
         Button(action: action) {
             HStack(spacing: Tokens.Space.s1) {
-                Image(systemName: "chevron.left").font(.system(size: 14, weight: .semibold)).frame(width: 18, height: 18)
-                Text(words).font(.system(size: 14, weight: .semibold)).lineLimit(1)
+                Image(systemName: "chevron.left").font(.wm(size: 14, weight: .semibold)).frame(width: 18, height: 18)
+                Text(words).font(.wm(size: 14, weight: .semibold)).lineLimit(1)
             }
             .padding(.leading, Tokens.Space.s1)
             .padding(.trailing, Tokens.Space.s3)
@@ -675,7 +675,7 @@ private struct TitleExtrasHeading: View {
 
     var body: some View {
         Text(words)
-            .font(.system(size: 17, weight: .semibold))
+            .font(.wm(size: 17, weight: .semibold))
             .tracking(-0.2)
             .foregroundStyle(palette.text)
             .accessibilityAddTraits(.isHeader)
@@ -723,12 +723,12 @@ private struct TitleRowSheet: View {
             VStack(alignment: .leading, spacing: 0) {
                 HStack(alignment: .top, spacing: Tokens.Space.s3) {
                     Text(title)
-                        .font(.system(size: 20, weight: .semibold))
+                        .font(.wm(size: 20, weight: .semibold))
                         .foregroundStyle(palette.text)
                         .fixedSize(horizontal: false, vertical: true)
                         .frame(maxWidth: .infinity, alignment: .leading)
                         .accessibilityAddTraits(.isHeader)
-                    Button { choose(nil) } label: { Image(systemName: "xmark").font(.system(size: 14, weight: .semibold)) }
+                    Button { choose(nil) } label: { Image(systemName: "xmark").font(.wm(size: 14, weight: .semibold)) }
                         .squareButton()
                         .accessibilityLabel("Close")
                 }
@@ -737,8 +737,8 @@ private struct TitleRowSheet: View {
                     ForEach(Array(rows.enumerated()), id: \.element.id) { index, row in
                         Button { choose(row) } label: {
                             HStack(spacing: Tokens.Space.s3) {
-                                Image(systemName: row.icon).font(.system(size: 17)).foregroundStyle(palette.textSecondary).frame(width: 20, height: 20)
-                                Text(row.words).font(.system(size: 15, weight: .medium)).foregroundStyle(palette.text)
+                                Image(systemName: row.icon).font(.wm(size: 17)).foregroundStyle(palette.textSecondary).frame(width: 20, height: 20)
+                                Text(row.words).font(.wm(size: 15, weight: .medium)).foregroundStyle(palette.text)
                                 Spacer(minLength: 0)
                             }
                         }
@@ -841,7 +841,7 @@ private struct TitleExtrasView: View {
             TitleWrapRow(spacing: Tokens.Space.s3, rowSpacing: Tokens.Space.s2) {
                 if !director.isEmpty {
                     (Text(target == .show ? "Created by" : "Directed by").foregroundColor(palette.textHint) + Text(" " + director).foregroundColor(palette.text))
-                        .font(.system(size: 14))
+                        .font(.wm(size: 14))
                 }
                 ForEach(editions, id: \.self) { TitlePill(words: $0) }
                 ForEach(tags, id: \.self) { tag in
@@ -879,7 +879,7 @@ private struct TitleExtrasView: View {
                 PosterCard(title: wideTitle, subtitle: sub, url: client.posterURL(item), progress: item.progressFraction, aspect: 16.0 / 9.0, width: cardWidth)
             }
             .buttonStyle(TitlePress())
-            Text(TitleLook.extraName(extra.link?.extraType)).font(.system(size: 15)).foregroundStyle(palette.textHint)
+            Text(TitleLook.extraName(extra.link?.extraType)).font(.wm(size: 15)).foregroundStyle(palette.textHint)
         }
         .frame(width: cardWidth, alignment: .leading)
     }
@@ -929,7 +929,7 @@ private struct TitleExtrasView: View {
                     brands("platform", platforms.map { BrandLink(name: $0.name, path: TitleLook.platformPath(library: libraryId, $0.key)) })
                     (Text("Nothing plays from these services. ").fontWeight(.semibold)
                         + Text(TitleLook.listedNote(listings) { $0.formatted(date: .numeric, time: .omitted) }))
-                        .font(.system(size: 13))
+                        .font(.wm(size: 13))
                         .foregroundStyle(palette.textHint)
                         .fixedSize(horizontal: false, vertical: true)
                         .padding(.top, Tokens.Space.s2)
@@ -1051,7 +1051,7 @@ struct ItemPage: View {
         return TitleWrapRow(spacing: 6, rowSpacing: 2) {
             ForEach(Array(crumbs.enumerated()), id: \.offset) { index, crumb in
                 if index > 0 {
-                    Image(systemName: "chevron.right").font(.system(size: 9, weight: .bold)).foregroundStyle(palette.textHint)
+                    Image(systemName: "chevron.right").font(.wm(size: 9, weight: .bold)).foregroundStyle(palette.textHint)
                         .frame(width: 14, height: 14).accessibilityHidden(true)
                 }
                 switch crumb.goes {
@@ -1064,7 +1064,7 @@ struct ItemPage: View {
                 }
             }
         }
-        .font(.system(size: 13, weight: .semibold))
+        .font(.wm(size: 13, weight: .semibold))
         .foregroundStyle(palette.textSecondary)
     }
 
@@ -1096,14 +1096,14 @@ struct ItemPage: View {
             if let stars { TitleStar(rating: stars).factDot(rated == nil, palette) }
             if genres { genreLinks(item).factDot(!(rated != nil && stars == nil), palette) }
         }
-        .font(.system(size: 14))
+        .font(.wm(size: 14))
         .foregroundStyle(palette.textSecondary)
         .tint(palette.textSecondary)
         .clipped()
     }
 
     private func moreButton() -> some View {
-        Button { sheet = .more } label: { Image(systemName: "ellipsis").font(.system(size: 16, weight: .semibold)) }
+        Button { sheet = .more } label: { Image(systemName: "ellipsis").font(.wm(size: 16, weight: .semibold)) }
             .squareButton()
             .accessibilityLabel("More")
     }
@@ -1122,7 +1122,7 @@ struct ItemPage: View {
                     if !rows.isEmpty { moreButton() }
                 }
                 Text(TitleLook.discHint(item, facts, admin: isAdmin))
-                    .font(.system(size: 12))
+                    .font(.wm(size: 12))
                     .foregroundStyle(palette.textHint)
                     .fixedSize(horizontal: false, vertical: true)
             }
@@ -1203,7 +1203,7 @@ struct ItemPage: View {
                         HStack(spacing: Tokens.Space.s1) {
                             ForEach(row.tools, id: \.toolName) { tool in
                                 let button = sheetRow(tool, item)
-                                Button(action: button.run) { Image(systemName: button.icon).font(.system(size: 15, weight: .semibold)) }
+                                Button(action: button.run) { Image(systemName: button.icon).font(.wm(size: 15, weight: .semibold)) }
                                     .squareButton()
                                     .accessibilityLabel(tool.toolName)
                             }
@@ -1213,7 +1213,7 @@ struct ItemPage: View {
                     }
                 }
                 Text(TitleLook.discHint(item, facts, admin: isAdmin))
-                    .font(.system(size: 12))
+                    .font(.wm(size: 12))
                     .foregroundStyle(palette.textHint)
                     .fixedSize(horizontal: false, vertical: true)
             }
@@ -1261,7 +1261,7 @@ struct ItemPage: View {
     private func factCell(_ fact: TitleLook.Fact) -> some View {
         VStack(alignment: .leading, spacing: 2) {
             Text(fact.key.uppercased())
-                .font(.system(size: 11, weight: .semibold))
+                .font(.wm(size: 11, weight: .semibold))
                 .tracking(0.77)
                 .foregroundStyle(palette.textHint)
             Text(fact.value)
@@ -1290,7 +1290,7 @@ struct ItemPage: View {
                 .padding(.bottom, Tokens.Space.s2)
             if let tagline = item.tagline, !tagline.isEmpty, !item.isRigGame {
                 Text(tagline)
-                    .font(.system(size: 17).italic())
+                    .font(.wm(size: 17).italic())
                     .foregroundStyle(palette.textSecondary)
                     .fixedSize(horizontal: false, vertical: true)
                     .padding(.bottom, Tokens.Space.s2)
@@ -1302,7 +1302,7 @@ struct ItemPage: View {
             if wide { wideActions(item) } else { actions(item) }
             if !overview.isEmpty {
                 Text(overview)
-                    .font(.system(size: 15))
+                    .font(.wm(size: 15))
                     .lineSpacing(6)
                     .foregroundStyle(palette.text)
                     .fixedSize(horizontal: false, vertical: true)
@@ -1314,7 +1314,7 @@ struct ItemPage: View {
             }
             if scrambled {
                 Text("This disc is encrypted, so it can't be played: encrypted media isn't supported, and nothing here bypasses copy protection.")
-                    .font(.system(size: 14))
+                    .font(.wm(size: 14))
                     .lineSpacing(3)
                     .foregroundStyle(palette.text)
                     .fixedSize(horizontal: false, vertical: true)
@@ -1655,7 +1655,7 @@ struct ShowPage: View {
                 .factDot(!(afterPill && network == nil && status == nil), palette)
             if !genres.isEmpty { Text(genres).factDot(true, palette) }
         }
-        .font(.system(size: 14))
+        .font(.wm(size: 14))
         .foregroundStyle(palette.textSecondary)
         .clipped()
     }
@@ -1673,7 +1673,7 @@ struct ShowPage: View {
                 Button { sheet = .save } label: { Label("Save", systemImage: "plus") }.pageButton(.secondary)
             }
             if isAdmin {
-                Button { sheet = .more } label: { Image(systemName: "ellipsis").font(.system(size: 16, weight: .semibold)) }
+                Button { sheet = .more } label: { Image(systemName: "ellipsis").font(.wm(size: 16, weight: .semibold)) }
                     .squareButton()
                     .accessibilityLabel("More")
             }
@@ -1732,12 +1732,12 @@ struct ShowPage: View {
                     }
                 }
                 Text(title)
-                    .font(.system(size: 13, weight: .semibold))
+                    .font(.wm(size: 13, weight: .semibold))
                     .foregroundStyle(palette.text)
                     .multilineTextAlignment(.leading)
                     .fixedSize(horizontal: false, vertical: true)
                     .padding(.top, Tokens.Space.s2)
-                if !line.isEmpty { Text(line).font(.system(size: 12)).foregroundStyle(palette.textHint) }
+                if !line.isEmpty { Text(line).font(.wm(size: 12)).foregroundStyle(palette.textHint) }
             }
             .frame(width: 108, alignment: .leading)
             .contentShape(Rectangle())
@@ -1770,7 +1770,7 @@ struct ShowPage: View {
     /// Layout: Cards or Playlist, and Use default when this show has its own.
     private func viewSwitch(current: String, own: Bool) -> some View {
         HStack(spacing: Tokens.Space.s3) {
-            Text("Layout").font(.system(size: 13)).foregroundStyle(palette.textHint)
+            Text("Layout").font(.wm(size: 13)).foregroundStyle(palette.textHint)
             HStack(spacing: 2) {
                 segment("Cards", on: current == "cards") { setView("cards") }
                 segment("Playlist", on: current == "list") { setView("list") }
@@ -1788,7 +1788,7 @@ struct ShowPage: View {
     private func segment(_ words: String, on: Bool, action: @escaping () -> Void) -> some View {
         Button(action: action) {
             Text(words)
-                .font(.system(size: 13, weight: .semibold))
+                .font(.wm(size: 13, weight: .semibold))
                 .foregroundStyle(on ? palette.background : palette.textSecondary)
                 .lineLimit(1)
                 .padding(.horizontal, Tokens.Space.s3)
@@ -1820,7 +1820,7 @@ struct ShowPage: View {
             if wide { wideActions(detail) } else { actions(detail) }
             if !overview.isEmpty {
                 Text(overview)
-                    .font(.system(size: 15))
+                    .font(.wm(size: 15))
                     .lineSpacing(6)
                     .foregroundStyle(palette.text)
                     .fixedSize(horizontal: false, vertical: true)
@@ -1969,7 +1969,7 @@ private struct TitleSmallGhostBody<Label: View>: View {
     var body: some View {
         let shape = RoundedRectangle(cornerRadius: Tokens.Radius.md, style: .continuous)
         label
-            .font(.system(size: 13, weight: .semibold))
+            .font(.wm(size: 13, weight: .semibold))
             .foregroundStyle(palette.text)
             .lineLimit(1)
             .padding(.horizontal, Tokens.Space.s3)
@@ -2019,7 +2019,7 @@ private struct TitleEpisodeRow: View {
         .overlay(alignment: .topTrailing) {
             if episode.progress?.watched == true {
                 Image(systemName: "checkmark")
-                    .font(.system(size: 10, weight: .bold))
+                    .font(.wm(size: 10, weight: .bold))
                     .foregroundStyle(Color.white)
                     .frame(width: 20, height: 20)
                     .background(Circle().fill(palette.scrim))
@@ -2042,20 +2042,20 @@ private struct TitleEpisodeRow: View {
                     if number.isEmpty {
                         Text(episode.title)
                     } else {
-                        Text(number).font(.system(size: 12, weight: .semibold)).foregroundColor(palette.textHint)
-                            + Text(" ").font(.system(size: 15)).kerning(6)
+                        Text(number).font(.wm(size: 12, weight: .semibold)).foregroundColor(palette.textHint)
+                            + Text(" ").font(.wm(size: 15)).kerning(6)
                             + Text(episode.title)
                     }
                 }
-                .font(.system(size: 15, weight: .semibold))
+                .font(.wm(size: 15, weight: .semibold))
                 .foregroundColor(palette.text)
                 .fixedSize(horizontal: false, vertical: true)
                 if !line.isEmpty {
-                    Text(line).font(.system(size: 12)).foregroundStyle(palette.textHint).padding(.top, 2)
+                    Text(line).font(.wm(size: 12)).foregroundStyle(palette.textHint).padding(.top, 2)
                 }
                 if let overview = episode.overview, !overview.isEmpty {
                     Text(overview)
-                        .font(.system(size: 13))
+                        .font(.wm(size: 13))
                         .lineSpacing(3)
                         .foregroundStyle(palette.textSecondary)
                         .lineLimit(lines)
@@ -2144,12 +2144,12 @@ private struct TitleEpisodeTable: View {
                 }
             }
         }
-        .font(.system(size: 14).monospacedDigit())
+        .font(.wm(size: 14).monospacedDigit())
     }
 
     private func head(_ words: String) -> some View {
         Text(words.uppercased())
-            .font(.system(size: 11, weight: .semibold))
+            .font(.wm(size: 11, weight: .semibold))
             .tracking(0.77)
             .foregroundStyle(palette.textHint)
             .padding(.vertical, Tokens.Space.s2)
@@ -2171,7 +2171,7 @@ private struct TitleEpisodeTable: View {
     private func state(_ episode: Item) -> some View {
         Group {
             if episode.progress?.watched == true {
-                Image(systemName: "checkmark").font(.system(size: 13, weight: .semibold)).accessibilityLabel("Watched")
+                Image(systemName: "checkmark").font(.wm(size: 13, weight: .semibold)).accessibilityLabel("Watched")
             } else if let at = episode.progress?.resumeSec, at > 0 {
                 Text(TitleLook.clock(episode.progress?.positionSec))
             } else {
@@ -2216,10 +2216,10 @@ private struct TitleEpisodeTable: View {
                         cell(episode) {
                             Button { play(episode) } label: {
                                 HStack(spacing: 6) {
-                                    Image(systemName: "play.fill").font(.system(size: 12, weight: .semibold)).frame(width: 16, height: 16)
+                                    Image(systemName: "play.fill").font(.wm(size: 12, weight: .semibold)).frame(width: 16, height: 16)
                                     Text("Play")
                                 }
-                                .font(.system(size: 13, weight: .semibold))
+                                .font(.wm(size: 13, weight: .semibold))
                                 .foregroundStyle(palette.text)
                                 .padding(.horizontal, Tokens.Space.s3)
                                 .frame(minHeight: 44)
@@ -2233,7 +2233,7 @@ private struct TitleEpisodeTable: View {
                     Rectangle().fill(palette.border).frame(height: 1)
                 }
             }
-            .font(.system(size: 14).monospacedDigit())
+            .font(.wm(size: 14).monospacedDigit())
             .lineLimit(1)
         }
     }

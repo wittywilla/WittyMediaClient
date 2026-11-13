@@ -5,6 +5,21 @@ What changed in WittyMediaClient, newest first. What changed before it had a rep
 
 ## Unreleased
 
+- **Apple: every look's finish, scene and type set; the layout editor; the server-name editor.** The theme's `look` (`GET /theme`)
+  now reaches every surface: glass on cards, rows, the Dock and groups, gloss on buttons and the main action, bevel on what can be
+  pressed and on card pictures, glow on focus, and scanlines or paper grain, each at the level the experience asks (none, subtle,
+  full) and a step lower on a modest device, in low power mode or with Reduce Transparency or Motion. The theme's scene (sky, light
+  sweep, bubbles, hill) is drawn behind the page and under the menu; Reduce Motion stops it drifting. Corners are the theme's radius
+  times the experience's multiple, and the type sets (system, humanist, rounded, mono, serif) use the bundled open fonts Nunito,
+  Source Sans 3, Source Serif 4 and JetBrains Mono (SIL OFL, `apple/App/Fonts`, credited in NOTICE). Nothing names a look by its id.
+  **You -> Edit layout** picks a part of the shell or a section of the page up (OK or Select, move with the arrows or the buttons, OK
+  to drop, Back to cancel; every move is announced), for me (`/sdui/placements` and the page's own arrangement) or, for
+  administrators, for everyone (`/sdui/config/experience`), with undo, redo, reset and presets. **Settings -> Server name and logo**
+  (administrators) colours letters or words by theme colour, fixed colour or gradient, bold, presets, the mark and a logo, shows the
+  name in every frame it appears in and warns, with the numbers, where a colour does not read. Apple TV: Home no longer lets shelf
+  titles run under the top bar, and Customise has room above the Dock.
+## 0.5.0
+
 - **What goes wrong is reported to the server's log, filed where it belongs.** Pages that don't load and parts of a page
   the app doesn't know (kind `sdui`, once for each type), connections from away that fall back to a relay or drop
   (`p2p`, filed under `p2p-` and the end of this device's peer ID), karaoke's parts (`karaoke`), remote control

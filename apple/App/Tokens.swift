@@ -20,15 +20,16 @@ enum Tokens {
         static let s16: CGFloat = 64
     }
 
-    /// Corners follow the theme in use (its `radius`): docs/APP-DESIGN.md, Themes. Set by the model as the
-    /// theme changes; everything that draws with them also reads the palette, so it's drawn again.
+    /// Corners follow the look in use: the theme's `radius` times the experience's multiple (square for a look of 0), and
+    /// the same steps as the website's (0.4, 0.6, 1, 1.4 and 2 times). Set by the model as the look changes; everything
+    /// that draws with them also reads the palette, so it's drawn again.
     enum Radius {
         static var theme: CGFloat = 10
-        static var xs: CGFloat { max(2, theme - 6) }
-        static var sm: CGFloat { max(2, theme - 4) }
+        static var xs: CGFloat { theme * 0.4 }
+        static var sm: CGFloat { theme * 0.6 }
         static var md: CGFloat { theme }
-        static var lg: CGFloat { theme + 4 }
-        static var xl: CGFloat { theme + 10 }
+        static var lg: CGFloat { theme * 1.4 }
+        static var xl: CGFloat { theme * 2 }
     }
 
     enum Motion {

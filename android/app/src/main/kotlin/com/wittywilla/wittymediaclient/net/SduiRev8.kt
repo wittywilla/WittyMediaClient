@@ -90,7 +90,7 @@ class SduiControlSpec(
 
 // What a Form holds while it is edited: every named control's value as the person has left it. Save runs the form's command
 // with them under their names; it is off until something has changed (a television's Save).
-class SduiFormValues(initial: Map<String, JsonElement>) {
+class SduiFormValues(initial: Map<String, JsonElement>, private val numeric: Set<String> = emptySet()) {
     private var base: Map<String, JsonElement> = initial
     private val edited = LinkedHashMap<String, JsonElement>()
 
@@ -109,20 +109,48 @@ class SduiFormValues(initial: Map<String, JsonElement>) {
 
     val changed: Boolean get() = edited.isNotEmpty()
 
-    // The Form's own command with the values: the action's params first, each named control's value over them.
-    fun submit(form: SduiAction): SduiAction =
-        form.copy(params = JsonObject(form.params + base.mapValues { (name, _) -> get(name)!! }))
+    // The Form's own command with the values: the action's params first, each named control's value over them. A control named
+    // `<param>.<key>` goes into the object parameter `param` under `key` (a number field gives a number, an empty control gives no
+    // key, and a key ending `[]` splits comma-separated text into a list).
+    fun submit(form: SduiAction): SduiAction {
+        val params = LinkedHashMap<String, JsonElement>(form.params)
+        val objects = LinkedHashMap<String, LinkedHashMap<String, JsonElement>>()
+        for (name in base.keys) {
+            val value = get(name)!!
+            val dot = name.indexOf('.')
+            if (dot <= 0) { params[name] = value; continue }
+            val bag = objects.getOrPut(name.substring(0, dot)) { LinkedHashMap() }
+            var key = name.substring(dot + 1)
+            val text = (value as? JsonPrimitive)?.takeIf { it.isString }?.content
+            if (text != null && text.isEmpty()) continue
+            if (key.endsWith("[]")) {
+                key = key.removeSuffix("[]")
+                val parts = (text ?: (value as? JsonPrimitive)?.content.orEmpty()).split(',').map { it.trim() }.filter { it.isNotEmpty() }
+                if (parts.isNotEmpty()) bag[key] = kotlinx.serialization.json.JsonArray(parts.map { p -> if (name in numeric) (p.toDoubleOrNull()?.let(::number) ?: JsonPrimitive(p)) else JsonPrimitive(p) })
+            } else if (text != null && name in numeric) {
+                bag[key] = text.toDoubleOrNull()?.let(::number) ?: JsonPrimitive(text)
+            } else bag[key] = value
+        }
+        objects.forEach { (param, bag) -> params[param] = JsonObject(bag) }
+        return form.copy(params = JsonObject(params))
+    }
+
+    private fun number(d: Double): JsonPrimitive = if (d == Math.floor(d)) JsonPrimitive(d.toLong()) else JsonPrimitive(d)
 
     companion object {
         // Every named control of the form's rows, with its value as sent. A row with no name or a disabled one is not collected.
         fun of(form: SduiView): SduiFormValues {
             val values = LinkedHashMap<String, JsonElement>()
+            val numeric = HashSet<String>()
             fun walk(v: SduiView) {
-                SduiControlSpec.of(v.props)?.takeIf { it.name.isNotEmpty() && !it.disabled }?.let { spec -> spec.value?.let { values[spec.name] = it } }
+                SduiControlSpec.of(v.props)?.takeIf { it.name.isNotEmpty() && !it.disabled }?.let { spec ->
+                    (spec.value ?: if (spec.type == "field") JsonPrimitive("") else null)?.let { values[spec.name] = it }
+                    if (spec.type == "field" && spec.input == "number") numeric += spec.name
+                }
                 v.children.forEach(::walk)
             }
             form.children.forEach(::walk)
-            return SduiFormValues(values)
+            return SduiFormValues(values, numeric)
         }
     }
 }

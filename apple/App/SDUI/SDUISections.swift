@@ -329,7 +329,7 @@ struct SDUIListRow: View {
                     HStack(spacing: 4) {
                         ForEach(Array(row.badges.prefix(2).enumerated()), id: \.offset) { _, badge in
                             Text(PlainWords.clean(badge, limit: 24))
-                                .font(.system(size: CGFloat(layout.text["badge"] ?? layout.textSize("caption")), weight: .semibold))
+                                .font(.wm(size: CGFloat(layout.text["badge"] ?? layout.textSize("caption")), weight: .semibold))
                                 .foregroundStyle(palette.textSecondary)
                                 .padding(.horizontal, 6)
                                 .padding(.vertical, 1)
@@ -344,7 +344,7 @@ struct SDUIListRow: View {
                 Text(row.shown("trailing")).sduiFont("caption").foregroundStyle(palette.textSecondary).lineLimit(1)
             }
             if row.action != nil {
-                Image(systemName: "chevron.right").font(.system(size: 13, weight: .semibold)).foregroundStyle(palette.textHint).accessibilityHidden(true)
+                Image(systemName: "chevron.right").font(.wm(size: 13, weight: .semibold)).foregroundStyle(palette.textHint).accessibilityHidden(true)
             }
         }
         .padding(.horizontal, layout.isTV ? layout.sp("s") : 0)
@@ -545,7 +545,7 @@ struct SDUISeasonListView: View {
         } label: {
             HStack(spacing: 6) {
                 Text(chosen?.title ?? "Season")
-                Image(systemName: "chevron.down").font(.system(size: 12, weight: .semibold))
+                Image(systemName: "chevron.down").font(.wm(size: 12, weight: .semibold))
             }
             .sduiFont("body", weight: .semibold)
             .foregroundStyle(palette.text)

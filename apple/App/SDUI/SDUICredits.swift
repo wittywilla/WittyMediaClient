@@ -184,7 +184,7 @@ private struct ShowAllTile: View {
     var body: some View {
         VStack(spacing: layout.sp("xs")) {
             Circle().fill(palette.card).frame(width: side, height: side)
-                .overlay(Image(systemName: "arrow.right").font(.system(size: side * 0.25, weight: .semibold))
+                .overlay(Image(systemName: "arrow.right").font(.wm(size: side * 0.25, weight: .semibold))
                     .foregroundStyle(palette.text))
                 .overlay(Circle().strokeBorder(palette.tvRing, lineWidth: metrics.focusRing).padding(-metrics.focusRoom)
                     .opacity(focused ? 1 : 0))
@@ -221,7 +221,7 @@ private struct PersonCard: View {
                     SDUIPicture(picture: card.picture, symbol: "person", shownWidth: side).clipShape(Circle())
                 } else {
                     Text(initials)
-                        .font(.system(size: side * 0.32, weight: .semibold, design: .rounded))
+                        .font(.wm(size: side * 0.32, weight: .semibold, design: .rounded))
                         .foregroundStyle(palette.textSecondary)
                         .accessibilityHidden(true)
                 }

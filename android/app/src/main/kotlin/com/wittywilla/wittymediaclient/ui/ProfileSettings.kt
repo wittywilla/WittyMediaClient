@@ -169,7 +169,7 @@ fun ProfilesScreen(nav: Nav, s: Map<String, String>) {
             }
         }
         GroupedList(s["profilesYours"].orEmpty(), mine)
-        if (me.isAdmin) SettingsSlotRows(nav, "people.profile")
+        if (me.isAdmin) SettingsSlotRows(nav, "people.profile", profile = me.id.toString())
         when {
             others == null -> if (problem.isEmpty()) Note(s["loading"].orEmpty(), busy = true)
             others.isEmpty() -> Note(s[if (limits?.limited == true) "profilesNoneLimited" else "profilesNone"].orEmpty())
@@ -195,6 +195,7 @@ fun ProfilesScreen(nav: Nav, s: Map<String, String>) {
                         }
                     },
                 )
+                if (me.isAdmin) SettingsSlotRows(nav, "people.profile", profile = u.id.toString())
             }
         }
         if (me.isAdmin) {
