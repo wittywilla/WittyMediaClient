@@ -298,6 +298,8 @@ fun SduiPageScreen(nav: Nav, page: String, params: Map<String, String>, top: Boo
     }
     val layerClose = LocalSduiLayerClose.current
     var asking by remember { mutableStateOf<SduiEffect.Command?>(null) }
+    // Why the last command a Form ran was refused: drawn under its Save in the danger tone, the values left as typed.
+    val commandError = remember { mutableStateOf("") }
     val screen = model?.screen
     val screenTime = model?.base?.screenTime
     val control = remember { mutableStateOf<SduiControl?>(null) }
@@ -307,6 +309,7 @@ fun SduiPageScreen(nav: Nav, page: String, params: Map<String, String>, top: Boo
     fun runCommand(effect: SduiEffect.Command) {
         scope.launch {
             try {
+                commandError.value = ""
                 client.command(effect.spec, effect.item, effect.params)
                 toast = when (effect.spec.op) {
                     "watchLater.add" -> "Added to Watch later"
@@ -318,7 +321,8 @@ fun SduiPageScreen(nav: Nav, page: String, params: Map<String, String>, top: Boo
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
-                failed(e, whole = false)
+                if (model?.screen?.visible?.any { it.node.type == "Form" } == true && e is ApiError) commandError.value = problemWords(e, "Couldn't save.")
+                else failed(e, whole = false)
             }
         }
     }
@@ -368,7 +372,7 @@ fun SduiPageScreen(nav: Nav, page: String, params: Map<String, String>, top: Boo
                 val base = LocalAppTheme.current
                 val pageTokens = screen.document.theme?.tokens.orEmpty()
                 val body = @Composable {
-                    CompositionLocalProvider(LocalSdui provides env) {
+                    CompositionLocalProvider(LocalSdui provides env, LocalSduiCommandError provides commandError) {
                         val document = screen.document
                         val personal = document.personal
                         if (customising && personal != null) {

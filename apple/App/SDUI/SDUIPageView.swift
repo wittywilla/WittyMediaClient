@@ -246,6 +246,8 @@ struct SDUIPageBody: View {
                     Button(action: customise) { Label("Customise", systemImage: "slider.horizontal.3") }
                         .action(pill: true)
                         .padding(.horizontal, layout.margin)
+                        // On a TV the button's ring and lift need room, and the Dock under the page must not crowd it.
+                        .padding(.vertical, layout.isTV ? layout.sp("xl") : 0)
                         .accessibilityIdentifier("sdui.customise")
                         .remoteSection()
                 }

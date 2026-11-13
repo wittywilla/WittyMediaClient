@@ -222,10 +222,10 @@ struct GameDetailView: View {
                     saveThumb(auto, width: tv ? 160 : 96, height: tv ? 120 : 72)
                         .overlay(alignment: .topTrailing) { ShelfRibbon(height: tv ? 40 : 28).padding(.trailing, Tokens.Space.s2).offset(y: -4) }
                     VStack(alignment: .leading, spacing: 2) {
-                        Text(say("wpWhereYouLeftOff")).font(.system(size: tv ? 24 : 15, weight: .semibold)).foregroundStyle(palette.text)
-                        Text(GameWords.ago(auto.updatedAt)).font(.system(size: tv ? 20 : 13)).foregroundStyle(palette.textSecondary)
+                        Text(say("wpWhereYouLeftOff")).font(.wm(size: tv ? 24 : 15, weight: .semibold)).foregroundStyle(palette.text)
+                        Text(GameWords.ago(auto.updatedAt)).font(.wm(size: tv ? 20 : 13)).foregroundStyle(palette.textSecondary)
                         if let played = game?.playedSeconds, played > 60 {
-                            Text("\(GameWords.played(played)) played").font(.system(size: tv ? 20 : 13)).foregroundStyle(palette.textSecondary)
+                            Text("\(GameWords.played(played)) played").font(.wm(size: tv ? 20 : 13)).foregroundStyle(palette.textSecondary)
                         }
                     }
                     Spacer(minLength: 0)
@@ -268,7 +268,7 @@ struct GameDetailView: View {
             VStack(alignment: .leading, spacing: Tokens.Space.s2) {
                 HStack(alignment: .firstTextBaseline, spacing: Tokens.Space.s2) {
                     SectionTitle(say("wpMoments"))
-                    Text("\(list.count)").font(.system(size: tv ? 22 : 13)).foregroundStyle(palette.textHint)
+                    Text("\(list.count)").font(.wm(size: tv ? 22 : 13)).foregroundStyle(palette.textHint)
                 }
                 .padding(.horizontal, sideGutter)
                 ScrollView(.horizontal, showsIndicators: false) {
@@ -277,8 +277,8 @@ struct GameDetailView: View {
                             NavigationLink(value: Route.playGame(id, .slot(save.slot))) {
                                 VStack(alignment: .leading, spacing: 2) {
                                     saveThumb(save, width: w, height: h).padding(.bottom, Tokens.Space.s1)
-                                    Text(momentName(save.slot)).font(.system(size: tv ? 22 : 14, weight: .semibold)).foregroundStyle(palette.text).lineLimit(1)
-                                    Text(GameWords.ago(save.updatedAt)).font(.system(size: tv ? 18 : 12)).foregroundStyle(palette.textHint)
+                                    Text(momentName(save.slot)).font(.wm(size: tv ? 22 : 14, weight: .semibold)).foregroundStyle(palette.text).lineLimit(1)
+                                    Text(GameWords.ago(save.updatedAt)).font(.wm(size: tv ? 18 : 12)).foregroundStyle(palette.textHint)
                                 }
                                 .frame(width: w, alignment: .leading)
                             }
@@ -466,14 +466,14 @@ struct GameDetailView: View {
         let tv = metrics.tv
         VStack(alignment: .leading, spacing: tv ? Tokens.Space.s3 : Tokens.Space.s2) {
             Text(game.title)
-                .font(.system(size: tv ? 48 : 30, weight: tv ? .bold : .semibold))
+                .font(.wm(size: tv ? 48 : 30, weight: tv ? .bold : .semibold))
                 .tracking(tv ? -1 : -0.66)
                 .foregroundStyle(palette.text)
                 .lineLimit(3)
                 .fixedSize(horizontal: false, vertical: true)
                 .accessibilityAddTraits(.isHeader)
             let line = facts(game)
-            if !line.isEmpty { Text(line).font(.system(size: tv ? 24 : 15)).foregroundStyle(palette.textSecondary) }
+            if !line.isEmpty { Text(line).font(.wm(size: tv ? 24 : 15)).foregroundStyle(palette.textSecondary) }
             if !error.isEmpty { ProblemLine(error) }
             if check?.ready == false {
                 stateCard.padding(.top, Tokens.Space.s2)
@@ -551,7 +551,7 @@ struct GameDetailView: View {
             ScrollView {
                 VStack(alignment: .leading, spacing: Tokens.Space.s10) {
                     VStack(alignment: .leading, spacing: Tokens.Space.s3) {
-                        if !kicker.isEmpty { Text(kicker).font(.system(size: 22, weight: .semibold)).foregroundStyle(palette.textSecondary) }
+                        if !kicker.isEmpty { Text(kicker).font(.wm(size: 22, weight: .semibold)).foregroundStyle(palette.textSecondary) }
                         titleAndActions(game)
                     }
                     .frame(maxWidth: 860, alignment: .leading)
@@ -615,18 +615,18 @@ struct GameStateCard: View {
         let tv = metrics.tv
         HStack(alignment: .top, spacing: Tokens.Space.s3) {
             Image(systemName: icon)
-                .font(.system(size: tv ? 22 : 16, weight: .semibold))
+                .font(.wm(size: tv ? 22 : 16, weight: .semibold))
                 .foregroundStyle(palette.warn)
                 .frame(width: tv ? 48 : 36, height: tv ? 48 : 36)
                 .background(Circle().fill(palette.warn.opacity(0.18)))
             VStack(alignment: .leading, spacing: Tokens.Space.s1) {
-                Text(headline).font(.system(size: tv ? 24 : 15, weight: .semibold)).foregroundStyle(palette.text)
-                Text(detail).font(.system(size: tv ? 20 : 13)).foregroundStyle(palette.textSecondary).fixedSize(horizontal: false, vertical: true)
+                Text(headline).font(.wm(size: tv ? 24 : 15, weight: .semibold)).foregroundStyle(palette.text)
+                Text(detail).font(.wm(size: tv ? 20 : 13)).foregroundStyle(palette.textSecondary).fixedSize(horizontal: false, vertical: true)
                 ForEach(files, id: \.file) { b in
                     HStack(spacing: Tokens.Space.s1) {
                         Image(systemName: b.found == true ? "checkmark.circle.fill" : "circle").foregroundStyle(b.found == true ? palette.ok : palette.textHint)
-                        Text(b.file).font(.system(size: tv ? 20 : 13, design: .monospaced)).foregroundStyle(palette.text)
-                        if let what = b.for, !what.isEmpty { Text(what).font(.system(size: tv ? 18 : 12)).foregroundStyle(palette.textHint) }
+                        Text(b.file).font(.wm(size: tv ? 20 : 13, design: .monospaced)).foregroundStyle(palette.text)
+                        if let what = b.for, !what.isEmpty { Text(what).font(.wm(size: tv ? 18 : 12)).foregroundStyle(palette.textHint) }
                     }
                 }
                 if action != nil || retry != nil {

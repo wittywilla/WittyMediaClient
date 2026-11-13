@@ -105,7 +105,7 @@ struct LibraryStrip: View {
                                 let here = isCurrent(place)
                                 Button { center.open(place, model: model) } label: {
                                     Text(place.label)
-                                        .font(.system(size: 15, weight: .bold))
+                                        .font(.wm(size: 15, weight: .bold))
                                         .foregroundStyle(here ? palette.text : palette.textSecondary)
                                         .lineLimit(1)
                                         .frame(height: 44)
@@ -182,7 +182,7 @@ struct PageBackButton: View {
             dismiss()
         } label: {
             Image(systemName: "chevron.left")
-                .font(.system(size: 17, weight: .semibold))
+                .font(.wm(size: 17, weight: .semibold))
                 .foregroundStyle(palette.text)
                 .frame(width: 40, height: 40)
                 .background(Circle().fill(palette.background.opacity(0.7)))
@@ -372,7 +372,7 @@ struct FloatingBar: View {
     }
 
     private func barIcon(_ symbol: String, size: CGFloat = 20) -> some View {
-        Image(systemName: symbol).font(.system(size: size, weight: .medium)).frame(width: 24, height: 24)
+        Image(systemName: symbol).font(.wm(size: size, weight: .medium)).frame(width: 24, height: 24)
     }
 
     /// An update to install, for whoever can: the website's dot on You.
@@ -389,7 +389,7 @@ struct FloatingBar: View {
         if model.user != nil {
             AvatarTile(name: name, size: 32, picture: model.user?.avatar).overlay(alignment: .topTrailing) { updateDot }
         } else {
-            Image(systemName: "person.crop.circle").font(.system(size: 22, weight: .medium))
+            Image(systemName: "person.crop.circle").font(.wm(size: 22, weight: .medium))
         }
     }
 
@@ -462,11 +462,11 @@ struct MenuDrawer: View {
         } label: {
             HStack(spacing: Tokens.Space.s3) {
                 Image(systemName: symbol(place))
-                    .font(.system(size: 15, weight: .medium))
+                    .font(.wm(size: 15, weight: .medium))
                     .foregroundStyle(here ? palette.accentText : palette.textHint)
                     .frame(width: 18, height: 18)
                     .accessibilityHidden(true)
-                Text(place.label).font(.system(size: 14, weight: here ? .semibold : .medium))
+                Text(place.label).font(.wm(size: 14, weight: here ? .semibold : .medium))
                     .foregroundStyle(here ? palette.text : palette.textSecondary).lineLimit(1)
                 Spacer(minLength: 0)
             }
@@ -492,7 +492,7 @@ struct MenuDrawer: View {
     }
 
     private func caption(_ words: String) -> some View {
-        Text(words.uppercased()).font(.system(size: 11, weight: .semibold)).tracking(0.77).foregroundStyle(palette.textHint)
+        Text(words.uppercased()).font(.wm(size: 11, weight: .semibold)).tracking(0.77).foregroundStyle(palette.textHint)
             .padding(.horizontal, Tokens.Space.s3).padding(.top, Tokens.Space.s5).padding(.bottom, Tokens.Space.s2)
             .accessibilityAddTraits(.isHeader)
     }
@@ -516,13 +516,13 @@ struct MenuDrawer: View {
             HStack(spacing: 6) {
                 Text("WittyMediaServer \(version.number)")
                 if !version.stage.isEmpty {
-                    Text(version.stage).font(.system(size: 11, weight: .bold)).tracking(0.55)
+                    Text(version.stage).font(.wm(size: 11, weight: .bold)).tracking(0.55)
                         .foregroundStyle(palette.accentText)
                         .padding(.horizontal, 6)
                         .background(RoundedRectangle(cornerRadius: Tokens.Radius.xs, style: .continuous).fill(palette.accent.opacity(0.16)))
                 }
             }
-            .font(.system(size: 12))
+            .font(.wm(size: 12))
             .foregroundStyle(palette.textHint)
             .padding(.horizontal, Tokens.Space.s3).padding(.top, Tokens.Space.s4).padding(.bottom, Tokens.Space.s2)
         }

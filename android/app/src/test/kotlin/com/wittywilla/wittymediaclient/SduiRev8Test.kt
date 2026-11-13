@@ -221,4 +221,55 @@ class SduiRev8Test {
         val elsewhere = doc("""{"version":1,"catalog":8,"page":{"id":"h"},"root":{"type":"Page","id":"page"}}""")
         assertNull(SduiRegionRules.after(elsewhere, first))
     }
+
+    private val smartPage = """{"version":1,"catalog":8,"page":{"id":"p"},"root":{"type":"Page","id":"page","children":[
+        {"type":"Form","id":"rule","props":{"title":"Smart list","submitLabel":"Save"},"action":{"type":"command","op":"smartlist.create","params":{"name":"Mine"}},"children":[
+          {"type":"List","id":"rows","children":[
+            {"type":"ListItem","id":"rows:from","props":{"title":"From","control":{"type":"field","name":"rule.yearFrom","value":"1990","input":"number"}}},
+            {"type":"ListItem","id":"rows:to","props":{"title":"To","control":{"type":"field","name":"rule.yearTo","value":"","input":"number"}}},
+            {"type":"ListItem","id":"rows:genres","props":{"title":"Genres","control":{"type":"field","name":"rule.genres[]","value":"Sci-Fi, Drama"}}},
+            {"type":"ListItem","id":"rows:kind","props":{"title":"Kind","control":{"type":"select","name":"rule.kind","value":"movie","options":[{"value":"movie","label":"Films"}]}}}]}]}]}}"""
+
+    @Test
+    fun objectParametersAreBuiltFromControlsNamedParamDotKey() {
+        val form = SduiScreen(doc(smartPage)).root.children.single()
+        val values = SduiFormValues.of(form)
+        val sent = values.submit(form.node.action!!)
+        assertEquals("""{"name":"Mine","rule":{"yearFrom":1990,"genres":["Sci-Fi","Drama"],"kind":"movie"}}""", sent.params.toString())
+        values.set("rule.yearTo", JsonPrimitive("2005"))
+        assertEquals("a number field gives a number", """{"name":"Mine","rule":{"yearFrom":1990,"yearTo":2005,"genres":["Sci-Fi","Drama"],"kind":"movie"}}""", values.submit(form.node.action!!).params.toString())
+        val spec = SduiCommandSpec("smartlist.create", "POST", "/api/smart", """{"name":"{name}","rule":"{rule}"}""", listOf(SduiCommandParam("name", "string", true), SduiCommandParam("rule", "object", true)))
+        val before = SduiCommands.serverRevision
+        SduiCommands.serverRevision = 16
+        try {
+            assertEquals("""{"name":"Mine","rule":{"yearFrom":1990,"genres":["Sci-Fi","Drama"],"kind":"movie"}}""", SduiCommands.request(spec, "", sent.params)!!.body)
+        } finally { SduiCommands.serverRevision = before }
+    }
+
+    @Test
+    fun aNativeButtonCarriesItsItemAsParams() {
+        val effect = SduiRouter().effect(action("""{"type":"native","to":"player","params":{"item":"42"}}""")) as SduiEffect.Open
+        assertEquals(SduiTarget.Native("player", mapOf("item" to "42"), ""), effect.target)
+    }
+
+    @Test
+    fun theNewServerPagesOpenThroughTheRenderer() {
+        val router = SduiRouter()
+        for ((route, page) in listOf("/creators" to "creators", "/creator/5" to "creator", "/comments/5" to "comments", "/markers/5" to "markers", "/canvas/5" to "canvas", "/smart-list" to "smart-list", "/versions/9" to "versions", "/devices" to "devices", "/year" to "year", "/studio/A%20B" to "studio")) {
+            val target = router.resolve(route) as SduiTarget.Page
+            assertEquals(route, page, target.page)
+        }
+        assertEquals("A B", (router.resolve("/studio/A%20B") as SduiTarget.Page).params["name"])
+        assertEquals("5", (router.resolve("/markers/5") as SduiTarget.Page).params["item"])
+        // A module's page from a settings slot: /page/<id>?item=<profile>.
+        val slot = router.resolve("/page/wittyplay-kids?item=7") as SduiTarget.Page
+        assertEquals("wittyplay-kids", slot.page)
+        assertEquals("7", slot.params["item"])
+    }
+
+    @Test
+    fun aQrIsAStackToTheKit() {
+        val screen = SduiScreen(doc("""{"version":1,"catalog":8,"page":{"id":"p"},"root":{"type":"Page","id":"page","children":[{"type":"QR","id":"join","props":{"value":"/games?join=X","label":"Scan","size":"l","isRoute":true}}]}}"""))
+        assertEquals("Stack", screen.root.children.single().type)
+    }
 }

@@ -168,7 +168,7 @@ struct SDUIPicture: View {
                     }
                 } else if !blank {
                     Image(systemName: symbol)
-                        .font(.system(size: 28, weight: .medium))
+                        .font(.wm(size: 28, weight: .medium))
                         .foregroundStyle(palette.textSecondary)
                 }
             }
@@ -273,7 +273,7 @@ struct SDUISectionHeading: View {
                     Button(action: seeAll) {
                         HStack(spacing: 2) {
                             Text("See all")
-                            Image(systemName: "chevron.right").font(.system(size: 11, weight: .semibold))
+                            Image(systemName: "chevron.right").font(.wm(size: 11, weight: .semibold))
                         }
                         .sduiFont("caption", weight: .medium)
                         .foregroundStyle(palette.textSecondary)
@@ -372,6 +372,8 @@ struct SDUIDraw {
         let typeRole = catalog.typeRoles[role] ?? SDUIDraw.defaultRoles[role] ?? SDUITypeRole(family: "body", weight: "body")
         let weight = explicit ?? SDUIDraw.weight(style?.type?.weights[typeRole.weight] ?? SDUIDraw.defaultWeights[typeRole.weight] ?? 400)
         let monospaced = typeRole.family == "mono"
+        // The look's own type set (bundled open fonts) comes before the theme's families: a look is a type set, a theme is colour.
+        if let name = TypeSet.faceName(weight: weight), !(monospaced && TypeSet.current != .mono) { return .custom(name, fixedSize: size) }
         for family in style?.type?.families(typeRole.family) ?? [] {
             let name = family.trimmingCharacters(in: .whitespaces)
             if ["system-ui", "-apple-system", "sans-serif", "ui-sans-serif", "BlinkMacSystemFont"].contains(name) { break }

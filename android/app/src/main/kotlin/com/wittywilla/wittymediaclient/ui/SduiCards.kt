@@ -172,6 +172,8 @@ fun SduiCard(view: SduiView, parent: SduiView?, width: Dp, modifier: Modifier = 
         var menu by remember { mutableStateOf(false) }
         val choices = remember(view) { if (env.tv) emptyList() else cardChoices(view) }
         val tile = style == "tile"
+        // plate: the title over the picture on a scrim at its foot (the Rail look); block: a flat block of colour with the title in it (teletext).
+        val over = style == "plate" || style == "block"
         val reduce = LocalReduceMotion.current || env.layout.reducedMotion
         val scale by androidx.compose.animation.core.animateFloatAsState(
             if (grow != null && grow.selected && !reduce) grow.scale else 1f, if (reduce) androidx.compose.animation.core.snap() else androidx.compose.animation.core.tween(180), label = "grow",
@@ -204,6 +206,8 @@ fun SduiCard(view: SduiView, parent: SduiView?, width: Dp, modifier: Modifier = 
                             Box(Modifier.fillMaxSize().background(scheme.surfaceVariant).clearAndSetSemantics { }, contentAlignment = Alignment.Center) {
                                 Text(initials(p.str("title")), color = scheme.onSurfaceVariant, fontSize = env.size("heading"), fontWeight = FontWeight.SemiBold)
                             }
+                        } else if (style == "block") {
+                            Box(Modifier.fillMaxSize().background(scheme.primary.copy(alpha = 0.22f)))
                         } else {
                             // A channel's logo is fitted inside a plain tile; everything else fills its card.
                             SduiPicture(image, width, aspect, if (image == null && p.str("icon").isNotEmpty()) sduiIcon(p.str("icon")) else sduiKindIcon(p.str("kind")), Modifier.fillMaxSize(), contain = image?.kind == "logo")
@@ -214,6 +218,14 @@ fun SduiCard(view: SduiView, parent: SduiView?, width: Dp, modifier: Modifier = 
                             Column(Modifier.align(Alignment.BottomStart).padding(env.pt(if (env.tv) 24 else 12))) {
                                 view.text["title"]?.let { Text(it, color = if (image != null) ON_IMAGE else scheme.onBackground, fontSize = env.size("body"), fontWeight = FontWeight.SemiBold, maxLines = view.line("title", 1), overflow = TextOverflow.Ellipsis) }
                                 view.text["count"]?.let { Text(countWords(it, p.str("kind")), color = if (image != null) ON_IMAGE.copy(alpha = 0.8f) else extra.hint, fontSize = env.size("caption"), maxLines = 1) }
+                            }
+                        }
+                        if (over) {
+                            if (style == "plate" && image != null) Box(Modifier.fillMaxSize().background(Brush.verticalGradient(0.45f to Color.Transparent, 1f to extra.scrim.copy(alpha = 0.82f))))
+                            Column(Modifier.align(Alignment.BottomStart).padding(env.pt(if (env.tv) 20 else 10))) {
+                                val ink = if (style == "plate" && image != null) ON_IMAGE else scheme.onBackground
+                                view.text["title"]?.let { Text(it, color = ink, fontSize = env.size("body"), fontWeight = FontWeight.SemiBold, maxLines = view.line("title", 2), overflow = TextOverflow.Ellipsis) }
+                                view.text["subtitle"]?.let { Text(it, color = ink.copy(alpha = 0.8f), fontSize = env.size("caption"), maxLines = view.line("subtitle", 1), overflow = TextOverflow.Ellipsis) }
                             }
                         }
                         val edge = env.pt(if (env.tv) 14 else 8)
@@ -232,7 +244,7 @@ fun SduiCard(view: SduiView, parent: SduiView?, width: Dp, modifier: Modifier = 
                         if ("progress" in view.shows) view.progress?.let { CardProgress(it) }
                         if (!env.tv && !tile) Box(Modifier.fillMaxSize().border(1.dp, Color(0x14FFFFFF), corner))
                     }
-                    if (!tile) CardWords(view, round)
+                    if (!tile && !over) CardWords(view, round)
                 }
             }
             // The app's own sheet, as its other menus are.
