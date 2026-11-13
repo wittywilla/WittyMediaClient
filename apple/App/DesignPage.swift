@@ -694,8 +694,11 @@ struct DesignCard: View {
     var body: some View {
         Button(action: action) {
             VStack(alignment: .leading, spacing: 2) {
-                // A look's layout as a preview in its colours, from the slot (`designCardPreview`); else the swatches.
-                if let shown = preview?.make(card) {
+                // A look's layout: the server's wire as a wireframe in its theme's colours; else a preview from the slot
+                // (`designCardPreview`); else the swatches.
+                if let wire = card.wire {
+                    LayoutThumb(wire: wire, swatches: card.swatches).padding(.bottom, 4)
+                } else if let shown = preview?.make(card) {
                     shown
                         .accessibilityHidden(true)
                         .padding(.bottom, 4)

@@ -5,6 +5,9 @@ package com.wittywilla.wittymediaclient.ui
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -15,11 +18,12 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.semantics
-import com.wittywilla.wittymediaclient.data.fill
+import androidx.compose.ui.text.font.FontWeight
 import com.wittywilla.wittymediaclient.net.ApiError
 import com.wittywilla.wittymediaclient.net.ModuleSettingRow
 import com.wittywilla.wittymediaclient.net.ModuleSettingsEntry
@@ -52,14 +56,23 @@ fun ModuleSettingsListScreen(nav: Nav, s: Map<String, String>) {
             modules = emptyList()
         }
     }
-    SettingsPage(nav, s["rowModuleSettings"].orEmpty(), s["moduleSettingsHint"].orEmpty()) {
+    val metrics = LocalMetrics.current
+    val accent = LocalExtraColours.current.accentText
+    DesignScreen(s["rowModuleSettings"].orEmpty(), nav::pop, eyebrow = s["youTab"].orEmpty(), lead = s["moduleSettingsHint"].orEmpty()) {
         val list = modules
-        when {
-            list == null -> Loading()
-            list.isEmpty() -> Note(problem.ifEmpty { s["moduleSettingsNone"].orEmpty() })
-            else -> GroupedList("", list.mapIndexed { i, m ->
-                GroupRow(m.label.ifEmpty { m.module }, onClick = { nav.push(Route.ModuleSettings(m.url, m.label.ifEmpty { m.module })) }, icon = sduiIcon(m.icon.ifEmpty { "extension" }), focusKey = "module-${m.module}", requestFocus = i == 0)
-            })
+        DesignSection("") {
+            when {
+                list == null -> Loading()
+                list.isEmpty() -> DesignNote(problem.ifEmpty { s["moduleSettingsNone"].orEmpty() })
+                else -> list.forEachIndexed { i, m ->
+                    DesignRow(
+                        m.label.ifEmpty { m.module }, onClick = { nav.push(Route.ModuleSettings(m.url, m.label.ifEmpty { m.module })) },
+                        leading = { Icon(sduiIcon(m.icon.ifEmpty { "extension" }), null, tint = accent, modifier = Modifier.size(metrics.u(24))) },
+                        trailing = { Icon(Symbols.Next, null, tint = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(metrics.u(20))) },
+                        focusKey = "module-${m.module}", requestFocus = i == 0,
+                    )
+                }
+            }
         }
     }
 }
@@ -106,75 +119,89 @@ fun ModuleSettingsScreen(nav: Nav, s: Map<String, String>, url: String, title: S
         }
     }
 
-    SettingsPage(nav, if (only.isNotEmpty()) title else view?.label?.ifEmpty { null } ?: title, "") {
+    DesignScreen(if (only.isNotEmpty()) title else view?.label?.ifEmpty { null } ?: title, nav::pop, eyebrow = s["rowModuleSettings"].orEmpty()) {
         val v = view
         when {
-            v == null && problem.isNotEmpty() -> Note(problem)
+            v == null && problem.isNotEmpty() -> DesignSection("") { DesignNote(problem, error = true) }
             v == null -> Loading()
             else -> v.pages.filter { only.isEmpty() || it.id == only }.forEach { page ->
                 page.groups.forEach { group ->
                     val rows = group.rows.filter(ModuleSettingsRules::known)
-                    GroupedList(group.title.ifEmpty { page.title }, rows.flatMap { row -> rowsFor(v, row, s, drafts, rowProblems[row.key].orEmpty(), ::save) })
-                    // Fields for text and secrets sit under their group, one per row that takes typing.
-                    rows.filter { ModuleSettingsRules.editable(v, it) && (it.kind == "string" || it.kind == "secret") }.forEach { row ->
-                        val secret = row.kind == "secret"
-                        WittyField(
-                            drafts[row.key] ?: if (secret) "" else ModuleSettingsRules.text(v, row.key),
-                            { drafts[row.key] = it.take(ModuleSettingsRules.limit(row)) },
-                            if (secret) row.label + " · " + s["moduleSecretNew"].orEmpty() else row.label,
-                            Modifier.fillMaxWidth(),
-                            kind = if (secret) FieldKind.Password else FieldKind.Text,
-                            error = rowProblems[row.key].orEmpty(),
-                            onAction = { drafts[row.key]?.let { typed -> save(row, JsonPrimitive(typed)) } },
-                            maxLength = ModuleSettingsRules.limit(row),
-                        )
-                        if (secret && row.key in v.secretsSet) WittyButton(s["moduleSecretClear"].orEmpty() + " · " + row.label, { save(row, null) }, kind = ButtonKind.Quiet, focusKey = "clear-${row.key}")
+                    DesignSection(group.title.ifEmpty { page.title }) {
+                        rows.forEach { row -> SettingRows(v, row, s, rowProblems[row.key].orEmpty(), ::save) }
+                        // Fields for text and secrets sit under their group, one per row that takes typing.
+                        rows.filter { ModuleSettingsRules.editable(v, it) && (it.kind == "string" || it.kind == "secret") }.forEach { row ->
+                            val secret = row.kind == "secret"
+                            WittyField(
+                                drafts[row.key] ?: if (secret) "" else ModuleSettingsRules.text(v, row.key),
+                                { drafts[row.key] = it.take(ModuleSettingsRules.limit(row)) },
+                                if (secret) row.label + " · " + s["moduleSecretNew"].orEmpty() else row.label,
+                                Modifier.fillMaxWidth(),
+                                kind = if (secret) FieldKind.Password else FieldKind.Text,
+                                error = rowProblems[row.key].orEmpty(),
+                                onAction = { drafts[row.key]?.let { typed -> save(row, JsonPrimitive(typed)) } },
+                                maxLength = ModuleSettingsRules.limit(row),
+                            )
+                            if (secret && row.key in v.secretsSet) WittyButton(s["moduleSecretClear"].orEmpty() + " · " + row.label, { save(row, null) }, kind = ButtonKind.Quiet, focusKey = "clear-${row.key}")
+                        }
+                        DesignNote(group.footer)
                     }
-                    if (group.footer.isNotEmpty()) Text(group.footer, color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.secondary)
                 }
             }
         }
-        if (said.isNotEmpty()) Text(said, color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.secondary, modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite })
+        if (said.isNotEmpty()) DesignNote(said, Modifier.padding(top = LocalDesignSizes.current.gap).semantics { liveRegion = LiveRegionMode.Polite })
     }
 }
 
-// The rows of the app's own grouped list for one setting.
-private fun rowsFor(
-    view: ModuleSettingsView, row: ModuleSettingRow, s: Map<String, String>, drafts: Map<String, String>, problem: String,
+// One setting's rows, in the order the app's grouped list had them: a switch, a choice (its options as chips), a number
+// with − and +, a secret, some text, or something to read, reachable all the same.
+@Composable
+private fun SettingRows(
+    view: ModuleSettingsView, row: ModuleSettingRow, s: Map<String, String>, problem: String,
     save: (ModuleSettingRow, JsonElement?) -> Unit,
-): List<GroupRow> {
+) {
     val canEdit = ModuleSettingsRules.editable(view, row)
     val help = listOf(row.help, problem, if (!canEdit && row.kind != "info") s["moduleReadOnly"].orEmpty() else "").filter { it.isNotEmpty() }.joinToString(" · ")
     val key = "setting-${row.key.ifEmpty { row.label }}"
-    return when (row.kind) {
+    when (row.kind) {
         "bool" -> {
             val on = ModuleSettingsRules.bool(view, row.key)
-            listOf(GroupRow(row.label, onClick = if (canEdit) ({ save(row, JsonPrimitive(!on)) }) else null, detail = help, focusKey = key, chevron = false,
-                trailing = { Toggle(on) }, value = if (canEdit) "" else if (on) "On" else "Off"))
+            val words = LocalWords.current
+            val said = if (on) words["on"] ?: "On" else words["off"] ?: "Off"
+            DesignRow(row.label, value = said, sub = help, on = on, state = said, selected = on, focusKey = key, onClick = if (canEdit) ({ save(row, JsonPrimitive(!on)) }) else null)
         }
         "enum" -> {
             val current = ModuleSettingsRules.text(view, row.key)
-            if (!canEdit) listOf(GroupRow(row.label, value = ModuleSettingsRules.shown(view, row), detail = help, focusKey = key, chevron = false, onClick = {}))
-            else listOf(GroupRow(row.label, detail = help, focusKey = key, chevron = false, onClick = {})) +
-                row.options.map { option ->
-                    GroupRow("    " + option.label, onClick = { if (option.value != current) save(row, JsonPrimitive(option.value)) }, selected = option.value == current,
-                        chevron = false, focusKey = "$key-${option.value}", trailing = if (option.value == current) ({ Text("✓", color = MaterialTheme.colorScheme.primary) }) else null)
+            if (!canEdit) DesignRow(row.label, value = ModuleSettingsRules.shown(view, row), sub = help, focusKey = key, onClick = {})
+            else {
+                DesignRow(row.label, value = ModuleSettingsRules.shown(view, row), on = true, sub = help, focusKey = key, onClick = {})
+                DesignChips {
+                    row.options.forEach { option ->
+                        DesignChip(option.label, { if (option.value != current) save(row, JsonPrimitive(option.value)) }, on = option.value == current, focusKey = "$key-${option.value}")
+                    }
                 }
+            }
         }
         "int" -> {
             val now = ModuleSettingsRules.number(view, row.key)
-            listOf(GroupRow(row.label, value = ModuleSettingsRules.shown(view, row), detail = help, focusKey = key, chevron = false, onClick = if (canEdit) ({}) else null,
-                trailing = if (!canEdit) null else ({
-                    Row(horizontalArrangement = Arrangement.spacedBy(LocalMetrics.current.u(8))) {
+            val shown = ModuleSettingsRules.shown(view, row)
+            if (!canEdit) DesignRow(row.label, value = shown, sub = help, focusKey = key)
+            else DesignRow(
+                row.label, sub = help, focusKey = key, onClick = {}, label = listOf(row.label, help, shown).filter { it.isNotEmpty() }.joinToString(", "),
+                trailing = {
+                    val ds = LocalDesignSizes.current
+                    Row(horizontalArrangement = Arrangement.spacedBy(LocalMetrics.current.u(8)), verticalAlignment = Alignment.CenterVertically) {
+                        Text(shown, color = LocalExtraColours.current.accentText, fontSize = ds.small, fontWeight = FontWeight.Bold)
                         WittyButton("−", { save(row, JsonPrimitive(ModuleSettingsRules.stepped(row, now, -1))) }, kind = ButtonKind.Quiet, focusKey = "$key-less")
                         WittyButton("+", { save(row, JsonPrimitive(ModuleSettingsRules.stepped(row, now, 1))) }, kind = ButtonKind.Quiet, focusKey = "$key-more")
                     }
-                })))
+                },
+            )
         }
-        "secret" -> listOf(GroupRow(row.label, value = if (row.key in view.secretsSet) s["moduleSecretSet"].orEmpty() else s["moduleSecretNotSet"].orEmpty(), detail = help, focusKey = key, chevron = false, onClick = {}))
-        "string" -> listOf(GroupRow(row.label, value = if (canEdit) "" else ModuleSettingsRules.shown(view, row), detail = help, focusKey = key, chevron = false, onClick = {}))
+        "secret" -> DesignRow(row.label, value = if (row.key in view.secretsSet) s["moduleSecretSet"].orEmpty() else s["moduleSecretNotSet"].orEmpty(), on = row.key in view.secretsSet, sub = help, focusKey = key, onClick = {})
+        "string" -> DesignRow(row.label, value = if (canEdit) "" else ModuleSettingsRules.shown(view, row), sub = help, focusKey = key, onClick = {})
         // Something to read, reachable all the same.
-        else -> listOf(GroupRow(row.label, detail = row.help, focusKey = key, chevron = false, onClick = {}))
+        else -> DesignRow(row.label, sub = row.help, focusKey = key, onClick = {})
     }
 }
 

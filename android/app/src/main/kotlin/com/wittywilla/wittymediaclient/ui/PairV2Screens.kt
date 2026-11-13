@@ -8,15 +8,11 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
-import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.text.BasicTextField
@@ -40,12 +36,10 @@ import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
@@ -54,7 +48,7 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
-import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.unit.em
 import com.wittywilla.wittymediaclient.net.ApiError
 import com.wittywilla.wittymediaclient.net.PAIR_QR_FEATURE
 import com.wittywilla.wittymediaclient.net.PairApproval
@@ -227,98 +221,80 @@ fun PairWithQr(nav: Nav, s: Map<String, String>, onBack: () -> Unit, onUsePasswo
         }
     }
     val ended = showing == null && phase != PairPhase.Starting
-    SignInLayout(
-        onBack,
-        words = {
-            val place = if (metrics.tv) Modifier else Modifier.align(Alignment.CenterHorizontally)
-            Lockup(nav.brandName, nav.brandLogo)
-            SignInHeading(s["pairQrTitle"].orEmpty(), detail = if (showing != null) s["pairQrHint"].orEmpty() else "")
+    // Design 2's page under this server's lockup: the PIN and the code to scan, then the other ways in.
+    DesignScreen(
+        s["pairQrTitle"].orEmpty(), onBack, lead = if (showing != null) s["pairQrHint"].orEmpty() else "", tag = "pairing",
+        top = { Lockup(nav.brandName, nav.brandLogo) },
+        actions = {
+            if (ended) {
+                if (phase == PairPhase.Busy) WittyButton(s["usePassword"].orEmpty(), onUsePassword, kind = ButtonKind.Primary, tall = true, takeFocus = true, focusKey = "pair-password")
+                else WittyButton(s["pairNew"].orEmpty(), { round++ }, kind = ButtonKind.Primary, tall = true, takeFocus = true, focusKey = "pair-new")
+            }
+            val server = nav.server
+            if (server != null && server.publicKey.isNotEmpty()) {
+                WittyButton(s["codeTitle"].orEmpty(), { nav.push(Route.Code(server)) }, kind = ButtonKind.Secondary, focusKey = "typed-code")
+            }
+            if (phase != PairPhase.Busy) WittyButton(s["usePassword"].orEmpty(), onUsePassword, kind = ButtonKind.Secondary, requestFocus = showing != null, focusKey = "use-password")
+            WittyButton(s["changeServer"].orEmpty(), nav::changeServer, kind = ButtonKind.Quiet, focusKey = "change-server")
+        },
+    ) {
+        DesignSection("") {
             if (showing != null) {
                 val seconds = PairRules.secondsLeft(leftAtAnswer, now - answeredAt)
                 val share = PairRules.share(leftAtAnswer, now - answeredAt, showing.period)
-                PinCard(s, pin, seconds, share, place)
+                PinCard(s, pin, seconds, share)
                 val address = remember(showing.approvePath) { runCatching { nav.app.api.mediaUrl(showing.approvePath) }.getOrDefault("") }
-                Text(
-                    s["pairQrOrType"].orEmpty().replace("{code}", showing.code).replace("{address}", address),
-                    color = scheme.onSurfaceVariant, style = MaterialTheme.typography.secondary, textAlign = if (metrics.tv) TextAlign.Start else TextAlign.Center,
-                )
-                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(metrics.u(8)), modifier = place) {
-                    Spinner(scheme.onSurfaceVariant, metrics.u(if (metrics.tv) 30 else 16))
-                    Text(s[if (lostContact) "errLost" else "pairWaiting"].orEmpty(), color = scheme.onSurfaceVariant, style = MaterialTheme.typography.secondary)
-                }
+                DesignNote(s["pairQrOrType"].orEmpty().replace("{code}", showing.code).replace("{address}", address))
+                DesignNote(s[if (lostContact) "errLost" else "pairWaiting"].orEmpty(), busy = true)
             } else if (!ended) {
-                Box(place.heightIn(min = metrics.u(80)), contentAlignment = Alignment.Center) { Spinner(scheme.onSurfaceVariant, metrics.u(if (metrics.tv) 40 else 24)) }
+                Spinner(scheme.onSurfaceVariant, metrics.u(if (metrics.tv) 40 else 24))
             }
-            Problem(problem, Modifier.fillMaxWidth())
-        },
-        actions = {
-            val place = if (metrics.tv) Modifier else Modifier.align(Alignment.CenterHorizontally)
-            if (showing != null) {
-                // The app's own code carries the server's ID and a check, for the app to scan. A phone without the
-                // app reads the web address instead, with its own camera, and types the PIN on the page it opens.
-                val web = remember(showing.approveUrl, showing.approvePath) {
-                    runCatching { showing.approveUrl.ifEmpty { nav.app.api.mediaUrl(showing.approvePath) } }.getOrDefault("")
-                }
-                val camera = forCamera && web.isNotEmpty()
-                QrCard(if (camera) web else showing.qr, s[if (camera) "pairQrScanCamera" else "pairQrScanApp"].orEmpty(), place)
+            DesignNote(problem, error = true)
+        }
+        if (showing != null) {
+            // The app's own code carries the server's ID and a check, for the app to scan. A phone without the
+            // app reads the web address instead, with its own camera, and types the PIN on the page it opens.
+            val web = remember(showing.approveUrl, showing.approvePath) {
+                runCatching { showing.approveUrl.ifEmpty { nav.app.api.mediaUrl(showing.approvePath) } }.getOrDefault("")
+            }
+            val camera = forCamera && web.isNotEmpty()
+            DesignSection("") {
+                QrCard(if (camera) web else showing.qr, s[if (camera) "pairQrScanCamera" else "pairQrScanApp"].orEmpty())
                 if (web.isNotEmpty()) {
-                    WittyButton(s[if (camera) "pairQrUseApp" else "pairQrUseCamera"].orEmpty(), { forCamera = !forCamera }, place, kind = ButtonKind.Quiet, focusKey = "pair-qr-kind")
+                    DesignChips {
+                        DesignChip(s[if (camera) "pairQrUseApp" else "pairQrUseCamera"].orEmpty(), { forCamera = !forCamera }, focusKey = "pair-qr-kind")
+                    }
                 }
             }
-            if (ended) {
-                if (phase == PairPhase.Busy) WittyButton(s["usePassword"].orEmpty(), onUsePassword, Modifier.fillMaxWidth(), kind = ButtonKind.Primary, tall = true, takeFocus = true, focusKey = "pair-password")
-                else WittyButton(s["pairNew"].orEmpty(), { round++ }, Modifier.fillMaxWidth(), kind = ButtonKind.Primary, tall = true, takeFocus = true, focusKey = "pair-new")
-            }
-            PairLinks {
-                val server = nav.server
-                if (server != null && server.publicKey.isNotEmpty()) {
-                    WittyButton(s["codeTitle"].orEmpty(), { nav.push(Route.Code(server)) }, kind = ButtonKind.Quiet, focusKey = "typed-code")
-                }
-                if (phase != PairPhase.Busy) WittyButton(s["usePassword"].orEmpty(), onUsePassword, kind = ButtonKind.Quiet, requestFocus = showing != null, focusKey = "use-password")
-                WittyButton(s["changeServer"].orEmpty(), nav::changeServer, kind = ButtonKind.Quiet, focusKey = "change-server")
-            }
-        },
-    )
+        }
+    }
 }
 
 private const val TICK_MS = 250L
 private const val EXPIRY_SLACK_SEC = 15
 
-@OptIn(ExperimentalLayoutApi::class)
-@Composable
-private fun PairLinks(content: @Composable () -> Unit) {
-    val metrics = LocalMetrics.current
-    FlowRow(
-        Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.spacedBy(metrics.u(8), if (metrics.tv) Alignment.Start else Alignment.CenterHorizontally),
-        verticalArrangement = Arrangement.spacedBy(metrics.u(8)),
-    ) { content() }
-}
-
-// The PIN, large enough to read across a room, with a ring that empties as it runs out. It is read aloud as its
-// digits when asked for, and not each time it changes: every thirty seconds would be all anyone heard.
+// The PIN, large enough to read across a room, with a ring that empties as it runs out, in the page's panel. It is
+// read aloud as its digits when asked for, and not each time it changes: every thirty seconds would be all anyone heard.
 @Composable
 private fun PinCard(s: Map<String, String>, pin: String, seconds: Int, share: Float, modifier: Modifier = Modifier) {
     val metrics = LocalMetrics.current
+    val ds = LocalDesignSizes.current
     val scheme = MaterialTheme.colorScheme
-    val density = LocalDensity.current
-    val size = with(density) { metrics.u(if (metrics.tv) 72 else 40).toSp() }
-    val spacing = with(density) { metrics.u(if (metrics.tv) 8 else 4).toSp() }
     val spoken = s["pairPinSpoken"].orEmpty().replace("{pin}", pin.toList().joinToString(" ")).replace("{n}", seconds.toString())
     Row(
         modifier
-            .clip(metrics.corner(14))
+            .clip(metrics.corner(10))
             .background(scheme.surface)
-            .padding(horizontal = metrics.u(24), vertical = metrics.u(12))
+            .padding(horizontal = ds.gap * 2.4f, vertical = ds.gap * 1.2f)
             .clearAndSetSemantics { contentDescription = spoken },
         verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(metrics.u(20)),
+        horizontalArrangement = Arrangement.spacedBy(ds.gap * 2),
     ) {
         Column {
-            Text(s["pairPinLabel"].orEmpty().uppercase(), color = scheme.onSurfaceVariant, style = MaterialTheme.typography.caption)
+            Text(s["pairPinLabel"].orEmpty().uppercase(), color = LocalExtraColours.current.accentText, fontSize = ds.tiny, fontWeight = FontWeight.Bold, letterSpacing = 0.08.em)
             Text(
                 PairRules.shownPin(pin), color = scheme.onSurface,
-                style = TextStyle(fontFamily = FontFamily.Monospace, fontWeight = FontWeight.Bold, fontSize = size, letterSpacing = spacing),
+                style = TextStyle(fontFamily = FontFamily.Monospace, fontWeight = FontWeight.Bold, fontSize = ds.title * 1.15f, letterSpacing = 0.12.em),
             )
         }
         val ring = metrics.u(if (metrics.tv) 72 else 44)
@@ -332,7 +308,7 @@ private fun PinCard(s: Map<String, String>, pin: String, seconds: Int, share: Fl
                 drawArc(track, 0f, 360f, false, Offset(inset, inset), arc, style = Stroke(stroke))
                 drawArc(accent, -90f, 360f * share, false, Offset(inset, inset), arc, style = Stroke(stroke, cap = StrokeCap.Round))
             }
-            Text(seconds.toString(), color = scheme.onSurface, style = MaterialTheme.typography.label)
+            Text(seconds.toString(), color = scheme.onSurface, fontSize = ds.small, fontWeight = FontWeight.Bold)
         }
     }
 }
@@ -479,106 +455,130 @@ fun ApproveDeviceScreen(nav: Nav, s: Map<String, String>) {
 
     val waitText = waitWords(s, waiting)
     val plain = asking == null && invite == null && !inviting && outcome.isEmpty() && scan != ScanStep.On
-    SettingsPage(nav, s["rowSignInTv"].orEmpty(), if (plain) s[if (canScan) "approveHintScan" else "signInTvHint"].orEmpty() else "", onBack = { if (plain) nav.pop() else reset() }) {
+    // Design 2's page: what's asking and the answer to it, as sections, each state with its own actions under it.
+    DesignScreen(
+        s["rowSignInTv"].orEmpty(), { if (plain) nav.pop() else reset() }, eyebrow = s["youTab"].orEmpty(),
+        lead = if (plain) s[if (canScan) "approveHintScan" else "signInTvHint"].orEmpty() else "", tag = "sign-in-tv",
+    ) {
         val found = asking
         val made = invite
-        val centre = if (metrics.tv) Modifier else Modifier.align(Alignment.CenterHorizontally)
+        val gap = Modifier.padding(top = LocalDesignSizes.current.gap)
         val confirm: @Composable () -> Unit = {
-            Note(s["approvePasswordWhy"].orEmpty())
+            DesignNote(s["approvePasswordWhy"].orEmpty())
             WittyField(password, { password = it; problem = "" }, s["yourPasswordLabel"].orEmpty(), kind = FieldKind.Password, icon = Symbols.Password, imeAction = if (twoFactor) ImeAction.Next else ImeAction.Done, isError = wrong > 0 && problem.isNotEmpty(), shake = wrong)
             if (twoFactor) WittyField(otp, { otp = it.take(32); problem = "" }, s["switchCodeLabel"].orEmpty(), icon = Symbols.ShieldLock, imeAction = ImeAction.Done, maxLength = 32)
         }
+        val trouble = listOf(problem, waitText).filter { it.isNotEmpty() }.joinToString(" ")
         when {
-            !adult -> Note(s["signInTvAdultOnly"].orEmpty())
+            !adult -> DesignNote(s["signInTvAdultOnly"].orEmpty(), gap, tone = true)
             outcome.isNotEmpty() -> {
-                if (good) Done(outcome) else Problem(outcome, Modifier.fillMaxWidth())
-                WittyButton(s["signInTvAnother"].orEmpty(), { outcome = "" }, Modifier.fillMaxWidth(), tall = true, takeFocus = true)
+                DesignSection("") { if (good) Done(outcome) else DesignNote(outcome, error = true) }
+                DesignActions { WittyButton(s["signInTvAnother"].orEmpty(), { outcome = "" }, kind = ButtonKind.Primary, tall = true, takeFocus = true) }
             }
             made != null -> {
-                PanelCard {
+                DesignSection("") {
                     Text(
-                        made.code, color = scheme.onSurface, textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth().semantics { contentDescription = made.code.toList().joinToString(" ") },
-                        style = MaterialTheme.typography.display.copy(fontFamily = FontFamily.Monospace, letterSpacing = MaterialTheme.typography.display.fontSize * 0.25f),
+                        made.code, color = scheme.onSurface,
+                        style = TextStyle(fontFamily = FontFamily.Monospace, fontWeight = FontWeight.Bold, fontSize = LocalDesignSizes.current.title * 1.15f, letterSpacing = 0.25.em),
+                        modifier = Modifier
+                            .clip(metrics.corner(10))
+                            .background(scheme.surface)
+                            .padding(horizontal = LocalDesignSizes.current.gap * 2.4f, vertical = LocalDesignSizes.current.gap * 1.2f)
+                            .semantics { contentDescription = made.code.toList().joinToString(" ") },
                     )
+                    DesignNote(s["signInTvInviteHint"].orEmpty().replace("{minutes}", (made.expiresInSec / 60).coerceAtLeast(1).toString()))
                 }
-                Text(s["signInTvInviteHint"].orEmpty().replace("{minutes}", (made.expiresInSec / 60).coerceAtLeast(1).toString()), color = scheme.onSurfaceVariant, style = MaterialTheme.typography.secondary)
-                WittyButton(s["signInTvAnother"].orEmpty(), ::reset, Modifier.fillMaxWidth(), tall = true)
+                DesignActions { WittyButton(s["signInTvAnother"].orEmpty(), ::reset, kind = ButtonKind.Secondary, tall = true) }
             }
             inviting -> {
-                confirm()
-                Problem(listOf(problem, waitText).filter { it.isNotEmpty() }.joinToString(" "), Modifier.fillMaxWidth())
-                WittyButton(s["approveGetCode"].orEmpty(), ::getInvite, Modifier.fillMaxWidth(), kind = ButtonKind.Primary, busy = busy, enabled = password.isNotEmpty() && waiting == 0, tall = true)
+                DesignSection("") {
+                    confirm()
+                    DesignNote(trouble, error = true)
+                }
+                DesignActions {
+                    WittyButton(s["approveGetCode"].orEmpty(), ::getInvite, kind = ButtonKind.Primary, busy = busy, enabled = password.isNotEmpty() && waiting == 0, tall = true)
+                }
             }
             found != null -> {
-                PanelCard {
-                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(metrics.u(12))) {
-                        IconTile(Symbols.Tv, Color(0xFFBD2F85))
-                        Column {
-                            Text(found.device, color = scheme.onSurface, style = MaterialTheme.typography.label.copy(fontWeight = FontWeight.SemiBold))
-                            val facts = listOf(found.platform, found.ip).filter { it.isNotEmpty() }.joinToString(" · ")
-                            if (facts.isNotEmpty()) Text(facts, color = scheme.onSurfaceVariant, style = MaterialTheme.typography.secondary)
-                        }
-                    }
+                DesignSection("") {
+                    DesignRow(
+                        found.device, sub = listOf(found.platform, found.ip).filter { it.isNotEmpty() }.joinToString(" · "),
+                        leading = { IconTile(Symbols.Tv, LocalExtraColours.current.accentText) },
+                    )
+                    DesignNote(s["approveCheck"].orEmpty())
                 }
-                Text(s["approveCheck"].orEmpty(), color = scheme.onSurfaceVariant, style = MaterialTheme.typography.secondary)
                 if (found.profiles.size > 1) {
-                    Text(s["signInTvAs"].orEmpty(), color = scheme.onBackground, style = MaterialTheme.typography.section)
-                    FlowRow(horizontalArrangement = Arrangement.spacedBy(metrics.u(24)), verticalArrangement = Arrangement.spacedBy(metrics.u(16))) {
-                        found.profiles.forEach { choice ->
-                            val known = faces[choice.id] ?: Profile(choice.id, choice.name, "", choice.kind)
-                            val edge = if (chosen == choice.id) scheme.primary else Color.Transparent
-                            Box(Modifier.border(metrics.u(2).coerceAtLeast(androidx.compose.ui.unit.Dp(1.5f)), edge, metrics.corner(14)).padding(metrics.u(6))) {
-                                ProfileTile(known, metrics.u(72), { chosen = choice.id; needsPassword = choice.needsPassword; problem = "" }, focusKey = "as-${choice.id}")
+                    DesignSection(s["signInTvAs"].orEmpty()) {
+                        DesignChips {
+                            found.profiles.forEach { choice ->
+                                val known = faces[choice.id] ?: Profile(choice.id, choice.name, "", choice.kind)
+                                DesignChip(
+                                    avatarName(known.displayName, known.name), { chosen = choice.id; needsPassword = choice.needsPassword; problem = "" },
+                                    on = chosen == choice.id, focusKey = "as-${choice.id}",
+                                )
                             }
                         }
                     }
                 }
                 if (found.needsPin) {
-                    Text(s["approvePin"].orEmpty(), color = scheme.onBackground, style = MaterialTheme.typography.section)
-                    PinEntry(pin, busy, wrong, centre) { pin = PairRules.typedPin(it); problem = "" }
+                    DesignSection(s["approvePin"].orEmpty()) {
+                        PinEntry(pin, busy, wrong) { pin = PairRules.typedPin(it); problem = "" }
+                    }
                 }
-                if (needsPassword) confirm()
-                Problem(listOf(problem, waitText).filter { it.isNotEmpty() }.joinToString(" "), Modifier.fillMaxWidth())
+                if (needsPassword) DesignSection("") { confirm() }
+                DesignNote(trouble, gap, error = true)
                 val ready = (!found.needsPin || pin.length == CODE_LENGTH) && (!needsPassword || password.isNotEmpty()) && waiting == 0
-                WittyButton(s["signInTvApprove"].orEmpty(), ::approve, Modifier.fillMaxWidth(), kind = ButtonKind.Primary, busy = busy, enabled = ready, tall = true, focusKey = "approve")
-                WittyButton(s["signInTvDeny"].orEmpty(), ::deny, centre, kind = ButtonKind.Quiet, focusKey = "deny")
+                DesignActions {
+                    WittyButton(s["signInTvApprove"].orEmpty(), ::approve, kind = ButtonKind.Primary, busy = busy, enabled = ready, tall = true, focusKey = "approve")
+                    WittyButton(s["signInTvDeny"].orEmpty(), ::deny, kind = ButtonKind.Secondary, tall = true, focusKey = "deny")
+                }
             }
             scan == ScanStep.On -> {
-                QrScanner(s["approveScanning"].orEmpty(), ::onScan, onFailed = { scan = ScanStep.Off; problem = s["approveCameraFailed"].orEmpty() })
-                Text(s["approveScanning"].orEmpty(), color = scheme.onSurfaceVariant, style = MaterialTheme.typography.secondary, textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth())
-                Problem(problem, Modifier.fillMaxWidth())
-                WittyButton(s["approveTypeInstead"].orEmpty(), { scan = ScanStep.Off; problem = "" }, Modifier.fillMaxWidth(), tall = true)
+                DesignSection("") {
+                    QrScanner(s["approveScanning"].orEmpty(), ::onScan, onFailed = { scan = ScanStep.Off; problem = s["approveCameraFailed"].orEmpty() })
+                    DesignNote(s["approveScanning"].orEmpty())
+                    DesignNote(problem, error = true)
+                }
+                DesignActions { WittyButton(s["approveTypeInstead"].orEmpty(), { scan = ScanStep.Off; problem = "" }, kind = ButtonKind.Secondary, tall = true) }
             }
             else -> {
                 if (canScan) {
                     when (scan) {
                         // Said before the system asks, so the question isn't a surprise.
                         ScanStep.Why -> {
-                            Note(s["approveCameraWhy"].orEmpty())
-                            WittyButton(s["approveCameraAllow"].orEmpty(), { permission.launch(Manifest.permission.CAMERA) }, Modifier.fillMaxWidth(), kind = ButtonKind.Primary, tall = true)
+                            DesignNote(s["approveCameraWhy"].orEmpty(), gap, tone = true)
+                            DesignActions {
+                                WittyButton(s["approveCameraAllow"].orEmpty(), { permission.launch(Manifest.permission.CAMERA) }, kind = ButtonKind.Primary, tall = true)
+                            }
                         }
-                        ScanStep.Denied -> Note(s["approveCameraDenied"].orEmpty())
-                        else -> WittyButton(
-                            s["approveScan"].orEmpty(), { problem = ""; scan = if (cameraAllowed(context)) ScanStep.On else ScanStep.Why },
-                            Modifier.fillMaxWidth(), kind = ButtonKind.Primary, icon = Symbols.Qr, tall = true, focusKey = "scan",
-                        )
+                        ScanStep.Denied -> DesignNote(s["approveCameraDenied"].orEmpty(), gap, tone = true)
+                        else -> DesignActions {
+                            WittyButton(
+                                s["approveScan"].orEmpty(), { problem = ""; scan = if (cameraAllowed(context)) ScanStep.On else ScanStep.Why },
+                                kind = ButtonKind.Primary, icon = Symbols.Qr, tall = true, focusKey = "scan",
+                            )
+                        }
                     }
-                    Text(s["approveOrType"].orEmpty(), color = scheme.onSurfaceVariant, style = MaterialTheme.typography.secondary, modifier = centre)
                 }
-                TvCodeEntry(code, busy, wrong, centre) { typed ->
-                    code = tvCodeTyped(typed)
-                    problem = ""
-                    if (code.length == TV_CODE_LENGTH) { scanned = null; lookUp(code) }
+                DesignSection("") {
+                    if (canScan) DesignNote(s["approveOrType"].orEmpty())
+                    TvCodeEntry(code, busy, wrong) { typed ->
+                        code = tvCodeTyped(typed)
+                        problem = ""
+                        if (code.length == TV_CODE_LENGTH) { scanned = null; lookUp(code) }
+                    }
+                    DesignNote(trouble, error = true)
                 }
-                Problem(listOf(problem, waitText).filter { it.isNotEmpty() }.joinToString(" "), Modifier.fillMaxWidth())
-                WittyButton(
-                    s["signInTvInvite"].orEmpty(),
-                    {
-                        // An administrator's own sign-in is only handed out with their password again.
-                        if (me.isAdmin) { inviting = true; needsPassword = true; problem = "" } else getInvite()
-                    },
-                    centre, kind = ButtonKind.Quiet,
-                )
+                DesignActions {
+                    WittyButton(
+                        s["signInTvInvite"].orEmpty(),
+                        {
+                            // An administrator's own sign-in is only handed out with their password again.
+                            if (me.isAdmin) { inviting = true; needsPassword = true; problem = "" } else getInvite()
+                        },
+                        kind = ButtonKind.Secondary,
+                    )
+                }
             }
         }
     }

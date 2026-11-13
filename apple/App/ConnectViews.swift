@@ -353,7 +353,7 @@ struct ConnectView: View {
         let others = uniqued(model.recent)
         Group {
             if let notSetUp {
-                SetupRequiredView(address: notSetUp, retry: { let a = notSetUp; self.notSetUp = nil; Task { await connect(a) } }, back: { self.notSetUp = nil })
+                SetupRequiredView(address: notSetUp, retry: { let a = notSetUp.hasSuffix("/setup") ? String(notSetUp.dropLast("/setup".count)) : notSetUp; self.notSetUp = nil; Task { await connect(a) } }, back: { self.notSetUp = nil })
             } else if showManage {
                 ManageServersPanel(back: closeManage)
             } else if showJoin {

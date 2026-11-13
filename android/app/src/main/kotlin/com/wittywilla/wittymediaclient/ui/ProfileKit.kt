@@ -2,21 +2,27 @@
 // Copyright (C) 2026 WittyWilla and contributors
 package com.wittywilla.wittymediaclient.ui
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRowScope
 import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.safeDrawingPadding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
@@ -29,36 +35,45 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.graphicsLayer
-import androidx.compose.ui.semantics.heading
-import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import kotlinx.coroutines.delay
 
-// Pieces the profile and parental-control screens share: a dialog in the app's own look, choosing one or several
-// from a list (which works with a remote's arrows as well as a finger), and the wait after too many wrong tries.
+// Pieces the profile and parental-control screens share: their page (Design 2's, with Back), a dialog in the same
+// look, choosing one or several from a list (which works with a remote's arrows as well as a finger), and the wait
+// after too many wrong tries.
 
-// Something over the page, in a panel: its title, then whatever it holds, scrolling when it's long. Back closes it.
-// Focus starts inside it and stays there, which a TV needs.
+// Something over the page, in a panel: Design 2's head (eyebrow, title, lead), then whatever it holds, scrolling
+// when it's long. Back closes it. Focus starts inside it and stays there, which a TV needs.
 @Composable
-fun PanelDialog(title: String, onClose: () -> Unit, content: @Composable ColumnScope.() -> Unit) {
+fun PanelDialog(
+    title: String,
+    onClose: () -> Unit,
+    eyebrow: String = "",
+    lead: String = "",
+    headModifier: Modifier = Modifier,
+    content: @Composable ColumnScope.() -> Unit,
+) {
     val metrics = LocalMetrics.current
     val scheme = MaterialTheme.colorScheme
     Dialog(onClose, DialogProperties(usePlatformDefaultWidth = false)) {
         CompositionLocalProvider(LocalFocusMemory provides remember { FocusMemory() }) {
-            Box(Modifier.fillMaxWidth().fillMaxHeight(DIALOG_MOST).padding(horizontal = metrics.gutter), contentAlignment = Alignment.Center) {
-                Column(
-                    Modifier
-                        .widthIn(max = metrics.u(if (metrics.tv) 880 else 520))
-                        .fillMaxWidth()
-                        .clip(metrics.corner(20))
-                        .background(scheme.background)
-                        .verticalScroll(rememberScrollState())
-                        .padding(metrics.u(if (metrics.tv) 32 else 20)),
-                    verticalArrangement = Arrangement.spacedBy(metrics.u(16)),
-                ) {
-                    if (title.isNotEmpty()) Text(title, color = scheme.onBackground, style = MaterialTheme.typography.headline, modifier = Modifier.semantics { heading() })
-                    content()
+            BoxWithConstraints(Modifier.fillMaxWidth().fillMaxHeight(DIALOG_MOST).padding(horizontal = metrics.gutter), contentAlignment = Alignment.Center) {
+                val sizes = DesignSizes.of(metrics, maxWidth.value)
+                CompositionLocalProvider(LocalDesignSizes provides sizes) {
+                    Column(
+                        Modifier
+                            .widthIn(max = metrics.u(if (metrics.tv) 880 else 520))
+                            .fillMaxWidth()
+                            .clip(metrics.corner(20))
+                            .background(scheme.background)
+                            .verticalScroll(rememberScrollState())
+                            .padding(metrics.u(if (metrics.tv) 32 else 20)),
+                        verticalArrangement = Arrangement.spacedBy(sizes.gap),
+                    ) {
+                        DesignHead(title, eyebrow, lead, headModifier)
+                        content()
+                    }
                 }
             }
         }
@@ -83,16 +98,15 @@ fun CheckMark(on: Boolean) {
 @Composable
 fun PickDialog(title: String, options: List<Pick>, chosen: String, onPick: (String) -> Unit, onClose: () -> Unit) {
     PanelDialog(title, onClose) {
-        GroupedList(
-            "",
-            options.mapIndexed { i, o ->
-                GroupRow(
-                    o.label, onClick = { onPick(o.id); onClose() }, detail = o.detail, chevron = false, selected = o.id == chosen,
+        DesignSection("") {
+            options.forEachIndexed { i, o ->
+                DesignRow(
+                    o.label, sub = o.detail, on = o.id == chosen, onClick = { onPick(o.id); onClose() }, selected = o.id == chosen,
                     focusKey = "pick-${o.id}", requestFocus = o.id == chosen || (i == 0 && options.none { it.id == chosen }),
                     trailing = { CheckMark(o.id == chosen) },
                 )
-            },
-        )
+            }
+        }
     }
 }
 
@@ -102,17 +116,15 @@ fun PickDialog(title: String, options: List<Pick>, chosen: String, onPick: (Stri
 fun MultiPickDialog(title: String, hint: String, options: List<Pick>, chosen: Set<String>, onDone: (Set<String>) -> Unit) {
     var now by remember { mutableStateOf(chosen) }
     val words = LocalWords.current
-    PanelDialog(title, { onDone(now) }) {
-        if (hint.isNotEmpty()) Text(hint, color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.secondary)
-        GroupedList(
-            "",
-            options.mapIndexed { i, o ->
-                GroupRow(
-                    o.label, onClick = { now = if (o.id in now) now - o.id else now + o.id }, detail = o.detail, chevron = false,
+    PanelDialog(title, { onDone(now) }, lead = hint) {
+        DesignSection("") {
+            options.forEachIndexed { i, o ->
+                DesignRow(
+                    o.label, sub = o.detail, on = o.id in now, onClick = { now = if (o.id in now) now - o.id else now + o.id },
                     selected = o.id in now, focusKey = "multi-${o.id}", requestFocus = i == 0, trailing = { CheckMark(o.id in now) },
                 )
-            },
-        )
+            }
+        }
         WittyButton(words["done"].orEmpty(), { onDone(now) }, Modifier.fillMaxWidth(), kind = ButtonKind.Primary, tall = true, focusKey = "multi-done")
     }
 }
@@ -120,8 +132,7 @@ fun MultiPickDialog(title: String, hint: String, options: List<Pick>, chosen: Se
 // Are you sure: the safe answer has focus.
 @Composable
 fun AskDialog(question: String, detail: String, yes: String, no: String, onYes: () -> Unit, onNo: () -> Unit) {
-    PanelDialog(question, onNo) {
-        if (detail.isNotEmpty()) Text(detail, color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.body)
+    PanelDialog(question, onNo, lead = detail) {
         WittyButton(no, onNo, Modifier.fillMaxWidth(), tall = true, requestFocus = true, focusKey = "ask-no")
         WittyButton(yes, onYes, Modifier.fillMaxWidth(), kind = ButtonKind.Destructive, tall = true, focusKey = "ask-yes")
     }

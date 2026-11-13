@@ -156,7 +156,18 @@ jobs:
           persist-credentials: false
           repository: wittywilla/WittyMediaServer
           path: .server
-          sparse-checkout: pkg/sdui/conformance
+      # Wittyconnect, which reaches a server from away (peer to peer), is built from the server's source with
+      # gomobile into android/app/libs; the build then requires it (-Pp2p=required), so no APK leaves without it.
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7
+        with:
+          go-version-file: .server/go.mod
+          cache: false
+      - name: Android NDK for the peer-to-peer library
+        run: yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "ndk;27.2.12479018" >/dev/null
+      - name: Build Wittyconnect from the server's source
+        env:
+          WITTYMEDIASERVER_SRC: .server
+        run: bash android/scripts/build-wittyconnect.sh
       - name: Test and build
         working-directory: android
         run: |
@@ -166,7 +177,7 @@ jobs:
           else
             echo "::warning title=SDUI conformance::The server's checkout has no pkg/sdui/conformance, so the conformance test was skipped"
           fi
-          gradle --no-daemon testDebugUnitTest lintSideload assembleSideload $fixtures
+          gradle --no-daemon testDebugUnitTest lintSideload assembleSideload -Pp2p=required $fixtures
       - name: Native code for all four processors
         working-directory: android
         run: sh scripts/check-abis.sh app/build/outputs/apk/sideload
