@@ -49,5 +49,6 @@ fun Modifier.elevated(level: Int, shape: Shape, radius: androidx.compose.ui.unit
         for (s in shadows) m = m.cssShadow((s["y"] ?: 0.0).toFloat().dp, (s["blur"] ?: 0.0).toFloat().dp, Color.Black.copy(alpha = (s["opacity"] ?: 0.0).toFloat()), radius)
     }
     m = m.background(fill, shape)
+    if (level >= 1) m = m.glass(shape)
     return if (noLine) m else m.border(1.dp, line, shape)
 }

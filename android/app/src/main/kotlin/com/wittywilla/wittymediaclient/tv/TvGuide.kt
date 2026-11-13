@@ -160,6 +160,7 @@ fun GuideScreen(nav: Nav) {
     // The Dock under the grid, and which of its menus is open (docs/plans/DESIGN-2.md, section 4: WittyTV's four places).
     val dockFocus = remember { FocusRequester() }
     var dockMenu by remember { mutableStateOf<DockMenu?>(null) }
+    var moreInfo by remember { mutableStateOf(false) }
     // A cell held with Select: everything else that can be done with it.
     var menu by remember { mutableStateOf<Pair<GuideChannel, GuideCell>?>(null) }
     var toast by remember { mutableStateOf("") }
@@ -660,6 +661,8 @@ fun GuideScreen(nav: Nav) {
         DockEntry(DockKeys.FILTER, "Filter") { dockMenu = DockMenu.Filter },
         DockEntry(DockKeys.RECORDINGS, "Recordings", enabled = com.wittywilla.wittymediaclient.player.ScreenTimeWatch.can("recordings")) { nav.push(TvRoute(TvScreen.Recordings)) },
         DockEntry(DockKeys.RECORD, "Record", enabled = recordable != null) { dockMenu = DockMenu.Record },
+        // More info (i): the programme in full, over the guide.
+        DockEntry(DockKeys.INFO, "More info", enabled = current != null && currentCell?.programme != null && nav.has("tv-programme-info")) { moreInfo = true },
     )
     fun dockPress(key: Char) {
         dockEntries.firstOrNull { it.key == key && it.enabled }?.action?.invoke()
@@ -811,6 +814,21 @@ fun GuideScreen(nav: Nav) {
                 onSeries = { p -> menu = null; series(c, p) },
                 onFavourite = { menu = null; favourite(c) },
             )
+        }
+        if (moreInfo) {
+            val c = current
+            val p = currentCell?.programme
+            if (c != null && p != null) {
+                MoreInfoSheet(
+                    nav, c.key, spot.at,
+                    MoreInfoActions(
+                        watch = { watch(c.key) },
+                        record = if (c.canRecord == true && currentCell?.isBroadcast == true && p.end > now) ({ record(c, p) }) else null,
+                        remind = if (c.canTune && p.start > now) ({ scope.launch { say(TvReminders.toggle(c.key, p)) } }) else null,
+                        openItem = { item, show -> if (show > 0) nav.push(com.wittywilla.wittymediaclient.ui.Route.Show(show)) else nav.push(com.wittywilla.wittymediaclient.ui.Route.Item(item)) },
+                    ),
+                ) { moreInfo = false }
+            } else moreInfo = false
         }
         dockMenu?.let { m ->
             val close = { dockMenu = null }

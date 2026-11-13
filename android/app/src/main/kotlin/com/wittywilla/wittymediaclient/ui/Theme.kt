@@ -234,7 +234,7 @@ val Typography.secondary get() = bodyMedium
 val Typography.caption get() = labelSmall
 
 @Composable
-fun WittyTheme(theme: AppTheme, metrics: Metrics, reduceMotion: Boolean, words: Map<String, String>, brandParts: List<com.wittywilla.wittymediaclient.net.BrandPart> = emptyList(), content: @Composable () -> Unit) {
+fun WittyTheme(theme: AppTheme, metrics: Metrics, reduceMotion: Boolean, words: Map<String, String>, brandParts: List<com.wittywilla.wittymediaclient.net.BrandPart> = emptyList(), look: com.wittywilla.wittymediaclient.net.Look = com.wittywilla.wittymediaclient.net.Look.NONE, content: @Composable () -> Unit) {
     // A new theme cross-fades in 200 ms, or at once with Reduce Motion.
     @Composable
     fun shown(c: ThemeColour): Color =
@@ -266,10 +266,10 @@ fun WittyTheme(theme: AppTheme, metrics: Metrics, reduceMotion: Boolean, words: 
         shown(theme.textHint), shown(theme.accentText), shown(theme.ok), shown(theme.raised), control,
         shown(theme.warn), shown(theme.accentPressed), shown(theme.scrim), shown(theme.brandAccent), shown(theme.focus),
     )
-    val type = remember(metrics.tv) { typeScale(if (metrics.tv) TvType else PhoneType) }
+    val type = remember(metrics.tv, look.type) { typeScale(if (metrics.tv) TvType else PhoneType, androidx.compose.ui.text.TextStyle(fontFamily = typeFace(look.type))) }
     CompositionLocalProvider(
         LocalMetrics provides metrics.copy(themeRadius = theme.radius.toFloat()), LocalExtraColours provides extra,
-        LocalReduceMotion provides reduceMotion, LocalWords provides words, LocalAppTheme provides theme, LocalBrandParts provides brandParts,
+        LocalReduceMotion provides reduceMotion, LocalWords provides words, LocalAppTheme provides theme, LocalBrandParts provides brandParts, LocalLook provides look,
     ) {
         MaterialTheme(colorScheme = scheme, typography = type, content = content)
     }

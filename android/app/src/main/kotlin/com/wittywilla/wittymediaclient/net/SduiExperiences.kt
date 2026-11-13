@@ -12,7 +12,10 @@ import kotlinx.serialization.json.jsonPrimitive
 // requires one.
 
 @Serializable
-data class SduiExperienceInfo(val id: String = "", val name: String = "", val tagline: String = "", val description: String = "", val icon: String = "", val theme: String = "")
+data class SduiExperienceInfo(val id: String = "", val name: String = "", val tagline: String = "", val description: String = "", val icon: String = "", val theme: String = "",
+    // The layout a chooser draws, by form factor.
+    val wire: Map<String, SduiWire> = emptyMap(),
+)
 
 @Serializable
 data class SduiExperienceList(val experiences: List<SduiExperienceInfo> = emptyList(), val default: String = "")
