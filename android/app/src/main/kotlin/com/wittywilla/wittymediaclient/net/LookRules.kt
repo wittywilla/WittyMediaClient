@@ -55,6 +55,10 @@ data class Look(
     val type: String = "system",
     val glass: Amount = Amount.None,
     val gloss: Amount = Amount.None,
+    // A lit top edge and a shaded bottom edge on what can be pressed and on cards; and the texture over the page (subtle:
+    // paper grain, drawn as nothing here; full: a CRT's scanlines).
+    val bevel: Amount = Amount.None,
+    val texture: Amount = Amount.None,
     val scene: List<SceneLayer> = emptyList(),
     val glassRecipe: Glass? = null,
     val glossRecipe: Gloss? = null,
@@ -106,6 +110,7 @@ data class Look(
             return Look(
                 type = (look["type"] as? JsonPrimitive)?.content ?: "system",
                 glass = amount(effects?.get("glass")), gloss = amount(effects?.get("gloss")),
+                bevel = amount(effects?.get("bevel")), texture = amount(effects?.get("texture")),
                 scene = scene(look["scene"] ?: theme["scene"]), glassRecipe = glass, glossRecipe = gloss,
             )
         }

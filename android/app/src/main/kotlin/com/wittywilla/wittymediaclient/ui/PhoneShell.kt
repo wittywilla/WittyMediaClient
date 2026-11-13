@@ -184,7 +184,7 @@ fun PhoneShell(nav: Nav, content: @Composable () -> Unit) {
         val overlay = nav.sduiNav?.shell?.overlay == true
         val sideRoom = 24.dp + inset + if (docked) DOCK_SPACE.dp else 0.dp
         val tabsRoom = if (side) status + 8.dp else if (overlay) status else status + size + 8.dp
-        Box(Modifier.fillMaxSize().background(scheme.background).scene(LocalLook.current.sceneFor(LocalReduceMotion.current))) {
+        Box(Modifier.fillMaxSize().background(scheme.background).scene(LocalLook.current.sceneFor(LocalReduceMotion.current)).scanlines()) {
             RailPin.load(androidx.compose.ui.platform.LocalContext.current)
             val railOpen = if (style == "rail" || style == "railDrawer") RailPin.pinned else false
             val startRoom = if (!side) 0.dp else if (railOpen) (nav.sduiNav?.shell?.open?.takeIf { it > 0 } ?: 240).dp else size
@@ -203,7 +203,7 @@ fun PhoneShell(nav: Nav, content: @Composable () -> Unit) {
         }
         return
     }
-    Box(Modifier.fillMaxSize().background(scheme.background).scene(LocalLook.current.sceneFor(LocalReduceMotion.current))) {
+    Box(Modifier.fillMaxSize().background(scheme.background).scene(LocalLook.current.sceneFor(LocalReduceMotion.current)).scanlines()) {
         CompositionLocalProvider(LocalShellScroll provides scroll, LocalBottomRoom provides bottomRoom, LocalTopRoom provides topRoom, LocalOverShell provides over) {
             content()
         }

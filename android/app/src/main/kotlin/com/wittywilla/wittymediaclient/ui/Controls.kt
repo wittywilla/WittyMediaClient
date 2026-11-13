@@ -223,6 +223,7 @@ fun Pressable(
             .then(if (clip) Modifier.clip(shape) else Modifier)
             .background(if (filled) MaterialTheme.colorScheme.onBackground else fill, shape)
             .then(if (glossy) Modifier.gloss(shape) else Modifier)
+            .bevel()
             .hoverable(interaction)
             .then(if (hovered && !metrics.tv && enabled) Modifier.background(MaterialTheme.colorScheme.onBackground.copy(alpha = HOVER_WASH), shape) else Modifier)
             .optionsKey(if (enabled) onLongClick else null)

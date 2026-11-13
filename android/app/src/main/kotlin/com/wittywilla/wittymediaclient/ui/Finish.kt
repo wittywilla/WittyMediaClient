@@ -2,12 +2,14 @@
 // Copyright (C) 2026 WittyWilla and contributors
 package com.wittywilla.wittymediaclient.ui
 
+import com.wittywilla.wittymediaclient.net.Amount
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.compositionLocalOf
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
@@ -89,6 +91,35 @@ fun Modifier.gloss(shape: Shape): Modifier {
     val f = look.gloss.factor
     return background(Brush.verticalGradient(0f to recipe.highlight.toColor().scaled(f), 0.5f to recipe.upper.toColor().scaled(f), 0.5001f to recipe.lower.toColor().scaled(f), 1f to recipe.lower.toColor().scaled(f)), shape)
         .border(1.dp, recipe.edge.toColor().scaled(f), shape)
+}
+
+// Bevel: a light line along the top inside edge and a shade along the bottom, as the web's finish draws it.
+@Composable
+fun Modifier.bevel(): Modifier {
+    val f = LocalLook.current.bevel.factor
+    if (f == 0f) return this
+    return drawWithContent {
+        drawContent()
+        val line = 1.dp.toPx()
+        drawRect(Color.White.copy(alpha = 0.3f * f), size = androidx.compose.ui.geometry.Size(size.width, line))
+        if (f >= 1f) drawRect(Color.Black.copy(alpha = 0.25f), topLeft = androidx.compose.ui.geometry.Offset(0f, size.height - line), size = androidx.compose.ui.geometry.Size(size.width, line))
+    }
+}
+
+// The CRT finish (texture full): faint scanlines over the page, drawn above it and never taking a touch or focus. Off
+// with reduced motion, as the web turns it off where more contrast is asked for.
+@Composable
+fun Modifier.scanlines(): Modifier {
+    if (LocalLook.current.texture != Amount.Full || LocalReduceMotion.current) return this
+    return drawWithContent {
+        drawContent()
+        val gap = 3.dp.toPx()
+        var y = 0f
+        while (y < size.height) {
+            drawRect(Color.Black.copy(alpha = 0.12f), topLeft = androidx.compose.ui.geometry.Offset(0f, y), size = androidx.compose.ui.geometry.Size(size.width, 1f))
+            y += gap
+        }
+    }
 }
 
 private fun Color.scaled(f: Float) = if (f >= 1f) this else copy(alpha = alpha * f)

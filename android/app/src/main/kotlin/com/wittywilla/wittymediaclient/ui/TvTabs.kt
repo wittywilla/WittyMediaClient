@@ -182,7 +182,7 @@ fun TvShell(nav: Nav, content: @Composable () -> Unit) {
         }
         return
     }
-    Column(Modifier.fillMaxSize().scene(LocalLook.current.sceneFor(LocalReduceMotion.current)).then(keys)) {
+    Column(Modifier.fillMaxSize().scene(LocalLook.current.sceneFor(LocalReduceMotion.current)).scanlines().then(keys)) {
         TvTopBar(nav, bar, libraries)
         Box(Modifier.weight(1f)) { CompositionLocalProvider(LocalTvBar provides bar) { content() } }
     }

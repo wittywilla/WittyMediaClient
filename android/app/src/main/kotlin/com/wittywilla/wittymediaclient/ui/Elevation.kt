@@ -50,5 +50,6 @@ fun Modifier.elevated(level: Int, shape: Shape, radius: androidx.compose.ui.unit
     }
     m = m.background(fill, shape)
     if (level >= 1) m = m.glass(shape)
+    if (level >= 1) m = m.bevel()
     return if (noLine) m else m.border(1.dp, line, shape)
 }
