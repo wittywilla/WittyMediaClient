@@ -43,6 +43,12 @@ final class LookTests: XCTestCase {
     @MainActor
     func testLookOnTv() throws {
         let app = try launchApp()
+        // The first-use look chooser: keep what is chosen ("Use this", the last thing on the page).
+        Thread.sleep(forTimeInterval: 6)
+        if app.staticTexts["Choose how it looks"].exists {
+            press(.down, .down, .down, .down, .down, .down, .down, .down, .down, .down, .down, .down, .down, .down, .down, .down)
+            press(.select)
+        }
         _ = anything(app, "sdui.page.home").waitForExistence(timeout: 40)
         Thread.sleep(forTimeInterval: 3)
         shoot("tv-01-home")
@@ -55,6 +61,12 @@ final class LookTests: XCTestCase {
     @MainActor
     func testLookOnTouch() throws {
         let app = try launchApp()
+        Thread.sleep(forTimeInterval: 6)
+        let use = app.buttons["Use this"].firstMatch
+        if app.staticTexts["Choose how it looks"].exists {
+            for _ in 0..<6 where !use.isHittable { app.swipeUp() }
+            use.tap()
+        }
         _ = anything(app, "sdui.page.home").waitForExistence(timeout: 40)
         Thread.sleep(forTimeInterval: 3)
         shoot("01-home")
