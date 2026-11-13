@@ -74,7 +74,7 @@ struct SDUICardView: View {
                 // A library's chip has its kind's icon before its name.
                 if !card.icon.isEmpty || !card.props.text("icon").isEmpty {
                     Image(systemName: SDUIIcon.symbol(card.icon.isEmpty ? card.props.text("icon") : card.icon, or: "folder"))
-                        .font(.system(size: layout.isTV ? 26 : 15, weight: .medium))
+                        .font(.wm(size: layout.isTV ? 26 : 15, weight: .medium))
                         .foregroundStyle(palette.textSecondary)
                         .accessibilityHidden(true)
                 }
@@ -109,7 +109,7 @@ struct SDUICardView: View {
                     if shows("rank") {
                         // A top ten's number beside its card.
                         Text(card.shown("rank"))
-                            .font(.system(size: height * 0.5, weight: .heavy, design: .rounded))
+                            .font(.wm(size: height * 0.5, weight: .heavy, design: .rounded))
                             .foregroundStyle(palette.textHint)
                             .minimumScaleFactor(0.5)
                             .lineLimit(1)
@@ -149,7 +149,7 @@ struct SDUICardView: View {
             .overlay(alignment: .topTrailing) {
                 if shows("watched") {
                     Image(systemName: "checkmark.circle.fill")
-                        .font(.system(size: layout.isTV ? 28 : 18, weight: .semibold))
+                        .font(.wm(size: layout.isTV ? 28 : 18, weight: .semibold))
                         .foregroundStyle(palette.onAccent, palette.accent)
                         .padding(layout.sp("xs"))
                 } else if shows("unwatched") {
@@ -161,13 +161,14 @@ struct SDUICardView: View {
                     ProgressStrip(fraction: Double(percent) / 100).padding(layout.sp("xs"))
                 }
             }
+            .overlay { FinishCardEdge(shape: clip) }
             .clipShape(clip)
             .tvFocusRing(radius: isCircle ? 999 : draw.radius("Card", style: style))
     }
 
     private func plate(_ words: String) -> some View {
         Text(words)
-            .font(.system(size: CGFloat(layout.text["badge"] ?? layout.textSize("caption")), weight: .semibold))
+            .font(.wm(size: CGFloat(layout.text["badge"] ?? layout.textSize("caption")), weight: .semibold))
             .foregroundStyle(onImage)
             .padding(.horizontal, 6)
             .padding(.vertical, 2)
@@ -330,7 +331,7 @@ struct SDUISeeAllCard: View {
                 .frame(width: width, height: height)
                 .overlay {
                     VStack(spacing: layout.sp("xs")) {
-                        Image(systemName: "chevron.right.circle").font(.system(size: 44, weight: .medium))
+                        Image(systemName: "chevron.right.circle").font(.wm(size: 44, weight: .medium))
                         Text("See all").sduiFont("body", weight: .medium)
                     }
                     .foregroundStyle(palette.textSecondary)

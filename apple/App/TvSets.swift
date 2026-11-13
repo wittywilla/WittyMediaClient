@@ -78,12 +78,12 @@ struct ChannelSetPicker: View {
             .frame(maxWidth: 1300, alignment: .leading)
         }
         .focusRoot(scope)
-        .background(palette.background.ignoresSafeArea())
+        .pageGround()
         // Over the picker's own sheet a second sheet is a narrow one, too narrow for a set's row: the whole screen instead.
         .fullScreenCover(isPresented: $managing) {
             ChannelSetsManager(onChanged: onChanged)
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
-                .background(palette.background.ignoresSafeArea())
+                .pageGround()
         }
     }
 }
@@ -200,7 +200,7 @@ struct ChannelSetsManager: View {
                 .frame(maxWidth: 1400, alignment: .leading)
             }
             .focusRoot(scope)
-            .background(palette.background.ignoresSafeArea())
+            .pageGround()
             .navigationDestination(for: Page.self) { page in
                 switch page {
                 case .edit: ChannelSetEditor(draft: draft, canShare: list?.canShare == true, sets: list?.sets ?? [], onPick: { path.append(.pick) }, onSaved: saved)
@@ -350,7 +350,7 @@ struct ChannelSetEditor: View {
             .frame(maxWidth: 1400, alignment: .leading)
         }
         .focusRoot(scope)
-        .background(palette.background.ignoresSafeArea())
+        .pageGround()
         .task { await draft.loadEverything(client: client) }
     }
 
@@ -425,7 +425,7 @@ struct ChannelPickerList: View {
             .padding(.vertical, Tokens.edge)
             .frame(maxWidth: 1400, alignment: .leading)
         }
-        .background(palette.background.ignoresSafeArea())
+        .pageGround()
         .task { await draft.loadEverything(client: client) }
     }
 }
@@ -475,7 +475,7 @@ struct AddToSetSheet: View {
             .frame(maxWidth: 1300, alignment: .leading)
         }
         .focusRoot(scope)
-        .background(palette.background.ignoresSafeArea())
+        .pageGround()
         .task {
             do { list = try await client.channelSets() } catch { self.error = (error as? APIError)?.message ?? "Your sets couldn't be loaded." }
         }
@@ -565,7 +565,7 @@ struct FindChannelSheet: View {
             .padding(.vertical, Tokens.edge)
             .frame(maxWidth: 1300, alignment: .leading)
         }
-        .background(palette.background.ignoresSafeArea())
+        .pageGround()
         .onAppear { words = current }
     }
 
@@ -606,7 +606,7 @@ struct GoToChannelSheet: View {
         .padding(.vertical, Tokens.edge)
         .frame(maxWidth: 1000, alignment: .leading)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-        .background(palette.background.ignoresSafeArea())
+        .pageGround()
     }
 
     private func go() {
@@ -662,7 +662,7 @@ struct RecordOptionsSheet: View {
             .frame(maxWidth: 1300, alignment: .leading)
         }
         .focusRoot(scope)
-        .background(palette.background.ignoresSafeArea())
+        .pageGround()
         .onAppear { options = start }
     }
 

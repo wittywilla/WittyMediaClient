@@ -207,15 +207,18 @@ private fun SettingRows(
 
 
 // The settings pages modules put in one place of the hand-built Settings (the server's GET /api/sdui/slots/{slot}): a group of
-// rows, each opening that page of the module's settings in the app's own controls. Nothing when no module has one there.
+// rows. A page with a `url` opens that page of the module's settings in the app's own controls; one with a `route`
+// (/page/<id>, and ?item={profile} for people.profile) opens through the renderer. Nothing when no module has one there.
 @Composable
-fun SettingsSlotRows(nav: Nav, slot: String, caption: String = "") {
+fun SettingsSlotRows(nav: Nav, slot: String, caption: String = "", profile: String = "") {
     var pages by remember(slot) { mutableStateOf<List<SettingsSlotPage>>(emptyList()) }
     LaunchedEffect(slot, nav.sdui) {
-        pages = runCatching { nav.app.api.settingsSlot(slot).pages.filter { ModuleSettingsRules.path(it.url) != null } }.getOrDefault(emptyList())
+        pages = runCatching { nav.app.api.settingsSlot(slot).pages.filter { it.route.isNotEmpty() || ModuleSettingsRules.path(it.url) != null } }.getOrDefault(emptyList())
     }
     if (pages.isEmpty()) return
     GroupedList(caption, pages.map { p ->
-        GroupRow(p.title.ifEmpty { p.label }, onClick = { nav.push(Route.ModuleSettings(p.url, p.title.ifEmpty { p.label }, p.id)) }, icon = sduiIcon(p.icon.ifEmpty { "extension" }), detail = p.label, focusKey = "slot-$slot-${p.module}-${p.id}")
+        val onClick = if (p.route.isNotEmpty()) ({ nav.go(nav.sduiRouter.resolve(p.route.replace("{profile}", profile))) })
+        else ({ nav.push(Route.ModuleSettings(p.url, p.title.ifEmpty { p.label }, p.id)) })
+        GroupRow(p.title.ifEmpty { p.label }, onClick = onClick, icon = sduiIcon(p.icon.ifEmpty { "extension" }), detail = p.label, focusKey = "slot-$slot-${p.module}-${p.id}-$profile")
     })
 }

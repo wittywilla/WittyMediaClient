@@ -25,6 +25,7 @@ struct WittyMediaApp: App {
 
     init() {
         ClientLog.shared.start(app: "WittyMedia Apple", version: WittyClient.appVersion)
+        TypeSet.register()
     }
 
     var body: some Scene {
@@ -63,10 +64,22 @@ struct RootView: View {
     @Environment(\.scenePhase) private var scenePhase
     /// The device's own, while the automatic theme leaves it be; otherwise the theme's.
     @Environment(\.colorScheme) private var colorScheme
+    @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    /// The finish of the look in use, a step lower on a modest device or when the person asked for less transparency or motion.
+    private var finish: Finish {
+        #if os(tvOS)
+        let lowPower = false
+        #else
+        let lowPower = ProcessInfo.processInfo.isLowPowerModeEnabled
+        #endif
+        return Finish(look: model.look, palette: model.palette, theme: model.appTheme, modest: reduceTransparency || lowPower, calm: reduceMotion)
+    }
 
     var body: some View {
         ZStack {
-            model.palette.background.ignoresSafeArea()
+            SceneBackdrop()
             switch model.stage {
             case .starting:
                 LoadingView()
@@ -89,6 +102,7 @@ struct RootView: View {
         .modifier(ScreenTimeGuard(household: model.household))
         .modifier(FirstRunLayers())
         .environment(\.palette, model.palette)
+        .environment(\.finish, finish)
         .environment(\.client, model.client)
         .animation(.easeInOut(duration: 0.2), value: model.effectiveThemeId)
         .onAppear { model.systemScheme = colorScheme }

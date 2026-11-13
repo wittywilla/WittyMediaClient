@@ -31,7 +31,7 @@ struct ListGroup<Content: View>: View {
                     .accessibilityAddTraits(.isHeader)
             }
             VStack(spacing: 0) { content }
-                .background(shape.fill(palette.panel))
+                .finished(shape, fill: palette.panel, role: .card)
                 .overlay(alignment: .bottom) {
                     palette.panel.frame(height: 2).allowsHitTesting(false).accessibilityHidden(true)
                 }
@@ -60,7 +60,7 @@ struct IconTile: View {
         let size: CGFloat = metrics.tv ? 32 : 28
         let base = Color(hex: hex)
         Image(systemName: symbol)
-            .font(.system(size: size * 0.5, weight: .semibold))
+            .font(.wm(size: size * 0.5, weight: .semibold))
             .foregroundStyle(scheme == .light ? base : Self.lifted(hex))
             .frame(width: size, height: size)
             .background(RoundedRectangle(cornerRadius: size * 0.25, style: .continuous).fill(base.opacity(scheme == .light ? 0.14 : 0.24)))

@@ -143,6 +143,12 @@ class SduiRouter(routes: List<SduiRouteSpec> = DEFAULT_ROUTES, commands: List<Sd
             page("/versions/{item}", "versions", "item" to "{item}"),
             page("/save-to/{item}", "save-to", "item" to "{item}"),
             page("/devices", "devices"),
+            page("/creators", "creators"),
+            page("/creator/{item}", "creator", "item" to "{item}"),
+            page("/comments/{item}", "comments", "item" to "{item}"),
+            page("/markers/{item}", "markers", "item" to "{item}"),
+            page("/canvas/{item}", "canvas", "item" to "{item}"),
+            page("/smart-list", "smart-list"),
             page("/year", "year"),
             page("/activity", "activity"),
             page("/notifications", "notifications"),
@@ -209,6 +215,7 @@ object SduiCommands {
                     }
                     "bool" -> template.replace(quoted, if (text == "true") "true" else if (text == "false") "false" else return null)
                     "ints" -> template.replace(quoted, ints(value) ?: return null)
+                    "object" -> template.replace(quoted, (value as? JsonObject ?: JsonObject(emptyMap())).toString())
                     else -> template.replace("{" + param.name + "}", text.replace("\\", "\\\\").replace("\"", "\\\"").replace("\n", "\\n"))
                 }
             }

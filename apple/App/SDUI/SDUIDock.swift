@@ -48,6 +48,7 @@ struct SDUIDockBar: View {
                 Rectangle().fill(.regularMaterial)
                 #endif
                 palette.panel.opacity(0.92)
+                FinishBackdrop(shape: Rectangle(), fill: nil, role: .bar)
             }
             .overlay(alignment: .top) { Rectangle().fill(palette.border).frame(height: 1) }
             .ignoresSafeArea(edges: .bottom)
@@ -135,7 +136,7 @@ struct SDUIKeyLegend: View {
                     Image(systemName: SDUIKeyLegend.glyph(entry.action))
                     Text(entry.label)
                 }
-                .font(.system(size: size))
+                .font(.wm(size: size))
                 .foregroundStyle(palette.textSecondary)
             }
         }

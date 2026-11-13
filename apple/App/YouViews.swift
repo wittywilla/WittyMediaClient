@@ -124,6 +124,13 @@ struct YouView: View {
                 .rowStyle()
                 .accessibilityIdentifier("row.personalColours")
             }
+            if model.has("sdui-personal") {
+                NavigationLink(value: Route.layoutEditor) {
+                    RowLabel(icon: "rectangle.3.group", tint: RowTint.teal, title: "Edit layout")
+                }
+                .rowStyle()
+                .accessibilityIdentifier("row.layoutEditor")
+            }
             if model.has("module-settings") {
                 NavigationLink(value: Route.modules) {
                     RowLabel(icon: "puzzlepiece.extension", tint: RowTint.quiet, title: "Modules")
@@ -156,6 +163,11 @@ struct YouView: View {
                 page("/settings/transcoding", "bolt", title: "rowTranscoding")
                 page("/settings/library-transcoding", "arrow.triangle.2.circlepath", title: "rowLibraryTranscoding")
                 page("/settings/remote", "globe", title: "rowRemote")
+                NavigationLink(value: Route.brandEditor) {
+                    RowLabel(icon: "textformat", tint: RowTint.teal, title: "Server name and logo")
+                }
+                .rowStyle()
+                .accessibilityIdentifier("row.brandEditor")
                 page("/settings/wittyrigs", "server.rack", title: "rowWittyRigs")
             }
             ListGroup(title: say("groupMaintenance")) {

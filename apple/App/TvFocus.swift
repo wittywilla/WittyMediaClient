@@ -22,6 +22,7 @@ struct TvFocusRing: ViewModifier {
                 RoundedRectangle(cornerRadius: CGFloat(TvGeometry.ringRadius(inner: Double(radius))), style: .continuous)
                     .strokeBorder(palette.tvRing, lineWidth: ring)
                     .padding(-(gap + ring))
+                    .finishGlow(true, colour: palette.tvRing)
                     .allowsHitTesting(false)
                     .accessibilityHidden(true)
             }
