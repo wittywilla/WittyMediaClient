@@ -5,6 +5,7 @@ package com.wittywilla.wittymediaclient.ui
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -222,7 +223,16 @@ fun TopTabs(nav: Nav, height: Dp, status: Dp, solid: Boolean, modifier: Modifier
     val page = scheme.background
     val line = scheme.outline
     val entries = nav.sduiMenuAll
-    Column(modifier.fillMaxWidth().background(if (solid) page.copy(alpha = 0.92f) else Color.Transparent)
+    // The bar's own look follows the menu style the server sent: a cable guide's flat blue rows, a satellite box's silver
+    // bevel, the tele keys' colours, the console's category bar, glass; else the pills.
+    val style = nav.sduiNav?.shell?.nav.orEmpty()
+    val barFill = when (style) {
+        "cableBar" -> scheme.primary
+        "bevelBar" -> Color(0xFFC9CED6)
+        "teleKeys" -> Color.Black
+        else -> if (solid) page.copy(alpha = 0.92f) else Color.Transparent
+    }
+    Column(modifier.fillMaxWidth().background(barFill).glass(RoundedCornerShape(0.dp))
         .drawWithContent { drawContent(); if (solid) drawRect(line, Offset(0f, size.height - 1.dp.toPx()), Size(size.width, 1.dp.toPx())) }) {
         Spacer(Modifier.height(status))
         Row(Modifier.fillMaxWidth().height(height), verticalAlignment = Alignment.CenterVertically) {
@@ -230,12 +240,8 @@ fun TopTabs(nav: Nav, height: Dp, status: Dp, solid: Boolean, modifier: Modifier
                 Modifier.weight(1f).horizontalScroll(rememberScrollState()).padding(horizontal = 12.dp).semantics { role = Role.Tab },
                 horizontalArrangement = Arrangement.spacedBy(4.dp), verticalAlignment = Alignment.CenterVertically,
             ) {
-                entries.filter { it.second != Route.Profile }.forEach { (entry, route) ->
-                    val on = chosen(nav, route)
-                    Pressable({ nav.openMenuEntry(route) }, Modifier.heightIn(min = 40.dp), shape = RoundedCornerShape(50), fill = if (on) scheme.primary.copy(alpha = 0.14f) else Color.Transparent,
-                        label = entry.label, state = if (on) "Selected" else null, selected = on, pressScale = 1f, ring = false) {
-                        Text(entry.label, color = if (on) accentText else scheme.onBackground.copy(alpha = 0.85f), fontSize = 15.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, modifier = Modifier.padding(horizontal = 14.dp, vertical = 8.dp))
-                    }
+                entries.filter { it.second != Route.Profile }.forEachIndexed { at, (entry, route) ->
+                    TabItem(style, entry.label, chosen(nav, route), at) { nav.openMenuEntry(route) }
                 }
             }
             entries.firstOrNull { it.second == Route.Profile }?.let { (entry, route) ->
@@ -244,6 +250,32 @@ fun TopTabs(nav: Nav, height: Dp, status: Dp, solid: Boolean, modifier: Modifier
                 }
             }
         }
+    }
+}
+
+// One tab of the bar, in the style of its menu: pill (the default and glass, glossy when the look has gloss), cable (flat rows
+// on the accent), bevel (raised silver), tele (colour-coded keys), crossbar (a category in a bar).
+@Composable
+private fun TabItem(style: String, label: String, on: Boolean, at: Int, onClick: () -> Unit) {
+    val scheme = MaterialTheme.colorScheme
+    val accentText = LocalExtraColours.current.accentText
+    val tele = listOf(Color(0xFFE53935), Color(0xFF43A047), Color(0xFFFDD835), Color(0xFF26C6DA), Color(0xFFAB47BC))
+    val (shape, fill, ink) = when (style) {
+        "cableBar" -> Triple(RoundedCornerShape(2.dp), if (on) scheme.onPrimary else Color.Transparent, if (on) scheme.primary else scheme.onPrimary)
+        "bevelBar" -> Triple(RoundedCornerShape(3.dp), if (on) Color.White else Color(0xFFE6E9EE), Color(0xFF1B2330))
+        "teleKeys" -> Triple(RoundedCornerShape(0.dp), tele[at % tele.size].copy(alpha = if (on) 1f else 0.7f), Color.Black)
+        "crossbar" -> Triple(RoundedCornerShape(50), if (on) scheme.primary.copy(alpha = 0.14f) else Color.Transparent, if (on) accentText else scheme.onBackground.copy(alpha = 0.7f))
+        else -> Triple(RoundedCornerShape(50), if (on) scheme.primary.copy(alpha = 0.14f) else Color.Transparent, if (on) accentText else scheme.onBackground.copy(alpha = 0.85f))
+    }
+    Pressable(
+        onClick, Modifier.heightIn(min = 40.dp), shape = shape, fill = fill, label = label, state = if (on) "Selected" else null, selected = on, pressScale = 1f, ring = false,
+        glossy = style == "floatingGlassBar" && on,
+    ) {
+        val bevel = if (style == "bevelBar") Modifier.border(1.dp, Color(0xFF8A93A0), shape) else Modifier
+        Text(
+            if (style == "teleKeys") label.uppercase() else label, color = ink, fontSize = if (style == "crossbar" && on) 17.sp else 15.sp, fontWeight = FontWeight.SemiBold, maxLines = 1,
+            modifier = bevel.padding(horizontal = 14.dp, vertical = 8.dp),
+        )
     }
 }
 
