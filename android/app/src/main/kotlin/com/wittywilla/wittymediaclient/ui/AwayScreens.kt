@@ -2,6 +2,10 @@
 // Copyright (C) 2026 WittyWilla and contributors
 package com.wittywilla.wittymediaclient.ui
 
+import android.Manifest
+import android.content.Intent
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRowScope
@@ -18,11 +22,20 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.platform.LocalClipboardManager
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.ImeAction
 import com.wittywilla.wittymediaclient.data.SavedServer
+import com.wittywilla.wittymediaclient.data.fill
+import com.wittywilla.wittymediaclient.net.ApiError
+import com.wittywilla.wittymediaclient.net.PairRefusal
+import com.wittywilla.wittymediaclient.net.PeerRules
+import com.wittywilla.wittymediaclient.net.problemWords
 import com.wittywilla.wittymediaclient.p2p.PeerWay
 import kotlinx.coroutines.launch
 
@@ -80,6 +93,9 @@ fun AwayScreen(nav: Nav, s: Map<String, String>) {
             s[if (off) "awayOffHint" else if (kept != null) "awayReadyHint" else "awaySetUpHint"].orEmpty(),
             Modifier.padding(top = LocalDesignSizes.current.gap), tone = true,
         )
+        // The canvas's Invite and Join: a link (and its QR code) that brings another device in, and the code a TV
+        // away from home shows, typed in here. Both sign the other device in as this account.
+        if (server != null) AwayInvite(nav, s)
     }
     if (asking && server != null) {
         Confirm(
@@ -129,15 +145,42 @@ fun JoinAwayScreen(nav: Nav, s: Map<String, String>) {
             }
         }
     }
+    // An invite link pasted in, from the server's Remote Access page.
+    val scope = rememberCoroutineScope()
+    var link by remember { mutableStateOf("") }
+    var linkProblem by remember { mutableStateOf("") }
+    var joining by remember { mutableStateOf(false) }
+    fun joinLink() {
+        if (joining) return
+        val invite = PeerRules.invite(link.trim())
+        if (invite == null) { linkProblem = s["joinPasteNotInvite"].orEmpty(); return }
+        joining = true
+        scope.launch {
+            nav.joinInvite(invite)?.let { linkProblem = it }
+            joining = false
+        }
+    }
     DesignScreen(
-        s["joinAwayTitle"].orEmpty(), nav::pop, lead = s["joinAwayHint"].orEmpty(), tag = "join-away",
+        s["joinAwayTitle"].orEmpty(), nav::pop, eyebrow = s["remoteTitle"].orEmpty(), lead = s["joinAwayHint"].orEmpty(), tag = "join-away",
         actions = {
             if (failed) WittyButton(s["pairNew"].orEmpty(), { attempt++ }, kind = ButtonKind.Primary, tall = true, requestFocus = true, focusKey = "join-new")
             WittyButton(s["back"].orEmpty(), nav::pop, kind = ButtonKind.Secondary, tall = true, requestFocus = !failed, focusKey = "join-back")
         },
     ) {
         val ds = LocalDesignSizes.current
-        DesignSection("") {
+        // A phone, tablet or Chromebook can take an invite link instead: pasted here, it joins at once. A TV shows the
+        // code alone, typed in on a phone or computer that's signed in.
+        if (!metrics.tv) {
+            DesignSection(s["joinPasteTitle"].orEmpty()) {
+                DesignNote(s["joinPasteHint"].orEmpty())
+                WittyField(link, { link = it; linkProblem = "" }, s["joinPasteField"].orEmpty(), kind = FieldKind.Address, imeAction = ImeAction.Go, onAction = ::joinLink, isError = linkProblem.isNotEmpty())
+                DesignNote(linkProblem, error = true)
+                DesignActions {
+                    WittyButton(s["joinPasteButton"].orEmpty(), ::joinLink, kind = ButtonKind.Primary, busy = joining, enabled = link.isNotBlank(), focusKey = "join-link")
+                }
+            }
+        }
+        DesignSection(if (metrics.tv) "" else s["joinCodeSection"].orEmpty()) {
             if (code.isNotEmpty() && !failed) {
                 Text(
                     code, color = MaterialTheme.colorScheme.onSurface, fontSize = ds.title * 1.15f, fontWeight = FontWeight.Bold, fontFamily = FontFamily.Monospace,
@@ -148,6 +191,9 @@ fun JoinAwayScreen(nav: Nav, s: Map<String, String>) {
                         .semantics { contentDescription = code.toList().joinToString(" ") },
                 )
             }
+            // The same code as a QR code, holding only the code: a phone signed in to the server reads it under You, From away,
+            // A TV that shows a code, so nobody types it.
+            if (code.isNotEmpty() && !failed) QrCard(code, s["joinCodeQr"].orEmpty())
             // Said aloud as it changes: waiting, found, or what went wrong.
             DesignNote(words, busy = !failed, error = failed)
         }
@@ -165,3 +211,134 @@ fun awayWords(nav: Nav, s: Map<String, String>, server: SavedServer?): String {
         else -> s["awayNotSetUp"].orEmpty()
     }
 }
+
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun AwayInvite(nav: Nav, s: Map<String, String>) {
+    val api = nav.app.api
+    val scope = rememberCoroutineScope()
+    val context = LocalContext.current
+    val clipboard = LocalClipboardManager.current
+    val metrics = LocalMetrics.current
+    var link by remember { mutableStateOf("") }
+    var making by remember { mutableStateOf(false) }
+    var copied by remember { mutableStateOf(false) }
+    var invitePassword by remember { mutableStateOf("") }
+    var inviteOtp by remember { mutableStateOf("") }
+    var askPassword by remember { mutableStateOf(false) }
+    var askOtp by remember { mutableStateOf(false) }
+    var inviteProblem by remember { mutableStateOf("") }
+    fun makeInvite() {
+        if (making) return
+        making = true
+        inviteProblem = ""
+        scope.launch {
+            try {
+                link = api.p2pInvite(invitePassword, inviteOtp)
+                invitePassword = ""; inviteOtp = ""; askPassword = false; askOtp = false; copied = false
+            } catch (e: ApiError) {
+                when {
+                    PairRefusal.read(e.body).needsPassword && !askPassword -> askPassword = true
+                    e.twoFactor -> askOtp = true
+                    else -> inviteProblem = e.message.orEmpty()
+                }
+            } catch (e: kotlinx.coroutines.CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                inviteProblem = problemWords(e, s["errUnreachable"].orEmpty())
+            }
+            making = false
+        }
+    }
+    DesignSection(s["awayInviteTitle"].orEmpty()) {
+        DesignNote(s["awayInviteHint"].orEmpty())
+        if (link.isNotEmpty()) {
+            QrCard(link, s["awayInviteQr"].orEmpty())
+            DesignNote(s["awayInviteReady"].orEmpty(), tone = true)
+            DesignRow(link, focusKey = "invite-link")
+            DesignChips {
+                if (!metrics.tv) {
+                    DesignChip(s["awayInviteShare"].orEmpty(), {
+                        val send = Intent(Intent.ACTION_SEND).setType("text/plain").putExtra(Intent.EXTRA_TEXT, link)
+                        runCatching { context.startActivity(Intent.createChooser(send, s["awayInviteShare"].orEmpty())) }
+                    }, on = true, focusKey = "invite-share")
+                }
+                DesignChip(if (copied) s["awayInviteCopied"].orEmpty() else s["awayInviteCopy"].orEmpty(), { clipboard.setText(AnnotatedString(link)); copied = true }, focusKey = "invite-copy")
+                DesignChip(s["awayInviteMake"].orEmpty(), ::makeInvite, focusKey = "invite-again")
+            }
+        } else {
+            if (askPassword) {
+                DesignNote(s["awayAdminPassword"].orEmpty(), tone = true)
+                WittyField(invitePassword, { invitePassword = it }, s["awayPassword"].orEmpty(), kind = FieldKind.Password, imeAction = ImeAction.Go, onAction = ::makeInvite)
+                if (askOtp) WittyField(inviteOtp, { inviteOtp = it }, s["awayTwoFactor"].orEmpty(), imeAction = ImeAction.Go, onAction = ::makeInvite)
+            }
+            DesignNote(inviteProblem, error = true)
+            DesignActions {
+                WittyButton(s["awayInviteMake"].orEmpty(), ::makeInvite, kind = ButtonKind.Primary, busy = making, icon = Symbols.Qr, focusKey = "invite-make")
+            }
+        }
+    }
+
+    var code by remember { mutableStateOf("") }
+    var codePassword by remember { mutableStateOf("") }
+    var codeOtp by remember { mutableStateOf("") }
+    var codeAskOtp by remember { mutableStateOf(false) }
+    var signing by remember { mutableStateOf(false) }
+    var codeSaid by remember { mutableStateOf("") }
+    var codeProblem by remember { mutableStateOf("") }
+    // The TV's code read with the camera, on a phone or tablet that has one.
+    var scanning by remember { mutableStateOf(false) }
+    val canScan = remember { !nav.app.isTv && hasCamera(context) }
+    val cameraAsk = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
+        if (granted) scanning = true else codeProblem = s["remoteCameraDenied"].orEmpty()
+    }
+    fun signIn() {
+        if (signing || code.isBlank() || codePassword.isEmpty()) return
+        signing = true
+        codeProblem = ""; codeSaid = ""
+        scope.launch {
+            try {
+                api.p2pJoin(code.trim(), codePassword, codeOtp)
+                codeSaid = fill(s["awayCodeDone"], "code" to code.trim().uppercase())
+                code = ""; codePassword = ""; codeOtp = ""; codeAskOtp = false
+            } catch (e: ApiError) {
+                if (e.twoFactor) codeAskOtp = true else codeProblem = e.message.orEmpty()
+            } catch (e: kotlinx.coroutines.CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                codeProblem = problemWords(e, s["errUnreachable"].orEmpty())
+            }
+            signing = false
+        }
+    }
+    DesignSection(s["awayCodeTitle"].orEmpty()) {
+        DesignNote(s["awayCodeHint"].orEmpty())
+        if (scanning) {
+            QrScanner(s["awayCodeScanning"].orEmpty(), { text ->
+                val read = text.trim().uppercase()
+                if (PeerRules.isJoinCode(read)) { code = read; scanning = false; codeProblem = "" } else codeProblem = s["awayCodeNotOurs"].orEmpty()
+            }, onFailed = { scanning = false; codeProblem = s["approveCameraFailed"].orEmpty() })
+        }
+        if (canScan) {
+            DesignChips {
+                DesignChip(s[if (scanning) "approveTypeInstead" else "awayCodeScan"].orEmpty(), {
+                    codeProblem = ""
+                    when {
+                        scanning -> scanning = false
+                        cameraAllowed(context) -> scanning = true
+                        else -> cameraAsk.launch(Manifest.permission.CAMERA)
+                    }
+                }, on = !scanning, focusKey = "code-scan")
+            }
+        }
+        WittyField(code, { code = it.take(12); codeSaid = "" }, s["awayCodeField"].orEmpty(), maxLength = 12)
+        WittyField(codePassword, { codePassword = it }, s["awayPassword"].orEmpty(), kind = FieldKind.Password, imeAction = ImeAction.Go, onAction = ::signIn)
+        if (codeAskOtp) WittyField(codeOtp, { codeOtp = it }, s["awayTwoFactor"].orEmpty(), imeAction = ImeAction.Go, onAction = ::signIn)
+        DesignNote(codeProblem, error = true)
+        DesignNote(codeSaid, tone = true)
+        DesignActions {
+            WittyButton(s["awayCodeSignIn"].orEmpty(), ::signIn, kind = ButtonKind.Secondary, busy = signing, enabled = code.isNotBlank() && codePassword.isNotEmpty(), focusKey = "code-sign-in")
+        }
+    }
+}
+

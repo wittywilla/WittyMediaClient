@@ -20,8 +20,8 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.safeDrawingPadding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -33,11 +33,14 @@ import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.compositionLocalOf
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.heading
+import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -344,7 +347,7 @@ fun DesignNote(text: String, modifier: Modifier = Modifier, tone: Boolean = fals
     // Still waiting (looking for servers, for an answer): a spinner before the words, which are said when they change.
     if (busy) {
         Row(
-            modifier.semantics(mergeDescendants = true) { androidx.compose.ui.semantics.liveRegion = androidx.compose.ui.semantics.LiveRegionMode.Polite },
+            modifier.semantics(mergeDescendants = true) { liveRegion = LiveRegionMode.Polite },
             verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(s.gap),
         ) {
             Spinner(scheme.onSurfaceVariant, s.small.value.dp * 1.2f)
@@ -361,7 +364,7 @@ fun DesignNote(text: String, modifier: Modifier = Modifier, tone: Boolean = fals
         (if (error) "! " else "") + text, color = if (error) scheme.onBackground else scheme.onSurfaceVariant, fontSize = s.small, lineHeight = s.small * 1.5f,
         modifier = modifier.widthIn(max = s.leadWidth).background(fill, RoundedCornerShape(metrics.u(metrics.themeRadius * 0.7f)))
             .padding(if (tone || error) s.gap else 0.dp)
-            .then(if (error) Modifier.semantics { androidx.compose.ui.semantics.liveRegion = androidx.compose.ui.semantics.LiveRegionMode.Polite } else Modifier),
+            .then(if (error) Modifier.semantics { liveRegion = LiveRegionMode.Polite } else Modifier),
     )
 }
 
@@ -390,6 +393,14 @@ fun DesignCard(
     swatch: List<Color> = emptyList(),
     on: Boolean = false,
     enabled: Boolean = true,
+    // A symbol above the words, for a card that is a way to do something rather than a look or a theme.
+    icon: androidx.compose.ui.graphics.vector.ImageVector? = null,
+    requestFocus: Boolean = false,
+    takeFocus: Boolean = false,
+    focusKey: String? = null,
+    // A picture of what the card stands for, above its words and in place of the swatch: a look's layout (W4's
+    // LayoutThumb), drawn the card's width and as tall as it chooses.
+    preview: (@Composable () -> Unit)? = null,
 ) {
     val s = LocalDesignSizes.current
     val metrics = LocalMetrics.current
@@ -397,9 +408,17 @@ fun DesignCard(
     Pressable(
         onClick, modifier.fillMaxWidth().testTag("design." + designId(title)), shape = metrics.corner(10), fill = scheme.surface,
         label = listOf(title, sub).filter { it.isNotEmpty() }.joinToString(", "), selected = on, enabled = enabled, grows = false,
+        requestFocus = requestFocus, takeFocus = takeFocus, focusKey = focusKey,
     ) {
-        Column(Modifier.fillMaxWidth().padding(s.gap * 0.8f)) {
-            if (swatch.isNotEmpty()) {
+        Column(Modifier.fillMaxWidth().defaultMinSize(minHeight = if (icon != null) s.rowHeight * 2 else 0.dp).padding(s.gap * 0.8f)) {
+            if (icon != null) {
+                androidx.compose.material3.Icon(icon, contentDescription = null, tint = LocalExtraColours.current.accentText, modifier = Modifier.size(s.body.value.dp * 1.6f))
+                Spacer(Modifier.height(s.gap * 0.8f))
+            }
+            if (preview != null) {
+                Box(Modifier.fillMaxWidth().clip(metrics.corner(6))) { preview() }
+                Spacer(Modifier.height(6.dp))
+            } else if (swatch.isNotEmpty()) {
                 Row(Modifier.fillMaxWidth().height(s.small.value.dp * 1.6f), horizontalArrangement = Arrangement.spacedBy(3.dp)) {
                     swatch.forEachIndexed { i, c ->
                         Box((if (i < 2) Modifier.weight(if (i == 0) 2f else 1f) else Modifier.size(s.small.value.dp * 1.6f)).height(s.small.value.dp * 1.6f).background(c, RoundedCornerShape(5.dp)))

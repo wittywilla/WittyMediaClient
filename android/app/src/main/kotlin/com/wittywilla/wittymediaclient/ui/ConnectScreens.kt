@@ -2,7 +2,10 @@
 // Copyright (C) 2026 WittyWilla and contributors
 package com.wittywilla.wittymediaclient.ui
 
+import android.Manifest
 import android.view.KeyEvent
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -85,11 +88,11 @@ import com.wittywilla.wittymediaclient.net.Profiles
 import com.wittywilla.wittymediaclient.net.ServerFinder
 import com.wittywilla.wittymediaclient.net.probeServer
 import com.wittywilla.wittymediaclient.net.problemWords
+import java.io.IOException
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
-import java.io.IOException
 
 // The screens in docs/APP-DESIGN.md, "Signing in", numbered as there. The words are the shared ones in
 // shared/data/strings.en.json.
@@ -202,6 +205,13 @@ fun ConnectScreen(nav: Nav, s: Map<String, String>, message: String) {
         }
     }
 
+    // The camera, for a QR code: asked about first, never on a TV or a device without one.
+    var scan by remember { mutableStateOf(ConnectScan.Off) }
+    val canScan = remember { !nav.app.isTv && hasCamera(context) }
+    val cameraAsk = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
+        scan = if (granted) ConnectScan.On else ConnectScan.Denied
+    }
+
     fun submit() {
         // An invite link from the server's Remote Access page, for connecting from away.
         PeerRules.invite(address)?.let { invite ->
@@ -227,6 +237,38 @@ fun ConnectScreen(nav: Nav, s: Map<String, String>, message: String) {
 
     if (showForm) {
         AddressScreen(nav, s, address, { address = it; problem = "" }, problem, connecting != null, ::submit) { showForm = false; problem = "" }
+        return
+    }
+
+    // Reading a QR code with the camera: an invite from the server's Remote Access page, or a server's address.
+    if (scan != ConnectScan.Off) {
+        DesignScreen(s["remoteScanCard"].orEmpty(), { scan = ConnectScan.Off }, eyebrow = s["remoteTitle"].orEmpty(), tag = "scan-code",
+            actions = { WittyButton(s["remoteAddressCard"].orEmpty(), { scan = ConnectScan.Off; showForm = true }, kind = ButtonKind.Secondary, tall = true) },
+        ) {
+            DesignSection("") {
+                when (scan) {
+                    ConnectScan.Why -> {
+                        DesignNote(s["remoteCameraWhy"].orEmpty(), tone = true)
+                        DesignActions {
+                            WittyButton(s["approveCameraAllow"].orEmpty(), { cameraAsk.launch(Manifest.permission.CAMERA) }, kind = ButtonKind.Primary, tall = true, requestFocus = true)
+                        }
+                    }
+                    ConnectScan.Denied -> DesignNote(s["remoteCameraDenied"].orEmpty(), tone = true)
+                    else -> {
+                        DesignNote(s["remoteScanning"].orEmpty())
+                        QrScanner(s["remoteScanning"].orEmpty(), { text ->
+                            if (scan != ConnectScan.On) return@QrScanner
+                            val read = text.trim()
+                            when {
+                                PeerRules.invite(read) != null || Address.normalize(read) is Address.Result.Ok -> { scan = ConnectScan.Off; address = read; submit() }
+                                else -> problem = s["remoteScanNotOurs"].orEmpty()
+                            }
+                        }, onFailed = { scan = ConnectScan.Off; problem = s["approveCameraFailed"].orEmpty() })
+                    }
+                }
+                DesignNote(problem, error = true)
+            }
+        }
         return
     }
 
@@ -276,21 +318,10 @@ fun ConnectScreen(nav: Nav, s: Map<String, String>, message: String) {
         focusOn = firstKey
     }
     Box(Modifier.fillMaxSize()) {
-        // Design 2's connect page: the servers this device has used, those found on the network, then this device's
-        // servers, and the other ways in as the page's actions.
+        // Design 2's connect page (the canvas's `connect`): the servers this device has used, those found on the network,
+        // then the ways to reach a server that isn't here (peer to peer, a QR code, an address), then this device's servers.
         DesignPage(
             s["findTitle"].orEmpty(), eyebrow = APP_NAME, lead = s["findSubtitle"].orEmpty(), foot = s["legalConnect"].orEmpty(), tag = "connect",
-            actions = {
-                WittyButton(
-                    s["enterAddress"].orEmpty(), { showForm = true; problem = "" },
-                    kind = if (nothing) ButtonKind.Primary else ButtonKind.Secondary, icon = Symbols.Address,
-                    requestFocus = firstKey == "enter-address", takeFocus = focusOn == "enter-address", focusKey = "enter-address",
-                )
-                // A device that has never been at home with its server: it shows a code to type into the server.
-                if (nav.app.peers.available) {
-                    WittyButton(s["joinAway"].orEmpty(), { nav.push(Route.JoinAway) }, kind = ButtonKind.Secondary, icon = Symbols.Globe, focusKey = "join-away")
-                }
-            },
         ) {
             DesignNote(problem, Modifier.padding(top = LocalDesignSizes.current.gap), error = true)
             Notice(nav.pickerNotice, Modifier.padding(top = LocalDesignSizes.current.gap))
@@ -333,8 +364,10 @@ fun ConnectScreen(nav: Nav, s: Map<String, String>, message: String) {
                                     val removeLabel = fill(s["removeServerNamed"], "name" to name)
                                     val card = @Composable {
                                         Box {
+                                            // A server reached peer to peer says so, rather than its private address.
+                                            val viaPeer = PeerRules.isAwayOnlyUrl(server.url) || nav.app.peers.info(server) != null
                                             ServerCard(
-                                                name, server.url, { connect(at) },
+                                                name, if (viaPeer) s["savedPeer"].orEmpty() else server.url, { connect(at) },
                                                 logo = LogoCache.file(context, server.url, server.brandLogo), lastUsed = server.url == last?.url,
                                                 connecting = connecting == at, requestFocus = i == 0 && !moved && (savedFirst || (foundOnly.isEmpty() && found.isNotEmpty())),
                                                 focusKey = "recent-${server.url}",
@@ -367,6 +400,33 @@ fun ConnectScreen(nav: Nav, s: Map<String, String>, message: String) {
                     }
                 }
                 if (savedFirst) { savedBlock(); foundBlock() } else { foundBlock(); savedBlock() }
+            }
+            // Connecting to a server that isn't on this network, as plainly as the ones that are: peer to peer by an invite
+            // link or a code this device shows, a QR code (an invite or an address), or an address typed in.
+            DesignSection(s["remoteTitle"].orEmpty()) {
+                val peer = nav.app.peers.available
+                val ways = buildList {
+                    if (peer) add("join-away")
+                    if (canScan) add("scan-code")
+                    add("enter-address")
+                }
+                DesignCards(ways.size, columns = ways.size) { i ->
+                    when (ways[i]) {
+                        "join-away" -> DesignCard(
+                            s["remoteJoinCard"].orEmpty(), { nav.push(Route.JoinAway) }, sub = s["remoteJoinCardSub"].orEmpty(), icon = Symbols.Globe,
+                            focusKey = "join-away", takeFocus = focusOn == "join-away",
+                        )
+                        "scan-code" -> DesignCard(
+                            s["remoteScanCard"].orEmpty(), { problem = ""; scan = if (cameraAllowed(context)) ConnectScan.On else ConnectScan.Why },
+                            sub = s["remoteScanCardSub"].orEmpty(), icon = Symbols.Qr, focusKey = "scan-code",
+                        )
+                        else -> DesignCard(
+                            s["remoteAddressCard"].orEmpty(), { showForm = true; problem = "" }, sub = s["remoteAddressCardSub"].orEmpty(), icon = Symbols.Address,
+                            requestFocus = firstKey == "enter-address", takeFocus = focusOn == "enter-address", focusKey = "enter-address", on = nothing,
+                        )
+                    }
+                }
+                if (peer) DesignNote(s["remoteNote"].orEmpty(), tone = true)
             }
             // Where every remembered server can be removed: one, all, or those not reached for a while.
             if (recent.isNotEmpty()) {
@@ -1104,3 +1164,6 @@ fun SetupRequiredScreen(s: Map<String, String>, address: String, retry: () -> Un
         }
     }
 }
+
+// Where the camera is, for reading a QR code on the connect page.
+private enum class ConnectScan { Off, Why, Denied, On }

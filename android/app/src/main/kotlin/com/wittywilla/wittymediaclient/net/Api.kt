@@ -334,6 +334,18 @@ class Api(val base: String, val token: String, private val quick: Boolean = fals
         call("POST", "/p2p/devices", JsonObject(mapOf("id" to JsonPrimitive(device), "name" to JsonPrimitive(name), "platform" to JsonPrimitive(platform))).toString())
     }
 
+    // An invite link that signs another device in as this account from away (fifteen minutes, once). An administrator's
+    // own password (and two-step code) is asked for again; without it the server refuses with "password-required".
+    suspend fun p2pInvite(password: String = "", otp: String = ""): String {
+        val body = JsonObject(mapOf("password" to JsonPrimitive(password), "otp" to JsonPrimitive(otp))).toString()
+        return (json.parseToJsonElement(call("POST", "/p2p/invite", body)) as? JsonObject)?.get("link")?.let { (it as? JsonPrimitive)?.content }.orEmpty()
+    }
+
+    // Signs in, as this account, the device away from home that shows `code` (Join with a link or code, on a TV).
+    suspend fun p2pJoin(code: String, password: String, otp: String = "") {
+        call("POST", "/p2p/join", JsonObject(mapOf("code" to JsonPrimitive(code), "password" to JsonPrimitive(password), "otp" to JsonPrimitive(otp))).toString())
+    }
+
     // Takes this device's key off the list.
     suspend fun p2pForget(device: String) {
         call("DELETE", "/p2p/devices/" + java.net.URLEncoder.encode(device, "UTF-8"))

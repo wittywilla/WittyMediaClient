@@ -4,6 +4,12 @@ package com.wittywilla.wittymediaclient.net
 
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.JsonNull
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.booleanOrNull
+import kotlinx.serialization.json.doubleOrNull
 
 /**
  * A Design 2 page as data (the design canvas's `gp` pages, docs/design-2/canvas/Exp.dc.html: `mk`, `secR`, `secP`,
@@ -28,7 +34,66 @@ data class DesignPageSpec(
     val layer: Boolean = false,
     /** Where focus starts: an item's id. Empty is the first thing that can take focus, top to bottom. */
     val start: String = "",
+    /** A form: its controls run nothing when changed, and Save hands every named control's value over at once. */
+    val form: Form? = null,
 ) {
+    /** The foot of a form (the server's Form component): Save, and Cancel when it has one. */
+    @Serializable
+    data class Form(val submitLabel: String, val cancelLabel: String = "")
+
+    /**
+     * What a row lets someone change, as the server sends it (docs/SDUI.md, "Forms and controls"): `switch` (value a
+     * bool), `select` (a string from `options`), `field` (a string) or `slider` (a number from min to max by step).
+     */
+    @Serializable
+    data class Control(
+        @SerialName("type") val kind: String,
+        val name: String = "",
+        val value: JsonElement? = null,
+        val options: List<Option> = emptyList(),
+        val min: Double = 0.0,
+        val max: Double = 0.0,
+        val step: Double = 0.0,
+        val unit: String = "",
+        val placeholder: String = "",
+        val maxLength: Int = 0,
+        val multiline: Boolean = false,
+        /** text, number, url or search: the keyboard a field asks for. */
+        val input: String = "",
+        val disabled: Boolean = false,
+        /** Why it is disabled, in a line under it. */
+        val why: String = "",
+    ) {
+        @Serializable
+        data class Option(val value: String, val label: String = "")
+
+        val on: Boolean get() = (value as? JsonPrimitive)?.booleanOrNull ?: false
+        val text: String get() = (value as? JsonPrimitive)?.takeIf { it !is JsonNull }?.content.orEmpty()
+        val number: Double get() = (value as? JsonPrimitive)?.doubleOrNull ?: min
+
+        /** A slider's value kept on its steps and inside its range. */
+        fun snap(v: Double): Double {
+            val hi = if (max > min) max else min
+            val stepped = if (step > 0) min + Math.round((v - min) / step) * step else v
+            return stepped.coerceIn(min, hi)
+        }
+
+        /** How a value reads: a select's label, a slider's number with its unit, a switch's On or Off. */
+        fun shown(onWord: String = "On", offWord: String = "Off"): String = when (kind) {
+            SWITCH -> if (on) onWord else offWord
+            SELECT -> options.firstOrNull { it.value == text }?.let { it.label.ifEmpty { it.value } } ?: text
+            SLIDER -> number.let { if (it == Math.floor(it)) it.toLong().toString() else it.toString() } + unit
+            else -> text
+        }
+
+        companion object {
+            const val SWITCH = "switch"
+            const val SELECT = "select"
+            const val FIELD = "field"
+            const val SLIDER = "slider"
+        }
+    }
+
     @Serializable
     enum class Kind { rows, chips, note, cards }
 
@@ -55,7 +120,11 @@ data class DesignPageSpec(
         /** Whether pressing it does something; a row that only says something isn't a stop for focus. */
         val pressable: Boolean = true,
         @SerialName("id") private val idGiven: String = "",
+        /** Something it changes in place: a switch, a choice, words or a number. */
+        val control: Control? = null,
     ) {
+        /** Whether focus stops on it: a control that isn't disabled always does, else only when it does something. */
+        val focusable: Boolean get() = control?.let { !it.disabled } ?: pressable
         val id: String get() = idGiven.ifEmpty { slug(title) }
     }
 
@@ -87,7 +156,7 @@ data class DesignPageSpec(
     val focusOrder: List<String>
         get() = sections.flatMap { s ->
             when (s.kind) {
-                Kind.rows -> s.rows.filter { it.pressable }.map { it.id }
+                Kind.rows -> s.rows.filter { it.focusable }.map { it.id }
                 Kind.chips -> s.chips.map { it.id }
                 Kind.cards -> s.cards.map { it.id }
                 Kind.note -> emptyList()
@@ -99,6 +168,17 @@ data class DesignPageSpec(
 
     /** What Back does on this page, by the Back ladder: a layer closes; the Stage hands focus to the Bar. */
     val back: BackStep get() = BackLadder.next(BackState(layerOpen = layer, zone = if (layer) Zone.Layer else Zone.Stage, barOnHome = false))
+
+    /** Every row with a control, by its name (else its id). */
+    val controls: Map<String, Control>
+        get() = sections.flatMap { it.rows }.mapNotNull { r -> r.control?.let { c -> c.name.ifEmpty { r.id } to c } }.toMap()
+
+    /**
+     * What a form's Save sends: every named control's value, those changed in [edits] (by name) taking the place of
+     * what the server sent.
+     */
+    fun formValues(edits: Map<String, JsonElement>): JsonObject =
+        JsonObject(controls.filterValues { it.name.isNotEmpty() }.mapValues { (name, c) -> edits[name] ?: c.value ?: JsonNull })
 
     companion object {
         fun mk(eyebrow: String, title: String, lead: String, sections: List<Section>, actions: List<Action> = emptyList(), foot: String = "") =
@@ -135,8 +215,8 @@ fun secN(heading: String, text: String, tone: Boolean = false) = DesignPageSpec.
 fun secC(heading: String, cards: List<DesignPageSpec.Card>, columns: Int? = null) = DesignPageSpec.Section(heading, DesignPageSpec.Kind.cards, cards = cards, columns = columns)
 
 @Suppress("FunctionName")
-fun R(title: String, value: String = "", on: Boolean = false, detail: String = "", pressable: Boolean = true, id: String = "") =
-    DesignPageSpec.Row(title, value, on, detail, pressable, id)
+fun R(title: String, value: String = "", on: Boolean = false, detail: String = "", pressable: Boolean = true, id: String = "", control: DesignPageSpec.Control? = null) =
+    DesignPageSpec.Row(title, value, on, detail, pressable, id, control)
 
 @Suppress("FunctionName")
 fun Cc(title: String, on: Boolean = false, id: String = "") = DesignPageSpec.Chip(title, on, id)

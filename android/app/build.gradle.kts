@@ -6,7 +6,36 @@ plugins {
     id("org.jetbrains.kotlin.plugin.serialization")
 }
 
-val wittyconnect: File? = file("libs/wittyconnect.aar").takeIf { it.isFile && it.length() > 0 }
+// Peer to peer is WittyMediaServer's connector library in app/libs. It decides which sources and dependencies the app is
+// built with, so when it is missing and an installable build is asked for (sideload or release), it is built here, while
+// the build is set up: android/scripts/build-wittyconnect.sh --if-available, which skips with a warning where Go, the
+// NDK or the server's source isn't there. Debug builds and unit tests don't wait for it.
+fun wittyconnectAar(): File? = file("libs/wittyconnect.aar").takeIf { it.isFile && it.length() > 0 }
+val installable = gradle.startParameter.taskNames.any { t -> listOf("sideload", "release", "bundle").any { t.contains(it, ignoreCase = true) } }
+if (wittyconnectAar() == null && installable && findProperty("p2p") != "off") {
+    logger.lifecycle("Peer to peer: app/libs/wittyconnect.aar is missing, so it is built first (android/scripts/build-wittyconnect.sh).")
+    val run = ProcessBuilder("bash", rootProject.file("scripts/build-wittyconnect.sh").path, "--if-available")
+        .directory(rootProject.projectDir).inheritIO().start()
+    if (run.waitFor() != 0) logger.warn("Peer to peer: building the library failed (see above).")
+}
+val wittyconnect: File? = wittyconnectAar()
+
+// Without the library the app builds, but can't reach a server from away and offers no way to: say so on every build,
+// and stop when it is asked for (-Pp2p=required, as release builds should be). -Pp2p=off skips building it.
+if (wittyconnect == null) {
+    val how = "Build it with: gradle :app:wittyconnect (or bash android/scripts/build-wittyconnect.sh); it needs Go, the NDK and a WittyMediaServer checkout."
+    if (findProperty("p2p") == "required") throw GradleException("Peer to peer is required (-Pp2p=required) but app/libs/wittyconnect.aar is missing. $how")
+    logger.warn("\nWARNING: app/libs/wittyconnect.aar is missing: this build can't connect peer to peer (no Join with a link or code, no From away). $how\n")
+}
+
+// One command for the library: android/scripts/build-wittyconnect.sh, which finds WittyMediaServer's source beside this
+// repository (or WITTYMEDIASERVER_SRC) and builds its connector with gomobile into app/libs.
+tasks.register<Exec>("wittyconnect") {
+    group = "build"
+    description = "Builds the peer-to-peer library (app/libs/wittyconnect.aar) from WittyMediaServer's source."
+    workingDir = rootProject.projectDir
+    commandLine("bash", "scripts/build-wittyconnect.sh")
+}
 
 android {
     namespace = "com.wittywilla.wittymediaclient"

@@ -66,4 +66,30 @@ class DesignPageSpecTest {
         assertEquals(listOf("v", "reset", "done"), spec.focusOrder)
         assertEquals(spec, json.decodeFromString(DesignPageSpec.serializer(), json.encodeToString(DesignPageSpec.serializer(), spec)))
     }
+
+    // A row's control as the server sends it (docs/SDUI.md, "Forms and controls"), and a Form's values for Save.
+    @Test fun controlsReadAsTheServerSendsThem() {
+        val text = """{"title":"Privacy","form":{"submitLabel":"Save","cancelLabel":"Cancel"},"sections":[{"kind":"rows","rows":[
+            {"title":"Show what I play","control":{"type":"switch","name":"share","value":true}},
+            {"title":"Who sees it","control":{"type":"select","name":"who","value":"friends","options":[{"value":"friends","label":"Friends"},{"value":"all","label":"Everyone"}]}},
+            {"title":"Volume","control":{"type":"slider","name":"vol","value":40,"min":0,"max":100,"step":5,"unit":"%"}},
+            {"title":"Nickname","control":{"type":"field","name":"nick","value":"Pip","maxLength":20}},
+            {"title":"Locked","control":{"type":"switch","name":"locked","value":false,"disabled":true,"why":"Your parent set this"}},
+            {"title":"Just words","pressable":false}]}]}"""
+        val spec = json.decodeFromString(DesignPageSpec.serializer(), text)
+        val c = spec.controls
+        assertEquals(true, c.getValue("share").on)
+        assertEquals("Everyone", c.getValue("who").copy(value = kotlinx.serialization.json.JsonPrimitive("all")).shown())
+        assertEquals("40%", c.getValue("vol").shown())
+        assertEquals(45.0, c.getValue("vol").snap(43.0), 0.0)
+        assertEquals(100.0, c.getValue("vol").snap(140.0), 0.0)
+        assertEquals("Pip", c.getValue("nick").text)
+        // A disabled control and a row that only says something are not stops for focus.
+        assertEquals(listOf("show-what-i-play", "who-sees-it", "volume", "nickname"), spec.focusOrder)
+        assertEquals("Save", spec.form?.submitLabel)
+        val values = spec.formValues(mapOf("who" to kotlinx.serialization.json.JsonPrimitive("all")))
+        assertEquals(setOf("share", "who", "vol", "nick", "locked"), values.keys)
+        assertEquals("\"all\"", values.getValue("who").toString())
+        assertEquals("true", values.getValue("share").toString())
+    }
 }
