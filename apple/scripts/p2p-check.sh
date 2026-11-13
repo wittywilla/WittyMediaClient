@@ -161,7 +161,14 @@ disown "$forward_pid"
 for _ in $(seq 1 20); do curl -fsS -m 2 "$home/api/health" >/dev/null 2>&1 && break; sleep 0.25; done
 curl -fsS -m 2 "$home/api/health" >/dev/null || { echo "The forwarder at $home didn't start." >&2; exit 1; }
 
-device="$(xcrun simctl list devices available | grep -E "^ +${P2P_CHECK_DEVICE:-$kind}" | head -1 | sed -E 's/.*\(([0-9A-F-]{36})\).*/\1/')"
+# P2P_CHECK_DEVICE is a simulator's whole name or its ID, taken as written (unset: an Apple TV or an iPhone); one already booted is
+# chosen first, so a check doesn't start a second simulator beside it.
+if [ -n "${P2P_CHECK_DEVICE:-}" ]; then
+  candidates="$(xcrun simctl list devices available | grep -F -e " $P2P_CHECK_DEVICE (" -e "($P2P_CHECK_DEVICE)" || true)"
+else
+  candidates="$(xcrun simctl list devices available | grep -E "^ +$kind" || true)"
+fi
+device="$(printf '%s\n' "$candidates" | awk '/\(Booted\)/ { print; found = 1; exit } NF { rest[++n] = $0 } END { if (!found && n) print rest[1] }' | sed -E 's/.*\(([0-9A-F-]{36})\).*/\1/')"
 [ -n "$device" ] || { echo "No $kind simulator. Add one in Xcode's settings, under Platforms." >&2; exit 2; }
 xcrun simctl boot "$device" 2>/dev/null || true
 xcrun simctl bootstatus "$device" -b >/dev/null
