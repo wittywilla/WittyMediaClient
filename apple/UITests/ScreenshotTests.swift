@@ -36,7 +36,10 @@ final class ScreenshotTests: XCTestCase {
         let env = ProcessInfo.processInfo.environment
         guard let device = env["WMC_DEVICE_ID"], !device.isEmpty else { throw XCTSkip("No installation name: set TEST_RUNNER_WMC_DEVICE_ID.") }
         let look = env["WMC_LOOK"] ?? "look"
-        let app = try launchApp(extra: ["-sdui.deviceId", device])
+        // The first-connect chooser is skipped (its "seen" mark is set for this server and person, as choosing would): the look under
+        // test is the one the script put on the server for this installation.
+        let server = env["WMC_SERVER"] ?? ""
+        let app = try launchApp(extra: ["-sdui.deviceId", device, "-lookSeen|\(server)|1", "YES"])
         _ = app.descendants(matching: .any).matching(NSPredicate(format: "identifier BEGINSWITH %@", "sdui.page.home")).firstMatch.waitForExistence(timeout: 40)
         Thread.sleep(forTimeInterval: 3)
         shoot("\(look)-1-home")
