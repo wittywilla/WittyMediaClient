@@ -141,8 +141,14 @@ struct GuideView: View {
         }
         .onDisappear { leaveIfDone() }
         .sheet(item: $ask) { a in
-            GuideDetails(ask: a, now: now, onWatch: { key in ask = nil; watch(key) },
-                         onFromStart: { p in ask = nil; fromStart(a.channel, p) }, onSaid: say)
+            if !a.day, model.has(TvFeature.programmeInfo), a.channel.canTune || a.programme != nil {
+                // WittyTV More info: the programme in full.
+                MoreInfoSheet(channel: a.channel.key, start: a.programme?.start ?? a.cell.start, onWatch: { key in ask = nil; watch(key) },
+                              onFromStart: { _, _ in if let p = a.programme { ask = nil; fromStart(a.channel, p) } else { ask = nil } })
+            } else {
+                GuideDetails(ask: a, now: now, onWatch: { key in ask = nil; watch(key) },
+                             onFromStart: { p in ask = nil; fromStart(a.channel, p) }, onSaid: say)
+            }
         }
         .sheet(item: $adding) { c in AddToSetSheet(channel: c, onSaid: { say($0); Task { await reloadSets() } }) }
         .sheet(isPresented: $setsOpen) {

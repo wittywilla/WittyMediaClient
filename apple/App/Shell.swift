@@ -384,7 +384,7 @@ private struct PillShell: View {
                 // The rail, and a headset's ornament: the same closed and open menu, the ornament floating at the leading edge.
                 HStack(spacing: 0) {
                     if !model.hidesBars {
-                        RailMenu(closed: navSize > 0 ? navSize : 76, open: CGFloat(center.shell?.open ?? 240))
+                        RailMenu(closed: navSize > 0 ? navSize : 76, open: CGFloat(center.shell?.open ?? 240), drawerWidth: CGFloat(center.shell?.drawer ?? 0))
                     }
                     tabs
                 }
@@ -444,7 +444,7 @@ struct ElsewhereNote: View {
         #if os(tvOS)
         // The same card Android TV shows: the page's code for a phone's camera, and its address.
         if let url = model.client.mediaURL(path) {
-            OpenOnPhone(url: url)
+            ModuleOnPhonePage(path: path, url: url)
         } else {
             Secondary("Open \(model.client.base) on a phone, tablet or computer.").padding(Tokens.gutter)
         }

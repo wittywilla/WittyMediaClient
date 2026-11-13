@@ -43,6 +43,8 @@ struct ChannelDock: View {
     let onGuide: () -> Void
     let onLook: () -> Void
     let onClose: () -> Void
+    /// WittyTV More info for what is on (feature `tv-programme-info`); nil on a server without it.
+    var onInfo: (() -> Void)? = nil
     @State private var audio: [LiveTrack] = []
     @State private var subtitles: [LiveTrack] = []
     @State private var choosing: (title: String, kind: AVMediaCharacteristic, tracks: [LiveTrack])?
@@ -76,6 +78,10 @@ struct ChannelDock: View {
                 if subtitles.count > 1 {
                     Button { choosing = ("Subtitles", .legible, subtitles) } label: { Label("Subtitles", systemImage: "captions.bubble") }
                         .buttonStyle(TvButtonStyle(dress: dress, onBar: true))
+                }
+                if let onInfo {
+                    Button(action: onInfo) { Label("More info", systemImage: "info.circle") }
+                        .buttonStyle(TvButtonStyle(dress: dress, onBar: true)).accessibilityIdentifier("tv.player.moreInfo")
                 }
                 Button(action: onLook) { Label("Look", systemImage: "paintpalette") }.buttonStyle(TvButtonStyle(dress: dress, onBar: true))
                 Button(action: onGuide) { Label("Guide", systemImage: "list.bullet.rectangle") }.buttonStyle(TvButtonStyle(dress: dress, onBar: true))

@@ -88,6 +88,13 @@ android {
         }
     }
 
+    lint {
+        // androidx.compose.ui.lint.ConfigurationScreenWidthHeightDetector crashes the lint run on some files
+        // ("No fir element was found for KtParameter", seen in player/PlayerScreen.kt) and only ever gives a
+        // Warning that suggests LocalWindowInfo. Switched off until the Compose lint jar fixes it.
+        disable += "ConfigurationScreenWidthHeight"
+    }
+
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17

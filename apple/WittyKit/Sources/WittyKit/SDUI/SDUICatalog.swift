@@ -51,12 +51,36 @@ public struct SDUICommand: Codable, Equatable, Sendable {
     /// With `{item}` where the item's ID goes.
     public var path: String?
     public var body: String?
+    /// The values beyond the item a command takes (`name`, `type` of `string` or `int`, `required`): the action's own
+    /// `params` give them by name, and each goes in place of `{name}` in the path and the body.
+    public var params: [Param]?
 
-    public init(_ op: String, method: String? = nil, path: String? = nil, body: String? = nil) {
+    public struct Param: Codable, Equatable, Sendable {
+        public var name: String
+        public var type: String
+        public var required: Bool
+
+        public init(_ name: String, type: String = "string", required: Bool = false) {
+            self.name = name
+            self.type = type
+            self.required = required
+        }
+
+        enum CodingKeys: String, CodingKey { case name, type, required }
+        public init(from decoder: Decoder) throws {
+            let c = try decoder.container(keyedBy: CodingKeys.self)
+            name = try c.decode(String.self, forKey: .name)
+            type = (try? c.decodeIfPresent(String.self, forKey: .type)) ?? "string"
+            required = (try? c.decodeIfPresent(Bool.self, forKey: .required)) ?? false
+        }
+    }
+
+    public init(_ op: String, method: String? = nil, path: String? = nil, body: String? = nil, params: [Param]? = nil) {
         self.op = op
         self.method = method
         self.path = path
         self.body = body
+        self.params = params
     }
 }
 
@@ -125,9 +149,8 @@ public struct SDUICatalog: Codable, Equatable, Sendable {
             SDUICardStyle("square", shape: "square", aspect: "1/1", shows: ["title", "subtitle"], titleLines: 1, subtitleLines: 1),
             SDUICardStyle("album", shape: "square", aspect: "1/1", shows: ["title", "subtitle"], titleLines: 1, subtitleLines: 1),
             SDUICardStyle("circle", shape: "circle", aspect: "1/1", shows: ["title"], titleLines: 2, subtitleLines: 0),
-            SDUICardStyle("person", shape: "circle", aspect: "1/1", shows: ["title", "subtitle"], titleLines: 1, subtitleLines: 1),
             SDUICardStyle("book", shape: "poster", aspect: "2/3", shows: ["title", "subtitle", "progress"], titleLines: 2, subtitleLines: 1),
-            SDUICardStyle("person", shape: "circle", aspect: "1/1", shows: ["title", "subtitle"], titleLines: 1, subtitleLines: 1),
+            SDUICardStyle("person", shape: "circle", aspect: "1/1", shows: ["title", "subtitle", "badges"], titleLines: 1, subtitleLines: 1),
             SDUICardStyle("game", shape: "poster", aspect: "3/4", shows: ["title", "subtitle", "badges"], titleLines: 1, subtitleLines: 1),
             SDUICardStyle("photo", shape: "square", aspect: "1/1", shows: [], titleLines: 0, subtitleLines: 0),
             SDUICardStyle("channel", shape: "landscape", aspect: "16/9", shows: ["number", "title", "now", "next", "progress"], titleLines: 1, subtitleLines: 2),
@@ -170,6 +193,20 @@ public struct SDUICatalog: Codable, Equatable, Sendable {
             SDUICommand("watchLater.add", method: "POST", path: "/api/v1/collections/watch-later/items", body: "{\"items\":[{item}]}"),
             SDUICommand("watched.set", method: "POST", path: "/api/v1/items/{item}/progress", body: "{\"watched\":true}"),
             SDUICommand("watched.clear", method: "DELETE", path: "/api/v1/items/{item}/progress"),
+            SDUICommand("wittyplay.room.create", method: "POST", path: "/api/play/{item}/room", body: "{\"open\":true}"),
+            SDUICommand("wittyplay.room.join", method: "POST", path: "/api/play/join", body: "{\"room\":\"{item}\",\"code\":\"{code}\"}",
+                        params: [.init("code")]),
+            SDUICommand("wittyplay.room.invite", method: "POST", path: "/api/play/{item}/invite"),
+            SDUICommand("wittyplay.state.save", method: "POST", path: "/api/play/{item}/action", body: "{\"type\":\"save\",\"slot\":\"{slot}\"}",
+                        params: [.init("slot", type: "int", required: true)]),
+            SDUICommand("wittyplay.state.load", method: "POST", path: "/api/play/{item}/action", body: "{\"type\":\"load\",\"slot\":\"{slot}\"}",
+                        params: [.init("slot", type: "int", required: true)]),
+            SDUICommand("wittyplay.state.delete", method: "DELETE", path: "/api/games/{item}/saves/{slot}",
+                        params: [.init("slot", type: "int", required: true)]),
+            SDUICommand("wittyplay.controller.assign", method: "PUT", path: "/api/play/{item}/seats/{user}", body: "{\"seat\":\"{seat}\"}",
+                        params: [.init("user", required: true), .init("seat", type: "int", required: true)]),
+            SDUICommand("rewind.open"),
+            SDUICommand("controller.remap"),
             SDUICommand("selectTab"),
             SDUICommand("refresh"),
         ])

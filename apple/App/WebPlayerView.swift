@@ -20,6 +20,8 @@ private struct WebPlayerPage: UIViewRepresentable {
     let keptToGames: Bool
     /// This device's theme, which the page reads where the web keeps a browser's own choice.
     let theme: String
+    /// The look's own background, so a page loading (or a player letterboxed) shows no borrowed black.
+    var backdrop: UIColor = .black
     let onLeave: () -> Void
     let onFail: () -> Void
     let onSaved: (URL) -> Void
@@ -156,7 +158,8 @@ private struct WebPlayerPage: UIViewRepresentable {
         }
         let web = WKWebView(frame: .zero, configuration: config)
         web.isOpaque = false
-        web.backgroundColor = .black
+        web.backgroundColor = backdrop
+        web.scrollView.backgroundColor = backdrop
         web.navigationDelegate = context.coordinator
         web.allowsLinkPreview = false // a preview would load another address, outside the checks above
         // This fires when the page changes its own address, which is how it closes its player.
@@ -208,6 +211,7 @@ struct WebPlayerView: View {
     @EnvironmentObject private var model: AppModel
     @EnvironmentObject private var listening: Listening
     @Environment(\.client) private var client
+    @Environment(\.palette) private var palette
     let path: String
     let keptToGames: Bool
     @State private var failed = false
@@ -242,7 +246,7 @@ struct WebPlayerView: View {
             if failed || client.token.isEmpty {
                 ProblemView(words: "This page couldn't open. Check the server is on, then try again.", retry: { failed = false }, back: leave)
             } else if let url = client.mediaURL(path) {
-                WebPlayerPage(base: client.root, token: client.token, url: url, keptToGames: keptToGames, theme: model.themeChoice == "custom" ? "" : model.themeChoice, onLeave: leave, onFail: { failed = true }, onSaved: { saved = $0.lastPathComponent }, onPath: entered, onGame: play)
+                WebPlayerPage(base: client.root, token: client.token, url: url, keptToGames: keptToGames, theme: model.themeChoice == "custom" ? "" : model.themeChoice, backdrop: keptToGames ? .black : UIColor(palette.background), onLeave: leave, onFail: { failed = true }, onSaved: { saved = $0.lastPathComponent }, onPath: entered, onGame: play)
                     // The address on this device changed (the app woke, the way changed): the page is opened again there.
                     .id(model.routeStamp)
                     .ignoresSafeArea(.container, edges: .bottom)

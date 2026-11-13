@@ -158,6 +158,7 @@ fun ProfilesScreen(nav: Nav, s: Map<String, String>) {
                 DesignRow(s["changePicture"].orEmpty(), onClick = { nav.push(HouseholdRoute(HouseholdScreen.Look(me.id))) }, focusKey = "profiles-my-picture")
             }
         }
+        if (me.isAdmin) SettingsSlotRows(nav, "people.profile")
         when {
             others == null -> if (problem.isEmpty()) DesignSection("") { Note(s["loading"].orEmpty(), busy = true) }
             others.isEmpty() -> DesignSection("") { DesignNote(s[if (limits?.limited == true) "profilesNoneLimited" else "profilesNone"].orEmpty(), tone = true) }

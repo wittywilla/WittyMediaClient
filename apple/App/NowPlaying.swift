@@ -386,12 +386,74 @@ struct NowPlayingView: View {
     @Environment(\.palette) private var palette
     @Environment(\.metrics) private var metrics
     @State private var editing = false
+    @ObservedObject private var store = MusicShowStore.shared
+    @StateObject private var canvasStatus = CanvasStatus()
+    @EnvironmentObject private var model: AppModel
+    @State private var viz = VisualizerPrefs()
+    @State private var vizHere = true
+    @State private var effectsOpen = false
+    @State private var sleepOpen = false
+    #if os(tvOS)
+    @State private var words: TvWordsView.Kind?
+    #endif
+
+    private var music: Bool { !(listening.now?.keepsPlace ?? false) }
+
+    /// Album art, Canvas video or Visualizer, then Lyrics and Karaoke, the effects and the sleep timer.
+    @ViewBuilder private var showControls: some View {
+        if music {
+            VStack(alignment: .leading, spacing: Tokens.Space.s2) {
+                MusicShowToggle(canvas: canvasStatus, visualizer: vizHere)
+                FlowRow(spacing: Tokens.Space.s2, lineSpacing: Tokens.Space.s2, centred: false) {
+                    #if os(tvOS)
+                    Button("Lyrics") { words = .lyrics }.action(pill: true)
+                    Button("Karaoke") { words = .karaoke }.action(pill: true)
+                    #endif
+                    if vizHere, store.show == .viz {
+                        Button(viz.effect.name) { effectsOpen = true }.action(pill: true)
+                            .accessibilityLabel("Visualizer effects, now \(viz.effect.name)")
+                    }
+                    Button(sleepWords) { sleepOpen = true }.action(selected: listening.sleep != nil, pill: true)
+                }
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .remoteSection()
+            .confirmationDialog("Sleep timer", isPresented: $sleepOpen) {
+                if listening.sleep != nil { Button("Turn it off") { listening.sleep = nil } }
+                ForEach(SleepChoices.minutes, id: \.self) { minutes in
+                    Button(SleepChoices.words(minutes)) { listening.sleep = .at(Date().addingTimeInterval(Double(minutes) * 60)) }
+                }
+                Button(SleepChoices.atTheEnd(books: false)) { listening.sleep = .afterThis }
+                Button("Cancel", role: .cancel) {}
+            }
+            .sheet(isPresented: $effectsOpen) {
+                VisualizerPickerView(prefs: viz, change: { change in
+                    change(&viz)
+                    let saved = viz
+                    Task { try? await client.setInterfaceChoice("musicPlayer", saved) }
+                }, close: { effectsOpen = false })
+            }
+        }
+    }
+
+    private var sleepWords: String {
+        switch listening.sleep {
+        case .at(let when)?: return "Sleep: stops at \(when.formatted(date: .omitted, time: .shortened))"
+        case .afterThis?: return "Sleep: after this one"
+        case nil: return "Sleep timer"
+        }
+    }
 
     private func art(_ side: CGFloat?) -> some View {
         ArtImage(url: listening.now.flatMap { client.posterURL($0.item) }, width: side ?? 360, placeholder: listening.now?.album ?? "")
             .aspectRatio(1, contentMode: .fit)
             .frame(width: side)
             .frame(maxWidth: 360)
+            .overlay {
+                if music, store.show == .viz, vizHere {
+                    MusicVisualizerLayer(prefs: viz, colour: palette.accent, playing: listening.isPlaying).background(Color.black.opacity(0.55))
+                }
+            }
             .clipShape(RoundedRectangle(cornerRadius: Tokens.Radius.lg, style: .continuous))
             .accessibilityHidden(true)
     }
@@ -452,6 +514,7 @@ struct NowPlayingView: View {
                     art(nil)
                     words(centre: true)
                     Controls()
+                    showControls
                 }
                 queueHead
                 queueLines
@@ -473,6 +536,7 @@ struct NowPlayingView: View {
                     words(centre: false)
                 }
                 Controls()
+                showControls
                 Spacer(minLength: 0)
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -506,8 +570,24 @@ struct NowPlayingView: View {
         }
         .background {
             // The song's canvas behind everything, under enough of the page's colour to read the words on it.
-            CanvasLayer(item: listening.now.flatMap { $0.keepsPlace ? nil : $0.item.id }, shade: palette.background.opacity(0.6)).ignoresSafeArea()
+            MusicBackdrop(item: music ? listening.now?.item.id : nil, prefs: viz, shownStyle: "", colour: palette.accent,
+                          playing: listening.isPlaying, visualizer: false, shade: palette.background.opacity(0.6)).ignoresSafeArea()
         }
+        .task(id: listening.now?.item.id) {
+            await canvasStatus.load(item: music ? listening.now?.item.id : nil, client: client, enabled: model.has(MediaFeature.canvas))
+        }
+        .task {
+            let prefs = try? await client.prefs()
+            vizHere = prefs?.visualizer != false
+            if let saved = try? await client.interfaceChoice("musicPlayer", as: VisualizerPrefs.self) { viz = saved }
+        }
+        #if os(tvOS)
+        .fullScreenCover(item: $words) { kind in
+            if let item = listening.now?.item {
+                TvWordsView(kind: kind, item: item, glow: palette.accent, viz: viz, vizHere: vizHere, canvas: canvasStatus, close: { words = nil })
+            }
+        }
+        #endif
         .background(palette.background.ignoresSafeArea())
         // The queue was cleared, from here or from elsewhere.
         .onChange(of: listening.now == nil) { gone in

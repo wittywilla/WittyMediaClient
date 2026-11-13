@@ -42,7 +42,7 @@ struct SDUICardView: View {
                     .disabled(card.action == nil)
             }
         }
-        .sduiFocusable(card.isFocusable ? focus : nil, card.id)
+        .sduiFocusable(card.isFocusable && card.action != nil ? focus : nil, card.id)
         .sduiScope(card.tokens)
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(card.label)

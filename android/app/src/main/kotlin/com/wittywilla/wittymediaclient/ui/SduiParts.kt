@@ -80,6 +80,9 @@ import coil3.compose.AsyncImage
 import coil3.request.ImageRequest
 import com.wittywilla.wittymediaclient.net.SduiAction
 import com.wittywilla.wittymediaclient.net.SduiButton
+import com.wittywilla.wittymediaclient.net.SduiControlSpec
+import com.wittywilla.wittymediaclient.net.SduiItemActions
+import com.wittywilla.wittymediaclient.net.isForm
 import com.wittywilla.wittymediaclient.net.SduiMarkdown
 import com.wittywilla.wittymediaclient.net.SduiView
 import com.wittywilla.wittymediaclient.net.aspectOf
@@ -102,6 +105,10 @@ import kotlinx.coroutines.launch
 @Composable
 fun SduiNode(view: SduiView, parent: SduiView?, topLevel: Boolean = false) {
     val side = if (topLevel) LocalSduiSpan.current.side else 0.dp
+    if (view.isForm) {
+        SduiFormView(view, side)
+        return
+    }
     when (view.type) {
         "Hero" -> SduiHero(view)
         "Shelf" -> SduiShelf(view, side)
@@ -294,13 +301,28 @@ fun SduiShelf(view: SduiView, side: Dp) {
                 val nearEnd by remember(view.children.size) { derivedStateOf { (state.layoutInfo.visibleItemsInfo.lastOrNull()?.index ?: 0) >= view.children.size - 4 } }
                 if (view.hasMore && nearEnd) LaunchedEffect(view.children.size) { env.more(view.id, false) }
                 val ring = if (env.tv) LocalMetrics.current.focusRing else 0.dp
+                // focusGrow: the chosen card grows (1.45 on a television, 1.25 on a tablet, none on a phone, whose first card is
+                // simply larger) and the ones after it step aside. detail: a panel under the row for the chosen card.
+                val grows = view.props.isOn("focusGrow")
+                val detail = view.props.isOn("detail")
+                var chosen by remember(view.id) { mutableStateOf<String?>(null) }
+                val chosenId = chosen ?: view.children.firstOrNull()?.id
+                val scale = if (!grows) 1f else if (env.tv) 1.45f else if (env.tablet) 1.25f else 1f
+                val touch = !env.tv
+                val tall = env.pt(view.cardHeight.takeIf { it > 0 } ?: 180)
                 SduiRowScroll { LazyRow(
                     (if (env.tv) Modifier.remoteRow() else Modifier).fillMaxWidth(), state = state,
                     // A TV's cards keep room for their ring and the little they grow by, so neither is cut off.
-                    contentPadding = PaddingValues(start = (edge - ring).coerceAtLeast(0.dp), end = (edge - ring).coerceAtLeast(0.dp), top = if (env.tv) env.pt(12) else 0.dp, bottom = if (env.tv) env.pt(12) else env.space("xs")),
+                    contentPadding = PaddingValues(start = (edge - ring).coerceAtLeast(0.dp), end = (edge - ring).coerceAtLeast(0.dp), top = if (env.tv) env.pt(12) else 0.dp, bottom = (if (env.tv) env.pt(12) else env.space("xs")) + tall * (scale - 1f)),
                     horizontalArrangement = Arrangement.spacedBy((env.pt(env.layout.cardGap) - ring * 2).coerceAtLeast(0.dp)),
                 ) {
-                    items(view.children, key = { it.id }, contentType = { "card" }) { card -> SduiCard(card, view, wide) }
+                    items(view.children, key = { it.id }, contentType = { "card" }) { card ->
+                        if (!grows && !detail) SduiCard(card, view, wide)
+                        else {
+                            val first = !env.tv && !env.tablet && grows && card.id == view.children.first().id
+                            SduiCard(card, view, if (first) wide * 1.25f else wide, grow = SduiGrow(scale, card.id == chosenId, touch && detail, { chosen = card.id }))
+                        }
+                    }
                     if (view.hasMore && view.id in env.loading) item(key = "~loading", contentType = "placeholder") {
                         SduiPlaceholder(wide, env.pt(view.cardHeight.takeIf { it > 0 } ?: 180), "")
                     }
@@ -313,6 +335,7 @@ fun SduiShelf(view: SduiView, side: Dp) {
                         }
                     }
                 } }
+                if (detail) SduiDetailPanel(view.children.firstOrNull { it.id == chosenId }, edge)
             }
         }
         if (span.side == 0.dp) Unit
@@ -923,6 +946,11 @@ fun SduiLine(view: SduiView, parent: SduiView) {
             }
         }
         else -> {
+            val control = SduiControlSpec.of(p)
+            if (control != null) {
+                SduiControlLine(view, control)
+                return
+            }
             val image = p.image("image")
             val dense = parent.props.isOn("dense")
             Pressable({ env.act(view.node.action) }, Modifier.fillMaxWidth(), shape = RoundedCornerShape(env.pt(10)), fill = Color.Transparent, label = view.label, enabled = press, disabledAlpha = 1f, focusKey = focusKey, requestFocus = start, ring = env.tv && press, pressScale = 1f) {
