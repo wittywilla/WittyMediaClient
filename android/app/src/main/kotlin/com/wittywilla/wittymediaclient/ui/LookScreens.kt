@@ -90,7 +90,7 @@ fun FirstLookScreen(nav: Nav, s: Map<String, String>) {
     // A layer of its own, so the remote and keys stay in it and nothing under it takes them.
     androidx.compose.ui.window.Dialog(
         onDismissRequest = { if (step == 1) step = 0 },
-        properties = androidx.compose.ui.window.DialogProperties(usePlatformDefaultWidth = false, decorFitsSystemWindows = false),
+        properties = androidx.compose.ui.window.DialogProperties(usePlatformDefaultWidth = false, decorFitsSystemWindows = true),
     ) {
     androidx.compose.foundation.layout.Box(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) {
     SignInLayout(
@@ -99,7 +99,9 @@ fun FirstLookScreen(nav: Nav, s: Map<String, String>) {
             SignInHeading(s[if (step == 0) "firstLookTitle" else "firstThemeTitle"].orEmpty(), detail = s[if (step == 0) "firstLookDetail" else "firstThemeDetail"].orEmpty())
         },
         actions = {
-            Column(Modifier.heightIn(max = 420.dp).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            // The list scrolls in about half the screen; Next and Done stay pinned below it, always in sight.
+            val most = (androidx.compose.ui.platform.LocalConfiguration.current.screenHeightDp / 2).coerceIn(200, 420).dp
+            Column(Modifier.heightIn(max = most).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 if (step == 0) {
                     list.forEachIndexed { i, e ->
                         val on = (state?.choice?.chosen?.ifEmpty { state.choice.current }) == e.id
@@ -112,14 +114,14 @@ fun FirstLookScreen(nav: Nav, s: Map<String, String>) {
                         }, kind = if (on) ButtonKind.Primary else ButtonKind.Secondary, takeFocus = i == 0, focusKey = "first-" + e.id)
                         }
                     }
-                    WittyButton(s["next"].orEmpty(), { step = 1 }, kind = ButtonKind.Primary, tall = true, focusKey = "first-next")
                 } else {
                     theme.forEachIndexed { i, t ->
                         WittyButton(t.shownName, { nav.chooseTheme(t.id) }, kind = if (nav.themeChoice == t.id) ButtonKind.Primary else ButtonKind.Secondary, takeFocus = i == 0, focusKey = "first-theme-" + t.id)
                     }
-                    WittyButton(s["done"].orEmpty(), { nav.finishFirstLook() }, kind = ButtonKind.Primary, tall = true, focusKey = "first-done")
                 }
             }
+            if (step == 0) WittyButton(s["next"].orEmpty(), { step = 1 }, kind = ButtonKind.Primary, tall = true, focusKey = "first-next")
+            else WittyButton(s["done"].orEmpty(), { nav.finishFirstLook() }, kind = ButtonKind.Primary, tall = true, focusKey = "first-done")
         },
     )
     }

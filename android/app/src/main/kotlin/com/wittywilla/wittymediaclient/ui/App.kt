@@ -344,6 +344,16 @@ class Nav(val app: WittyApp, private val s: Map<String, String>) {
         themeChoice = choice
         server?.let { app.store.chooseTheme(it.url, choice) }
         wantTheme(choice.ifEmpty { themeId })
+        app.scope.launch { refreshLook() }
+    }
+
+    // The look in force, with this device's theme asked for (not "auto" or a custom one, which the server can't name).
+    private fun lookTheme() = themeChoice.takeIf { it != AUTO_THEME && it != ThemeTranslator.CUSTOM_THEME }.orEmpty()
+
+    private suspend fun refreshLook() {
+        val want = lookTheme()
+        kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) { runCatching { app.api.resolvedTheme(want) } }
+            .onSuccess { if (lookTheme() == want) look = com.wittywilla.wittymediaclient.net.Look.from(it) }
     }
 
     // The server's themes (docs/APP-DESIGN.md, Themes): its list, each one read and translated as it's wanted,
@@ -465,7 +475,7 @@ class Nav(val app: WittyApp, private val s: Map<String, String>) {
         val io = kotlinx.coroutines.Dispatchers.IO
         kotlinx.coroutines.withContext(io) { runCatching { client.experiences() } }.onSuccess { if (sdui === client) experienceList = it }
         kotlinx.coroutines.withContext(io) { runCatching { client.experienceState() } }.onSuccess { if (sdui === client) experienceState = it }
-        kotlinx.coroutines.withContext(io) { runCatching { app.api.resolvedTheme() } }.onSuccess {
+        kotlinx.coroutines.withContext(io) { runCatching { app.api.resolvedTheme(lookTheme()) } }.onSuccess {
             requiredTheme = SduiLook.requiredTheme(it)
             look = com.wittywilla.wittymediaclient.net.Look.from(it)
             // A required theme is the one drawn.

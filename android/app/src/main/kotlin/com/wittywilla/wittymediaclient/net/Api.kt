@@ -405,7 +405,9 @@ class Api(val base: String, val token: String, private val quick: Boolean = fals
     suspend fun themes(): ThemeList = get("/themes")
 
     // The resolved theme with its `look` (experience and theme in force, what an administrator requires).
-    suspend fun resolvedTheme(): kotlinx.serialization.json.JsonObject = json.parseToJsonElement(call("GET", "/theme")).jsonObject
+    // A theme chosen on this device is asked for, so its own scene and finish come with it.
+    suspend fun resolvedTheme(theme: String = ""): kotlinx.serialization.json.JsonObject =
+        json.parseToJsonElement(call("GET", "/theme" + if (theme.isEmpty()) "" else "?theme=" + query(theme))).jsonObject
 
     // Import a theme ZIP for this profile (POST /themes/mine, or /themes for an administrator's, the server's).
     suspend fun importTheme(zip: ByteArray, forEveryone: Boolean): String? = withContext(Dispatchers.IO) {
