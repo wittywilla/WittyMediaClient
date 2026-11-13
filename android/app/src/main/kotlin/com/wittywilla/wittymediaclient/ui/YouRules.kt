@@ -6,7 +6,7 @@ package com.wittywilla.wittymediaclient.ui
 // Apart from the screen, so it can be tested without one. Rows the server would refuse are left out,
 // not greyed.
 
-enum class YouNative { Names, Password, TwoStep, Devices, SignInTv, Theme, TopMenu, Licences, Log, Servers, Away, Profiles, PlayingHere, Look, Modules, RemoteControl, WatchParty }
+enum class YouNative { Names, Password, TwoStep, Devices, SignInTv, Theme, TopMenu, Licences, Log, Servers, Away, Profiles, PlayingHere, Look, Modules, RemoteControl, WatchParty, EditLayout, NameAndLogo }
 
 sealed interface YouOpens {
     data class Native(val screen: YouNative) : YouOpens
@@ -42,6 +42,8 @@ data class YouWho(
     val remote: Boolean = false,
     // The server has watch parties (`syncplay`), and this profile may join them.
     val parties: Boolean = false,
+    // The server has placements (`sdui-experiences`): Edit layout is offered.
+    val layoutEditor: Boolean = false,
 )
 
 private const val QUIET = "#5d6474"
@@ -87,6 +89,8 @@ fun youGroups(who: YouWho): List<YouGroup> {
         "groupDevice",
         listOfNotNull(
             if (who.looks) native("rowLook", "toolbar", "#0e7c6f", YouNative.Look) else null,
+            // Where the shell's parts and the page's sections are, for this device or for everyone (the layout editor).
+            if (who.layoutEditor) native("rowEditLayout", "toolbar", "#7f46b8", YouNative.EditLayout) else null,
             native("rowTheme", "palette", "#0e7c6f", YouNative.Theme),
             // Which libraries join the bar along the top: a TV's alone.
             if (who.onTv) native("rowTopMenu", "toolbar", "#bd2f85", YouNative.TopMenu) else null,
@@ -112,6 +116,7 @@ fun youGroups(who: YouWho): List<YouGroup> {
                 page("rowTranscoding", "bolt", QUIET, "/settings/transcoding"),
                 page("rowLibraryTranscoding", "autorenew", QUIET, "/settings/library-transcoding"),
                 page("rowRemote", "public", QUIET, "/settings/remote"),
+                native("rowNameAndLogo", "badge", "#7f46b8", YouNative.NameAndLogo),
                 page("rowAppearance", "brush", QUIET, "/settings/appearance"),
                 page("rowWittyRigs", "dns", QUIET, "/settings/wittyrigs"),
             ),

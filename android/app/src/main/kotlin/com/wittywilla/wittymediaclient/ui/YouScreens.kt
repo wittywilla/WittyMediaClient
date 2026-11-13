@@ -165,6 +165,7 @@ fun YouScreen(nav: Nav, s: Map<String, String>) {
         nativeProfiles = nav.has(com.wittywilla.wittymediaclient.net.FEATURE_PARENTAL),
         remote = nav.app.remote.canControl,
         parties = nav.app.remote.hasParties,
+        layoutEditor = nav.has("sdui-experiences"),
         off = com.wittywilla.wittymediaclient.player.ScreenTimeWatch.limits?.features?.filterValues { !it }?.keys.orEmpty(),
     )
     fun open(row: YouRow) {
@@ -340,6 +341,8 @@ fun YouSettingScreen(nav: Nav, s: Map<String, String>, screen: YouNative) {
         YouNative.PlayingHere -> PlayingHereScreen(nav, s)
         YouNative.RemoteControl -> RemoteRouteScreen(nav, RemoteRoute.Devices)
         YouNative.WatchParty -> RemoteRouteScreen(nav, RemoteRoute.Party(null))
+        YouNative.EditLayout -> LayoutEditorScreen(nav, s)
+        YouNative.NameAndLogo -> BrandEditorScreen(nav, s)
     }
 }
 

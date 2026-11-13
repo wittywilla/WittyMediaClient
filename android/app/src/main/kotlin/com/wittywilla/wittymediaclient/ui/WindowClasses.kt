@@ -3,7 +3,11 @@
 package com.wittywilla.wittymediaclient.ui
 
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.input.key.isCtrlPressed
+import androidx.compose.ui.input.key.isShiftPressed
+import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.key.onKeyEvent
+import androidx.compose.ui.input.key.type
 import com.wittywilla.wittymediaclient.net.InputAction
 import com.wittywilla.wittymediaclient.net.InputContext
 
@@ -25,6 +29,10 @@ object WindowClasses {
 // Ctrl+[ and Ctrl+] move between the bottom bar's tabs. A text field has had the key first, so typing is never taken.
 fun windowKeys(nav: Nav): Modifier = Modifier.onKeyEvent { e ->
     if (!nav.current.signedIn) return@onKeyEvent false
+    // The layout editor: Ctrl+Shift+L, or Start on a pad, from a page (docs/plans/DESIGN-2.md 7.5).
+    if (nav.has("sdui-experiences") && nav.current.let { it == Route.Home || it is Route.Sdui } && e.type == androidx.compose.ui.input.key.KeyEventType.KeyDown &&
+        ((e.isCtrlPressed && e.isShiftPressed && e.key == androidx.compose.ui.input.key.Key.L) || e.key == androidx.compose.ui.input.key.Key.ButtonStart)
+    ) { nav.push(Route.You(YouNative.EditLayout)); return@onKeyEvent true }
     when (e.action(InputContext())) {
         InputAction.Search -> { if (nav.current != Route.Search) nav.reset(Route.Search); true }
         InputAction.Help -> { InputInUse.helpOpen = true; true }
