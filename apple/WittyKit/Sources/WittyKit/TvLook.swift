@@ -284,7 +284,7 @@ public enum TvLook {
             nowLine: mine.nowLine ?? true, progress: mine.progress ?? true, subtitles: mine.subtitles ?? true, logos: mine.logos ?? true, art: mine.art ?? true,
             preview: ["highlight", "last", "off"].contains(mine.preview ?? "") ? mine.preview! : "highlight",
             previewSide: mine.previewSide == "left" || mine.previewSide == "right" ? mine.previewSide! : shape.side,
-            previewW: mine.previewW, previewSound: mine.previewSound ?? false)
+            previewW: mine.previewW, previewSound: mine.previewSound ?? true)
     }
 
     private static func isTheme(_ id: String?) -> Bool { id.map(themes.contains) ?? false }
