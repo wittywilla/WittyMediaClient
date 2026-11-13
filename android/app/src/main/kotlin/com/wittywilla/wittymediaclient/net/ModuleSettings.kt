@@ -105,3 +105,13 @@ suspend fun Api.moduleSettingsList(): ModuleSettingsList = json.decodeFromString
 suspend fun Api.moduleSettings(path: String): ModuleSettingsView = json.decodeFromString(call("GET", path))
 
 suspend fun Api.saveModuleSetting(path: String, body: String): ModuleSettingsView = json.decodeFromString(call("PUT", path, body))
+
+// GET /api/sdui/slots/{slot} (docs/SDUI-MODULES.md): the settings pages modules put in one place of the hand-built Settings
+// (you.games on You, people.profile on People). Each page opens the module's settings at `url`, showing that page.
+@Serializable
+data class SettingsSlot(val slot: String = "", val pages: List<SettingsSlotPage> = emptyList())
+
+@Serializable
+data class SettingsSlotPage(val module: String = "", val label: String = "", val id: String = "", val title: String = "", val icon: String = "", val url: String = "")
+
+suspend fun Api.settingsSlot(slot: String): SettingsSlot = json.decodeFromString(call("GET", "/sdui/slots/$slot"))

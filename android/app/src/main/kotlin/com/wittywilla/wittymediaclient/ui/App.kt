@@ -49,6 +49,7 @@ import com.wittywilla.wittymediaclient.diag.ClientLog
 import com.wittywilla.wittymediaclient.net.Api
 import com.wittywilla.wittymediaclient.net.BrandPart
 import com.wittywilla.wittymediaclient.net.ApiError
+import com.wittywilla.wittymediaclient.net.SduiCardStyles
 import com.wittywilla.wittymediaclient.net.SduiClient
 import com.wittywilla.wittymediaclient.net.SduiExperienceList
 import com.wittywilla.wittymediaclient.net.SduiExperienceState
@@ -124,7 +125,8 @@ sealed interface Route {
     // A device that has never been at home with its server shows a code for it (ui/AwayScreens.kt).
     data object JoinAway : Route { override val key = "join-away" }
     // One module's settings, at the address the server gave (ui/ModuleSettingsScreens.kt).
-    data class ModuleSettings(val url: String, val title: String) : Route { override val key = "module-settings:$url" }
+    // `page` is the one page of the module's settings to show; empty shows them all.
+    data class ModuleSettings(val url: String, val title: String, val page: String = "") : Route { override val key = "module-settings:$url:$page" }
     data object Logs : Route { override val key = "logs" }
     // With something chosen, as the website's /library/3?genre=Drama: from a title's genre, tag or service.
     data class Library(val library: com.wittywilla.wittymediaclient.net.Library, val chosen: Map<String, String> = emptyMap()) : Route {
@@ -409,7 +411,7 @@ class Nav(val app: WittyApp, private val s: Map<String, String>) {
         val io = kotlinx.coroutines.Dispatchers.IO
         if (sduiNav == null) kotlinx.coroutines.withContext(io) { client.keptNavigation() }?.let { sduiNav = it }
         kotlinx.coroutines.withContext(io) { runCatching { client.navigation() } }.onSuccess { if (sdui === client) sduiNav = it.value }.onFailure { handleExpired(it) }
-        kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Default) { runCatching { client.catalog().let { SduiRouter(it.routes, it.commands) } } }
+        kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Default) { runCatching { client.catalog().let { SduiCardStyles.use(it.cardStyles); SduiRouter(it.routes, it.commands) } } }
             .onSuccess { if (sdui === client) sduiRouter = it }
         loadExperiences()
     }
@@ -515,6 +517,7 @@ class Nav(val app: WittyApp, private val s: Map<String, String>) {
         sduiReadFor = null
         sduiNav = null
         sduiRouter = SduiRouter()
+        SduiCardStyles.reset()
         val folder = sduiFolder
         app.scope.launch(kotlinx.coroutines.Dispatchers.IO) { runCatching { folder.deleteRecursively() } }
     }
@@ -588,8 +591,14 @@ class Nav(val app: WittyApp, private val s: Map<String, String>) {
         }
     }
 
-    // Opens a place the server names: one of its pages, one of the app's screens, or something played.
-    fun go(target: SduiTarget) {
+    // What a page put into the shell's regions (statusBar, systemDock) while it shows, and a page shown over the screen
+    // (navigate `as: "layer"`); ui/SduiRev8.kt draws both.
+    var regions by mutableStateOf<com.wittywilla.wittymediaclient.net.SduiRegionsState?>(null)
+    var layer by mutableStateOf<SduiTarget.Page?>(null)
+
+    // Opens a place the server names: one of its pages, one of the app's screens, or something played. A page can be a layer.
+    fun go(target: SduiTarget, layer: Boolean = false) {
+        if (layer && target is SduiTarget.Page) { this.layer = target; return }
         if (target is SduiTarget.Native) {
             val item = target.params["item"].orEmpty()
             when (target.screen) {
@@ -1329,7 +1338,7 @@ fun AppRoot(app: WittyApp) {
                         is Route.OwnItem -> PageShell(nav) { if (LocalMetrics.current.tv) ItemScreen(nav, strings, route.id) else PhoneItem(nav, strings, route.id) }
                         Route.Notices -> NoticesScreen(nav)
                         Route.JoinAway -> JoinAwayScreen(nav, strings)
-                        is Route.ModuleSettings -> ModuleSettingsScreen(nav, strings, route.url, route.title)
+                        is Route.ModuleSettings -> ModuleSettingsScreen(nav, strings, route.url, route.title, route.page)
                         Route.Logs -> LogsScreen(nav)
                         is Route.Library -> {
                             val body = @Composable {
