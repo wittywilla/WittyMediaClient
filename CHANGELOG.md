@@ -5,6 +5,8 @@ What changed in WittyMediaClient, newest first. What changed before it had a rep
 
 ## Unreleased
 
+## 0.5.0
+
 - **What goes wrong is reported to the server's log, filed where it belongs.** Pages that don't load and parts of a page
   the app doesn't know (kind `sdui`, once for each type), connections from away that fall back to a relay or drop
   (`p2p`, filed under `p2p-` and the end of this device's peer ID), karaoke's parts (`karaoke`), remote control
