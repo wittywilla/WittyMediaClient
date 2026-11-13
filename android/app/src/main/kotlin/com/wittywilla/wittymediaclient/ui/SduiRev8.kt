@@ -53,6 +53,7 @@ import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.heading
+import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
@@ -191,6 +192,9 @@ class SduiFormHold(val values: SduiFormValues) {
 
 val LocalSduiForm = compositionLocalOf<SduiFormHold?> { null }
 
+// The refusal of the last command, for the Form's line under Save.
+val LocalSduiCommandError = compositionLocalOf<androidx.compose.runtime.MutableState<String>?> { null }
+
 // One row of a List that carries a control: the row's words at the start, the control at the end (a field under the words).
 @Composable
 fun SduiControlLine(view: SduiView, spec: SduiControlSpec) {
@@ -301,6 +305,8 @@ fun SduiFormView(view: SduiView, side: Dp) {
                 Text(it, color = scheme.onBackground, fontSize = env.size("heading"), fontWeight = FontWeight.Bold, modifier = Modifier.padding(horizontal = side).semantics { heading() })
             }
             view.children.forEach { SduiNode(it, view, topLevel = side > 0.dp) }
+            val refused = LocalSduiCommandError.current?.value.orEmpty()
+            if (refused.isNotEmpty()) Text(refused, color = scheme.error, fontSize = env.size("caption"), modifier = Modifier.padding(horizontal = side).semantics { liveRegion = androidx.compose.ui.semantics.LiveRegionMode.Assertive })
             Row(Modifier.fillMaxWidth().padding(horizontal = side).padding(top = env.space("xs")), horizontalArrangement = Arrangement.spacedBy(env.space("s"))) {
                 val save = p.str("submitLabel").ifEmpty { "Save" }
                 // On a television Save is off until something has changed; elsewhere it is always there to press.
@@ -442,4 +448,19 @@ private fun SduiSystemDock(nav: Nav, state: SduiRegionsState, vertical: Boolean)
     }
     if (vertical) Column(Modifier.fillMaxHeight().background(scheme.surface).padding(metrics.u(8)).focusGroup(), verticalArrangement = Arrangement.spacedBy(metrics.u(8)), horizontalAlignment = Alignment.CenterHorizontally) { buttons() }
     else Row(Modifier.fillMaxWidth().background(scheme.surface).padding(vertical = metrics.u(8)).focusGroup(), horizontalArrangement = Arrangement.spacedBy(metrics.u(16), Alignment.CenterHorizontally), verticalAlignment = Alignment.Top) { buttons() }
+}
+
+// MARK: QR
+
+// The QR component: `value` is an address or, when `isRoute`, a route on the server the app is signed in to (a join link for a
+// friend's phone); `size` s, m or l. Black on white whatever the theme, the label under it.
+@Composable
+fun SduiQr(view: SduiView, side: Dp) {
+    val env = LocalSdui.current
+    val p = view.props
+    val value = p.str("value")
+    if (value.isEmpty()) return
+    val address = if (p.isOn("isRoute")) env.nav.app.api.base.trimEnd('/') + value else value
+    val units = when (p.str("size")) { "s" -> 120; "l" -> 240; else -> 180 } * (if (env.tv) 1.5f else 1f)
+    QrCard(address, p.str("label"), Modifier.padding(horizontal = side).fillMaxWidth(), size = units.toInt())
 }

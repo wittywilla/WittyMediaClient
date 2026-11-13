@@ -20,8 +20,8 @@ packages:
 settings:
   base:
     SWIFT_VERSION: "5.0"
-    MARKETING_VERSION: "0.4.1"
-    CURRENT_PROJECT_VERSION: "1"
+    MARKETING_VERSION: "0.5.0"
+    CURRENT_PROJECT_VERSION: "2"
     PRODUCT_BUNDLE_IDENTIFIER: com.wittywilla.wittymediaclient
     GENERATE_INFOPLIST_FILE: "YES"
     INFOPLIST_KEY_CFBundleDisplayName: WittyMediaClient
