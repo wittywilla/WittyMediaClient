@@ -17,10 +17,21 @@ struct TvSideMenu: View {
     var focus: FocusState<AppTab?>.Binding
     let closed: CGFloat
     let open: CGFloat
+    /// The width of a library's drawer beside the open menu (`shell.drawer`); 0 for a menu without one.
+    var drawerWidth: CGFloat = 0
     /// Which entry had focus last, nil while it's out on the page.
     @State private var inside: AppTab?
+    /// The entry the drawer is for: the last library entry that had focus, while the menu is open.
+    @State private var drawerTab: AppTab?
+    @FocusState private var drawerFocus: String?
 
-    private var isOpen: Bool { focus.wrappedValue != nil }
+    private var isOpen: Bool { focus.wrappedValue != nil || drawerFocus != nil }
+
+    /// The drawer data of the menu entry for a tab, where the server gave one.
+    private func drawer(for tab: AppTab?) -> SDUINavDrawer? {
+        guard drawerWidth > 0, let tab else { return nil }
+        return center.items.first { center.tab(for: $0) == tab && $0.drawer != nil }?.drawer
+    }
 
     private func choose(_ tab: AppTab) {
         if model.tab == tab {
@@ -72,9 +83,77 @@ struct TvSideMenu: View {
     }
 
     var body: some View {
+        HStack(spacing: 0) {
+            menu
+            if isOpen, let content = drawer(for: drawerTab) { drawerColumn(content) }
+        }
+        .frame(maxHeight: .infinity, alignment: .top)
+        // The drawer is for the library entry that had focus last.
+        .onChange(of: focus.wrappedValue) { next in
+            if let next, drawer(for: next) != nil { drawerTab = next } else if let next, drawerFocus == nil { drawerTab = next }
+        }
+        .onExitCommand(perform: drawerFocus != nil ? { drawerFocus = nil; focus.wrappedValue = drawerTab } : nil)
+    }
+
+    /// A library's drawer: its name large with the icon and count, then its views; Back returns to the menu.
+    private func drawerColumn(_ content: SDUINavDrawer) -> some View {
+        VStack(alignment: .leading, spacing: Tokens.Space.s3) {
+            HStack(spacing: Tokens.Space.s4) {
+                Image(systemName: SDUIIcon.symbol(content.icon, or: "folder")).font(.system(size: 34, weight: .semibold)).foregroundStyle(palette.accentText)
+                VStack(alignment: .leading, spacing: 0) {
+                    Text(PlainWords.clean(content.title, limit: 40)).font(.system(size: 44, weight: .bold)).foregroundStyle(palette.text).lineLimit(1)
+                    if let count = content.count, count > 0 {
+                        Text(count == 1 ? "1 title" : "\(count) titles").font(.system(size: 25)).foregroundStyle(palette.textSecondary)
+                    }
+                }
+            }
+            .padding(.vertical, Tokens.Space.s6)
+            ScrollView(.vertical, showsIndicators: false) {
+                VStack(alignment: .leading, spacing: Tokens.Space.s2) {
+                    ForEach(content.views) { view in
+                        Button {
+                            if let route = view.route {
+                                model.tab = .home
+                                SDUIActor(model: model, center: center, store: nil).open(route: route)
+                            }
+                        } label: {
+                            HStack(spacing: Tokens.Space.s4) {
+                                Image(systemName: SDUIIcon.symbol(view.icon, or: "square")).font(.system(size: 28)).frame(width: 40)
+                                Text(view.label).font(.wmLabel).lineLimit(1)
+                                Spacer(minLength: 0)
+                            }
+                            .foregroundStyle(palette.text)
+                            .padding(.horizontal, Tokens.Space.s4)
+                            .frame(width: drawerWidth - Tokens.Space.s8, height: 76, alignment: .leading)
+                        }
+                        .buttonStyle(SurfaceStyle(fill: nil, radius: Tokens.Radius.lg))
+                        .focused($drawerFocus, equals: view.id)
+                        .accessibilityIdentifier("frame.drawer." + view.id)
+                    }
+                }
+            }
+            .unclippedScroll()
+        }
+        .padding(.horizontal, Tokens.Space.s4)
+        .frame(width: drawerWidth)
+        .frame(maxHeight: .infinity, alignment: .top)
+        .background(palette.card.opacity(0.97).ignoresSafeArea().shadow(color: .black.opacity(0.5), radius: 30, x: 10))
+        .focusSection()
+        .accessibilityElement(children: .contain)
+        .accessibilityLabel(content.title)
+    }
+
+    private var menu: some View {
         let places = TvTopBar.entries(model: model, center: center)
-        VStack(spacing: Tokens.Space.s2) {
-            BrandMark(size: 56).padding(.vertical, Tokens.Space.s6)
+        return VStack(spacing: Tokens.Space.s2) {
+            if center.shell?.shows("brand") != false {
+                // The mark in a centred badge while closed, the name in its colours once open.
+                if isOpen {
+                    BrandLockup().padding(.horizontal, Tokens.Space.s4).padding(.vertical, Tokens.Space.s6).frame(width: open, alignment: .leading)
+                } else {
+                    BrandBadge(size: 72).padding(.vertical, Tokens.Space.s6)
+                }
+            }
             ScrollView(.vertical, showsIndicators: false) {
                 VStack(spacing: Tokens.Space.s2) {
                     ForEach(places, id: \.tab) { entry($0.tab, $0.name, $0.symbol) }
