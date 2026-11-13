@@ -241,7 +241,19 @@ fun SduiLongHead(view: SduiView, pad: Boolean = true) {
 private fun SduiEmptyLine(view: SduiView, side: Dp) {
     val env = LocalSdui.current
     val words = view.text["empty"] ?: return
-    Text(words, color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = env.size("caption"), modifier = Modifier.padding(horizontal = side))
+    // An empty section says what to do: a hint under the message and a button that runs emptyAction ("Scan now").
+    val hint = view.props.str("emptyHint")
+    val action = view.props.child("emptyAction")
+    val label = action?.str("label").orEmpty()
+    val run = action?.child("action")?.let { runCatching { com.wittywilla.wittymediaclient.net.json.decodeFromJsonElement(SduiAction.serializer(), it) }.getOrNull() }
+    Column(Modifier.padding(horizontal = side), verticalArrangement = Arrangement.spacedBy(env.space("xs"))) {
+        Text(words, color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = env.size("caption"))
+        if (hint.isNotEmpty()) Text(hint, color = LocalExtraColours.current.hint, fontSize = env.size("caption"))
+        if (label.isNotEmpty() && run != null) {
+            if (env.tv) WittyButton(label, { env.act(run) }, kind = ButtonKind.Secondary, pill = true, focusKey = view.id + "~empty")
+            else WebButton(label, { env.act(run) }, WebButtonKind.Secondary, small = true)
+        }
+    }
 }
 
 // A section that couldn't be loaded: one line, and Retry, which asks its address again.
