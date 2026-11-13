@@ -276,7 +276,7 @@ object TvLook {
             nowLine = mine.nowLine ?: true, progress = mine.progress ?: true, subtitles = mine.subtitles ?: true, logos = mine.logos ?: true, art = mine.art ?: true,
             preview = mine.preview?.takeIf { it in listOf("highlight", "last", "off") } ?: "highlight",
             previewSide = mine.previewSide?.takeIf { it == "left" || it == "right" } ?: shape.side,
-            previewW = mine.previewW, previewSound = mine.previewSound ?: false,
+            previewW = mine.previewW, previewSound = mine.previewSound ?: true,
         )
     }
 

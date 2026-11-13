@@ -110,7 +110,7 @@ final class TvLookTests: XCTestCase {
         XCTAssertTrue(plain.nowLine && plain.progress && plain.subtitles && plain.logos && plain.art)
         XCTAssertEqual(plain.preview, "highlight")
         XCTAssertEqual(plain.previewSide, "right")
-        XCTAssertFalse(plain.previewSound)
+        XCTAssertTrue(plain.previewSound, "WittyTV starts with sound")
         XCTAssertEqual(TvLook.resolve(saved: nil, ownerTheme: "bigpicture").previewSide, "left", "Big picture starts on the left")
 
         let json = #"{"theme":"compact","density":"large","hours":3,"nowLine":false,"progress":false,"subtitles":false,"logos":false,"art":false,"preview":"last","previewSide":"left","previewW":500,"previewSound":true}"#

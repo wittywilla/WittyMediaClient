@@ -135,7 +135,7 @@ class TvLookTest {
         assertTrue(plain.nowLine && plain.progress && plain.subtitles && plain.logos && plain.art)
         assertEquals("highlight", plain.preview)
         assertEquals("right", plain.previewSide)
-        assertFalse(plain.previewSound)
+        assertTrue(plain.previewSound) // WittyTV starts with sound
         assertEquals("Big picture starts on the left", "left", TvLook.resolve(null, null, "bigpicture").previewSide)
 
         val look = TvLook.resolve(

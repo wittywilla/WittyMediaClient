@@ -79,7 +79,10 @@ struct SDUIHeroView: View {
         if layout.isTV { return CGSize(width: w, height: h) }
         // The hero's shape at the window's width.
         let width = pageWidth > 0 ? pageWidth : w
-        return CGSize(width: width, height: (width * h / w).rounded())
+        // Never shorter than its words need: a page narrowed by an open menu, a drawer or a split view would otherwise give a
+        // hero too short for its title, facts and dots (title lines wrap, the art keeps filling the width).
+        let least: CGFloat = width < 520 ? 280 : 240
+        return CGSize(width: width, height: max((width * h / w).rounded(), least))
     }
 
     private func step(_ by: Int) {
@@ -181,7 +184,9 @@ struct SDUIHeroView: View {
                                                 startPoint: .top, endPoint: .bottom))
                         .overlay(alignment: .bottomLeading) {
                             words(slide, over: true)
-                                .frame(maxWidth: layout.phone ? .infinity : max(size.width / 3, 320), alignment: .leading)
+                                // A third of the width on a wide page; the whole width (less the margins) once the page is narrow, so
+                                // the title wraps instead of running into the art's other parts.
+                                .frame(maxWidth: layout.phone || size.width < 760 ? .infinity : max(size.width / 3, 320), alignment: .leading)
                                 .padding(layout.margin)
                                 .padding(.bottom, slides.count > 1 ? 16 : 0)
                         }

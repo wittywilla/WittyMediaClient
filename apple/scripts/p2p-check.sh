@@ -94,6 +94,8 @@ curl -fsS -m 2 "$direct/api/health" >/dev/null || { tail -20 "$WORK/server.log";
 post() { curl -fsS -m 30 -X "$1" "$direct$2" -H 'Content-Type: application/json' ${token:+-H "Authorization: Bearer $token"} -d "$3"; }
 token=""
 token="$(post POST /api/setup "{\"name\":\"owner\",\"password\":\"$PASSWORD\",\"device\":\"check\",\"acknowledgedLegal\":true}" | json 'd["token"]')"
+# First run is over (setup is web-only, and the server answers `setup_required` to everything else until it is told): apps may connect.
+post POST /api/v1/setup/complete '{}' >/dev/null
 # Nothing is written beside the film. And the server doesn't announce itself on the network: away
 # from home nothing would hear it, and here the simulator would, and find the server's own address.
 post PUT /api/settings '{"saveMetadata":"0","lanDiscovery":"0"}' >/dev/null

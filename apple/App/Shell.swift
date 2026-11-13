@@ -303,7 +303,7 @@ private struct TopTabs: View {
                 ZStack(alignment: .leading) {
                     page.padding(.leading, model.path.isEmpty ? closed : 0)
                     if model.path.isEmpty {
-                        TvSideMenu(focus: $bar, closed: closed, open: CGFloat(max(side.open ?? 400, side.size)))
+                        TvSideMenu(focus: $bar, closed: closed, open: CGFloat(max(side.open ?? 400, side.size)), drawerWidth: CGFloat(side.drawer ?? 0))
                             .ignoresSafeArea(.container, edges: .vertical)
                     }
                 }
