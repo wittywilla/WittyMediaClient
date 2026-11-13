@@ -268,9 +268,9 @@ extension View {
     /// don't clip: what's inside keeps to the margins in `Tokens` by itself.
     @ViewBuilder func pageBackground(_ palette: Palette) -> some View {
         #if os(tvOS)
-        self.background(palette.background.ignoresSafeArea()).ignoresSafeArea(.container, edges: .horizontal)
+        self.pageGround().ignoresSafeArea(.container, edges: .horizontal)
         #else
-        self.background(palette.background.ignoresSafeArea())
+        self.pageGround()
         #endif
     }
 

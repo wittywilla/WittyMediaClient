@@ -385,7 +385,7 @@ struct SDUIDetailHeaderView: View {
                                     Button { actor.perform(button.action) } label: {
                                         VStack(spacing: 4) {
                                             Image(systemName: SDUIIcon.symbol(button.icon.isEmpty ? button.id : button.icon, or: "circle"))
-                                                .font(.system(size: 20, weight: .medium))
+                                                .font(.wm(size: 20, weight: .medium))
                                                 .frame(width: 44, height: 32)
                                             Text(button.label).sduiFont("caption").lineLimit(1)
                                         }
@@ -473,7 +473,7 @@ struct SDUIBannerView: View {
                     SDUIPicture(picture: banner.picture, shownWidth: 96).frame(width: 96, height: 96)
                         .clipShape(RoundedRectangle(cornerRadius: draw.radius("Banner", "thumb"), style: .continuous))
                 } else if !banner.icon.isEmpty {
-                    Image(systemName: SDUIIcon.symbol(banner.icon)).font(.system(size: 28, weight: .medium)).foregroundStyle(palette.accentText)
+                    Image(systemName: SDUIIcon.symbol(banner.icon)).font(.wm(size: 28, weight: .medium)).foregroundStyle(palette.accentText)
                         .frame(width: 64, height: 64)
                 }
                 words(over: false)

@@ -186,7 +186,7 @@ struct GamesLibraryView: View {
         HStack(alignment: .firstTextBaseline, spacing: Tokens.Space.s2) {
             Heading(library.name)
             if everything > 0 {
-                Text("\(everything.formatted()) \(everything == 1 ? "game" : "games")").font(.system(size: 15)).foregroundStyle(palette.textHint)
+                Text("\(everything.formatted()) \(everything == 1 ? "game" : "games")").font(.wm(size: 15)).foregroundStyle(palette.textHint)
             }
             Spacer()
         }
@@ -276,9 +276,9 @@ struct GamesLibraryView: View {
         VStack(alignment: .leading, spacing: Tokens.Space.s3) {
             HStack(alignment: .firstTextBaseline, spacing: Tokens.Space.s2) {
                 Text(sort == .title ? say("wpEveryGame") : "Every game")
-                    .font(.system(size: metrics.tv ? 28 : 20, weight: .semibold)).foregroundStyle(palette.text)
+                    .font(.wm(size: metrics.tv ? 28 : 20, weight: .semibold)).foregroundStyle(palette.text)
                     .accessibilityAddTraits(.isHeader)
-                if let total { Text(total.formatted()).font(.system(size: metrics.tv ? 22 : 13)).foregroundStyle(palette.textHint) }
+                if let total { Text(total.formatted()).font(.wm(size: metrics.tv ? 22 : 13)).foregroundStyle(palette.textHint) }
             }
             .padding(.horizontal, metrics.gutter)
             ScrollView(.horizontal, showsIndicators: false) {
@@ -312,7 +312,7 @@ struct GamesLibraryView: View {
                     } header: {
                         if !letter.id.isEmpty {
                             Text(letter.id)
-                                .font(.system(size: metrics.tv ? 24 : 13, weight: .bold, design: .monospaced))
+                                .font(.wm(size: metrics.tv ? 24 : 13, weight: .bold, design: .monospaced))
                                 .foregroundStyle(palette.textSecondary)
                                 .frame(maxWidth: .infinity, alignment: .leading)
                                 .padding(.top, Tokens.Space.s2)

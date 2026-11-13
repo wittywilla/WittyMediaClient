@@ -251,3 +251,60 @@ final class PolicyPickerTests: XCTestCase {
         XCTAssertEqual(page.start, "look-rail")
     }
 }
+
+final class LayoutWireTests: XCTestCase {
+    /// A look as `GET /sdui/experiences` sends it (the `wire` of docs/SDUI.md, Experiences).
+    private func look(_ json: String) throws -> ExperienceCatalogue.Info {
+        try JSONDecoder().decode(ExperienceCatalogue.Info.self, from: Data(json.utf8))
+    }
+
+    private let lumen = #"{"id":"lumen","name":"Lumen","wire":{"desktop":{"nav":"top","style":"pill","home":"hero","cards":"poster","brand":"left","finish":"flat"},"phone":{"nav":"bottom","style":"pill","home":"hero","cards":"poster","brand":"top","finish":"flat"},"tv":{"nav":"top","style":"pill","home":"hero","cards":"poster","dock":true,"brand":"left","finish":"flat"}}}"#
+
+    func testAScreenDrawsTheDesktopsWireAndATelevisionItsOwn() throws {
+        let l = try look(lumen)
+        XCTAssertEqual(LayoutWire.of(l, tv: false), LayoutWire(nav: "top", style: "pill", home: "hero", cards: "poster", brand: "left", finish: "flat"))
+        XCTAssertTrue(LayoutWire.of(l, tv: true).dock)
+        // A phone's bottom tabs are the same in every look: the preview shows the look's own menu.
+        XCTAssertNotEqual(LayoutWire.of(l, tv: false).nav, "bottom")
+    }
+
+    func testWhatTheServerSendsIsRead() throws {
+        let cable = try look(#"{"id":"classicCable","name":"Classic Cable","wire":{"desktop":{"nav":"top","style":"cable","home":"list","cards":"landscape","brand":"left","finish":"flat"}}}"#)
+        XCTAssertEqual(LayoutWire.of(cable, tv: false).style, "cable")
+        XCTAssertEqual(LayoutWire.of(cable, tv: false).home, "list")
+        let classic = try look(#"{"id":"classic","name":"Classic","wire":{"desktop":{"nav":"side","open":true,"style":"pill","home":"hero","cards":"poster","brand":"top","finish":"flat"}}}"#)
+        XCTAssertTrue(LayoutWire.of(classic, tv: false).open)
+        XCTAssertEqual(LayoutWire.of(classic, tv: false).nav, "side")
+    }
+
+    func testALookWithNoWireOrFieldsGetsTheDefaultNotACrash() throws {
+        XCTAssertEqual(LayoutWire.of(try look(#"{"id":"x","name":"X"}"#), tv: false), LayoutWire())
+        let partial = try look(#"{"id":"x","name":"X","wire":{"desktop":{"nav":"rail"}}}"#)
+        XCTAssertEqual(LayoutWire.of(partial, tv: false).nav, "rail")
+        XCTAssertEqual(LayoutWire.of(partial, tv: false).home, "hero")
+    }
+
+    func testEveryLookCardCarriesItsWireframe() throws {
+        let cat = ExperienceCatalogue(experiences: [try look(lumen)])
+        let page = AppearancePage.settings(.init(catalogue: cat, themes: []))
+        XCTAssertNotNil(page.sections[0].cards.first?.wire)
+        XCTAssertNil(page.sections[1].cards.first?.wire)
+    }
+
+    func testTheServersOwnTableDecodes() throws {
+        let urls = ["WittyMediaServer/pkg/sdui/conformance/experience-wire-table.json"]
+        var folder = URL(fileURLWithPath: #filePath).deletingLastPathComponent()
+        for _ in 0..<10 {
+            folder = folder.deletingLastPathComponent()
+            let file = folder.appendingPathComponent(urls[0])
+            guard let data = try? Data(contentsOf: file) else { continue }
+            struct Table: Decodable { let experiences: [ExperienceCatalogue.Info] }
+            let table = try JSONDecoder().decode(Table.self, from: data)
+            XCTAssertEqual(table.experiences.count, 14)
+            XCTAssertTrue(table.experiences.allSatisfy { LayoutWire.of($0, tv: false).nav != "" && $0.wire["desktop"] != nil })
+            XCTAssertEqual(LayoutWire.of(try XCTUnwrap(table.experiences.first { $0.id == "crossbar" }), tv: false).home, "cross")
+            return
+        }
+        throw XCTSkip("The server's repository is not beside this one.")
+    }
+}

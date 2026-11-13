@@ -94,13 +94,13 @@ struct DesignPage<Content: View, Actions: View>: View {
                     if !eyebrow.isEmpty {
                         Text(eyebrow)
                             .textCase(.uppercase)
-                            .font(.system(size: sizes.small, weight: .bold))
+                            .font(.wm(size: sizes.small, weight: .bold))
                             .kerning(sizes.small * 0.08)
                             .foregroundStyle(palette.accentText)
                             .padding(.bottom, sizes.gap * 0.6)
                     }
                     Text(title)
-                        .font(.system(size: sizes.title, weight: .heavy, design: .rounded))
+                        .font(.wm(size: sizes.title, weight: .heavy, design: .rounded))
                         .kerning(-sizes.title * 0.04)
                         .foregroundStyle(palette.text)
                         .fixedSize(horizontal: false, vertical: true)
@@ -108,7 +108,7 @@ struct DesignPage<Content: View, Actions: View>: View {
                         .accessibilityIdentifier(identifier.isEmpty ? "" : identifier + "-title")
                     if !lead.isEmpty {
                         Text(lead)
-                            .font(.system(size: sizes.body))
+                            .font(.wm(size: sizes.body))
                             .foregroundStyle(palette.textSecondary)
                             .frame(maxWidth: sizes.leadWidth, alignment: .leading)
                             .fixedSize(horizontal: false, vertical: true)
@@ -118,7 +118,7 @@ struct DesignPage<Content: View, Actions: View>: View {
                     DesignActions(content: actions).padding(.top, sizes.gap2)
                     if !foot.isEmpty {
                         Text(foot)
-                            .font(.system(size: sizes.small))
+                            .font(.wm(size: sizes.small))
                             .foregroundStyle(palette.textSecondary)
                             .fixedSize(horizontal: false, vertical: true)
                             .padding(.top, sizes.gap2)
@@ -133,7 +133,7 @@ struct DesignPage<Content: View, Actions: View>: View {
             .scrollDismissesKeyboardIfAvailable()
             .environment(\.designSizes, sizes)
         }
-        .background(palette.background.ignoresSafeArea())
+        .pageGround()
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier(identifier)
     }
@@ -169,7 +169,7 @@ struct DesignSection<Content: View>: View {
         VStack(alignment: .leading, spacing: sizes.gap) {
             if !title.isEmpty {
                 Text(title)
-                    .font(.system(size: sizes.body, weight: .heavy))
+                    .font(.wm(size: sizes.body, weight: .heavy))
                     .foregroundStyle(palette.text)
                     .accessibilityAddTraits(.isHeader)
             }
@@ -208,22 +208,22 @@ struct DesignRow: View {
         HStack(spacing: sizes.gap) {
             if let symbol {
                 Image(systemName: symbol)
-                    .font(.system(size: sizes.body, weight: .semibold))
+                    .font(.wm(size: sizes.body, weight: .semibold))
                     .foregroundStyle(palette.textSecondary)
                     .frame(width: sizes.body * 1.6)
                     .accessibilityHidden(true)
             }
             VStack(alignment: .leading, spacing: 2) {
-                Text(title).font(.system(size: sizes.body, weight: .bold)).foregroundStyle(palette.text)
+                Text(title).font(.wm(size: sizes.body, weight: .bold)).foregroundStyle(palette.text)
                 if !detail.isEmpty {
-                    Text(detail).font(.system(size: sizes.tiny)).foregroundStyle(palette.text.opacity(0.7))
+                    Text(detail).font(.wm(size: sizes.tiny)).foregroundStyle(palette.text.opacity(0.7))
                         .fixedSize(horizontal: false, vertical: true)
                 }
             }
             Spacer(minLength: sizes.gap)
             if !value.isEmpty {
                 Text(value)
-                    .font(.system(size: sizes.small, weight: .bold))
+                    .font(.wm(size: sizes.small, weight: .bold))
                     .foregroundStyle(on ? palette.accentText : palette.textSecondary)
                     .multilineTextAlignment(.trailing)
             }
@@ -314,9 +314,10 @@ private struct DesignRowBackground: ViewModifier {
     func body(content: Content) -> some View {
         let shape = RoundedRectangle(cornerRadius: Tokens.Radius.md, style: .continuous)
         content
-            .background(shape.fill(pressed ? palette.raised : palette.card))
+            .finished(shape, fill: pressed ? palette.raised : palette.card, role: .row)
             .overlay(shape.strokeBorder(focused ? palette.tvRing : palette.text, lineWidth: sizes.ring)
                 .opacity(selected || focused ? 1 : 0))
+            .finishGlow(focused, colour: palette.tvRing)
             .clipShape(shape)
     }
 }
@@ -368,11 +369,11 @@ private struct DesignChipStyle: ButtonStyle {
 
         var body: some View {
             configuration.label
-                .font(.system(size: sizes.small, weight: .semibold))
+                .font(.wm(size: sizes.small, weight: .semibold))
                 .foregroundStyle(on ? palette.background : palette.text)
                 .padding(.horizontal, sizes.chipHeight * 0.45)
                 .frame(minHeight: sizes.chipHeight)
-                .background(Capsule().fill(on ? palette.text : Color(white: 0.5).opacity(configuration.isPressed ? 0.34 : 0.22)))
+                .finished(Capsule(), fill: on ? palette.text : Color(white: 0.5).opacity(configuration.isPressed ? 0.34 : 0.22), role: .chip(on: on))
                 .overlay(Capsule().strokeBorder(palette.tvRing, lineWidth: sizes.ring).opacity(focused ? 1 : 0))
                 .contentShape(Capsule())
                 .scaleEffect(focused ? 1.05 : 1)
@@ -390,7 +391,7 @@ struct DesignNote: View {
 
     var body: some View {
         Text(text)
-            .font(.system(size: sizes.small))
+            .font(.wm(size: sizes.small))
             .foregroundStyle(tone ? palette.text : palette.textSecondary)
             .fixedSize(horizontal: false, vertical: true)
             .padding(tone ? sizes.gap * 1.2 : sizes.gap * 0.4)
@@ -693,8 +694,11 @@ struct DesignCard: View {
     var body: some View {
         Button(action: action) {
             VStack(alignment: .leading, spacing: 2) {
-                // A look's layout as a preview in its colours, from the slot (`designCardPreview`); else the swatches.
-                if let shown = preview?.make(card) {
+                // A look's layout: the server's wire as a wireframe in its theme's colours; else a preview from the slot
+                // (`designCardPreview`); else the swatches.
+                if let wire = card.wire {
+                    LayoutThumb(wire: wire, swatches: card.swatches).padding(.bottom, 4)
+                } else if let shown = preview?.make(card) {
                     shown
                         .accessibilityHidden(true)
                         .padding(.bottom, 4)
@@ -716,10 +720,10 @@ struct DesignCard: View {
                         .accessibilityHidden(true)
                         .padding(.bottom, 4)
                 }
-                Text(card.title).font(.system(size: sizes.small, weight: .heavy)).foregroundStyle(palette.text)
+                Text(card.title).font(.wm(size: sizes.small, weight: .heavy)).foregroundStyle(palette.text)
                     .lineLimit(2).multilineTextAlignment(.leading)
                 if !card.subtitle.isEmpty {
-                    Text(card.subtitle).font(.system(size: sizes.tiny)).foregroundStyle(palette.text.opacity(0.75))
+                    Text(card.subtitle).font(.wm(size: sizes.tiny)).foregroundStyle(palette.text.opacity(0.75))
                         .lineLimit(2).multilineTextAlignment(.leading)
                 }
             }

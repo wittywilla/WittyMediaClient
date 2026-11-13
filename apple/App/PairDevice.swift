@@ -139,7 +139,7 @@ struct PairPanel: View {
 
     private func bigCode(_ text: String, size: CGFloat, id: String) -> some View {
         Text(text)
-            .font(.system(size: size, weight: .bold, design: .monospaced))
+            .font(.wm(size: size, weight: .bold, design: .monospaced))
             .kerning(size / 5)
             .foregroundStyle(palette.text)
             .lineLimit(1)

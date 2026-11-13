@@ -126,17 +126,17 @@ struct EraName: View {
     private var styled: Text {
         switch era {
         case "first", "8-bit":
-            return Text(name.uppercased()).font(.system(size: size, weight: .bold, design: .monospaced)).tracking(size * 0.06)
+            return Text(name.uppercased()).font(.wm(size: size, weight: .bold, design: .monospaced)).tracking(size * 0.06)
         case "pocket":
-            return Text(name).font(.system(size: size, weight: .semibold, design: .monospaced))
+            return Text(name).font(.wm(size: size, weight: .semibold, design: .monospaced))
         case "16-bit":
-            return Text(name).font(.system(size: size, weight: .heavy)).tracking(-size * 0.02)
+            return Text(name).font(.wm(size: size, weight: .heavy)).tracking(-size * 0.02)
         case "early-3d":
-            return Text(name).font(.system(size: size, weight: .bold)).italic()
+            return Text(name).font(.wm(size: size, weight: .bold)).italic()
         case "disc":
-            return Text(name.uppercased()).font(.system(size: size, weight: .light)).tracking(size * 0.14)
+            return Text(name.uppercased()).font(.wm(size: size, weight: .light)).tracking(size * 0.14)
         default:
-            return Text(name).font(.system(size: size, weight: .bold))
+            return Text(name).font(.wm(size: size, weight: .bold))
         }
     }
 }
@@ -178,7 +178,7 @@ private struct ShelfStar: View {
     let scale: CGFloat
     var body: some View {
         Image(systemName: "star.fill")
-            .font(.system(size: 10 * scale, weight: .bold))
+            .font(.wm(size: 10 * scale, weight: .bold))
             .foregroundStyle(palette.warn)
             .padding(3 * scale)
             .background(Circle().fill(palette.scrim))
@@ -203,10 +203,10 @@ struct ShelfCover: View {
             ZStack {
                 LinearGradient(colors: [palette.card, palette.panel], startPoint: .topLeading, endPoint: .bottomTrailing)
                 VStack(spacing: 2) {
-                    Text(item.title).font(.system(size: max(9, width * 0.1), weight: .semibold)).foregroundStyle(palette.text)
+                    Text(item.title).font(.wm(size: max(9, width * 0.1), weight: .semibold)).foregroundStyle(palette.text)
                         .multilineTextAlignment(.center).lineLimit(4).minimumScaleFactor(0.7)
                     if let c = console {
-                        Text(c.shortName).font(.system(size: max(8, width * 0.075), weight: .bold, design: .monospaced)).foregroundStyle(palette.textHint)
+                        Text(c.shortName).font(.wm(size: max(8, width * 0.075), weight: .bold, design: .monospaced)).foregroundStyle(palette.textHint)
                     }
                 }
                 .padding(4)
@@ -551,7 +551,7 @@ struct GameSpineView: View {
             EraGrain(cell: grain * s).opacity(0.35)
             if media != "disc" {
                 Text(item.title)
-                    .font(.system(size: 12.5 * s * words, weight: .semibold))
+                    .font(.wm(size: 12.5 * s * words, weight: .semibold))
                     .foregroundStyle(.white)
                     .lineLimit(1)
                     .truncationMode(.tail)
@@ -563,7 +563,7 @@ struct GameSpineView: View {
                 VStack {
                     Spacer(minLength: 0)
                     Text(GameShelves.footName(console))
-                        .font(.system(size: 9 * s, weight: .bold, design: .monospaced))
+                        .font(.wm(size: 9 * s, weight: .bold, design: .monospaced))
                         .foregroundStyle(.white)
                         .lineLimit(1)
                         .minimumScaleFactor(0.5)
@@ -574,7 +574,7 @@ struct GameSpineView: View {
                 }
             }
             if favourite {
-                Image(systemName: "star.fill").font(.system(size: 10 * s)).foregroundStyle(.white.opacity(0.9)).padding(.top, 5 * s)
+                Image(systemName: "star.fill").font(.wm(size: 10 * s)).foregroundStyle(.white.opacity(0.9)).padding(.top, 5 * s)
                     .offset(y: ribbon ? metrics.shelf.ribbon.height * 0.6 : 0)
             }
         }
@@ -623,7 +623,7 @@ struct ShelfDivider: View {
         let s = metrics.shelf.scale
         let shape = UnevenRect(top: 3 * s, bottom: 0)
         Text(letter)
-            .font(.system(size: 11 * s, weight: .bold, design: .monospaced))
+            .font(.wm(size: 11 * s, weight: .bold, design: .monospaced))
             .foregroundStyle(palette.textSecondary)
             .padding(.top, 5 * s)
             .frame(width: 22 * s, height: 64 * s, alignment: .top)

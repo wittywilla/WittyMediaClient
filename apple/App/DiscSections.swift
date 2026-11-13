@@ -100,7 +100,7 @@ struct DiscSections: View {
     /// The website's `.section-title`: 20 semibold (17 for a heading inside a section), 12 above what it names.
     private func heading(_ words: String, top: CGFloat, size: CGFloat = 20) -> some View {
         Text(words)
-            .font(.system(size: size, weight: .semibold))
+            .font(.wm(size: size, weight: .semibold))
             .tracking(-0.012 * size)
             .foregroundStyle(palette.text)
             .fixedSize(horizontal: false, vertical: true)
@@ -112,7 +112,7 @@ struct DiscSections: View {
     /// A scene's start or a bonus feature's length, at the bottom right of its picture.
     private func time(_ words: String) -> some View {
         Text(words)
-            .font(.system(size: 11, weight: .semibold).monospacedDigit())
+            .font(.wm(size: 11, weight: .semibold).monospacedDigit())
             .foregroundStyle(Color.white)
             .padding(.horizontal, 6)
             .padding(.vertical, 1)
@@ -137,7 +137,7 @@ struct DiscSections: View {
                 Button { play(main.ttn) } label: {
                     DiscPicture(item: item.id, ttn: main.ttn, scene: 0) {
                         Image(systemName: "play.fill")
-                            .font(.system(size: 24, weight: .semibold))
+                            .font(.wm(size: 24, weight: .semibold))
                             .foregroundStyle(palette.onAccent)
                             .frame(width: 56, height: 56)
                             .background(Circle().fill(palette.accent))
@@ -152,14 +152,14 @@ struct DiscSections: View {
                         DiscNameField(placeholder: item.title, text: titleName(main.ttn), label: "Feature name")
                     } else {
                         Text(name)
-                            .font(.system(size: 20, weight: .semibold))
+                            .font(.wm(size: 20, weight: .semibold))
                             .tracking(-0.24)
                             .foregroundStyle(palette.text)
                             .fixedSize(horizontal: false, vertical: true)
                             .accessibilityAddTraits(.isHeader)
                     }
                     Text(DiscPage.featureLine(main))
-                        .font(.system(size: 13))
+                        .font(.wm(size: 13))
                         .foregroundStyle(palette.textHint)
                         .fixedSize(horizontal: false, vertical: true)
                     if languages.isEmpty {
@@ -167,7 +167,7 @@ struct DiscSections: View {
                         Color.clear.frame(height: 0)
                     } else {
                         Text(languages)
-                            .font(.system(size: 13))
+                            .font(.wm(size: 13))
                             .foregroundStyle(palette.textHint)
                             .fixedSize(horizontal: false, vertical: true)
                     }
@@ -208,7 +208,7 @@ struct DiscSections: View {
                             .padding(.top, 6)
                     } else {
                         (Text("\(chapter.n).").foregroundColor(palette.textHint) + Text(" " + DiscPage.sceneName(labels, ttn: main.ttn, scene: chapter.n)))
-                            .font(.system(size: 13))
+                            .font(.wm(size: 13))
                             .foregroundColor(palette.text)
                             .lineSpacing(2)
                             .fixedSize(horizontal: false, vertical: true)
@@ -239,7 +239,7 @@ struct DiscSections: View {
                                 .padding(.top, 6)
                         } else {
                             (Text(DiscPage.name(title, labels, otherwise: DiscPage.bonusName(index))) + Text(" · title \(title.ttn)").foregroundColor(palette.textHint))
-                                .font(.system(size: 13))
+                                .font(.wm(size: 13))
                                 .foregroundColor(palette.text)
                                 .lineSpacing(2)
                                 .fixedSize(horizontal: false, vertical: true)
@@ -262,10 +262,10 @@ struct DiscSections: View {
                 ForEach(Array(menus.enumerated()), id: \.offset) { _, menu in
                     Button { go(DiscPage.menuPath(item.id, menu)) } label: {
                         HStack(spacing: Tokens.Space.s2) {
-                            Image(systemName: "line.3.horizontal").font(.system(size: 15, weight: .semibold)).frame(width: 18, height: 18).opacity(0.8)
+                            Image(systemName: "line.3.horizontal").font(.wm(size: 15, weight: .semibold)).frame(width: 18, height: 18).opacity(0.8)
                             Text(menu.label)
                         }
-                        .font(.system(size: 14, weight: .semibold))
+                        .font(.wm(size: 14, weight: .semibold))
                         .foregroundStyle(palette.text)
                         .lineLimit(1)
                         .padding(.horizontal, Tokens.Space.s4)
@@ -289,12 +289,12 @@ struct DiscSections: View {
             Button { allTitles.toggle() } label: {
                 HStack(spacing: 6) {
                     Image(systemName: "arrowtriangle.right.fill")
-                        .font(.system(size: 8))
+                        .font(.wm(size: 8))
                         .rotationEffect(.degrees(allTitles ? 90 : 0))
                         .accessibilityHidden(true)
                     Text(summary)
                 }
-                .font(.system(size: 14, weight: .semibold))
+                .font(.wm(size: 14, weight: .semibold))
                 .foregroundStyle(palette.textSecondary)
                 .padding(.vertical, Tokens.Space.s3)
                 .contentShape(Rectangle())
@@ -308,7 +308,7 @@ struct DiscSections: View {
     private func cell<Content: View>(_ row: DiscPage.TitleRow, small: Bool = false, @ViewBuilder _ content: () -> Content) -> some View {
         TitleTableCell(line: palette.border) {
             content()
-                .font(.system(size: small ? 13 : 14, weight: row.feature ? .semibold : .regular).monospacedDigit())
+                .font(.wm(size: small ? 13 : 14, weight: row.feature ? .semibold : .regular).monospacedDigit())
                 .foregroundStyle(row.feature ? palette.accentText : palette.text)
         }
     }
@@ -429,7 +429,7 @@ private struct DiscThumb: View {
                     Image(decorative: image, scale: 1).resizable().scaledToFill()
                 } else if failed {
                     Text("Preview not available")
-                        .font(.system(size: 12, weight: .semibold))
+                        .font(.wm(size: 12, weight: .semibold))
                         .foregroundStyle(palette.textHint)
                         .multilineTextAlignment(.center)
                         .padding(Tokens.Space.s2)
@@ -469,7 +469,7 @@ private struct DiscNameField: View {
     var body: some View {
         let shape = RoundedRectangle(cornerRadius: Tokens.Radius.md, style: .continuous)
         TextField("", text: $text, prompt: Text(placeholder).foregroundColor(palette.textHint))
-            .font(.system(size: small ? 13 : 14))
+            .font(.wm(size: small ? 13 : 14))
             .foregroundStyle(palette.text)
             .tint(palette.accentText)
             .focused($focused)

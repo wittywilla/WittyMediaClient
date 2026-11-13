@@ -87,7 +87,7 @@ private struct PageFontModifier: ViewModifier {
     var italic = false
 
     func body(content: Content) -> some View {
-        let font = Font.system(size: Self.scaled(type.size, type.style, typeSize), weight: type.weight)
+        let font = Font.wm(size: Self.scaled(type.size, type.style, typeSize), weight: type.weight)
         content.font(italic ? font.italic() : font).tracking(type.tracking)
     }
 
@@ -195,7 +195,7 @@ private struct PageButtonBody<Label: View>: View {
             .lineLimit(1)
             .padding(.horizontal, square ? 0 : Tokens.Space.s4)
             .frame(minWidth: 44, maxWidth: wide ? .infinity : nil, minHeight: 44)
-            .background(shape.fill(fill))
+            .finished(shape, fill: fill, role: kind == .primary ? .accent : kind == .secondary ? .button : .chip(on: false))
             .overlay { if kind == .ghost { shape.strokeBorder(palette.text.opacity(0.2), lineWidth: 1) } }
             .contentShape(shape)
             .scaleEffect(pressed && !reduceMotion ? 0.97 : 1)
@@ -208,7 +208,7 @@ private struct PageButtonBody<Label: View>: View {
 private struct PageLabelStyle: LabelStyle {
     func makeBody(configuration: Configuration) -> some View {
         HStack(spacing: Tokens.Space.s2) {
-            configuration.icon.font(.system(size: 15, weight: .semibold)).frame(width: 18, height: 18)
+            configuration.icon.font(.wm(size: 15, weight: .semibold)).frame(width: 18, height: 18)
             configuration.title
         }
     }
@@ -239,7 +239,7 @@ struct SectionHead: View {
     private var link: some View {
         HStack(spacing: 2) {
             Text(action)
-            Image(systemName: "chevron.right").font(.system(size: 11, weight: .semibold))
+            Image(systemName: "chevron.right").font(.wm(size: 11, weight: .semibold))
         }
         .pageFont(.action)
         .foregroundStyle(palette.textSecondary)
@@ -302,7 +302,7 @@ struct PlaceholderArt: View {
                     // Too small to read (72 or less): the colour alone.
                     if lines > 0, geo.size.width > 72 {
                         Text(title)
-                            .font(.system(size: 15, weight: .semibold))
+                            .font(.wm(size: 15, weight: .semibold))
                             .lineSpacing(2)
                             .foregroundStyle(.white)
                             .lineLimit(min(lines, 3))
@@ -497,7 +497,7 @@ struct LibraryTile: View {
         let square: CGFloat = compact ? 38 : 44
         HStack(spacing: compact ? 10 : Tokens.Space.s3) {
             Image(systemName: symbol)
-                .font(.system(size: compact ? 17 : 19, weight: .semibold))
+                .font(.wm(size: compact ? 17 : 19, weight: .semibold))
                 .foregroundStyle(adding ? palette.textSecondary : palette.accentText)
                 .frame(width: square, height: square)
                 .background(RoundedRectangle(cornerRadius: Tokens.Radius.md, style: .continuous).fill(adding ? palette.card : palette.accent.opacity(0.14)))
@@ -606,12 +606,12 @@ private struct ChipBody<Label: View>: View {
         // The website's `.chip`: 44 high on a touch screen, outlined in the text colour at 20%, and the chosen one
         // inverted, in every theme.
         label
-            .font(.system(size: 13, weight: .medium))
+            .font(.wm(size: 13, weight: .medium))
             .lineLimit(1)
             .foregroundStyle(chosen ? palette.background : pressed ? palette.text : palette.textSecondary)
             .padding(.horizontal, Tokens.Space.s3)
             .frame(minHeight: 44)
-            .background(Capsule().fill(chosen ? palette.text : (pressed ? palette.text.opacity(0.07) : Color.clear)))
+            .finished(Capsule(), fill: chosen ? palette.text : (pressed ? palette.text.opacity(0.07) : Color.clear), role: .chip(on: chosen))
             .overlay(Capsule().strokeBorder(chosen ? palette.text : palette.text.opacity(0.2), lineWidth: 1))
             .contentShape(Capsule())
             .accessibilityAddTraits(chosen ? [.isSelected] : [])
@@ -733,15 +733,15 @@ struct EmptyState: View {
         VStack(spacing: Tokens.Space.s2) {
             // The website's `.empty`: a 26 icon in `textHint` on a 56 circle of `card`, the title 17, the words 14.
             Image(systemName: icon)
-                .font(.system(size: 22, weight: .semibold))
+                .font(.wm(size: 22, weight: .semibold))
                 .foregroundStyle(palette.textHint)
                 .frame(width: 56, height: 56)
                 .background(Circle().fill(palette.card))
                 .padding(.bottom, Tokens.Space.s4 - Tokens.Space.s1)
                 .accessibilityHidden(true)
-            Text(title).font(.system(size: 17, weight: .bold)).foregroundStyle(palette.text).multilineTextAlignment(.center).accessibilityAddTraits(.isHeader)
+            Text(title).font(.wm(size: 17, weight: .bold)).foregroundStyle(palette.text).multilineTextAlignment(.center).accessibilityAddTraits(.isHeader)
             if !detail.isEmpty {
-                Text(detail).font(.system(size: 14)).foregroundStyle(palette.textSecondary).multilineTextAlignment(.center)
+                Text(detail).font(.wm(size: 14)).foregroundStyle(palette.textSecondary).multilineTextAlignment(.center)
                     .frame(maxWidth: 46 * 7.5)
                     .fixedSize(horizontal: false, vertical: true)
             }

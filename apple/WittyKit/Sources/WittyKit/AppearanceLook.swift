@@ -19,8 +19,11 @@ public struct ExperienceCatalogue: Decodable, Equatable, Sendable {
         /// The theme it wears unless one is required or chosen.
         public var theme: String
         public var tvTheme: String
+        /// The layout a chooser draws, by form factor (`wire`).
+        public var wire: [String: LayoutWire]
 
-        enum CodingKeys: String, CodingKey { case id, order, name, tagline, description, theme, tvTheme }
+        enum CodingKeys: String, CodingKey { case id, order, name, tagline, description, theme, tvTheme, wire }
+
         public init(from decoder: Decoder) throws {
             let c = try decoder.container(keyedBy: CodingKeys.self)
             id = try c.decode(String.self, forKey: .id)
@@ -30,9 +33,10 @@ public struct ExperienceCatalogue: Decodable, Equatable, Sendable {
             description = (try? c.decodeIfPresent(String.self, forKey: .description)) ?? ""
             theme = (try? c.decodeIfPresent(String.self, forKey: .theme)) ?? "default"
             tvTheme = (try? c.decodeIfPresent(String.self, forKey: .tvTheme)) ?? ""
+            wire = (try? c.decodeIfPresent([String: LayoutWire].self, forKey: .wire)) ?? [:]
         }
 
-        public init(id: String, name: String, tagline: String = "", theme: String = "default", order: Int = 0) {
+        public init(id: String, name: String, tagline: String = "", theme: String = "default", order: Int = 0, wire: [String: LayoutWire] = [:]) {
             self.id = id
             self.name = name
             self.tagline = tagline
@@ -40,6 +44,7 @@ public struct ExperienceCatalogue: Decodable, Equatable, Sendable {
             self.order = order
             description = ""
             tvTheme = ""
+            self.wire = wire
         }
     }
 
@@ -257,12 +262,15 @@ public enum AppearancePage {
         public var canPickFile: Bool
         public var server: String
         public var profile: String
+        /// A television previews the look's television menu.
+        public var tv: Bool
         /// A problem to show under the page, the server's words.
         public var problem: String
 
         public init(catalogue: ExperienceCatalogue, state: ExperienceState? = nil, look: LookState = LookState(),
                     themes: [ThemeChoice] = [], chosenTheme: String = "", pendingExperience: String = "", pendingTheme: String = "",
-                    canPickFile: Bool = true, server: String = "", profile: String = "", problem: String = "") {
+                    canPickFile: Bool = true, server: String = "", profile: String = "", tv: Bool = false, problem: String = "") {
+            self.tv = tv
             self.catalogue = catalogue
             self.state = state
             self.look = look
@@ -319,7 +327,8 @@ public enum AppearancePage {
             let themeName = i.themes.first { $0.id == info.theme }?.name ?? info.theme.capitalized
             return DesignPageSpec.Card(id: "look-" + info.id, title: info.name,
                                        subtitle: [info.tagline, themeName].filter { !$0.isEmpty }.joined(separator: " · "),
-                                       on: info.id == shown, swatches: swatches(for: info.theme, in: i.themes))
+                                       on: info.id == shown, swatches: swatches(for: info.theme, in: i.themes),
+                                       wire: LayoutWire.of(info, tv: i.tv))
         }
     }
 
@@ -340,9 +349,9 @@ public enum AppearancePage {
     public static func settings(_ i: Inputs) -> DesignPageSpec {
         var sections: [DesignPageSpec.Section] = []
         if let r = i.requiredExperience {
-            sections.append(.secC("Look · \(r.words)", lookCards(i).filter { $0.id == "look-" + r.value }, 2))
+            sections.append(.secC("Look · \(r.words)", lookCards(i).filter { $0.id == "look-" + r.value }))
         } else {
-            sections.append(.secC("Look", lookCards(i), 5))
+            sections.append(.secC("Look", lookCards(i)))
         }
         if let r = i.requiredTheme {
             sections.append(.secC("Theme · \(r.words)", themeCards(i).filter { $0.id == "theme-" + r.value }, 6))
@@ -523,16 +532,16 @@ public extension WittyClient {
 public extension LookPolicy {
     /// The sheet that chooses what is required of one person or everyone: a look, a theme, either, or neither. Pressing a
     /// card chooses it (pressing the chosen one again, or "Not required", clears the part); Done keeps it.
-    static func picker(who: String, current: Requirement, looks: [ExperienceCatalogue.Info], themes: [AppearancePage.ThemeChoice]) -> DesignPageSpec {
+    static func picker(who: String, current: Requirement, tv: Bool = false, looks: [ExperienceCatalogue.Info], themes: [AppearancePage.ThemeChoice]) -> DesignPageSpec {
         let lookCards = [DesignPageSpec.Card(id: "look-none", title: "Not required", subtitle: "They choose their own look", on: current.experience.isEmpty)]
             + looks.map { DesignPageSpec.Card(id: "look-" + $0.id, title: $0.name, subtitle: $0.tagline, on: current.experience == $0.id,
-                                              swatches: AppearancePage.swatches(for: $0.theme, in: themes)) }
+                                              swatches: AppearancePage.swatches(for: $0.theme, in: themes), wire: LayoutWire.of($0, tv: tv)) }
         let themeCards = [DesignPageSpec.Card(id: "theme-none", title: "Not required", subtitle: "They choose their own theme", on: current.theme.isEmpty)]
             + themes.map { DesignPageSpec.Card(id: "theme-" + $0.id, title: $0.name, subtitle: $0.dark ? "Dark" : "Light", on: current.theme == $0.id,
                                                swatches: $0.swatches.isEmpty ? AppearancePage.fallbackSwatches : $0.swatches) }
         var page = DesignPageSpec(eyebrow: "Settings · People · Looks and themes", title: "Require for \(who)",
                                   lead: "Choose a look, a theme, or both. They are locked for \(who), with your name beside them.",
-                                  sections: [.secC("Look", lookCards, 5), .secC("Theme", themeCards, 6)],
+                                  sections: [.secC("Look", lookCards), .secC("Theme", themeCards, 6)],
                                   actions: [.A1("Done"), .A2("Cancel")], layer: true)
         page.start = current.experience.isEmpty ? "look-none" : "look-" + current.experience
         return page

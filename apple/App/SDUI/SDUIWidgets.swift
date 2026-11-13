@@ -141,7 +141,7 @@ struct SDUIFilterBarView: View {
                         Button { open = field } label: {
                             HStack(spacing: 6) {
                                 Text(field.summary)
-                                Image(systemName: "chevron.down").font(.system(size: 11, weight: .semibold)).accessibilityHidden(true)
+                                Image(systemName: "chevron.down").font(.wm(size: 11, weight: .semibold)).accessibilityHidden(true)
                             }
                         }
                         #if os(tvOS)
