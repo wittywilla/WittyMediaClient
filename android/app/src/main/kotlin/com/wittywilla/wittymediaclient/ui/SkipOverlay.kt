@@ -4,12 +4,8 @@ package com.wittywilla.wittymediaclient.ui
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawingPadding
-import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -18,15 +14,12 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import com.wittywilla.wittymediaclient.net.ExtrasFeature
 import com.wittywilla.wittymediaclient.net.Intro
 import com.wittywilla.wittymediaclient.net.SkipRange
@@ -79,32 +72,36 @@ fun rememberTvSkipping(
     return skipping
 }
 
-// "Skipped the intro.", over the picture for a few seconds and read out by a screen reader. Nothing to focus.
+// "Skipped the intro.", over the picture for a few seconds and read out by a screen reader. Nothing to focus. Its own
+// scrim, as everything over a film has, so it reads on any picture.
 @Composable
 fun TvSkipNotice(skipping: TvSkipping, modifier: Modifier = Modifier) {
     val words = skipping.said
     if (words.isEmpty()) return
-    Box(
-        modifier.safeDrawingPadding().padding(LocalMetrics.current.gutter).background(Color(0xCC000000), Radius.FULL)
-            .padding(horizontal = Space.S4, vertical = Space.S2).semantics { liveRegion = LiveRegionMode.Polite },
-    ) { Text(words, color = Color.White, style = MaterialTheme.typography.bodyMedium) }
+    DesignSized {
+        val s = LocalDesignSizes.current
+        Box(
+            modifier.safeDrawingPadding().padding(LocalMetrics.current.gutter).background(SCRIM, Radius.FULL)
+                .padding(horizontal = s.gap * 1.4f, vertical = s.gap * 0.8f).semantics { liveRegion = LiveRegionMode.Polite },
+        ) { Text(words, color = Color.White, fontSize = s.small, fontWeight = FontWeight.Bold) }
+    }
 }
 
-// The phone's and tablet's button, as the website draws it (`.skip-intro`): white, 44 high, radius 10, over the
-// picture for as long as the stretch is on. A screen reader hears it arrive.
+// The phone's and tablet's button: Design 2's chosen chip over the picture ("Skip intro ›"), for as long as the
+// stretch is on. It takes focus when it appears (docs/plans/DESIGN-2.md, Player), and a screen reader hears it arrive.
 @Composable
 fun PhoneSkipButton(session: VideoSession, modifier: Modifier = Modifier) {
     val skip = session.skipping.now ?: return
     if (session.problem.isNotEmpty()) return
-    Pressable(
-        { session.skipping.pressed(); session.seekFilm(skip.toSec) },
-        modifier.height(44.dp).semantics { liveRegion = LiveRegionMode.Polite },
-        shape = RoundedCornerShape(10.dp), fill = Color.White, label = skip.label, ring = false,
-    ) {
-        Box(Modifier.padding(horizontal = 20.dp).fillMaxSize(), contentAlignment = Alignment.Center) {
-            Text("${skip.label} ›", color = Color(0xFF111111), fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
-        }
+    DesignSized {
+        DesignChip(
+            "${skip.label} ›", { session.skipping.pressed(); session.seekFilm(skip.toSec) },
+            modifier.semantics { liveRegion = LiveRegionMode.Polite }, on = true, label = skip.label, takeFocus = true, focusKey = "skip",
+        )
     }
 }
+
+// What's over the picture is dark whatever the theme: the film is.
+private val SCRIM = Color(0xCC000000)
 
 private const val SAID_MS = 4_000L

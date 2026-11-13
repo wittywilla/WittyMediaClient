@@ -19,12 +19,12 @@ import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.imePadding
-import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawingPadding
 import androidx.compose.foundation.layout.size
@@ -38,7 +38,6 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -62,7 +61,6 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Constraints
-import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 
 // The sign-in screens' pieces from docs/APP-DESIGN.md, "Signing in" and "Components". The Apple app
@@ -194,43 +192,10 @@ fun SignInHeading(title: String, modifier: Modifier = Modifier, detail: String =
     }
 }
 
-// Above a group of things, such as the servers found: small capitals in `textSecondary`, as Apple's apps head a list.
-@Composable
-fun SectionLabel(text: String, modifier: Modifier = Modifier, searching: Boolean = false) {
-    val metrics = LocalMetrics.current
-    Row(modifier.fillMaxWidth().semantics(mergeDescendants = true) { heading() }, verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(metrics.u(8))) {
-        Text(
-            text.uppercase(), color = MaterialTheme.colorScheme.onSurfaceVariant,
-            style = MaterialTheme.typography.caption.copy(fontWeight = FontWeight.SemiBold, letterSpacing = with(LocalDensity.current) { metrics.u(0.6f).toSp() }),
-        )
-        if (searching) PulsingDot()
-    }
-}
-
-// The accent dot beside "On your network" while it looks. Still, with Reduce Motion on.
-@Composable
-private fun PulsingDot() {
-    val metrics = LocalMetrics.current
-    val reduce = LocalReduceMotion.current
-    val pulse = if (reduce) {
-        null
-    } else {
-        rememberInfiniteTransition(label = "searching").animateFloat(0.35f, 1f, infiniteRepeatable(tween(PULSE_MS), RepeatMode.Reverse), label = "dot")
-    }
-    Box(
-        Modifier
-            .size(metrics.u(7))
-            .graphicsLayer { alpha = pulse?.value ?: 1f }
-            .clip(CircleShape)
-            .background(MaterialTheme.colorScheme.primary),
-    )
-}
-
-private const val PULSE_MS = 900
-
-// docs/APP-DESIGN.md, "Server card", as Apple's apps draw it. A saved server shows its own logo and name over
-// its address; one only found shows the plain server icon and its address over "Found on your network", as a
-// server says nothing about itself until it's added. A chevron turns into a spinner while connecting.
+// A server in the list of servers, as a Design 2 row: its mark, its name in bold and what's known of it under that,
+// "Last used" at the end in the accent's text colour. A saved server shows its own logo and name over its address;
+// one only found shows the plain server icon and its address over "Found on your network", as a server says nothing
+// about itself until it's added. A spinner takes the end while connecting.
 @Composable
 fun ServerCard(
     name: String,
@@ -252,14 +217,15 @@ fun ServerCard(
     onLongClick: (() -> Unit)? = null,
     longClickLabel: String? = null,
     actions: List<CustomAccessibilityAction> = emptyList(),
-    // Instead of the chevron, such as a button that removes it.
+    // At the end instead of "Last used", such as a button that removes it.
     trailing: (@Composable () -> Unit)? = null,
 ) {
     val scheme = MaterialTheme.colorScheme
     val metrics = LocalMetrics.current
+    val s = LocalDesignSizes.current
     val words = LocalWords.current
-    val hint = LocalExtraColours.current.hint
-    val mark = metrics.u(if (metrics.tv) 56 else 40)
+    val extra = LocalExtraColours.current
+    val mark = metrics.u(if (metrics.tv) 56 else 36)
     val spoken = listOfNotNull(
         name, detail, reached.ifEmpty { null }, if (stale) words["staleServer"] else null, if (lastUsed) words["lastUsed"] else null,
     ).joinToString(", ")
@@ -269,14 +235,14 @@ fun ServerCard(
         true
     }
     Pressable(
-        onClick, modifier.fillMaxWidth().then(menuKey), shape = metrics.corner(14), fill = scheme.surfaceVariant, label = spoken,
+        onClick, modifier.fillMaxWidth().then(menuKey), shape = metrics.corner(10), fill = scheme.surface, label = spoken,
         state = if (connecting) words["connecting"] else null, requestFocus = requestFocus, takeFocus = takeFocus, focusKey = focusKey,
-        pressScale = CARD_PRESS, onLongClick = onLongClick, longClickLabel = longClickLabel, actions = actions,
+        grows = false, onLongClick = onLongClick, longClickLabel = longClickLabel, actions = actions,
     ) {
         Row(
-            Modifier.fillMaxWidth().padding(metrics.u(16)),
+            Modifier.fillMaxWidth().defaultMinSize(minHeight = s.rowHeight).padding(horizontal = s.gap * 1.4f, vertical = s.gap * 0.6f),
             verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(metrics.u(12)),
+            horizontalArrangement = Arrangement.spacedBy(s.gap),
         ) {
             if (saved) {
                 ServerMark(mark, logo)
@@ -285,52 +251,20 @@ fun ServerCard(
                     Icon(Symbols.Server, contentDescription = null, tint = scheme.onSurfaceVariant, modifier = Modifier.size(mark * 0.6f))
                 }
             }
-            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(metrics.u(2))) {
-                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(metrics.u(8))) {
-                    Text(
-                        name, color = scheme.onSurface, style = MaterialTheme.typography.label.copy(fontWeight = FontWeight.SemiBold),
-                        maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false),
-                    )
-                    if (lastUsed) Tag(words["lastUsed"].orEmpty())
-                }
-                Text(detail, color = scheme.onSurfaceVariant, style = MaterialTheme.typography.secondary, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                if (reached.isNotEmpty()) {
-                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(metrics.u(8))) {
-                        Text(
-                            reached, color = hint, style = MaterialTheme.typography.caption.copy(fontWeight = FontWeight.Normal),
-                            maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false),
-                        )
-                        if (stale) Tag(words["staleServer"].orEmpty())
-                    }
+            Column(Modifier.weight(1f)) {
+                Text(name, color = scheme.onSurface, fontSize = s.body, fontWeight = FontWeight.Bold, lineHeight = s.body * 1.3f, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                Text(detail, color = scheme.onSurfaceVariant, fontSize = s.tiny, lineHeight = s.tiny * 1.35f, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                val seen = listOfNotNull(reached.ifEmpty { null }, if (stale) words["staleServer"] else null).joinToString(" · ")
+                if (seen.isNotEmpty()) {
+                    Text(seen, color = extra.hint, fontSize = s.tiny, lineHeight = s.tiny * 1.35f, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 }
             }
-            if (trailing != null) trailing()
-            else if (connecting) Spinner(hint, metrics.u(if (metrics.tv) 30 else 20))
-            // On a TV, Apple's footnote chevron: 25 tall, its tip 4 inside the padding. Ours has more room
-            // round it in its box, so the box is nudged out by that much.
-            else if (metrics.tv) Icon(Symbols.Next, contentDescription = null, tint = hint, modifier = Modifier.offset(x = metrics.u(14)).size(metrics.u(52)))
-            else Icon(Symbols.Next, contentDescription = null, tint = hint, modifier = Modifier.size(metrics.u(24)))
+            when {
+                trailing != null -> trailing()
+                connecting -> Spinner(extra.hint, metrics.u(if (metrics.tv) 30 else 20))
+                lastUsed -> Text(words["lastUsed"].orEmpty(), color = extra.accentText, fontSize = s.small, fontWeight = FontWeight.Bold, maxLines = 1)
+            }
         }
-    }
-}
-
-private const val CARD_PRESS = 0.98f
-
-// Which server a code or a sign-in goes to: its mark and name in a quiet pill. Large enough to read from
-// across the room on a TV: a 40 logo and the Section size.
-@Composable
-fun ServerPill(name: String, logo: Any?, modifier: Modifier = Modifier) {
-    val metrics = LocalMetrics.current
-    Row(
-        modifier.clip(Radius.FULL).background(MaterialTheme.colorScheme.surface).padding(start = metrics.u(4), end = metrics.u(12), top = metrics.u(4), bottom = metrics.u(4)),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(metrics.u(8)),
-    ) {
-        ServerMark(metrics.u(if (metrics.tv) 40 else 24), logo)
-        Text(
-            name, color = MaterialTheme.colorScheme.onSurface, maxLines = 1,
-            style = if (metrics.tv) MaterialTheme.typography.section.copy(fontWeight = FontWeight.Normal) else MaterialTheme.typography.label,
-        )
     }
 }
 
@@ -503,13 +437,4 @@ fun PanelCard(modifier: Modifier = Modifier, content: @Composable ColumnScope.()
         verticalArrangement = Arrangement.spacedBy(metrics.u(6)),
         content = content,
     )
-}
-
-// The warning icon in a circle of `danger` at 16%.
-@Composable
-fun WarningBadge(size: Dp, modifier: Modifier = Modifier) {
-    val danger = MaterialTheme.colorScheme.error
-    Box(modifier.size(size).clip(CircleShape).background(danger.copy(alpha = 0.16f)), contentAlignment = Alignment.Center) {
-        Icon(Symbols.Warning, contentDescription = null, tint = danger, modifier = Modifier.size(size * 0.5f))
-    }
 }

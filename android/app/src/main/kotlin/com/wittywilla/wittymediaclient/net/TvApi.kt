@@ -249,3 +249,7 @@ suspend fun Api.saveTvLook(change: Map<String, JsonElement?>) {
 
 // The server's error words, or a plain fallback: what Apple TV says too.
 fun problemText(e: Throwable, fallback: String): String = (e as? ApiError)?.message?.takeIf { it.isNotEmpty() } ?: fallback
+
+// One programme in full, for More info (feature `tv-programme-info`): `start` is a moment in it, Unix seconds.
+suspend fun Api.programmeInfo(key: String, start: Long): JsonObject =
+    json.parseToJsonElement(call("GET", "/tv/${GuideRules.pathPart(key)}/programme?start=$start")) as JsonObject

@@ -4,16 +4,14 @@ package com.wittywilla.wittymediaclient.ui
 
 import android.text.format.DateFormat
 import androidx.compose.foundation.background
-import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawingPadding
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
@@ -110,17 +108,18 @@ fun ProfileGuard(nav: Nav, api: Api, s: Map<String, String>) {
     // The guide isn't offered to a profile whose limits turn Live TV off, whichever screen found the server has one.
     val liveTv = ScreenTimeWatch.can("liveTv")
     LaunchedEffect(liveTv, nav.hasGuide) { if (!liveTv && nav.hasGuide) nav.hasGuide = false }
-    Box(Modifier.fillMaxSize().safeDrawingPadding().padding(metrics.gutter), contentAlignment = Alignment.BottomCenter) {
+    // Design 2's screen-time note, at the foot of whatever page is showing: a quiet panel of the accent on the page's
+    // surface, so it reads over a picture as well as over a page.
+    BoxWithConstraints(Modifier.fillMaxSize().safeDrawingPadding().padding(metrics.gutter), contentAlignment = Alignment.BottomCenter) {
         if (showLine && minutes != null && !telling) {
-            Text(
-                s[if (minutes == 1) "screenTimeLeftOne" else "screenTimeLeft"].orEmpty().replace("{n}", minutes.toString()),
-                color = MaterialTheme.colorScheme.onSurface, style = MaterialTheme.typography.label,
-                modifier = Modifier
-                    .clip(Radius.FULL)
-                    .background(MaterialTheme.colorScheme.surface)
-                    .padding(horizontal = metrics.u(20), vertical = metrics.u(12))
-                    .semantics { liveRegion = LiveRegionMode.Polite },
-            )
+            CompositionLocalProvider(LocalDesignSizes provides DesignSizes.of(metrics, maxWidth.value)) {
+                Box(Modifier.clip(metrics.corner(14)).background(MaterialTheme.colorScheme.surface)) {
+                    DesignNote(
+                        s[if (minutes == 1) "screenTimeLeftOne" else "screenTimeLeft"].orEmpty().replace("{n}", minutes.toString()),
+                        Modifier.semantics { liveRegion = LiveRegionMode.Polite }, tone = true,
+                    )
+                }
+            }
         }
     }
     val st = ScreenTimeWatch.time
@@ -141,8 +140,6 @@ private fun whenAgain(s: Map<String, String>, st: ScreenTime): String {
 
 @Composable
 private fun TimeUpNotice(nav: Nav, s: Map<String, String>, st: ScreenTime) {
-    val metrics = LocalMetrics.current
-    val scheme = MaterialTheme.colorScheme
     val scope = rememberCoroutineScope()
     val limits = ScreenTimeWatch.limits
     val hasPin = limits?.parentPin == true
@@ -194,25 +191,31 @@ private fun TimeUpNotice(nav: Nav, s: Map<String, String>, st: ScreenTime) {
         }
     }
 
+    // Design 2's "Screen time is over" (canvas `screentime`): the profile's name over why, and when it starts again;
+    // Ask a parent and Switch profile as chips, then OK.
+    val who = nav.me?.let { avatarName(it.displayName, it.name) }.orEmpty()
     if (!asking) {
-        PanelDialog(title, ScreenTimeWatch::dismiss) {
-            Text(st.message.ifEmpty { s["timeUpPlain"].orEmpty() }, color = scheme.onBackground, style = MaterialTheme.typography.body, modifier = Modifier.semantics { liveRegion = LiveRegionMode.Assertive })
-            val again = whenAgain(s, st)
-            if (again.isNotEmpty()) Text(again, color = scheme.onSurfaceVariant, style = MaterialTheme.typography.body)
-            WittyButton(s["ok"].orEmpty(), ScreenTimeWatch::dismiss, Modifier.fillMaxWidth(), kind = ButtonKind.Primary, tall = true, requestFocus = true, focusKey = "time-ok")
-            WittyButton(s["askParent"].orEmpty(), { asking = true; problem = "" }, Modifier.fillMaxWidth(), tall = true, focusKey = "time-ask")
-            WittyButton(s["switchProfile"].orEmpty(), { ScreenTimeWatch.dismiss(); switchProfile(nav) }, Modifier.fillMaxWidth(), kind = ButtonKind.Quiet, icon = Symbols.Group, focusKey = "time-switch")
+        val again = whenAgain(s, st)
+        PanelDialog(
+            title, ScreenTimeWatch::dismiss, eyebrow = who,
+            lead = listOf(st.message.ifEmpty { s["timeUpPlain"].orEmpty() }, again).filter { it.isNotEmpty() }.joinToString(" "),
+            headModifier = Modifier.semantics { liveRegion = LiveRegionMode.Assertive },
+        ) {
+            DesignChips {
+                DesignChip(s["askParent"].orEmpty(), { asking = true; problem = "" }, on = true, focusKey = "time-ask")
+                DesignChip(s["switchProfile"].orEmpty(), { ScreenTimeWatch.dismiss(); switchProfile(nav) }, focusKey = "time-switch")
+            }
+            DesignActions {
+                WittyButton(s["ok"].orEmpty(), ScreenTimeWatch::dismiss, kind = ButtonKind.Primary, requestFocus = true, focusKey = "time-ok")
+            }
         }
         return
     }
-    PanelDialog(s["askParent"].orEmpty(), { asking = false; problem = "" }) {
-        Text(s["askParentHint"].orEmpty(), color = scheme.onSurfaceVariant, style = MaterialTheme.typography.body)
-        Row(Modifier.fillMaxWidth().remoteRow(), horizontalArrangement = Arrangement.spacedBy(metrics.u(8))) {
+    // Design 2's "Ask a parent" (canvas `askparent`): how long as chips, who the parent is, then Give more time.
+    PanelDialog(s["askParent"].orEmpty(), { asking = false; problem = "" }, eyebrow = s["limitsTabTime"].orEmpty(), lead = s["askParentHint"].orEmpty()) {
+        DesignChips {
             ScreenTimeRules.EXTRA_CHOICES.forEach { m ->
-                WittyButton(
-                    s[if (m == 60) "extraHour" else "extraMinutes"].orEmpty().replace("{n}", m.toString()), { minutes = m },
-                    Modifier.weight(1f), kind = if (minutes == m) ButtonKind.Primary else ButtonKind.Secondary, focusKey = "extra-$m",
-                )
+                DesignChip(s[if (m == 60) "extraHour" else "extraMinutes"].orEmpty().replace("{n}", m.toString()), { minutes = m }, on = minutes == m, focusKey = "extra-$m")
             }
         }
         if (byPassword) {
@@ -227,15 +230,17 @@ private fun TimeUpNotice(nav: Nav, s: Map<String, String>, st: ScreenTime) {
                 imeAction = ImeAction.Go, onAction = ::give, isError = wrong > 0 && problem.isNotEmpty(), shake = wrong, maxLength = 12,
             )
         }
-        Problem(listOf(problem, waitWords(s, waiting)).filter { it.isNotEmpty() }.joinToString(" "), Modifier.fillMaxWidth())
+        DesignNote(listOf(problem, waitWords(s, waiting)).filter { it.isNotEmpty() }.joinToString(" "), error = true)
         val ready = if (byPassword) name.isNotBlank() && password.isNotEmpty() else ScreenTimeRules.pinReady(pin)
-        WittyButton(s["giveMoreTime"].orEmpty(), ::give, Modifier.fillMaxWidth(), kind = ButtonKind.Primary, busy = busy, enabled = ready && waiting == 0, tall = true, focusKey = "give-time")
-        if (hasPin) {
-            WittyButton(
-                s[if (byPassword) "askUsePin" else "askUsePassword"].orEmpty(), { byPassword = !byPassword; problem = "" },
-                Modifier.fillMaxWidth(), kind = ButtonKind.Quiet, focusKey = "ask-other-way",
-            )
+        DesignActions {
+            WittyButton(s["giveMoreTime"].orEmpty(), ::give, kind = ButtonKind.Primary, busy = busy, enabled = ready && waiting == 0, focusKey = "give-time")
+            if (hasPin) {
+                WittyButton(
+                    s[if (byPassword) "askUsePin" else "askUsePassword"].orEmpty(), { byPassword = !byPassword; problem = "" },
+                    kind = ButtonKind.Secondary, focusKey = "ask-other-way",
+                )
+            }
+            WittyButton(s["back"].orEmpty(), { asking = false; problem = "" }, kind = ButtonKind.Quiet, focusKey = "ask-back")
         }
-        WittyButton(s["back"].orEmpty(), { asking = false; problem = "" }, Modifier.fillMaxWidth(), kind = ButtonKind.Quiet, focusKey = "ask-back")
     }
 }

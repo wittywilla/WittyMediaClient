@@ -251,29 +251,36 @@ fun ManageServersScreen(nav: Nav, s: Map<String, String>) {
     }
 
     Box(Modifier.fillMaxSize()) {
-        SettingsPage(nav, s["manageServers"].orEmpty(), s["manageServersHint"].orEmpty()) {
+        // Design 2's page: the saved servers, then the order of the list of servers, then the ways to remove more than one.
+        DesignScreen(
+            s["manageServers"].orEmpty(), nav::pop, eyebrow = s["rowServers"].orEmpty(), lead = s["manageServersHint"].orEmpty(), tag = "manage-servers",
+            actions = {
+                if (servers.isEmpty()) {
+                    WittyButton(s["back"].orEmpty(), nav::pop, kind = ButtonKind.Primary, tall = true, requestFocus = true, takeFocus = focusOn == "servers-back", focusKey = "servers-back")
+                } else {
+                    WittyButton(s["removeOldServers"].orEmpty(), { choosing = true }, kind = ButtonKind.Secondary, tall = true, focusKey = "remove-old")
+                    WittyButton(s["removeAllServers"].orEmpty(), { askingAll = true }, kind = ButtonKind.Destructive, tall = true, focusKey = "remove-all")
+                }
+            },
+        ) {
             if (servers.isEmpty()) {
-                Note(s["noServersRemembered"].orEmpty())
-                WittyButton(s["back"].orEmpty(), nav::pop, Modifier.fillMaxWidth(), tall = true, requestFocus = true, takeFocus = focusOn == "servers-back", focusKey = "servers-back")
+                DesignSection("") { DesignNote(s["noServersRemembered"].orEmpty()) }
             } else {
-                GroupedList(
-                    "",
-                    servers.mapIndexed { i, server ->
+                DesignSection("") {
+                    servers.forEachIndexed { i, server ->
                         val name = shownName(server)
                         val stale = isStale(server.lastSeen, now, nav.app.store.recentSince)
-                        GroupRow(
-                            title = name,
-                            detail = server.url + " · " + reachedWords(s, server.lastSeen, now),
+                        val sub = listOfNotNull(server.url, reachedWords(s, server.lastSeen, now), if (stale) s["staleServer"] else null).joinToString(" · ")
+                        DesignRow(
+                            name, sub = sub,
                             leading = { ServerMark(metrics.u(if (tv) 40 else 32), LogoCache.file(context, server.url, server.brandLogo)) },
                             // On a TV the row itself is pressed, then asked; a phone has the button.
                             onClick = if (tv) { { asking = server } } else null,
-                            chevron = false,
                             focusKey = keyOf(server),
                             requestFocus = tv && i == 0,
                             takeFocus = tv && focusOn == keyOf(server),
-                            trailing = {
-                                if (stale) Tag(s["staleServer"].orEmpty())
-                                if (!tv) {
+                            trailing = if (tv) null else {
+                                {
                                     RemoveButton(
                                         fill(s["removeServerNamed"], "name" to name),
                                         { if (nav.uses(server)) asking = server else removeNow(server) },
@@ -282,18 +289,18 @@ fun ManageServersScreen(nav: Nav, s: Map<String, String>) {
                                 }
                             },
                         )
-                    },
-                )
+                    }
+                }
                 // The order of the list of servers: what this device has used first, or what's found on the network.
                 var savedFirst by remember { mutableStateOf(nav.app.store.savedFirst) }
-                GroupedList("", listOf(GroupRow(
-                    s["savedServersFirst"].orEmpty(), onClick = { savedFirst = !savedFirst; nav.app.store.savedFirst = savedFirst },
-                    detail = s["savedServersFirstHint"].orEmpty(), chevron = false, focusKey = "saved-first", trailing = { Toggle(savedFirst) },
-                )))
-                WittyButton(s["removeOldServers"].orEmpty(), { choosing = true }, Modifier.fillMaxWidth(), tall = true, focusKey = "remove-old")
-                WittyButton(s["removeAllServers"].orEmpty(), { askingAll = true }, Modifier.fillMaxWidth(), kind = ButtonKind.Destructive, tall = true, focusKey = "remove-all")
+                DesignSection("") {
+                    DesignSwitchRow(
+                        s["savedServersFirst"].orEmpty(), savedFirst, { savedFirst = it; nav.app.store.savedFirst = it },
+                        sub = s["savedServersFirstHint"].orEmpty(),
+                    )
+                }
             }
-            Notice(done, Modifier.fillMaxWidth())
+            Notice(done, Modifier.fillMaxWidth().padding(top = LocalDesignSizes.current.gap))
         }
         if (!tv) {
             UndoRemoval(nav, s, Modifier.align(Alignment.BottomCenter).safeDrawingPadding().padding(metrics.u(16))) {

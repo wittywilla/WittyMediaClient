@@ -262,12 +262,29 @@ jobs:
       - uses: gradle/actions/setup-gradle@8da46b539cd8fe6ab27ca75128919a18d757604c # v6.4.1
         with:
           gradle-version: ${{ env.GRADLE_VERSION }}
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+          repository: wittywilla/WittyMediaServer
+          path: .server
+      # Wittyconnect, which reaches a server from away (peer to peer), is built from the server's source with
+      # gomobile into android/app/libs; the build then requires it (-Pp2p=required), so no APK leaves without it.
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7
+        with:
+          go-version-file: .server/go.mod
+          cache: false
+      - name: Android NDK for the peer-to-peer library
+        run: yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "ndk;27.2.12479018" >/dev/null
+      - name: Build Wittyconnect from the server's source
+        env:
+          WITTYMEDIASERVER_SRC: .server
+        run: bash android/scripts/build-wittyconnect.sh
       - name: Unit tests
         working-directory: android
         run: gradle --no-daemon :app:testDebugUnitTest
       - name: Build the sideload and (unsigned) release APKs
         working-directory: android
-        run: gradle --no-daemon :app:assembleSideload :app:assembleRelease
+        run: gradle --no-daemon :app:assembleSideload :app:assembleRelease -Pp2p=required
       - name: Native code for all four processors
         working-directory: android
         run: sh scripts/check-abis.sh app/build/outputs/apk/sideload

@@ -2,16 +2,12 @@
 // Copyright (C) 2026 WittyWilla and contributors
 package com.wittywilla.wittymediaclient.ui
 
-import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
-import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
-import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -25,6 +21,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextAlign
 import com.wittywilla.wittymediaclient.net.ApiError
@@ -163,13 +160,18 @@ fun WhoIsWatchingScreen(nav: Nav, s: Map<String, String>) {
                 val back = { chosen = null; password = ""; code = ""; needCode = false; problem = "" }
                 val submit = { if (needCode) { if (code.isNotBlank()) go(picked, password, code.trim()) } else if (password.isNotEmpty()) go(picked, password, "") }
                 val wait = waitWords(s, waiting)
-                SignInLayout(
-                    back, centred = true,
-                    words = {
-                        FaceWithNames(picked.asProfile(), metrics.u(if (metrics.tv) 200 else 120), Modifier.align(Alignment.CenterHorizontally))
-                        SignInHeading("", detail = s[if (needCode) "twoFactorHint" else if (picked.kind == "adult") "passwordHint" else "switchPinHint"].orEmpty(), centred = true)
-                    },
+                val shown = avatarName(picked.displayName, picked.name)
+                // Design 2's "Enter your PIN" (canvas `pinentry`): who it is for, what to type, then Switch.
+                DesignScreen(
+                    shown, back, eyebrow = s["whoTitle"].orEmpty(),
+                    lead = s[if (needCode) "twoFactorHint" else if (picked.kind == "adult") "passwordHint" else "switchPinHint"].orEmpty(),
+                    foot = if (showsUsername(picked.displayName, picked.name)) "@${picked.name}" else "",
                     actions = {
+                        WittyButton(s["switchGo"].orEmpty(), submit, kind = ButtonKind.Primary, busy = busy, enabled = waiting == 0, focusKey = "switch-go")
+                    },
+                ) {
+                    DesignSection("") {
+                        ProfileFace(shown, picked.avatar, metrics.u(if (metrics.tv) 160 else 96))
                         if (needCode) {
                             WittyField(
                                 code, { code = it.take(CODE_MOST); problem = "" }, s["switchCodeLabel"].orEmpty(), icon = Symbols.Key,
@@ -182,10 +184,9 @@ fun WhoIsWatchingScreen(nav: Nav, s: Map<String, String>) {
                                 isError = problem.isNotEmpty() && wrong > 0, shake = wrong,
                             )
                         }
-                        Problem(listOf(problem, wait).filter { it.isNotEmpty() }.joinToString(" "), Modifier.fillMaxWidth())
-                        WittyButton(s["switchGo"].orEmpty(), submit, Modifier.fillMaxWidth(), kind = ButtonKind.Primary, busy = busy, enabled = waiting == 0, tall = true, focusKey = "switch-go")
-                    },
-                )
+                        DesignNote(listOf(problem, wait).filter { it.isNotEmpty() }.joinToString(" "), error = true)
+                    }
+                }
             }
             else -> {
                 val size = metrics.u(
@@ -195,10 +196,15 @@ fun WhoIsWatchingScreen(nav: Nav, s: Map<String, String>) {
                         else -> 104
                     },
                 )
-                val grid: @Composable () -> Unit = {
+                // Design 2's page head and actions around W4's profile tiles.
+                DesignScreen(
+                    s["whoTitle"].orEmpty(), nav::pop,
+                    actions = { WittyButton(s["otherAccount"].orEmpty(), nav::signOut, kind = ButtonKind.Secondary, focusKey = "other-account") },
+                ) {
+                    DesignNote(problem, Modifier.padding(top = LocalDesignSizes.current.gap), error = true)
                     FlowRow(
-                        Modifier.fillMaxWidth().remoteRow(),
-                        horizontalArrangement = Arrangement.spacedBy(metrics.u(if (metrics.tv) 48 else 24), Alignment.CenterHorizontally),
+                        Modifier.fillMaxWidth().padding(top = LocalDesignSizes.current.gap2).remoteRow(),
+                        horizontalArrangement = Arrangement.spacedBy(metrics.u(if (metrics.tv) 48 else 24)),
                         verticalArrangement = Arrangement.spacedBy(metrics.u(20)),
                         maxItemsInEachRow = if (metrics.tv || metrics.tablet) Int.MAX_VALUE else 2,
                     ) {
@@ -214,36 +220,11 @@ fun WhoIsWatchingScreen(nav: Nav, s: Map<String, String>) {
                                             else -> ""
                                         },
                                         color = if (p.current) LocalExtraColours.current.accentText else LocalExtraColours.current.hint,
-                                        style = MaterialTheme.typography.caption, textAlign = TextAlign.Center,
+                                        fontSize = LocalDesignSizes.current.tiny, fontWeight = FontWeight.Bold, textAlign = TextAlign.Center,
                                     )
                                 }
                             }
                         }
-                    }
-                }
-                val other: @Composable () -> Unit = {
-                    WittyButton(s["otherAccount"].orEmpty(), nav::signOut, kind = ButtonKind.Quiet, focusKey = "other-account")
-                }
-                if (metrics.tv) {
-                    androidx.activity.compose.BackHandler { nav.pop() }
-                    TvBackdrop(contentAlignment = Alignment.Center) {
-                        Column(
-                            Modifier.padding(horizontal = metrics.gutter + metrics.tvSafeSides),
-                            horizontalAlignment = Alignment.CenterHorizontally,
-                            verticalArrangement = Arrangement.spacedBy(metrics.u(40)),
-                        ) {
-                            SignInHeading(s["whoTitle"].orEmpty(), display = true, centred = true)
-                            if (problem.isNotEmpty()) Problem(problem, centred = true)
-                            grid()
-                            other()
-                        }
-                    }
-                } else {
-                    SignInPage(nav::pop, wide = metrics.tablet) {
-                        SignInHeading(s["whoTitle"].orEmpty(), display = true)
-                        grid()
-                        Problem(problem, Modifier.fillMaxWidth())
-                        other()
                     }
                 }
             }

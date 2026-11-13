@@ -79,6 +79,8 @@ fun RecordingsScreen(nav: Nav) {
     var error by remember { mutableStateOf("") }
     var asking by remember { mutableStateOf<Asking?>(null) }
     var note by remember { mutableStateOf("") }
+    // The recording whose More info is open.
+    var info by remember { mutableStateOf<Recording?>(null) }
     // A series' options being changed, on a server with `tv-dvr-rules-2`.
     var changing by remember { mutableStateOf<RecordingRule?>(null) }
     val rules2 = nav.has("tv-dvr-rules-2")
@@ -175,7 +177,7 @@ fun RecordingsScreen(nav: Nav) {
                     )
                 }
                 Column(Modifier.padding(vertical = dress.pt(8)), verticalArrangement = Arrangement.spacedBy(dress.pt(16))) {
-                    for (r in shown) RecordingRow(dress, r, nav.me?.isAdmin == true, onPlay = { play(r) }, onRemove = { asking = Asking(r, false) }, onDelete = { asking = Asking(r, true) })
+                    for (r in shown) RecordingRow(dress, r, nav.me?.isAdmin == true, onPlay = { play(r) }, onRemove = { asking = Asking(r, false) }, onDelete = { asking = Asking(r, true) }, onInfo = if (r.channelKey != null && nav.has("tv-programme-info")) ({ info = r }) else null)
                 }
             } else if (error.isEmpty()) {
                 Box(Modifier.fillMaxWidth().height(dress.pt(200)), contentAlignment = Alignment.Center) { Spinner(p.text, dress.pt(48)) }
@@ -198,6 +200,12 @@ fun RecordingsScreen(nav: Nav) {
     if (note.isNotEmpty()) {
         TvDialog("Not in a library yet", note, listOf(TvDialogButton("OK", cancel = true) { note = "" }), onClose = { note = "" })
     }
+    info?.let { r ->
+        val key = r.channelKey ?: return@let
+        // The programme is "<channel>@<start>"; the recording's own start is the same moment.
+        val at = r.programme?.substringAfter('@', "")?.toLongOrNull() ?: r.start
+        MoreInfoSheet(nav, key, at, MoreInfoActions(watch = { nav.watchChannel(key) }, record = null, remind = null, openItem = null)) { info = null }
+    }
     asking?.let { a ->
         val r = a.recording
         val close = { asking = null }
@@ -219,7 +227,7 @@ fun RecordingsScreen(nav: Nav) {
 }
 
 @Composable
-private fun RecordingRow(dress: TvDress, r: Recording, admin: Boolean, onPlay: () -> Unit, onRemove: () -> Unit, onDelete: () -> Unit) {
+private fun RecordingRow(dress: TvDress, r: Recording, admin: Boolean, onPlay: () -> Unit, onRemove: () -> Unit, onDelete: () -> Unit, onInfo: (() -> Unit)? = null) {
     val p = dress.paint
     val size = r.sizeWords
     val shape = RoundedCornerShape(dress.pt(dress.radius))
@@ -248,6 +256,7 @@ private fun RecordingRow(dress: TvDress, r: Recording, admin: Boolean, onPlay: (
         }
         Text(r.statusWords, style = dress.font(18.75f, W.Bold), color = if (r.status == "recording") p.accent else p.text)
         if (r.status == "done") TvButton(dress, "Play", onPlay, on = true, icon = TvSymbols.Play)
+        if (onInfo != null) TvButton(dress, "More info", onInfo)
         TvButton(dress, if (r.isFinished) "Remove" else "Cancel", onRemove)
         if (admin && r.path?.isNotEmpty() == true && r.status != "recording" && r.status != "scheduled") TvButton(dress, "Delete file", onDelete)
     }
