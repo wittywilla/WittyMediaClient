@@ -26,7 +26,12 @@ final class WittyPlayPlaceTests: XCTestCase {
         XCTAssertEqual(WittyPlayPlace.page(for: "/page/wittyplay-online").page, "wittyplay-online")
         XCTAssertEqual(WittyPlayPlace.page(for: "/page/wittyplay-online?tab=together").params, ["tab": "together"])
         XCTAssertEqual(WittyPlayPlace.page(for: "/page/wittyplay-controllers").page, "wittyplay-controllers")
-        XCTAssertEqual(WittyPlayPlace.page(for: "/wittyplay/library/3").page, "wittyplay-online", "no page for a library's own view")
+        XCTAssertEqual(WittyPlayPlace.page(for: "/wittyplay/library/3?tab=consoles").page, "wittyplay-library")
+        XCTAssertEqual(WittyPlayPlace.page(for: "/wittyplay/library/3?tab=consoles").params, ["library": "3", "tab": "consoles"])
+        XCTAssertEqual(WittyPlayPlace.page(for: "/wittyplay/settings").page, "wittyplay-settings")
+        XCTAssertEqual(WittyPlayPlace.page(for: "/wittyplay/settings/store").page, "wittyplay-store")
+        XCTAssertEqual(WittyPlayPlace.page(for: "/wittyplay/game/9").page, "wittyplay-online")
+        XCTAssertEqual(WittyPlayPlace.library(3, query: ["library": "3", "tab": "consoles"]), "/wittyplay/library/3?tab=consoles")
     }
 }
 

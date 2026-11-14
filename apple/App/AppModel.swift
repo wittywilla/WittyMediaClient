@@ -334,7 +334,7 @@ final class AppModel: ObservableObject {
             // The server's page for a library: a games library's is WittyPlay's view of it.
             guard let id = place.params["library"].flatMap({ Int64($0) }),
                   let library = libraries.first(where: { $0.id == id }), library.hasGameScreens else { return nil }
-            return WittyPlayPlace.library(id)
+            return WittyPlayPlace.library(id, query: place.params)
         default: return nil
         }
         #else
@@ -357,7 +357,8 @@ final class AppModel: ObservableObject {
     /// WittyPlay's page for an address, as Apple TV draws it.
     static func wittyPlayRoute(_ address: String) -> Route {
         let found = WittyPlayPlace.page(for: address)
-        return .sdui(SDUIPlace(page: found.page, params: found.params, route: "/page/" + found.page))
+        let query = found.params.sorted { $0.key < $1.key }.map { "\($0.key)=\($0.value)" }.joined(separator: "&")
+        return .sdui(SDUIPlace(page: found.page, params: found.params, route: "/page/" + found.page + (query.isEmpty ? "" : "?" + query)))
     }
 
     /// Opens WittyPlay at an address of its own: a phone's and a tablet's cover, or Apple TV's page from Home.

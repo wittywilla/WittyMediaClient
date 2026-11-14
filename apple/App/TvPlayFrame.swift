@@ -34,11 +34,6 @@ struct TvPlayFrame<Content: View>: View {
             model.tab = .search
             return
         }
-        // WittyPlay's settings are the website's own page: this app has them as the module's settings.
-        if entry.route == "/wittyplay/settings" || entry.route.hasPrefix("/wittyplay/settings/") {
-            model.path.append(.moduleSettings("wittyplay"))
-            return
-        }
         if WittyPlayPlace.isPlayPath(entry.route) {
             let route = AppModel.wittyPlayRoute(entry.route)
             if entry.as == "layer" {
@@ -59,8 +54,11 @@ struct TvPlayFrame<Content: View>: View {
             if !regions.statusBar.isEmpty {
                 TvPlayStatus(parts: regions.statusBar, exit: exit)
             }
+            // The page and the dock are sections of their own, so Down from anywhere on the page's last row reaches the
+            // dock, wherever across the screen the focus is.
             content
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .focusSection()
             if !regions.dock.isEmpty {
                 TvPlayDock(entries: regions.dock, current: current, go: go)
             }
@@ -87,7 +85,7 @@ private struct TvPlayStatus: View {
         HStack(spacing: Tokens.Space.s6) {
             Text(String(name.prefix(1)).uppercased())
                 .font(.system(size: 34, weight: .bold))
-                .foregroundStyle(palette.accentText)
+                .foregroundStyle(palette.onAccent)
                 .frame(width: 72, height: 72)
                 .background(Circle().fill(palette.accent))
                 .accessibilityHidden(true)
@@ -132,7 +130,7 @@ private struct TvPlayDock: View {
                     Button { go(entry) } label: {
                         Image(systemName: SDUIIcon.symbol(entry.icon, or: "circle"))
                             .font(.system(size: 38, weight: .semibold))
-                            .foregroundStyle(on ? palette.accentText : palette.text)
+                            .foregroundStyle(on ? palette.onAccent : palette.text)
                             .frame(width: 104, height: 104)
                             .background(Circle().fill(on ? palette.accent : palette.card))
                             .overlay(Circle().strokeBorder(palette.text.opacity(lit ? 1 : (on ? 0.9 : 0)), lineWidth: 5).padding(-10))
