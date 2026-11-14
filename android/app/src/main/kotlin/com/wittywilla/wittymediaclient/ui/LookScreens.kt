@@ -34,6 +34,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
@@ -181,7 +182,8 @@ fun FirstLookScreen(nav: Nav, s: Map<String, String>) {
                         sub = theme?.let { if (it.scheme == "light") s["themeLight"].orEmpty() else s["themeDark"].orEmpty() }.orEmpty(),
                         preview = {
                             Box(Modifier.fillMaxWidth(), contentAlignment = androidx.compose.ui.Alignment.Center) {
-                                ThemedThumb(wire, look?.name.orEmpty(), theme, if (portrait) Modifier.width(220.dp) else Modifier.fillMaxWidth(), false, portrait)
+                                // At most 320 tall (460 on a TV), as Apple's, so the one preview never fills the screen.
+                                ThemedThumb(wire, look?.name.orEmpty(), theme, if (portrait) Modifier.width(178.dp) else Modifier.widthIn(max = if (LocalMetrics.current.tv) LocalMetrics.current.u(736) else 512.dp), false, portrait)
                             }
                         },
                     )
