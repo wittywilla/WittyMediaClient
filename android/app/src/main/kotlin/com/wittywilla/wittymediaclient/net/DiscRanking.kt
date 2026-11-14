@@ -7,7 +7,7 @@ import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlin.math.roundToInt
 
-// What the disc's engine made of a DVD or Blu-ray (GET /items/{id}/disc/analysis, feature `disc-ranking`): which
+// What the disc's engine made of a DVD or Blu-ray (GET /modules/wittydvd or wittybluray/discs/{id}/analysis, feature `disc-ranking`): which
 // title or playlist is the film and why, how sure it is, the film's other versions and a TV disc's episodes. The
 // server's web page (web/src/pages/DiscWhy.tsx) words it the same way.
 
@@ -102,10 +102,14 @@ object DiscWords {
     fun choiceBody(ttn: Int): String = JsonObject(mapOf("ttn" to JsonPrimitive(ttn))).toString()
 }
 
-suspend fun Api.discAnalysis(item: Long): DiscAnalysis = json.decodeFromString(call("GET", "/items/$item/disc/analysis"))
+suspend fun Api.discAnalysis(kind: String, item: Long): DiscAnalysis = json.decodeFromString(call("GET", "${discRoot(kind, item)}/analysis"))
 
-suspend fun Api.chooseDiscTitle(item: Long, ttn: Int): DiscAnalysis = json.decodeFromString(call("PUT", "/items/$item/disc/choice", DiscWords.choiceBody(ttn)))
+suspend fun Api.chooseDiscTitle(kind: String, item: Long, ttn: Int): DiscAnalysis = json.decodeFromString(call("PUT", "${discRoot(kind, item)}/choice", DiscWords.choiceBody(ttn)))
 
-suspend fun Api.forgetDiscChoice(item: Long): DiscAnalysis = json.decodeFromString(call("DELETE", "/items/$item/disc/choice"))
+suspend fun Api.forgetDiscChoice(kind: String, item: Long): DiscAnalysis = json.decodeFromString(call("DELETE", "${discRoot(kind, item)}/choice"))
 
-suspend fun Api.rankDiscAgain(item: Long): DiscAnalysis = json.decodeFromString(call("POST", "/items/$item/disc/analysis", "{}"))
+suspend fun Api.rankDiscAgain(kind: String, item: Long): DiscAnalysis = json.decodeFromString(call("POST", "${discRoot(kind, item)}/analysis", "{}"))
+
+// A disc's own routes, the module's that reads it: WittyBluray's for a Blu-ray (bluray-* kinds), else WittyDVD's.
+fun discRoot(kind: String, item: Long): String =
+    if (kind.startsWith("bluray")) "/modules/wittybluray/discs/$item" else "/modules/wittydvd/discs/$item"

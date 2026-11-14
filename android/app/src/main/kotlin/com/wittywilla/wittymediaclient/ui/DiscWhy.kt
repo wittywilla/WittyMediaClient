@@ -31,7 +31,7 @@ import kotlinx.coroutines.launch
 // an administrator another title to make the film, or the engine's pick back. Sections of the item's page in Design 2's
 // parts (DesignPage.kt): rows for what can be played or chosen, chips for the choices.
 @Composable
-fun DiscWhySection(nav: Nav, itemId: Long, playable: Boolean, modifier: Modifier = Modifier) {
+fun DiscWhySection(nav: Nav, kind: String, itemId: Long, playable: Boolean, modifier: Modifier = Modifier) {
     if (!nav.has("disc-ranking")) return
     val scope = rememberCoroutineScope()
     var analysis by remember { mutableStateOf<DiscAnalysis?>(null) }
@@ -41,7 +41,7 @@ fun DiscWhySection(nav: Nav, itemId: Long, playable: Boolean, modifier: Modifier
     LaunchedEffect(itemId, ask) {
         // A small server works it out in the background: asked again until it has.
         repeat(PENDING_TRIES) {
-            val got = runCatching { nav.app.api.discAnalysis(itemId) }.getOrNull() ?: return@LaunchedEffect
+            val got = runCatching { nav.app.api.discAnalysis(kind, itemId) }.getOrNull() ?: return@LaunchedEffect
             analysis = got
             if (!got.pending) return@LaunchedEffect
             delay(PENDING_WAIT_MS)
@@ -111,13 +111,13 @@ fun DiscWhySection(nav: Nav, itemId: Long, playable: Boolean, modifier: Modifier
                     val name = DiscWords.name(a.kind, c.ttn)
                     DesignRow(
                         "Make $name the film", value = DiscWords.clock(c.durationSec),
-                        onClick = { run("$name is now this disc's film") { nav.app.api.chooseDiscTitle(itemId, c.ttn) } },
+                        onClick = { run("$name is now this disc's film") { nav.app.api.chooseDiscTitle(kind, itemId, c.ttn) } },
                         label = "Make $name the film · ${DiscWords.clock(c.durationSec)}",
                     )
                 }
                 DesignChips(Modifier.padding(top = LocalDesignSizes.current.gap * 0.5f)) {
-                    if (a.chosen != null) DesignChip("Use the engine's pick", { run("The engine's pick is the film again") { nav.app.api.forgetDiscChoice(itemId) } })
-                    DesignChip("Rank again", { run("Ranked again") { nav.app.api.rankDiscAgain(itemId).also { if (it.pending) ask++ } } })
+                    if (a.chosen != null) DesignChip("Use the engine's pick", { run("The engine's pick is the film again") { nav.app.api.forgetDiscChoice(kind, itemId) } })
+                    DesignChip("Rank again", { run("Ranked again") { nav.app.api.rankDiscAgain(kind, itemId).also { if (it.pending) ask++ } } })
                 }
             }
         }
