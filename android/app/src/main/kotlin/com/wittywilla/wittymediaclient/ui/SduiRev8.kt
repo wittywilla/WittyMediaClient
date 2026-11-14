@@ -337,9 +337,23 @@ fun SduiLayer(nav: Nav, target: SduiTarget.Page, close: () -> Unit) {
     val scheme = MaterialTheme.colorScheme
     CompositionLocalProvider(LocalSduiLayerClose provides close) {
         if (tv) {
+            // Focus goes into the panel as it opens, to its first control once the page has drawn one (the page under it
+            // kept focus before, so the first press only moved into the panel).
+            val into = remember { androidx.compose.ui.focus.FocusRequester() }
+            var inside by remember { androidx.compose.runtime.mutableStateOf(false) }
+            LaunchedEffect(Unit) {
+                repeat(40) {
+                    if (inside) return@LaunchedEffect
+                    kotlinx.coroutines.delay(100)
+                    runCatching { into.requestFocus() }
+                }
+            }
             TvLayer(close) {
                 Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                    Box(Modifier.fillMaxWidth(0.62f).fillMaxHeight(0.78f).clip(RoundedCornerShape(32.dp)).background(scheme.background).focusGroup()) {
+                    Box(
+                        Modifier.fillMaxWidth(0.62f).fillMaxHeight(0.78f).clip(RoundedCornerShape(32.dp)).background(scheme.background)
+                            .focusRequester(into).onFocusChanged { inside = it.hasFocus }.focusGroup(),
+                    ) {
                         SduiPageScreen(nav, target.page, target.params, layered = true)
                     }
                 }
