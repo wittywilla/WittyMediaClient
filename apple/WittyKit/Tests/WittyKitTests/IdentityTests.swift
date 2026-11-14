@@ -100,9 +100,9 @@ final class IdentityTests: XCTestCase {
         XCTAssertEqual(Identity.compare(publicKey: keyB, serverId: idB, url: "http://10.0.0.9:9797", saved: [mine]), .new)
     }
 
-    func testAnOlderServerIsOnlyAllowedWithNoKeyRemembered() {
-        XCTAssertEqual(Identity.unanswered(url: url, saved: []), .older)
-        XCTAssertEqual(Identity.unanswered(url: url, saved: [SavedServer(url: url, name: "Home")]), .older)
+    func testAServerThatWontProveItsKeyIsRefused() {
+        XCTAssertEqual(Identity.unanswered(url: url, saved: []), .bad, "every server answers; one that won't could be anyone")
+        XCTAssertEqual(Identity.unanswered(url: url, saved: [SavedServer(url: url, name: "Home")]), .bad)
         XCTAssertEqual(Identity.unanswered(url: url, saved: [mine]), .bad)
     }
 
@@ -113,8 +113,7 @@ final class IdentityTests: XCTestCase {
         XCTAssertFalse(Identity.fits(pin: keyA, proof: ServerProof(state: .different, serverId: idA, publicKey: keyB)))
         XCTAssertFalse(Identity.fits(pin: keyA, proof: ServerProof(state: .bad)))
         XCTAssertFalse(Identity.fits(pin: keyA, proof: ServerProof(state: .unreachable)))
-        XCTAssertFalse(Identity.fits(pin: keyA, proof: ServerProof(state: .older)), "no answer can't stand in for a key")
-        XCTAssertTrue(Identity.fits(pin: "", proof: ServerProof(state: .new, serverId: idA, publicKey: keyA)), "nothing to compare with yet")
+        XCTAssertFalse(Identity.fits(pin: "", proof: ServerProof(state: .new, serverId: idA, publicKey: keyA)), "a sign-in kept with no key belongs to no server")
         XCTAssertFalse(Identity.fits(pin: "", proof: ServerProof(state: .bad)))
     }
 
@@ -123,7 +122,6 @@ final class IdentityTests: XCTestCase {
         XCTAssertEqual(Identity.nextStep(.bad, tokenFits: true), .refuse)
         XCTAssertEqual(Identity.nextStep(.unreachable, tokenFits: true), .lost)
         XCTAssertEqual(Identity.nextStep(.new, tokenFits: false), .askCode)
-        XCTAssertEqual(Identity.nextStep(.older, tokenFits: false), .signIn)
         XCTAssertEqual(Identity.nextStep(.same, tokenFits: false), .signIn)
         XCTAssertEqual(Identity.nextStep(.same, tokenFits: true), .open)
     }

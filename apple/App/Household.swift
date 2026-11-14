@@ -194,7 +194,7 @@ final class Household: ObservableObject {
     }
 
     /// "Switch profile": Who's watching where the server lists its profiles to this device, signing out where
-    /// it doesn't (the Classic sign-in screen, away from home, or an older server), as it always was.
+    /// it doesn't (the Classic sign-in screen, or away from home).
     func startSwitch(_ model: AppModel) {
         guard model.has("profile-switching") else {
             model.signOut()

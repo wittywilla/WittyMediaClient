@@ -69,7 +69,7 @@ enum Keychain {
 
     static var token: String { read(tokenAccount) }
 
-    /// The key of the server the token was kept with. Empty for a server too old to have one.
+    /// The key of the server the token was kept with.
     static var pin: String { read(pinAccount) }
 
     /// False if it couldn't be kept, in which case nothing is: a sign-in with no key beside it

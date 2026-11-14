@@ -159,10 +159,8 @@ final class RulesTests: XCTestCase {
         XCTAssertEqual(Identity.beforeSending(shownKey: "A", proof: proof(.same, key: "B")), .changed, "a key remembered from elsewhere is still another key")
         XCTAssertEqual(Identity.beforeSending(shownKey: "A", proof: proof(.different, key: "B")), .changed)
         XCTAssertEqual(Identity.beforeSending(shownKey: "A", proof: proof(.new, key: "B")), .changed)
-        XCTAssertEqual(Identity.beforeSending(shownKey: "A", proof: proof(.older, key: "")), .refuse, "a key that goes away is what a look-alike would do")
         XCTAssertEqual(Identity.beforeSending(shownKey: "A", proof: proof(.bad, key: "")), .refuse)
         XCTAssertEqual(Identity.beforeSending(shownKey: "A", proof: proof(.unreachable, key: "")), .unreachable)
-        XCTAssertEqual(Identity.beforeSending(shownKey: "", proof: proof(.older, key: "")), .send, "a server older than this check")
         XCTAssertEqual(Identity.beforeSending(shownKey: "", proof: proof(.new, key: "B")), .send)
     }
 

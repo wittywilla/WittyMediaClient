@@ -578,8 +578,7 @@ final class AppModel: ObservableObject {
         }
     }
 
-    /// The key kept with the token decides. A sign-in saved with none is from a server too old
-    /// to have a key, and all that's left to go on is what it said then.
+    /// The key kept with the token decides: only the server that proved that key gets it.
     func tokenFits(pin: String, proof: ServerProof) -> Bool {
         !Keychain.token.isEmpty && Identity.fits(pin: pin, proof: proof)
     }
