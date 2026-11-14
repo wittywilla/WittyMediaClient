@@ -27,11 +27,10 @@ struct GameCard: View {
 }
 
 private enum GameSort: String, CaseIterable, Identifiable {
-    case title, popular, newest, oldest, rating, added
+    case title, newest, oldest, rating, added
     var id: String { rawValue }
     var label: String {
         switch self {
-        case .popular: return "Most popular"
         case .newest: return "Newest first"
         case .oldest: return "Oldest first"
         case .title: return "A to Z"
@@ -55,7 +54,7 @@ struct GamesLibraryView: View {
     @State private var consoles: [GameConsole] = []
     @State private var byConsole: [String: [GameItem]] = [:]
     @State private var forTwo: [GameItem] = []
-    @State private var popular: [GameItem] = []
+    @State private var rated: [GameItem] = []
     @State private var games: [GameItem] = []
     @State private var total: Int?
     @State private var sort: GameSort = .title
@@ -104,7 +103,7 @@ struct GamesLibraryView: View {
             return
         }
         if let console {
-            popular = (try? await client.games(library: library.id, console: console, sort: "popular", limit: 24).items) ?? popular
+            rated = (try? await client.games(library: library.id, console: console, sort: "rating", limit: 24).items) ?? rated
         } else {
             await loadShelves()
         }
@@ -118,9 +117,9 @@ struct GamesLibraryView: View {
         var found: [String: [GameItem]] = [:]
         await withTaskGroup(of: (String, [GameItem]?).self) { group in
             for id in ids {
-                group.addTask { (id, try? await client.games(library: lib, console: id, sort: "popular", limit: 24).items) }
+                group.addTask { (id, try? await client.games(library: lib, console: id, sort: "rating", limit: 24).items) }
             }
-            group.addTask { ("", try? await client.games(library: lib, players: 2, sort: "popular", limit: 24).items) }
+            group.addTask { ("", try? await client.games(library: lib, players: 2, sort: "rating", limit: 24).items) }
             for await (id, items) in group {
                 if id.isEmpty { forTwo = items ?? forTwo } else { found[id] = items ?? byConsole[id] ?? [] }
             }
@@ -163,7 +162,7 @@ struct GamesLibraryView: View {
     private func follow(_ key: String?) {
         following?.cancel()
         guard let key, let id = key.split(separator: ":").last.flatMap({ Int64($0) }) else { return }
-        let known = (home?.continue?.map(\.item) ?? []) + byConsole.values.flatMap { $0 } + forTwo + popular + games
+        let known = (home?.continue?.map(\.item) ?? []) + byConsole.values.flatMap { $0 } + forTwo + rated + games
             + (home?.favourites ?? []) + (home?.recent ?? []) + (home?.mostPlayed ?? []) + (home?.shelves ?? []).flatMap { $0.items ?? [] }
         guard let item = known.first(where: { $0.id == id }), item.id != shown?.id else { return }
         following = Task {
@@ -229,15 +228,15 @@ struct GamesLibraryView: View {
     }
 
     @ViewBuilder private func collectionRows(_ c: GameConsole) -> some View {
-        CollectionBand(console: c, count: c.count, first: popular.first)
+        CollectionBand(console: c, count: c.count, first: rated.first)
         if c.ready == false {
             Secondary(c.unavailable ?? "This server has no core for the \(c.name) yet, so these games can't start. \(model.user?.isAdmin == true ? "Install one on the website, in Settings, Consoles & cores." : "Ask whoever runs this server to install one.")")
                 .padding(.horizontal, metrics.gutter)
         }
         OnTheGoRow(title: say("wpContinuePlaying"), entries: inProgress, context: context)
-        if !popular.isEmpty {
+        if !rated.isEmpty {
             ShelfViewSwitch(view: $view) { pulled = nil }
-            shelf("popular", "Most popular", popular, faceFirst: true)
+            shelf("rated", "Highest rated", rated, faceFirst: true)
         }
         YoursOn(console: c)
     }

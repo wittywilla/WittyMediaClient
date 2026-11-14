@@ -341,7 +341,7 @@ private struct GamesShelf: View {
 
     private func load() async {
         do {
-            async let found = client.games(library: library.id, sort: "popular", limit: GamesShelf.length)
+            async let found = client.games(library: library.id, sort: "rating", limit: GamesShelf.length)
             async let known = client.gameConsoles(library: library.id)
             let fresh = uniqued(try await found.items ?? [])
             consoles = Dictionary((try? await known)?.map { ($0.id, $0) } ?? [], uniquingKeysWith: { a, _ in a })

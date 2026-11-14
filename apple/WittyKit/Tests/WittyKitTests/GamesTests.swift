@@ -108,7 +108,7 @@ final class GamesTests: XCTestCase {
     func testSocketAddressCarriesNoToken() throws {
         let client = WittyClient(base: "http://127.0.0.1:9797", token: "secret")
         let request = try XCTUnwrap(client.gameStreamRequest("g/1"))
-        XCTAssertEqual(request.url?.absoluteString, "ws://127.0.0.1:9797/api/v1/play/g%2F1/stream")
+        XCTAssertEqual(request.url?.absoluteString, "ws://127.0.0.1:9797/api/v1/modules/wittyplay/play/g%2F1/stream")
         XCTAssertEqual(request.value(forHTTPHeaderField: "Authorization"), "Bearer secret")
         XCTAssertFalse(request.url!.absoluteString.contains("secret"))
         let secure = WittyClient(base: "https://media.example", token: "t")
@@ -505,5 +505,10 @@ final class GamesTests: XCTestCase {
         XCTAssertEqual(WittyClient.resolvePadPath(controller: "054c:0ce6", console: "nes", game: 1),
                        "/modules/wittyplay/game-profiles/resolve?kind=gamepad&controller=054c%3A0ce6&console=nes&game=1")
         XCTAssertEqual(WittyClient.backgroundPath, "/modules/wittyplay/game-background")
+        let client = WittyClient(base: "http://127.0.0.1:9797", token: "t")
+        XCTAssertEqual(client.gameStreamOfferRequest("s1")?.url?.absoluteString, "http://127.0.0.1:9797/api/v1/modules/wittyplay/play/s1/stream")
+        XCTAssertEqual(client.gameSaveThumbURL(7, slot: 2, version: 5)?.absoluteString,
+                       "http://127.0.0.1:9797/api/v1/modules/wittyplay/games/7/saves/2/thumb?v=5")
+        XCTAssertEqual(client.gameBezelURL(3)?.absoluteString, "http://127.0.0.1:9797/api/v1/modules/wittyplay/game-bezels/3")
     }
 }

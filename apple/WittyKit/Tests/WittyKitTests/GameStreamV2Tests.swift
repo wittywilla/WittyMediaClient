@@ -82,7 +82,7 @@ final class GameStreamV2Tests: XCTestCase {
 
         let client = WittyClient(base: "http://127.0.0.1:9797", token: "secret")
         let request = try XCTUnwrap(client.gameStreamRequest("g1"))
-        XCTAssertEqual(request.url?.absoluteString, "ws://127.0.0.1:9797/api/v1/play/g1/stream")
+        XCTAssertEqual(request.url?.absoluteString, "ws://127.0.0.1:9797/api/v1/modules/wittyplay/play/g1/stream")
         XCTAssertEqual(request.value(forHTTPHeaderField: "Authorization"), "Bearer secret")
         let hello = GameHello(app: "a", device: "d", name: "n", seats: [0], display: .init(hz: 60, width: 1, height: 1))
         XCTAssertTrue(GameTransports.make(mode: GameModes.streamWebSocket, session: "g1", client: client, hello: hello) is GameWebSocketTransport)
@@ -206,7 +206,7 @@ final class GameStreamV2Tests: XCTestCase {
         let client = WittyClient(base: "https://media.example", token: "secret")
         let request = try XCTUnwrap(client.gameStreamOfferRequest("g 1"))
         XCTAssertEqual(request.httpMethod, "POST")
-        XCTAssertEqual(request.url?.absoluteString, "https://media.example/api/v1/play/g%201/stream")
+        XCTAssertEqual(request.url?.absoluteString, "https://media.example/api/v1/modules/wittyplay/play/g%201/stream")
         XCTAssertEqual(request.value(forHTTPHeaderField: "Authorization"), "Bearer secret")
         XCTAssertEqual(request.value(forHTTPHeaderField: "Content-Type"), "application/json")
 
