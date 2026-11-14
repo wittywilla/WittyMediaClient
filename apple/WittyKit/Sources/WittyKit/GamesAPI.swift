@@ -84,6 +84,10 @@ extension WittyClient {
     /// Where WittyPlay answers its own calls (module API 5): everything after this prefix is the module's. A server
     /// without WittyPlay answers 424 there, naming the module.
     public static let wittyPlay = "/modules/wittyplay"
+    /// WittyCouch's routes (game PCs on the network, played from here): its module's own paths, API 5.
+    public static let wittyCouch = "/modules/wittycouch"
+    /// WittyRigs's routes (someone's own PC, its games and its sessions): its module's own paths, API 5.
+    public static let wittyRigs = "/modules/wittyrigs"
 
     static func controlsPath(console: String, device: String, game: Int64?) -> String {
         var path = wittyPlay + "/consoles/\(pathPart(console))/controls?device=\(queryValue(device))"

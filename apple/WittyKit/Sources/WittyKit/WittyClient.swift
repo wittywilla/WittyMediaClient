@@ -771,7 +771,7 @@ public final class WittyClient: @unchecked Sendable {
         _ = try await call("POST", "/items/\(id)/progress", body: body)
     }
 
-    public func couchStatus() async throws -> CouchStatus { try await get("/couch") }
+    public func couchStatus() async throws -> CouchStatus { try await get(Self.wittyCouch + "/status") }
     public func guide() async throws -> Guide { try await get("/guide?hours=3") }
 
     /// How this account's guide looks, as chosen on any device.
@@ -981,16 +981,16 @@ public final class WittyClient: @unchecked Sendable {
     /// What this device can do to play a game on someone's own PC. It starts nothing there.
     public func rigPlay(_ gameId: Int64, client: String, os: String) async throws -> RigPlay {
         let body = try JSONEncoder().encode(["client": client, "os": os])
-        return try decoder.decode(RigPlay.self, from: try await call("POST", "/rigs/games/\(gameId)/play", body: body))
+        return try decoder.decode(RigPlay.self, from: try await call("POST", Self.wittyRigs + "/games/\(gameId)/play", body: body))
     }
 
     /// Starts the game on the PC, so Moonlight can pick it up with Resume.
     public func rigStart(_ gameId: Int64) async throws -> RigStarted {
-        try decoder.decode(RigStarted.self, from: try await call("POST", "/rigs/games/\(gameId)/start", body: Data("{}".utf8)))
+        try decoder.decode(RigStarted.self, from: try await call("POST", Self.wittyRigs + "/games/\(gameId)/start", body: Data("{}".utf8)))
     }
 
     public func rigWake(_ rigId: Int64) async throws -> RigWake {
-        try decoder.decode(RigWake.self, from: try await call("POST", "/rigs/\(rigId)/wake", body: Data("{}".utf8)))
+        try decoder.decode(RigWake.self, from: try await call("POST", Self.wittyRigs + "/rigs/\(rigId)/wake", body: Data("{}".utf8)))
     }
 
     public func logout() async throws {
