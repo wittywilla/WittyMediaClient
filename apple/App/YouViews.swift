@@ -153,7 +153,8 @@ struct YouView: View {
         }
         if isAdmin {
             ListGroup(title: say("groupServer")) {
-                page("/settings/libraries", "books.vertical", title: "rowLibraries")
+                // The server's own page (manage-libraries): each library opens its scan page as a layer, the same on every app.
+                row(.sdui(SDUIPlace(page: "manage-libraries", params: [:], route: "/manage/libraries")), "books.vertical", RowTint.quiet, "rowLibraries")
                 page("/settings/metadata", "photo.on.rectangle", title: "rowMetadata")
                 page("/fix-matches", "wand.and.stars", title: "rowFixMatches")
                 page("/settings/playback", "play.rectangle", title: "rowPlayback")
