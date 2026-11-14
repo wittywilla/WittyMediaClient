@@ -198,7 +198,7 @@ final class CommandParamsTests: XCTestCase {
 
     func testAnIntParamReplacesItsQuotedToken() {
         let r = SDUIRouter.request(for: catalog.command("wittyplay.state.save"), item: "s-9", params: ["slot": "3"])
-        XCTAssertEqual(r?.path, "/api/play/s-9/action")
+        XCTAssertEqual(r?.path, "/api/modules/wittyplay/play/s-9/action")
         XCTAssertEqual(body(r), #"{"type":"save","slot":3}"#)
     }
 
@@ -206,7 +206,7 @@ final class CommandParamsTests: XCTestCase {
         let join = SDUIRouter.request(for: catalog.command("wittyplay.room.join"), item: "", params: ["code": #"HA"RB"#])
         XCTAssertEqual(body(join), #"{"room":"","code":"HA\"RB"}"#)
         let assign = SDUIRouter.request(for: catalog.command("wittyplay.controller.assign"), item: "s1", params: ["user": "a b/c", "seat": "2"])
-        XCTAssertEqual(assign?.path, "/api/play/s1/seats/a%20b%2Fc")
+        XCTAssertEqual(assign?.path, "/api/modules/wittyplay/play/s1/seats/a%20b%2Fc")
         XCTAssertEqual(body(assign), #"{"seat":2}"#)
     }
 
@@ -215,7 +215,7 @@ final class CommandParamsTests: XCTestCase {
         XCTAssertEqual(body(r), #"{"room":"r1","code":""}"#)
         let del = SDUIRouter.request(for: catalog.command("wittyplay.state.delete"), item: "7", params: ["slot": "2"])
         XCTAssertEqual(del?.method, "DELETE")
-        XCTAssertEqual(del?.path, "/api/games/7/saves/2")
+        XCTAssertEqual(del?.path, "/api/modules/wittyplay/games/7/saves/2")
     }
 
     func testClientHandledCommandsMakeNoRequest() {
