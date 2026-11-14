@@ -234,13 +234,17 @@ fun YouScreen(nav: Nav, s: Map<String, String>) {
         }
         return
     }
+    val scroll = rememberScrollState()
+    // The shell's tabs turn solid once the page goes under them.
+    TracksScroll(scroll)
     Box(Modifier.fillMaxSize(), contentAlignment = Alignment.TopCenter) {
         Column(
             Modifier
                 .widthIn(max = YOU_MOST)
                 .fillMaxSize()
-                .verticalScroll(rememberScrollState())
-                .statusBarsPadding()
+                .verticalScroll(scroll)
+                // Under the shell's top bar or tabs where it has them (LocalTopRoom counts the status bar), else under the status bar.
+                .then(if (LocalTopRoom.current > 0.dp) Modifier.padding(top = LocalTopRoom.current) else Modifier.statusBarsPadding())
                 .padding(horizontal = metrics.gutter)
                 .padding(top = Space.S6, bottom = LocalBottomRoom.current + Space.S4),
             verticalArrangement = Arrangement.spacedBy(metrics.u(24)),
