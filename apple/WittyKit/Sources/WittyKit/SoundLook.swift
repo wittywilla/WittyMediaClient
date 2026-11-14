@@ -248,56 +248,142 @@ public enum Karaoke {
 
 // MARK: - The visualizer
 
-/// The visualizer's choices, kept for the person on the server with their other interface choices (`/me/ui`,
-/// `musicPlayer`).
-public struct VisualizerPrefs: Codable, Equatable {
-    public static let styles: [(id: String, name: String)] = [("bars", "Bars"), ("waves", "Waves"), ("drift", "Drift")]
-    public static let shuffleChoices = [0, 15, 30, 60, 120, 300, 600]
+/// The visualizer's choices for this profile, as WittyVisualizer keeps them (its settings page, `profile` rows): the
+/// website, its Settings page and every app read and save the same ones. Whether it shows with the player is the
+/// person's own interface choice (`/me/ui` `visualizerPlayer`), as on the website.
+public struct VisualizerPrefs: Equatable {
+    public static let module = "wittyvisualizer"
+    /// The interface choice that says whether it shows with the player (and whether the flashing notice was read).
+    public static let playerChoice = "visualizerPlayer"
 
+    /// Shown with the player.
     public var viz = true
-    public var style = "bars"
-    public var slow = false
+    /// The effect (the module's `effect`).
+    public var style = "skyline"
+    /// Seconds between automatic changes; 0 stays on one (`cycleSec`).
     public var shuffleEvery = 0
-    public var shufflePool = "mine"
-    /// Design 2: the colour family ("theme" follows the theme), how one effect gives way to the next, Calm mode,
-    /// and how much and how fast it moves (0...1).
-    public var colour = "theme"
-    public var change = "fade"
-    public var calm = false
-    public var intensity = 0.7
-    public var speed = 0.45
+    /// Calm mode: "system" follows the device's Reduce Motion, "on", "off".
+    public var calm = "system"
+    /// How much and how fast it moves, 1 as made (`intensityPct`, `speedPct` over 100).
+    public var intensity = 1.0
+    public var speed = 1.0
+    /// "effect": the effect's own colours; "theme": the theme's accent.
+    public var colour = "effect"
 
     public init() {}
 
-    private enum CodingKeys: String, CodingKey { case viz, style, slow, shuffleEvery, shufflePool, colour, change, calm, intensity, speed }
-
-    public init(from decoder: Decoder) throws {
-        let c = try decoder.container(keyedBy: CodingKeys.self)
-        viz = (try? c.decodeIfPresent(Bool.self, forKey: .viz)) != false
-        let saved = (try? c.decodeIfPresent(String.self, forKey: .style)) ?? "bars"
-        style = saved.count <= 48 ? saved : "bars"
-        slow = (try? c.decodeIfPresent(Bool.self, forKey: .slow)) == true
-        let every = (try? c.decodeIfPresent(Int.self, forKey: .shuffleEvery)) ?? 0
-        shuffleEvery = Self.shuffleChoices.contains(every) ? every : 0
-        shufflePool = (try? c.decodeIfPresent(String.self, forKey: .shufflePool)) == "all" ? "all" : "mine"
-        let family = (try? c.decodeIfPresent(String.self, forKey: .colour)) ?? "theme"
-        colour = VisualizerEffects.colours.contains { $0.id == family } ? family : "theme"
-        let how = (try? c.decodeIfPresent(String.self, forKey: .change)) ?? "fade"
-        change = VisualizerEffects.changes.contains { $0.id == how } ? how : "fade"
-        calm = (try? c.decodeIfPresent(Bool.self, forKey: .calm)) == true
-        intensity = min(1, max(0, (try? c.decodeIfPresent(Double.self, forKey: .intensity)) ?? 0.7))
-        speed = min(1, max(0, (try? c.decodeIfPresent(Double.self, forKey: .speed)) ?? 0.45))
+    /// From the module's saved values and the player choice.
+    public init(values: [String: JSONValue], shown: Bool) {
+        viz = shown
+        if let effect = values["effect"]?.string, !effect.isEmpty, effect.count <= 48 { style = effect }
+        shuffleEvery = Int(values["cycleSec"]?.string ?? "") ?? values["cycleSec"]?.int ?? 0
+        let quiet = values["calm"]?.string ?? "system"
+        calm = ["system", "on", "off"].contains(quiet) ? quiet : "system"
+        intensity = Double(values["intensityPct"]?.int ?? 100) / 100
+        speed = Double(values["speedPct"]?.int ?? 100) / 100
+        colour = values["colour"]?.string == "theme" ? "theme" : "effect"
     }
 
-    /// The style drawn here: one of the player's own, or Bars for an effect only the website's plugin draws.
-    public var nativeStyle: String { Self.styles.contains { $0.id == style } ? style : "bars" }
+    /// What is saved to the profile's own module settings: only the values this player changes.
+    public var values: [String: JSONValue] {
+        ["effect": .string(style), "cycleSec": .string(String(shuffleEvery)), "calm": .string(calm),
+         "intensityPct": .number(Double(Int((intensity * 100).rounded()))), "speedPct": .number(Double(Int((speed * 100).rounded()))),
+         "colour": .string(colour)]
+    }
 
-    /// The effect to draw: any of the 18 or the app's three; Skyline for an id this version doesn't know.
+    /// Calm mode in force: on, or following the device's Reduce Motion.
+    public func calmNow(reduceMotion: Bool) -> Bool { calm == "on" || (calm == "system" && reduceMotion) }
+
+    /// The style drawn here: one of the player's own, or Bars for an effect only the website's plugin draws.
+    public var nativeStyle: String { VisualizerEffects.all.first { $0.id == style && $0.native }?.id ?? "bars" }
+
+    /// The effect to draw; Skyline for an id this version doesn't know.
     public var effect: VisualizerEffect { VisualizerEffects.named(style) ?? VisualizerEffects.all[0] }
 
     /// "Off: stay on this one", "Every 15 seconds", "Every minute", "Every 2 minutes".
     public static func everyWords(_ seconds: Int) -> String {
         seconds == 0 ? "Off: stay on this one" : seconds < 60 ? "Every \(seconds) seconds" : seconds == 60 ? "Every minute" : "Every \(seconds / 60) minutes"
+    }
+}
+
+/// What the picker offers, from WittyVisualizer's own rows: its effects in its order, the automatic changes, the colour
+/// and calm choices, and how far intensity and speed go. Without the module's settings, the effects this app knows.
+public struct VisualizerChoices: Equatable {
+    public var effects: [VisualizerEffect]
+    public var every: [Int]
+    public var colours: [(id: String, name: String)]
+    public var calm: [(id: String, name: String)]
+    public var intensity: ClosedRange<Double>
+    public var speed: ClosedRange<Double>
+
+    public static func == (a: VisualizerChoices, b: VisualizerChoices) -> Bool {
+        a.effects == b.effects && a.every == b.every && a.colours.map(\.id) == b.colours.map(\.id) && a.calm.map(\.id) == b.calm.map(\.id)
+            && a.intensity == b.intensity && a.speed == b.speed
+    }
+
+    public static let fallback = VisualizerChoices(
+        effects: VisualizerEffects.picker, every: [0, 10, 15, 30, 60, 120, 300],
+        colours: [("effect", "The effect's own colours"), ("theme", "The theme's accent")],
+        calm: [("system", "As the device says"), ("on", "On"), ("off", "Off")],
+        intensity: 0.3...1.5, speed: 0.5...2.0)
+
+    public init(effects: [VisualizerEffect], every: [Int], colours: [(id: String, name: String)], calm: [(id: String, name: String)],
+                intensity: ClosedRange<Double>, speed: ClosedRange<Double>) {
+        self.effects = effects; self.every = every; self.colours = colours; self.calm = calm; self.intensity = intensity; self.speed = speed
+    }
+
+    public init(_ settings: ModuleSettings) {
+        let rows = settings.pages.flatMap(\.groups).flatMap(\.rows)
+        func row(_ key: String) -> ModuleSettings.Row? { rows.first { $0.key == key } }
+        let fallback = Self.fallback
+        let listed = (row("effect")?.options ?? []).map { o in
+            VisualizerEffects.named(o.value).map { VisualizerEffect(id: $0.id, name: o.label, about: $0.about, native: false) }
+                ?? VisualizerEffect(id: o.value, name: o.label, about: "", native: false)
+        }
+        effects = listed.isEmpty ? fallback.effects : listed
+        let seconds = (row("cycleSec")?.options ?? []).compactMap { Int($0.value) }
+        every = seconds.isEmpty ? fallback.every : seconds
+        let paints = (row("colour")?.options ?? []).map { ($0.value, $0.label) }
+        colours = paints.isEmpty ? fallback.colours : paints
+        let quiet = (row("calm")?.options ?? []).map { ($0.value, $0.label) }
+        calm = quiet.isEmpty ? fallback.calm : quiet
+        func range(_ key: String, _ or: ClosedRange<Double>) -> ClosedRange<Double> {
+            guard let r = row(key), let lo = r.min, let hi = r.max, lo < hi else { return or }
+            return Double(lo) / 100...Double(hi) / 100
+        }
+        intensity = range("intensityPct", fallback.intensity)
+        speed = range("speedPct", fallback.speed)
+    }
+}
+
+/// Whether the visualizer shows with the player, and whether its flashing notice was read: the website's
+/// `visualizerPlayer`, kept whole so one doesn't lose the other.
+public struct VisualizerPlayerChoice: Codable, Equatable {
+    public var on: Bool?
+    public var notice: Bool?
+    public init(on: Bool? = nil, notice: Bool? = nil) { self.on = on; self.notice = notice }
+}
+
+public extension WittyClient {
+    /// The visualizer's choices and what the picker offers, from WittyVisualizer; the defaults where it isn't there.
+    func visualizer() async -> (prefs: VisualizerPrefs, choices: VisualizerChoices) {
+        async let module = try? moduleSettings(VisualizerPrefs.module)
+        async let player = try? interfaceChoice(VisualizerPrefs.playerChoice, as: VisualizerPlayerChoice.self)
+        let (settings, shown) = await (module, player)
+        let prefs = VisualizerPrefs(values: settings?.values ?? [:], shown: shown?.on != false)
+        return (prefs, settings.map(VisualizerChoices.init) ?? .fallback)
+    }
+
+    /// Saves a change: the module's values when they changed, the player choice when that did.
+    func saveVisualizer(_ now: VisualizerPrefs, was: VisualizerPrefs) async {
+        if now.values != was.values {
+            _ = try? await setModuleSettings(VisualizerPrefs.module, values: now.values, personal: true)
+        }
+        if now.viz != was.viz {
+            var choice = (try? await interfaceChoice(VisualizerPrefs.playerChoice, as: VisualizerPlayerChoice.self)) ?? VisualizerPlayerChoice()
+            choice.on = now.viz
+            try? await setInterfaceChoice(VisualizerPrefs.playerChoice, choice)
+        }
     }
 }
 

@@ -403,7 +403,7 @@ private struct SDUIDiscExtras: View {
             if let found, TitleLook.isDisc(found.item) {
                 let page = width > 0 ? width : 400
                 #if os(tvOS)
-                DiscWhy(item: found.item.id, playable: false, top: Tokens.Space.s2)
+                DiscWhy(item: found.item.id, kind: found.item.kind ?? "", playable: false, top: Tokens.Space.s2)
                     .moduleScope(found.item.isBluray ? "wittybluray" : "wittydvd")
                 #else
                 DiscSections(item: found.item, disc: found.facts.disc, admin: model.user?.isAdmin == true,

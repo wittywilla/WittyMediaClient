@@ -1138,11 +1138,16 @@ public final class WittyClient: @unchecked Sendable {
         URL(string: "\(root)\(apiPath)/meta/\(target.rawValue)/\(id)/art/logo?v=\(version ?? 0)")
     }
     /// A DVD's or a Blu-ray's sections: its feature and scenes, bonus titles and menus, with the names given them.
-    public func discView(_ item: Int64) async throws -> DiscView { try await get("/items/\(item)/disc") }
+    public func discView(_ item: Int64, kind: String) async throws -> DiscView { try await get(Self.discPath(item, kind: kind)) }
+
+    /// Where a disc's routes are (API 5): WittyBluray's for a Blu-ray, WittyDVD's for a DVD.
+    public static func discPath(_ item: Int64, kind: String) -> String {
+        (kind.hasPrefix("bluray") ? "/modules/wittybluray" : "/modules/wittydvd") + "/discs/\(item)"
+    }
 
     /// An administrator's names for a disc's titles and scenes, all at once; the server answers with what it kept.
-    public func setDiscLabels(_ item: Int64, _ labels: DiscLabels) async throws -> DiscLabels {
-        try decoder.decode(DiscLabels.self, from: try await call("PUT", "/items/\(item)/disc/labels", body: try JSONEncoder().encode(labels)))
+    public func setDiscLabels(_ item: Int64, kind: String, _ labels: DiscLabels) async throws -> DiscLabels {
+        try decoder.decode(DiscLabels.self, from: try await call("PUT", Self.discPath(item, kind: kind) + "/labels", body: try JSONEncoder().encode(labels)))
     }
 
     /// A picture of a disc's title (scene 0) or one of its scenes, made by the server the first time it's asked for.

@@ -80,15 +80,10 @@ final class SoundLookTests: XCTestCase {
         XCTAssertEqual(Karaoke.timingWords(-300), "Words -0.3 s")
     }
 
-    func testVisualizerChoicesAndLevels() throws {
-        let saved = try JSONDecoder().decode(VisualizerPrefs.self, from: Data(#"{"viz":false,"style":"plasma","shuffleEvery":7,"shufflePool":"all"}"#.utf8))
-        XCTAssertFalse(saved.viz)
-        XCTAssertEqual(saved.nativeStyle, "bars")
-        XCTAssertEqual(saved.shuffleEvery, 0)
-        XCTAssertEqual(saved.shufflePool, "all")
-        XCTAssertTrue(try JSONDecoder().decode(VisualizerPrefs.self, from: Data("{}".utf8)).viz)
-        XCTAssertEqual(VisualizerPrefs.shuffleChoices.map(VisualizerPrefs.everyWords),
-                       ["Off: stay on this one", "Every 15 seconds", "Every 30 seconds", "Every minute", "Every 2 minutes", "Every 5 minutes", "Every 10 minutes"])
+    func testVisualizerChoicesAndLevels() {
+        XCTAssertEqual(VisualizerPrefs(values: ["effect": .string("plasma")], shown: true).nativeStyle, "bars")
+        XCTAssertEqual([0, 15, 60, 120].map(VisualizerPrefs.everyWords),
+                       ["Off: stay on this one", "Every 15 seconds", "Every minute", "Every 2 minutes"])
         XCTAssertEqual(VisualizerLevels.bins(0), 2..<2 + max(1, Int(2 * pow(170, 1 / 23.0)) - 2))
         XCTAssertLessThanOrEqual(VisualizerLevels.bins(22).upperBound, 341)
         XCTAssertEqual(VisualizerLevels.level(peak: 0, at: 5), 0)

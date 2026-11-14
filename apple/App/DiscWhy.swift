@@ -16,6 +16,8 @@ struct DiscWhy: View {
     @Environment(\.palette) private var palette
     @Environment(\.metrics) private var metrics
     let item: Int64
+    /// dvd-* or bluray-*: which module answers for it.
+    let kind: String
     /// Episodes and versions open the server's disc player, which isn't on Apple TV.
     let playable: Bool
     /// How far below what comes before its heading is.
@@ -61,7 +63,7 @@ struct DiscWhy: View {
         for attempt in 0..<DiscRanking.pendingTries {
             if attempt > 0 { try? await Task.sleep(nanoseconds: UInt64(DiscRanking.pendingWait * 1_000_000_000)) }
             if Task.isCancelled { return }
-            guard let fresh = try? await client.discAnalysis(item) else { return }
+            guard let fresh = try? await client.discAnalysis(item, kind: kind) else { return }
             take(fresh)
             if !fresh.pending { return }
         }
@@ -93,16 +95,16 @@ struct DiscWhy: View {
     }
 
     private func choose(_ ttn: Int, _ a: DiscAnalysis) {
-        run("choose", done: DiscRanking.chosenToast(ttn, a)) { try await client.chooseDiscTitle(item, ttn: ttn) }
+        run("choose", done: DiscRanking.chosenToast(ttn, a)) { try await client.chooseDiscTitle(item, kind: kind, ttn: ttn) }
     }
 
     private func clear() {
-        run("clear", done: DiscRanking.clearedToast) { try await client.clearDiscChoice(item) }
+        run("clear", done: DiscRanking.clearedToast) { try await client.clearDiscChoice(item, kind: kind) }
     }
 
     private func again(secondOpinion: Bool) {
         run(secondOpinion ? "second" : "again", done: secondOpinion ? DiscRanking.secondOpinionToast : DiscRanking.againToast) {
-            try await client.rankDiscAgain(item, secondOpinion: secondOpinion)
+            try await client.rankDiscAgain(item, kind: kind, secondOpinion: secondOpinion)
         }
     }
 

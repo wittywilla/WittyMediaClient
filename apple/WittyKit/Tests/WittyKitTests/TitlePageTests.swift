@@ -462,11 +462,11 @@ final class TitlePageTests: XCTestCase {
         }
         addTeardownBlock { stand.stop() }
         let client = WittyClient(base: stand.address, token: "t")
-        let view = try await client.discView(9)
+        let view = try await client.discView(9, kind: "dvd-folder")
         XCTAssertEqual(view.main?.ttn, 2)
-        let kept = try await client.setDiscLabels(9, DiscLabels(titles: ["2": "The film", "5": " "]))
+        let kept = try await client.setDiscLabels(9, kind: "dvd-folder", DiscLabels(titles: ["2": "The film", "5": " "]))
         XCTAssertEqual(kept, DiscLabels(titles: ["2": "The film"]))
-        XCTAssertEqual(stand.requests.map(\.line), ["GET /api/v1/items/9/disc HTTP/1.1", "PUT /api/v1/items/9/disc/labels HTTP/1.1"])
+        XCTAssertEqual(stand.requests.map(\.line), ["GET /api/v1/modules/wittydvd/discs/9 HTTP/1.1", "PUT /api/v1/modules/wittydvd/discs/9/labels HTTP/1.1"])
     }
 
     func testAnItemsPageIsOneRequest() async throws {

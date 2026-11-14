@@ -390,6 +390,7 @@ struct NowPlayingView: View {
     @StateObject private var canvasStatus = CanvasStatus()
     @EnvironmentObject private var model: AppModel
     @State private var viz = VisualizerPrefs()
+    @State private var vizChoices = VisualizerChoices.fallback
     @State private var vizHere = true
     @State private var effectsOpen = false
     @State private var sleepOpen = false
@@ -427,10 +428,11 @@ struct NowPlayingView: View {
                 Button("Cancel", role: .cancel) {}
             }
             .sheet(isPresented: $effectsOpen) {
-                VisualizerPickerView(prefs: viz, change: { change in
+                VisualizerPickerView(prefs: viz, choices: vizChoices, change: { change in
+                    let was = viz
                     change(&viz)
-                    let saved = viz
-                    Task { try? await client.setInterfaceChoice("musicPlayer", saved) }
+                    let now = viz
+                    Task { await client.saveVisualizer(now, was: was) }
                 }, close: { effectsOpen = false })
             }
         }
@@ -579,7 +581,9 @@ struct NowPlayingView: View {
         .task {
             let prefs = try? await client.prefs()
             vizHere = prefs?.visualizer != false
-            if let saved = try? await client.interfaceChoice("musicPlayer", as: VisualizerPrefs.self) { viz = saved }
+            let found = await client.visualizer()
+            viz = found.prefs
+            vizChoices = found.choices
         }
         #if os(tvOS)
         .fullScreenCover(item: $words) { kind in

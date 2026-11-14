@@ -77,9 +77,9 @@ struct MusicVisualizerLayer: View {
         Group {
             if !effect.native, let make = VisualizerEffectSeam.make {
                 make(VisualizerLook(effect: effect.id, colourFamily: prefs.colour, intensity: prefs.intensity, speed: prefs.speed,
-                                    calm: prefs.calm || reduceMotion, accent: colour, playing: playing))
+                                    calm: prefs.calmNow(reduceMotion: reduceMotion), accent: colour, playing: playing))
             } else {
-                VisualizerBackground(style: effect.native ? effect.id : "bars", slow: prefs.slow || prefs.calm, colour: colour, playing: playing)
+                VisualizerBackground(style: effect.native ? effect.id : "bars", slow: prefs.calmNow(reduceMotion: reduceMotion), colour: colour, playing: playing)
             }
         }
         .allowsHitTesting(false)
@@ -185,19 +185,23 @@ private struct LevelRow: View {
     @Environment(\.palette) private var palette
     let name: String
     let value: Double
+    var range: ClosedRange<Double> = 0...1
     let set: (Double) -> Void
+
+    private var share: Double { max(0, min(1, (value - range.lowerBound) / (range.upperBound - range.lowerBound))) }
+    private func step(_ by: Double) { set(max(range.lowerBound, min(range.upperBound, ((value + by) * 10).rounded() / 10))) }
 
     var body: some View {
         HStack(spacing: 10) {
             Text(name).font(.system(size: 13, weight: .semibold)).foregroundStyle(palette.textSecondary).frame(width: 78, alignment: .leading)
-            Button { set(max(0, value - 0.1)) } label: { Image(systemName: "minus") }
+            Button { step(-0.1) } label: { Image(systemName: "minus") }
                 .action(pill: true).accessibilityLabel("Less \(name.lowercased())")
             ZStack(alignment: .leading) {
                 Capsule().fill(palette.control)
-                GeometryReader { geo in Capsule().fill(palette.accent).frame(width: geo.size.width * value) }
+                GeometryReader { geo in Capsule().fill(palette.accent).frame(width: geo.size.width * share) }
             }
             .frame(height: 8)
-            Button { set(min(1, value + 0.1)) } label: { Image(systemName: "plus") }
+            Button { step(0.1) } label: { Image(systemName: "plus") }
                 .action(pill: true).accessibilityLabel("More \(name.lowercased())")
             Text("\(Int((value * 100).rounded()))%").font(.system(size: 13).monospacedDigit()).foregroundStyle(palette.textSecondary).frame(width: 44, alignment: .trailing)
         }
@@ -206,12 +210,14 @@ private struct LevelRow: View {
     }
 }
 
-/// Effects, colours, change, options, intensity and speed (the board's `vizpick`). Choices are kept for the person
-/// on the server (`musicPlayer`) and applied as they are made.
+/// Effects, colours, options, intensity and speed (the board's `vizpick`), as WittyVisualizer offers them. Choices are
+/// kept in the profile's own WittyVisualizer settings, the same ones the website and its Settings page use, and
+/// applied as they are made.
 struct VisualizerPickerView: View {
     @Environment(\.palette) private var palette
     @ObservedObject private var watch = CanvasWatch.shared
     let prefs: VisualizerPrefs
+    var choices = VisualizerChoices.fallback
     let change: ((inout VisualizerPrefs) -> Void) -> Void
     let close: () -> Void
 
@@ -249,7 +255,7 @@ struct VisualizerPickerView: View {
                     Spacer()
                     Button("Done", action: close).action(primary: true, pill: true)
                 }
-                Text("Every effect is kept, the classics and the new Aurora Rings. Pick one, or let it change by itself with a fade, a dissolve, an iris or a sweep. Calm mode leaves out the lively ones.")
+                Text("Pick an effect, or let it change by itself. Calm mode leaves out the lively ones. Your choices are the same on every device and in WittyVisualizer's settings.")
                     .font(.system(size: 13)).foregroundStyle(palette.textSecondary).fixedSize(horizontal: false, vertical: true)
                 if !VisualizerEffectSeam.available {
                     Text("The full effects draw on the next update of this app. Until then they show as Bars.")
@@ -257,44 +263,41 @@ struct VisualizerPickerView: View {
                 }
                 section("Effects") {
                     LazyVGrid(columns: [GridItem(.adaptive(minimum: 150), spacing: 8)], spacing: 8) {
-                        ForEach(VisualizerEffects.picker) { effectTile($0) }
-                        ForEach(VisualizerEffects.all.filter(\.native)) { effectTile($0) }
+                        ForEach(choices.effects) { effectTile($0) }
                     }
                 }
                 section("Colours") {
                     FlowRow(spacing: 6, lineSpacing: 6, centred: false) {
-                        ForEach(VisualizerEffects.colours, id: \.id) { c in
+                        ForEach(choices.colours, id: \.id) { c in
                             Button(c.name) { change { $0.colour = c.id } }.action(selected: prefs.colour == c.id, pill: true)
                                 .accessibilityAddTraits(prefs.colour == c.id ? [.isSelected] : [])
                         }
                     }
                 }
-                section("Change") {
+                section("Calm mode") {
                     FlowRow(spacing: 6, lineSpacing: 6, centred: false) {
-                        ForEach(VisualizerEffects.changes, id: \.id) { c in
-                            Button(c.name) { change { $0.change = c.id } }.action(selected: prefs.change == c.id, pill: true)
-                                .accessibilityAddTraits(prefs.change == c.id ? [.isSelected] : [])
+                        ForEach(choices.calm, id: \.id) { c in
+                            Button(c.name) { change { $0.calm = c.id } }.action(selected: prefs.calm == c.id, pill: true)
+                                .accessibilityAddTraits(prefs.calm == c.id ? [.isSelected] : [])
                         }
                     }
                 }
                 section("Options") {
                     FlowRow(spacing: 6, lineSpacing: 6, centred: false) {
-                        Button { change { $0.calm.toggle() } } label: { Text(prefs.calm ? "Calm mode: on" : "Calm mode: off") }
-                            .action(selected: prefs.calm, pill: true)
                         Button { watch.wanted.toggle() } label: { Text(watch.wanted ? "Canvas video: on" : "Canvas video: off") }
                             .action(selected: watch.wanted, pill: true)
                     }
                     Text("Auto-change").font(.system(size: 12, weight: .semibold)).foregroundStyle(palette.textSecondary)
                     FlowRow(spacing: 6, lineSpacing: 6, centred: false) {
-                        ForEach(VisualizerEffects.autoChange, id: \.self) { seconds in
+                        ForEach(choices.every, id: \.self) { seconds in
                             Button(seconds == 0 ? "Off" : seconds < 60 ? "\(seconds) s" : "\(seconds / 60) min") { change { $0.shuffleEvery = seconds } }
                                 .action(selected: prefs.shuffleEvery == seconds, pill: true)
                         }
                     }
                 }
                 section("Intensity and speed") {
-                    LevelRow(name: "Intensity", value: prefs.intensity) { v in change { $0.intensity = v } }
-                    LevelRow(name: "Speed", value: prefs.speed) { v in change { $0.speed = v } }
+                    LevelRow(name: "Intensity", value: prefs.intensity, range: choices.intensity) { v in change { $0.intensity = v } }
+                    LevelRow(name: "Speed", value: prefs.speed, range: choices.speed) { v in change { $0.speed = v } }
                     Text("The picture is drawn on this device and is off until you turn it on.")
                         .font(.system(size: 12)).foregroundStyle(palette.textSecondary)
                 }

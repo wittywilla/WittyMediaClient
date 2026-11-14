@@ -488,6 +488,7 @@ struct PhoneNowPlaying: View {
     @State private var video: MusicLink?
     @State private var karaoke = false
     @State private var viz = VisualizerPrefs()
+    @State private var vizChoices = VisualizerChoices.fallback
     @ObservedObject private var store = MusicShowStore.shared
     @StateObject private var canvasStatus = CanvasStatus()
     @State private var effectsOpen = false
@@ -501,11 +502,12 @@ struct PhoneNowPlaying: View {
     private var lyricsWanted: Bool { music && (panel == .lyrics || panel == .read || karaoke) }
     private var prefs: VisualizerPrefs { viz }
 
-    /// Kept for the person on the server, with their other interface choices.
+    /// Kept in the profile's own WittyVisualizer settings, the same on every device.
     private func setViz(_ change: (inout VisualizerPrefs) -> Void) {
+        let was = viz
         change(&viz)
-        let saved = viz
-        Task { try? await client.setInterfaceChoice("musicPlayer", saved) }
+        let now = viz
+        Task { await client.saveVisualizer(now, was: was) }
     }
 
     private func say(_ words: String) {
@@ -608,14 +610,16 @@ struct PhoneNowPlaying: View {
             let prefs = try? await client.prefs()
             maxSpeed = prefs?.maxSpeed
             vizHere = prefs?.visualizer != false
-            if let saved = try? await client.interfaceChoice("musicPlayer", as: VisualizerPrefs.self) { viz = saved }
+            let found = await client.visualizer()
+            viz = found.prefs
+            vizChoices = found.choices
             vizLoaded = true
         }
         .task(id: music ? now?.item.id : nil) {
             await canvasStatus.load(item: music ? now?.item.id : nil, client: client, enabled: model.has(MediaFeature.canvas))
         }
         .sheet(isPresented: $effectsOpen) {
-            VisualizerPickerView(prefs: viz, change: { setViz($0) }, close: { effectsOpen = false })
+            VisualizerPickerView(prefs: viz, choices: vizChoices, change: { setViz($0) }, close: { effectsOpen = false })
         }
         .task(id: music ? now?.item.id : nil) {
             extras = []
@@ -638,7 +642,7 @@ struct PhoneNowPlaying: View {
             while !Task.isCancelled {
                 try? await Task.sleep(nanoseconds: UInt64(viz.shuffleEvery) * 1_000_000_000)
                 guard !Task.isCancelled else { return }
-                let others = VisualizerEffects.picker.map(\.id).filter { $0 != (shownStyle.isEmpty ? viz.style : shownStyle) }
+                let others = vizChoices.effects.map(\.id).filter { $0 != (shownStyle.isEmpty ? viz.style : shownStyle) }
                 shownStyle = others.randomElement() ?? shownStyle
             }
         }
