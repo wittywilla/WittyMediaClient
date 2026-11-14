@@ -350,7 +350,11 @@ private struct PageGround: ViewModifier {
     @Environment(\.finish) private var finish
 
     func body(content: Content) -> some View {
-        content.background { (finish.scene.isEmpty ? palette.background : Color.clear).ignoresSafeArea() }
+        // A look with a scene draws it here too: the system's tab and navigation containers paint their own black over the
+        // root's, so a clear ground showed black rather than the theme (Witty's bg is #0f1115).
+        content.background {
+            if finish.scene.isEmpty { palette.background.ignoresSafeArea() } else { SceneBackdrop() }
+        }
     }
 }
 
