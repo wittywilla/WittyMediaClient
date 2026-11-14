@@ -10,7 +10,8 @@ let package = Package(
     platforms: [.iOS(.v16), .tvOS(.v17), .macOS(.v13), .visionOS(.v1)],
     products: [.library(name: "WittyKit", targets: ["WittyKit"])],
     targets: [
-        .target(name: "WittyKit"),
+        // The server's SDUI catalogue, as apple/scripts/sync-sdui-catalog.sh writes it: SDUICatalog.builtIn.
+        .target(name: "WittyKit", resources: [.copy("Resources/sdui-catalog.json")]),
         .testTarget(name: "WittyKitTests", dependencies: ["WittyKit"]),
     ]
 )
