@@ -25,6 +25,16 @@ class WittyPlayPlaceTest {
     }
 
     @Test
+    fun theDockStartsWithHomeAndLightsOnlyThePageShowing() {
+        val together = "/page/wittyplay-online?tab=together"
+        val dock = WittyPlayPlace.dockFor(listOf("search" to "/search", "together" to together), { it.first }, { it.second }, "home" to WittyPlayPlace.HOME)
+        assertEquals(listOf("home", "search", "together"), dock.map { it.first })
+        assertTrue(WittyPlayPlace.isCurrent(WittyPlayPlace.HOME, "wittyplay-online", emptyMap()))
+        assertFalse(WittyPlayPlace.isCurrent(together, "wittyplay-online", emptyMap()))
+        assertTrue(WittyPlayPlace.isCurrent(together, "wittyplay-online", mapOf("tab" to "together")))
+    }
+
+    @Test
     fun leavingTheFrameGoesBackToTheApp() {
         assertEquals(Leave.Stay, WittyPlayPlace.leave("/wittyplay/library/2"))
         assertEquals(Leave.Play(17), WittyPlayPlace.leave("/game/17"))
