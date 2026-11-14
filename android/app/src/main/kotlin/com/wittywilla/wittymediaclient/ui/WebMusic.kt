@@ -841,7 +841,7 @@ private fun ArtistPage(nav: Nav, library: Long, name: String) {
             }
         }
         if (picking) ChoiceSheet("Sort albums", listOf("year" to "Newest first", "title" to "By title"), if (newestFirst) "year" else "title", { newestFirst = it == "year" }) { picking = false }
-        Toast(toast, { toast = "" }, Modifier.align(Alignment.BottomCenter).padding(bottom = LocalBottomRoom.current - 4.dp))
+        Toast(toast, { toast = "" }, Modifier.align(Alignment.BottomCenter).padding(bottom = (LocalBottomRoom.current - 4.dp).coerceAtLeast(16.dp)))
     }
 }
 

@@ -428,6 +428,6 @@ fun SduiPageScreen(nav: Nav, page: String, params: Map<String, String>, top: Boo
         }
         Box(Modifier.size(1.dp).semantics { liveRegion = LiveRegionMode.Polite; contentDescription = settled })
         if (!layered) nav.layer?.let { SduiLayer(nav, it) { nav.layer = null } }
-        if (toast.isNotEmpty()) Toast(toast, { toast = "" }, Modifier.align(Alignment.BottomCenter).padding(bottom = if (metrics.tv) metrics.u(60) else LocalBottomRoom.current - 4.dp))
+        if (toast.isNotEmpty()) Toast(toast, { toast = "" }, Modifier.align(Alignment.BottomCenter).padding(bottom = if (metrics.tv) metrics.u(60) else (LocalBottomRoom.current - 4.dp).coerceAtLeast(16.dp)))
     }
 }
