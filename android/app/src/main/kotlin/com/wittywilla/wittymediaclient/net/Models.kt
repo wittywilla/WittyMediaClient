@@ -564,7 +564,7 @@ data class RigInstall(
     val license: String = "",
 )
 
-// What POST /rigs/games/{id}/play answers.
+// What POST /modules/wittyrigs/games/{id}/play answers.
 @Serializable
 data class RigPlay(
     val rig: RigInfo = RigInfo(),

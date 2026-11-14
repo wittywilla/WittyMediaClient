@@ -269,12 +269,12 @@ class Api(val base: String, val token: String, private val quick: Boolean = fals
 
     // What this device can do to play a game on someone's own PC. It starts nothing there.
     suspend fun rigPlay(gameId: Long, request: RigPlayRequest): RigPlay =
-        json.decodeFromString(call("POST", "/rigs/games/$gameId/play", json.encodeToString(request)))
+        json.decodeFromString(call("POST", "/modules/wittyrigs/games/$gameId/play", json.encodeToString(request)))
 
     suspend fun rigWake(rigId: Long): RigWake =
-        json.decodeFromString(call("POST", "/rigs/$rigId/wake", "{}"))
+        json.decodeFromString(call("POST", "/modules/wittyrigs/rigs/$rigId/wake", "{}"))
 
-    suspend fun couchStatus(): CouchStatus = get("/couch")
+    suspend fun couchStatus(): CouchStatus = get("/modules/wittycouch/status")
     suspend fun modulePages(): List<Pair<String, ModulePage>> = get<ModuleBundles>("/modules/web").bundles.flatMap { b -> b.pages.map { b.id to it } }
     suspend fun guide(hours: Int, limit: Int): Guide = get("/guide?hours=$hours&limit=$limit")
     suspend fun forYou(): ForYou = get("/me/recommended")
