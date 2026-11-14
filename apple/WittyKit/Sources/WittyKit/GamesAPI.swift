@@ -80,20 +80,34 @@ extension WittyClient {
 
     public func gameBezelURL(_ bezel: Int64) -> URL? { mediaURL("/api/v1/game-bezels/\(bezel)") }
 
-    public func gameControls(console: String, device: String, game: Int64? = nil) async throws -> GameControls {
-        var path = "/consoles/\(Self.pathPart(console))/controls?device=\(Self.queryValue(device))"
+    /// Where WittyPlay answers its own calls (module API 5): everything after this prefix is the module's. A server
+    /// without WittyPlay answers 424 there, naming the module.
+    public static let wittyPlay = "/modules/wittyplay"
+
+    static func controlsPath(console: String, device: String, game: Int64?) -> String {
+        var path = wittyPlay + "/consoles/\(pathPart(console))/controls?device=\(queryValue(device))"
         if let game { path += "&game=\(game)" }
-        return try await decode("GET", path)
+        return path
+    }
+
+    static func resolvePadPath(controller: String, console: String, game: Int64) -> String {
+        wittyPlay + "/game-profiles/resolve?kind=gamepad&controller=\(queryValue(controller))&console=\(queryValue(console))&game=\(game)"
+    }
+
+    static let backgroundPath = wittyPlay + "/game-background"
+
+    public func gameControls(console: String, device: String, game: Int64? = nil) async throws -> GameControls {
+        try await decode("GET", Self.controlsPath(console: console, device: device, game: game))
     }
 
     /// `controller` is `vendor:product` in lowercase hex, or `id:<name>` for a pad without numbers.
     public func resolvePad(controller: String, console: String, game: Int64) async throws -> ResolvedPad {
-        try await decode("GET", "/game-profiles/resolve?kind=gamepad&controller=\(Self.queryValue(controller))&console=\(Self.queryValue(console))&game=\(game)")
+        try await decode("GET", Self.resolvePadPath(controller: controller, console: console, game: game))
     }
 
     public func gameSettings(item: Int64) async throws -> GameSettings { try await decode("GET", "/games/settings?item=\(item)") }
 
-    public func gameBackground() async throws -> GameBackground { try await decode("GET", "/game-background") }
+    public func gameBackground() async throws -> GameBackground { try await decode("GET", Self.backgroundPath) }
 
     /// For a game in an archive: ask about once a second until it's ready, then play.
     public func prepareGame(_ id: Int64) async throws -> GamePrepare {

@@ -261,7 +261,7 @@ final class GamesTests: XCTestCase {
 
     // MARK: Every button, as the server sends each console's controls
 
-    /// `defaults` cut from the local server's own answers to `GET /consoles/{id}/controls`.
+    /// `defaults` cut from the local server's own answers to `GET /modules/wittyplay/consoles/{id}/controls`.
     private static let consoleControls: [String: (gamepad: PadMap, keyboard: [String: String], targets: [Int])] = [
         "nes": (["0": .button(0), "2": .button(8), "3": .button(9), "4": .button(12), "5": .button(13), "6": .button(14), "7": .button(15), "8": .button(1)],
                 ["0": "KeyZ", "2": "ShiftRight", "3": "Enter", "4": "ArrowUp", "5": "ArrowDown", "6": "ArrowLeft", "7": "ArrowRight", "8": "KeyX"],
@@ -502,5 +502,14 @@ final class GamesTests: XCTestCase {
         XCTAssertNil(WebPlayer.serverGame("/games/game/12"))
         XCTAssertNil(WebPlayer.serverGame("/game/x"))
         XCTAssertNil(WebPlayer.serverGame("/item/12"))
+    }
+
+    func testWittyPlaysOwnCallsGoUnderItsModulePrefix() {
+        XCTAssertEqual(WittyClient.controlsPath(console: "snes", device: "pad 1", game: 7),
+                       "/modules/wittyplay/consoles/snes/controls?device=pad%201&game=7")
+        XCTAssertEqual(WittyClient.controlsPath(console: "n64", device: "tv", game: nil), "/modules/wittyplay/consoles/n64/controls?device=tv")
+        XCTAssertEqual(WittyClient.resolvePadPath(controller: "054c:0ce6", console: "nes", game: 1),
+                       "/modules/wittyplay/game-profiles/resolve?kind=gamepad&controller=054c%3A0ce6&console=nes&game=1")
+        XCTAssertEqual(WittyClient.backgroundPath, "/modules/wittyplay/game-background")
     }
 }
