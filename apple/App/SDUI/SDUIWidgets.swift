@@ -424,11 +424,30 @@ struct SDUINoticeView: View {
         }
     }
 
+    /// The notice's own way to be put away (`dismiss`: a command, and the words for its button): the server
+    /// stops showing it, and the page is asked for again.
+    private var dismiss: SDUIAction? {
+        guard let d = notice.props.fields("dismiss"), !d.text("op").isEmpty else { return nil }
+        return SDUIAction(type: "command", op: d.text("op"), params: d.fields("params"))
+    }
+    private var dismissLabel: String {
+        let words = notice.props.fields("dismiss")?.text("label") ?? ""
+        return words.isEmpty ? "Dismiss" : words
+    }
+
     @ViewBuilder private var button: some View {
-        if !notice.shown("button").isEmpty, notice.action != nil, SDUIActor(model: model, center: center, store: store).canPerform(notice.action) {
-            Button(notice.shown("button")) { SDUIActor(model: model, center: center, store: store).perform(notice.action) }
-                .action()
-                .sduiFocusable(notice.isFocusable ? focus : nil, notice.id)
+        HStack(spacing: layout.sp("s")) {
+            if !notice.shown("button").isEmpty, notice.action != nil, SDUIActor(model: model, center: center, store: store).canPerform(notice.action) {
+                Button(notice.shown("button")) { SDUIActor(model: model, center: center, store: store).perform(notice.action) }
+                    .action()
+                    .sduiFocusable(notice.isFocusable ? focus : nil, notice.id)
+            }
+            if let dismiss {
+                Button(dismissLabel) { SDUIActor(model: model, center: center, store: store).perform(dismiss) }
+                    .action()
+                    .accessibilityHint("Stops showing this")
+                    .accessibilityIdentifier("sdui.notice.dismiss." + notice.id)
+            }
         }
     }
 

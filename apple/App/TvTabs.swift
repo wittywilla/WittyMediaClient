@@ -22,8 +22,10 @@ struct TvTopBar: View {
     var focus: FocusState<AppTab?>.Binding
     /// Which pill had focus last, nil while it's below the bar.
     @State private var inside: AppTab?
-    /// The pills are wider than the bar: some sit past its edge.
-    @State private var overflows = false
+    /// The pills together, and the room they have: wider than the room, some sit past its edge.
+    @State private var pillsWidth: CGFloat = 0
+    @State private var barWidth: CGFloat = 0
+    private var overflows: Bool { barWidth > 0 && pillsWidth > barWidth + 1 }
     @Environment(\.palette) private var palette
 
     private func choose(_ tab: AppTab) {
@@ -104,8 +106,9 @@ struct TvTopBar: View {
                     .padding(.vertical, ring)
                     .background(GeometryReader { Color.clear.preference(key: TvMenuWidth.self, value: $0.size.width) })
                 }
+                .onPreferenceChange(TvMenuWidth.self) { pillsWidth = $0 }
                 .background(GeometryReader { box in
-                    Color.clear.onPreferenceChange(TvMenuWidth.self) { pills in overflows = pills > box.size.width + 1 }
+                    Color.clear.onAppear { barWidth = box.size.width }.sduiOnChange(of: box.size.width) { barWidth = $0 }
                 })
                 // Pills that don't fit fade out towards You, rather than stop short against the edge.
                 .mask(HStack(spacing: 0) {
