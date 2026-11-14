@@ -259,6 +259,8 @@ final class SDUICenter: ObservableObject {
             model.paths[.home] = []
             model.tab = .home
         case .page(let page, let params):
+            let place = SDUIPlace(page: page, params: params, route: entry.route)
+            if let address = model.wittyPlayAddress(.sdui(place)) { model.wittyPlay = address; return }
             var transaction = Transaction()
             transaction.disablesAnimations = model.tab == .home && (model.paths[.home]?.count ?? 0) == 1
             withTransaction(transaction) {
