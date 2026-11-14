@@ -9,6 +9,8 @@ struct SDUIPlace: Hashable {
     var params: [String: String] = [:]
     /// The place in the app it is, when it was opened by one: what marks it in the menus.
     var route: String?
+    /// Opened as a layer (`as: "layer"`): over the screen it came from, with its title at its top on every device.
+    var layer = false
 
     static let home = SDUIPlace(page: "home", route: "/")
 }

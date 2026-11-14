@@ -258,7 +258,7 @@ struct SDUIListView: View {
             } else {
                 LazyVStack(spacing: 0) {
                     ForEach(Array(list.children.enumerated()), id: \.element.id) { index, row in
-                        SDUIListRow(row: row, dense: list.props.flag("dense") == true)
+                        SDUIListRow(stop: list.props.flag("focusable") == true, row: row, dense: list.props.flag("dense") == true)
                             .onAppear {
                                 if list.hasMore, index >= list.children.count - 4 { Task { await store.more(list, center: center) } }
                             }
@@ -275,6 +275,9 @@ struct SDUIListView: View {
 }
 
 struct SDUIListRow: View {
+    /// The List's `focusable`: on a TV a row without an action stays a focus stop (OK on it does nothing), so focus
+    /// stays put while a row's action comes and goes (a library scanning).
+    var stop = false
     @Environment(\.sduiDraw) private var draw
     @EnvironmentObject private var model: AppModel
     @EnvironmentObject private var center: SDUICenter
@@ -393,11 +396,12 @@ struct SDUIListRow: View {
                             }
                         }
                 }
-            } else if row.action != nil {
-                Button { SDUIActor(model: model, center: center, store: store).perform(row.action) } label: { label }
+            } else if row.action != nil || (stop && layout.isTV) {
+                // One button whether or not it has an action now, so it keeps focus as its action comes and goes.
+                Button { if row.action != nil { SDUIActor(model: model, center: center, store: store).perform(row.action) } } label: { label }
                     .buttonStyle(SurfaceStyle())
                     .sduiFocusable(focus, row.id)
-                    .accessibilityAddTraits(.isButton)
+                    .accessibilityAddTraits(row.action != nil ? .isButton : [])
             } else {
                 label
             }

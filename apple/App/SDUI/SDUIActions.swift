@@ -53,7 +53,7 @@ struct SDUIActor {
             store.asking = action
             return
         }
-        go(destination(action))
+        go(destination(action), layer: action?.presentation == "layer")
     }
 
     /// Runs a command the person said yes to.
@@ -79,14 +79,16 @@ struct SDUIActor {
         #endif
     }
 
-    func go(_ destination: SDUIDestination, route: String? = nil) {
+    func go(_ destination: SDUIDestination, route: String? = nil, layer: Bool = false) {
         switch destination {
         case .page(let page, let params):
             if page == "home", params.isEmpty {
                 model.paths[.home] = []
                 model.tab = .home
             } else {
-                push(.sdui(SDUIPlace(page: page, params: params, route: route)))
+                // A layer is pushed over what opened it: Back closes it and focus goes back where it was; one
+                // hints bar, the layer's, as the page under it is not drawn.
+                push(.sdui(SDUIPlace(page: page, params: params, route: route, layer: layer)))
             }
         case .native(let screen, let params):
             native(screen, params)

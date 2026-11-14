@@ -67,6 +67,7 @@ struct SDUIPageScreen: View {
 
     var body: some View {
         framed
+            .environment(\.sduiIsLayer, place.layer)
             .environmentObject(store)
             // Corners and type from the theme, by the catalogue's tokens for each component.
             .environment(\.sduiDraw, SDUIDraw(catalog: center.catalog, style: model.themeStyle))
@@ -185,6 +186,7 @@ struct SDUIPageBody: View {
     @Environment(\.palette) private var palette
     @Environment(\.sduiTheme) private var theme
     @Environment(\.sduiInPlayFrame) private var inPlayFrame
+    @Environment(\.sduiIsLayer) private var isLayer
     let screen: SDUIScreen
     let offline: Bool
     let customise: (() -> Void)?
@@ -210,9 +212,10 @@ struct SDUIPageBody: View {
         sections.firstIndex { $0.type == "NativeView" && SDUINativeView.has($0.props.text("view")) }
     }
 
-    /// The page's heading is drawn on a touch screen, unless what the page starts with is its own heading.
+    /// The page's heading is drawn on a touch screen, and on a TV for a layer (docs/SDUI.md: a layer shows its title
+    /// at its top), unless what the page starts with is its own heading.
     private var showsTitle: Bool {
-        guard !layout.isTV, !screen.title.isEmpty else { return false }
+        guard !layout.isTV || isLayer, !screen.title.isEmpty else { return false }
         return !["Hero", "DetailHeader"].contains(sections.first?.type ?? "")
     }
 

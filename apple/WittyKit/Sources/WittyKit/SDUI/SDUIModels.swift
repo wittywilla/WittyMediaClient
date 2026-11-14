@@ -280,6 +280,8 @@ public struct SDUIAction: Codable, Equatable, Hashable, Sendable {
     public var params: SDUIProps?
     /// A question to ask before a command runs ("Read every file of Movies again?"); nothing runs without a yes.
     public var confirm: String?
+    /// `as`: "layer" shows a navigated page over the screen it came from (docs/SDUI.md, Actions).
+    public var presentation: String?
 
     public init(type: String, to: String? = nil, item: String? = nil, url: String? = nil, op: String? = nil, params: SDUIProps? = nil,
                 confirm: String? = nil) {
@@ -292,7 +294,7 @@ public struct SDUIAction: Codable, Equatable, Hashable, Sendable {
         self.confirm = confirm
     }
 
-    enum CodingKeys: String, CodingKey { case type, to, item, url, op, params, confirm }
+    enum CodingKeys: String, CodingKey { case type, to, item, url, op, params, confirm, presentation = "as" }
 
     public init(from decoder: Decoder) throws {
         let box = try decoder.container(keyedBy: CodingKeys.self)
@@ -309,6 +311,7 @@ public struct SDUIAction: Codable, Equatable, Hashable, Sendable {
         params = try? box.decodeIfPresent(SDUIProps.self, forKey: .params)
         let question = (try? box.decodeIfPresent(String.self, forKey: .confirm))?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
         confirm = question.isEmpty ? nil : String(question.prefix(240))
+        presentation = try? box.decodeIfPresent(String.self, forKey: .presentation)
     }
 }
 

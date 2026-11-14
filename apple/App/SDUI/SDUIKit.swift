@@ -26,11 +26,21 @@ private struct SDUIFocusKey: EnvironmentKey {
     static let defaultValue: FocusState<String?>.Binding? = nil
 }
 
+private struct SDUILayerKey: EnvironmentKey {
+    static let defaultValue = false
+}
+
 private struct SDUIPlayFrameKey: EnvironmentKey {
     static let defaultValue = false
 }
 
 extension EnvironmentValues {
+    /// The page was opened as a layer (`as: "layer"`): it shows its title at its top on every device, a TV too.
+    var sduiIsLayer: Bool {
+        get { self[SDUILayerKey.self] }
+        set { self[SDUILayerKey.self] = newValue }
+    }
+
     /// The page is inside WittyPlay's frame on Apple TV (TvPlayFrame.swift), which draws the page's Dock beside its round dock.
     var sduiInPlayFrame: Bool {
         get { self[SDUIPlayFrameKey.self] }
