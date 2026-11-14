@@ -171,7 +171,9 @@ fun SduiPageView(
         // The page's large title, Home's too, as the Apple apps draw it; not over a tall first section (a hero), not on a TV.
         val heading = title.takeIf { !env.tv && !tallFirst && it.isNotEmpty() }
         val topRoom = if (env.tv) env.space("s") else if (tallFirst && !offline && screenTime == null) 0.dp else LocalTopRoom.current
-        val bottomRoom = if (env.tv) env.pt(layout.safeArea.bottom) else LocalBottomRoom.current
+        // On a TV the screen's bottom edge needs room only when the column reaches it: a Dock or the frame's system dock below
+        // already keeps that edge, and the room it took cut the page's tabs off the top to fit a row of cards.
+        val bottomRoom = if (env.tv) (if (dock != null || LocalDockBelow.current) 0.dp else env.pt(layout.safeArea.bottom)) else LocalBottomRoom.current
         // The Dock's jump to a letter: choose one, then ask for pages until a title starting with it has come (at most 20), and
         // bring the grid to it.
         var wanted by remember { mutableStateOf<String?>(null) }
@@ -221,12 +223,23 @@ fun SduiPageView(
                                 had = focus.hasFocus
                                 if (!had) return@onFocusChanged
                                 val inner = row is SduiRow.Line || (row is SduiRow.Cards && row.index > 0)
-                                val peek = if (at == 0) 0 else if (inner) -(list.layoutInfo.viewportSize.height * 3 / 10) else 0
+                                // A section that goes to the top goes past the column's room above it too, so what's before it
+                                // isn't left showing there as a sliver.
+                                val peek = if (at == 0) 0 else if (inner) -innerPeek(list, at + lead) else list.layoutInfo.beforeContentPadding
                                 scope.launch {
                                     // After the system's own small move for what took focus has begun, so this one is the one that stands.
                                     withFrameNanos { }
                                     withFrameNanos { }
-                                    if (reduce) list.scrollToItem(if (at == 0) 0 else at + lead, peek) else list.animateScrollToItem(if (at == 0) 0 else at + lead, peek)
+                                    // A section that shows whole with the page's top still in view leaves the page at its
+                                    // top: moved up, what's above it (a page's tabs) would be cut to a sliver.
+                                    if (!inner && fitsFromTop(list, at + lead)) {
+                                        if (reduce) list.scrollToItem(0) else list.animateScrollToItem(0)
+                                        return@launch
+                                    }
+                                    // A grid's first row goes up with the grid's heading, the row before it, over it.
+                                    val head = row is SduiRow.Cards && row.index == 0 && at > 0
+                                    val target = if (at == 0) 0 else at + lead - (if (head) 1 else 0)
+                                    if (reduce) list.scrollToItem(target, peek) else list.animateScrollToItem(target, peek)
                                 }
                             },
                         ) { SduiRowView(row, gap) }
@@ -263,6 +276,26 @@ fun SduiPageView(
             }
         }
     }
+}
+
+// How far down a row inside a grid or list stands: a third of the way, with the rows before it showing above, but never so far
+// that its own foot is cut off at the bottom of the window.
+private fun innerPeek(list: androidx.compose.foundation.lazy.LazyListState, index: Int): Int {
+    val info = list.layoutInfo
+    val third = info.viewportSize.height * 3 / 10
+    val size = info.visibleItemsInfo.firstOrNull { it.index == index }?.size ?: return third
+    // The column's own room at its top, kept at its foot too, for the card that grows under focus.
+    val room = info.viewportEndOffset - info.afterContentPadding - size - info.beforeContentPadding
+    return third.coerceAtMost(room).coerceAtLeast(0)
+}
+
+// Whether the item at `index` ends inside the list's window while the list is scrolled to its very top.
+private fun fitsFromTop(list: androidx.compose.foundation.lazy.LazyListState, index: Int): Boolean {
+    val info = list.layoutInfo
+    if (list.firstVisibleItemIndex != 0) return false
+    val item = info.visibleItemsInfo.firstOrNull { it.index == index } ?: return false
+    val end = item.offset + item.size + list.firstVisibleItemScrollOffset
+    return end <= info.viewportEndOffset - info.afterContentPadding
 }
 
 // How a TV's own rule moves a row of cards under focus, kept for the rows inside a page whose column has its own.

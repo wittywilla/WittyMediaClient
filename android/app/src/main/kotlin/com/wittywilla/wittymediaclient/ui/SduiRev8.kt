@@ -399,11 +399,16 @@ fun SduiRegionsFrame(nav: Nav, content: @Composable () -> Unit) {
         if (bar) Box(Modifier.onFocusChanged { onBar = it.hasFocus }) { SduiStatusBar(nav, state) }
         Row(Modifier.weight(1f).fillMaxWidth()) {
             if (side) SduiSystemDock(nav, state, vertical = true)
-            Box(Modifier.weight(1f).fillMaxHeight().focusRequester(page).focusGroup()) { content() }
+            Box(Modifier.weight(1f).fillMaxHeight().focusRequester(page).focusGroup()) {
+                CompositionLocalProvider(LocalDockBelow provides (dock && !side)) { content() }
+            }
         }
         if (dock && !side) SduiSystemDock(nav, state, vertical = false)
     }
 }
+
+// The frame draws its system dock under the page, so the page needn't keep the screen's bottom edge itself.
+val LocalDockBelow = compositionLocalOf { false }
 
 private const val PAGE_FOCUS_TRIES = 15
 private const val PAGE_FOCUS_STEP_MS = 100L

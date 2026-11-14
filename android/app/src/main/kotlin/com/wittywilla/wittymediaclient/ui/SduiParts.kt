@@ -181,8 +181,9 @@ fun SduiDockBar(view: SduiView, side: Dp) {
 private fun SduiDock(view: SduiView, side: Dp) {
     val env = LocalSdui.current
     val keys = view.children.filter { it.type == "KeyLegend" }
-    // On a TV the bar sits on the picture's safe area, not on the screen's edge.
-    val foot = if (env.tv) env.pt(env.layout.safeArea.bottom) else 0.dp
+    // On a TV the bar sits on the picture's safe area, not on the screen's edge; with the frame's system dock under it, that
+    // dock keeps the edge.
+    val foot = if (env.tv && !LocalDockBelow.current) env.pt(env.layout.safeArea.bottom) else 0.dp
     Row(
         Modifier.fillMaxWidth().padding(horizontal = side).padding(bottom = foot).elevated(1, RoundedCornerShape(env.pt(14)), env.pt(14))
             .defaultMinSize(minHeight = if (env.tv) env.pt(DesignTokens.Tv.Dock.height.toFloat()) else 0.dp)
