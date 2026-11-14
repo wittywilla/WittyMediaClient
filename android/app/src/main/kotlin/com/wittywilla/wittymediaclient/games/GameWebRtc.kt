@@ -45,7 +45,7 @@ import java.util.concurrent.atomic.AtomicBoolean
 // rather than waited for, so it's the best on a lossy network. libwebrtc decodes H.264 with MediaCodec and its own audio
 // device plays the Opus sound; the picture goes through a VideoSink onto the player's own surface.
 
-// Where a session's version 2 stream is: the server's /api/v1/play/{sid}/stream, which takes a POST (WebRTC) and a
+// Where a session's version 2 stream is: WittyPlay's /api/v1/modules/wittyplay/play/{sid}/stream, which takes a POST (WebRTC) and a
 // WebSocket. `rewriteAnswer` is for testing against a stand-in on this machine only, see the debug build's StandInActivity.
 data class StreamEndpoint(val url: String, val rewriteAnswer: ((String) -> String)? = null)
 

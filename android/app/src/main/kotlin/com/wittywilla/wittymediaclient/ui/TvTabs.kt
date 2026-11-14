@@ -501,7 +501,7 @@ private fun GamesShelf(nav: Nav, s: Map<String, String>, library: Library) {
     var games by remember(library.id) { mutableStateOf<List<Item>?>(null) }
     LaunchedEffect(library.id) {
         games = try {
-            nav.app.api.popularGames(library.id, SHELF_LENGTH).items.distinctBy { it.id }
+            nav.app.api.topRatedGames(library.id, SHELF_LENGTH).items.distinctBy { it.id }
         } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {

@@ -99,7 +99,8 @@ object GamesCache {
     var libraries: List<GamesLibraryRef> = emptyList()
 }
 
-private val SORTS = listOf("popular" to "Most popular", "newest" to "Newest first", "oldest" to "Oldest first", "title" to "A to Z", "added" to "Recently added", "rating" to "Highest rated")
+// Highest rated first, as WittyPlay's own library pages open.
+private val SORTS = listOf("rating" to "Highest rated", "title" to "A to Z", "newest" to "Newest first", "oldest" to "Oldest first", "added" to "Recently added")
 
 private enum class CouchTab { Home, Consoles, Search }
 
@@ -213,7 +214,7 @@ private fun LibraryHome(
     val byId = remember(consoles) { consoles.associateBy { it.id } }
     val present = remember(consoles) { consoles.filter { it.count > 0 }.sortedByDescending { it.count } }
     val current = byId[console]
-    var sort by remember(console) { mutableStateOf("popular") }
+    var sort by remember(console) { mutableStateOf("rating") }
     val games = remember(libraryId, console, sort) { mutableStateListOf<GameItem>() }
     var total by remember(libraryId, console, sort) { mutableIntStateOf(-1) }
     var loading by remember(libraryId, console, sort) { mutableStateOf(false) }
@@ -236,7 +237,7 @@ private fun LibraryHome(
     }
     LaunchedEffect(libraryId, console, sort) { more() }
     LaunchedEffect(console) {
-        if (console.isNotEmpty()) runCatching { api.games(libraryId, console, "popular", limit = 40) }.onSuccess { r -> consoleHero = r.items.filter { it.hasPoster }.take(15) }
+        if (console.isNotEmpty()) runCatching { api.games(libraryId, console, "rating", limit = 40) }.onSuccess { r -> consoleHero = r.items.filter { it.hasPoster }.take(15) }
     }
     // More as the end comes near.
     LaunchedEffect(list, games.size, total) {

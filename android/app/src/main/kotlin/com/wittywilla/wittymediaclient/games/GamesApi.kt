@@ -26,13 +26,16 @@ import okhttp3.WebSocketListener
 import java.net.URLEncoder
 import java.util.concurrent.TimeUnit
 
-// The games routes this app uses: exactly the ones the website's player uses (the server's docs/GAMING-API.md),
-// under /api/v1. It rides on the app's own connection, so the sign-in goes in a header to that server only, the
+// The games routes this app uses: exactly the ones the website's player uses (the server's docs/GAMING-API.md).
+// The game API is WittyPlay's (module API 5), under /api/v1/modules/wittyplay; a game's items, metadata and
+// versions stay the server's, under /api/v1. It rides on the app's own connection, so the sign-in goes in a header to that server only, the
 // WebSocket's included, and never in an address. Nothing here sends or receives a game's file.
 
 private const val API = "/api/v1"
 // WittyPlay answers its own API under the module prefix (module API 5); a server without it answers 424.
 private const val WITTYPLAY = "/modules/wittyplay"
+private const val GAMES = "$WITTYPLAY/games"
+private const val PLAY = "$WITTYPLAY/play"
 private val JSON_TYPE = "application/json".toMediaType()
 private const val MAX_BYTES = 8L * 1024 * 1024
 private val LAYOUT = MapSerializer(String.serializer(), Placement.serializer())
@@ -66,32 +69,32 @@ class GamesApi(val api: Api) {
 
     fun q(text: String): String = URLEncoder.encode(text, "UTF-8")
 
-    suspend fun home(library: Long): GamesHome = get("/games/home?library=$library")
+    suspend fun home(library: Long): GamesHome = get("$GAMES/home?library=$library")
     suspend fun consoles(library: Long? = null): List<GameConsole> =
-        json.decodeFromString<List<GameConsole>?>(call("GET", "/games/consoles" + (library?.let { "?library=$it" } ?: ""))).orEmpty()
+        json.decodeFromString<List<GameConsole>?>(call("GET", "$GAMES/consoles" + (library?.let { "?library=$it" } ?: ""))).orEmpty()
 
-    // `sort` is popular, title, newest, oldest, rating or added, as the website's.
-    suspend fun games(library: Long, console: String = "", sort: String = "popular", search: String = "", offset: Int = 0, limit: Int = 60): GameItemPage {
+    // `sort` is title, newest, oldest, rating or added.
+    suspend fun games(library: Long, console: String = "", sort: String = "rating", search: String = "", offset: Int = 0, limit: Int = 60): GameItemPage {
         val descending = sort == "rating" || sort == "added"
         return get("/items?library=$library&kind=game&sort=${q(sort)}&desc=${if (descending) 1 else 0}&console=${q(console)}&search=${q(search)}&offset=$offset&limit=$limit")
     }
 
     suspend fun item(id: Long): GameItem = get("/items/$id")
-    suspend fun check(id: Long): GameCheck = get("/games/$id/check")
+    suspend fun check(id: Long): GameCheck = get("$GAMES/$id/check")
     suspend fun details(id: Long): GameDetails = get("/games/$id/metadata")
-    suspend fun personal(id: Long): GamePersonal = get("/games/$id/meta")
+    suspend fun personal(id: Long): GamePersonal = get("$GAMES/$id/meta")
     suspend fun versions(id: Long): GameVersions = get("/games/$id/versions")
 
     suspend fun setFavourite(id: Long, on: Boolean): GamePersonal =
-        json.decodeFromString(call("PUT", "/games/$id/meta", buildJsonObject { put("favourite", on) }.toString()))
+        json.decodeFromString(call("PUT", "$GAMES/$id/meta", buildJsonObject { put("favourite", on) }.toString()))
 
-    suspend fun saves(id: Long): List<GameSave> = json.decodeFromString<List<GameSave>?>(call("GET", "/games/$id/saves")).orEmpty()
+    suspend fun saves(id: Long): List<GameSave> = json.decodeFromString<List<GameSave>?>(call("GET", "$GAMES/$id/saves")).orEmpty()
 
     suspend fun deleteSave(id: Long, slot: Int) {
-        call("DELETE", "/games/$id/saves/$slot")
+        call("DELETE", "$GAMES/$id/saves/$slot")
     }
 
-    suspend fun settings(item: Long): GameSettings = get("/games/settings?item=$item")
+    suspend fun settings(item: Long): GameSettings = get("$GAMES/settings?item=$item")
 
     suspend fun controls(console: String, device: String, game: Long = 0): GameControls =
         get("$WITTYPLAY/consoles/${q(console)}/controls?device=${q(device)}" + if (game > 0) "&game=$game" else "")
@@ -112,7 +115,7 @@ class GamesApi(val api: Api) {
         get("$WITTYPLAY/game-profiles/resolve?kind=gamepad&controller=${q(controller)}&console=${q(console)}&game=$game")
 
     // For a game in an archive: about once a second until it's ready, then play.
-    suspend fun prepare(id: Long): GamePrepare = json.decodeFromString(call("POST", "/games/$id/prepare", "{}"))
+    suspend fun prepare(id: Long): GamePrepare = json.decodeFromString(call("POST", "$GAMES/$id/prepare", "{}"))
 
     // Starts a game. Starting another saves and ends whatever this account was playing, anywhere.
     suspend fun play(id: Long, resume: Boolean, safeMode: Boolean): GameSession {
@@ -121,25 +124,25 @@ class GamesApi(val api: Api) {
             put("client", "native")
             if (safeMode) put("safeMode", true)
         }
-        return json.decodeFromString(call("POST", "/games/$id/play", body.toString(), slow))
+        return json.decodeFromString(call("POST", "$GAMES/$id/play", body.toString(), slow))
     }
 
-    suspend fun session(sid: String): GameSession = get("/play/${q(sid)}")
+    suspend fun session(sid: String): GameSession = get("$PLAY/${q(sid)}")
 
     // Answers the server's own answer, which for `speed` is the speed it was held to.
-    suspend fun action(sid: String, action: GameAction): String = call("POST", "/play/${q(sid)}/action", json.encodeToString(action))
+    suspend fun action(sid: String, action: GameAction): String = call("POST", "$PLAY/${q(sid)}/action", json.encodeToString(action))
 
     // Saves and stops. The answer comes once everything is written, battery save and all.
     suspend fun stop(sid: String) {
-        call("DELETE", "/play/${q(sid)}", client = slow)
+        call("DELETE", "$PLAY/${q(sid)}", client = slow)
     }
 
     fun posterUrl(game: GameItem, width: Int = 480): String = "${api.base}$API/items/${game.id}/poster?v=${game.updatedAt}&w=${width.coerceIn(64, 800)}"
     fun backdropUrl(game: GameItem): String = "${api.base}$API/items/${game.id}/backdrop?v=${game.updatedAt}"
-    fun saveThumbUrl(game: Long, slot: Int, version: Long): String = "${api.base}$API/games/$game/saves/$slot/thumb?v=$version"
+    fun saveThumbUrl(game: Long, slot: Int, version: Long): String = "${api.base}$API$GAMES/$game/saves/$slot/thumb?v=$version"
 
     // Version 2's stream address for a session (docs/GAMING-STREAM.md): a POST for WebRTC, a WebSocket otherwise.
-    fun streamEndpoint(sid: String) = StreamEndpoint(api.base + API + "/play/${q(sid)}/stream")
+    fun streamEndpoint(sid: String) = StreamEndpoint(api.base + API + "$PLAY/${q(sid)}/stream")
 
     // WebRTC's offer and answer, at an address the endpoint gives.
     suspend fun postStream(url: String, body: String): String = withContext(Dispatchers.IO) {

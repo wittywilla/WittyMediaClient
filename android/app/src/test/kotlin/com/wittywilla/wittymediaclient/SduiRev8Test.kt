@@ -104,11 +104,11 @@ class SduiRev8Test {
         val a = action("""{"type":"command","op":"wittyplay.online.set","params":{"sharePlaying":true,"appearOnline":false}}""")
         assertEquals("""{"sharePlaying":true,"appearOnline":false}""", SduiCommands.request(online, a.item, a.params)!!.body)
 
-        val save = spec("wittyplay.state.save", "/api/play/{item}/action", """{"type":"save","slot":"{slot}"}""", "slot" to "int")
+        val save = spec("wittyplay.state.save", "/api/modules/wittyplay/play/{item}/action", """{"type":"save","slot":"{slot}"}""", "slot" to "int")
         val s = action("""{"type":"command","op":"wittyplay.state.save","item":"abc","params":{"slot":3}}""")
         val r = SduiCommands.request(save, s.item, s.params)!!
         assertEquals("""{"type":"save","slot":3}""", r.body)
-        assertEquals("/api/play/abc/action", r.path)
+        assertEquals("/api/modules/wittyplay/play/abc/action", r.path)
 
         val kids = spec("wittyplay.kids.friends", "/api/games/online/kids/{item}", """{"friends":"{friends}"}""", "friends" to "ints")
         val k = action("""{"type":"command","op":"wittyplay.kids.friends","item":"7","params":{"friends":[1,2,3]}}""")

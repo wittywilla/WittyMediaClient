@@ -315,7 +315,7 @@ on this device, and moves up above the prompt bar when one shows.
 
 A console's page: a **band** 260 high in the console's colour with its grain fading down; "{era} · Collection" in Caption
 at 80% white, the name in 48 extra-bold in its era's type, "{full name} · {count} games" in 15 at 85%. On a light theme
-the band is pale and its words `text`. Then sort chips (Most popular, A to Z, Newest first, Made for two); **Yours on
+the band is pale and its words `text`. Then sort chips (Highest rated, A to Z, Newest first, Made for two); **Yours on
 {console}** (Look, Controls, Settings for this console: the per-console settings, where people expect them); **Where
 {console} games run** (see [Where each core runs](#where-each-core-runs)); Continue playing for this console; the shelf
 of every game, and a grid three across for a long collection.
@@ -570,6 +570,11 @@ the filter sheet: Sort, Era, Players, Genre, Series, Decade, Rating). Results th
 
 Every WittyPlay feature the server has today, and where it is in this design, so nothing is lost. "Server page" means
 the server's own page inside the app (a QR card on a TV), as APP-DESIGN's settings do.
+
+The game API is WittyPlay's (module API 5): `/games/...`, `/play/...`, `/gaming/...`, `/game-bezels`, `/consoles/{c}/controls`,
+`/game-controllers`, `/game-profiles` and `/game-background` below are under `/api/v1/modules/wittyplay/`, and answer 424
+when WittyPlay isn't installed. A game's item, `/games/{id}/metadata`, `/versions` and its splitting, `/games/facets`,
+pictures and art stay the server's, under `/api/v1`.
 
 | Server feature | Route or setting | Where it is |
 |---|---|---|
