@@ -10,9 +10,12 @@ object WittyPlayPlace {
     const val HOME = "/page/wittyplay-online"
     const val HOME_PAGE = "wittyplay-online"
 
-    // WittyPlay's own settings, drawn natively where there are no web pages (a TV).
+    // WittyPlay's own settings: on a TV, its server-drawn page (there are no web pages there).
     const val SETTINGS = "/wittyplay/settings"
-    const val SETTINGS_URL = "/api/v1/sdui/modules/wittyplay/settings"
+    const val SETTINGS_PAGE = "wittyplay-settings"
+
+    // One games library as WittyPlay's server-drawn page, for a TV.
+    const val LIBRARY_PAGE = "wittyplay-library"
 
     // The dock always starts with WittyPlay's own Home, so every one of its pages has one press back to it (the website's
     // dockFor in playPaths.ts).

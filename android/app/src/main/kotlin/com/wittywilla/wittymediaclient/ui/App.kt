@@ -555,9 +555,8 @@ class Nav(val app: WittyApp, private val s: Map<String, String>) {
     fun wittyPlayFor(library: com.wittywilla.wittymediaclient.net.Library): Route? {
         if (library.type != "games" || library.console == "rig") return null
         if (!wittyPlayInstalled) return gamesRouteFor(library)
-        // A TV has no web pages: WittyPlay's frame is drawn from its home page's regions, as Apple TV's. A library has no
-        // page of its own yet, so on a TV it opens WittyPlay's home.
-        return if (app.isTv) Route.Sdui(com.wittywilla.wittymediaclient.net.WittyPlayPlace.HOME_PAGE, emptyMap(), library.name)
+        // A TV has no web pages: WittyPlay's frame and its library are drawn from its own server pages, as Apple TV's.
+        return if (app.isTv) Route.Sdui(com.wittywilla.wittymediaclient.net.WittyPlayPlace.LIBRARY_PAGE, mapOf("library" to library.id.toString()), library.name)
         else Route.WittyPlay(com.wittywilla.wittymediaclient.net.WittyPlayPlace.library(library.id))
     }
 
@@ -627,7 +626,13 @@ class Nav(val app: WittyApp, private val s: Map<String, String>) {
             val path = target.route.substringBefore('?')
             val query = SduiRouter.parseQuery(target.route.substringAfter('?', ""))
             val library = path.removePrefix("/artist/").toLongOrNull()
+            val play = com.wittywilla.wittymediaclient.net.WittyPlayPlace
             if (path.startsWith("/artist/") && library != null && query["name"] != null) Route.Artist(library, query["name"].orEmpty())
+            // WittyPlay's web addresses, on a phone or tablet its own frame over the app; on a TV, which has no web pages,
+            // the server pages that draw the same.
+            else if (play.isPlayPath(path) && !app.isTv) Route.WittyPlay(target.route)
+            else if (app.isTv && path.startsWith("/wittyplay/library/")) Route.Sdui(play.LIBRARY_PAGE, mapOf("library" to path.removePrefix("/wittyplay/library/")))
+            else if (app.isTv && (path == play.SETTINGS || path.startsWith(play.SETTINGS + "/"))) Route.Sdui(play.SETTINGS_PAGE, emptyMap())
             else if (target.route.startsWith("/")) Route.Page(target.route) else null
         }
     }

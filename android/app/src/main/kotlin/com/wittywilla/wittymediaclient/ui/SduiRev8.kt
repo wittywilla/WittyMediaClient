@@ -447,13 +447,13 @@ private fun SduiSystemDock(nav: Nav, state: SduiRegionsState, vertical: Boolean)
     val size = metrics.u(if (metrics.tv) 104 else 48)
     val home = com.wittywilla.wittymediaclient.net.SduiSystemButton(id = "home", label = "Home", icon = "home", route = com.wittywilla.wittymediaclient.net.WittyPlayPlace.HOME)
     val entries = com.wittywilla.wittymediaclient.net.WittyPlayPlace.dockFor(state.regions.systemDock, { it.id }, { it.route }, home)
-    // Search is the app's own; WittyPlay's settings are drawn natively; a layer goes over; anything else takes this page's place.
+    // Search is the app's own; WittyPlay's settings are its server page; a layer goes over; anything else takes this page's place.
     fun press(b: com.wittywilla.wittymediaclient.net.SduiSystemButton) {
         val path = b.route.substringBefore('?')
         when {
             path == "/search" -> nav.reset(Route.Search)
             path == com.wittywilla.wittymediaclient.net.WittyPlayPlace.SETTINGS || path.startsWith(com.wittywilla.wittymediaclient.net.WittyPlayPlace.SETTINGS + "/") ->
-                nav.push(Route.ModuleSettings(com.wittywilla.wittymediaclient.net.WittyPlayPlace.SETTINGS_URL, "WittyPlay"))
+                nav.push(Route.Sdui(com.wittywilla.wittymediaclient.net.WittyPlayPlace.SETTINGS_PAGE, emptyMap(), b.label))
             b.layer == "layer" -> nav.go(nav.sduiRouter.resolve(b.route), layer = true)
             else -> nav.routeOf(nav.sduiRouter.resolve(b.route))?.let { nav.replace(it) } ?: nav.go(nav.sduiRouter.resolve(b.route))
         }
