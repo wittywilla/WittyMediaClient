@@ -240,7 +240,7 @@ extension AppModel {
     func learnAway() async {
         guard PeerLibrary.available, stage == .browsing, !client.token.isEmpty, let server = current, !awayIsOff(for: server) else { return }
         let asking = client
-        // An older server has no such thing, and isn't asked.
+        // Not asked where the server doesn't offer peer to peer.
         guard let caps = try? await asking.capabilities(), caps.has(WittyClient.peerFeature),
               let key = deviceKey(), let id = PeerLibrary.deviceID(of: key),
               let answer = try? await asking.peerInfo(device: id), asking === client, current?.url == server.url else { return }

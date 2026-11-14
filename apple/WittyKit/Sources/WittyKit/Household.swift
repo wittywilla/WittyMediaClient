@@ -226,8 +226,8 @@ public struct MyLimits: Decodable, Equatable {
         self.parentPin = parentPin
     }
 
-    /// Whether a part of the app is offered. Anything the server didn't mention is, so an older server and a
-    /// newer feature both show as before; the server refuses what is really off.
+    /// Whether a part of the app is offered. Anything the server didn't mention is, so a
+    /// feature newer than this app shows as before; the server refuses what is really off.
     public func allows(_ feature: String) -> Bool { features?[feature] ?? true }
 
     /// The profile has time rules: only then is the time asked after.
@@ -507,7 +507,7 @@ public enum LimitWords {
 // MARK: - A profile's limits
 
 /// A profile's limits, as `GET /users` gives them and `PUT /users/{id}/access` takes them. Everything is read
-/// with a stand-in for what is missing, since an older server sends fewer of them.
+/// with a stand-in for what is missing.
 public struct Access: Codable, Equatable {
     public var maxAge: Int
     public var allowUnrated: Bool
