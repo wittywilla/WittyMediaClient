@@ -3,9 +3,9 @@
 import Foundation
 
 // Which title (DVD) or playlist (Blu-ray) of a disc is the film, and why: the server's
-// GET /items/{id}/disc/analysis (feature `disc-ranking`), as the website's DiscWhy.tsx shows it.
+// GET /modules/wittydvd|wittybluray/discs/{id}/analysis (feature `disc-ranking`), as the website's DiscWhy.tsx shows it.
 // Anyone who may see the disc reads it; an administrator can choose another title for everyone
-// (PUT/DELETE /items/{id}/disc/choice) and ask for the ranking again (POST .../disc/analysis).
+// (PUT/DELETE .../discs/{id}/choice) and ask for the ranking again (POST .../analysis).
 // The shapes are the server's discAnalysisView and library.DiscRank; every field may be missing,
 // and a list keeps the entries it can read.
 
@@ -16,7 +16,7 @@ private extension KeyedDecodingContainer {
     func list<T: Decodable>(_ key: Key) -> [T] { ((try? decodeIfPresent([Loose<T>].self, forKey: key)) ?? []).compactMap(\.value) }
 }
 
-/// GET /items/{id}/disc/analysis, and what choosing, clearing and ranking again answer.
+/// GET .../discs/{id}/analysis, and what choosing, clearing and ranking again answer.
 public struct DiscAnalysis: Decodable, Equatable, Sendable {
     /// "dvd" or "bluray".
     public var kind: String
@@ -500,22 +500,22 @@ public enum DiscRanking {
 
 public extension WittyClient {
     /// Which title is the film and why. `pending` says to ask again in a few seconds.
-    func discAnalysis(_ item: Int64) async throws -> DiscAnalysis { try await get("/items/\(item)/disc/analysis") }
+    func discAnalysis(_ item: Int64, kind: String) async throws -> DiscAnalysis { try await get(Self.discPath(item, kind: kind) + "/analysis") }
 
     /// An administrator's: this title or playlist is the disc's film, for everyone.
-    func chooseDiscTitle(_ item: Int64, ttn: Int) async throws -> DiscAnalysis {
-        let data = try await call("PUT", "/items/\(item)/disc/choice", body: try JSONEncoder().encode(["ttn": ttn]))
+    func chooseDiscTitle(_ item: Int64, kind: String, ttn: Int) async throws -> DiscAnalysis {
+        let data = try await call("PUT", Self.discPath(item, kind: kind) + "/choice", body: try JSONEncoder().encode(["ttn": ttn]))
         return try JSONDecoder().decode(DiscAnalysis.self, from: data)
     }
 
     /// An administrator's: forget the choice, so the engine's pick is the film again.
-    func clearDiscChoice(_ item: Int64) async throws -> DiscAnalysis {
-        try JSONDecoder().decode(DiscAnalysis.self, from: try await call("DELETE", "/items/\(item)/disc/choice"))
+    func clearDiscChoice(_ item: Int64, kind: String) async throws -> DiscAnalysis {
+        try JSONDecoder().decode(DiscAnalysis.self, from: try await call("DELETE", Self.discPath(item, kind: kind) + "/choice"))
     }
 
     /// An administrator's: work the ranking out again; `secondOpinion` also asks a libbluray (Blu-ray only).
-    func rankDiscAgain(_ item: Int64, secondOpinion: Bool = false) async throws -> DiscAnalysis {
-        let data = try await call("POST", "/items/\(item)/disc/analysis", body: try JSONEncoder().encode(["secondOpinion": secondOpinion]))
+    func rankDiscAgain(_ item: Int64, kind: String, secondOpinion: Bool = false) async throws -> DiscAnalysis {
+        let data = try await call("POST", Self.discPath(item, kind: kind) + "/analysis", body: try JSONEncoder().encode(["secondOpinion": secondOpinion]))
         return try JSONDecoder().decode(DiscAnalysis.self, from: data)
     }
 }

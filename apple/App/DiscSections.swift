@@ -39,7 +39,7 @@ struct DiscSections: View {
     /// A disc that can't be read shows only the table of its titles.
     private func load() async {
         do {
-            let fresh = try await client.discView(item.id)
+            let fresh = try await client.discView(item.id, kind: item.kind ?? "")
             view = fresh
             labels = DiscLabels(fresh)
         } catch {
@@ -49,7 +49,7 @@ struct DiscSections: View {
 
     private func save() async {
         do {
-            _ = try await client.setDiscLabels(item.id, labels)
+            _ = try await client.setDiscLabels(item.id, kind: item.kind ?? "", labels)
             editing = false
             say("Names saved")
         } catch {
@@ -184,7 +184,7 @@ struct DiscSections: View {
             .background(card.fill(palette.panel))
             .overlay(card.strokeBorder(palette.border, lineWidth: 1))
             // Why this title is the film (DiscWhy.swift); a new film puts its own feature here.
-            DiscWhy(item: item.id, playable: playable) { _ in Task { await load() } }
+            DiscWhy(item: item.id, kind: item.kind ?? "", playable: playable) { _ in Task { await load() } }
             if DiscPage.showsScenes(main) {
                 heading("Scenes", top: Tokens.Space.s6, size: 17)
                 scenes(main)
