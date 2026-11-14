@@ -54,22 +54,16 @@ fun FindChannel(
     val field = remember { FocusRequester() }
     val typed = words.trim()
     val isNumber = typed.isNotEmpty() && typed.all { it.isDigit() || it == '.' || it == '-' }
-    // On a server that narrows for itself, it's asked a moment after typing stops; otherwise the channel list the
-    // guide already has is looked through.
+    // The server is asked a moment after typing stops.
     LaunchedEffect(typed, store.set) {
         if (typed.isEmpty()) {
             found = emptyList()
             error = ""
             return@LaunchedEffect
         }
-        if (!store.hasPaging) {
-            val shown = if (store.hasSets) store.lineup else store.lineup.filter { GuideRules.matches(it, store.filter.kind, store.filter.group, store.filter.favourites) }
-            found = shown.filter { GuidePaging.matches(it, typed) }.take(LIMIT)
-            return@LaunchedEffect
-        }
         delay(300)
         try {
-            found = uniqueChannels(api.liteChannels(if (store.hasSets) store.set else null, typed, LIMIT).channels)
+            found = uniqueChannels(api.liteChannels(store.set, typed, LIMIT).channels)
             error = ""
         } catch (e: CancellationException) {
             throw e
@@ -91,7 +85,7 @@ fun FindChannel(
             if (error.isNotEmpty()) Text(error, style = MaterialTheme.typography.body, color = scheme.error)
             Row(Modifier.focusGroup(), horizontalArrangement = Arrangement.spacedBy(metrics.u(16))) {
                 if (isNumber) SheetButton("Go to channel $typed", { onJump(typed) }, kind = SheetKind.Primary)
-                if (store.hasPaging && typed.isNotEmpty() && !isNumber) SheetButton("Show only these in the guide", { onNarrow(typed) })
+                if (typed.isNotEmpty() && !isNumber) SheetButton("Show only these in the guide", { onNarrow(typed) })
                 if (store.search.isNotEmpty()) SheetButton("Show every channel again", { onNarrow("") })
             }
         },

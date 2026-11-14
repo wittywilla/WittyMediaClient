@@ -7,7 +7,7 @@ import WittyKit
 // What opens over the guide for a server with many channels: choosing a channel set, managing your own sets,
 // adding a channel to one, finding a channel by name or going to it by number, and a recording's options. As the
 // guide's other sheets (TvSheets.swift), these are in the app's own colours. WittyKit's ChannelSets.swift has the
-// rules; every one of these is only offered when the server names its feature (`TvFeature`).
+// rules.
 
 /// This device's own choices for the guide: how many channels a page, and which set, per server and account.
 @MainActor
