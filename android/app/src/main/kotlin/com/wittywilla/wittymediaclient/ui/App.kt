@@ -364,8 +364,8 @@ class Nav(val app: WittyApp, private val s: Map<String, String>) {
     var customTheme by mutableStateOf<ThemeMakerInput?>(null)
         private set
 
-    // What this server says it has (/capabilities features): every newer feature is offered only when its name is
-    // here, so the app still works against an older server. Empty until read, which hides them.
+    // What this server says it has (/capabilities features): a feature is offered only when its name is here, as
+    // the owner can turn features off. Empty until read, which hides them.
     var features by mutableStateOf<Set<String>>(emptySet())
         private set
 

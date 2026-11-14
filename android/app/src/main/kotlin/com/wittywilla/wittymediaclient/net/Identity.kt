@@ -30,7 +30,7 @@ data class IdentityAnswer(
 // New          never seen before
 // Same         a key we remembered
 // Different    we remembered another key here: possibly a look-alike
-enum class IdentityState { Unreachable, None, Bad, New, Same, Different }
+enum class IdentityState { Unreachable, Bad, New, Same, Different }
 
 data class ServerProof(
     val state: IdentityState,
@@ -91,22 +91,20 @@ object Identity {
         }
     }
 
-    // A 404 is an older server, unless we remember this address proving itself:
-    // then it's what a look-alike would say to avoid the question.
-    fun unanswered(url: String, saved: List<SavedServer>) =
-        if (saved.any { it.url == url && it.publicKey.isNotEmpty() }) IdentityState.Bad else IdentityState.None
+    // Every server answers the identity question; one that won't is refused, as a look-alike would avoid it.
+    @Suppress("UNUSED_PARAMETER")
+    fun unanswered(url: String, saved: List<SavedServer>) = IdentityState.Bad
 
     // May what belongs with this pin (a token, a code) go to the server that gave this proof?
     fun fits(pin: String, proof: ServerProof): Boolean =
-        if (pin.isEmpty()) proof.state == IdentityState.New || proof.state == IdentityState.None
-        else proof.state == IdentityState.Same && proof.publicKey == pin
+        // A sign-in kept with no key is from before servers proved theirs: nothing ties it to this one.
+        pin.isNotEmpty() && proof.state == IdentityState.Same && proof.publicKey == pin
 
     // Just before a code or a password goes out: is this still the key the person was shown?
     fun beforeSending(shownKey: String, proof: ServerProof) = when (proof.state) {
         IdentityState.Unreachable -> SendStep.Unreachable
         IdentityState.Bad -> SendStep.Refuse
         IdentityState.Different -> SendStep.Changed
-        IdentityState.None -> if (shownKey.isEmpty()) SendStep.Send else SendStep.Refuse
         IdentityState.New -> if (shownKey.isEmpty()) SendStep.Send else SendStep.Changed
         IdentityState.Same -> if (proof.publicKey == shownKey) SendStep.Send else SendStep.Changed
     }
@@ -117,7 +115,6 @@ object Identity {
         IdentityState.Bad -> NextStep.Refuse
         IdentityState.Unreachable -> NextStep.Lost
         IdentityState.New -> NextStep.AskCode
-        IdentityState.None -> NextStep.SignIn
         IdentityState.Same -> if (tokenFits) NextStep.Open else NextStep.SignIn
     }
 
@@ -126,6 +123,6 @@ object Identity {
         IdentityState.Different -> NextStep.Warn
         IdentityState.Bad -> NextStep.Refuse
         IdentityState.Unreachable -> NextStep.Lost
-        IdentityState.New, IdentityState.None, IdentityState.Same -> if (tokenFits) NextStep.Open else NextStep.SignIn
+        IdentityState.New, IdentityState.Same -> if (tokenFits) NextStep.Open else NextStep.SignIn
     }
 }

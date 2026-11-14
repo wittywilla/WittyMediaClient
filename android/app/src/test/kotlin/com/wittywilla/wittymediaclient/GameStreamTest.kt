@@ -68,9 +68,9 @@ class GameStreamTest {
             """{"id":"abc","itemId":1922,"console":"nes","width":256,"height":224,"aspect":1.3061,"modes":[{"id":"webrtc","video":["h264","vp8"]},{"id":"ws-h264"},{"id":"ws-jpeg"},{"id":"ws-av1"}]}""",
         )
         assertEquals(listOf("ws-h264", "ws-jpeg"), GameModes.order(session.modeIds))
-        // An older server names them.
-        val older: GameSession = json.decodeFromString("""{"id":"abc","modes":["ws-jpeg"]}""")
-        assertEquals(listOf("ws-jpeg"), GameModes.order(older.modeIds))
+        // A bare name isn't a mode: modes are objects.
+        val bare: GameSession = json.decodeFromString("""{"id":"abc","modes":["ws-jpeg"]}""")
+        assertEquals(emptyList<String>(), bare.modeIds)
         assertEquals(GameModes.supported, GameModes.order(emptyList()))
         // A mode this device chose is the only one tried, where the server offers it.
         assertEquals(listOf("ws-jpeg"), GameModes.order(session.modeIds, "ws-jpeg"))
