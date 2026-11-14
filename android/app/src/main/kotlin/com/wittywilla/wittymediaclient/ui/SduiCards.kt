@@ -299,7 +299,9 @@ private fun SduiChip(view: SduiView, modifier: Modifier) {
         { env.act(view.node.action) }, modifier, shape = Radius.FULL, fill = scheme.surfaceVariant, label = view.label,
         focusKey = view.id.takeIf { env.tv }, requestFocus = env.tv && view.id == env.screen.focus.default, ring = env.tv,
     ) {
-        Box(Modifier.heightIn(min = env.pt(if (env.tv) 66 else 44)).padding(horizontal = env.pt(if (env.tv) 32 else 16)), contentAlignment = Alignment.Center) {
+        // A chip's icon leads its words, as the website's and Apple's library chips draw it.
+        Row(Modifier.heightIn(min = env.pt(if (env.tv) 66 else 44)).padding(horizontal = env.pt(if (env.tv) 32 else 16)), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(env.pt(8))) {
+            view.props.str("icon").takeIf { it.isNotEmpty() }?.let { Icon(sduiIcon(it), null, tint = scheme.onBackground, modifier = Modifier.size(env.pt(if (env.tv) 30 else 20))) }
             Text(view.text["title"].orEmpty(), color = scheme.onBackground, fontSize = env.size("body"), fontWeight = FontWeight.Medium, maxLines = 1, overflow = TextOverflow.Ellipsis)
         }
     }

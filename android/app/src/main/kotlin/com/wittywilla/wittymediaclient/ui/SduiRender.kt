@@ -168,7 +168,8 @@ fun SduiPageView(
         val reduce = LocalReduceMotion.current || layout.reducedMotion
         if (!env.tv) TracksScroll(list)
         // A page's own heading: not on a TV, where the top menu says where you are, nor over a picture, nor on Home.
-        val heading = title.takeIf { !env.tv && !tallFirst && screen.document.page.kind != "home" && it.isNotEmpty() }
+        // The page's large title, Home's too, as the Apple apps draw it; not over a tall first section (a hero), not on a TV.
+        val heading = title.takeIf { !env.tv && !tallFirst && it.isNotEmpty() }
         val topRoom = if (env.tv) env.space("s") else if (tallFirst && !offline && screenTime == null) 0.dp else LocalTopRoom.current
         val bottomRoom = if (env.tv) env.pt(layout.safeArea.bottom) else LocalBottomRoom.current
         // The Dock's jump to a letter: choose one, then ask for pages until a title starting with it has come (at most 20), and
@@ -234,10 +235,9 @@ fun SduiPageView(
                 if (native == null) {
                     if (layout.truncated) item(key = "~truncated", contentType = "note") { SduiPageNote("This page has more than this device shows at once.", Modifier.padding(horizontal = side).padding(top = gap)) }
                     if (customise != null) item(key = "~customise", contentType = "customise") {
-                        Box(Modifier.fillMaxWidth().padding(top = gap, bottom = env.space("xs")), contentAlignment = Alignment.Center) {
-                            val words = if (screen.document.page.kind == "home") "Customize home" else "Customize this page"
-                            if (env.tv) WittyButton(words, customise, kind = ButtonKind.Secondary, pill = true, focusKey = "~customise")
-                            else WebButton(words, customise, WebButtonKind.Ghost, small = true)
+                        // "Customise", a pill with its sliders at the page's margin, as Apple's.
+                        Box(Modifier.fillMaxWidth().padding(horizontal = side).padding(top = gap, bottom = env.space("xs")), contentAlignment = if (env.tv) Alignment.Center else Alignment.CenterStart) {
+                            WittyButton("Customise", customise, kind = ButtonKind.Secondary, pill = true, icon = Symbols.Tune, focusKey = "~customise")
                         }
                     }
                     if (!env.tv) item(key = "~foot", contentType = "foot") { PageFoot(env.nav) }

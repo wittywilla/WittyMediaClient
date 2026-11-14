@@ -73,6 +73,14 @@ object WebIcons {
     val Image: ImageVector by lazy { webIcon("image", "M21 19V5a2 2 0 00-2-2H5a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2zM8.5 13.5l2.5 3 3.5-4.5 4.5 6H5z") }
     val Film: ImageVector by lazy { webIcon("film", "M4 4h16v16H4zM6 6v2h2V6zm0 4v2h2v-2zm0 4v2h2v-2zm10-8v2h2V6zm0 4v2h2v-2zm0 4v2h2v-2zM10 6v12h4V6z") }
     val Library: ImageVector by lazy { webIcon("library", "M4 6H2v14a2 2 0 002 2h14v-2H4zm16-4H8a2 2 0 00-2 2v12a2 2 0 002 2h12a2 2 0 002-2V4a2 2 0 00-2-2zm-1 9H9V9h10zm-4 4H9v-2h6zm4-8H9V5h10z") }
+    // A game controller in outline, as Apple's gamecontroller symbol: what the apps draw for a game without a picture.
+    val GamepadLine: ImageVector by lazy {
+        ImageVector.Builder("gamepad-line", 24.dp, 24.dp, 24f, 24f)
+            .addPath(addPathNodes(spacedArcs("M7.5 6.5h9a5 5 0 015 5v4a3 3 0 01-5.4 1.8L14.6 15.5H9.4l-1.5 1.8A3 3 0 012.5 15.5v-4a5 5 0 015-5zM7.5 9.5v4M5.5 11.5h4")),
+                stroke = SolidColor(Color.Black), strokeLineWidth = 1.6f, strokeLineCap = androidx.compose.ui.graphics.StrokeCap.Round, strokeLineJoin = androidx.compose.ui.graphics.StrokeJoin.Round)
+            .addPath(addPathNodes(spacedArcs("M16 10.2a1 1 0 100 2 1 1 0 000-2zM18 12.4a1 1 0 100 2 1 1 0 000-2z")), fill = SolidColor(Color.Black))
+            .build()
+    }
     val Gamepad: ImageVector by lazy { webIcon("gamepad", "M7 7h10a5 5 0 015 5v3.5a3.5 3.5 0 01-6.4 2L14 16h-4l-1.6 1.5A3.5 3.5 0 012 15.5V12a5 5 0 015-5zm0 2.5V11H5.5v1.5H7V14h1.5v-1.5H10V11H8.5V9.5zM16 10a1 1 0 100 2 1 1 0 000-2zm2.5 2.5a1 1 0 100 2 1 1 0 000-2z") }
     val Shorts: ImageVector by lazy { webIcon("shorts", "M17 2H7a3 3 0 00-3 3v14a3 3 0 003 3h10a3 3 0 003-3V5a3 3 0 00-3-3zm-7 14V8l6 4z") }
     val Channels: ImageVector by lazy { webIcon("channels", "M21 5H3a2 2 0 00-2 2v10a2 2 0 002 2h18a2 2 0 002-2V7a2 2 0 00-2-2zM10 15.5v-7l6 3.5z") }
