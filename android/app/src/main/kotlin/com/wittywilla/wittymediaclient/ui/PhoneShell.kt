@@ -384,7 +384,7 @@ private fun TabBar(nav: Nav, inset: Dp, modifier: Modifier, openMenu: () -> Unit
 private fun barEntries(nav: Nav): List<Pair<SduiNavItem, Route>>? = if (nav.sduiNav == null) null else nav.sduiBar
 
 // The floating bar, made from the server's menu and drawn as the bar above is: the entries in the server's order, at
-// most five across, with Menu for what sits behind More. Menu goes before You when You is last, so the avatar keeps
+// most six across, with Menu for what sits behind More. Menu goes before You when You is last, so the avatar keeps
 // the far end.
 @Composable
 private fun ServedTabBar(nav: Nav, entries: List<Pair<SduiNavItem, Route>>, inset: Dp, modifier: Modifier, openMenu: () -> Unit) {
