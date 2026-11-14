@@ -84,6 +84,9 @@ data class SduiMeta(
     val source: String = "",
     val configRevision: Int = 0,
     val ttlSeconds: Int = 0,
+    // Something on the page is in progress (a library scanning): ask again this many seconds after each answer, while
+    // the page shows. Absent or 0: don't (docs/SDUI.md, "Pages that are in progress").
+    val refreshSec: Int = 0,
 )
 
 @Serializable
