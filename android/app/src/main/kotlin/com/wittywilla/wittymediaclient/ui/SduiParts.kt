@@ -1095,11 +1095,36 @@ fun SduiNotice(view: SduiView, modifier: Modifier = Modifier) {
         view.text["title"]?.let { Text(it, color = scheme.onSurface, fontSize = env.size("title"), fontWeight = FontWeight.SemiBold) }
         view.text["text"]?.let { Text(it, color = scheme.onSurfaceVariant, fontSize = env.size("body")) }
     }
+    // A quieter second button beside the main one (`props.dismiss`): a command, such as setting a module's step aside.
+    val dismiss = p.child("dismiss")?.let { d ->
+        val label = d.str("label")
+        val op = d.str("op")
+        if (label.isEmpty() || op.isEmpty()) null else label to SduiAction(type = "command", op = op, params = d.child("params") ?: kotlinx.serialization.json.JsonObject(emptyMap()))
+    }
     @Composable
-    fun press() {
+    fun first() {
         if (button == null) return
         if (env.tv) WittyButton(button, { env.act(view.node.action) }, kind = ButtonKind.Primary, pill = true, focusKey = view.id, requestFocus = view.id == env.screen.focus.default)
         else WebButton(button, { env.act(view.node.action) }, WebButtonKind.Primary, small = true)
+    }
+    @Composable
+    fun quiet() {
+        val (label, action) = dismiss ?: return
+        if (env.tv) WittyButton(label, { env.act(action) }, kind = ButtonKind.Secondary, pill = true, focusKey = view.id + "~dismiss")
+        else WebButton(label, { env.act(action) }, WebButtonKind.Ghost, small = true)
+    }
+    // The main button first, then Dismiss: side by side on a TV or a tablet, each its own stop for a remote, and under it
+    // on a phone.
+    @Composable
+    fun press() {
+        if (button == null && dismiss == null) return
+        if (env.tv || env.tablet) Row(if (env.tv) Modifier.remoteRow() else Modifier, horizontalArrangement = Arrangement.spacedBy(env.space("s")), verticalAlignment = Alignment.CenterVertically) {
+            first()
+            quiet()
+        } else Column(verticalArrangement = Arrangement.spacedBy(env.space("xs"))) {
+            first()
+            quiet()
+        }
     }
     Row(
         modifier.fillMaxWidth().clip(corner).background(scheme.surface).height(IntrinsicSize.Min).semantics { contentDescription = view.label },
