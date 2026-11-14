@@ -1443,7 +1443,8 @@ fun AppRoot(app: WittyApp) {
     }
 }
 
-private const val BAR_CELLS = 5
+// Six: Home, Search, Live TV, Games (WittyPlay, the owner's choice for the bar), Menu and You.
+private const val BAR_CELLS = 6
 const val AUTO_THEME = "auto"
 private const val LIGHT_THEME = "light"
 private const val NAV_VEIL_ALPHA = 0xB3
