@@ -592,11 +592,13 @@ fun SduiDetailHeader(view: SduiView) {
                         view.text["facts"]?.let { SduiFacts(it, lines = 1) }
                         view.text["overview"]?.let { Text(it, color = scheme.onBackground.copy(alpha = 0.86f), fontSize = env.size("body"), maxLines = view.line("overview", 4), overflow = TextOverflow.Ellipsis) }
                         view.progress?.let { SduiProgressLine(it, Modifier.padding(top = env.space("xs")).widthIn(max = env.pt(600))) }
-                        // The buttons centred under the words, as on every device.
-                        Row(Modifier.fillMaxWidth().padding(top = env.space("xs")).remoteRow(), horizontalArrangement = Arrangement.spacedBy(env.pt(16), Alignment.CenterHorizontally)) {
-                            buttons.forEachIndexed { i, button ->
-                                val main = button.primary || (i == 0 && buttons.none { it.primary })
-                                SduiActionButton(button, focusKey = "${view.id}~${button.id}", requestFocus = main && view.id == env.screen.focus.default)
+                        // The buttons centred under the words, as on every device, in a row that scrolls when they don't fit.
+                        BoxWithConstraints(Modifier.fillMaxWidth().padding(top = env.space("xs"))) {
+                            Row(Modifier.remoteRow().horizontalScroll(rememberScrollState()).widthIn(min = maxWidth), horizontalArrangement = Arrangement.spacedBy(env.pt(16), Alignment.CenterHorizontally)) {
+                                buttons.forEachIndexed { i, button ->
+                                    val main = button.primary || (i == 0 && buttons.none { it.primary })
+                                    SduiActionButton(button, focusKey = "${view.id}~${button.id}", requestFocus = main && view.id == env.screen.focus.default)
+                                }
                             }
                         }
                     }

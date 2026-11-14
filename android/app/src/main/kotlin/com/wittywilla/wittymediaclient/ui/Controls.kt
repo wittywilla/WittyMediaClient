@@ -312,7 +312,7 @@ fun WittyButton(
                 horizontalArrangement = Arrangement.spacedBy(metrics.u(8)),
             ) {
                 if (icon != null) Icon(icon, contentDescription = null, tint = shown, modifier = Modifier.size(metrics.u(if (metrics.tv) 30 else 20)))
-                Text(text, color = shown, style = style, textAlign = TextAlign.Center)
+                Text(text, color = shown, style = style, textAlign = TextAlign.Center, maxLines = 1, softWrap = false)
             }
             if (busy) Spinner(shown, metrics.u(if (metrics.tv) 30 else 20))
         }
