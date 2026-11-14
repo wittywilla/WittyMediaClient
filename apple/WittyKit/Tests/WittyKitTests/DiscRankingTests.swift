@@ -131,16 +131,16 @@ final class DiscRankingTests: XCTestCase {
         let stand = try StandInServer { _ in StandInServer.answer(body: body) }
         addTeardownBlock { stand.stop() }
         let client = WittyClient(base: stand.address, token: "t")
-        let read = try await client.discAnalysis(9)
-        let chosen = try await client.chooseDiscTitle(9, ttn: 801)
-        let cleared = try await client.clearDiscChoice(9)
-        let again = try await client.rankDiscAgain(9, secondOpinion: true)
+        let read = try await client.discAnalysis(9, kind: "bluray-iso")
+        let chosen = try await client.chooseDiscTitle(9, kind: "bluray-iso", ttn: 801)
+        let cleared = try await client.clearDiscChoice(9, kind: "dvd-folder")
+        let again = try await client.rankDiscAgain(9, kind: "bluray-iso", secondOpinion: true)
         XCTAssertEqual([read.main, chosen.main, cleared.main, again.main], [800, 800, 800, 800])
         XCTAssertEqual(stand.requests.map(\.line), [
-            "GET /api/v1/items/9/disc/analysis HTTP/1.1",
-            "PUT /api/v1/items/9/disc/choice HTTP/1.1",
-            "DELETE /api/v1/items/9/disc/choice HTTP/1.1",
-            "POST /api/v1/items/9/disc/analysis HTTP/1.1",
+            "GET /api/v1/modules/wittybluray/discs/9/analysis HTTP/1.1",
+            "PUT /api/v1/modules/wittybluray/discs/9/choice HTTP/1.1",
+            "DELETE /api/v1/modules/wittydvd/discs/9/choice HTTP/1.1",
+            "POST /api/v1/modules/wittybluray/discs/9/analysis HTTP/1.1",
         ])
     }
 }
