@@ -26,7 +26,17 @@ private struct SDUIFocusKey: EnvironmentKey {
     static let defaultValue: FocusState<String?>.Binding? = nil
 }
 
+private struct SDUIPlayFrameKey: EnvironmentKey {
+    static let defaultValue = false
+}
+
 extension EnvironmentValues {
+    /// The page is inside WittyPlay's frame on Apple TV (TvPlayFrame.swift), above its round dock.
+    var sduiInPlayFrame: Bool {
+        get { self[SDUIPlayFrameKey.self] }
+        set { self[SDUIPlayFrameKey.self] = newValue }
+    }
+
     /// The device profile the page was fitted to: every size a component uses comes from here.
     var sduiLayout: SDUILayout {
         get { self[SDUILayoutKey.self] }

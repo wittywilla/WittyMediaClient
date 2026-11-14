@@ -46,7 +46,9 @@ struct SDUIPageScreen: View {
     @ViewBuilder private var framed: some View {
         #if os(tvOS)
         if let regions {
-            TvPlayFrame(regions: regions, place: place) { content.frame(maxWidth: .infinity, maxHeight: .infinity) }
+            TvPlayFrame(regions: regions, place: place) {
+                content.frame(maxWidth: .infinity, maxHeight: .infinity).environment(\.sduiInPlayFrame, true)
+            }
                 .moduleScope(WittyPlayPlace.isPlayPage(place.page) ? "wittyplay" : "")
         } else {
             content
