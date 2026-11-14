@@ -53,9 +53,9 @@ public struct LayoutWire: Codable, Equatable, Sendable {
         finish = s(.finish, "flat")
     }
 
-    /// The wireframe to draw for a look: a television's own, or the desktop's for every other screen (a phone's bottom tabs
-    /// are the same in every look, so the preview shows the look's own menu). A server that sends no `wire` gets the default.
-    public static func of(_ look: ExperienceCatalogue.Info, tv: Bool) -> LayoutWire {
-        look.wire[tv ? "tv" : "desktop"] ?? look.wire["tablet"] ?? look.wire["web"] ?? LayoutWire()
+    /// The wireframe to draw for a look on this device's form factor (`phone`, `tablet`, `tv` or `desktop`): the server works
+    /// one out for each. A server that sends no `wire` gets the default.
+    public static func of(_ look: ExperienceCatalogue.Info, form: String) -> LayoutWire {
+        look.wire[form] ?? look.wire["web"] ?? LayoutWire()
     }
 }

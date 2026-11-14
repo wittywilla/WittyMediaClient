@@ -117,17 +117,20 @@ public struct DesignPageSpec: Codable, Equatable, Sendable {
         public var swatches: [String]
         /// The wireframe of a look's layout (the server's `wire` of the experience), drawn in the swatches' colours instead of the three swatches (`LayoutThumb`).
         public var wire: LayoutWire?
+        /// The wire is a phone's: drawn upright, the shape of a phone's screen.
+        public var portrait: Bool
         /// A symbol over the title (an SF Symbol name on Apple), for a card that is a way to do something; empty for none.
         public var symbol: String
 
         public init(id: String = "", title: String, subtitle: String = "", on: Bool = false, swatches: [String] = [], symbol: String = "",
-                    wire: LayoutWire? = nil) {
+                    wire: LayoutWire? = nil, portrait: Bool = false) {
             self.id = id.isEmpty ? DesignPageSpec.slug(title) : id
             self.title = title
             self.subtitle = subtitle
             self.on = on
             self.swatches = swatches
             self.wire = wire
+            self.portrait = portrait
             self.symbol = symbol
         }
     }
@@ -396,7 +399,7 @@ extension DesignPageSpec.Chip {
 }
 
 extension DesignPageSpec.Card {
-    private enum Keys: String, CodingKey { case id, title, subtitle, on, swatches, symbol, wire }
+    private enum Keys: String, CodingKey { case id, title, subtitle, on, swatches, symbol, wire, portrait }
 
     public init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: Keys.self)
@@ -405,7 +408,8 @@ extension DesignPageSpec.Card {
                   on: try c.decodeIfPresent(Bool.self, forKey: .on) ?? false,
                   swatches: try c.decodeIfPresent([String].self, forKey: .swatches) ?? [],
                   symbol: try c.decodeIfPresent(String.self, forKey: .symbol) ?? "",
-                  wire: try? c.decodeIfPresent(LayoutWire.self, forKey: .wire))
+                  wire: try? c.decodeIfPresent(LayoutWire.self, forKey: .wire),
+                  portrait: try c.decodeIfPresent(Bool.self, forKey: .portrait) ?? false)
     }
 }
 

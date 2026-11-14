@@ -262,15 +262,15 @@ public enum AppearancePage {
         public var canPickFile: Bool
         public var server: String
         public var profile: String
-        /// A television previews the look's television menu.
-        public var tv: Bool
+        /// This device's form factor (`phone`, `tablet`, `tv` or `desktop`): a look is previewed as it is drawn here.
+        public var form: String
         /// A problem to show under the page, the server's words.
         public var problem: String
 
         public init(catalogue: ExperienceCatalogue, state: ExperienceState? = nil, look: LookState = LookState(),
                     themes: [ThemeChoice] = [], chosenTheme: String = "", pendingExperience: String = "", pendingTheme: String = "",
-                    canPickFile: Bool = true, server: String = "", profile: String = "", tv: Bool = false, problem: String = "") {
-            self.tv = tv
+                    canPickFile: Bool = true, server: String = "", profile: String = "", form: String = "desktop", problem: String = "") {
+            self.form = form
             self.catalogue = catalogue
             self.state = state
             self.look = look
@@ -328,7 +328,7 @@ public enum AppearancePage {
             return DesignPageSpec.Card(id: "look-" + info.id, title: info.name,
                                        subtitle: [info.tagline, themeName].filter { !$0.isEmpty }.joined(separator: " · "),
                                        on: info.id == shown, swatches: swatches(for: info.theme, in: i.themes),
-                                       wire: LayoutWire.of(info, tv: i.tv))
+                                       wire: LayoutWire.of(info, form: i.form), portrait: i.form == "phone")
         }
     }
 
@@ -377,28 +377,66 @@ public enum AppearancePage {
                               sections: sections, actions: actions, foot: foot)
     }
 
-    /// First connect, in the app: look and theme chosen once. Locked when an administrator requires them.
-    public static func chooser(_ i: Inputs) -> DesignPageSpec {
-        let required = i.requiredExperience != nil || i.requiredTheme != nil
-        var sections: [DesignPageSpec.Section] = []
-        if required {
-            var cards: [DesignPageSpec.Card] = []
-            if let r = i.requiredExperience { cards += lookCards(i).filter { $0.id == "look-" + r.value } }
-            if let r = i.requiredTheme { cards += themeCards(i).filter { $0.id == "theme-" + r.value } }
-            sections.append(.secC("Required", cards, 2))
-            if i.requiredExperience == nil { sections.insert(.secC("Look", lookCards(i), 2), at: 0) }
-            if i.requiredTheme == nil { sections.append(.secC("Theme", Array(themeCards(i).prefix(8)), 2)) }
-        } else {
-            sections = [.secC("Look", lookCards(i), 2), .secC("Theme", themeCards(i).filter { $0.id != "import-theme" }, 2)]
-            if i.canPickFile { sections.append(.secP("", [.Cc("Import a theme…")])) }
-        }
-        if !i.problem.isEmpty { sections.append(.secN("", i.problem, true)) }
+    /// First connect, in the app: the two steps of choosing how it looks. The layout first, each look drawn as it is on this
+    /// device; then its theme, the chosen look previewed in each.
+    public enum ChooserStep: Sendable { case layout, colour }
+
+    /// The theme the colour step shows as chosen: the one picked, else the one the chosen look wears.
+    public static func colourTheme(_ i: Inputs) -> String {
+        if i.requiredTheme != nil || !i.pendingTheme.isEmpty || !i.chosenTheme.isEmpty { return i.shownTheme }
+        return i.catalogue.experiences.first { $0.id == i.shownExperience }?.theme ?? i.shownTheme
+    }
+
+    /// The step a chooser opens on: colours alone when the look is required.
+    public static func firstStep(_ i: Inputs) -> ChooserStep { i.requiredExperience != nil ? .colour : .layout }
+
+    /// First connect, in the app: look and theme chosen once, on two pages. Locked when an administrator requires them.
+    public static func chooser(_ i: Inputs, step: ChooserStep = .layout) -> DesignPageSpec {
+        let eyebrow = i.profile.isEmpty ? "Welcome" : "Welcome, \(i.profile)"
         let by = (i.requiredExperience ?? i.requiredTheme)?.by ?? ""
-        return DesignPageSpec(eyebrow: i.profile.isEmpty ? "Welcome" : "Welcome, \(i.profile)",
-                              title: required && i.requiredExperience != nil && i.requiredTheme != nil ? "Your look is set" : (required ? "Part of your look is set" : "Choose how it looks"),
-                              lead: required ? (by.isEmpty ? "Your administrator set this for your profile." : "\(by) set this for your profile.") + " It looks the same on every device."
-                                  : "Pick a look and a theme. You can change them any time in Settings.",
-                              sections: sections, actions: [required && i.requiredExperience != nil && i.requiredTheme != nil ? .A1("Continue") : .A1("Use this")])
+        let setBy = (by.isEmpty ? "Your administrator set this for your profile." : "\(by) set this for your profile.") + " It looks the same on every device."
+        let foot = i.problem.isEmpty ? [] : [DesignPageSpec.Section.secN("", i.problem, true)]
+        let portrait = i.form == "phone"
+        let look = i.catalogue.experiences.first { $0.id == i.shownExperience }
+        let wire = look.map { LayoutWire.of($0, form: i.form) } ?? LayoutWire()
+
+        if i.requiredExperience != nil, i.requiredTheme != nil {
+            let theme = i.themes.first { $0.id == i.shownTheme }
+            let card = DesignPageSpec.Card(id: "preview", title: [look?.name, theme?.name].compactMap { $0 }.joined(separator: " · "),
+                                           subtitle: "Required", on: true, swatches: swatches(for: i.shownTheme, in: i.themes),
+                                           wire: wire, portrait: portrait)
+            return DesignPageSpec(eyebrow: eyebrow, title: "Your look is set", lead: setBy,
+                                  sections: [.secC("", [card], 1)] + foot, actions: [.A1("Continue")])
+        }
+
+        switch step {
+        case .layout:
+            let next = i.requiredTheme != nil ? "Continue" : "Next"
+            return DesignPageSpec(eyebrow: eyebrow, title: "Choose a layout",
+                                  lead: "Each look is a layout of its own: the menu, Home and the cards, drawn as they are on this device. Colours are the next step, and you can change both any time in Settings.",
+                                  sections: [.secC("", lookCards(i), 2)] + foot, actions: [.A1(next)])
+        case .colour:
+            let shown = colourTheme(i)
+            let theme = i.themes.first { $0.id == shown }
+            let preview = DesignPageSpec.Card(id: "preview", title: [look?.name, theme?.name].compactMap { $0 }.joined(separator: " · "),
+                                              subtitle: theme.map { $0.dark ? "Dark" : "Light" } ?? "", on: false,
+                                              swatches: swatches(for: shown, in: i.themes), wire: wire, portrait: portrait)
+            var sections: [DesignPageSpec.Section] = [.secC("Preview", [preview], 1)]
+            if i.requiredTheme != nil {
+                sections.append(.secN("", setBy))
+            } else {
+                let cards = i.themes.map { t in
+                    DesignPageSpec.Card(id: "theme-" + t.id, title: t.name, subtitle: t.imported ? "Imported · yours" : (t.dark ? "Dark" : "Light"),
+                                        on: t.id == shown, swatches: t.swatches.isEmpty ? fallbackSwatches : t.swatches, wire: wire, portrait: portrait)
+                }
+                sections.append(.secC("Themes", cards, 2))
+                if i.canPickFile { sections.append(.secP("", [.Cc("Import a theme…")])) }
+            }
+            let back: [DesignPageSpec.Action] = i.requiredExperience == nil ? [.A2("Back")] : []
+            return DesignPageSpec(eyebrow: eyebrow, title: "Choose colours",
+                                  lead: i.requiredExperience == nil ? "The colours. Any theme goes with any look: here is yours in each." : "Your look is set. " + setBy,
+                                  sections: sections + foot, actions: [.A1("Use this")] + back)
+        }
     }
 
     /// The look and theme as a pressed card id: `look-lumen` or `theme-cinema`.
@@ -532,10 +570,10 @@ public extension WittyClient {
 public extension LookPolicy {
     /// The sheet that chooses what is required of one person or everyone: a look, a theme, either, or neither. Pressing a
     /// card chooses it (pressing the chosen one again, or "Not required", clears the part); Done keeps it.
-    static func picker(who: String, current: Requirement, tv: Bool = false, looks: [ExperienceCatalogue.Info], themes: [AppearancePage.ThemeChoice]) -> DesignPageSpec {
+    static func picker(who: String, current: Requirement, form: String = "desktop", looks: [ExperienceCatalogue.Info], themes: [AppearancePage.ThemeChoice]) -> DesignPageSpec {
         let lookCards = [DesignPageSpec.Card(id: "look-none", title: "Not required", subtitle: "They choose their own look", on: current.experience.isEmpty)]
             + looks.map { DesignPageSpec.Card(id: "look-" + $0.id, title: $0.name, subtitle: $0.tagline, on: current.experience == $0.id,
-                                              swatches: AppearancePage.swatches(for: $0.theme, in: themes), wire: LayoutWire.of($0, tv: tv)) }
+                                              swatches: AppearancePage.swatches(for: $0.theme, in: themes), wire: LayoutWire.of($0, form: form), portrait: form == "phone") }
         let themeCards = [DesignPageSpec.Card(id: "theme-none", title: "Not required", subtitle: "They choose their own theme", on: current.theme.isEmpty)]
             + themes.map { DesignPageSpec.Card(id: "theme-" + $0.id, title: $0.name, subtitle: $0.dark ? "Dark" : "Light", on: current.theme == $0.id,
                                                swatches: $0.swatches.isEmpty ? AppearancePage.fallbackSwatches : $0.swatches) }

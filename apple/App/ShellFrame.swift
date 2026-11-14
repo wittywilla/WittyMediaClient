@@ -82,6 +82,7 @@ struct FrameEntries {
     }
 
     func open(_ entry: SDUINavItem) {
+        if let address = model.wittyPlayAddress(.page(entry.address)) { model.wittyPlay = address; return }
         let tab = center.tab(for: entry)
         if center.phoneTabs.contains(tab), tab != .home {
             if model.tab == tab { model.paths[tab] = [] } else { model.tab = tab }

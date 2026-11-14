@@ -400,7 +400,10 @@ struct FloatingBar: View {
             // The server's own menu: its entries for the bar, in its order.
             ForEach(center.barEntries) { entry in
                 let tab = center.tab(for: entry)
-                slot(PlainWords.clean(entry.label, limit: 40), chosen: marked(tab), action: { press(tab) }) {
+                slot(PlainWords.clean(entry.label, limit: 40), chosen: marked(tab), action: {
+                    // WittyPlay opens over everything, as the website's does, rather than as a tab.
+                    if let address = model.wittyPlayAddress(.page(entry.address)) { model.wittyPlay = address } else { press(tab) }
+                }) {
                     barIcon(SDUIIcon.symbol(entry.icon, or: "square") + (marked(tab) && entry.icon == "home" ? ".fill" : ""))
                 }
             }
