@@ -214,6 +214,12 @@ class SduiRev8Test {
         assertEquals(2, first.regions.statusBar.size)
         assertEquals("layer", first.regions.systemDock[1].layer)
         assertTrue(first.dockOnSide)
+        // The shell's own "off in every look" doesn't hide what a page supplies.
+        val tvDefault = doc("""{"version":1,"catalog":8,"page":{"id":"o"},"theme":{"scope":"wittyplay"},"layout":{"formFactor":"tv","shell":{"placements":{"statusBar":{"visible":false},"systemDock":{"visible":false}}}},"root":{"type":"Page","id":"page"},
+            "regions":{"statusBar":[{"id":"server","kind":"server"}],"systemDock":[{"id":"home","label":"Home","icon":"home","route":"/page/online"}]}}""")
+        val shown = SduiRegionRules.after(tvDefault, null)!!
+        assertFalse(shown.hideStatusBar)
+        assertFalse(shown.hideSystemDock)
         val sameScope = doc("""{"version":1,"catalog":8,"page":{"id":"t"},"theme":{"scope":"wittyplay"},"root":{"type":"Page","id":"page"}}""")
         assertEquals(first, SduiRegionRules.after(sameScope, first))
         val elsewhere = doc("""{"version":1,"catalog":8,"page":{"id":"h"},"root":{"type":"Page","id":"page"}}""")

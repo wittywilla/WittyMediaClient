@@ -178,9 +178,9 @@ object SduiRegionRules {
         val own = page.regions?.takeIf { it.statusBar.isNotEmpty() || it.systemDock.isNotEmpty() }
         val placements = page.layout?.shell?.placements.orEmpty()
         return when {
-            own != null -> SduiRegionsState(
-                own, scope, placements["statusBar"]?.visible == false, placements["systemDock"]?.visible == false, placements["systemDock"]?.position == "side",
-            )
+            // A page that supplies them turns them on (docs/SDUI.md, Shell regions): the shell's own "off in every look"
+            // placement doesn't hide them, as Apple TV and the website draw them. Where the dock sits still comes from it.
+            own != null -> SduiRegionsState(own, scope, hideStatusBar = false, hideSystemDock = false, dockOnSide = placements["systemDock"]?.position == "side")
             held != null && scope.isNotEmpty() && scope == held.scope -> held
             else -> null
         }
