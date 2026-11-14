@@ -142,9 +142,9 @@ struct SDUICardView: View {
             .frame(width: fills ? nil : width)
             .overlay { SDUIPicture(picture: card.picture, symbol: pictureSymbol, shownWidth: width) }
             // No picture (a game with no art): its name on the tile, as the website draws a box with the title, so the
-            // card is never a blank grey square, whether or not its title is shown under it.
+            // card is never a blank grey square. Only where the card doesn't print its title under the picture already.
             .overlay(alignment: .bottom) {
-                if card.picture == nil, !isCircle, !card.title.isEmpty {
+                if card.picture == nil, !isCircle, !card.title.isEmpty, !shows("title") {
                     Text(card.title)
                         .sduiFont("title", weight: .semibold)
                         .foregroundStyle(palette.text)

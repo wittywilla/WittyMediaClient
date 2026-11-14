@@ -39,11 +39,11 @@ struct TvTopBar: View {
         switch tab {
         case .games: return WittyPlayPlace.home
         case .library(let id):
-            return model.libraries.first(where: { $0.id == id })?.hasGameScreens == true ? WittyPlayPlace.home : nil
+            return model.libraries.first(where: { $0.id == id })?.hasGameScreens == true ? WittyPlayPlace.library(id) : nil
         case .sdui(let id):
             guard let entry = center.entry(id) else { return nil }
             if WittyPlayPlace.isPlayPath(entry.address) { return entry.address }
-            if let library = model.libraries.first(where: { "/library/\($0.id)" == entry.address }), library.hasGameScreens { return WittyPlayPlace.home }
+            if let library = model.libraries.first(where: { "/library/\($0.id)" == entry.address }), library.hasGameScreens { return WittyPlayPlace.library(library.id) }
             return nil
         default: return nil
         }

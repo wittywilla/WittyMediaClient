@@ -284,6 +284,16 @@ struct SDUIListRow: View {
     @Environment(\.sduiFocus) private var focus
     let row: SDUIElement
     let dense: Bool
+    /// A select's choices, while they are open.
+    @State private var choosing = false
+
+    /// The row's control (a select, a switch), if it has one.
+    private var control: SDUIRowControl? { SDUIRowControl(row.props["control"]) }
+
+    private func run(_ value: String) {
+        guard let action = control?.action(row.action, choosing: value) else { return }
+        SDUIActor(model: model, center: center, store: store).perform(action)
+    }
 
     /// With a picture, the row is as tall as a small poster; without, a line of text.
     private var height: CGFloat {
@@ -325,6 +335,10 @@ struct SDUIListRow: View {
                 if !row.shown("subtitle").isEmpty {
                     Text(row.shown("subtitle")).sduiFont("caption").foregroundStyle(palette.textSecondary).sduiLines(row.lineLimit("subtitle"))
                 }
+                // A control that can't be used says why, under the row's words.
+                if let control, control.disabled, !control.why.isEmpty {
+                    Text(control.why).sduiFont("caption").foregroundStyle(palette.textHint).lineLimit(2)
+                }
                 if !row.badges.isEmpty {
                     HStack(spacing: 4) {
                         ForEach(Array(row.badges.prefix(2).enumerated()), id: \.offset) { _, badge in
@@ -343,7 +357,14 @@ struct SDUIListRow: View {
             if !row.shown("trailing").isEmpty {
                 Text(row.shown("trailing")).sduiFont("caption").foregroundStyle(palette.textSecondary).lineLimit(1)
             }
-            if row.action != nil {
+            if let control {
+                // What it is set to now: a select's choice, a switch's On or Off.
+                Text(control.shown).sduiFont("body", weight: .medium)
+                    .foregroundStyle(control.disabled ? palette.textHint : palette.accentText).lineLimit(1)
+                if control.type == "select", !control.disabled {
+                    Image(systemName: "chevron.up.chevron.down").font(.wm(size: 13, weight: .semibold)).foregroundStyle(palette.textHint).accessibilityHidden(true)
+                }
+            } else if row.action != nil {
                 Image(systemName: "chevron.right").font(.wm(size: 13, weight: .semibold)).foregroundStyle(palette.textHint).accessibilityHidden(true)
             }
         }
@@ -354,7 +375,25 @@ struct SDUIListRow: View {
 
     var body: some View {
         Group {
-            if row.action != nil {
+            if let control {
+                if control.disabled || row.action == nil {
+                    // Dimmed, and out of focus: a disabled control takes none.
+                    label.opacity(control.disabled ? 0.55 : 1)
+                } else {
+                    Button {
+                        if control.type == "select" { choosing = true } else { run(control.value) }
+                    } label: { label }
+                        .buttonStyle(SurfaceStyle())
+                        .sduiFocusable(focus, row.id)
+                        .accessibilityAddTraits(.isButton)
+                        .accessibilityValue(control.shown)
+                        .confirmationDialog(row.shown("title"), isPresented: $choosing, titleVisibility: .visible) {
+                            ForEach(control.options) { option in
+                                Button(option.value == control.value ? "\(option.label) ✓" : option.label) { run(option.value) }
+                            }
+                        }
+                }
+            } else if row.action != nil {
                 Button { SDUIActor(model: model, center: center, store: store).perform(row.action) } label: { label }
                     .buttonStyle(SurfaceStyle())
                     .sduiFocusable(focus, row.id)
