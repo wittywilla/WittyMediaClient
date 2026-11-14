@@ -86,7 +86,7 @@ fun canPlay(check: GameCheck?, console: GameConsole?, details: GameDetails?): Bo
 
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
-fun GamePageScreen(nav: GamesNav, gameId: Long) {
+fun GamePageScreen(nav: GamesNav, gameId: Long, inShell: Boolean = false) {
     val look = gameLook()
     val api = remember(nav.api) { GamesApi(nav.api) }
     val scope = rememberCoroutineScope()
@@ -144,17 +144,21 @@ fun GamePageScreen(nav: GamesNav, gameId: Long) {
     }
 
     Box(Modifier.fillMaxSize().background(GameColours.background)) {
-        Box(Modifier.fillMaxSize().verticalScroll(rememberScrollState())) {
+        val pageScroll = rememberScrollState()
+        if (inShell) com.wittywilla.wittymediaclient.ui.TracksScroll(pageScroll)
+        Box(Modifier.fillMaxSize().verticalScroll(pageScroll)) {
             // The backdrop across the top, faint and fading into the page, scrolling away with it.
             // The backdrop, else where you left off, as Apple's game page: clear on a phone, faint on a TV.
             val heroUrl = if (g.hasBackdrop) api.backdropUrl(g) else auto?.takeIf { it.hasThumb }?.let { api.saveThumbUrl(g.id, 0, it.updatedAt) }
+            // In the app's shell the top bar shades the picture under it, as over any page with one.
+            if (inShell) com.wittywilla.wittymediaclient.ui.HeroPage(heroUrl != null)
             if (heroUrl != null) {
                 val heroHeight = if (look.tv) 270.dp else 300.dp
                 GamePicture(heroUrl, g.title, Modifier.fillMaxWidth().height(heroHeight).graphicsLayer { alpha = if (look.tv) 0.24f else 0.9f }, contentScale = ContentScale.Crop)
                 Box(Modifier.fillMaxWidth().height(heroHeight).background(Brush.verticalGradient(0.55f to Color.Transparent, 1f to GameColours.background)))
             }
             Column(Modifier.fillMaxWidth().windowInsetsPadding(WindowInsets.statusBars)) {
-                if (!look.tv) {
+                if (!look.tv && !inShell) {
                     Pressable(nav.back, Modifier.padding(start = look.gutter, top = 8.dp).size(40.dp), radius = 20.dp, label = "Back", fill = GameColours.background.copy(alpha = 0.7f)) {
                         Icon(GameIcons.Back, null, Modifier.align(Alignment.Center).size(22.dp), tint = GameColours.text)
                     }
@@ -244,7 +248,7 @@ fun GamePageScreen(nav: GamesNav, gameId: Long) {
                         }
                     } else {
                         // A phone, as Apple's: the cover small at the left over the picture, the console beside it, then the rest.
-                        Column(Modifier.fillMaxWidth().padding(top = if (heroUrl != null) 120.dp else 0.dp), verticalArrangement = Arrangement.spacedBy(20.dp)) {
+                        Column(Modifier.fillMaxWidth().padding(top = if (heroUrl != null) (if (inShell) 168.dp else 120.dp) else if (inShell) 48.dp else 0.dp), verticalArrangement = Arrangement.spacedBy(20.dp)) {
                             Row(verticalAlignment = Alignment.Bottom, horizontalArrangement = Arrangement.spacedBy(16.dp)) {
                                 cover(Modifier.width(narrowCover))
                                 console?.let { Text(it.shortName, color = GameColours.secondary, fontSize = 15.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.padding(bottom = 8.dp)) }
@@ -358,7 +362,8 @@ fun GamePageScreen(nav: GamesNav, gameId: Long) {
                             color = GameColours.secondary, fontSize = look.small,
                         )
                     }
-                    Spacer(Modifier.height(24.dp).windowInsetsPadding(WindowInsets.navigationBars))
+                    // Room under the page for the app's floating bar when it is in the shell.
+                    Spacer(Modifier.height(24.dp + if (inShell) com.wittywilla.wittymediaclient.ui.LocalBottomRoom.current else 0.dp).windowInsetsPadding(WindowInsets.navigationBars))
                 }
             }
         }

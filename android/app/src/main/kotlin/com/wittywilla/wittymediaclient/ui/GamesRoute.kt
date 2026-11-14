@@ -56,7 +56,8 @@ fun GamesRouteScreen(nav: Nav, route: GamesRoute) {
     }
     when (val screen = route.screen) {
         is GamesScreen.Library -> GamesLibraryScreen(games, screen.id, screen.console)
-        is GamesScreen.Game -> GamePageScreen(games, screen.id)
+        // A game's page keeps the app's bar on a phone or tablet, as Apple's; the shell draws its Back.
+        is GamesScreen.Game -> if (nav.app.isTv) GamePageScreen(games, screen.id) else PageShell(nav) { GamePageScreen(games, screen.id, inShell = true) }
         // Saved and stopped, or the game ended itself: back to where it was started from.
         is GamesScreen.Play -> GamePlayerScreen(nav.app, screen.id, screen.start) { if (nav.current == route) nav.pop() }
     }
