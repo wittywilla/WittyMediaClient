@@ -32,7 +32,8 @@ final class SDUIPageStore: ObservableObject {
     /// The document as the server last sent it, for the diff route.
     private var served: SDUILoaded?
     private var working: SDUIDocument?
-    private var loadedAt = Date.distantPast
+    /// Published: a page in progress counts its next refresh from each answer, even one that changed nothing.
+    @Published private var loadedAt = Date.distantPast
     private var generation = 0
     private var window: Int?
     private var catalog = SDUICatalog.builtIn
@@ -65,6 +66,11 @@ final class SDUIPageStore: ObservableObject {
         if let working, working.layout.formFactor != "tv" { show(working) }
     }
 
+    /// Seconds after the last answer to ask again, while the page is open and showing (`meta.refreshSec`); 0 for never.
+    var refreshAfter: Int { working?.meta?.refreshAfter ?? 0 }
+    /// When the last answer arrived: the next quiet refresh counts from it.
+    var answeredAt: Date { loadedAt }
+
     /// The screen has come up, or come back: the first time the page is asked for, drawn at once from what was
     /// kept; after that it is asked again once it is older than the server said it stays good for.
     func appear(_ center: SDUICenter) async {
@@ -73,6 +79,8 @@ final class SDUIPageStore: ObservableObject {
             await load(center)
             return
         }
+        // Something in progress is asked about at once on coming back.
+        if refreshAfter > 0 { await refresh(center, quietly: true); return }
         let ttl = TimeInterval(working?.meta?.ttlSeconds ?? 60)
         // A page that only changes "when something happens" is still asked on coming back to it: something may have.
         if Date().timeIntervalSince(loadedAt) >= min(max(ttl, 0), 300) || offline { await refresh(center) }
@@ -148,19 +156,23 @@ final class SDUIPageStore: ObservableObject {
     }
 
     /// Asks again for the page that's showing: patches where the server still has the render this app has.
-    func refresh(_ center: SDUICenter) async {
+    /// `quietly`: a page in progress asking about itself (`refreshSec`). Nothing dims or flashes, and only what changed
+    /// is read out, once, politely.
+    func refresh(_ center: SDUICenter, quietly: Bool = false) async {
         guard let current = served, screen != nil else {
             await load(center)
             return
         }
         generation += 1
         let mine = generation
-        refreshing = true
+        if !quietly { refreshing = true }
         defer { if mine == generation { refreshing = false } }
         do {
             let loaded = try await center.loader.refresh(page, params: params, device: center.device, current: current)
             guard mine == generation else { return }
+            let before = screen
             accept(loaded)
+            if quietly, let before, let now = screen, let changed = now.firstChange(from: before) { announcePolitely(changed) }
         } catch {
             guard mine == generation, !(error is CancellationError), (error as? URLError)?.code != .cancelled else { return }
             fail(error, center: center)

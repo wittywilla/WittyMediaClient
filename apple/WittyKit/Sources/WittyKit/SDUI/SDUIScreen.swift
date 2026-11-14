@@ -149,6 +149,14 @@ public struct SDUIScreen: Equatable, Sendable {
     public var title: String { document.page.title }
     /// The page's top-level sections.
     public var sections: [SDUIElement] { root.children }
+    /// What a quiet refresh changed, to be read out once: the label of the first element, in page order, that is new
+    /// or reads differently than it did. Nil when nothing a screen reader says has changed.
+    public func firstChange(from before: SDUIScreen) -> String? {
+        var was: [String: String] = [:]
+        for e in before.root.flattened { was[e.id] = e.label }
+        return root.flattened.first { !$0.label.isEmpty && was[$0.id] != $0.label }?.label
+    }
+
     /// The node types on this page that this app doesn't know, and draws as plain columns.
     public var unknownTypes: Set<String> { Set(root.flattened.map(\.unknownType).filter { !$0.isEmpty }) }
 

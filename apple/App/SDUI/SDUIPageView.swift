@@ -20,6 +20,7 @@ struct SDUIPageScreen: View {
     @EnvironmentObject private var center: SDUICenter
     @Environment(\.palette) private var palette
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.scenePhase) private var scenePhase
     let place: SDUIPlace
     var chrome = Chrome.pushed
     @StateObject private var store: SDUIPageStore
@@ -75,6 +76,15 @@ struct SDUIPageScreen: View {
                 if phase == .ready, chrome == .tabRoot { center.settled() }
             }
             .sduiOnChange(of: center.changes) { _ in Task { await store.refresh(center) } }
+            // A page with something in progress asks about itself refreshSec after each answer, one request at a time,
+            // only while it's showing and the app is in front; on coming back to the front, at once.
+            .task(id: "\(store.refreshAfter)|\(store.answeredAt.timeIntervalSince1970)|\(scenePhase == .active)") {
+                guard scenePhase == .active, store.refreshAfter > 0 else { return }
+                let wait = max(0, store.answeredAt.addingTimeInterval(TimeInterval(store.refreshAfter)).timeIntervalSinceNow)
+                if wait > 0 { try? await Task.sleep(nanoseconds: UInt64(wait * 1_000_000_000)) }
+                guard !Task.isCancelled, scenePhase == .active else { return }
+                await store.refresh(center, quietly: true)
+            }
             // Screen time that runs out, or more of it given, changes what the page says about it: ask again.
             .onReceive(model.household.$time.map { $0?.allowed }.removeDuplicates().dropFirst()) { _ in
                 Task { await store.refresh(center) }

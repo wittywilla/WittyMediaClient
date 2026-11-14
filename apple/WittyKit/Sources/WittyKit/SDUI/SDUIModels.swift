@@ -201,6 +201,12 @@ public struct SDUIMeta: Codable, Equatable, Sendable {
     public var source: String?
     public var configRevision: Int?
     public var ttlSeconds: Int?
+    /// Something on the page is in progress (a library scanning): ask for it again this many seconds after the last
+    /// answer, while it's open and showing. Absent or 0: don't.
+    public var refreshSec: Int?
+
+    /// `refreshSec` as the app follows it: 0 for none, at most 300.
+    public var refreshAfter: Int { min(max(refreshSec ?? 0, 0), 300) }
 }
 
 /// What the profile may change about a page, and what it has changed.

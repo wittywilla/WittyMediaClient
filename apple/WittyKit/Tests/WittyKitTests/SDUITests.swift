@@ -789,4 +789,12 @@ final class SDUITests: XCTestCase {
         XCTAssertFalse(SDUI.available(["sdui", "sdui-pages", "sdui-catalog"]))
         XCTAssertFalse(SDUI.available([]))
     }
+
+    func testRefreshSecIsFollowedAndCapped() throws {
+        func meta(_ json: String) throws -> SDUIMeta { try JSONDecoder().decode(SDUIMeta.self, from: Data(json.utf8)) }
+        XCTAssertEqual(try meta(#"{"ttlSeconds":60}"#).refreshAfter, 0)
+        XCTAssertEqual(try meta(#"{"refreshSec":2}"#).refreshAfter, 2)
+        XCTAssertEqual(try meta(#"{"refreshSec":9000}"#).refreshAfter, 300)
+        XCTAssertEqual(try meta(#"{"refreshSec":-4}"#).refreshAfter, 0)
+    }
 }

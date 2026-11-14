@@ -20,6 +20,20 @@ func announce(_ words: String) {
     #endif
 }
 
+/// Words a screen reader says after what it is saying now, without cutting in: a page's progress, say.
+func announcePolitely(_ words: String) {
+    guard !words.isEmpty else { return }
+    #if os(macOS)
+    if let window = NSApplication.shared.mainWindow {
+        NSAccessibility.post(element: window, notification: .announcementRequested, userInfo: [.announcement: words, .priority: NSAccessibilityPriorityLevel.low.rawValue])
+    }
+    #else
+    // Queued behind what's being said, rather than cutting in.
+    UIAccessibility.post(notification: .announcement,
+                         argument: NSAttributedString(string: words, attributes: [.accessibilitySpeechQueueAnnouncement: true]))
+    #endif
+}
+
 /// What went wrong, as on Android: a mark in the danger colour, and the words in the page's own
 /// colour so they can be read in every theme.
 struct ProblemLine: View {
