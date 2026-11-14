@@ -17,7 +17,14 @@ object WittyPlayPlace {
     // The dock always starts with WittyPlay's own Home, so every one of its pages has one press back to it (the website's
     // dockFor in playPaths.ts).
     fun <T> dockFor(entries: List<T>, id: (T) -> String, route: (T) -> String, home: T): List<T> =
-        if (entries.any { id(it) == "home" || route(it).substringBefore('?') == HOME }) entries else listOf(home) + entries
+        if (entries.any { id(it) == "home" || route(it) == HOME }) entries else listOf(home) + entries
+
+    // The dock's button for the page showing: its address and its tab, if it names one, are the page's own.
+    fun isCurrent(buttonRoute: String, page: String, params: Map<String, String>): Boolean {
+        if (buttonRoute.substringBefore('?') != "/page/$page") return false
+        val tab = buttonRoute.substringAfter('?', "").split('&').firstOrNull { it.startsWith("tab=") }?.substringAfter('=')
+        return tab == params["tab"]?.ifEmpty { null }
+    }
 
     // One games library, as WittyPlay draws it.
     fun library(id: Long) = "/wittyplay/library/$id"

@@ -443,7 +443,6 @@ private fun StatusClock() {
 private fun SduiSystemDock(nav: Nav, state: SduiRegionsState, vertical: Boolean) {
     val metrics = LocalMetrics.current
     val scheme = MaterialTheme.colorScheme
-    val here = (nav.current as? Route.Sdui)?.let { r -> "/page/" + r.page }.orEmpty()
     // 10-foot round buttons on a TV, as Apple TV's 104.
     val size = metrics.u(if (metrics.tv) 104 else 48)
     val home = com.wittywilla.wittymediaclient.net.SduiSystemButton(id = "home", label = "Home", icon = "home", route = com.wittywilla.wittymediaclient.net.WittyPlayPlace.HOME)
@@ -461,7 +460,7 @@ private fun SduiSystemDock(nav: Nav, state: SduiRegionsState, vertical: Boolean)
     }
     val buttons: @Composable () -> Unit = {
         entries.forEach { b ->
-            val current = b.route.substringBefore('?') == here
+            val current = (nav.current as? Route.Sdui)?.let { com.wittywilla.wittymediaclient.net.WittyPlayPlace.isCurrent(b.route, it.page, it.params) } == true
             Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.padding(metrics.u(4))) {
                 Pressable(
                     { press(b) }, Modifier.size(size), shape = CircleShape,
