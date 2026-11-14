@@ -3,6 +3,7 @@
 package com.wittywilla.wittymediaclient.games
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -130,6 +131,7 @@ fun GamePageScreen(nav: GamesNav, gameId: Long) {
         }
         return
     }
+    val words = com.wittywilla.wittymediaclient.ui.LocalWords.current
     val auto = saves.firstOrNull { it.slot == 0 }
     val ready = canPlay(check, console, details)
     val resumes = resumes(resumeSetting, auto != null)
@@ -143,13 +145,12 @@ fun GamePageScreen(nav: GamesNav, gameId: Long) {
     Box(Modifier.fillMaxSize().background(GameColours.background)) {
         Box(Modifier.fillMaxSize().verticalScroll(rememberScrollState())) {
             // The backdrop across the top, faint and fading into the page, scrolling away with it.
-            if (g.hasBackdrop) {
-                GamePicture(
-                    api.backdropUrl(g), g.title,
-                    Modifier.fillMaxWidth().height(if (look.tv) 270.dp else 360.dp).graphicsLayer { alpha = 0.24f },
-                    contentScale = ContentScale.Crop,
-                )
-                Box(Modifier.fillMaxWidth().height(if (look.tv) 270.dp else 360.dp).background(Brush.verticalGradient(listOf(Color.Transparent, GameColours.background))))
+            // The backdrop, else where you left off, as Apple's game page: clear on a phone, faint on a TV.
+            val heroUrl = if (g.hasBackdrop) api.backdropUrl(g) else auto?.takeIf { it.hasThumb }?.let { api.saveThumbUrl(g.id, 0, it.updatedAt) }
+            if (heroUrl != null) {
+                val heroHeight = if (look.tv) 270.dp else 300.dp
+                GamePicture(heroUrl, g.title, Modifier.fillMaxWidth().height(heroHeight).graphicsLayer { alpha = if (look.tv) 0.24f else 0.9f }, contentScale = ContentScale.Crop)
+                Box(Modifier.fillMaxWidth().height(heroHeight).background(Brush.verticalGradient(0.55f to Color.Transparent, 1f to GameColours.background)))
             }
             Column(Modifier.fillMaxWidth().windowInsetsPadding(WindowInsets.statusBars)) {
                 if (!look.tv) {
@@ -159,7 +160,7 @@ fun GamePageScreen(nav: GamesNav, gameId: Long) {
                 }
                 BoxWithConstraints(Modifier.fillMaxWidth().padding(horizontal = look.gutter, vertical = if (look.tv) 24.dp else 16.dp)) {
                     val wide = maxWidth > 720.dp
-                    val narrowCover = minOf(maxWidth * 0.58f, 208.dp)
+                    val narrowCover = 140.dp
                     val cover = @Composable { m: Modifier ->
                         Box(m.aspectRatio(0.75f), contentAlignment = Alignment.BottomCenter) {
                             if (g.hasPoster) GamePicture(api.posterUrl(g, 800), g.title, Modifier.fillMaxSize().clip(RoundedCornerShape(10.dp)))
@@ -167,40 +168,63 @@ fun GamePageScreen(nav: GamesNav, gameId: Long) {
                         }
                     }
                     val info = @Composable { m: Modifier ->
-                        Column(m, horizontalAlignment = if (wide) Alignment.Start else Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                            console?.let { Text(it.shortName, color = GameColours.secondary, fontSize = if (look.tv) look.small else 13.sp) }
-                            Text(g.title, color = GameColours.text, fontSize = look.display, fontWeight = FontWeight.Bold, textAlign = if (wide) TextAlign.Start else TextAlign.Center)
-                            if (g.tagline.isNotEmpty()) Text(g.tagline, color = GameColours.secondary, fontSize = if (look.tv) look.body else 17.sp, textAlign = if (wide) TextAlign.Start else TextAlign.Center)
+                        Column(m, horizontalAlignment = Alignment.Start, verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                            // A phone has the console beside the cover, as Apple's.
+                            if (wide) console?.let { Text(it.shortName, color = GameColours.secondary, fontSize = if (look.tv) look.small else 13.sp) }
+                            Text(g.title, color = GameColours.text, fontSize = look.display, fontWeight = FontWeight.Bold, textAlign = TextAlign.Start)
+                            if (g.tagline.isNotEmpty()) Text(g.tagline, color = GameColours.secondary, fontSize = if (look.tv) look.body else 17.sp, textAlign = TextAlign.Start)
                             val facts = listOfNotNull(
                                 console?.name?.ifEmpty { null }, g.year?.toString(), details?.players?.takeIf { it > 0 }?.let { GameWords.players(it) },
                                 g.contentRating.ifEmpty { null }, g.rating?.let { "★ %.1f".format(it) }, g.genres.take(3).joinToString(", ").ifEmpty { null },
                             )
-                            if (facts.isNotEmpty()) Text(facts.joinToString("  ·  "), color = GameColours.secondary, fontSize = look.small, textAlign = if (wide) TextAlign.Start else TextAlign.Center)
+                            if (facts.isNotEmpty()) Text(facts.joinToString("  ·  "), color = GameColours.secondary, fontSize = look.small, textAlign = TextAlign.Start)
                             val played = g.playedSeconds
                             val sessions = mine?.plays ?: 0
-                            if (played > 60 || sessions > 0) {
+                            // A phone says time played under Where you left off instead.
+                            if (wide && (played > 60 || sessions > 0)) {
                                 Text(
                                     listOfNotNull(if (played > 60) "${GameWords.played(played)} played" else null, if (sessions > 0) "$sessions ${if (sessions == 1) "session" else "sessions"}" else null).joinToString("   "),
                                     color = GameColours.secondary, fontSize = look.small,
                                 )
                             }
                             details?.problem?.takeIf { it.isNotEmpty() }?.let { Blocked(it) }
-                            FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp, if (wide) Alignment.Start else Alignment.CenterHorizontally), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                                if (ready) {
-                                    GameButton(if (resumes) "Resume" else "Play", { nav.play(g.id, GameStart(resume = resumes)) }, kind = ButtonKind.Primary, icon = GameIcons.Play, focusRequester = playButton)
-                                    if (auto != null) GameButton("Start over", { nav.play(g.id, GameStart(resume = false)) })
-                                }
+                            // Resume (or Play), Favourite and More in one row: on a phone Resume takes the width and Start over is
+                            // under More, as Apple's.
+                            val playIt = { nav.play(g.id, GameStart(resume = resumes)) }
+                            val favourite: @Composable () -> Unit = {
                                 mine?.let { m ->
                                     GameIconButton(GameIcons.Star, if (m.favourite) "Favourite" else "Add to favourites", {
                                         scope.launch { runCatching { api.setFavourite(g.id, !m.favourite) }.onSuccess { mine = it } }
                                     }, on = m.favourite, tint = if (m.favourite) Color(0xFFFFC94D) else null, focusRequester = favouriteButton)
                                 }
-                                if (ready) GameIconButton(GameIcons.More, "More for this game", { moreOpen = !moreOpen }, on = moreOpen)
+                            }
+                            if (wide) {
+                                FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                                    if (ready) {
+                                        GameButton(if (resumes) "Resume" else "Play", playIt, kind = ButtonKind.Primary, icon = GameIcons.Play, focusRequester = playButton)
+                                        if (auto != null) GameButton("Start over", { nav.play(g.id, GameStart(resume = false)) })
+                                    }
+                                    favourite()
+                                    if (ready) GameIconButton(GameIcons.More, "More for this game", { moreOpen = !moreOpen }, on = moreOpen)
+                                }
+                            } else {
+                                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+                                    if (ready) GameButton(if (resumes) "Resume" else "Play", playIt, Modifier.weight(1f), kind = ButtonKind.Primary, icon = GameIcons.Play, focusRequester = playButton)
+                                    favourite()
+                                    if (ready) GameIconButton(GameIcons.More, "More for this game", { moreOpen = !moreOpen }, on = moreOpen)
+                                }
                             }
                             if (moreOpen && ready) {
-                                GameButton("Start with default settings", { nav.play(g.id, GameStart(resume = auto != null, safeMode = true)) }, icon = GameIcons.Refresh, big = false)
+                                FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                                    // On a phone Start over (or Resume) is here, as under Apple's ⋯.
+                                    if (!wide && auto != null) {
+                                        if (resumes) GameButton(words["wpStartOver"] ?: "Start over", { nav.play(g.id, GameStart(resume = false)) }, icon = GameIcons.Refresh, big = false)
+                                        else GameButton("Resume", { nav.play(g.id, GameStart(resume = true)) }, icon = GameIcons.Play, big = false)
+                                    }
+                                    GameButton("Start with default settings", { nav.play(g.id, GameStart(resume = auto != null, safeMode = true)) }, icon = GameIcons.Refresh, big = false)
+                                }
                             }
-                            if (auto != null && ready) ResumeCard(api, g, auto) { nav.play(g.id, GameStart(resume = true)) }
+                            if (auto != null && ready) ResumeCard(api, g, auto, words) { nav.play(g.id, GameStart(resume = true)) }
                             // What stops it: the server's own words, from its readiness check.
                             val c = check
                             if (c != null && !c.ready) Blocked(blockedWords(c, console), title = blockedTitle(c.reason))
@@ -213,8 +237,12 @@ fun GamePageScreen(nav: GamesNav, gameId: Long) {
                             info(Modifier.weight(1f))
                         }
                     } else {
-                        Column(Modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(20.dp)) {
-                            cover(Modifier.width(narrowCover))
+                        // A phone, as Apple's: the cover small at the left over the picture, the console beside it, then the rest.
+                        Column(Modifier.fillMaxWidth().padding(top = if (heroUrl != null) 120.dp else 0.dp), verticalArrangement = Arrangement.spacedBy(20.dp)) {
+                            Row(verticalAlignment = Alignment.Bottom, horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+                                cover(Modifier.width(narrowCover))
+                                console?.let { Text(it.shortName, color = GameColours.secondary, fontSize = 15.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.padding(bottom = 8.dp)) }
+                            }
                             info(Modifier.fillMaxWidth())
                         }
                     }
@@ -251,24 +279,35 @@ fun GamePageScreen(nav: GamesNav, gameId: Long) {
                             }
                         }
                     }
-                    if (saves.isNotEmpty()) {
-                        Section("Save states") {
-                            val ordered = saves.sortedWith(compareBy({ it.slot != 0 }, { it.slot }))
-                            FlowRow(horizontalArrangement = Arrangement.spacedBy(16.dp), verticalArrangement = Arrangement.spacedBy(16.dp), maxItemsInEachRow = if (look.tv) 4 else 2) {
-                                for (s in ordered) {
-                                    Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    // Moments, as Apple's: newest first, then the server's two for undoing; where you left off is above.
+                    val moments = saves.filter { it.slot in 1..99 }.sortedByDescending { it.updatedAt } + saves.filter { it.slot == 100 } + saves.filter { it.slot == 101 }
+                    fun momentName(slot: Int) = when (slot) {
+                        100 -> words["wpBeforeYouLoaded"] ?: "Before you loaded"
+                        101 -> words["wpBeforeStartingOver"] ?: "Before starting over"
+                        else -> (words["wpMoment"] ?: "Moment") + " $slot"
+                    }
+                    if (moments.isNotEmpty()) {
+                        Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                            Row(verticalAlignment = Alignment.Bottom, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                Text(words["wpMoments"] ?: "Moments", color = GameColours.text, fontSize = look.title, fontWeight = FontWeight.Bold)
+                                Text("${moments.size}", color = GameColours.hint, fontSize = look.small, modifier = Modifier.padding(bottom = 3.dp))
+                            }
+                            Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(if (look.tv) 32.dp else 12.dp)) {
+                                for (s in moments) {
+                                    val w = if (look.tv) 304.dp else 200.dp
+                                    Column(Modifier.width(w), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                                         Pressable(
-                                            { if (ready) nav.play(g.id, if (s.slot == 0) GameStart(resume = true) else GameStart(resume = false, slot = s.slot)) },
-                                            Modifier.fillMaxWidth().aspectRatio(16f / 10f),
-                                            label = "Play from ${GameWords.slotName(s.slot)}, saved ${GameWords.ago(s.updatedAt)}",
+                                            { if (ready) nav.play(g.id, GameStart(resume = false, slot = s.slot)) },
+                                            Modifier.width(w).aspectRatio(4f / 3f).clip(RoundedCornerShape(10.dp)),
+                                            label = "${words["wpPlayFromHere"] ?: "Play from here"}: ${momentName(s.slot)}, saved ${GameWords.ago(s.updatedAt)}",
                                             fill = GameColours.card,
                                         ) {
-                                            if (s.hasThumb) GamePicture(api.saveThumbUrl(g.id, s.slot, s.updatedAt), "", Modifier.fillMaxSize())
+                                            if (s.hasThumb) GamePicture(api.saveThumbUrl(g.id, s.slot, s.updatedAt), "", Modifier.fillMaxSize(), contentScale = ContentScale.Crop)
                                         }
                                         Row(verticalAlignment = Alignment.CenterVertically) {
                                             Column(Modifier.weight(1f)) {
-                                                Text(GameWords.slotName(s.slot), color = GameColours.text, fontSize = look.small, fontWeight = FontWeight.SemiBold, maxLines = 1)
-                                                Text(GameWords.ago(s.updatedAt), color = GameColours.secondary, fontSize = look.small, maxLines = 1)
+                                                Text(momentName(s.slot), color = GameColours.text, fontSize = look.small, fontWeight = FontWeight.SemiBold, maxLines = 1)
+                                                Text(GameWords.ago(s.updatedAt), color = GameColours.hint, fontSize = look.small, maxLines = 1)
                                             }
                                             val asking = deleting == s.slot
                                             Pressable({
@@ -278,7 +317,7 @@ fun GamePageScreen(nav: GamesNav, gameId: Long) {
                                                     deleting = null
                                                     scope.launch { runCatching { api.deleteSave(g.id, s.slot) }.onSuccess { saves = saves.filter { it.slot != s.slot } } }
                                                 }
-                                            }, label = if (asking) "Delete for good" else "Delete ${GameWords.slotName(s.slot)}", radius = 8.dp) {
+                                            }, label = if (asking) "Delete for good" else "Delete ${momentName(s.slot)}", radius = 8.dp) {
                                                 Row(Modifier.padding(8.dp), verticalAlignment = Alignment.CenterVertically) {
                                                     Icon(GameIcons.Trash, null, Modifier.size(18.dp), tint = if (asking) GameColours.danger else GameColours.secondary)
                                                     if (asking) Text(" Delete?", color = GameColours.danger, fontSize = look.small)
@@ -324,7 +363,7 @@ fun GamePageScreen(nav: GamesNav, gameId: Long) {
 
 // "Pick up where you left off": the automatic save's picture and when it was made.
 @Composable
-private fun ResumeCard(api: GamesApi, g: GameItem, auto: GameSave, onClick: () -> Unit) {
+private fun ResumeCard(api: GamesApi, g: GameItem, auto: GameSave, words: Map<String, String>, onClick: () -> Unit) {
     val look = gameLook()
     Pressable(onClick, Modifier.border(1.dp, GameColours.border, RoundedCornerShape(10.dp)), fill = GameColours.panel, label = "Resume from ${GameWords.ago(auto.updatedAt)}") {
         Row(Modifier.padding(8.dp).padding(end = 8.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -332,8 +371,9 @@ private fun ResumeCard(api: GamesApi, g: GameItem, auto: GameSave, onClick: () -
                 if (auto.hasThumb) GamePicture(api.saveThumbUrl(g.id, 0, auto.updatedAt), "", Modifier.fillMaxSize())
             }
             Column {
-                Text("Pick up where you left off", color = GameColours.text, fontSize = look.body, fontWeight = FontWeight.SemiBold)
+                Text(words["wpWhereYouLeftOff"] ?: "Where you left off", color = GameColours.text, fontSize = look.body, fontWeight = FontWeight.SemiBold)
                 Text(GameWords.ago(auto.updatedAt), color = GameColours.secondary, fontSize = look.small)
+                if (g.playedSeconds > 60) Text("${GameWords.played(g.playedSeconds)} played", color = GameColours.secondary, fontSize = look.small)
             }
         }
     }

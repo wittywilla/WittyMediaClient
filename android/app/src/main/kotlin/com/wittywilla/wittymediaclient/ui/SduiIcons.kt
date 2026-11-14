@@ -38,7 +38,7 @@ fun sduiIcon(name: String): ImageVector = when (name) {
     "library", "collection", "folder" -> WebIcons.Library
     "movie", "video" -> WebIcons.Film
     "show", "tv" -> WebIcons.Tv
-    "live", "guide" -> Symbols.LiveTv
+    "live", "guide" -> Symbols.Antenna
     "record" -> WebIcons.Station
     "music", "album" -> WebIcons.Audio
     "artist", "user" -> Symbols.Person
@@ -50,7 +50,7 @@ fun sduiIcon(name: String): ImageVector = when (name) {
     "audiobook" -> WebIcons.Headphones
     "photo" -> WebIcons.Image
     "disc" -> WebIcons.Disc
-    "game" -> WebIcons.Gamepad
+    "game" -> WebIcons.GamepadLine
     "list" -> WebIcons.AddList
     "search" -> WebIcons.Search
     "settings" -> WebIcons.Settings
@@ -89,7 +89,7 @@ fun sduiKindIcon(kind: String): ImageVector = when (kind) {
     "book" -> WebIcons.Book
     "audiobook" -> WebIcons.Headphones
     "podcast" -> WebIcons.Mic
-    "game" -> WebIcons.Gamepad
+    "game" -> WebIcons.GamepadLine
     "photo" -> WebIcons.Image
     "channel" -> Symbols.LiveTv
     "library", "collection" -> WebIcons.Library

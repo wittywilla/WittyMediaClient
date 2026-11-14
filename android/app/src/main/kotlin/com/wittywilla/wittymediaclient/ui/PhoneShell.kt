@@ -222,7 +222,7 @@ fun PhoneShell(nav: Nav, content: @Composable () -> Unit) {
 }
 
 // The top bar: status bar, then 52 high, 4 above and below, 16 at the sides, 8 apart. Transparent; once the page
-// scrolls under it, the page colour at 85% with a hairline. Over a picture, a shade from the page colour instead.
+// scrolls under it, solid with a hairline. Over a picture, a shade from the page colour instead.
 @Composable
 private fun TopBar(nav: Nav, scroll: ShellScroll, status: Dp, top: Boolean) {
     val page = MaterialTheme.colorScheme.background
@@ -237,10 +237,12 @@ private fun TopBar(nav: Nav, scroll: ShellScroll, status: Dp, top: Boolean) {
         )
         // Under the clock the page colour is solid, as a browser's own bar is above the website; the strip itself is
         // the page colour at 85%, as the website's (which also blurs what's behind it).
+        // Solid, a little lighter than the page, as the Apple apps' bar: nothing scrolls through under the words.
+        val bar = androidx.compose.ui.graphics.lerp(page, MaterialTheme.colorScheme.surface, 0.6f)
         if (surface > 0f) Column(Modifier.fillMaxWidth().graphicsLayer { alpha = surface }) {
-            Box(Modifier.fillMaxWidth().height(status).background(page))
+            Box(Modifier.fillMaxWidth().height(status).background(bar))
             Box(
-                Modifier.fillMaxWidth().height(TOP_BAR.dp).background(page.copy(alpha = 0.85f))
+                Modifier.fillMaxWidth().height(TOP_BAR.dp).background(bar)
                     .drawWithContent { drawContent(); drawRect(border, Offset(0f, size.height), Size(size.width, 1.dp.toPx())) },
             )
         }
