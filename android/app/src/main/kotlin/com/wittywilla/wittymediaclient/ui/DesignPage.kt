@@ -375,7 +375,9 @@ fun DesignCards(count: Int, modifier: Modifier = Modifier, columns: Int = 0, car
     val cols = (if (columns > 0) columns else s.columns).let { if (s.phone) minOf(it, 2) else it }.coerceAtLeast(1)
     Column(modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(s.gap * 0.7f)) {
         (0 until count).chunked(cols).forEach { line ->
-            Row(Modifier.fillMaxWidth().remoteRow(), horizontalArrangement = Arrangement.spacedBy(s.gap * 0.7f)) {
+            // Left and right stop at the row's ends, and up and down go straight to the card above or below: a grid
+            // row restores no remembered card, or Down would bring focus back along its own row.
+            Row(Modifier.fillMaxWidth().gridRow(), horizontalArrangement = Arrangement.spacedBy(s.gap * 0.7f)) {
                 line.forEach { i -> Box(Modifier.weight(1f)) { card(i) } }
                 repeat(cols - line.size) { Spacer(Modifier.weight(1f)) }
             }

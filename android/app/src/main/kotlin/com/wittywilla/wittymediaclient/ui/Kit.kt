@@ -172,6 +172,14 @@ fun Modifier.remoteRow(): Modifier =
         }
         .focusGroup()
 
+// A row of a grid for a remote: Left and Right stop at its ends; Up and Down find the nearest card above or below.
+fun Modifier.gridRow(): Modifier =
+    focusProperties {
+        onExit = {
+            if (requestedFocusDirection == FocusDirection.Left || requestedFocusDirection == FocusDirection.Right) cancelFocusChange()
+        }
+    }.focusGroup()
+
 // The one heading of a page, or above a row.
 @Composable
 fun Heading(text: String, modifier: Modifier = Modifier) {
