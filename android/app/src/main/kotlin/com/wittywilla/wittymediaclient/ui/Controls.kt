@@ -202,12 +202,8 @@ fun Pressable(
         modifier
             // Above its neighbours, so they don't cover its ring.
             .zIndex(if (showsFocus) 1f else 0f)
-            .graphicsLayer { scaleX = grow; scaleY = grow; alpha = dim; translationY = -lift.toPx() }
-            .then(if (tvRoom) Modifier.padding(metrics.focusRing) else Modifier)
-            .then(
-                if (ring && showsFocus && !filled) Modifier.ringOutside(shape, ringColour, if (tvRoom) 0.dp else metrics.focusRing, metrics.focusRing)
-                else Modifier,
-            )
+            // Focus and touch come before the lift and growth below: a remote finds the next thing from where this
+            // one sits, not where it is drawn, or a lifted button looks higher than its row and Down picks a neighbour.
             .focusRequester(requester)
             .onFocusChanged {
                 focused = it.isFocused
@@ -220,12 +216,7 @@ fun Pressable(
                 if (!enabled) disabled()
                 if (actions.isNotEmpty()) customActions = actions
             }
-            .then(if (clip) Modifier.clip(shape) else Modifier)
-            .background(if (filled) MaterialTheme.colorScheme.onBackground else fill, shape)
-            .then(if (glossy) Modifier.gloss(shape) else Modifier)
-            .bevel()
             .hoverable(interaction)
-            .then(if (hovered && !metrics.tv && enabled) Modifier.background(MaterialTheme.colorScheme.onBackground.copy(alpha = HOVER_WASH), shape) else Modifier)
             .optionsKey(if (enabled) onLongClick else null)
             .then(
                 if (onLongClick == null) Modifier.clickable(interactionSource = interaction, indication = null, role = Role.Button) { if (enabled) onClick() }
@@ -233,7 +224,18 @@ fun Pressable(
                     interactionSource = interaction, indication = null, role = Role.Button,
                     onLongClickLabel = longClickLabel, onLongClick = { if (enabled) onLongClick() },
                 ) { if (enabled) onClick() },
-            ),
+            )
+            .graphicsLayer { scaleX = grow; scaleY = grow; alpha = dim; translationY = -lift.toPx() }
+            .then(if (tvRoom) Modifier.padding(metrics.focusRing) else Modifier)
+            .then(
+                if (ring && showsFocus && !filled) Modifier.ringOutside(shape, ringColour, if (tvRoom) 0.dp else metrics.focusRing, metrics.focusRing)
+                else Modifier,
+            )
+            .then(if (clip) Modifier.clip(shape) else Modifier)
+            .background(if (filled) MaterialTheme.colorScheme.onBackground else fill, shape)
+            .then(if (glossy) Modifier.gloss(shape) else Modifier)
+            .bevel()
+            .then(if (hovered && !metrics.tv && enabled) Modifier.background(MaterialTheme.colorScheme.onBackground.copy(alpha = HOVER_WASH), shape) else Modifier),
         contentAlignment = Alignment.Center,
     ) { content(pressed || showsFocus) }
 }
