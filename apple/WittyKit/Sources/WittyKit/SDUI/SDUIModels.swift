@@ -92,8 +92,10 @@ public struct SDUIRegions: Codable, Equatable, Sendable {
         public var route: String
         /// `layer`: it opens over the page rather than in place of it.
         public var `as`: String?
-        public init(id: String, label: String, icon: String? = nil, route: String, as: String? = nil) {
-            self.id = id; self.label = label; self.icon = icon; self.route = route; self.as = `as`
+        /// The page says this is where it is, on a page none of the dock's buttons opens (WittyPlay's store, under Settings).
+        public var current: Bool?
+        public init(id: String, label: String, icon: String? = nil, route: String, as: String? = nil, current: Bool? = nil) {
+            self.id = id; self.label = label; self.icon = icon; self.route = route; self.as = `as`; self.current = current
         }
     }
 
@@ -121,6 +123,7 @@ public struct SDUIRegions: Codable, Equatable, Sendable {
     /// that query; else one whose route is the page or a parent of it.
     public func current(path: String, query: [String: String] = [:]) -> Int? {
         let entries = dock
+        if let marked = entries.firstIndex(where: { $0.current == true }) { return marked }
         if let exact = entries.firstIndex(where: { entry in
             let parts = entry.route.split(separator: "?", maxSplits: 1).map(String.init)
             guard parts.count == 2, parts[0] == path else { return false }

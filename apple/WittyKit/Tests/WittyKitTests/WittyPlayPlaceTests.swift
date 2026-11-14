@@ -58,5 +58,8 @@ final class SDUIRegionsTests: XCTestCase {
         XCTAssertEqual(r.current(path: "/page/wittyplay-online", query: ["tab": "together"]), 2)
         XCTAssertEqual(r.current(path: "/page/wittyplay-controllers"), 3)
         XCTAssertNil(r.current(path: "/library/2"))
+        var store = r
+        store.systemDock[0].current = true
+        XCTAssertEqual(store.current(path: "/page/wittyplay-store"), 1, "the entry the page marks is current")
     }
 }
