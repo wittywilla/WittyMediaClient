@@ -190,7 +190,8 @@ public struct SDUICatalog: Codable, Equatable, Sendable {
             SDUIRouteRule("/pair", native: "pair"),
         ],
         commands: [
-            SDUICommand("watchLater.add", method: "POST", path: "/api/v1/collections/watch-later/items", body: "{\"items\":[{item}]}"),
+            SDUICommand("watchLater.add", method: "POST", path: "/api/v1/collections/watch-later/items", body: "{\"items\":[\"{item}\"]}"),
+            SDUICommand("watchLater.remove", method: "DELETE", path: "/api/v1/collections/watch-later/items", body: "{\"items\":[\"{item}\"]}"),
             SDUICommand("watched.set", method: "POST", path: "/api/v1/items/{item}/progress", body: "{\"watched\":true}"),
             SDUICommand("watched.clear", method: "DELETE", path: "/api/v1/items/{item}/progress"),
             SDUICommand("wittyplay.room.create", method: "POST", path: "/api/play/{item}/room", body: "{\"open\":true}"),

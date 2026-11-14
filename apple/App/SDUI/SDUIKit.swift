@@ -340,31 +340,12 @@ struct SDUIDraw {
 
     /// A rounded part's corner in points: `part` of `component` (or of the card style, which comes first).
     func radius(_ component: String, _ part: String = "corner", style cardStyle: String? = nil) -> CGFloat {
-        let name = cardStyle.flatMap { catalog.cardStyle($0)?.tokens?.shape?[part] }
-            ?? catalog.componentTokens[component]?.shape?[part]
-            ?? SDUIDraw.defaultShape(component, part)
+        // The catalogue names every rounded part's shape token; one it doesn't name is a catalogue bug, drawn at the default corner.
+        guard let name = cardStyle.flatMap({ catalog.cardStyle($0)?.tokens?.shape?[part] }) ?? catalog.componentTokens[component]?.shape?[part] else {
+            return CGFloat(Tokens.Radius.md)
+        }
         let value = style?.shape[name] ?? SDUIDraw.fallback[name] ?? Double(Tokens.Radius.md)
         return CGFloat(max(0, min(value, 999)))
-    }
-
-    /// The part's shape token where the catalogue doesn't say (an older server).
-    private static func defaultShape(_ component: String, _ part: String) -> String {
-        switch part {
-        case "badge", "code": return "badge"
-        case "art", "thumb": return component == "Banner" ? "card" : "thumb"
-        case "button": return "button"
-        case "season", "chip", "segment": return "chip"
-        case "row": return "row"
-        case "still", "poster": return "card"
-        default:
-            switch component {
-            case "Hero", "Banner", "Image", "NativeView": return "image"
-            case "Button": return "button"
-            case "SearchBox": return "field"
-            case "ListItem": return "row"
-            default: return "card"
-            }
-        }
     }
 
     /// A text role's typeface: the first of the theme's families this device has, else the system's.

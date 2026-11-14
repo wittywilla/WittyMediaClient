@@ -249,12 +249,8 @@ public struct SDUIScreen: Equatable, Sendable {
                     e.filters.append(SDUIFilterField(id: field.text("id"), label: field.text("label"), value: value, options: options,
                                                      summary: field.text("label") + ": " + (chosen.isEmpty ? "Any" : chosen)))
                 }
-                // The server's own words for the count ("1 title"); older servers sent only the number.
-                if !p.text("countText").isEmpty {
-                    text("count", p.text("countText"))
-                } else if let count = p.whole("count") {
-                    text("count", count == 1 ? "1 title" : "\(count) titles")
-                }
+                // The server's own words for the count ("1 title").
+                text("count", p.text("countText"))
             case "DetailHeader":
                 e.role = "region"
                 e.label = p.text("title")
