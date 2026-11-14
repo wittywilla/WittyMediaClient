@@ -28,6 +28,9 @@ class WittyPlayPlaceTest {
     fun leavingTheFrameGoesBackToTheApp() {
         assertEquals(Leave.Stay, WittyPlayPlace.leave("/wittyplay/library/2"))
         assertEquals(Leave.Play(17), WittyPlayPlace.leave("/game/17"))
+        assertEquals(Leave.Play(17, resume = true), WittyPlayPlace.leave("/game/17?resume=1"))
+        assertEquals(Leave.Play(17, resume = false, slot = 3), WittyPlayPlace.leave("/game/17?slot=3"))
+        assertEquals(Leave.Play(17, resume = false, safe = true), WittyPlayPlace.leave("/game/17?resume=0&safe=1"))
         assertEquals(Leave.Home, WittyPlayPlace.leave("/"))
         assertEquals(Leave.Search, WittyPlayPlace.leave("/search?q=zelda"))
         assertEquals(Leave.Elsewhere("/item/3"), WittyPlayPlace.leave("/item/3"))

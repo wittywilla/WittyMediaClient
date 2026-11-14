@@ -137,7 +137,8 @@ private class PageClient(
 
     // Also runs for the page changing its own address, which is how it closes its player.
     override fun doUpdateVisitedHistory(view: WebView, url: String, isReload: Boolean) {
-        url.toHttpUrlOrNull()?.encodedPath?.let(onPath)
+        // The query goes along: WittyPlay's frame asks for a game with ?resume=1, ?slot=N or ?safe=1.
+        url.toHttpUrlOrNull()?.let { u -> onPath(u.encodedPath + (u.encodedQuery?.let { "?$it" } ?: "")) }
     }
 
     override fun onReceivedError(view: WebView, request: WebResourceRequest, error: WebResourceError) {
@@ -300,7 +301,7 @@ fun ServerPageScreen(
                         com.wittywilla.wittymediaclient.net.WittyPlayPlace.Leave.Stay -> Unit
                         is com.wittywilla.wittymediaclient.net.WittyPlayPlace.Leave.Play -> {
                             web.goBack()
-                            nav.push(GamesRoute(GamesScreen.Play(went.game, com.wittywilla.wittymediaclient.games.GameStart(resume = true))))
+                            nav.push(GamesRoute(GamesScreen.Play(went.game, com.wittywilla.wittymediaclient.games.GameStart(resume = went.resume, slot = went.slot, safeMode = went.safe))))
                         }
                         com.wittywilla.wittymediaclient.net.WittyPlayPlace.Leave.Home -> nav.reset(Route.Home)
                         com.wittywilla.wittymediaclient.net.WittyPlayPlace.Leave.Search -> nav.reset(Route.Search)

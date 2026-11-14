@@ -456,6 +456,17 @@ private val Library.isWittyPlay get() = type == "games" && console != "rig"
 // name and a pill for the whole of it, then its covers.
 @Composable
 fun GamesTabScreen(nav: Nav, s: Map<String, String>) {
+    // With WittyPlay on the server, Games is WittyPlay Online over the whole screen, as on Apple TV. It opens once as the
+    // tab is chosen; back on the tab, a button opens it again.
+    if (nav.wittyPlayInstalled) {
+        val open = { nav.push(Route.Sdui(com.wittywilla.wittymediaclient.net.WittyPlayPlace.HOME_PAGE, emptyMap(), s["gamesTab"].orEmpty())) }
+        var opened by androidx.compose.runtime.saveable.rememberSaveable { mutableStateOf(false) }
+        LaunchedEffect(Unit) { if (!opened) { opened = true; open() } }
+        Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+            WittyButton("Open WittyPlay", open, kind = ButtonKind.Primary, pill = true, icon = WebIcons.GamepadLine, focusKey = "open-wittyplay", requestFocus = true)
+        }
+        return
+    }
     var attempt by remember { mutableIntStateOf(0) }
     val (libraries, error) = rememberLibraries(nav, s, attempt)
     val games = libraries?.filter { it.isWittyPlay }
