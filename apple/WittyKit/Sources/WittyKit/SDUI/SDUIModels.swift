@@ -272,17 +272,21 @@ public struct SDUIAction: Codable, Equatable, Hashable, Sendable {
     public var url: String?
     public var op: String?
     public var params: SDUIProps?
+    /// A question to ask before a command runs ("Read every file of Movies again?"); nothing runs without a yes.
+    public var confirm: String?
 
-    public init(type: String, to: String? = nil, item: String? = nil, url: String? = nil, op: String? = nil, params: SDUIProps? = nil) {
+    public init(type: String, to: String? = nil, item: String? = nil, url: String? = nil, op: String? = nil, params: SDUIProps? = nil,
+                confirm: String? = nil) {
         self.type = type
         self.to = to
         self.item = item
         self.url = url
         self.op = op
         self.params = params
+        self.confirm = confirm
     }
 
-    enum CodingKeys: String, CodingKey { case type, to, item, url, op, params }
+    enum CodingKeys: String, CodingKey { case type, to, item, url, op, params, confirm }
 
     public init(from decoder: Decoder) throws {
         let box = try decoder.container(keyedBy: CodingKeys.self)
@@ -297,6 +301,8 @@ public struct SDUIAction: Codable, Equatable, Hashable, Sendable {
         url = try? box.decodeIfPresent(String.self, forKey: .url)
         op = try? box.decodeIfPresent(String.self, forKey: .op)
         params = try? box.decodeIfPresent(SDUIProps.self, forKey: .params)
+        let question = (try? box.decodeIfPresent(String.self, forKey: .confirm))?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        confirm = question.isEmpty ? nil : String(question.prefix(240))
     }
 }
 

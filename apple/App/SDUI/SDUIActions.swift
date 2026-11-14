@@ -48,7 +48,19 @@ struct SDUIActor {
     }
 
     func perform(_ action: SDUIAction?) {
+        // A command with a question is asked first, on its page; it runs only on a yes (`confirmed`).
+        if let action, action.confirm != nil, let store {
+            store.asking = action
+            return
+        }
         go(destination(action))
+    }
+
+    /// Runs a command the person said yes to.
+    func confirmed(_ action: SDUIAction) {
+        var yes = action
+        yes.confirm = nil
+        go(destination(yes))
     }
 
     func open(route: String) {

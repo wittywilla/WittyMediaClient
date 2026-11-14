@@ -199,6 +199,8 @@ final class SDUIPageStore: ObservableObject {
     @Published private(set) var listed: Set<String> = []
     /// A card to bring into view: where a jump to a letter landed.
     @Published var scrollTo: String?
+    /// A command waiting for a yes to its question (`confirm`): the page asks it, and runs the command only on a yes.
+    @Published var asking: SDUIAction?
 
     private func listKey(_ grid: String, profile: String) -> String { "sdui.view|\(page)|\(grid)|\(profile)" }
 

@@ -79,6 +79,16 @@ struct SDUIPageScreen: View {
             .onReceive(model.household.$time.map { $0?.allowed }.removeDuplicates().dropFirst()) { _ in
                 Task { await store.refresh(center) }
             }
+            // A command's question (`confirm`), asked before anything runs: its own name to go ahead, or Cancel.
+            .alert(store.asking?.confirm ?? "", isPresented: Binding(get: { store.asking != nil }, set: { if !$0 { store.asking = nil } })) {
+                if let action = store.asking {
+                    Button(center.catalog.command(action.op ?? "")?.label ?? "Continue") {
+                        store.asking = nil
+                        SDUIActor(model: model, center: center, store: store).confirmed(action)
+                    }
+                }
+                Button("Cancel", role: .cancel) { store.asking = nil }
+            }
             .sheet(isPresented: $customising) {
                 if let document = store.document {
                     SDUICustomiseView(document: document, page: store.page) { changed in
