@@ -115,64 +115,9 @@ class SduiRouter(routes: List<SduiRouteSpec> = DEFAULT_ROUTES, commands: List<Sd
             return out
         }
 
-        private fun page(pattern: String, page: String, vararg params: Pair<String, String>) = SduiRouteSpec(pattern, page = page, params = params.toMap())
-        private fun native(pattern: String, screen: String) = SduiRouteSpec(pattern, native = screen)
-
-        // Catalogue revision 2's table, for the moment before the server's own has been read.
-        val DEFAULT_ROUTES: List<SduiRouteSpec> = listOf(
-            page("/", "home"),
-            page("/libraries", "libraries"),
-            page("/library/{library}", "library", "library" to "{library}"),
-            page("/item/{item}", "detail", "item" to "{item}"),
-            page("/show/{show}", "detail", "show" to "{show}"),
-            page("/album/{library}", "detail", "album" to "?album", "artist" to "?artist", "library" to "{library}"),
-            // A person's page (catalogue revision 5: cast and crew).
-            page("/person/{person}", "detail", "person" to "{person}"),
-            page("/collections/{collection}", "detail", "collection" to "{collection}"),
-            page("/collections", "collections"),
-            page("/search", "search", "q" to "?q"),
-            page("/tv", "livetv"),
-            page("/music", "music"),
-            page("/photos", "photos"),
-            page("/books", "books"),
-            page("/games", "games"),
-            // Catalogue revision 8: the pages the server serves for every app, opened about something.
-            page("/studio/{name}", "studio", "name" to "{name}"),
-            page("/network/{name}", "network", "name" to "{name}"),
-            page("/category/{name}", "category", "name" to "{name}"),
-            page("/versions/{item}", "versions", "item" to "{item}"),
-            page("/save-to/{item}", "save-to", "item" to "{item}"),
-            page("/devices", "devices"),
-            page("/creators", "creators"),
-            page("/creator/{item}", "creator", "item" to "{item}"),
-            page("/comments/{item}", "comments", "item" to "{item}"),
-            page("/markers/{item}", "markers", "item" to "{item}"),
-            page("/canvas/{item}", "canvas", "item" to "{item}"),
-            page("/smart-list", "smart-list"),
-            page("/year", "year"),
-            page("/activity", "activity"),
-            page("/notifications", "notifications"),
-            page("/page/{id}", "{id}"),
-            native("/settings", "settings"),
-            native("/settings/{section}", "settings"),
-            native("/tv/guide", "guide"),
-            native("/tv/recordings", "guide"),
-            native("/tv/watch/{key}", "livePlayer"),
-            native("/watch/{item}", "player"),
-            native("/play/{item}", "player"),
-            native("/read/{item}", "reader"),
-            native("/game/{item}", "game"),
-            native("/you", "profiles"),
-            native("/pair", "pair"),
-        )
-
-        val DEFAULT_COMMANDS: List<SduiCommandSpec> = listOf(
-            SduiCommandSpec("watchLater.add", "POST", "/api/v1/collections/watch-later/items", "{\"items\":[\"{item}\"]}"),
-            SduiCommandSpec("watched.set", "POST", "/api/v1/items/{item}/progress", "{\"watched\":true}"),
-            SduiCommandSpec("watched.clear", "DELETE", "/api/v1/items/{item}/progress", ""),
-            SduiCommandSpec("selectTab", "GET", "", ""),
-            SduiCommandSpec("refresh", "GET", "", ""),
-        )
+        // The bundled catalogue's, for the moment before the server's own has been read (SduiBuiltIn).
+        val DEFAULT_ROUTES: List<SduiRouteSpec> get() = SduiBuiltIn.catalog.routes
+        val DEFAULT_COMMANDS: List<SduiCommandSpec> get() = SduiBuiltIn.catalog.commands
     }
 }
 

@@ -24,31 +24,12 @@ class SduiCardStyle(
 )
 
 object SduiCardStyles {
-    private fun style(name: String, shape: String, aspect: String, titleLines: Int, subtitleLines: Int, vararg shows: String) =
-        SduiCardStyle(name, shape, aspect, shows.toList(), titleLines, subtitleLines)
+    private fun from(specs: List<SduiCardStyleSpec>) =
+        specs.map { SduiCardStyle(it.style, it.shape, it.aspect, it.shows, it.titleLines, it.subtitleLines, it.image, it.badgeTones) }
 
-    // Catalogue revision 8's table, built in for the moment before the server's own has been read and for offline tests:
-    // the app reads the real one from GET /api/sdui/catalog at sign-in (`use`), and a unit test checks this one against the
-    // conformance kit's card-style-table.json.
-    val BUILT_IN: List<SduiCardStyle> = listOf(
-        style("poster", "poster", "2/3", 1, 1, "title", "subtitle", "progress", "watched", "unwatched", "badges"),
-        style("landscape", "landscape", "16/9", 1, 1, "title", "subtitle", "badges"),
-        style("progress", "landscape", "16/9", 1, 1, "title", "subtitle", "progress", "remaining"),
-        style("episode", "landscape", "16/9", 1, 1, "title", "subtitle", "synopsis", "progress", "watched"),
-        style("square", "square", "1/1", 1, 1, "title", "subtitle"),
-        style("album", "square", "1/1", 1, 1, "title", "subtitle"),
-        style("circle", "circle", "1/1", 2, 0, "title"),
-        style("person", "circle", "1/1", 1, 1, "title", "subtitle", "badges"),
-        style("book", "poster", "2/3", 2, 1, "title", "subtitle", "progress"),
-        style("game", "poster", "3/4", 1, 1, "title", "subtitle", "badges"),
-        style("photo", "square", "1/1", 0, 0),
-        style("channel", "landscape", "16/9", 1, 2, "number", "title", "now", "next", "progress"),
-        style("tile", "landscape", "16/9", 1, 0, "title", "count"),
-        style("plate", "poster", "2/3", 2, 1, "title", "subtitle", "badges"),
-        style("block", "landscape", "16/9", 2, 1, "title", "subtitle"),
-        style("logo", "landscape", "16/9", 1, 0, "number", "title"),
-        style("chip", "chip", "", 1, 0, "title"),
-    )
+    // The bundled catalogue's table (SduiBuiltIn), for the moment before the server's own has been read and for offline
+    // tests: the app reads the real one from GET /api/sdui/catalog at sign-in (`use`).
+    val BUILT_IN: List<SduiCardStyle> by lazy { from(SduiBuiltIn.catalog.cardStyles) }
 
     @Volatile
     private var current: List<SduiCardStyle> = BUILT_IN
@@ -62,7 +43,7 @@ object SduiCardStyles {
     // Takes the catalogue's card styles. A catalogue with none leaves the built-in table.
     fun use(specs: List<SduiCardStyleSpec>) {
         if (specs.isEmpty()) return
-        val next = specs.map { SduiCardStyle(it.style, it.shape, it.aspect, it.shows, it.titleLines, it.subtitleLines, it.image, it.badgeTones) }
+        val next = from(specs)
         current = next
         byName = next.associateBy { it.style }
     }

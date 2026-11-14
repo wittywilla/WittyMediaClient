@@ -361,7 +361,7 @@ class SduiRulesTest {
         assertEquals(SduiTarget.Native("livePlayer", mapOf("key" to "lib-1"), "/tv/watch/lib-1"), router.resolve("/tv/watch/lib-1"))
         assertEquals("player", (router.resolve("/watch/9") as SduiTarget.Native).screen)
         assertEquals("guide", (router.resolve("/tv/guide") as SduiTarget.Native).screen)
-        assertEquals("a place the table doesn't have", SduiTarget.Unknown("/artist/3?name=The+Examples"), router.resolve("/artist/3?name=The+Examples"))
+        assertEquals("a place the table doesn't have", SduiTarget.Unknown("/nowhere/3?name=The+Examples"), router.resolve("/nowhere/3?name=The+Examples"))
         // A server's own table wins over the one the app was built with.
         val own = SduiRouter(json.decodeFromString("""[{"pattern":"/item/{item}","native":"player"},{"pattern":"/stage/{id}","page":"stage","params":{"act":"{id}","seat":"?seat"}}]"""))
         assertEquals("player", (own.resolve("/item/3") as SduiTarget.Native).screen)
