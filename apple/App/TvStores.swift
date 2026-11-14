@@ -79,15 +79,15 @@ final class TvLookStore: ObservableObject {
 
 /// The guide's channels, a page at a time, for the stretch of hours on screen. Only the rows near
 /// what's shown are asked for, so a playlist of thousands of channels stays quick. With a page size, only that
-/// page's rows are on screen; with none, they're one list that loads as it scrolls. On a server with channel sets
-/// (`tv-sets`) the filter is a set, and with `tv-guide-paging` the server finds channels by name and number.
+/// page's rows are on screen; with none, they're one list that loads as it scrolls. The channels are a set's, narrowed by
+/// a filter, and the server finds channels by name and number.
 @MainActor
 final class GuideStore: ObservableObject {
     struct Filter: Equatable {
         var kind = ""
         var group = ""
         var favourites = false
-        /// A channel set's id, on a server with sets.
+        /// A channel set's id.
         var set = ""
         /// Only channels whose number starts with this or whose name has it in it.
         var q = ""
@@ -114,24 +114,20 @@ final class GuideStore: ObservableObject {
     /// Rows a page, or 0 for all of them in one list; and the first row of the page on screen.
     @Published private(set) var pageSize = 0
     @Published private(set) var pageStart = 0
-    /// The sets this profile can choose from, on a server with them.
+    /// The sets this profile can choose from.
     @Published private(set) var sets: [ChannelSet] = []
     @Published private(set) var canShare = false
-    private(set) var features: Set<String> = []
     private var fetchFrom: Int64 = 0
     private var loaded = Set<String>()
     private var client = WittyClient(base: "")
 
-    var hasSets: Bool { features.contains(TvFeature.sets) }
-    var hasPaging: Bool { features.contains(TvFeature.paging) }
     /// How many rows are asked for at once.
-    var fetchSize: Int { GuidePaging.fetchSize(pageSize: pageSize, paging: hasPaging) }
+    var fetchSize: Int { GuidePaging.fetchSize(pageSize: pageSize) }
     /// The rows on screen: the page's, or all of them.
     var shown: Range<Int> { GuidePaging.rows(start: pageStart, size: pageSize, total: total ?? 0) }
 
-    func use(_ client: WittyClient, features: Set<String>) {
+    func use(_ client: WittyClient) {
         self.client = client
-        self.features = features
     }
 
     /// A changed filter starts the rows afresh, at the first page.
@@ -199,48 +195,29 @@ final class GuideStore: ObservableObject {
     /// Every channel's number and name: for favourites, Last, and finding a channel by its key. Without the
     /// schedule's other fields where the server can leave them out.
     func loadLineup() async {
-        if hasPaging {
-            if let all = try? await client.channelList(limit: 20000) { lineup = uniqued(all.channels ?? []) }
-        } else if let all = try? await client.lineup() {
-            lineup = uniqued(all.channels ?? [])
-        }
+        if let all = try? await client.channelList(limit: 20000) { lineup = uniqued(all.channels ?? []) }
     }
 
     /// The sets there are, and the one to show: the one remembered while it's still there, otherwise all.
     func loadSets(remembered: String?) async -> String {
-        guard hasSets, let list = try? await client.channelSets() else { return ChannelSetRules.all }
+        guard let list = try? await client.channelSets() else { return ChannelSetRules.all }
         sets = list.sets
         canShare = list.canShare
         return ChannelSetRules.chosen(remembered, in: list.sets)
     }
 
-    /// Where a channel is in what's on screen, by its key or number. An older server is answered from the lineup.
+    /// Where a channel is in what's on screen, by its key or number.
     func locate(_ target: String) async -> Int? {
-        if hasPaging {
-            guard let found = try? await client.channelList(set: filter.setAsked, q: filter.q, locate: target, limit: 1) else { return nil }
-            return found.located.flatMap { $0 >= 0 ? $0 : nil }
-        }
-        return index(of: target) ?? LocateRules.index(of: target, in: filtered)
+        guard let found = try? await client.channelList(set: filter.setAsked, q: filter.q, locate: target, limit: 1) else { return nil }
+        return found.located.flatMap { $0 >= 0 ? $0 : nil }
     }
 
     /// A number typed on the remote: in what's on screen, or failing that among all channels.
     func locateNumber(_ number: String) async -> LocateOutcome {
         let here = await locate(number)
         if here != nil || filter.isAll { return LocateRules.outcome(inSet: here, inAll: nil) }
-        if hasPaging {
-            let all = try? await client.channelList(locate: number, limit: 1)
-            return LocateRules.outcome(inSet: nil, inAll: all?.located)
-        }
-        return LocateRules.outcome(inSet: nil, inAll: LocateRules.index(of: number, in: lineup))
-    }
-
-    private var filtered: [GuideChannel] {
-        lineup.filter { GuideRules.matches($0, kind: filter.kind, group: filter.group, favourites: filter.favourites) }
-    }
-
-    func index(of key: String) -> Int? {
-        guard filter.setAsked.isEmpty, filter.q.isEmpty else { return nil }
-        return filtered.firstIndex { $0.key == key }
+        let all = try? await client.channelList(locate: number, limit: 1)
+        return LocateRules.outcome(inSet: nil, inAll: all?.located)
     }
 
     /// Marks a channel a favourite or not, at once, then tells the server.

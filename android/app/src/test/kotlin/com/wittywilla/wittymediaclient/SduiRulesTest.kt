@@ -361,7 +361,7 @@ class SduiRulesTest {
         assertEquals(SduiTarget.Native("livePlayer", mapOf("key" to "lib-1"), "/tv/watch/lib-1"), router.resolve("/tv/watch/lib-1"))
         assertEquals("player", (router.resolve("/watch/9") as SduiTarget.Native).screen)
         assertEquals("guide", (router.resolve("/tv/guide") as SduiTarget.Native).screen)
-        assertEquals("a place the table doesn't have", SduiTarget.Unknown("/artist/3?name=The+Examples"), router.resolve("/artist/3?name=The+Examples"))
+        assertEquals("a place the table doesn't have", SduiTarget.Unknown("/nowhere/3?name=The+Examples"), router.resolve("/nowhere/3?name=The+Examples"))
         // A server's own table wins over the one the app was built with.
         val own = SduiRouter(json.decodeFromString("""[{"pattern":"/item/{item}","native":"player"},{"pattern":"/stage/{id}","page":"stage","params":{"act":"{id}","seat":"?seat"}}]"""))
         assertEquals("player", (own.resolve("/item/3") as SduiTarget.Native).screen)
@@ -389,11 +389,12 @@ class SduiRulesTest {
         val request = SduiCommands.request(later.spec, later.item)!!
         assertEquals("POST", request.method)
         assertEquals("/api/v1/collections/watch-later/items", request.path)
-        assertEquals("""{"items":[101]}""", request.body)
-        // A show's ID is "show-<n>": Watch later takes it under shows, and nothing marks a whole show watched.
+        assertEquals("""{"items":["101"]}""", request.body)
+        // A show's ID is "show-<n>", which the server's routes take as it is.
         val show = router.effect(action("""{"type":"command","op":"watchLater.add","item":"show-5"}""")) as SduiEffect.Command
-        assertEquals("""{"shows":[5]}""", SduiCommands.request(show.spec, show.item)!!.body)
-        assertEquals(SduiEffect.Nothing, router.effect(action("""{"type":"command","op":"watched.set","item":"show-5"}""")))
+        assertEquals("""{"items":["show-5"]}""", SduiCommands.request(show.spec, show.item)!!.body)
+        val showWatched = router.effect(action("""{"type":"command","op":"watched.set","item":"show-5"}""")) as SduiEffect.Command
+        assertEquals("/api/v1/items/show-5/progress", SduiCommands.request(showWatched.spec, showWatched.item)!!.path)
         val watched = router.effect(action("""{"type":"command","op":"watched.set","item":"9"}""")) as SduiEffect.Command
         assertEquals("/api/v1/items/9/progress", SduiCommands.request(watched.spec, watched.item)!!.path)
         val cleared = router.effect(action("""{"type":"command","op":"watched.clear","item":"9"}""")) as SduiEffect.Command

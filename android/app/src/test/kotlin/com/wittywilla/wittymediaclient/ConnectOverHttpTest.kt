@@ -144,9 +144,9 @@ class ConnectOverHttpTest {
     }
 
     @Test
-    fun aFourOhFourOnlyPassesWithNoKeyRemembered() = runBlocking {
+    fun aServerThatWontAnswerIsRefused() = runBlocking {
         val old = stub { Answer(404, """{"error":"not found"}""") }
-        assertEquals(IdentityState.None, identify(old.url, emptyList()).state)
+        assertEquals(IdentityState.Bad, identify(old.url, emptyList()).state)
         val pinned = SavedServer(old.url, "Home", keys.serverId, keys.publicKey)
         assertEquals(IdentityState.Bad, identify(old.url, listOf(pinned)).state)
     }
@@ -185,7 +185,7 @@ class ConnectOverHttpTest {
         assertEquals(Probe.Failed("not-set-up"), probeServer(capabilitiesServer("""{"server":"WittyMediaServer","apiVersions":[1],"setupRequired":true}""").url))
         assertEquals(Probe.Failed("not-server"), probeServer(stub { Answer(200, "<html></html>") }.url))
         assertEquals(Probe.Failed("not-server"), probeServer(stub { Answer(404, "{}") }.url))
-        assertEquals(Probe.Failed("server-old"), probeServer(stub { asked ->
+        assertEquals(Probe.Failed("not-server"), probeServer(stub { asked ->
             if (asked.path == "/api/v1/status") Answer(200, fixture("status")) else Answer(404, "{}")
         }.url))
         val closed = stub { Answer(200, "") }

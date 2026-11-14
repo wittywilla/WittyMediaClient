@@ -61,7 +61,6 @@ interface GameTransport {
 data class GameModeInfo(val id: String, val stream: Int = 1) {
     companion object {
         fun from(element: JsonElement): GameModeInfo? = when (element) {
-            is JsonPrimitive -> GameModeInfo(element.content)
             is JsonObject -> element["id"]?.let { (it as? JsonPrimitive)?.content }?.let { id ->
                 GameModeInfo(id, (element["stream"] as? JsonPrimitive)?.intOrNull ?: 1)
             }

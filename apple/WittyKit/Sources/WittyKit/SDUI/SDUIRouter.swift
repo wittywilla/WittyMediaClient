@@ -134,10 +134,9 @@ public struct SDUIRouter: Equatable, Sendable {
                 slots.append(value)
                 out = out.replacingOccurrences(of: token, with: marker)
             }
-            // The item: a quoted token takes the ID as it is; a bare one (an older catalogue) a number as a number.
+            // The item: the catalogue always quotes it in a body, and the ID goes in as it is.
             if !inPath {
                 put("\"{item}\"", "\"" + jsonEscaped(item) + "\"")
-                put("{item}", Int64(item).map(String.init) ?? "\"" + jsonEscaped(item) + "\"")
             } else {
                 put("{item}", unreserved(item))
             }

@@ -98,23 +98,7 @@ class GuideRulesTest {
     }
 
     @Test
-    fun filters() {
-        val news = channel("""{"key":"tun-1","kind":"tuner","name":"News","group":"Test","favourite":true}""")
-        val films = channel("""{"key":"lib-1","kind":"library","name":"Films","categories":["Movies"]}""")
-        assertTrue(GuideRules.matches(news, "", "", false))
-        assertTrue(GuideRules.matches(news, "tuner", "Test", true))
-        assertFalse(GuideRules.matches(films, "tuner", "", false))
-        assertTrue("a category counts as a group", GuideRules.matches(films, "", "Movies", false))
-        assertFalse(GuideRules.matches(films, "", "", true))
-        assertFalse(news.copy(favourite = false).favourite)
-    }
-
-    @Test
     fun theGuideIsAskedForAsThePageAsksForIt() {
-        assertEquals(
-            "/guide?from=3600&hours=8&offset=30&limit=30&kind=tuner&group=News%20%26%20Weather&favourites=1",
-            GuideRules.query(3600, 30, kind = "tuner", group = "News & Weather", favourites = true),
-        )
         assertEquals("tun%2F1%20x", GuideRules.pathPart("tun/1 x"))
     }
 

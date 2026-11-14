@@ -2,22 +2,9 @@
 // Copyright (C) 2026 WittyWilla and contributors
 import Foundation
 
-// What the guide gained for a server with thousands of channels: channel sets (which channels the guide shows, in
-// which order), pages of them, finding one by name or number, watching a programme from its start, and recording
-// options. Each is offered only when the server names it in its capabilities, so an older server's guide is as it
-// was. The server's side is in its docs (live TV); these rules are what the apps draw from, held by ChannelSetsTests.
-
-/// The capability names live TV's newer parts go by.
-public enum TvFeature {
-    /// Channel sets, and `set=` on the guide.
-    public static let sets = "tv-sets"
-    /// `q`, `locate` and `lite` on the guide.
-    public static let paging = "tv-guide-paging"
-    /// Watching a programme of an archived channel from its start.
-    public static let catchup = "tv-catchup"
-    /// Padding, and new-only, any-channel and keep-the-newest series rules.
-    public static let dvrRules = "tv-dvr-rules-2"
-}
+// The guide for a server with thousands of channels: channel sets (which channels the guide shows, in which order),
+// pages of them, finding one by name or number, watching a programme from its start, and recording options. The
+// server's side is in its docs (live TV); these rules are what the apps draw from, held by ChannelSetsTests.
 
 // MARK: - Sets
 
@@ -234,10 +221,9 @@ public enum GuidePaging {
 
     public static func sizeName(_ size: Int) -> String { size > 0 ? "\(size)" : "All" }
 
-    /// How many rows to ask for at once: a page's worth, or a chunk of the one list. An older server's guide is
-    /// asked in the smaller pieces it always was.
-    public static func fetchSize(pageSize: Int, paging: Bool) -> Int {
-        pageSize > 0 ? pageSize : paging ? chunk : GuideRules.page
+    /// How many rows to ask for at once: a page's worth, or a chunk of the one list.
+    public static func fetchSize(pageSize: Int) -> Int {
+        pageSize > 0 ? pageSize : chunk
     }
 
     /// The first row of the page holding a row.
@@ -332,13 +318,6 @@ public enum LocateRules {
         if let inSet, inSet >= 0 { return .here(inSet) }
         if let inAll, inAll >= 0 { return .inAll(inAll) }
         return .nowhere
-    }
-
-    /// The same, from this device's own list of channels, for a server without `locate`.
-    public static func index(of number: String, in channels: [GuideChannel]) -> Int? {
-        let wanted = LocateRules.number(number)
-        guard !wanted.isEmpty else { return nil }
-        return channels.firstIndex { ($0.number ?? "") == wanted } ?? channels.firstIndex { $0.key == number }
     }
 }
 

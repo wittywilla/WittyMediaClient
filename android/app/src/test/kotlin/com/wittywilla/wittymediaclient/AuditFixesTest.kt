@@ -78,10 +78,7 @@ class AuditFixesTest {
         assertEquals(SendStep.Changed, step(IdentityState.Different))
         assertEquals(SendStep.Changed, step(IdentityState.New, "OTHER"))
         assertEquals(SendStep.Refuse, step(IdentityState.Bad))
-        assertEquals(SendStep.Refuse, step(IdentityState.None))
         assertEquals(SendStep.Unreachable, step(IdentityState.Unreachable))
-        // A server older than keys, when no key was shown.
-        assertEquals(SendStep.Send, Identity.beforeSending("", ServerProof(IdentityState.None)))
     }
 
     @Test

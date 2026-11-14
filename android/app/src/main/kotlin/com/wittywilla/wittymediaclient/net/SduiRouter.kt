@@ -115,82 +115,15 @@ class SduiRouter(routes: List<SduiRouteSpec> = DEFAULT_ROUTES, commands: List<Sd
             return out
         }
 
-        private fun page(pattern: String, page: String, vararg params: Pair<String, String>) = SduiRouteSpec(pattern, page = page, params = params.toMap())
-        private fun native(pattern: String, screen: String) = SduiRouteSpec(pattern, native = screen)
-
-        // Catalogue revision 2's table, for the moment before the server's own has been read.
-        val DEFAULT_ROUTES: List<SduiRouteSpec> = listOf(
-            page("/", "home"),
-            page("/libraries", "libraries"),
-            page("/library/{library}", "library", "library" to "{library}"),
-            page("/item/{item}", "detail", "item" to "{item}"),
-            page("/show/{show}", "detail", "show" to "{show}"),
-            page("/album/{library}", "detail", "album" to "?album", "artist" to "?artist", "library" to "{library}"),
-            // A person's page (catalogue revision 5: cast and crew).
-            page("/person/{person}", "detail", "person" to "{person}"),
-            page("/collections/{collection}", "detail", "collection" to "{collection}"),
-            page("/collections", "collections"),
-            page("/search", "search", "q" to "?q"),
-            page("/tv", "livetv"),
-            page("/music", "music"),
-            page("/photos", "photos"),
-            page("/books", "books"),
-            page("/games", "games"),
-            // Catalogue revision 8: the pages the server serves for every app, opened about something.
-            page("/studio/{name}", "studio", "name" to "{name}"),
-            page("/network/{name}", "network", "name" to "{name}"),
-            page("/category/{name}", "category", "name" to "{name}"),
-            page("/versions/{item}", "versions", "item" to "{item}"),
-            page("/save-to/{item}", "save-to", "item" to "{item}"),
-            page("/devices", "devices"),
-            page("/creators", "creators"),
-            page("/creator/{item}", "creator", "item" to "{item}"),
-            page("/comments/{item}", "comments", "item" to "{item}"),
-            page("/markers/{item}", "markers", "item" to "{item}"),
-            page("/canvas/{item}", "canvas", "item" to "{item}"),
-            page("/smart-list", "smart-list"),
-            page("/year", "year"),
-            page("/activity", "activity"),
-            page("/notifications", "notifications"),
-            page("/page/{id}", "{id}"),
-            native("/settings", "settings"),
-            native("/settings/{section}", "settings"),
-            native("/tv/guide", "guide"),
-            native("/tv/recordings", "guide"),
-            native("/tv/watch/{key}", "livePlayer"),
-            native("/watch/{item}", "player"),
-            native("/play/{item}", "player"),
-            native("/read/{item}", "reader"),
-            native("/game/{item}", "game"),
-            native("/you", "profiles"),
-            native("/pair", "pair"),
-        )
-
-        val DEFAULT_COMMANDS: List<SduiCommandSpec> = listOf(
-            SduiCommandSpec("watchLater.add", "POST", "/api/v1/collections/watch-later/items", "{\"items\":[{item}]}"),
-            SduiCommandSpec("watched.set", "POST", "/api/v1/items/{item}/progress", "{\"watched\":true}"),
-            SduiCommandSpec("watched.clear", "DELETE", "/api/v1/items/{item}/progress", ""),
-            SduiCommandSpec("selectTab", "GET", "", ""),
-            SduiCommandSpec("refresh", "GET", "", ""),
-        )
+        // The bundled catalogue's, for the moment before the server's own has been read (SduiBuiltIn).
+        val DEFAULT_ROUTES: List<SduiRouteSpec> get() = SduiBuiltIn.catalog.routes
+        val DEFAULT_COMMANDS: List<SduiCommandSpec> get() = SduiBuiltIn.catalog.commands
     }
 }
 
-// A command as a request. Items are numbers, but a show's is "show-<n>", which the catalogue's templates were not
-// written for: Watch later takes a show under `shows`, and there is no request that marks a whole show watched.
+// A command as a request. The catalogue's templates quote {item} in bodies, and its routes take a show's "show-<n>".
 object SduiCommands {
     class Request(val method: String, val path: String, val body: String?)
-
-    private fun showId(item: String): Long? = item.removePrefix("show-").takeIf { it != item }?.toLongOrNull()
-
-    fun bodyItem(item: String): String = item.toLongOrNull()?.toString() ?: ("\"" + item.replace("\\", "\\\\").replace("\"", "\\\"") + "\"")
-
-    // The server's apiRevision, read with its capabilities. From 16 its templates hold {item} inside a JSON string and
-    // its routes take a show's "show-<n>" (marking a whole show watched included), so nothing needs working round.
-    @Volatile
-    var serverRevision = 0
-
-    private const val SHOW_IDS_FROM = 16
 
     // A command's request, from its catalogue entry: {item} and each of the entry's params by name go into the path and the
     // body where the template has them (docs/SDUI.md, Action). An int parameter replaces its string and quotes with the
@@ -234,18 +167,10 @@ object SduiCommands {
     }
 
     private fun baseRequest(spec: SduiCommandSpec, item: String): Request? {
-        if (serverRevision >= SHOW_IDS_FROM) {
-            if (item.isEmpty() && ("{item}" in spec.path || "{item}" in spec.body)) return null
-            if (item.any { it.isISOControl() }) return null
-            val inPath = java.net.URLEncoder.encode(item, "UTF-8").replace("+", "%20")
-            val inString = item.replace("\\", "\\\\").replace("\"", "\\\"")
-            return Request(spec.method, spec.path.replace("{item}", inPath), spec.body.takeIf { it.isNotEmpty() }?.replace("{item}", inString))
-        }
-        val show = showId(item)
-        if (show != null) {
-            return if (spec.op == "watchLater.add") Request(spec.method, spec.path, "{\"shows\":[$show]}") else null
-        }
-        if ("{item}" in spec.path && item.toLongOrNull() == null) return null
-        return Request(spec.method, spec.path.replace("{item}", item), spec.body.takeIf { it.isNotEmpty() }?.replace("{item}", bodyItem(item)))
+        if (item.isEmpty() && ("{item}" in spec.path || "{item}" in spec.body)) return null
+        if (item.any { it.isISOControl() }) return null
+        val inPath = java.net.URLEncoder.encode(item, "UTF-8").replace("+", "%20")
+        val inString = item.replace("\\", "\\\\").replace("\"", "\\\"")
+        return Request(spec.method, spec.path.replace("{item}", inPath), spec.body.takeIf { it.isNotEmpty() }?.replace("{item}", inString))
     }
 }

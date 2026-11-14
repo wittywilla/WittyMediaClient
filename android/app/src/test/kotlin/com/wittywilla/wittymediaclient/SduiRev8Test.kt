@@ -96,9 +96,7 @@ class SduiRev8Test {
 
     @Test
     fun commandParametersAreTyped() {
-        val before = SduiCommands.serverRevision
-        SduiCommands.serverRevision = 16
-        try { commandParameters() } finally { SduiCommands.serverRevision = before }
+        commandParameters()
     }
 
     private fun commandParameters() {
@@ -239,11 +237,7 @@ class SduiRev8Test {
         values.set("rule.yearTo", JsonPrimitive("2005"))
         assertEquals("a number field gives a number", """{"name":"Mine","rule":{"yearFrom":1990,"yearTo":2005,"genres":["Sci-Fi","Drama"],"kind":"movie"}}""", values.submit(form.node.action!!).params.toString())
         val spec = SduiCommandSpec("smartlist.create", "POST", "/api/smart", """{"name":"{name}","rule":"{rule}"}""", listOf(SduiCommandParam("name", "string", true), SduiCommandParam("rule", "object", true)))
-        val before = SduiCommands.serverRevision
-        SduiCommands.serverRevision = 16
-        try {
-            assertEquals("""{"name":"Mine","rule":{"yearFrom":1990,"genres":["Sci-Fi","Drama"],"kind":"movie"}}""", SduiCommands.request(spec, "", sent.params)!!.body)
-        } finally { SduiCommands.serverRevision = before }
+        assertEquals("""{"name":"Mine","rule":{"yearFrom":1990,"genres":["Sci-Fi","Drama"],"kind":"movie"}}""", SduiCommands.request(spec, "", sent.params)!!.body)
     }
 
     @Test

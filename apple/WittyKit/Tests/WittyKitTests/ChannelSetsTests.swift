@@ -184,9 +184,8 @@ final class ChannelSetsTests: XCTestCase {
         XCTAssertEqual(GuidePaging.size(stored: 60), 0, "not one of the choices")
         XCTAssertEqual(GuidePaging.size(stored: nil), 0)
         XCTAssertEqual(GuidePaging.sizes.map(GuidePaging.sizeName), ["25", "50", "75", "100", "All"])
-        XCTAssertEqual(GuidePaging.fetchSize(pageSize: 50, paging: true), 50)
-        XCTAssertEqual(GuidePaging.fetchSize(pageSize: 0, paging: true), 100)
-        XCTAssertEqual(GuidePaging.fetchSize(pageSize: 0, paging: false), GuideRules.page)
+        XCTAssertEqual(GuidePaging.fetchSize(pageSize: 50), 50)
+        XCTAssertEqual(GuidePaging.fetchSize(pageSize: 0), 100)
     }
 
     func testWhatTheGuideIsAsked() {
@@ -207,9 +206,6 @@ final class ChannelSetsTests: XCTestCase {
         XCTAssertTrue(LocateRules.shouldTryAll(set: "set:7"))
         XCTAssertFalse(LocateRules.shouldTryAll(set: "all"))
         XCTAssertFalse(LocateRules.shouldTryAll(set: ""))
-        let lineup = try JSONDecoder().decode([GuideChannel].self, from: Data(#"[{"key":"a","number":"1","name":"One"},{"key":"b","number":"4.1","name":"Four"}]"#.utf8))
-        XCTAssertEqual(LocateRules.index(of: "4.1", in: lineup), 1)
-        XCTAssertNil(LocateRules.index(of: "7", in: lineup))
         let page = try JSONDecoder().decode(Guide.self, from: Data(#"{"channels":[],"total":30,"offset":0,"set":"set:7","located":-1}"#.utf8))
         XCTAssertEqual(page.located, -1)
         XCTAssertEqual(page.set, "set:7")
@@ -244,8 +240,6 @@ final class ChannelSetsTests: XCTestCase {
         XCTAssertEqual(RecordingOptions().seriesWords, "")
         let rule = try JSONDecoder().decode(RecordingRule.self, from: Data(#"{"id":3,"channel":"tun-12","title":"News","anyChannel":false,"newOnly":true,"keep":5,"padBefore":1,"padAfter":5}"#.utf8))
         XCTAssertEqual(rule.options, RecordingOptions(padBefore: 1, padAfter: 5, newOnly: true, keep: 5))
-        let older = try JSONDecoder().decode(RecordingRule.self, from: Data(#"{"id":3,"channel":"tun-12","title":"News"}"#.utf8))
-        XCTAssertEqual(older.options, RecordingOptions())
         let body = try JSONSerialization.jsonObject(with: JSONEncoder().encode(WittyClient.ruleBody(channel: "tun-12", title: "News", options: rule.options))) as? [String: Any]
         XCTAssertEqual(body?["newOnly"] as? Bool, true)
         XCTAssertEqual(body?["keep"] as? Int, 5)

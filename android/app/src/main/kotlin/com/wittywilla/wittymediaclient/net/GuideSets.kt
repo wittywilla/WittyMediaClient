@@ -5,9 +5,8 @@ package com.wittywilla.wittymediaclient.net
 import kotlinx.serialization.Serializable
 import java.util.Locale
 
-// Which channels the guide shows, in which order (the server's `tv-sets`), how the guide is paged (`tv-guide-paging`),
-// finding a channel by its number, watching a programme from its start (`tv-catchup`) and a recording's options
-// (`tv-dvr-rules-2`): the rules alone, so GuideSetsTest holds them without a device. The screens are in tv/.
+// Which channels the guide shows, in which order (channel sets), how the guide is paged, finding a channel by its
+// number, watching a programme from its start and a recording's options: the rules alone, so GuideSetsTest holds them without a device. The screens are in tv/.
 
 // One set from GET /tv-sets. `id` is what the guide is asked for with `set=`: `all`, `fav`, `set:7`, `src:lib`,
 // `grp:News`. `count` is how many of its channels this profile may see.
@@ -193,8 +192,8 @@ object GuidePaging {
 
     fun number(n: Int, locale: Locale = Locale.getDefault()): String = String.format(locale, "%,d", n)
 
-    // The piece a row is asked for in: the page itself when paged, else a CHUNK (or the older server's 30).
-    fun chunk(size: Int, paging: Boolean): Int = if (size > 0) size else if (paging) CHUNK else GuideRules.PAGE
+    // The piece a row is asked for in: the page itself when paged, else a CHUNK.
+    fun chunk(size: Int): Int = if (size > 0) size else CHUNK
 
     // The pieces to keep while these rows are on screen; everything else can go and be asked for again.
     fun keep(visible: kotlin.collections.Collection<Int>, chunk: Int, margin: Int = KEEP): IntRange {
@@ -211,7 +210,7 @@ object GuidePaging {
         return channel.number.lowercase(Locale.ROOT).startsWith(w) || channel.name.lowercase(Locale.ROOT).contains(w)
     }
 
-    // The query for a page of the guide on a server with sets and paging: a stretch of the schedule, a page of a set's
+    // The query for a page of the guide: a stretch of the schedule, a page of a set's
     // channels, what was typed to narrow them, and the channel to find.
     fun query(from: Long, offset: Int, limit: Int, set: String?, q: String = "", locate: String = ""): String {
         val b = StringBuilder("/guide?from=$from&hours=${GuideRules.FETCH_HOURS}&offset=${maxOf(0, offset)}&limit=${limit.coerceIn(1, 200)}")
@@ -290,7 +289,7 @@ object CatchupRules {
         "/tv/${GuideRules.pathPart(key)}/catchup?start=${programme.start}&end=${programme.end}&streamToken=1&viewer=${GuideRules.pathPart(viewer)}"
 }
 
-// A recording's options, as POST /recordings and /recording-rules take them on a server with `tv-dvr-rules-2`.
+// A recording's options, as POST /recordings and /recording-rules take them.
 object DvrRules {
     // Minutes before and after, as the person chooses them.
     val PADDING = listOf(0, 1, 2, 5, 10, 15, 30, 60)

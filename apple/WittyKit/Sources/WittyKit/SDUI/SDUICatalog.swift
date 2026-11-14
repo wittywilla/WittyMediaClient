@@ -118,10 +118,10 @@ public struct SDUICatalog: Codable, Equatable, Sendable {
         let styles = ((try? box.decodeIfPresent([Loose<SDUICardStyle>].self, forKey: .cardStyles)) ?? []).compactMap(\.value)
         let rules = ((try? box.decodeIfPresent([Loose<SDUIRouteRule>].self, forKey: .routes)) ?? []).compactMap(\.value)
         let ops = ((try? box.decodeIfPresent([Loose<SDUICommand>].self, forKey: .commands)) ?? []).compactMap(\.value)
-        // A catalogue without a table keeps the one this app was built with.
-        cardStyles = styles.isEmpty ? SDUICatalog.builtIn.cardStyles : styles
-        routes = rules.isEmpty ? SDUICatalog.builtIn.routes : rules
-        commands = ops.isEmpty ? SDUICatalog.builtIn.commands : ops
+        // The server's tables as they are: a row this app can't read is left out.
+        cardStyles = styles
+        routes = rules
+        commands = ops
         icons = try? box.decodeIfPresent([String].self, forKey: .icons)
         let parts = ((try? box.decodeIfPresent([Loose<Component>].self, forKey: .components)) ?? []).compactMap(\.value)
         componentTokens = Dictionary(parts.compactMap { part in part.tokens.map { (part.type, $0) } }, uniquingKeysWith: { first, _ in first })
@@ -138,78 +138,23 @@ public struct SDUICatalog: Codable, Equatable, Sendable {
     public func cardStyle(_ name: String) -> SDUICardStyle? { cardStyles.first { $0.style == name } }
     public func command(_ op: String) -> SDUICommand? { commands.first { $0.op == op } }
 
-    /// Catalogue revision 2 as this app was built against it: what's used until the server's own has been
-    /// read, and when it can't be. The same tables as the server's docs/SDUI.md, "Card styles", "Routes", "Commands".
-    public static let builtIn = SDUICatalog(
-        cardStyles: [
-            SDUICardStyle("poster", shape: "poster", aspect: "2/3", shows: ["title", "subtitle", "progress", "watched", "unwatched", "badges"], titleLines: 1, subtitleLines: 1),
-            SDUICardStyle("landscape", shape: "landscape", aspect: "16/9", shows: ["title", "subtitle", "badges"], titleLines: 1, subtitleLines: 1),
-            SDUICardStyle("progress", shape: "landscape", aspect: "16/9", shows: ["title", "subtitle", "progress", "remaining"], titleLines: 1, subtitleLines: 1),
-            SDUICardStyle("episode", shape: "landscape", aspect: "16/9", shows: ["title", "subtitle", "synopsis", "progress", "watched"], titleLines: 1, subtitleLines: 1),
-            SDUICardStyle("square", shape: "square", aspect: "1/1", shows: ["title", "subtitle"], titleLines: 1, subtitleLines: 1),
-            SDUICardStyle("album", shape: "square", aspect: "1/1", shows: ["title", "subtitle"], titleLines: 1, subtitleLines: 1),
-            SDUICardStyle("circle", shape: "circle", aspect: "1/1", shows: ["title"], titleLines: 2, subtitleLines: 0),
-            SDUICardStyle("book", shape: "poster", aspect: "2/3", shows: ["title", "subtitle", "progress"], titleLines: 2, subtitleLines: 1),
-            SDUICardStyle("person", shape: "circle", aspect: "1/1", shows: ["title", "subtitle", "badges"], titleLines: 1, subtitleLines: 1),
-            SDUICardStyle("game", shape: "poster", aspect: "3/4", shows: ["title", "subtitle", "badges"], titleLines: 1, subtitleLines: 1),
-            SDUICardStyle("photo", shape: "square", aspect: "1/1", shows: [], titleLines: 0, subtitleLines: 0),
-            SDUICardStyle("channel", shape: "landscape", aspect: "16/9", shows: ["number", "title", "now", "next", "progress"], titleLines: 1, subtitleLines: 2),
-            SDUICardStyle("tile", shape: "landscape", aspect: "16/9", shows: ["title", "count"], titleLines: 1, subtitleLines: 0),
-            SDUICardStyle("plate", shape: "poster", aspect: "2/3", shows: ["title", "subtitle", "badges"], titleLines: 2, subtitleLines: 1),
-            SDUICardStyle("block", shape: "landscape", aspect: "16/9", shows: ["title", "subtitle"], titleLines: 2, subtitleLines: 1),
-            SDUICardStyle("logo", shape: "landscape", aspect: "16/9", shows: ["number", "title"], titleLines: 1, subtitleLines: 0),
-            SDUICardStyle("chip", shape: "chip", aspect: "", shows: ["title"], titleLines: 1, subtitleLines: 0),
-        ],
-        routes: [
-            SDUIRouteRule("/", page: "home"),
-            SDUIRouteRule("/libraries", page: "libraries"),
-            SDUIRouteRule("/library/{library}", page: "library", params: ["library": "{library}"]),
-            SDUIRouteRule("/item/{item}", page: "detail", params: ["item": "{item}"]),
-            SDUIRouteRule("/person/{person}", page: "detail", params: ["person": "{person}"]),
-            SDUIRouteRule("/show/{show}", page: "detail", params: ["show": "{show}"]),
-            SDUIRouteRule("/album/{library}", page: "detail", params: ["album": "?album", "artist": "?artist", "library": "{library}"]),
-            SDUIRouteRule("/collections/{collection}", page: "detail", params: ["collection": "{collection}"]),
-            SDUIRouteRule("/collections", page: "collections"),
-            SDUIRouteRule("/search", page: "search", params: ["q": "?q"]),
-            SDUIRouteRule("/tv", page: "livetv"),
-            SDUIRouteRule("/music", page: "music"),
-            SDUIRouteRule("/photos", page: "photos"),
-            SDUIRouteRule("/books", page: "books"),
-            SDUIRouteRule("/games", page: "games"),
-            SDUIRouteRule("/page/{id}", page: "{id}"),
-            SDUIRouteRule("/settings", native: "settings"),
-            SDUIRouteRule("/settings/{section}", native: "settings"),
-            SDUIRouteRule("/tv/guide", native: "guide"),
-            SDUIRouteRule("/tv/recordings", native: "guide"),
-            SDUIRouteRule("/tv/watch/{key}", native: "livePlayer"),
-            SDUIRouteRule("/watch/{item}", native: "player"),
-            SDUIRouteRule("/play/{item}", native: "player"),
-            SDUIRouteRule("/read/{item}", native: "reader"),
-            SDUIRouteRule("/game/{item}", native: "game"),
-            SDUIRouteRule("/you", native: "profiles"),
-            SDUIRouteRule("/pair", native: "pair"),
-        ],
-        commands: [
-            SDUICommand("watchLater.add", method: "POST", path: "/api/v1/collections/watch-later/items", body: "{\"items\":[{item}]}"),
-            SDUICommand("watched.set", method: "POST", path: "/api/v1/items/{item}/progress", body: "{\"watched\":true}"),
-            SDUICommand("watched.clear", method: "DELETE", path: "/api/v1/items/{item}/progress"),
-            SDUICommand("wittyplay.room.create", method: "POST", path: "/api/play/{item}/room", body: "{\"open\":true}"),
-            SDUICommand("wittyplay.room.join", method: "POST", path: "/api/play/join", body: "{\"room\":\"{item}\",\"code\":\"{code}\"}",
-                        params: [.init("code")]),
-            SDUICommand("wittyplay.room.invite", method: "POST", path: "/api/play/{item}/invite"),
-            SDUICommand("wittyplay.state.save", method: "POST", path: "/api/play/{item}/action", body: "{\"type\":\"save\",\"slot\":\"{slot}\"}",
-                        params: [.init("slot", type: "int", required: true)]),
-            SDUICommand("wittyplay.state.load", method: "POST", path: "/api/play/{item}/action", body: "{\"type\":\"load\",\"slot\":\"{slot}\"}",
-                        params: [.init("slot", type: "int", required: true)]),
-            SDUICommand("wittyplay.state.delete", method: "DELETE", path: "/api/games/{item}/saves/{slot}",
-                        params: [.init("slot", type: "int", required: true)]),
-            SDUICommand("wittyplay.controller.assign", method: "PUT", path: "/api/play/{item}/seats/{user}", body: "{\"seat\":\"{seat}\"}",
-                        params: [.init("user", required: true), .init("seat", type: "int", required: true)]),
-            SDUICommand("rewind.open"),
-            SDUICommand("controller.remap"),
-            SDUICommand("selectTab"),
-            SDUICommand("refresh"),
-        ])
+    /// The server's own catalogue as this app was built against it: what's drawn with until the server's own has been
+    /// read. It is WittyKit's bundled copy of what the server prints (Resources/sdui-catalog.json, written by
+    /// apple/scripts/sync-sdui-catalog.sh), so its card styles, routes and commands are the server's, never a
+    /// table kept by hand. A copy that is missing or can't be read is a broken build, and stops here, loudly.
+    public static let builtIn: SDUICatalog = {
+        guard let url = Bundle.module.url(forResource: "sdui-catalog", withExtension: "json"), let data = try? Data(contentsOf: url) else {
+            fatalError("WittyKit has no bundled SDUI catalogue: run apple/scripts/sync-sdui-catalog.sh")
+        }
+        do {
+            let catalog = try JSONDecoder().decode(SDUICatalog.self, from: data)
+            precondition(!catalog.cardStyles.isEmpty && !catalog.routes.isEmpty && !catalog.commands.isEmpty,
+                         "WittyKit's bundled SDUI catalogue has an empty table: run apple/scripts/sync-sdui-catalog.sh")
+            return catalog
+        } catch {
+            fatalError("WittyKit's bundled SDUI catalogue can't be read (\(error)): run apple/scripts/sync-sdui-catalog.sh")
+        }
+    }()
 }
 
 /// A component's or card style's theme tokens: each coloured part's colour token, each text's role, each rounded

@@ -80,12 +80,16 @@ final class SDUITests: XCTestCase {
         XCTAssertEqual(document.layout, SDUILayout.fallback)
     }
 
-    func testTheCatalogueKeepsItsOwnTablesWhereTheServersAreMissing() throws {
+    func testTheCatalogueTakesTheServersTablesAsTheyAre() throws {
         let catalog = try JSONDecoder().decode(SDUICatalog.self, from: Data(#"{"revision":3,"routes":[{"pattern":"/x/{id}","page":"{id}"},7],"components":[{"type":"Page"}]}"#.utf8))
+        // A row it can't read is left out; a table the server didn't send is empty, not this app's own.
         XCTAssertEqual(catalog.routes.count, 1)
-        XCTAssertEqual(catalog.cardStyles.count, 17)
-        XCTAssertEqual(catalog.cardStyle("photo")?.shows, [])
-        XCTAssertNotNil(catalog.command("watched.set"))
+        XCTAssertTrue(catalog.cardStyles.isEmpty)
+        XCTAssertNil(catalog.command("watched.set"))
+        // The bundled one has the server's card styles, the photo's with nothing over it.
+        let built = SDUICatalog.builtIn
+        XCTAssertEqual(built.cardStyle("photo")?.shows, [])
+        XCTAssertNotNil(built.command("watched.set"))
     }
 
     func testNavigationKeepsTheEntriesItCanRead() throws {
@@ -149,7 +153,10 @@ final class SDUITests: XCTestCase {
         let later = try XCTUnwrap(SDUIRouter.request(for: catalog.command("watchLater.add"), item: "12"))
         XCTAssertEqual(later.method, "POST")
         XCTAssertEqual(later.path, "/api/v1/collections/watch-later/items")
-        XCTAssertEqual(later.body.map { String(decoding: $0, as: UTF8.self) }, #"{"items":[12]}"#)
+        XCTAssertEqual(later.body.map { String(decoding: $0, as: UTF8.self) }, #"{"items":["12"]}"#)
+        let off = try XCTUnwrap(SDUIRouter.request(for: catalog.command("watchLater.remove"), item: "show-5"))
+        XCTAssertEqual(off.method, "DELETE")
+        XCTAssertEqual(off.body.map { String(decoding: $0, as: UTF8.self) }, #"{"items":["show-5"]}"#)
         let clear = try XCTUnwrap(SDUIRouter.request(for: catalog.command("watched.clear"), item: "12"))
         XCTAssertEqual(clear.method, "DELETE")
         XCTAssertEqual(clear.path, "/api/v1/items/12/progress")
