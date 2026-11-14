@@ -554,7 +554,11 @@ class Nav(val app: WittyApp, private val s: Map<String, String>) {
 
     fun wittyPlayFor(library: com.wittywilla.wittymediaclient.net.Library): Route? {
         if (library.type != "games" || library.console == "rig") return null
-        return if (wittyPlayInstalled && !app.isTv) Route.WittyPlay(com.wittywilla.wittymediaclient.net.WittyPlayPlace.library(library.id)) else gamesRouteFor(library)
+        if (!wittyPlayInstalled) return gamesRouteFor(library)
+        // A TV has no web pages: WittyPlay's frame is drawn from its home page's regions, as Apple TV's. A library has no
+        // page of its own yet, so on a TV it opens WittyPlay's home.
+        return if (app.isTv) Route.Sdui(com.wittywilla.wittymediaclient.net.WittyPlayPlace.HOME_PAGE, emptyMap(), library.name)
+        else Route.WittyPlay(com.wittywilla.wittymediaclient.net.WittyPlayPlace.library(library.id))
     }
 
     // The route for a place the server names, where it is one of the app's screens or pages; null for what is done

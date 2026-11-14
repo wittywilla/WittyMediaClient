@@ -8,6 +8,16 @@ package com.wittywilla.wittymediaclient.net
 object WittyPlayPlace {
     // WittyPlay Online's home: where Games goes.
     const val HOME = "/page/wittyplay-online"
+    const val HOME_PAGE = "wittyplay-online"
+
+    // WittyPlay's own settings, drawn natively where there are no web pages (a TV).
+    const val SETTINGS = "/wittyplay/settings"
+    const val SETTINGS_URL = "/api/v1/sdui/modules/wittyplay/settings"
+
+    // The dock always starts with WittyPlay's own Home, so every one of its pages has one press back to it (the website's
+    // dockFor in playPaths.ts).
+    fun <T> dockFor(entries: List<T>, id: (T) -> String, route: (T) -> String, home: T): List<T> =
+        if (entries.any { id(it) == "home" || route(it).substringBefore('?') == HOME }) entries else listOf(home) + entries
 
     // One games library, as WittyPlay draws it.
     fun library(id: Long) = "/wittyplay/library/$id"
@@ -29,7 +39,8 @@ object WittyPlayPlace {
     // Server (Home), Search, or somewhere else of the app's.
     sealed interface Leave {
         data object Stay : Leave
-        data class Play(val game: Long) : Leave
+        // As the frame asks: resume (resume=1), from a moment (slot=N), and with default settings only (safe=1).
+        data class Play(val game: Long, val resume: Boolean = true, val slot: Int? = null, val safe: Boolean = false) : Leave
         data object Home : Leave
         data object Search : Leave
         data class Elsewhere(val path: String) : Leave
@@ -40,7 +51,11 @@ object WittyPlayPlace {
         val game = Regex("^/game/(\\d+)/?$").find(bare)?.groupValues?.get(1)?.toLongOrNull()
         return when {
             isPlayPath(path) -> Leave.Stay
-            game != null -> Leave.Play(game)
+            game != null -> {
+                val q = path.substringAfter('?', "").split('&').filter { it.isNotEmpty() }.associate { it.substringBefore('=') to it.substringAfter('=', "") }
+                val slot = q["slot"]?.toIntOrNull()
+                Leave.Play(game, resume = slot == null && q["resume"] != "0", slot = slot, safe = q["safe"] == "1")
+            }
             bare == "/" || bare.isEmpty() -> Leave.Home
             bare == "/search" -> Leave.Search
             else -> Leave.Elsewhere(path)

@@ -396,7 +396,10 @@ private fun SduiStatusBar(nav: Nav, state: SduiRegionsState) {
     val user = nav.me?.let { avatarName(it.displayName, it.name) }.orEmpty()
     val server = nav.brandName
     Row(
-        Modifier.fillMaxWidth().background(scheme.surface).padding(horizontal = metrics.u(if (metrics.tv) 40 else 12), vertical = metrics.u(if (metrics.tv) 10 else 6)).semantics { contentDescription = "Status" },
+        // On a TV, inside the safe area (90 at the sides, 60 at the top), as every TV page is.
+        Modifier.fillMaxWidth().background(scheme.surface)
+            .padding(start = metrics.u(if (metrics.tv) 90 else 12), end = metrics.u(if (metrics.tv) 90 else 12), top = metrics.u(if (metrics.tv) 48 else 6), bottom = metrics.u(if (metrics.tv) 12 else 6))
+            .semantics { contentDescription = "Status" },
         verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(metrics.u(if (metrics.tv) 32 else 16)),
     ) {
         state.regions.statusBar.forEach { item ->
@@ -437,13 +440,27 @@ private fun SduiSystemDock(nav: Nav, state: SduiRegionsState, vertical: Boolean)
     val metrics = LocalMetrics.current
     val scheme = MaterialTheme.colorScheme
     val here = (nav.current as? Route.Sdui)?.let { r -> "/page/" + r.page }.orEmpty()
-    val size = metrics.u(if (metrics.tv) 72 else 48)
+    // 10-foot round buttons on a TV, as Apple TV's 104.
+    val size = metrics.u(if (metrics.tv) 104 else 48)
+    val home = com.wittywilla.wittymediaclient.net.SduiSystemButton(id = "home", label = "Home", icon = "home", route = com.wittywilla.wittymediaclient.net.WittyPlayPlace.HOME)
+    val entries = com.wittywilla.wittymediaclient.net.WittyPlayPlace.dockFor(state.regions.systemDock, { it.id }, { it.route }, home)
+    // Search is the app's own; WittyPlay's settings are drawn natively; a layer goes over; anything else takes this page's place.
+    fun press(b: com.wittywilla.wittymediaclient.net.SduiSystemButton) {
+        val path = b.route.substringBefore('?')
+        when {
+            path == "/search" -> nav.reset(Route.Search)
+            path == com.wittywilla.wittymediaclient.net.WittyPlayPlace.SETTINGS || path.startsWith(com.wittywilla.wittymediaclient.net.WittyPlayPlace.SETTINGS + "/") ->
+                nav.push(Route.ModuleSettings(com.wittywilla.wittymediaclient.net.WittyPlayPlace.SETTINGS_URL, "WittyPlay"))
+            b.layer == "layer" -> nav.go(nav.sduiRouter.resolve(b.route), layer = true)
+            else -> nav.routeOf(nav.sduiRouter.resolve(b.route))?.let { nav.replace(it) } ?: nav.go(nav.sduiRouter.resolve(b.route))
+        }
+    }
     val buttons: @Composable () -> Unit = {
-        state.regions.systemDock.forEach { b ->
+        entries.forEach { b ->
             val current = b.route.substringBefore('?') == here
             Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.padding(metrics.u(4))) {
                 Pressable(
-                    { nav.go(nav.sduiRouter.resolve(b.route), layer = b.layer == "layer") }, Modifier.size(size), shape = CircleShape,
+                    { press(b) }, Modifier.size(size), shape = CircleShape,
                     fill = if (current) scheme.primary else scheme.surfaceVariant, label = b.label, selected = current, focusKey = ("dock~" + b.id).takeIf { metrics.tv },
                 ) {
                     Box(Modifier.size(size), contentAlignment = Alignment.Center) {
@@ -455,7 +472,7 @@ private fun SduiSystemDock(nav: Nav, state: SduiRegionsState, vertical: Boolean)
         }
     }
     if (vertical) Column(Modifier.fillMaxHeight().background(scheme.surface).padding(metrics.u(8)).focusGroup(), verticalArrangement = Arrangement.spacedBy(metrics.u(8)), horizontalAlignment = Alignment.CenterHorizontally) { buttons() }
-    else Row(Modifier.fillMaxWidth().background(scheme.surface).padding(vertical = metrics.u(8)).focusGroup(), horizontalArrangement = Arrangement.spacedBy(metrics.u(16), Alignment.CenterHorizontally), verticalAlignment = Alignment.Top) { buttons() }
+    else Row(Modifier.fillMaxWidth().background(scheme.surface).padding(top = metrics.u(8), bottom = metrics.u(if (metrics.tv) 48 else 8)).focusGroup(), horizontalArrangement = Arrangement.spacedBy(metrics.u(16), Alignment.CenterHorizontally), verticalAlignment = Alignment.Top) { buttons() }
 }
 
 // MARK: QR
