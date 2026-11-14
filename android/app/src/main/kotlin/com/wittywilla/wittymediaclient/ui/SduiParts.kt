@@ -50,6 +50,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.key.KeyEventType
 import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.key.nativeKeyCode
+import androidx.compose.ui.focus.focusProperties
 import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.input.key.type
 import androidx.compose.ui.layout.ContentScale
@@ -969,7 +970,8 @@ fun SduiLine(view: SduiView, parent: SduiView) {
             }
             val image = p.image("image")
             val dense = parent.props.isOn("dense")
-            Pressable({ env.act(view.node.action) }, Modifier.fillMaxWidth(), shape = RoundedCornerShape(env.pt(10)), fill = Color.Transparent, label = view.label, enabled = press, disabledAlpha = 1f, focusKey = focusKey, requestFocus = start, ring = env.tv && press, pressScale = 1f) {
+            // A row that does nothing is words to read, not a stop for a remote.
+            Pressable({ env.act(view.node.action) }, Modifier.fillMaxWidth().focusProperties { canFocus = press }, shape = RoundedCornerShape(env.pt(10)), fill = Color.Transparent, label = view.label, enabled = press, disabledAlpha = 1f, focusKey = focusKey, requestFocus = start, ring = env.tv && press, pressScale = 1f) {
                 Row(Modifier.fillMaxWidth().heightIn(min = env.pt(if (env.tv) 90 else if (dense) 44 else 56)).padding(horizontal = env.pt(if (env.tv) 24 else 4)).clearAndSetSemantics { }, verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(env.space("s"))) {
                     val box = env.pt(if (env.tv) 66 else if (dense) 28 else 40)
                     if (image != null) SduiPicture(image, box, 1f, null, Modifier.size(box).clip(RoundedCornerShape(env.pt(6))))

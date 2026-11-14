@@ -40,6 +40,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.focus.focusProperties
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.key.KeyEventType
 import androidx.compose.ui.input.key.nativeKeyCode
@@ -377,15 +379,34 @@ fun SduiRegionsFrame(nav: Nav, content: @Composable () -> Unit) {
     val bar = !state.hideStatusBar && state.regions.statusBar.isNotEmpty()
     val dock = !state.hideSystemDock && state.regions.systemDock.isNotEmpty()
     val side = dock && state.dockOnSide
-    Column(Modifier.fillMaxSize()) {
-        if (bar) SduiStatusBar(nav, state)
+    // A remote arrives on the page, not on the bar above it: the bar's button is first in reading order, and Down from it
+    // lands on a tab, which is chosen as focus rests there.
+    val page = remember { androidx.compose.ui.focus.FocusRequester() }
+    // Going from one of its pages to the next, the focused row goes with the old page and focus falls to the bar: bring it
+    // into the new page as soon as that has something to stand on.
+    var onBar by remember { mutableStateOf(false) }
+    LaunchedEffect(nav.current) {
+        repeat(PAGE_FOCUS_TRIES) {
+            kotlinx.coroutines.delay(PAGE_FOCUS_STEP_MS)
+            if (onBar && page.requestFocus()) return@LaunchedEffect
+        }
+    }
+    Column(
+        Modifier.fillMaxSize()
+            .focusProperties { onEnter = { if (requestedFocusDirection == androidx.compose.ui.focus.FocusDirection.Enter && page.requestFocus()) cancelFocusChange() } }
+            .focusGroup(),
+    ) {
+        if (bar) Box(Modifier.onFocusChanged { onBar = it.hasFocus }) { SduiStatusBar(nav, state) }
         Row(Modifier.weight(1f).fillMaxWidth()) {
             if (side) SduiSystemDock(nav, state, vertical = true)
-            Box(Modifier.weight(1f).fillMaxHeight()) { content() }
+            Box(Modifier.weight(1f).fillMaxHeight().focusRequester(page).focusGroup()) { content() }
         }
         if (dock && !side) SduiSystemDock(nav, state, vertical = false)
     }
 }
+
+private const val PAGE_FOCUS_TRIES = 15
+private const val PAGE_FOCUS_STEP_MS = 100L
 
 // Up to six items: the profile's name with its line under it, the server's name drawn from the brand (so its colours survive), text.
 // The clock is the shell's own.
@@ -459,8 +480,10 @@ private fun SduiSystemDock(nav: Nav, state: SduiRegionsState, vertical: Boolean)
         }
     }
     val buttons: @Composable () -> Unit = {
+        // The server says which entry is current where it knows (a page under one, as the store under Settings); else the page's address does.
+        val told = entries.any { it.current }
         entries.forEach { b ->
-            val current = (nav.current as? Route.Sdui)?.let { com.wittywilla.wittymediaclient.net.WittyPlayPlace.isCurrent(b.route, it.page, it.params) } == true
+            val current = if (told) b.current else (nav.current as? Route.Sdui)?.let { com.wittywilla.wittymediaclient.net.WittyPlayPlace.isCurrent(b.route, it.page, it.params) } == true
             Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.padding(metrics.u(4))) {
                 Pressable(
                     { press(b) }, Modifier.size(size), shape = CircleShape,

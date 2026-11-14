@@ -56,6 +56,8 @@ data class SduiSystemButton(
     val icon: String = "",
     val route: String = "",
     @SerialName("as") val layer: String = "",
+    // The server's word that this entry is the place showing, for a page under it (the store under Settings).
+    val current: Boolean = false,
 )
 
 @Serializable
