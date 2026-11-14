@@ -397,16 +397,20 @@ private fun SduiStatusBar(nav: Nav, state: SduiRegionsState) {
     val server = nav.brandName
     Row(
         // On a TV, inside the safe area (90 at the sides, 60 at the top), as every TV page is.
-        Modifier.fillMaxWidth().background(scheme.surface)
+        // On a TV the bar sits over the page, as Apple TV's; a phone's has its band.
+        Modifier.fillMaxWidth().background(if (metrics.tv) Color.Transparent else scheme.surface)
             .padding(start = metrics.u(if (metrics.tv) 90 else 12), end = metrics.u(if (metrics.tv) 90 else 12), top = metrics.u(if (metrics.tv) 48 else 6), bottom = metrics.u(if (metrics.tv) 12 else 6))
             .semantics { contentDescription = "Status" },
         verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(metrics.u(if (metrics.tv) 32 else 16)),
     ) {
         state.regions.statusBar.forEach { item ->
             when (item.kind) {
-                "profile" -> Column {
+                "profile" -> Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(metrics.u(10))) {
+                    Avatar(user.ifEmpty { "?" }, metrics.u(if (metrics.tv) 44 else 32))
+                    Column {
                     Text(user, color = scheme.onSurface, style = MaterialTheme.typography.label, maxLines = 1)
                     SduiRegionText.fill(item.text, user, server).takeIf { it.isNotEmpty() }?.let { Text(it, color = scheme.onSurfaceVariant, style = MaterialTheme.typography.caption, maxLines = 1) }
+                    }
                 }
                 "server" -> Text(com.wittywilla.wittymediaclient.ui.brandAnnotated(server, nav.brandParts, scheme.onSurface, LocalExtraColours.current.brandAccent), style = MaterialTheme.typography.label, maxLines = 1)
                 else -> Text(SduiRegionText.fill(item.text, user, server), color = scheme.onSurface, style = MaterialTheme.typography.label, maxLines = 1)
@@ -416,7 +420,7 @@ private fun SduiStatusBar(nav: Nav, state: SduiRegionsState) {
         StatusClock()
         // Out of WittyPlay's frame, back to the server's Home.
         Pressable(
-            { nav.regions = null; nav.reset(Route.Home) }, shape = CircleShape, fill = scheme.surfaceVariant,
+            { nav.regions = null; nav.reset(Route.Home) }, shape = CircleShape, fill = scheme.primary.copy(alpha = 0.22f),
             label = "Return To Server", focusKey = "status~return".takeIf { metrics.tv },
         ) {
             Text("Return To Server", color = scheme.onSurface, style = MaterialTheme.typography.label, maxLines = 1,
@@ -472,7 +476,7 @@ private fun SduiSystemDock(nav: Nav, state: SduiRegionsState, vertical: Boolean)
         }
     }
     if (vertical) Column(Modifier.fillMaxHeight().background(scheme.surface).padding(metrics.u(8)).focusGroup(), verticalArrangement = Arrangement.spacedBy(metrics.u(8)), horizontalAlignment = Alignment.CenterHorizontally) { buttons() }
-    else Row(Modifier.fillMaxWidth().background(scheme.surface).padding(top = metrics.u(8), bottom = metrics.u(if (metrics.tv) 48 else 8)).focusGroup(), horizontalArrangement = Arrangement.spacedBy(metrics.u(16), Alignment.CenterHorizontally), verticalAlignment = Alignment.Top) { buttons() }
+    else Row(Modifier.fillMaxWidth().background(if (metrics.tv) Color.Transparent else scheme.surface).padding(top = metrics.u(8), bottom = metrics.u(if (metrics.tv) 48 else 8)).focusGroup(), horizontalArrangement = Arrangement.spacedBy(metrics.u(16), Alignment.CenterHorizontally), verticalAlignment = Alignment.Top) { buttons() }
 }
 
 // MARK: QR
