@@ -684,7 +684,6 @@ class Nav(val app: WittyApp, private val s: Map<String, String>) {
             if (server?.url == base) {
                 if (caps != null) {
                     features = caps.features.toSet()
-                    com.wittywilla.wittymediaclient.net.SduiCommands.serverRevision = caps.apiRevision
                 }
                 featuresRead = true
             }
