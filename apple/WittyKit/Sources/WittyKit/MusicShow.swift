@@ -83,7 +83,7 @@ public enum LyricsMode: String, CaseIterable, Codable, Equatable {
     public static let holdSeconds = 4.0
 }
 
-/// One visualizer effect: the seventeen classics and Aurora Rings. `id` is what is saved in `musicPlayer`.
+/// One visualizer effect: the seventeen classics and Aurora Rings. `id` is WittyVisualizer's `effect`.
 public struct VisualizerEffect: Equatable, Identifiable {
     public let id: String
     public let name: String
@@ -124,15 +124,4 @@ public enum VisualizerEffects {
 
     public static func named(_ id: String) -> VisualizerEffect? { all.first { $0.id == id } }
 
-    /// The eight colour families the effects move between, and the theme's own colour first.
-    public static let colours: [(id: String, name: String)] = [
-        ("theme", "Theme colours"), ("ember", "Ember"), ("lagoon", "Lagoon"), ("orchid", "Orchid"), ("citrus", "Citrus"),
-        ("ice", "Ice"), ("neon", "Neon"), ("forest", "Forest"), ("rainbow", "Rainbow"),
-    ]
-
-    /// How one effect gives way to the next.
-    public static let changes: [(id: String, name: String)] = [("fade", "Fade"), ("dissolve", "Dissolve"), ("iris", "Iris"), ("sweep", "Sweep")]
-
-    /// Seconds between automatic changes the picker offers; 0 stays on one effect.
-    public static let autoChange = VisualizerPrefs.shuffleChoices
 }

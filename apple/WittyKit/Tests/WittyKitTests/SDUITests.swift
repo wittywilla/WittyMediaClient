@@ -118,6 +118,8 @@ final class SDUITests: XCTestCase {
         XCTAssertEqual(router.resolve(route: "/collections"), .page("collections", params: [:]))
         XCTAssertEqual(router.resolve(route: "/search?q=exam"), .page("search", params: ["q": "exam"]))
         XCTAssertEqual(router.resolve(route: "/page/family-night"), .page("family-night", params: [:]))
+        // A module's page keeps its query: the folder browser's ?name= reaches GET /sdui/pages/{id}?name=.
+        XCTAssertEqual(router.resolve(route: "/page/wittyintegratedfilebrowser?name=Movies"), .page("wittyintegratedfilebrowser", params: ["name": "Movies"]))
         XCTAssertEqual(router.resolve(route: "/settings/playback"), .native("settings", params: ["section": "playback", "route": "/settings/playback"]))
         XCTAssertEqual(router.resolve(route: "/tv/watch/bbc.one"), .native("livePlayer", params: ["key": "bbc.one", "route": "/tv/watch/bbc.one"]))
         XCTAssertEqual(router.resolve(route: "/watch/12"), .native("player", params: ["item": "12", "route": "/watch/12"]))

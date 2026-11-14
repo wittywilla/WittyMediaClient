@@ -38,19 +38,42 @@ final class MusicShowTests: XCTestCase {
         XCTAssertEqual(VisualizerEffects.picker.count, 18)
         XCTAssertNotNil(VisualizerEffects.named("auroraRings"))
         XCTAssertEqual(Set(VisualizerEffects.all.map(\.id)).count, VisualizerEffects.all.count)
-        XCTAssertEqual(VisualizerEffects.colours.count, 9)
-        XCTAssertEqual(VisualizerEffects.changes.map(\.id), ["fade", "dissolve", "iris", "sweep"])
+        XCTAssertEqual(VisualizerChoices.fallback.effects.count, 18)
     }
 
-    func testPrefsKeepOldSavedChoicesAndClamp() throws {
-        let old = try JSONDecoder().decode(VisualizerPrefs.self, from: Data(#"{"viz":true,"style":"waves"}"#.utf8))
-        XCTAssertEqual(old.colour, "theme")
-        XCTAssertEqual(old.change, "fade")
-        let odd = try JSONDecoder().decode(VisualizerPrefs.self, from: Data(#"{"colour":"x","change":"y","intensity":9,"speed":-1,"calm":true}"#.utf8))
-        XCTAssertEqual(odd.colour, "theme")
-        XCTAssertEqual(odd.intensity, 1)
-        XCTAssertEqual(odd.speed, 0)
-        XCTAssertTrue(odd.calm)
-        XCTAssertEqual(VisualizerPrefs().effect.id, "bars")
+    func testPrefsReadAndWriteWittyVisualizersValues() {
+        let none = VisualizerPrefs(values: [:], shown: true)
+        XCTAssertEqual(none, VisualizerPrefs())
+        XCTAssertEqual(none.effect.id, "skyline")
+        let saved = VisualizerPrefs(values: ["effect": .string("molten"), "cycleSec": .string("30"), "calm": .string("on"),
+                                             "intensityPct": .number(150), "speedPct": .number(50), "colour": .string("theme")], shown: false)
+        XCTAssertFalse(saved.viz)
+        XCTAssertEqual(saved.style, "molten")
+        XCTAssertEqual(saved.shuffleEvery, 30)
+        XCTAssertEqual(saved.intensity, 1.5)
+        XCTAssertEqual(saved.speed, 0.5)
+        XCTAssertEqual(saved.colour, "theme")
+        XCTAssertTrue(saved.calmNow(reduceMotion: false))
+        // The values go back as the module keeps them.
+        XCTAssertEqual(saved.values["cycleSec"], .string("30"))
+        XCTAssertEqual(saved.values["intensityPct"], .number(150))
+        XCTAssertEqual(VisualizerPrefs(values: saved.values, shown: false), saved)
+        // Odd values fall back to the defaults.
+        let odd = VisualizerPrefs(values: ["calm": .string("loud"), "colour": .string("x")], shown: true)
+        XCTAssertEqual(odd.calm, "system")
+        XCTAssertEqual(odd.colour, "effect")
+        XCTAssertTrue(odd.calmNow(reduceMotion: true))
+        XCTAssertFalse(odd.calmNow(reduceMotion: false))
+    }
+
+    func testChoicesComeFromTheModulesRows() throws {
+        let json = #"{"module":"wittyvisualizer","pages":[{"id":"p","title":"Visualizer","groups":[{"rows":[{"key":"effect","kind":"enum","label":"Effect","options":[{"value":"skyline","label":"Skyline"},{"value":"newone","label":"New One"}]},{"key":"cycleSec","kind":"enum","label":"Change","options":[{"value":"0","label":"Off"},{"value":"10","label":"Every 10 s"}]},{"key":"intensityPct","kind":"int","label":"Intensity","min":30,"max":150}]}]}],"values":{}}"#
+        let choices = VisualizerChoices(try JSONDecoder().decode(ModuleSettings.self, from: Data(json.utf8)))
+        XCTAssertEqual(choices.effects.map(\.id), ["skyline", "newone"])
+        XCTAssertFalse(choices.effects[0].about.isEmpty)
+        XCTAssertEqual(choices.every, [0, 10])
+        XCTAssertEqual(choices.intensity, 0.3...1.5)
+        XCTAssertEqual(choices.speed, VisualizerChoices.fallback.speed)
+        XCTAssertEqual(choices.colours.map(\.id), ["effect", "theme"])
     }
 }
