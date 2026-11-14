@@ -45,6 +45,8 @@ struct Wordmark: View {
     var brand: ResolvedTheme.Brand?
     /// The theme's colour tokens, for a part coloured by token.
     var colors: [String: String] = [:]
+    /// A size of its own, for a bar; otherwise the lockup's.
+    var size: CGFloat?
 
     private func colour(_ c: ThemeColour) -> Color { Color(.sRGB, red: c.red, green: c.green, blue: c.blue, opacity: c.alpha) }
 
@@ -86,7 +88,7 @@ struct Wordmark: View {
             }
         }
         // Read from across the room on a TV: the size of Display.
-        .font(metrics.tv ? .system(size: 48, weight: .bold) : .wmHero.weight(.bold))
+        .font(size.map { .system(size: $0, weight: .bold) } ?? (metrics.tv ? .system(size: 48, weight: .bold) : .wmHero.weight(.bold)))
         .lineLimit(1)
         .minimumScaleFactor(0.7)
         .accessibilityLabel(app ? "WittyMediaClient" : (brand.map { $0.parts.map(\.text).joined() } ?? (name.isEmpty ? "WittyMediaServer" : name)))

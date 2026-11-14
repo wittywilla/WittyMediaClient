@@ -55,6 +55,12 @@ struct AppNoticeLine: View {
         if !model.notice.isEmpty {
             HStack(alignment: .top, spacing: Tokens.Space.s2) {
                 ProblemLine(model.notice).frame(maxWidth: .infinity, alignment: .leading)
+                #if os(tvOS)
+                // Across the room the close is a named pill the remote can find, not a small ×.
+                Button { model.closeNotice() } label: { Label("Dismiss", systemImage: "xmark") }
+                    .action(pill: true)
+                    .accessibilityLabel("Close this notice")
+                #else
                 Button { model.closeNotice() } label: {
                     Image(systemName: "xmark").font(.subheadline.weight(.semibold)).foregroundStyle(palette.textSecondary)
                         .frame(minWidth: 44, minHeight: 44)
@@ -62,6 +68,7 @@ struct AppNoticeLine: View {
                 }
                 .buttonStyle(.plain)
                 .accessibilityLabel("Close this notice")
+                #endif
             }
         }
     }

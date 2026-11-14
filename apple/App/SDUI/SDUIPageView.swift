@@ -164,6 +164,7 @@ struct SDUIPageBody: View {
     @EnvironmentObject private var store: SDUIPageStore
     @Environment(\.palette) private var palette
     @Environment(\.sduiTheme) private var theme
+    @Environment(\.sduiInPlayFrame) private var inPlayFrame
     let screen: SDUIScreen
     let offline: Bool
     let customise: (() -> Void)?
@@ -304,7 +305,8 @@ struct SDUIPageBody: View {
         }
         // A bar at the foot that never moves: outside the page's scroll.
         .safeAreaInset(edge: .bottom, spacing: 0) {
-            if let dock, !dockIsSheet { SDUIDockBar(dock: dock, height: CGFloat(layout.dock?.height ?? 64), focus: layout.focusEngine ? $focused : nil) }
+            // Inside WittyPlay's frame on Apple TV the frame draws the Dock in its own bottom row (TvPlayFrame.swift).
+            if let dock, !dockIsSheet, !inPlayFrame { SDUIDockBar(dock: dock, height: CGFloat(layout.dock?.height ?? 64), focus: layout.focusEngine ? $focused : nil) }
         }
         .sheet(isPresented: $showingDock) {
             if let dock { SDUIDockSheet(dock: dock) { showingDock = false } }

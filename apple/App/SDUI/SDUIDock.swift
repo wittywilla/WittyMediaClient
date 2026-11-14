@@ -14,7 +14,6 @@ struct SDUIDockBar: View {
     @EnvironmentObject private var store: SDUIPageStore
     @Environment(\.palette) private var palette
     @Environment(\.sduiLayout) private var layout
-    @Environment(\.sduiInPlayFrame) private var inPlayFrame
     let dock: SDUIElement
     let height: CGFloat
     let focus: FocusState<String?>.Binding?
@@ -48,9 +47,7 @@ struct SDUIDockBar: View {
                 #if !os(tvOS)
                 Rectangle().fill(.regularMaterial)
                 #endif
-                // Inside WittyPlay's frame the bar is a band of its own above the round dock: solid, so the page
-                // scrolling up behind it never shows through.
-                palette.panel.opacity(inPlayFrame ? 1 : 0.92)
+                palette.panel.opacity(0.92)
                 FinishBackdrop(shape: Rectangle(), fill: nil, role: .bar)
             }
             .overlay(alignment: .top) { Rectangle().fill(palette.border).frame(height: 1) }

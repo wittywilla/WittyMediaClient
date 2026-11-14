@@ -31,7 +31,7 @@ private struct SDUIPlayFrameKey: EnvironmentKey {
 }
 
 extension EnvironmentValues {
-    /// The page is inside WittyPlay's frame on Apple TV (TvPlayFrame.swift), above its round dock.
+    /// The page is inside WittyPlay's frame on Apple TV (TvPlayFrame.swift), which draws the page's Dock beside its round dock.
     var sduiInPlayFrame: Bool {
         get { self[SDUIPlayFrameKey.self] }
         set { self[SDUIPlayFrameKey.self] = newValue }
