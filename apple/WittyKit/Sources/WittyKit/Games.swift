@@ -198,12 +198,7 @@ public struct GameMode: Decodable, Equatable {
         self.stream = stream
     }
 
-    /// Either an object or, from older servers, just its name.
     public init(from decoder: Decoder) throws {
-        if let name = try? decoder.singleValueContainer().decode(String.self) {
-            self.init(id: name)
-            return
-        }
         struct Full: Decodable { let id: String; let video: [String]?; let stream: Int? }
         let full = try Full(from: decoder)
         self.init(id: full.id, video: full.video, stream: full.stream)

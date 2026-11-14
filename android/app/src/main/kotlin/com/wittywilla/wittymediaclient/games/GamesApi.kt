@@ -31,6 +31,8 @@ import java.util.concurrent.TimeUnit
 // WebSocket's included, and never in an address. Nothing here sends or receives a game's file.
 
 private const val API = "/api/v1"
+// WittyPlay answers its own API under the module prefix (module API 5); a server without it answers 424.
+private const val WITTYPLAY = "/modules/wittyplay"
 private val JSON_TYPE = "application/json".toMediaType()
 private const val MAX_BYTES = 8L * 1024 * 1024
 private val LAYOUT = MapSerializer(String.serializer(), Placement.serializer())
@@ -92,7 +94,7 @@ class GamesApi(val api: Api) {
     suspend fun settings(item: Long): GameSettings = get("/games/settings?item=$item")
 
     suspend fun controls(console: String, device: String, game: Long = 0): GameControls =
-        get("/consoles/${q(console)}/controls?device=${q(device)}" + if (game > 0) "&game=$game" else "")
+        get("$WITTYPLAY/consoles/${q(console)}/controls?device=${q(device)}" + if (game > 0) "&game=$game" else "")
 
     // A touch layout belongs to the device that saved it. `null` goes back to the console's own.
     suspend fun saveTouchLayout(console: String, device: String, orientation: String, layout: Map<String, Placement>?) {
@@ -102,12 +104,12 @@ class GamesApi(val api: Api) {
             put("orientation", orientation)
             put("data", layout?.let { json.encodeToJsonElement(LAYOUT, it) } ?: JsonNull)
         }
-        call("PUT", "/consoles/${q(console)}/controls", body.toString())
+        call("PUT", "$WITTYPLAY/consoles/${q(console)}/controls", body.toString())
     }
 
     // `controller` is vendor:product in lowercase hex, or id:<name> for a pad without numbers.
     suspend fun resolvePad(controller: String, console: String, game: Long): ResolvedPad =
-        get("/game-profiles/resolve?kind=gamepad&controller=${q(controller)}&console=${q(console)}&game=$game")
+        get("$WITTYPLAY/game-profiles/resolve?kind=gamepad&controller=${q(controller)}&console=${q(console)}&game=$game")
 
     // For a game in an archive: about once a second until it's ready, then play.
     suspend fun prepare(id: Long): GamePrepare = json.decodeFromString(call("POST", "/games/$id/prepare", "{}"))
