@@ -65,16 +65,15 @@ class GameStreamTest {
     @Test
     fun modesAreTheServersOrderOfWhatThisAppCanUse() {
         val session: GameSession = json.decodeFromString(
-            """{"id":"abc","itemId":1922,"console":"nes","width":256,"height":224,"aspect":1.3061,"modes":[{"id":"webrtc","video":["h264","vp8"]},{"id":"ws-h264"},{"id":"ws-jpeg"},{"id":"ws-av1"}]}""",
+            """{"id":"abc","itemId":1922,"console":"nes","width":256,"height":224,"aspect":1.3061,"modes":[{"id":"webrtc","stream":2,"video":["h264","vp8"]},{"id":"ws-h264","stream":2},{"id":"ws-jpeg","stream":2},{"id":"ws-av1","stream":2}]}""",
         )
-        assertEquals(listOf("ws-h264", "ws-jpeg"), GameModes.order(session.modeIds))
+        val offered = session.modes.mapNotNull(com.wittywilla.wittymediaclient.games.GameModeInfo::from)
+        assertEquals(listOf("webrtc", "ws-h264", "ws-jpeg"), com.wittywilla.wittymediaclient.games.GameRoute.plan(offered).map { it.modeId })
         // A bare name isn't a mode: modes are objects.
         val bare: GameSession = json.decodeFromString("""{"id":"abc","modes":["ws-jpeg"]}""")
         assertEquals(emptyList<String>(), bare.modeIds)
-        assertEquals(GameModes.supported, GameModes.order(emptyList()))
         // A mode this device chose is the only one tried, where the server offers it.
-        assertEquals(listOf("ws-jpeg"), GameModes.order(session.modeIds, "ws-jpeg"))
-        assertEquals(listOf("ws-h264", "ws-jpeg"), GameModes.order(session.modeIds, "webrtc"))
+        assertEquals(listOf("ws-jpeg"), com.wittywilla.wittymediaclient.games.GameRoute.plan(offered, "ws-jpeg").map { it.modeId })
         assertEquals("jpeg", GameModes.video("ws-jpeg"))
         assertEquals("h264", GameModes.video("ws-h264"))
     }

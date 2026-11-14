@@ -12,7 +12,6 @@ import com.wittywilla.wittymediaclient.games.GamesApi
 import com.wittywilla.wittymediaclient.games.PadState
 import com.wittywilla.wittymediaclient.games.StreamHello
 import com.wittywilla.wittymediaclient.games.StreamMessage
-import com.wittywilla.wittymediaclient.games.WebSocketV1Transport
 import com.wittywilla.wittymediaclient.games.WebSocketV2Transport
 import com.wittywilla.wittymediaclient.games.seatsRequest
 import com.wittywilla.wittymediaclient.net.Api
@@ -97,11 +96,17 @@ class GameTransportTest {
     }
 
     @Test
-    fun version2IsUsedWhereTheServerOffersIt() {
-        val v1: GameSession = json.decodeFromString("""{"id":"a","modes":[{"id":"webrtc"},{"id":"ws-h264"},{"id":"ws-jpeg"}]}""")
+    fun onlyVersion2IsUsed() {
+        val unversioned: GameSession = json.decodeFromString("""{"id":"a","modes":[{"id":"webrtc"},{"id":"ws-h264"},{"id":"ws-jpeg"}]}""")
         val v2: GameSession = json.decodeFromString("""{"id":"a","modes":[{"id":"webrtc","stream":2},{"id":"ws-h264","stream":2},{"id":"ws-jpeg","stream":2}]}""")
-        assertEquals(listOf(GameRoute(1, "h264"), GameRoute(1, "jpeg")), GameRoute.plan(v1.modes.mapNotNull(GameModeInfo::from)))
-        // Version 2 tries WebRTC first, then the WebSocket.
+        val v3: GameSession = json.decodeFromString("""{"id":"a","modes":[{"id":"webrtc","stream":3},{"id":"ws-h264","stream":3}]}""")
+        assertEquals("a mode without version 2 isn't one this app can use", emptyList<GameRoute>(), GameRoute.plan(unversioned.modes.mapNotNull(GameModeInfo::from)))
+        assertFalse(GameRoute.needsUpdate(unversioned.modes.mapNotNull(GameModeInfo::from)))
+        // A newer stream version means updating this app, not falling back.
+        assertEquals(emptyList<GameRoute>(), GameRoute.plan(v3.modes.mapNotNull(GameModeInfo::from)))
+        assertTrue(GameRoute.needsUpdate(v3.modes.mapNotNull(GameModeInfo::from)))
+        assertFalse(GameRoute.needsUpdate(v2.modes.mapNotNull(GameModeInfo::from)))
+        // WebRTC first, then the WebSocket.
         assertEquals(listOf(GameRoute(2, "webrtc"), GameRoute(2, "h264"), GameRoute(2, "jpeg")), GameRoute.plan(v2.modes.mapNotNull(GameModeInfo::from)))
         assertEquals(listOf(GameRoute(2, "webrtc")), GameRoute.plan(v2.modes.mapNotNull(GameModeInfo::from), "webrtc"))
         assertEquals("webrtc", GameRoute(2, "webrtc").modeId)
@@ -130,7 +135,7 @@ class GameTransportTest {
         val session = api.play(game, resume = true, safeMode = false)
         try {
             val offered = session.modes.mapNotNull(GameModeInfo::from)
-            val routes = GameRoute.plan(offered).filter { it.video == "h264" } + GameRoute(1, "h264")
+            val routes = GameRoute.plan(offered).filter { it.video == "h264" }
             for (route in routes.distinct()) {
                 val opened = CountDownLatch(1)
                 val keyframe = CountDownLatch(1)
@@ -148,14 +153,14 @@ class GameTransportTest {
                     override fun lost(status: Int) {}
                 }
                 val hello = StreamHello("WittyMediaClient Android test", "android-live-test", "Live test")
-                val transport = if (route.stream >= 2) WebSocketV2Transport(api, api.streamEndpoint(session.id), hello, receiver) else WebSocketV1Transport(api, session.id, "h264", receiver)
+                val transport = WebSocketV2Transport(api, api.streamEndpoint(session.id), hello, receiver)
                 try {
                     assertTrue("$route opened", opened.await(10, TimeUnit.SECONDS))
                     assertTrue("$route keyframe", keyframe.await(10, TimeUnit.SECONDS))
                     assertTrue("$route sound", sound.await(10, TimeUnit.SECONDS))
                     assertTrue("$route said what it sends", described.get() > 0)
                     transport.send(PadState(0, 0).encoded())
-                    if (route.stream >= 2) transport.sendEvent(seatsRequest(listOf(0)))
+                    transport.sendEvent(seatsRequest(listOf(0)))
                 } finally {
                     transport.close()
                 }

@@ -153,13 +153,6 @@ class GamesApi(val api: Api) {
 
     fun openWebSocketUrl(url: String, listener: WebSocketListener): WebSocket =
         socketClient.newWebSocket(Request.Builder().url(url).build(), listener)
-
-    // A game's WebSocket, at a path under /api/v1 (see GameTransport.kt). OkHttp turns ws into http for the upgrade, so
-    // the app's connection adds the sign-in header to it as to any request to this server, and never to an address.
-    fun openWebSocket(path: String, listener: WebSocketListener): WebSocket {
-        val request = Request.Builder().url(api.base + API + path).build()
-        return socketClient.newWebSocket(request, listener)
-    }
 }
 
 // The server's own words for what went wrong, and plain ones where it gives none (docs/GAMING-API.md, starting a game).
@@ -173,6 +166,8 @@ fun problemFrom(status: Int, text: String): String {
         status == 409 && flag("needBios") -> "This game needs a BIOS file the server doesn't have yet."
         status == 409 && flag("rig") -> "This game plays on a PC, not on the server."
         status == 422 -> "This file can't be played."
+        status == 424 -> "WittyPlay isn't installed on this server. Ask whoever runs it to add it."
+        status == 429 -> "The server is busy with games just now. Try again in a little while."
         status == 503 -> "The server is running as many games as it can just now. Try again in a little while."
         status == 404 -> "This game isn't on the server any more."
         else -> "The server answered with an error ($status)."

@@ -21,8 +21,8 @@ import okio.ByteString
 import java.util.ArrayDeque
 
 // How a running game reaches this device, whatever carries it. The player only sees this interface, so a new way of
-// streaming (WebRTC, a newer protocol) is a new transport and nothing else. Two are here: version 1's WebSocket
-// (the server's docs/GAMING-API.md) and version 2's (docs/GAMING-STREAM.md), whose messages are the same on any transport.
+// streaming is a new transport and nothing else. Version 2's (docs/GAMING-STREAM.md) messages are the same over WebRTC
+// and a WebSocket.
 
 interface GameTransport {
     // What the game sends. Media comes on the transport's own thread, as it arrives; the rest may come on any thread.
@@ -56,9 +56,11 @@ interface GameTransport {
     fun close()
 }
 
-// One of the server's ways of sending a game, from a session's `modes` or GET /games/modes. `stream` is 2 where the
-// mode is reachable through version 2's /play/{sid}/stream.
-data class GameModeInfo(val id: String, val stream: Int = 1) {
+// One of the server's ways of sending a game, from a session's `modes` or GET /games/modes. `stream` is the version of
+// /play/{sid}/stream it goes by: this app speaks GAME_STREAM, and a higher one means it needs updating.
+const val GAME_STREAM = 2
+
+data class GameModeInfo(val id: String, val stream: Int = 0) {
     companion object {
         fun from(element: JsonElement): GameModeInfo? = when (element) {
             is JsonObject -> element["id"]?.let { (it as? JsonPrimitive)?.content }?.let { id ->
@@ -127,41 +129,6 @@ class ArrivalDelay(private val windowMs: Long = 10_000) {
         val out = worst
         worst = 0.0
         return Math.round(out).toInt()
-    }
-}
-
-// Version 1: GET /play/{sid}/ws?video=h264|jpeg. The server's hello says what's coming; input goes up as binary.
-class WebSocketV1Transport(api: GamesApi, sid: String, video: String, private val receiver: GameTransport.Receiver) : GameTransport {
-    private val socket: WebSocket = api.openWebSocket("/play/${api.q(sid)}/ws?video=${api.q(video)}", Listener())
-
-    override fun send(message: ByteArray) {
-        socket.send(ByteString.of(*message))
-    }
-
-    override fun sendEvent(event: JsonObject) {}
-
-    override fun requestKeyframe() = send(TimingRequests.keyframe)
-
-    override fun close() {
-        socket.close(1000, null)
-    }
-
-    private inner class Listener : WebSocketListener() {
-        override fun onOpen(webSocket: WebSocket, response: Response) {
-            webSocket.send(ByteString.of(*TimingRequests.decodingOurselves))
-            receiver.opened()
-        }
-
-        override fun onMessage(webSocket: WebSocket, bytes: ByteString) {
-            StreamMessage.parse(bytes.toByteArray())?.let(receiver::media)
-        }
-
-        override fun onMessage(webSocket: WebSocket, text: String) {
-            GameEvent.parse(text)?.let(receiver::event)
-        }
-
-        override fun onFailure(webSocket: WebSocket, t: Throwable, response: Response?) = receiver.lost(response?.code ?: 0)
-        override fun onClosed(webSocket: WebSocket, code: Int, reason: String) = receiver.lost(0)
     }
 }
 
@@ -244,8 +211,7 @@ class WebSocketV2Transport(api: GamesApi, endpoint: StreamEndpoint, hello: Strea
     }
 }
 
-// Which transport a mode goes by: version 2 where the server offers it, version 1 otherwise. `video` is webrtc (version 2
-// only, which draws and plays for itself), h264 or jpeg (over a WebSocket).
+// Which transport a mode goes by. `video` is webrtc (which draws and plays for itself), h264 or jpeg (over a WebSocket).
 data class GameRoute(val stream: Int, val video: String) {
     val modeId: String get() = when (video) {
         "webrtc" -> "webrtc"
@@ -254,15 +220,16 @@ data class GameRoute(val stream: Int, val video: String) {
     }
 
     companion object {
-        // The ways to try, best first: the server's order, of what this app can use. On version 2 that starts with
-        // WebRTC; version 1's WebRTC isn't used. A chosen mode (the menu's Connection) is the only one tried where offered.
+        // The ways to try, best first: the server's order, of the modes this app can use on its stream version (WebRTC
+        // first). A chosen mode (the menu's Connection) is the only one tried where offered.
         fun plan(offered: List<GameModeInfo>, chosen: String = "auto"): List<GameRoute> {
-            val v2 = offered.any { it.stream >= 2 }
-            if (!v2) return GameModes.order(offered.map { it.id }, chosen).map { GameRoute(1, GameModes.video(it)) }
-            val usable = offered.map { it.id }.filter { it in GameModes.supportedV2 }.distinct().ifEmpty { GameModes.supportedV2 }
+            val usable = offered.filter { it.stream == GAME_STREAM }.map { it.id }.filter { it in GameModes.supported }.distinct()
             val tried = if (chosen in usable) listOf(chosen) else usable
-            return tried.map { GameRoute(2, if (it == "webrtc") "webrtc" else GameModes.video(it)) }
+            return tried.map { GameRoute(GAME_STREAM, if (it == "webrtc") "webrtc" else GameModes.video(it)) }
         }
+
+        // The server streams only in a newer version than this app speaks: it needs updating, nothing else will do.
+        fun needsUpdate(offered: List<GameModeInfo>) = offered.none { it.stream == GAME_STREAM } && offered.any { it.stream > GAME_STREAM }
     }
 }
 

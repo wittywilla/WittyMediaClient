@@ -156,16 +156,8 @@ sealed interface GameEvent {
 // Which of the server's ways of sending a game this app tries, in order: the WebSocket with H.264, then with a
 // JPEG a frame. WebRTC needs a stack this app doesn't carry; ids this app doesn't know are skipped.
 object GameModes {
-    val supported = listOf("ws-h264", "ws-jpeg")
-
-    // On version 2 the same messages also come over WebRTC, first.
-    val supportedV2 = listOf("webrtc", "ws-h264", "ws-jpeg")
-
-    // `chosen` is "auto", or the one mode this device was told to use, where the server offers it.
-    fun order(offered: List<String>, chosen: String = "auto"): List<String> {
-        val ids = offered.filter { it in supported }.distinct().ifEmpty { supported }
-        return if (chosen in ids) listOf(chosen) else ids
-    }
+    // WebRTC first; the same messages come over a WebSocket.
+    val supported = listOf("webrtc", "ws-h264", "ws-jpeg")
 
     // The website's names for them.
     val names = mapOf(

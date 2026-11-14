@@ -238,6 +238,10 @@ class GamePlay(
             discs = started.discs
             for (notice in started.notices) say(notice)
             offered = started.modes.mapNotNull(GameModeInfo::from)
+            if (GameRoute.needsUpdate(offered)) {
+                problem = GameProblem("Update this app", "This server sends games in a newer way than this app knows. Update WittyMediaClient to play.", retry = false)
+                return
+            }
             routes = GameRoute.plan(offered, chosenMode)
             routeIndex = 0
             if (started.fps > 0) fps = started.fps
@@ -283,7 +287,7 @@ class GamePlay(
 
     // The connection modes this game can use, for the menu's Connection.
     val connectionChoices: List<String>
-        get() = if (offered.any { it.stream >= 2 }) GameModes.supportedV2.filter { id -> offered.any { it.id == id } } else GameModes.supported
+        get() = GameModes.supported.filter { id -> offered.any { it.id == id && it.stream == GAME_STREAM } }
 
     // Start again after a problem: from the automatic save if there's one, or as asked.
     fun retry(safeMode: Boolean = false) {
@@ -314,8 +318,7 @@ class GamePlay(
         val made = try {
             when {
                 route.video == "webrtc" -> WebRtcV2Transport(app, api, endpoint, hello(route), receiver)
-                route.stream >= 2 -> WebSocketV2Transport(api, endpoint, hello(route), receiver)
-                else -> WebSocketV1Transport(api, sid, route.video, receiver)
+                else -> WebSocketV2Transport(api, endpoint, hello(route), receiver)
             }
         } catch (e: Exception) {
             ClientLog.warn("game", "Couldn't connect over $route: ${e.javaClass.simpleName}")
