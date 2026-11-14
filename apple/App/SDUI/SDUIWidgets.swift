@@ -460,6 +460,11 @@ struct SDUINoticeView: View {
         .overlay(alignment: .leading) { Rectangle().fill(tone).frame(width: 4) }
         .clipShape(RoundedRectangle(cornerRadius: draw.radius("Notice"), style: .continuous))
         .padding(.horizontal, layout.margin)
+        #if os(tvOS)
+        // The whole width is the notice's, so Up or Down from anywhere across the screen lands on its button,
+        // rather than skipping a button at the far end of it.
+        .focusSection()
+        #endif
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("sdui.section." + notice.id)
     }
