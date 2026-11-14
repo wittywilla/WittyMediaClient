@@ -302,9 +302,10 @@ fun GamePageScreen(nav: GamesNav, gameId: Long, inShell: Boolean = false) {
                                 Text(words["wpMoments"] ?: "Moments", color = GameColours.text, fontSize = look.title, fontWeight = FontWeight.Bold)
                                 Text("${moments.size}", color = GameColours.hint, fontSize = look.small, modifier = Modifier.padding(bottom = 3.dp))
                             }
-                            Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(if (look.tv) 32.dp else 12.dp)) {
+                            Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(if (look.tv) 16.dp else 12.dp)) {
                                 for (s in moments) {
-                                    val w = if (look.tv) 304.dp else 200.dp
+                                    // 304 TV units (half a dp each), as Apple TV's.
+                                    val w = if (look.tv) 152.dp else 200.dp
                                     Column(Modifier.width(w), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                                         Pressable(
                                             { if (ready) nav.play(g.id, GameStart(resume = false, slot = s.slot)) },
