@@ -38,11 +38,20 @@ final class AppearanceModel: ObservableObject {
     }
 
     /// The themes on offer, with the colours to draw a swatch: the server's list, or the built-in ones before it answers.
-    #if os(tvOS)
-    static let isTV = true
-    #else
-    static let isTV = false
-    #endif
+    /// This device's form factor, as the server names them: a look is previewed as it is drawn here.
+    static var form: String {
+        #if os(tvOS)
+        return "tv"
+        #elseif os(macOS)
+        return "desktop"
+        #else
+        switch UIDevice.current.userInterfaceIdiom {
+        case .pad: return "tablet"
+        case .mac: return "desktop"
+        default: return "phone"
+        }
+        #endif
+    }
 
     static func themes(_ list: ThemeList?) -> [AppearancePage.ThemeChoice] {
         if let themes = list?.themes, !themes.isEmpty {
@@ -73,7 +82,7 @@ final class AppearanceModel: ObservableObject {
         return AppearancePage.Inputs(catalogue: catalogue, state: state, look: model.requiredLook.map { merged($0) } ?? look,
                                      themes: Self.themes(model.themeList), chosenTheme: model.themeChoice,
                                      pendingExperience: pendingExperience, pendingTheme: pendingTheme, canPickFile: mayImport,
-                                     server: model.client.base, profile: model.user?.shownName ?? "", tv: Self.isTV, problem: message)
+                                     server: model.client.base, profile: model.user?.shownName ?? "", form: Self.form, problem: message)
     }
 
     private func merged(_ fresh: LookState) -> LookState {
@@ -204,17 +213,24 @@ struct LookChooserView: View {
     @State private var importing = false
     let done: () -> Void
 
-    private var spec: DesignPageSpec { AppearancePage.chooser(appearance.inputs(model)) }
+    /// Layout first, then colours; nil until the page knows whether the look is required.
+    @State private var step: AppearancePage.ChooserStep?
+
+    private var inputs: AppearancePage.Inputs { appearance.inputs(model) }
+    private var spec: DesignPageSpec { AppearancePage.chooser(inputs, step: step ?? AppearancePage.firstStep(inputs)) }
 
     private func pressed(_ id: String) {
         switch id {
-        case "continue": done()
-        case "use-this":
+        case "continue" where inputs.requiredExperience != nil && inputs.requiredTheme != nil: done()
+        case "next": withAnimation(.easeInOut(duration: 0.2)) { step = .colour }
+        case "back": withAnimation(.easeInOut(duration: 0.2)) { step = .layout }
+        case "use-this", "continue":
             Task {
                 await appearance.save(model, everywhere: false)
                 if appearance.message.hasPrefix("Saved") || (appearance.pendingExperience.isEmpty && appearance.pendingTheme.isEmpty) { done() }
             }
         case "import-a-theme": importing = true
+        case "preview": break
         default: appearance.pressedCard(id, model)
         }
     }
@@ -222,7 +238,10 @@ struct LookChooserView: View {
     var body: some View {
         ZStack {
             model.palette.background.ignoresSafeArea()
+            // Each step is a page of its own, read from the top.
             DesignSpecPage(spec: spec, onPress: pressed)
+                .id(step ?? AppearancePage.firstStep(inputs))
+                .transition(.opacity)
         }
         .accessibilityIdentifier("chooselook")
         .task { await appearance.load(model) }
@@ -379,7 +398,7 @@ struct LookPolicyView: View {
             .accessibilityIdentifier("look-policy")
             .task { await load() }
             .sheet(item: $choosing) { pick in
-                DesignSpecPage(spec: LookPolicy.picker(who: pick.who, current: choosing?.draft ?? pick.draft, tv: AppearanceModel.isTV, looks: catalogue.experiences, themes: themes),
+                DesignSpecPage(spec: LookPolicy.picker(who: pick.who, current: choosing?.draft ?? pick.draft, form: AppearanceModel.form, looks: catalogue.experiences, themes: themes),
                                onPress: { id in
                                    switch id {
                                    case "done": keep(choosing ?? pick)

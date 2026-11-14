@@ -67,11 +67,44 @@ final class AppearanceLookTests: XCTestCase {
         let page = AppearancePage.chooser(inputs(look: look))
         XCTAssertEqual(page.title, "Your look is set")
         XCTAssertEqual(page.eyebrow, "Welcome, Willow")
-        XCTAssertEqual(page.sections[0].cards.map(\.id), ["look-lumen", "theme-cinema"])
+        XCTAssertEqual(page.sections[0].cards.map(\.id), ["preview"])
         XCTAssertEqual(page.actions.map(\.title), ["Continue"])
-        let open = AppearancePage.chooser(inputs())
-        XCTAssertEqual(open.title, "Choose how it looks")
-        XCTAssertEqual(open.actions.map(\.title), ["Use this"])
+    }
+
+    func testTheChooserIsALayoutPageThenAColourPage() {
+        var i = inputs()
+        i.form = "phone"
+        XCTAssertEqual(AppearancePage.firstStep(i), .layout)
+        let layout = AppearancePage.chooser(i, step: .layout)
+        XCTAssertEqual(layout.title, "Choose a layout")
+        XCTAssertEqual(layout.sections.flatMap(\.cards).map(\.id), ["look-lumen", "look-rail", "look-aero"])
+        XCTAssertTrue(layout.sections[0].cards.allSatisfy(\.portrait), "a phone previews its own layout, upright")
+        XCTAssertEqual(layout.actions.map(\.title), ["Next"])
+
+        i.pendingExperience = "rail"
+        let colour = AppearancePage.chooser(i, step: .colour)
+        XCTAssertEqual(colour.title, "Choose colours")
+        XCTAssertEqual(colour.sections[0].heading, "Preview")
+        XCTAssertEqual(colour.sections[0].cards.map(\.id), ["preview"])
+        // The chosen look wears its own theme until one is picked: Rail's is Cinema.
+        XCTAssertTrue(colour.sections[1].cards.first { $0.id == "theme-cinema" }?.on == true)
+        XCTAssertEqual(colour.sections[0].cards[0].swatches, AppearancePage.swatches(for: "cinema", in: i.themes))
+        // Every colour card draws the chosen layout in its own colours.
+        let wire = colour.sections[0].cards[0].wire
+        XCTAssertTrue(colour.sections[1].cards.allSatisfy { $0.wire == wire && $0.portrait })
+        XCTAssertEqual(colour.actions.map(\.title), ["Use this", "Back"])
+
+        i.pendingTheme = "aeroDay"
+        let picked = AppearancePage.chooser(i, step: .colour)
+        XCTAssertEqual(picked.sections[0].cards[0].swatches, AppearancePage.swatches(for: "aeroDay", in: i.themes))
+    }
+
+    func testARequiredLookOpensOnColoursAndARequiredThemeFinishesFromTheLayout() {
+        let lookSet = inputs(look: LookState(experience: "rail", theme: "cinema", requiredExperience: .init(value: "rail", by: "Willow")))
+        XCTAssertEqual(AppearancePage.firstStep(lookSet), .colour)
+        XCTAssertEqual(AppearancePage.chooser(lookSet, step: .colour).actions.map(\.title), ["Use this"], "no layout page to go back to")
+        let themeSet = inputs(look: LookState(experience: "rail", theme: "cinema", requiredTheme: .init(value: "cinema", by: "Willow")))
+        XCTAssertEqual(AppearancePage.chooser(themeSet, step: .layout).actions.map(\.title), ["Continue"])
     }
 
     func testPickedCardIds() {
@@ -260,28 +293,30 @@ final class LayoutWireTests: XCTestCase {
 
     private let lumen = #"{"id":"lumen","name":"Lumen","wire":{"desktop":{"nav":"top","style":"pill","home":"hero","cards":"poster","brand":"left","finish":"flat"},"phone":{"nav":"bottom","style":"pill","home":"hero","cards":"poster","brand":"top","finish":"flat"},"tv":{"nav":"top","style":"pill","home":"hero","cards":"poster","dock":true,"brand":"left","finish":"flat"}}}"#
 
-    func testAScreenDrawsTheDesktopsWireAndATelevisionItsOwn() throws {
+    func testEveryScreenDrawsItsOwnWire() throws {
         let l = try look(lumen)
-        XCTAssertEqual(LayoutWire.of(l, tv: false), LayoutWire(nav: "top", style: "pill", home: "hero", cards: "poster", brand: "left", finish: "flat"))
-        XCTAssertTrue(LayoutWire.of(l, tv: true).dock)
-        // A phone's bottom tabs are the same in every look: the preview shows the look's own menu.
-        XCTAssertNotEqual(LayoutWire.of(l, tv: false).nav, "bottom")
+        XCTAssertEqual(LayoutWire.of(l, form: "desktop"), LayoutWire(nav: "top", style: "pill", home: "hero", cards: "poster", brand: "left", finish: "flat"))
+        XCTAssertTrue(LayoutWire.of(l, form: "tv").dock)
+        // A phone previews the look as a phone draws it: the owner's "show the MOBILE view".
+        XCTAssertEqual(LayoutWire.of(l, form: "phone").nav, "bottom")
+        // A form factor the server sent nothing for falls back to the web's, then the default.
+        XCTAssertEqual(LayoutWire.of(l, form: "tablet"), LayoutWire())
     }
 
     func testWhatTheServerSendsIsRead() throws {
         let cable = try look(#"{"id":"classicCable","name":"Classic Cable","wire":{"desktop":{"nav":"top","style":"cable","home":"list","cards":"landscape","brand":"left","finish":"flat"}}}"#)
-        XCTAssertEqual(LayoutWire.of(cable, tv: false).style, "cable")
-        XCTAssertEqual(LayoutWire.of(cable, tv: false).home, "list")
+        XCTAssertEqual(LayoutWire.of(cable, form: "desktop").style, "cable")
+        XCTAssertEqual(LayoutWire.of(cable, form: "desktop").home, "list")
         let classic = try look(#"{"id":"classic","name":"Classic","wire":{"desktop":{"nav":"side","open":true,"style":"pill","home":"hero","cards":"poster","brand":"top","finish":"flat"}}}"#)
-        XCTAssertTrue(LayoutWire.of(classic, tv: false).open)
-        XCTAssertEqual(LayoutWire.of(classic, tv: false).nav, "side")
+        XCTAssertTrue(LayoutWire.of(classic, form: "desktop").open)
+        XCTAssertEqual(LayoutWire.of(classic, form: "desktop").nav, "side")
     }
 
     func testALookWithNoWireOrFieldsGetsTheDefaultNotACrash() throws {
-        XCTAssertEqual(LayoutWire.of(try look(#"{"id":"x","name":"X"}"#), tv: false), LayoutWire())
+        XCTAssertEqual(LayoutWire.of(try look(#"{"id":"x","name":"X"}"#), form: "desktop"), LayoutWire())
         let partial = try look(#"{"id":"x","name":"X","wire":{"desktop":{"nav":"rail"}}}"#)
-        XCTAssertEqual(LayoutWire.of(partial, tv: false).nav, "rail")
-        XCTAssertEqual(LayoutWire.of(partial, tv: false).home, "hero")
+        XCTAssertEqual(LayoutWire.of(partial, form: "desktop").nav, "rail")
+        XCTAssertEqual(LayoutWire.of(partial, form: "desktop").home, "hero")
     }
 
     func testEveryLookCardCarriesItsWireframe() throws {
@@ -301,8 +336,8 @@ final class LayoutWireTests: XCTestCase {
             struct Table: Decodable { let experiences: [ExperienceCatalogue.Info] }
             let table = try JSONDecoder().decode(Table.self, from: data)
             XCTAssertEqual(table.experiences.count, 14)
-            XCTAssertTrue(table.experiences.allSatisfy { LayoutWire.of($0, tv: false).nav != "" && $0.wire["desktop"] != nil })
-            XCTAssertEqual(LayoutWire.of(try XCTUnwrap(table.experiences.first { $0.id == "crossbar" }), tv: false).home, "cross")
+            XCTAssertTrue(table.experiences.allSatisfy { LayoutWire.of($0, form: "desktop").nav != "" && $0.wire["desktop"] != nil })
+            XCTAssertEqual(LayoutWire.of(try XCTUnwrap(table.experiences.first { $0.id == "crossbar" }), form: "desktop").home, "cross")
             return
         }
         throw XCTSkip("The server's repository is not beside this one.")

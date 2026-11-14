@@ -89,10 +89,15 @@ struct BrowseShell: View {
             #if os(tvOS)
             TopTabs().nowPlayingCover()
             #else
-            PillShell().nowPlayingCover()
+            PillShell().nowPlayingCover().wittyPlayCover()
             #endif
         }
         .modifier(SDUIShellSync(center: center))
+        // WittyPlay is installed when the server's menu has it: games then open WittyPlay (WittyPlayFrame.swift).
+        .onAppear { model.wittyPlayInstalled = WittyPlayPlace.installed(routes: (center.navigation?.items ?? []).map(\.address)) }
+        .sduiOnChange(of: center.navigation) { menu in
+            model.wittyPlayInstalled = WittyPlayPlace.installed(routes: (menu?.items ?? []).map(\.address))
+        }
         .environmentObject(center)
     }
 }
