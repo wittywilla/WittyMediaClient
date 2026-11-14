@@ -261,6 +261,8 @@ fun ServerPageScreen(
     upOut: (() -> Unit)? = null,
     // A phone's or tablet's page inside the website's shell (PhoneShell): under its bar, with its Back.
     inShell: Boolean = false,
+    // WittyPlay's own frame over the whole app: a game plays in the app's player, and leaving WittyPlay goes back to the app.
+    wittyPlay: Boolean = false,
 ) {
     val context = LocalContext.current
     val api = nav.app.api
@@ -268,7 +270,7 @@ fun ServerPageScreen(
     var failed by remember { mutableStateOf("") }
     // A web view takes seconds to start the first time, and until then it's only black.
     var showing by remember { mutableStateOf(false) }
-    var fills by remember { mutableStateOf(keptToGames || pageFillsScreen(path)) }
+    var fills by remember { mutableStateOf(keptToGames || wittyPlay || pageFillsScreen(path)) }
     var fullScreen by remember { mutableStateOf<View?>(null) }
     var endFullScreen by remember { mutableStateOf<WebChromeClient.CustomViewCallback?>(null) }
     var waitingForFile by remember { mutableStateOf<ValueCallback<Array<Uri>>?>(null) }
@@ -293,7 +295,18 @@ fun ServerPageScreen(
         web.webViewClient = PageClient(
             api.base,
             onPath = { now ->
-                if (keptToGames) {
+                if (wittyPlay) {
+                    if (nav.current == route) when (val went = com.wittywilla.wittymediaclient.net.WittyPlayPlace.leave(now)) {
+                        com.wittywilla.wittymediaclient.net.WittyPlayPlace.Leave.Stay -> Unit
+                        is com.wittywilla.wittymediaclient.net.WittyPlayPlace.Leave.Play -> {
+                            web.goBack()
+                            nav.push(GamesRoute(GamesScreen.Play(went.game, com.wittywilla.wittymediaclient.games.GameStart(resume = true))))
+                        }
+                        com.wittywilla.wittymediaclient.net.WittyPlayPlace.Leave.Home -> nav.reset(Route.Home)
+                        com.wittywilla.wittymediaclient.net.WittyPlayPlace.Leave.Search -> nav.reset(Route.Search)
+                        is com.wittywilla.wittymediaclient.net.WittyPlayPlace.Leave.Elsewhere -> { nav.pop(); nav.go(nav.sduiRouter.resolve(went.path)) }
+                    }
+                } else if (keptToGames) {
                     if (!staysInWebPlayer(now) && nav.current == route) nav.pop()
                 } else if (!inShell && !nav.app.isTv && pageFillsScreen(path) && !pageFillsScreen(now) && nav.current == route) {
                     // The website's disc or CD player, asked to step aside, goes on to the website's own item page. In

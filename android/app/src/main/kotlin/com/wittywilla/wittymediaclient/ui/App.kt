@@ -137,6 +137,8 @@ sealed interface Route {
     data class Item(val id: Long) : Route { override val key = "item-$id" }
     data class Player(val id: Long, val startOver: Boolean) : Route { override val key = "player-$id" }
     data class Web(val path: String) : Route { override val key = "web-$path" }
+    // WittyPlay's own frame, the server's page at a WittyPlay address over the whole app (net/WittyPlayPlace.kt).
+    data class WittyPlay(val path: String) : Route { override val key = "wittyplay-$path" }
     // The server's own page; with a title, it has a native bar with Back above it, as You's rows do.
     data class Page(val path: String, val title: String = "") : Route { override val key = "page-$path" }
     // One of You's own screens: names, password, two-step, devices, signing in a TV, theme.
@@ -546,14 +548,13 @@ class Nav(val app: WittyApp, private val s: Map<String, String>) {
         app.scope.launch(kotlinx.coroutines.Dispatchers.IO) { runCatching { folder.deleteRecursively() } }
     }
 
-    // WittyPlay Online, the page WittyPlay serves for its games (with its status bar and dock: the whole screen), where
-    // the server has WittyPlay; on a TV, and without it, the app's own games screens.
-    val wittyPlayPage: String? get() = sduiNav?.items?.firstOrNull { it.page == WITTYPLAY_PAGE }?.page
+    // With WittyPlay on the server (its entry in the server's menu), games open WittyPlay's own frame over the whole app, as
+    // on the website and the Apple apps; on a TV, and without it, the app's own games screens.
+    val wittyPlayInstalled: Boolean get() = sduiNav?.items?.let { com.wittywilla.wittymediaclient.net.WittyPlayPlace.installed(it) } == true
 
     fun wittyPlayFor(library: com.wittywilla.wittymediaclient.net.Library): Route? {
         if (library.type != "games" || library.console == "rig") return null
-        val page = wittyPlayPage
-        return if (page != null && !app.isTv) Route.Sdui(page, emptyMap(), library.name) else gamesRouteFor(library)
+        return if (wittyPlayInstalled && !app.isTv) Route.WittyPlay(com.wittywilla.wittymediaclient.net.WittyPlayPlace.library(library.id)) else gamesRouteFor(library)
     }
 
     // The route for a place the server names, where it is one of the app's screens or pages; null for what is done
@@ -576,7 +577,8 @@ class Nav(val app: WittyApp, private val s: Map<String, String>) {
             // A games library opens WittyPlay, as the website and the Apple apps do.
             "library" -> libraries.firstOrNull { it.id == target.params["library"]?.toLongOrNull() }
                 ?.let { wittyPlayFor(it) ?: Route.Library(it, target.params - "library") } ?: Route.Sdui(target.page, target.params)
-            else -> Route.Sdui(target.page, target.params)
+            else -> if (com.wittywilla.wittymediaclient.net.WittyPlayPlace.isPlayPage(target.page) && !app.isTv) Route.WittyPlay(target.route.ifEmpty { "/page/" + target.page })
+                else Route.Sdui(target.page, target.params)
         }
         is SduiTarget.Native -> {
             val item = target.params["item"].orEmpty()
@@ -1394,6 +1396,7 @@ fun AppRoot(app: WittyApp) {
                         Route.NowPlaying -> if (LocalMetrics.current.tv) NowPlayingScreen(nav) else WebNowPlaying(nav)
                         is Route.Player -> if (LocalMetrics.current.tv) PlayerScreen(nav, route.id, route.startOver) else VideoPlayerScreen(nav, route)
                         is Route.Web -> ServerPageScreen(nav, route, route.path, keptToGames = true)
+                        is Route.WittyPlay -> ServerPageScreen(nav, route, route.path, keptToGames = false, wittyPlay = true)
                         is Route.Page -> if (!LocalMetrics.current.tv && !pageFillsScreen(route.path)) PageShell(nav) { ServerPageScreen(nav, route, route.path, keptToGames = false, title = route.title, inShell = true) }
                             else ServerPageScreen(nav, route, route.path, keptToGames = false, title = route.title)
                         is Route.You -> YouSettingScreen(nav, strings, route.screen)
@@ -1440,5 +1443,3 @@ private const val BAR_CELLS = 5
 const val AUTO_THEME = "auto"
 private const val LIGHT_THEME = "light"
 private const val NAV_VEIL_ALPHA = 0xB3
-
-const val WITTYPLAY_PAGE = "wittyplay-online"
