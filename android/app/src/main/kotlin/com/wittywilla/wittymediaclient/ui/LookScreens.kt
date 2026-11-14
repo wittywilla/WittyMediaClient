@@ -33,7 +33,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.statusBarsPadding
-import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.layout.height
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
@@ -121,98 +121,89 @@ fun FirstLookScreen(nav: Nav, s: Map<String, String>) {
     }
     fun finish() = nav.finishFirstLook()
     val both = lookRequired != null && themeRequired != null
+    fun themeOf(id: String) = themes.firstOrNull { it.id == id }
     BackHandler(enabled = step == 1 && lookRequired == null) { step = 0 }
-    // A layer of its own, so the remote and keys stay in it and nothing under it takes them.
+    // A layer of its own, so the remote and keys stay in it and nothing under it takes them. Drawn with the Design 2
+    // page kit, as Apple's chooser: eyebrow, title, lead, cards, then the buttons.
     androidx.compose.ui.window.Dialog(
         onDismissRequest = { if (step == 1 && lookRequired == null) step = 0 },
         properties = androidx.compose.ui.window.DialogProperties(usePlatformDefaultWidth = false, decorFitsSystemWindows = true),
     ) {
-        Column(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background).statusBarsPadding().navigationBarsPadding()) {
-            Column(
-                Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(horizontal = 20.dp, vertical = 24.dp)
-                    .widthIn(max = 720.dp).align(androidx.compose.ui.Alignment.CenterHorizontally),
-                verticalArrangement = Arrangement.spacedBy(16.dp),
-            ) {
-                Text(
-                    (if (who.isEmpty()) s["firstLookWelcome"].orEmpty() else s["firstLookWelcomeName"].orEmpty().replace("{name}", who)).uppercase(),
-                    style = MaterialTheme.typography.labelMedium, color = LocalExtraColours.current.accentText,
-                )
-                Text(
-                    s[when { both -> "firstLookSetTitle"; step == 0 -> "firstLookTitle"; else -> "firstThemeTitle" }].orEmpty(),
-                    style = MaterialTheme.typography.headlineMedium, color = MaterialTheme.colorScheme.onBackground,
-                    modifier = Modifier.semantics { heading() },
-                )
-                val setBy = lookRequired ?: themeRequired
-                Text(
-                    when {
-                        both || (step == 1 && lookRequired != null) || (step == 1 && themeRequired != null) -> com.wittywilla.wittymediaclient.net.SduiLook.lockedWords(setBy!!)
-                        step == 0 -> s["firstLookDetail"].orEmpty()
-                        else -> s["firstThemeDetail"].orEmpty()
-                    },
-                    style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-                if (step == 0 && !both) {
-                    CardGrid(looks.map { e ->
-                        val on = e.id == shownLook
-                        Choice(e.id, e.name, e.tagline, on, com.wittywilla.wittymediaclient.net.Wire.of(e.wire, form), null) {
-                            if (busy || on) return@Choice
-                            busy = true
-                            scope.launch { nav.chooseExperience(e.id); busy = false }
-                        }
-                    }, portrait)
-                } else {
-                    // The chosen look, large, in the theme picked.
-                    val theme = themes.firstOrNull { it.id == shownTheme }
-                    Text(listOfNotNull(look?.name, theme?.shownName).joinToString(" · "), style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.onBackground)
-                    Box(Modifier.fillMaxWidth(), contentAlignment = androidx.compose.ui.Alignment.Center) {
-                        ThemedThumb(wire, look?.name.orEmpty(), theme, if (portrait) Modifier.width(200.dp) else Modifier.fillMaxWidth(), false, portrait)
+        val setBy = lookRequired ?: themeRequired
+        val eyebrow = if (who.isEmpty()) s["firstLookWelcome"].orEmpty() else s["firstLookWelcomeName"].orEmpty().replace("{name}", who)
+        val title = s[when { both -> "firstLookSetTitle"; step == 0 -> "firstLookTitle"; else -> "firstThemeTitle" }].orEmpty()
+        val lead = when {
+            both || (step == 1 && setBy != null) -> SduiLook.lockedWords(setBy!!)
+            step == 0 -> s["firstLookDetail"].orEmpty()
+            else -> s["firstThemeDetail"].orEmpty()
+        }
+        // Each step is a page of its own, read from the top.
+        androidx.compose.runtime.key(step) {
+        DesignPage(
+            title, Modifier.statusBarsPadding().navigationBarsPadding(), eyebrow = eyebrow, lead = lead, tag = "chooselook",
+            actions = {
+                when {
+                    both || (step == 0 && themeRequired != null) -> WittyButton(s["continue"].orEmpty(), { finish() }, kind = ButtonKind.Primary, focusKey = "first-continue")
+                    step == 0 -> WittyButton(s["next"].orEmpty(), { step = 1 }, kind = ButtonKind.Primary, focusKey = "first-next")
+                    else -> {
+                        WittyButton(s["firstLookUseThis"].orEmpty(), { finish() }, kind = ButtonKind.Primary, focusKey = "first-done")
+                        if (lookRequired == null) WittyButton(s["back"].orEmpty(), { step = 0 }, kind = ButtonKind.Secondary, focusKey = "first-back")
                     }
-                    if (themeRequired == null) {
-                        Text(s["firstThemeThemes"].orEmpty(), style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.onBackground)
-                        CardGrid(themes.map { t ->
-                            Choice(t.id, t.shownName, if (t.scheme == "light") s["themeLight"].orEmpty() else s["themeDark"].orEmpty(), t.id == shownTheme, wire, t) { nav.chooseTheme(t.id) }
-                        }, portrait)
+                }
+            },
+        ) {
+            if (step == 0 && !both) {
+                // Each look in its own theme's colours, as Apple's chooser draws them.
+                DesignSection("") {
+                    DesignCards(looks.size) { i ->
+                        val e = looks[i]
+                        val on = e.id == shownLook
+                        val wears = themeOf(e.theme)
+                        DesignCard(
+                            e.name, {
+                                if (!busy && !on) {
+                                    busy = true
+                                    scope.launch { nav.chooseExperience(e.id); busy = false }
+                                }
+                            },
+                            sub = listOfNotNull(e.tagline.ifEmpty { null }, wears?.shownName).joinToString(" · "), on = on,
+                            requestFocus = on, focusKey = "first-" + e.id,
+                            preview = { ThemedThumb(com.wittywilla.wittymediaclient.net.Wire.of(e.wire, form), e.name, wears, Modifier.fillMaxWidth(), false, portrait) },
+                        )
+                    }
+                }
+            } else {
+                // The chosen layout, large, in the theme picked.
+                val theme = themeOf(shownTheme)
+                DesignSection(s["firstThemePreview"].orEmpty()) {
+                    DesignCard(
+                        listOfNotNull(look?.name, theme?.shownName).joinToString(" · "), {},
+                        sub = theme?.let { if (it.scheme == "light") s["themeLight"].orEmpty() else s["themeDark"].orEmpty() }.orEmpty(),
+                        preview = {
+                            Box(Modifier.fillMaxWidth(), contentAlignment = androidx.compose.ui.Alignment.Center) {
+                                ThemedThumb(wire, look?.name.orEmpty(), theme, if (portrait) Modifier.width(220.dp) else Modifier.fillMaxWidth(), false, portrait)
+                            }
+                        },
+                    )
+                }
+                if (themeRequired == null) {
+                    DesignSection(s["firstThemeThemes"].orEmpty()) {
+                        DesignCards(themes.size) { i ->
+                            val t = themes[i]
+                            DesignCard(
+                                t.shownName, { nav.chooseTheme(t.id) }, sub = if (t.scheme == "light") s["themeLight"].orEmpty() else s["themeDark"].orEmpty(),
+                                on = t.id == shownTheme, requestFocus = t.id == shownTheme, focusKey = "first-theme-" + t.id,
+                                preview = { ThemedThumb(wire, t.shownName, t, Modifier.fillMaxWidth(), false, portrait) },
+                            )
+                        }
+                    }
+                    DesignSection("") {
                         WittyButton(s["themeImport"].orEmpty(), { picker.launch("*/*") }, kind = ButtonKind.Secondary, focusKey = "first-import")
                         if (said.isNotEmpty()) Note(said)
                     }
                 }
             }
-            // The buttons stay in sight below the page.
-            Row(Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 12.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                when {
-                    both -> WittyButton(s["continue"].orEmpty(), { finish() }, kind = ButtonKind.Primary, tall = true, focusKey = "first-continue", modifier = Modifier.weight(1f))
-                    step == 0 && themeRequired != null -> WittyButton(s["continue"].orEmpty(), { finish() }, kind = ButtonKind.Primary, tall = true, focusKey = "first-continue", modifier = Modifier.weight(1f))
-                    step == 0 -> WittyButton(s["next"].orEmpty(), { step = 1 }, kind = ButtonKind.Primary, tall = true, focusKey = "first-next", modifier = Modifier.weight(1f))
-                    else -> {
-                        if (lookRequired == null) WittyButton(s["back"].orEmpty(), { step = 0 }, kind = ButtonKind.Secondary, tall = true, focusKey = "first-back", modifier = Modifier.weight(1f))
-                        WittyButton(s["firstLookUseThis"].orEmpty(), { finish() }, kind = ButtonKind.Primary, tall = true, focusKey = "first-done", modifier = Modifier.weight(1f))
-                    }
-                }
-            }
         }
-    }
-}
-
-private class Choice(val id: String, val name: String, val detail: String, val on: Boolean, val wire: com.wittywilla.wittymediaclient.net.SduiWire, val theme: ThemeList.ThemeSummary?, val pick: () -> Unit)
-
-// Cards two across (three on a wide screen), each a wireframe with its name and a line under it.
-@Composable
-private fun CardGrid(cards: List<Choice>, portrait: Boolean) {
-    val across = if (portrait) 2 else if (androidx.compose.ui.platform.LocalConfiguration.current.screenWidthDp >= 900) 4 else 3
-    Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
-        cards.chunked(across).forEach { row ->
-            Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                row.forEach { c ->
-                    Pressable(c.pick, Modifier.weight(1f), label = c.name, selected = c.on, focusKey = "first-" + c.id) {
-                        Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                            ThemedThumb(c.wire, c.name, c.theme, Modifier.fillMaxWidth(), c.on, portrait)
-                            Text(c.name, style = MaterialTheme.typography.titleSmall, color = if (c.on) LocalExtraColours.current.accentText else MaterialTheme.colorScheme.onBackground, maxLines = 1)
-                            if (c.detail.isNotEmpty()) Text(c.detail, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 2)
-                        }
-                    }
-                }
-                repeat(across - row.size) { Spacer(Modifier.weight(1f)) }
-            }
         }
     }
 }

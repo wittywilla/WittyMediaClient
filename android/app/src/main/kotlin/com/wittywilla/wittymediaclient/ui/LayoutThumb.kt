@@ -63,7 +63,12 @@ internal fun DrawScope.drawWire(s: SduiWire, bg: Color, panel: Color, card: Colo
     when (s.nav) {
         "side" -> { box(0f, 0f, 22 * u, h, panel, 0f); left = 22 * u; for (i in 0 until 4) item(3 * u, (8 + i * 9) * u, 16 * u, 3 * u, i == 0) }
         "rail" -> { box(0f, 0f, 9 * u, h, panel, 0f); left = 9 * u; box(2.5f * u, 4 * u, 4 * u, 4 * u, accent); for (i in 0 until 4) item(3 * u, (14 + i * 8) * u, 3 * u, 3 * u, i == 0) }
-        "bottom" -> { box(0f, h - 9 * u, w, 9 * u, panel, 0f); bottom = 9 * u; for (i in 0 until 4) item((18 + i * 18) * u, h - 6 * u, 6 * u, 3 * u, i == 0) }
+        // A phone's tabs float in a rounded bar with a dot each, as the app draws them.
+        "bottom" -> if (portrait) {
+            val bh = 10 * u
+            box(6 * u, h - bh - 4 * u, w - 12 * u, bh, panel, bh / 2); bottom = bh + 6 * u
+            for (i in 0 until 4) drawCircle(if (i == 0) accent else soft, 2.2f * u, Offset((22 + i * 19) * u, h - 4 * u - bh / 2))
+        } else { box(0f, h - 9 * u, w, 9 * u, panel, 0f); bottom = 9 * u; for (i in 0 until 4) item((18 + i * 18) * u, h - 6 * u, 6 * u, 3 * u, i == 0) }
         "none" -> Unit
         else -> {
             val tall = if (s.style == "crossbar") 12 * u else 9 * u
@@ -97,7 +102,12 @@ internal fun DrawScope.drawWire(s: SduiWire, bg: Color, panel: Color, card: Colo
         while (rowY + h * 0.03f + ch <= limit) {
             box(x0, rowY, pw * 0.3f, h * 0.014f, ink.copy(alpha = 0.4f), 1f)
             rowY += h * 0.03f
-            for (i in 0 until across) box(x0 + i * (cw + gap), rowY, cw, ch, card, if (s.cards == "plate") 4f else 3f)
+            for (i in 0 until across) {
+                val cx = x0 + i * (cw + gap)
+                box(cx, rowY, cw, ch, card, cw * 0.14f)
+                // A plate card's name sits on a band of the accent at its foot.
+                if (s.cards == "plate") box(cx, rowY + ch * 0.74f, cw, ch * 0.26f, accent.copy(alpha = 0.55f), cw * 0.14f)
+            }
             rowY += ch + h * 0.03f
         }
         if (s.dock) box(left + 3 * u, h - bottom - dockH, w - left - 6 * u, 6 * u, panel, 3f)
