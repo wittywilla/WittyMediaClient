@@ -12,6 +12,8 @@ sealed interface YouOpens {
     data class Native(val screen: YouNative) : YouOpens
     // The server's own page for it, inside the app; a QR card for it on a TV.
     data class Page(val path: String) : YouOpens
+    // One of the server's SDUI pages (its catalogue's routes), drawn by the app the same on a phone, tablet and TV.
+    data class Sdui(val path: String) : YouOpens
 }
 
 // `icon` is a Material Symbols name, `tint` the icon tile's colour (null: the quiet grey, danger: "danger").
@@ -106,7 +108,7 @@ fun youGroups(who: YouWho): List<YouGroup> {
         groups += YouGroup(
             "groupServer",
             listOf(
-                page("rowLibraries", "video_library", QUIET, "/settings/libraries"),
+                YouRow("rowLibraries", "video_library", QUIET, YouOpens.Sdui("/manage/libraries")),
                 page("rowMetadata", "image_search", QUIET, "/settings/metadata"),
                 page("rowFixMatches", "auto_fix_high", QUIET, "/fix-matches"),
                 page("rowPlayback", "smart_display", QUIET, "/settings/playback"),
