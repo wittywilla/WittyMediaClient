@@ -412,7 +412,7 @@ public enum AppearancePage {
         switch step {
         case .layout:
             let next = i.requiredTheme != nil ? "Continue" : "Next"
-            return DesignPageSpec(eyebrow: eyebrow, title: "Choose a look",
+            return DesignPageSpec(eyebrow: eyebrow, title: "Choose a layout",
                                   lead: "Each look is a layout of its own: the menu, Home and the cards, drawn as they are on this device. Colours are the next step, and you can change both any time in Settings.",
                                   sections: [.secC("", lookCards(i), 2)] + foot, actions: [.A1(next)])
         case .colour:
@@ -433,7 +433,7 @@ public enum AppearancePage {
                 if i.canPickFile { sections.append(.secP("", [.Cc("Import a theme…")])) }
             }
             let back: [DesignPageSpec.Action] = i.requiredExperience == nil ? [.A2("Back")] : []
-            return DesignPageSpec(eyebrow: eyebrow, title: "Choose a theme",
+            return DesignPageSpec(eyebrow: eyebrow, title: "Choose colours",
                                   lead: i.requiredExperience == nil ? "The colours. Any theme goes with any look: here is yours in each." : "Your look is set. " + setBy,
                                   sections: sections + foot, actions: [.A1("Use this")] + back)
         }

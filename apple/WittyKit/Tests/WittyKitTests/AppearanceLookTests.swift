@@ -76,14 +76,14 @@ final class AppearanceLookTests: XCTestCase {
         i.form = "phone"
         XCTAssertEqual(AppearancePage.firstStep(i), .layout)
         let layout = AppearancePage.chooser(i, step: .layout)
-        XCTAssertEqual(layout.title, "Choose a look")
+        XCTAssertEqual(layout.title, "Choose a layout")
         XCTAssertEqual(layout.sections.flatMap(\.cards).map(\.id), ["look-lumen", "look-rail", "look-aero"])
         XCTAssertTrue(layout.sections[0].cards.allSatisfy(\.portrait), "a phone previews its own layout, upright")
         XCTAssertEqual(layout.actions.map(\.title), ["Next"])
 
         i.pendingExperience = "rail"
         let colour = AppearancePage.chooser(i, step: .colour)
-        XCTAssertEqual(colour.title, "Choose a theme")
+        XCTAssertEqual(colour.title, "Choose colours")
         XCTAssertEqual(colour.sections[0].heading, "Preview")
         XCTAssertEqual(colour.sections[0].cards.map(\.id), ["preview"])
         // The chosen look wears its own theme until one is picked: Rail's is Cinema.
