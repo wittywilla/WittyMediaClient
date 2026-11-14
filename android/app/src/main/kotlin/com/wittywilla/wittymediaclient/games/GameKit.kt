@@ -251,6 +251,8 @@ fun GameButton(
     focusRequester: FocusRequester? = null,
     enabled: Boolean = true,
     big: Boolean = true,
+    // Round ends, as a phone's game page draws its row of buttons (Apple's).
+    pill: Boolean = false,
 ) {
     val look = gameLook()
     val fill = when (kind) {
@@ -265,10 +267,10 @@ fun GameButton(
         else -> GameColours.text
     }
     val outline = if (kind == ButtonKind.Ghost) GameColours.border else Color.Transparent
-    Pressable(onClick, modifier, enabled = enabled, focusRequester = focusRequester, fill = fill) {
+    Pressable(onClick, modifier, enabled = enabled, focusRequester = focusRequester, fill = fill, radius = if (pill) 999.dp else look.radius) {
         Row(
             Modifier
-                .border(1.dp, outline, RoundedCornerShape(look.radius))
+                .border(1.dp, outline, RoundedCornerShape(if (pill) 999.dp else look.radius))
                 .defaultMinSize(minHeight = if (big) look.button else look.button * 0.8f)
                 .padding(horizontal = if (look.tv) tv(32) else 16.dp),
             verticalAlignment = Alignment.CenterVertically,
@@ -282,9 +284,9 @@ fun GameButton(
 
 // A square button with an icon alone, its words for screen readers.
 @Composable
-fun GameIconButton(icon: ImageVector, label: String, onClick: () -> Unit, modifier: Modifier = Modifier, on: Boolean = false, tint: Color? = null, focusRequester: FocusRequester? = null) {
+fun GameIconButton(icon: ImageVector, label: String, onClick: () -> Unit, modifier: Modifier = Modifier, on: Boolean = false, tint: Color? = null, focusRequester: FocusRequester? = null, pill: Boolean = false) {
     val look = gameLook()
-    Pressable(onClick, modifier.size(look.button), label = label, fill = GameColours.card, focusRequester = focusRequester) {
+    Pressable(onClick, if (pill) modifier.size(width = look.button * 1.3f, height = look.button) else modifier.size(look.button), label = label, fill = GameColours.card, focusRequester = focusRequester, radius = if (pill) 999.dp else look.radius) {
         Icon(icon, null, Modifier.align(Alignment.Center).size(look.icon + 2.dp), tint = tint ?: if (on) GameColours.accentText else GameColours.text)
     }
 }
@@ -367,5 +369,17 @@ fun GameNote(title: String, body: String, modifier: Modifier = Modifier, action:
             GameButton(action, onAction, Modifier.padding(top = look.gap), kind = ButtonKind.Primary, focusRequester = focus)
             LaunchedEffect(Unit) { runCatching { focus.requestFocus() } }
         }
+    }
+}
+
+// The bookmark ribbon on a game with somewhere to resume from, in the accent, as Apple's shelves and game page draw it.
+@Composable
+fun GameRibbon(modifier: Modifier = Modifier, height: androidx.compose.ui.unit.Dp = 36.dp) {
+    val accent = GameColours.accent
+    androidx.compose.foundation.Canvas(modifier.size(width = height * 0.45f, height = height)) {
+        val p = androidx.compose.ui.graphics.Path().apply {
+            moveTo(0f, 0f); lineTo(size.width, 0f); lineTo(size.width, size.height); lineTo(size.width / 2, size.height * 0.78f); lineTo(0f, size.height); close()
+        }
+        drawPath(p, accent)
     }
 }
