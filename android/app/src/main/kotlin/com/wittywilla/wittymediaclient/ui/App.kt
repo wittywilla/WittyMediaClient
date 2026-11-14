@@ -546,6 +546,16 @@ class Nav(val app: WittyApp, private val s: Map<String, String>) {
         app.scope.launch(kotlinx.coroutines.Dispatchers.IO) { runCatching { folder.deleteRecursively() } }
     }
 
+    // WittyPlay Online, the page WittyPlay serves for its games (with its status bar and dock: the whole screen), where
+    // the server has WittyPlay; on a TV, and without it, the app's own games screens.
+    val wittyPlayPage: String? get() = sduiNav?.items?.firstOrNull { it.page == WITTYPLAY_PAGE }?.page
+
+    fun wittyPlayFor(library: com.wittywilla.wittymediaclient.net.Library): Route? {
+        if (library.type != "games" || library.console == "rig") return null
+        val page = wittyPlayPage
+        return if (page != null && !app.isTv) Route.Sdui(page, emptyMap(), library.name) else gamesRouteFor(library)
+    }
+
     // The route for a place the server names, where it is one of the app's screens or pages; null for what is done
     // rather than opened (playing something).
     fun routeOf(target: SduiTarget): Route? = when (target) {
@@ -563,8 +573,9 @@ class Nav(val app: WittyApp, private val s: Map<String, String>) {
                     else -> Route.Sdui(target.page, p)
                 }
             }
+            // A games library opens WittyPlay, as the website and the Apple apps do.
             "library" -> libraries.firstOrNull { it.id == target.params["library"]?.toLongOrNull() }
-                ?.let { Route.Library(it, target.params - "library") } ?: Route.Sdui(target.page, target.params)
+                ?.let { wittyPlayFor(it) ?: Route.Library(it, target.params - "library") } ?: Route.Sdui(target.page, target.params)
             else -> Route.Sdui(target.page, target.params)
         }
         is SduiTarget.Native -> {
@@ -781,7 +792,7 @@ class Nav(val app: WittyApp, private val s: Map<String, String>) {
     // A library's own page: WittyPlay's for a games library, the app's for films, shows, discs and listening, and the
     // website's for every other kind. The strip, the drawer, Home's tiles and See all all come through here.
     fun libraryRoute(library: com.wittywilla.wittymediaclient.net.Library): Route =
-        gamesRouteFor(library) ?: if (library.hasOwnScreen) Route.Library(library) else Route.Page(library.pagePath(), library.name)
+        wittyPlayFor(library) ?: if (library.hasOwnScreen) Route.Library(library) else Route.Page(library.pagePath(), library.name)
     fun open(item: com.wittywilla.wittymediaclient.net.Item) = push(
         when {
             gamesRouteFor(item) != null -> gamesRouteFor(item)!!
@@ -1429,3 +1440,5 @@ private const val BAR_CELLS = 5
 const val AUTO_THEME = "auto"
 private const val LIGHT_THEME = "light"
 private const val NAV_VEIL_ALPHA = 0xB3
+
+const val WITTYPLAY_PAGE = "wittyplay-online"
