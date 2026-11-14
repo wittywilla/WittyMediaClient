@@ -162,7 +162,7 @@ data class GameDeviceType(val id: Int = 0, val name: String = "")
 @Serializable
 data class GamePortDevices(val port: Int = 0, val current: Int = 0, val types: List<GameDeviceType> = emptyList())
 
-// A game being played, from POST /games/{id}/play. `modes` is kept raw: older servers send names, newer ones objects.
+// A game being played, from POST /games/{id}/play. `modes` is kept raw and read as objects (GameModeInfo.from).
 @Serializable
 data class GameSession(
     val id: String = "",
@@ -191,7 +191,6 @@ data class GameSession(
     val modeIds: List<String>
         get() = modes.mapNotNull { m ->
             when (m) {
-                is JsonPrimitive -> m.content
                 is JsonObject -> (m["id"] as? JsonPrimitive)?.content
                 else -> null
             }

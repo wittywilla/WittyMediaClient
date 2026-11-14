@@ -3,7 +3,6 @@
 package com.wittywilla.wittymediaclient.ui
 
 import androidx.compose.runtime.Composable
-import com.wittywilla.wittymediaclient.net.FEATURE_SWITCHING
 
 // The household's screens in the app's own stack (the server's docs/PROFILES.md): Who's watching for switching
 // profile without signing out, and, under You → Profiles, what an adult manages for the profiles in their care.
@@ -53,12 +52,8 @@ fun HouseholdRouteScreen(nav: Nav, s: Map<String, String>, route: HouseholdRoute
     }
 }
 
-// "Switch profile" on You, and on the time-up notice. A server that switches opens Who's watching, which itself
-// signs out where the server doesn't list its profiles to this device; an older server signs out, as before.
+// "Switch profile" on You, and on the time-up notice: Who's watching, which itself signs out where the server
+// doesn't list its profiles to this device.
 fun switchProfile(nav: Nav) {
-    if (nav.has(FEATURE_SWITCHING)) {
-        if (nav.current != HouseholdRoute(HouseholdScreen.Who)) nav.push(HouseholdRoute(HouseholdScreen.Who))
-    } else {
-        nav.signOut()
-    }
+    if (nav.current != HouseholdRoute(HouseholdScreen.Who)) nav.push(HouseholdRoute(HouseholdScreen.Who))
 }

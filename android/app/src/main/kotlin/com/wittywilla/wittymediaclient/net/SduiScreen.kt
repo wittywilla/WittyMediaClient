@@ -333,8 +333,7 @@ class SduiScreen(val document: SduiDocument) {
                 p.child("sort")?.let { buttons += "Sort: " + optionLabel(it, it.str("value")) }
                 p.objects("fields").forEach { buttons += it.str("label") + ": " + optionLabel(it, it.str("value")).ifEmpty { "Any" } }
                 d.buttons = buttons
-                val countText = p.str("countText")
-                if (countText.isNotEmpty()) d.say("count", countText) else p.int("count")?.let { d.say("count", "$it titles") }
+                p.str("countText").takeIf { it.isNotEmpty() }?.let { d.say("count", it) }
             }
             "DetailHeader" -> {
                 d.role = "region"; d.label = p.str("title")

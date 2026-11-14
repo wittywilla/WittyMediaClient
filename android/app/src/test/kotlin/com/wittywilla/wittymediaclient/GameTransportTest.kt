@@ -24,6 +24,7 @@ import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Assume.assumeTrue
 import org.junit.Test
@@ -105,7 +106,7 @@ class GameTransportTest {
         assertEquals(listOf(GameRoute(2, "webrtc")), GameRoute.plan(v2.modes.mapNotNull(GameModeInfo::from), "webrtc"))
         assertEquals("webrtc", GameRoute(2, "webrtc").modeId)
         assertEquals(listOf(GameRoute(2, "jpeg")), GameRoute.plan(v2.modes.mapNotNull(GameModeInfo::from), "ws-jpeg"))
-        assertEquals(GameModeInfo("ws-jpeg"), GameModeInfo.from(json.parseToJsonElement("\"ws-jpeg\"")))
+        assertNull("a bare name is not a mode", GameModeInfo.from(json.parseToJsonElement("\"ws-jpeg\"")))
     }
 
     @Test

@@ -117,9 +117,9 @@ class IdentityTest {
     }
 
     @Test
-    fun anOlderServerIsOnlyAllowedWithNoKeyRemembered() {
-        assertEquals(IdentityState.None, Identity.unanswered(url, emptyList()))
-        assertEquals(IdentityState.None, Identity.unanswered(url, listOf(SavedServer(url, "Home"))))
+    fun aServerThatWontProveItselfIsRefused() {
+        assertEquals(IdentityState.Bad, Identity.unanswered(url, emptyList()))
+        assertEquals(IdentityState.Bad, Identity.unanswered(url, listOf(SavedServer(url, "Home"))))
         assertEquals(IdentityState.Bad, Identity.unanswered(url, listOf(mine)))
     }
 
@@ -131,8 +131,8 @@ class IdentityTest {
         assertFalse(Identity.fits(real.publicKey, ServerProof(IdentityState.Different, real.serverId, otherKey)))
         assertFalse(Identity.fits(real.publicKey, ServerProof(IdentityState.Bad)))
         assertFalse(Identity.fits(real.publicKey, ServerProof(IdentityState.Unreachable)))
-        assertFalse("no answer can't stand in for a key", Identity.fits(real.publicKey, ServerProof(IdentityState.None)))
-        assertTrue("nothing to compare with yet", Identity.fits("", ServerProof(IdentityState.New, real.serverId, real.publicKey)))
+        assertFalse("a sign-in kept with no key isn't trusted", Identity.fits("", ServerProof(IdentityState.New, real.serverId, real.publicKey)))
+        assertFalse(Identity.fits("", ServerProof(IdentityState.Same, real.serverId, real.publicKey)))
         assertFalse(Identity.fits("", ServerProof(IdentityState.Bad)))
     }
 
@@ -142,7 +142,6 @@ class IdentityTest {
         assertEquals(NextStep.Refuse, Identity.nextStep(IdentityState.Bad, true))
         assertEquals(NextStep.Lost, Identity.nextStep(IdentityState.Unreachable, true))
         assertEquals(NextStep.AskCode, Identity.nextStep(IdentityState.New, false))
-        assertEquals(NextStep.SignIn, Identity.nextStep(IdentityState.None, false))
         assertEquals(NextStep.SignIn, Identity.nextStep(IdentityState.Same, false))
         assertEquals(NextStep.Open, Identity.nextStep(IdentityState.Same, true))
     }

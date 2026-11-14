@@ -31,8 +31,8 @@ data class RoomSummary(val id: String = "", val name: String = "", val hostName:
 data class SyncInfo(
     val enabled: Boolean = false,
     val canCreate: Boolean = false,
-    // False when this profile's limits turn watch parties off; an older server doesn't say, and lets anyone join.
-    val canJoin: Boolean = true,
+    // False when this profile's limits turn watch parties off.
+    val canJoin: Boolean = false,
     val drift: Drift = Drift(),
     val limits: SyncLimits = SyncLimits(),
     val rooms: List<RoomSummary> = emptyList(),

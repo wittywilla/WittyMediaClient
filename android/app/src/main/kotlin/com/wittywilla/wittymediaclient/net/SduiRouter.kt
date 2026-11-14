@@ -167,7 +167,7 @@ class SduiRouter(routes: List<SduiRouteSpec> = DEFAULT_ROUTES, commands: List<Sd
         )
 
         val DEFAULT_COMMANDS: List<SduiCommandSpec> = listOf(
-            SduiCommandSpec("watchLater.add", "POST", "/api/v1/collections/watch-later/items", "{\"items\":[{item}]}"),
+            SduiCommandSpec("watchLater.add", "POST", "/api/v1/collections/watch-later/items", "{\"items\":[\"{item}\"]}"),
             SduiCommandSpec("watched.set", "POST", "/api/v1/items/{item}/progress", "{\"watched\":true}"),
             SduiCommandSpec("watched.clear", "DELETE", "/api/v1/items/{item}/progress", ""),
             SduiCommandSpec("selectTab", "GET", "", ""),
@@ -176,21 +176,9 @@ class SduiRouter(routes: List<SduiRouteSpec> = DEFAULT_ROUTES, commands: List<Sd
     }
 }
 
-// A command as a request. Items are numbers, but a show's is "show-<n>", which the catalogue's templates were not
-// written for: Watch later takes a show under `shows`, and there is no request that marks a whole show watched.
+// A command as a request. The catalogue's templates quote {item} in bodies, and its routes take a show's "show-<n>".
 object SduiCommands {
     class Request(val method: String, val path: String, val body: String?)
-
-    private fun showId(item: String): Long? = item.removePrefix("show-").takeIf { it != item }?.toLongOrNull()
-
-    fun bodyItem(item: String): String = item.toLongOrNull()?.toString() ?: ("\"" + item.replace("\\", "\\\\").replace("\"", "\\\"") + "\"")
-
-    // The server's apiRevision, read with its capabilities. From 16 its templates hold {item} inside a JSON string and
-    // its routes take a show's "show-<n>" (marking a whole show watched included), so nothing needs working round.
-    @Volatile
-    var serverRevision = 0
-
-    private const val SHOW_IDS_FROM = 16
 
     // A command's request, from its catalogue entry: {item} and each of the entry's params by name go into the path and the
     // body where the template has them (docs/SDUI.md, Action). An int parameter replaces its string and quotes with the
@@ -234,18 +222,10 @@ object SduiCommands {
     }
 
     private fun baseRequest(spec: SduiCommandSpec, item: String): Request? {
-        if (serverRevision >= SHOW_IDS_FROM) {
-            if (item.isEmpty() && ("{item}" in spec.path || "{item}" in spec.body)) return null
-            if (item.any { it.isISOControl() }) return null
-            val inPath = java.net.URLEncoder.encode(item, "UTF-8").replace("+", "%20")
-            val inString = item.replace("\\", "\\\\").replace("\"", "\\\"")
-            return Request(spec.method, spec.path.replace("{item}", inPath), spec.body.takeIf { it.isNotEmpty() }?.replace("{item}", inString))
-        }
-        val show = showId(item)
-        if (show != null) {
-            return if (spec.op == "watchLater.add") Request(spec.method, spec.path, "{\"shows\":[$show]}") else null
-        }
-        if ("{item}" in spec.path && item.toLongOrNull() == null) return null
-        return Request(spec.method, spec.path.replace("{item}", item), spec.body.takeIf { it.isNotEmpty() }?.replace("{item}", bodyItem(item)))
+        if (item.isEmpty() && ("{item}" in spec.path || "{item}" in spec.body)) return null
+        if (item.any { it.isISOControl() }) return null
+        val inPath = java.net.URLEncoder.encode(item, "UTF-8").replace("+", "%20")
+        val inString = item.replace("\\", "\\\\").replace("\"", "\\\"")
+        return Request(spec.method, spec.path.replace("{item}", inPath), spec.body.takeIf { it.isNotEmpty() }?.replace("{item}", inString))
     }
 }

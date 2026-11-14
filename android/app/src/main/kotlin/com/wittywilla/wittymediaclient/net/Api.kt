@@ -541,9 +541,7 @@ suspend fun probeServer(url: String, appVersion: String = "", followUpgrade: Boo
     } catch (e: ApiError) {
         val upgrade = if (followUpgrade && e.status in 300..399) httpsUpgrade(url, e.location) else null
         if (upgrade != null) return probeServer(upgrade, appVersion, followUpgrade = false)
-        // No /capabilities: an older server, if it says it is one at all.
-        val old = e.status == 404 && runCatching { api.status().name == "WittyMediaServer" }.getOrDefault(false)
-        Probe.Failed(if (old) "server-old" else "not-server")
+        Probe.Failed("not-server")
     } catch (_: SerializationException) {
         Probe.Failed("not-server")
     }
