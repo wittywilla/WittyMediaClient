@@ -15,6 +15,12 @@ struct LayoutThumb: View {
     /// A phone's layout: drawn upright, the shape of a phone's screen, never taller than a phone in the hand.
     var portrait = false
 
+    #if os(tvOS)
+    static let maxLandscape: CGFloat = 460
+    #else
+    static let maxLandscape: CGFloat = 320
+    #endif
+
     private func colour(_ index: Int, fallback: String) -> Color {
         let hex = swatches.indices.contains(index) ? swatches[index] : fallback
         guard let c = ThemeColour(hex: hex) else { return .gray }
@@ -33,7 +39,9 @@ struct LayoutThumb: View {
         .aspectRatio(portrait ? 0.56 : 16.0 / 10.0, contentMode: .fit)
         .clipShape(RoundedRectangle(cornerRadius: corner, style: .continuous))
         .overlay(RoundedRectangle(cornerRadius: corner, style: .continuous).strokeBorder(Color.gray.opacity(0.4), lineWidth: portrait ? 2 : 1))
-        .frame(maxHeight: portrait ? 420 : nil)
+        // Never taller than a phone in the hand, nor than about half a television's screen: a single card (the colour
+        // page's preview) would otherwise fill the whole width.
+        .frame(maxHeight: portrait ? 420 : Self.maxLandscape)
         .frame(maxWidth: .infinity)
         .accessibilityHidden(true)
     }
