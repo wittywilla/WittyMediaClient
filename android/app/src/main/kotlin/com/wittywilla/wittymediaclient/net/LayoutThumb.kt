@@ -25,8 +25,9 @@ data class SduiWire(
 )
 
 object Wire {
-    // The wire for a form factor, else the nearest the server sent (desktop), else the plain look.
-    fun of(wires: Map<String, SduiWire>, formFactor: String): SduiWire = wires[formFactor] ?: wires["desktop"] ?: wires.values.firstOrNull() ?: SduiWire()
+    // The wire for this device's form factor (phone, tablet, tv or desktop): the server works one out for each, so a
+    // look is previewed as it is drawn here, never as a desktop's. A server that sends none gets the plain look.
+    fun of(wires: Map<String, SduiWire>, formFactor: String): SduiWire = wires[formFactor] ?: wires["web"] ?: SduiWire()
 
     // The menu's places as a wireframe draws them.
     fun glass(w: SduiWire) = w.finish == "glass" || w.finish == "gloss"
