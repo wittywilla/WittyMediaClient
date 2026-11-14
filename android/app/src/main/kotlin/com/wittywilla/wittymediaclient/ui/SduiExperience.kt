@@ -103,12 +103,18 @@ fun SduiWidget(view: SduiView) {
         verticalArrangement = Arrangement.spacedBy(env.space("s")),
     ) {
         view.text["title"]?.let { Text(it, color = scheme.onSurface, fontSize = env.size("title"), fontWeight = FontWeight.SemiBold, modifier = Modifier.semantics { heading() }) }
-        if (view.text["kind"] == "clock") {
+        val kind = view.props["kind"]?.let { (it as? kotlinx.serialization.json.JsonPrimitive)?.content }.orEmpty().ifEmpty { view.text["kind"].orEmpty() }
+        if (kind == "clock") {
             var now by remember { mutableStateOf(System.currentTimeMillis()) }
             LaunchedEffect(Unit) { while (true) { delay(1000); now = System.currentTimeMillis() } }
             Text(android.text.format.DateFormat.format("HH:mm", now).toString(), color = scheme.onSurface, fontSize = env.size("display"), fontWeight = FontWeight.Bold)
         }
-        if (view.children.isNotEmpty()) Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(env.space("s"))) {
+        // Server status, and a widget one column wide, hold their items one under another, as the website's; the others
+        // a row of cards that scrolls.
+        val stacked = kind == "serverStatus" || (view.props["w"]?.toString()?.toIntOrNull() ?: 1) == 1 || view.children.all { it.type == "ListItem" }
+        if (view.children.isNotEmpty() && stacked) Column(Modifier.fillMaxWidth()) {
+            view.children.forEach { SduiNode(it, view) }
+        } else if (view.children.isNotEmpty()) Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(env.space("s"))) {
             view.children.forEach { SduiNode(it, view) }
         }
     }
