@@ -38,7 +38,7 @@ public struct GameHello: Encodable, Equatable {
     public var latency: String
     public var maxKbps = 0
 
-    public init(app: String, device: String, name: String, video: [String] = ["h264"], audio: [String] = ["pcm"], seats: [Int],
+    public init(app: String, device: String, name: String, video: [String] = ["h264", "jpeg"], audio: [String] = ["pcm"], seats: [Int],
                 display: Display, latency: String = "auto") {
         self.app = String(app.prefix(64))
         self.device = device
@@ -102,7 +102,7 @@ public enum GameStreamV2 {
             guard rest.count >= 4 else { return nil }
             return (.opus(timestamp: u32(0), packet: Data(rest[4...])), nil)
         default:
-            // PCM (0x03), JPEG (0x02) and the timing answers are as in the first stream.
+            // PCM (0x03), JPEG (0x02) and the timing answers.
             return GameStreamMessage.parse(data).map { ($0, nil) }
         }
     }

@@ -3,13 +3,12 @@
 import CoreVideo
 import Foundation
 
-// What arrives on a game's WebSocket (the server's docs/GAMING-API.md, WebSocket): binary
-// messages whose first byte says what they are, and JSON events as text. Apple TV has no WebRTC
-// of its own, so this is how it plays: H.264 into VideoToolbox, or a JPEG a frame where the server
-// has no encoder, and plain PCM sound.
+// What arrives on a game's stream (the server's docs/GAMING-STREAM.md): binary messages whose first
+// byte says what they are, and JSON events as text. The stream's own video and Opus frames are read in
+// GameStreamV2.swift; JPEG (a frame where the server has no encoder), PCM and the timing answers here.
 
 public enum GameStreamMessage: Equatable {
-    /// One frame in Annex B, with its parameter sets before each keyframe.
+    /// One frame in Annex B, with its parameter sets before each keyframe (from the stream's 0x11).
     case video(keyframe: Bool, annexB: Data)
     case jpeg(Data)
     /// Signed 16-bit little-endian stereo, at any rate a console uses, such as 32040.
@@ -26,9 +25,6 @@ public enum GameStreamMessage: Equatable {
         guard let kind = data.first else { return nil }
         let rest = data.dropFirst()
         switch kind {
-        case 1:
-            guard let flag = rest.first else { return nil }
-            return .video(keyframe: flag == 1, annexB: Data(rest.dropFirst()))
         case 2:
             return .jpeg(Data(rest))
         case 3:
@@ -286,37 +282,33 @@ public enum AnnexB {
     }
 }
 
-/// Which of the server's ways of sending a game this app tries, in order. Apple TV has no WebRTC
-/// stack of its own, so it's the WebSocket with H.264, then with a JPEG a frame.
+/// Which of the server's ways of sending a game this app tries, in order: the stream (docs/GAMING-STREAM.md),
+/// over WebRTC where the app has a stack for it, then over its WebSocket. Apple TV has no WebRTC of its own.
 public enum GameModes {
-    /// The second stream's WebSocket, `/play/{sid}/stream`: this app's own name for it, since the
-    /// server lists the second stream by the modes it reaches, each marked `"stream": 2`.
+    /// The version of the stream this app speaks. The server marks every mode with the version it reaches.
+    public static let streamVersion = 2
+    /// The stream's WebSocket, `GET /play/{sid}/stream`.
     public static let streamWebSocket = "stream2-ws"
-    /// The second stream over WebRTC, `POST /play/{sid}/stream`, where the app has a WebRTC stack.
+    /// The stream over WebRTC, `POST /play/{sid}/stream`, where the app has a WebRTC stack.
     public static let streamWebRTC = "stream2-webrtc"
-    public static let supported = [streamWebRTC, streamWebSocket, "ws-h264", "ws-jpeg"]
+    public static let supported = [streamWebRTC, streamWebSocket]
 
-    /// The server's order, best first, of what this app can use. Ids it doesn't know are ignored.
-    /// Where the server has the second stream, WebRTC comes first (where the app has it), then the
-    /// second stream's WebSocket, and the first stream's behind them.
+    /// The ways to try, best first; empty when the server offers none in this app's version of the stream.
     public static func order(_ offered: [GameMode]?, webRTC: Bool = GameTransports.webRTC != nil) -> [String] {
+        guard (offered ?? []).contains(where: { $0.stream == streamVersion }) else { return [] }
+        return webRTC ? [streamWebRTC, streamWebSocket] : [streamWebSocket]
+    }
+
+    /// The server only offers a newer stream than this app speaks: the app needs updating.
+    public static func needsNewerApp(_ offered: [GameMode]?) -> Bool {
         let offered = offered ?? []
-        let own = [streamWebRTC, streamWebSocket]
-        var ids = offered.map(\.id).filter { supported.contains($0) && !own.contains($0) }
-        if ids.isEmpty { ids = ["ws-h264", "ws-jpeg"] }
-        if offered.contains(where: { $0.stream == 2 }) {
-            ids.insert(streamWebSocket, at: 0)
-            if webRTC { ids.insert(streamWebRTC, at: 0) }
-        }
-        return ids
+        return !offered.contains { $0.stream == streamVersion } && offered.contains { ($0.stream ?? 0) > streamVersion }
     }
 
     /// How long to wait for a first picture before trying the next way: 8 seconds for WebRTC, as
     /// the second stream's design says, and 12 for a WebSocket.
     public static func firstPictureWait(_ mode: String) -> TimeInterval { mode == streamWebRTC ? 8 : 12 }
 
-    /// `h264` or `jpeg`, for the WebSocket's address.
-    public static func video(for mode: String) -> String { mode == "ws-jpeg" ? "jpeg" : "h264" }
 }
 
 /// Where the picture goes on the screen, by the person's `display.*` settings.

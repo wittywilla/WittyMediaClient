@@ -5,8 +5,9 @@ import Foundation
 import FoundationNetworking
 #endif
 
-// The games routes this app uses: exactly the ones the website's player uses (the server's
-// docs/GAMING-API.md), under /api/v1. Nothing here sends or receives a game's file.
+// The games routes this app uses: exactly the ones the website's player uses. Playing (/games/…, /play/…,
+// bezels, controls) is WittyPlay's, under /api/v1/modules/wittyplay; a game's item, metadata and pictures stay the
+// server's, under /api/v1. Nothing here sends or receives a game's file.
 
 extension WittyClient {
     private static let gamesDecoder = JSONDecoder()
@@ -25,20 +26,20 @@ extension WittyClient {
 
     private func json<T: Encodable>(_ value: T) throws -> Data { try JSONEncoder().encode(value) }
 
-    public func gamesHome(library: Int64) async throws -> GamesHome { try await decode("GET", "/games/home?library=\(library)") }
+    public func gamesHome(library: Int64) async throws -> GamesHome { try await decode("GET", Self.wittyPlay + "/games/home?library=\(library)") }
 
     /// Every console, with that library's count of games for each when one is given.
     public func gameConsoles(library: Int64? = nil) async throws -> [GameConsole] {
-        try await decodeAs([GameConsole]?.self, "GET", "/games/consoles" + (library.map { "?library=\($0)" } ?? "")) ?? []
+        try await decodeAs([GameConsole]?.self, "GET", Self.wittyPlay + "/games/consoles" + (library.map { "?library=\($0)" } ?? "")) ?? []
     }
 
-    /// `sort` is `popular`, `title`, `newest`, `oldest`, `rating` or `added`, as the website's. `players`
+    /// `sort` is `title`, `newest`, `oldest`, `rating` or `added`, as the website's. `players`
     /// keeps games for at least that many, as the website's Made for two shelf (`players=2`).
-    public func games(library: Int64, console: String? = nil, players: Int? = nil, sort: String = "popular", offset: Int = 0, limit: Int = 60) async throws -> GameItemPage {
+    public func games(library: Int64, console: String? = nil, players: Int? = nil, sort: String = "rating", offset: Int = 0, limit: Int = 60) async throws -> GameItemPage {
         try await decode("GET", Self.gamesPath(library: library, console: console, players: players, sort: sort, offset: offset, limit: limit))
     }
 
-    static func gamesPath(library: Int64, console: String? = nil, players: Int? = nil, sort: String = "popular", offset: Int = 0, limit: Int = 60) -> String {
+    static func gamesPath(library: Int64, console: String? = nil, players: Int? = nil, sort: String = "rating", offset: Int = 0, limit: Int = 60) -> String {
         let descending = sort == "rating" || sort == "added"
         var path = "/items?library=\(library)&kind=game&sort=\(queryValue(sort))&desc=\(descending ? 1 : 0)&offset=\(offset)&limit=\(limit)"
         if let console, !console.isEmpty { path += "&console=\(queryValue(console))" }
@@ -47,26 +48,26 @@ extension WittyClient {
     }
 
     public func gameItem(_ id: Int64) async throws -> GameItem { try await decode("GET", "/items/\(id)") }
-    public func gameCheck(_ id: Int64) async throws -> GameCheck { try await decode("GET", "/games/\(id)/check") }
+    public func gameCheck(_ id: Int64) async throws -> GameCheck { try await decode("GET", Self.wittyPlay + "/games/\(id)/check") }
     public func gameDetails(_ id: Int64) async throws -> GameDetails { try await decode("GET", "/games/\(id)/metadata") }
-    public func gamePersonal(_ id: Int64) async throws -> GamePersonal { try await decode("GET", "/games/\(id)/meta") }
+    public func gamePersonal(_ id: Int64) async throws -> GamePersonal { try await decode("GET", Self.wittyPlay + "/games/\(id)/meta") }
 
     @discardableResult
     public func setGameFavourite(_ id: Int64, _ on: Bool) async throws -> GamePersonal {
-        try await decode("PUT", "/games/\(id)/meta", body: try json(["favourite": on]))
+        try await decode("PUT", Self.wittyPlay + "/games/\(id)/meta", body: try json(["favourite": on]))
     }
 
     public func gameSaves(_ id: Int64) async throws -> [GameSave] {
-        try await decodeAs([GameSave]?.self, "GET", "/games/\(id)/saves") ?? []
+        try await decodeAs([GameSave]?.self, "GET", Self.wittyPlay + "/games/\(id)/saves") ?? []
     }
 
     public func deleteGameSave(_ id: Int64, slot: Int) async throws {
-        _ = try await call("DELETE", "/games/\(id)/saves/\(slot)")
+        _ = try await call("DELETE", Self.wittyPlay + "/games/\(id)/saves/\(slot)")
     }
 
     /// A state's picture. `version` is its `updatedAt`, so a newer save is a new picture.
     public func gameSaveThumbURL(_ id: Int64, slot: Int, version: Int64) -> URL? {
-        mediaURL("/api/v1/games/\(id)/saves/\(slot)/thumb?v=\(version)")
+        mediaURL("/api/v1" + Self.wittyPlay + "/games/\(id)/saves/\(slot)/thumb?v=\(version)")
     }
 
     /// Covers come as smaller copies, as big as they'll be seen.
@@ -78,51 +79,63 @@ extension WittyClient {
         mediaURL("/api/v1/items/\(game.id)/backdrop?v=\(game.updatedAt ?? 0)")
     }
 
-    public func gameBezelURL(_ bezel: Int64) -> URL? { mediaURL("/api/v1/game-bezels/\(bezel)") }
+    public func gameBezelURL(_ bezel: Int64) -> URL? { mediaURL("/api/v1" + Self.wittyPlay + "/game-bezels/\(bezel)") }
+
+    /// Where WittyPlay answers its own calls (module API 5): everything after this prefix is the module's. A server
+    /// without WittyPlay answers 424 there, naming the module.
+    public static let wittyPlay = "/modules/wittyplay"
+
+    static func controlsPath(console: String, device: String, game: Int64?) -> String {
+        var path = wittyPlay + "/consoles/\(pathPart(console))/controls?device=\(queryValue(device))"
+        if let game { path += "&game=\(game)" }
+        return path
+    }
+
+    static func resolvePadPath(controller: String, console: String, game: Int64) -> String {
+        wittyPlay + "/game-profiles/resolve?kind=gamepad&controller=\(queryValue(controller))&console=\(queryValue(console))&game=\(game)"
+    }
+
+    static let backgroundPath = wittyPlay + "/game-background"
 
     public func gameControls(console: String, device: String, game: Int64? = nil) async throws -> GameControls {
-        var path = "/consoles/\(Self.pathPart(console))/controls?device=\(Self.queryValue(device))"
-        if let game { path += "&game=\(game)" }
-        return try await decode("GET", path)
+        try await decode("GET", Self.controlsPath(console: console, device: device, game: game))
     }
 
     /// `controller` is `vendor:product` in lowercase hex, or `id:<name>` for a pad without numbers.
     public func resolvePad(controller: String, console: String, game: Int64) async throws -> ResolvedPad {
-        try await decode("GET", "/game-profiles/resolve?kind=gamepad&controller=\(Self.queryValue(controller))&console=\(Self.queryValue(console))&game=\(game)")
+        try await decode("GET", Self.resolvePadPath(controller: controller, console: console, game: game))
     }
 
-    public func gameSettings(item: Int64) async throws -> GameSettings { try await decode("GET", "/games/settings?item=\(item)") }
+    public func gameSettings(item: Int64) async throws -> GameSettings { try await decode("GET", Self.wittyPlay + "/games/settings?item=\(item)") }
 
-    public func gameBackground() async throws -> GameBackground { try await decode("GET", "/game-background") }
+    public func gameBackground() async throws -> GameBackground { try await decode("GET", Self.backgroundPath) }
 
     /// For a game in an archive: ask about once a second until it's ready, then play.
     public func prepareGame(_ id: Int64) async throws -> GamePrepare {
-        try await decode("POST", "/games/\(id)/prepare", body: Data("{}".utf8))
+        try await decode("POST", Self.wittyPlay + "/games/\(id)/prepare", body: Data("{}".utf8))
     }
 
     /// Starts a game. Starting another saves and ends whatever this account was playing, anywhere.
     public func playGame(_ id: Int64, resume: Bool, safeMode: Bool = false) async throws -> GameSession {
         struct Start: Encodable { let resume: Bool; let client: String; let safeMode: Bool? }
-        return try await decodeAs(GameSession.self, "POST", "/games/\(id)/play", body: try json(Start(resume: resume, client: "native", safeMode: safeMode ? true : nil)),
+        return try await decodeAs(GameSession.self, "POST", Self.wittyPlay + "/games/\(id)/play", body: try json(Start(resume: resume, client: "native", safeMode: safeMode ? true : nil)),
                                   wait: Self.gameStartWait)
     }
 
-    public func gameSession(_ sid: String) async throws -> GameSession { try await decode("GET", "/play/\(Self.pathPart(sid))") }
+    public func gameSession(_ sid: String) async throws -> GameSession { try await decode("GET", Self.wittyPlay + "/play/\(Self.pathPart(sid))") }
 
     public func gameAction(_ sid: String, _ action: GameAction) async throws {
-        _ = try await call("POST", "/play/\(Self.pathPart(sid))/action", body: try json(action))
+        _ = try await call("POST", Self.wittyPlay + "/play/\(Self.pathPart(sid))/action", body: try json(action))
     }
 
     /// Saves and stops. The answer comes once everything is written, battery save and all.
     public func stopGame(_ sid: String) async throws {
-        _ = try await call("DELETE", "/play/\(Self.pathPart(sid))")
+        _ = try await call("DELETE", Self.wittyPlay + "/play/\(Self.pathPart(sid))")
     }
 
-    /// The WebSocket for a game: `video` is `h264` or `jpeg`. The sign-in goes in its header, as
-    /// for every other request, and never in the address.
-    /// The second stream's WebRTC offer, `POST /play/{sid}/stream`, signed in by header.
+    /// The stream's WebRTC offer, `POST /play/{sid}/stream`, signed in by header.
     public func gameStreamOfferRequest(_ sid: String) -> URLRequest? {
-        guard let url = mediaURL("/api/v1/play/\(Self.pathPart(sid))/stream") else { return nil }
+        guard let url = mediaURL("/api/v1" + Self.wittyPlay + "/play/\(Self.pathPart(sid))/stream") else { return nil }
         var request = URLRequest(url: url)
         request.httpMethod = "POST"
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
@@ -131,13 +144,9 @@ extension WittyClient {
         return request
     }
 
-    /// The second stream's WebSocket: the hello goes first, as text.
+    /// The stream's WebSocket: the hello goes first, as text. The sign-in goes in its header, never the address.
     public func gameStreamRequest(_ sid: String) -> URLRequest? {
-        socketRequest("/api/v1/play/\(Self.pathPart(sid))/stream")
-    }
-
-    public func gameSocketRequest(_ sid: String, video: String) -> URLRequest? {
-        socketRequest("/api/v1/play/\(Self.pathPart(sid))/ws?video=\(Self.queryValue(video))")
+        socketRequest("/api/v1" + Self.wittyPlay + "/play/\(Self.pathPart(sid))/stream")
     }
 
     /// A WebSocket's request, signed in by header: the token never goes in the address.

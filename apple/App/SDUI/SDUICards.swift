@@ -141,6 +141,21 @@ struct SDUICardView: View {
             .aspectRatio(width / max(height, 1), contentMode: .fit)
             .frame(width: fills ? nil : width)
             .overlay { SDUIPicture(picture: card.picture, symbol: pictureSymbol, shownWidth: width) }
+            // No picture (a game with no art): its name on the tile, as the website draws a box with the title, so the
+            // card is never a blank grey square, whether or not its title is shown under it.
+            .overlay(alignment: .bottom) {
+                if card.picture == nil, !isCircle, !card.title.isEmpty {
+                    Text(card.title)
+                        .sduiFont("title", weight: .semibold)
+                        .foregroundStyle(palette.text)
+                        .multilineTextAlignment(.center)
+                        .lineLimit(3)
+                        .minimumScaleFactor(0.7)
+                        .padding(layout.sp("s"))
+                        .frame(maxWidth: .infinity)
+                        .accessibilityHidden(true)
+                }
+            }
             .overlay(alignment: .topLeading) {
                 if shows("badges") {
                     HStack(spacing: 4) { ForEach(card.badges.prefix(3), id: \.self) { plate($0) } }.padding(layout.sp("xs"))

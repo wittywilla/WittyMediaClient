@@ -52,32 +52,28 @@ public enum GameTransports {
     /// the device's hello. WittyKit has no WebRTC stack of its own.
     nonisolated(unsafe) public static var webRTC: ((_ offer: URLRequest, _ hello: GameHello) -> GameTransport?)?
 
-    /// A transport for one of `GameModes.supported`, for a session; nil for a mode this app
-    /// can't use or an address that can't be made. The second stream needs the device's hello.
-    public static func make(mode: String, session: String, client: WittyClient, hello: GameHello? = nil) -> GameTransport? {
+    /// A transport for one of `GameModes.supported`, for a session, opened with the device's hello; nil for
+    /// a mode this app can't use or an address that can't be made.
+    public static func make(mode: String, session: String, client: WittyClient, hello: GameHello) -> GameTransport? {
         switch mode {
         case GameModes.streamWebRTC:
-            guard let hello, let request = client.gameStreamOfferRequest(session) else { return nil }
+            guard let request = client.gameStreamOfferRequest(session) else { return nil }
             return webRTC?(request, hello)
         case GameModes.streamWebSocket:
-            guard let hello, let request = client.gameStreamRequest(session) else { return nil }
+            guard let request = client.gameStreamRequest(session) else { return nil }
             return GameWebSocketTransport(request: request, hello: hello)
-        case "ws-h264", "ws-jpeg":
-            guard let request = client.gameSocketRequest(session, video: GameModes.video(for: mode)) else { return nil }
-            return GameWebSocketTransport(request: request)
         default:
             return nil
         }
     }
 }
 
-/// A game over a WebSocket: binary media first-byte tagged, events as text, controller states up
-/// the same socket. Without a hello, the first stream (`GET /play/{sid}/ws?video=h264|jpeg`). With
-/// one, the second (`GET /play/{sid}/stream`): the hello goes first, frames carry timestamps, and
-/// how late they arrive goes back twice a second.
+/// A game over the stream's WebSocket (`GET /play/{sid}/stream`): the hello goes first, then binary media
+/// first-byte tagged with timestamps, events as text, controller states up the same socket, and how late
+/// frames arrive goes back twice a second.
 public final class GameWebSocketTransport: NSObject, GameTransport, URLSessionWebSocketDelegate, @unchecked Sendable {
     private let request: URLRequest
-    private let hello: GameHello?
+    private let hello: GameHello
     private let queue = DispatchQueue(label: "wittyplay.socket")
     private var delay = ArrivalDelay()
     private var reports: DispatchSourceTimer?
@@ -90,12 +86,10 @@ public final class GameWebSocketTransport: NSObject, GameTransport, URLSessionWe
     public var onEvent: (@Sendable (GameEvent) -> Void)?
     public var onEnd: (@Sendable (GameTransportEnd) -> Void)?
 
-    public init(request: URLRequest, hello: GameHello? = nil) {
+    public init(request: URLRequest, hello: GameHello) {
         self.request = request
         self.hello = hello
     }
-
-    public var isSecondStream: Bool { hello != nil }
 
     public func open() {
         let config = URLSessionConfiguration.ephemeral
@@ -109,10 +103,8 @@ public final class GameWebSocketTransport: NSObject, GameTransport, URLSessionWe
         self.session = session
         self.task = task
         task.resume()
-        if let hello {
-            task.send(.string(hello.text())) { _ in }
-            startReports()
-        }
+        task.send(.string(hello.text())) { _ in }
+        startReports()
         receive()
     }
 
@@ -129,10 +121,6 @@ public final class GameWebSocketTransport: NSObject, GameTransport, URLSessionWe
     }
 
     private func take(_ data: Data) {
-        guard hello != nil else {
-            if let message = GameStreamMessage.parse(data) { onMessage?(message) }
-            return
-        }
         guard let parsed = GameStreamV2.parse(data) else { return }
         let message = parsed.message
         if let timing = parsed.timing {
