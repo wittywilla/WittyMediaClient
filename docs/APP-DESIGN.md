@@ -568,7 +568,7 @@ A single column, gutter 16, at most 640 wide and centred on a tablet; it scrolls
 | | `rowControllers` Controllers | `dpad` / `gamepad`, `#3e5bd0` | | `/controllers` | with a games library |
 | `groupDevice` | `rowTheme` Theme | `paintpalette` / `palette`, `#0e7c6f` | the theme's name | Theme (native) | everyone |
 | | `rowAway` From away | `dot.radiowaves.left.and.right` / `settings_input_antenna`, `#0a6fb8` | how the server is reached from away while it is (`Peer to peer · direct`), otherwise `awayReady` or `awayNotSetUp` | From away (native) | where the app has the connecting library |
-| `groupServer` | `rowLibraries` Libraries | `books.vertical` / `video_library`, `#5d6474` | | `/settings/libraries` | admins |
+| `groupServer` | `rowLibraries` Libraries | `books.vertical` / `video_library`, `#5d6474` | | `/manage/libraries` (SDUI page `manage-libraries`, drawn by the app, on a TV too; a library opens `/manage/library/{id}` as a layer) | admins |
 | | `rowMetadata` Metadata and artwork | `photo.on.rectangle` / `image_search` | | `/settings/metadata` | admins |
 | | `rowFixMatches` Fix matches | `wand.and.stars` / `auto_fix_high` | | `/fix-matches` | admins |
 | | `rowPlayback` Playback and discs | `play.rectangle` / `smart_display` | | `/settings/playback` | admins |

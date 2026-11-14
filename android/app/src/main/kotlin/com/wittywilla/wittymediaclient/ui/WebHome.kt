@@ -240,7 +240,7 @@ private fun EmptyCard(nav: Nav, parts: HomeParts, modifier: Modifier) {
         else "Nothing was found in their folders yet. Check the folders in Settings, Libraries, then scan again.",
         modifier,
     ) {
-        if (parts.admin && !scanning) WebButton("Open library settings", { nav.push(Route.Page("/settings/libraries", "Libraries")) }, WebButtonKind.Secondary)
+        if (parts.admin && !scanning) WebButton("Open library settings", { nav.go(nav.sduiRouter.resolve("/manage/libraries")) }, WebButtonKind.Secondary)
     }
 }
 
@@ -426,14 +426,14 @@ private fun LibraryTile(name: String, sub: String, icon: ImageVector, add: Boole
 private fun LibraryTiles(nav: Nav, libraries: List<Library>, admin: Boolean, preview: Boolean) {
     if (libraries.isEmpty()) return
     Column(Modifier.padding(bottom = if (preview) 0.dp else 28.dp)) {
-        if (!preview) HubHead("Your libraries", if (admin) "Manage" else null) { nav.push(Route.Page("/settings/libraries", "Libraries")) }
+        if (!preview) HubHead("Your libraries", if (admin) "Manage" else null) { nav.go(nav.sduiRouter.resolve("/manage/libraries")) }
         val rows = (libraries.map<Library, Library?> { it } + if (admin) listOf(null) else emptyList()).chunked(2)
         Column(Modifier.padding(horizontal = if (preview) 0.dp else 16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             rows.forEach { pair ->
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     pair.forEach { l ->
                         if (l != null) LibraryTile(l.name, countWords(l), WebIcons.forLibrary(l.type), false, Modifier.weight(1f)) { nav.open(l) }
-                        else LibraryTile("Add a library", "Another folder of media", WebIcons.Plus, true, Modifier.weight(1f)) { nav.push(Route.Page("/settings/libraries", "Libraries")) }
+                        else LibraryTile("Add a library", "Another folder of media", WebIcons.Plus, true, Modifier.weight(1f)) { nav.go(nav.sduiRouter.resolve("/manage/libraries")) }
                     }
                     if (pair.size == 1) Spacer(Modifier.weight(1f))
                 }

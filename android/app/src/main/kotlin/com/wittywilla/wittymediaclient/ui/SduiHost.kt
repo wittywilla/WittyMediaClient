@@ -6,6 +6,7 @@ import android.content.Intent
 import android.net.Uri
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.runtime.Composable
@@ -28,6 +29,10 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.TextUnit
+import androidx.compose.ui.semantics.LiveRegionMode
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.liveRegion
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.Lifecycle
@@ -150,6 +155,7 @@ fun SduiPageScreen(nav: Nav, page: String, params: Map<String, String>, top: Boo
     var problem by remember { mutableStateOf<SduiProblem?>(null) }
     var offline by remember { mutableStateOf(false) }
     var refreshing by remember { mutableStateOf(false) }
+    var settled by remember { mutableStateOf("") }
     var attempt by remember { mutableIntStateOf(0) }
     var toast by remember { mutableStateOf("") }
     var customising by rememberSaveable { mutableStateOf(false) }
@@ -233,7 +239,13 @@ fun SduiPageScreen(nav: Nav, page: String, params: Map<String, String>, top: Boo
             val fresh = withContext(Dispatchers.Default) { client.refreshed(page, forWhat, have.base) }
             if (fresh != null && shownFor == forWhat) {
                 val now = model
-                model = withContext(Dispatchers.Default) { now?.withBase(fresh)?.ready() }
+                val next = withContext(Dispatchers.Default) { now?.withBase(fresh)?.ready() }
+                // What was in progress has settled: TalkBack reads the first row that changed, once.
+                if (now != null && next != null && now.base.meta.refreshSec > 0 && fresh.meta.refreshSec <= 0) {
+                    val before = now.screen.visible.associate { it.id to it.label }
+                    next.screen.visible.firstOrNull { it.label.isNotEmpty() && before[it.id] != it.label }?.let { settled = it.label }
+                }
+                model = next
             }
             offline = false
         } catch (e: CancellationException) {
@@ -253,8 +265,27 @@ fun SduiPageScreen(nav: Nav, page: String, params: Map<String, String>, top: Boo
     val etag = model?.base?.meta?.etag
     val ttl = model?.base?.meta?.ttlSeconds ?: 0
     val owner = LocalLifecycleOwner.current
-    LaunchedEffect(client, etag, ttl, owner) {
-        if (etag == null) return@LaunchedEffect
+    // Something on it is in progress: asked again refreshSec after each answer while it shows (not under a layer, not
+    // with the app away), and straight away on coming back; drawn quietly over what is there. It stands in for ttl.
+    val hint = (model?.base?.meta?.refreshSec ?: 0).coerceIn(0, 300)
+    val covered = !layered && nav.layer != null
+    val wasCovered = remember { booleanArrayOf(false) }
+    LaunchedEffect(client, etag, hint, covered, owner) {
+        val uncovered = wasCovered[0] && !covered
+        wasCovered[0] = covered
+        if (etag == null || hint <= 0 || covered) return@LaunchedEffect
+        var back = uncovered
+        owner.lifecycle.repeatOnLifecycle(Lifecycle.State.STARTED) {
+            if (back) refresh()
+            back = true
+            while (true) {
+                delay(hint * 1000L)
+                refresh()
+            }
+        }
+    }
+    LaunchedEffect(client, etag, ttl, owner, hint) {
+        if (etag == null || hint > 0) return@LaunchedEffect
         var first = true
         owner.lifecycle.repeatOnLifecycle(Lifecycle.State.STARTED) {
             if (!first) refresh()
@@ -395,7 +426,8 @@ fun SduiPageScreen(nav: Nav, page: String, params: Map<String, String>, top: Boo
         asking?.let { ask ->
             SduiConfirm(ask.confirm, ask.spec.label.ifEmpty { "Yes" }, { asking = null; runCommand(ask) }, { asking = null })
         }
+        Box(Modifier.size(1.dp).semantics { liveRegion = LiveRegionMode.Polite; contentDescription = settled })
         if (!layered) nav.layer?.let { SduiLayer(nav, it) { nav.layer = null } }
-        if (toast.isNotEmpty()) Toast(toast, { toast = "" }, Modifier.align(Alignment.BottomCenter).padding(bottom = if (metrics.tv) metrics.u(60) else LocalBottomRoom.current - 4.dp))
+        if (toast.isNotEmpty()) Toast(toast, { toast = "" }, Modifier.align(Alignment.BottomCenter).padding(bottom = if (metrics.tv) metrics.u(60) else (LocalBottomRoom.current - 4.dp).coerceAtLeast(16.dp)))
     }
 }

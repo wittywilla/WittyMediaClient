@@ -170,6 +170,7 @@ fun YouScreen(nav: Nav, s: Map<String, String>) {
     )
     fun open(row: YouRow) {
         val title = s[row.key].orEmpty()
+        (row.opens as? YouOpens.Sdui)?.let { nav.go(nav.sduiRouter.resolve(it.path)); return }
         nav.push(
             when (val opens = row.opens) {
                 is YouOpens.Native -> when (opens.screen) {
@@ -180,6 +181,7 @@ fun YouScreen(nav: Nav, s: Map<String, String>) {
                     YouNative.WatchParty -> RemoteRoute.Party(null)
                     else -> Route.You(opens.screen)
                 }
+                is YouOpens.Sdui -> return
                 is YouOpens.Page -> if (nav.app.isTv) Route.OnPhone(title, opens.path) else Route.Page(opens.path, title)
             },
         )

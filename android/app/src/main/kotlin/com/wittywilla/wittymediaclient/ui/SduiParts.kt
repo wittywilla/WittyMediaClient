@@ -1003,14 +1003,17 @@ fun SduiLine(view: SduiView, parent: SduiView) {
             DisposableEffect(view.id) {
                 onDispose { if (env.tv && System.nanoTime() - held[0] < VANISH_NS) memory.vanished = parent.id to at }
             }
+            // A row with focus that stops doing anything for a while (a scan choice while the library scans) keeps focus,
+            // so a remote stays on it through the page's refreshes and it works again when the server says so.
+            val holding = held[0] == -1L
             Pressable(
                 { env.act(view.node.action) },
-                Modifier.fillMaxWidth().focusProperties { canFocus = press }.onFocusChanged {
+                Modifier.fillMaxWidth().focusProperties { canFocus = press || holding }.onFocusChanged {
                     if (it.isFocused || held[0] == -1L) held[0] = if (it.isFocused) -1L else System.nanoTime()
                     if (it.isFocused && succeeds) memory.vanished = null
                 },
                 shape = RoundedCornerShape(env.pt(10)), fill = Color.Transparent, label = view.label, enabled = press, disabledAlpha = 1f,
-                focusKey = focusKey, requestFocus = start, takeFocus = succeeds, ring = env.tv && press, pressScale = 1f,
+                focusKey = focusKey, requestFocus = start, takeFocus = succeeds, ring = env.tv && (press || holding), pressScale = 1f,
             ) {
                 Row(Modifier.fillMaxWidth().heightIn(min = env.pt(if (env.tv) 90 else if (dense) 44 else 56)).padding(horizontal = env.pt(if (env.tv) 24 else 4)).clearAndSetSemantics { }, verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(env.space("s"))) {
                     val box = env.pt(if (env.tv) 66 else if (dense) 28 else 40)
