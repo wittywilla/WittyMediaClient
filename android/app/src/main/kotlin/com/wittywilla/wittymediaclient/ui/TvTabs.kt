@@ -314,7 +314,11 @@ private fun TvTabPill(nav: Nav, tab: TvTab, requester: FocusRequester, modifier:
     val person = if (me == null) "" else avatarName(me.displayName, me.name)
     Pressable(
         {
-            if (!chosen) {
+            val route = tab.route
+            if (route is Route.Sdui && com.wittywilla.wittymediaclient.net.WittyPlayPlace.isPlayPage(route.page)) {
+                // WittyPlay opens over everything in its own frame, as on Apple TV; Back comes back to this bar.
+                nav.push(route)
+            } else if (!chosen) {
                 // The tab opens with focus still on its pill, rather than on its page's own first focus.
                 nav.focusFor(tab.route.key).last = pillKey(tab.route)
                 nav.reset(tab.route)
