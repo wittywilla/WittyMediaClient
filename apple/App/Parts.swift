@@ -46,6 +46,27 @@ struct ProblemLine: View {
     }
 }
 
+/// The app's notice (`AppModel.notice`), with a × that closes it.
+struct AppNoticeLine: View {
+    @EnvironmentObject private var model: AppModel
+    @Environment(\.palette) private var palette
+
+    var body: some View {
+        if !model.notice.isEmpty {
+            HStack(alignment: .top, spacing: Tokens.Space.s2) {
+                ProblemLine(model.notice).frame(maxWidth: .infinity, alignment: .leading)
+                Button { model.closeNotice() } label: {
+                    Image(systemName: "xmark").font(.subheadline.weight(.semibold)).foregroundStyle(palette.textSecondary)
+                        .frame(minWidth: 44, minHeight: 44)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("Close this notice")
+            }
+        }
+    }
+}
+
 /// A whole screen that couldn't load, with a way forward. Never a dead end: on a TV these buttons
 /// are also what the remote's focus lands on.
 struct ProblemView: View {

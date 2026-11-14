@@ -254,7 +254,7 @@ struct SDUIPageBody: View {
                 }
                 if let over = screen.document.screenTime { SDUIScreenTimeNote(over: over) }
                 if offline { SDUIOfflineNote() }
-                if !model.notice.isEmpty { ProblemLine(model.notice).padding(.horizontal, layout.margin) }
+                AppNoticeLine().padding(.horizontal, layout.margin)
                 ForEach(sections) { SDUINodeView(element: $0) }
                 // A disc's own sections (its titles, why this title is the film, versions, episodes) are the app's,
                 // under the server's title page, as the website keeps them.

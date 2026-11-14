@@ -241,6 +241,14 @@ final class AppModel: ObservableObject {
     @Published var video: PlaybackModel?
     /// Something worth saying that isn't a failure of the screen in front of the person.
     @Published var notice = ""
+    static let keychainNoticeClosed = "keychainNoticeClosed"
+
+    /// The notice closed by its ×. The one about the keychain stays closed on this device: on a copy that isn't signed
+    /// it would otherwise come back at every sign-in.
+    func closeNotice() {
+        if notice.hasPrefix("This copy of the app isn't signed") { UserDefaults.standard.set(true, forKey: Self.keychainNoticeClosed) }
+        notice = ""
+    }
     /// What this server can do, by the names in its `/capabilities`. Everything newer than the app's first
     /// version is offered only when its name is here, so an older server just doesn't show it.
     @Published private(set) var features: Set<String> = []
@@ -895,7 +903,9 @@ final class AppModel: ObservableObject {
     /// The address, the key it proved and the token are kept together.
     func signedIn(token: String, user: User? = nil) {
         let kept = current ?? SavedServer(url: client.base, name: "WittyMediaServer")
-        notice = Keychain.save(token: token, pin: kept.publicKey) ? "" : KeychainWords.notice(status: Keychain.lastFailure)
+        let keptSignIn = Keychain.save(token: token, pin: kept.publicKey)
+        // A notice the person closed for good (an unsigned test copy's) isn't said again at every sign-in.
+        notice = keptSignIn || UserDefaults.standard.bool(forKey: Self.keychainNoticeClosed) ? "" : KeychainWords.notice(status: Keychain.lastFailure)
         server = kept.url
         remember(kept)
         client = connection(to: kept.url, token: token)

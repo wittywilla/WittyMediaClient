@@ -280,7 +280,7 @@ struct YouView: View {
                 ScrollView {
                     VStack(spacing: Tokens.Space.s6) {
                         header
-                        if !model.notice.isEmpty { ProblemLine(model.notice) }
+                        AppNoticeLine()
                         groups
                         thisServer
                     }
