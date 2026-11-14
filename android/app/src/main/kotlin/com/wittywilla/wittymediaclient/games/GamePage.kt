@@ -19,6 +19,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBars
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBars
@@ -165,6 +166,7 @@ fun GamePageScreen(nav: GamesNav, gameId: Long) {
                         Box(m.aspectRatio(0.75f), contentAlignment = Alignment.BottomCenter) {
                             if (g.hasPoster) GamePicture(api.posterUrl(g, 800), g.title, Modifier.fillMaxSize().clip(RoundedCornerShape(10.dp)))
                             else GamePlaceholder(g.title, console?.shortName.orEmpty(), Modifier.fillMaxSize().clip(RoundedCornerShape(10.dp)))
+                            if (auto != null) GameRibbon(Modifier.align(Alignment.TopEnd).padding(end = 12.dp).offset(y = (-4).dp))
                         }
                     }
                     val info = @Composable { m: Modifier ->
@@ -174,7 +176,7 @@ fun GamePageScreen(nav: GamesNav, gameId: Long) {
                             Text(g.title, color = GameColours.text, fontSize = look.display, fontWeight = FontWeight.Bold, textAlign = TextAlign.Start)
                             if (g.tagline.isNotEmpty()) Text(g.tagline, color = GameColours.secondary, fontSize = if (look.tv) look.body else 17.sp, textAlign = TextAlign.Start)
                             val facts = listOfNotNull(
-                                console?.name?.ifEmpty { null }, g.year?.toString(), details?.players?.takeIf { it > 0 }?.let { GameWords.players(it) },
+                                console?.name?.ifEmpty { null }?.takeIf { wide }, g.year?.toString(), details?.players?.takeIf { it > 0 }?.let { GameWords.players(it) },
                                 g.contentRating.ifEmpty { null }, g.rating?.let { "★ %.1f".format(it) }, g.genres.take(3).joinToString(", ").ifEmpty { null },
                             )
                             if (facts.isNotEmpty()) Text(facts.joinToString("  ·  "), color = GameColours.secondary, fontSize = look.small, textAlign = TextAlign.Start)
@@ -209,9 +211,13 @@ fun GamePageScreen(nav: GamesNav, gameId: Long) {
                                 }
                             } else {
                                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
-                                    if (ready) GameButton(if (resumes) "Resume" else "Play", playIt, Modifier.weight(1f), kind = ButtonKind.Primary, icon = GameIcons.Play, focusRequester = playButton)
-                                    favourite()
-                                    if (ready) GameIconButton(GameIcons.More, "More for this game", { moreOpen = !moreOpen }, on = moreOpen)
+                                    if (ready) GameButton(if (resumes) "Resume" else "Play", playIt, Modifier.weight(1f), kind = ButtonKind.Primary, icon = GameIcons.Play, focusRequester = playButton, pill = true)
+                                    mine?.let { m ->
+                                        GameIconButton(GameIcons.Star, if (m.favourite) "Favourite" else "Add to favourites", {
+                                            scope.launch { runCatching { api.setFavourite(g.id, !m.favourite) }.onSuccess { mine = it } }
+                                        }, on = m.favourite, tint = if (m.favourite) Color(0xFFFFC94D) else null, focusRequester = favouriteButton, pill = true)
+                                    }
+                                    if (ready) GameIconButton(GameIcons.More, "More for this game", { moreOpen = !moreOpen }, on = moreOpen, pill = true)
                                 }
                             }
                             if (moreOpen && ready) {
@@ -365,10 +371,11 @@ fun GamePageScreen(nav: GamesNav, gameId: Long) {
 @Composable
 private fun ResumeCard(api: GamesApi, g: GameItem, auto: GameSave, words: Map<String, String>, onClick: () -> Unit) {
     val look = gameLook()
-    Pressable(onClick, Modifier.border(1.dp, GameColours.border, RoundedCornerShape(10.dp)), fill = GameColours.panel, label = "Resume from ${GameWords.ago(auto.updatedAt)}") {
+    Pressable(onClick, Modifier.fillMaxWidth().border(1.dp, GameColours.border, RoundedCornerShape(14.dp)), fill = GameColours.panel, radius = 14.dp, label = "Resume from ${GameWords.ago(auto.updatedAt)}") {
         Row(Modifier.padding(8.dp).padding(end = 8.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
             Box(Modifier.width(if (look.tv) 64.dp else 96.dp).aspectRatio(4f / 3f).clip(RoundedCornerShape(4.dp)).background(GameColours.card)) {
-                if (auto.hasThumb) GamePicture(api.saveThumbUrl(g.id, 0, auto.updatedAt), "", Modifier.fillMaxSize())
+                if (auto.hasThumb) GamePicture(api.saveThumbUrl(g.id, 0, auto.updatedAt), "", Modifier.fillMaxSize(), contentScale = ContentScale.Crop)
+                GameRibbon(Modifier.align(Alignment.TopEnd).padding(end = 8.dp), height = 26.dp)
             }
             Column {
                 Text(words["wpWhereYouLeftOff"] ?: "Where you left off", color = GameColours.text, fontSize = look.body, fontWeight = FontWeight.SemiBold)
