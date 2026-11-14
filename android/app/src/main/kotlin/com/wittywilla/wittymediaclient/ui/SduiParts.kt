@@ -591,7 +591,8 @@ fun SduiDetailHeader(view: SduiView) {
                         view.text["facts"]?.let { SduiFacts(it, lines = 1) }
                         view.text["overview"]?.let { Text(it, color = scheme.onBackground.copy(alpha = 0.86f), fontSize = env.size("body"), maxLines = view.line("overview", 4), overflow = TextOverflow.Ellipsis) }
                         view.progress?.let { SduiProgressLine(it, Modifier.padding(top = env.space("xs")).widthIn(max = env.pt(600))) }
-                        Row(Modifier.padding(top = env.space("xs")).remoteRow(), horizontalArrangement = Arrangement.spacedBy(env.pt(16))) {
+                        // The buttons centred under the words, as on every device.
+                        Row(Modifier.fillMaxWidth().padding(top = env.space("xs")).remoteRow(), horizontalArrangement = Arrangement.spacedBy(env.pt(16), Alignment.CenterHorizontally)) {
                             buttons.forEachIndexed { i, button ->
                                 val main = button.primary || (i == 0 && buttons.none { it.primary })
                                 SduiActionButton(button, focusKey = "${view.id}~${button.id}", requestFocus = main && view.id == env.screen.focus.default)
@@ -632,8 +633,9 @@ fun SduiDetailHeader(view: SduiView) {
                 val main = buttons.firstOrNull { it.primary }
                 val rest = buttons.filter { it !== main }
                 if (main != null) SduiActionButton(main, focusKey = "${view.id}~${main.id}", modifier = Modifier.padding(horizontal = side).padding(top = env.space("m")), wide = !env.tablet)
-                // The other actions: icons with their names under them, in a row that scrolls when there are many.
-                if (rest.isNotEmpty()) Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(horizontal = side).padding(top = env.space("s")), horizontalArrangement = Arrangement.spacedBy(env.space("xs"))) {
+                // The other actions: icons with their names under them, centred, in a row that scrolls when there are many.
+                if (rest.isNotEmpty()) BoxWithConstraints(Modifier.fillMaxWidth().padding(top = env.space("s"))) {
+                Row(Modifier.horizontalScroll(rememberScrollState()).widthIn(min = maxWidth).padding(horizontal = side), horizontalArrangement = Arrangement.spacedBy(env.space("xs"), Alignment.CenterHorizontally)) {
                     rest.forEach { button ->
                         Pressable({ env.act(button.action) }, Modifier.widthIn(min = 72.dp).heightIn(min = 56.dp), shape = RoundedCornerShape(10.dp), fill = Color.Transparent, label = button.label, ring = false) {
                             Column(Modifier.padding(horizontal = 8.dp, vertical = 6.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(4.dp)) {
@@ -642,6 +644,7 @@ fun SduiDetailHeader(view: SduiView) {
                             }
                         }
                     }
+                }
                 }
                 view.text["overview"]?.let { words ->
                     // Four lines, and More to read the rest.
@@ -857,11 +860,15 @@ private fun SduiSeasonHead(view: SduiView, side: Dp) {
     val env = LocalSdui.current
     val seasons = seasonOptions(view)
     var open by remember { mutableStateOf(false) }
+    Column(Modifier.fillMaxWidth()) {
     Row(Modifier.fillMaxWidth().padding(horizontal = side).padding(bottom = env.space("xs")), verticalAlignment = Alignment.CenterVertically) {
         Text(view.props.str("title").ifEmpty { "Episodes" }, color = MaterialTheme.colorScheme.onBackground, fontSize = env.size("title"), fontWeight = FontWeight.SemiBold, modifier = Modifier.weight(1f).semantics { heading() })
         val current = seasons.firstOrNull { it.third }
         if (current != null && seasons.size > 1) SduiChoicePill(current.first, view.id + "~season") { open = true }
         else if (current != null) Text(current.first, color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = env.size("caption"))
+    }
+    // Cards or a playlist, as the website's.
+    SduiEpisodeLayout(view, side)
     }
     if (open) SduiChooser("Season", seasons.map { it.first to it.second }, seasons.firstOrNull { it.third }?.second.orEmpty(), { open = false }) { url -> open = false; env.season(view.id, url) }
 }
@@ -892,10 +899,17 @@ fun SduiSeasons(view: SduiView, side: Dp) {
                 }
             }
         }
+        SduiEpisodeLayout(view, side)
+        val list = sduiEpisodesAsList(view)
         when {
             view.deferred -> { LaunchedEffect(view.id) { env.more(view.id, false) }; SduiPlaceholderRow(view, side, 4) }
             view.failed -> SduiFailedLine(view, side)
             view.children.isEmpty() -> SduiEmptyLine(view, side)
+            // The playlist: one line each, down the page.
+            list -> Column(Modifier.fillMaxWidth().padding(horizontal = side - env.pt(24))) {
+                if (view.hasMore) LaunchedEffect(view.children.size) { env.more(view.id, false) }
+                view.children.forEach { SduiEpisodeLine(it, view) }
+            }
             else -> {
                 val state = rememberLazyListState()
                 val wide = env.pt(view.cardWidth.takeIf { it > 0 } ?: 420)
@@ -944,6 +958,11 @@ fun SduiLine(view: SduiView, parent: SduiView) {
             }
         }
         "Card" -> {
+            // A show's episodes as a playlist: a line each, no still.
+            if (parent.type == "SeasonList" && sduiEpisodesAsList(parent)) {
+                SduiEpisodeLine(view, parent)
+                return
+            }
             // An episode on a phone: its still at the left with how far through it is, then its name, length and synopsis.
             val still = env.pt(if (env.tablet) 200 else 136)
             Pressable({ env.act(view.node.action) }, Modifier.fillMaxWidth().padding(vertical = env.space("xs")), shape = RoundedCornerShape(10.dp), fill = Color.Transparent, label = view.label, enabled = press, disabledAlpha = 1f, ring = false, pressScale = 0.99f) {

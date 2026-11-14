@@ -319,7 +319,9 @@ struct SDUIDetailHeaderView: View {
                 Spacer(minLength: 0)
                 words
                 overview
+                // The buttons centred under the words, as on every device.
                 SDUIActionRow(buttons: header.buttons, owner: header.id, ownerFocusable: header.isFocusable)
+                    .frame(maxWidth: .infinity, alignment: .center)
             }
             .frame(maxWidth: 1100, alignment: .leading)
             Spacer(minLength: 0)
@@ -378,34 +380,40 @@ struct SDUIDetailHeaderView: View {
                         .accessibilityIdentifier("sdui.action." + main.id)
                     }
                     if !others.isEmpty {
-                        // The other actions: icons with their names under them.
-                        ScrollView(.horizontal, showsIndicators: false) {
-                            HStack(alignment: .top, spacing: layout.sp("m")) {
-                                ForEach(others) { button in
-                                    Button { actor.perform(button.action) } label: {
-                                        VStack(spacing: 4) {
-                                            Image(systemName: SDUIIcon.symbol(button.icon.isEmpty ? button.id : button.icon, or: "circle"))
-                                                .font(.wm(size: 20, weight: .medium))
-                                                .frame(width: 44, height: 32)
-                                            Text(button.label).sduiFont("caption").lineLimit(1)
-                                        }
-                                        // On (Watch later with the title on the list): in the accent.
-                                        .foregroundStyle(button.pressed ? palette.accentText : palette.text)
-                                        .frame(minWidth: 64, minHeight: 56)
-                                        .contentShape(Rectangle())
-                                    }
-                                    .buttonStyle(.plain)
-                                    .accessibilityLabel(button.label)
-                                    .accessibilityAddTraits(button.pressed ? [.isSelected] : [])
-                                    .accessibilityIdentifier("sdui.action." + button.id)
-                                }
-                            }
+                        // The other actions: icons with their names under them, centred; a row too wide for the screen
+                        // scrolls instead.
+                        ViewThatFits(in: .horizontal) {
+                            otherActions(others).frame(maxWidth: .infinity, alignment: .center)
+                            ScrollView(.horizontal, showsIndicators: false) { otherActions(others) }
                         }
                     }
                     overview
                 }
             }
             .padding(.horizontal, layout.margin)
+        }
+    }
+
+    private func otherActions(_ others: [SDUIButtonModel]) -> some View {
+        HStack(alignment: .top, spacing: layout.sp("m")) {
+            ForEach(others) { button in
+                Button { actor.perform(button.action) } label: {
+                    VStack(spacing: 4) {
+                        Image(systemName: SDUIIcon.symbol(button.icon.isEmpty ? button.id : button.icon, or: "circle"))
+                            .font(.wm(size: 20, weight: .medium))
+                            .frame(width: 44, height: 32)
+                        Text(button.label).sduiFont("caption").lineLimit(1)
+                    }
+                    // On (Watch later with the title on the list): in the accent.
+                    .foregroundStyle(button.pressed ? palette.accentText : palette.text)
+                    .frame(minWidth: 64, minHeight: 56)
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel(button.label)
+                .accessibilityAddTraits(button.pressed ? [.isSelected] : [])
+                .accessibilityIdentifier("sdui.action." + button.id)
+            }
         }
     }
     #endif
