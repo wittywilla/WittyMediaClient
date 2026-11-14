@@ -697,7 +697,7 @@ struct DesignCard: View {
                 // A look's layout: the server's wire as a wireframe in its theme's colours; else a preview from the slot
                 // (`designCardPreview`); else the swatches.
                 if let wire = card.wire {
-                    LayoutThumb(wire: wire, swatches: card.swatches).padding(.bottom, 4)
+                    LayoutThumb(wire: wire, swatches: card.swatches, portrait: card.portrait).padding(.bottom, 4)
                 } else if let shown = preview?.make(card) {
                     shown
                         .accessibilityHidden(true)

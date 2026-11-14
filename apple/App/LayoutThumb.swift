@@ -12,6 +12,8 @@ struct LayoutThumb: View {
     let wire: LayoutWire
     /// Background, second background and accent, as `#rrggbb`.
     let swatches: [String]
+    /// A phone's layout: drawn upright, the shape of a phone's screen, never taller than a phone in the hand.
+    var portrait = false
 
     private func colour(_ index: Int, fallback: String) -> Color {
         let hex = swatches.indices.contains(index) ? swatches[index] : fallback
@@ -24,12 +26,15 @@ struct LayoutThumb: View {
     }
 
     var body: some View {
+        let corner: CGFloat = portrait ? 14 : 6
         Canvas { ctx, size in
             draw(&ctx, size)
         }
-        .aspectRatio(16.0 / 10.0, contentMode: .fit)
-        .clipShape(RoundedRectangle(cornerRadius: 6, style: .continuous))
-        .overlay(RoundedRectangle(cornerRadius: 6, style: .continuous).strokeBorder(Color.gray.opacity(0.4), lineWidth: 1))
+        .aspectRatio(portrait ? 0.56 : 16.0 / 10.0, contentMode: .fit)
+        .clipShape(RoundedRectangle(cornerRadius: corner, style: .continuous))
+        .overlay(RoundedRectangle(cornerRadius: corner, style: .continuous).strokeBorder(Color.gray.opacity(0.4), lineWidth: portrait ? 2 : 1))
+        .frame(maxHeight: portrait ? 420 : nil)
+        .frame(maxWidth: .infinity)
         .accessibilityHidden(true)
     }
 
@@ -64,7 +69,7 @@ struct LayoutThumb: View {
 
         // The menu: what it takes from the page.
         var left: CGFloat = 0, top: CGFloat = 0, bottom: CGFloat = 0
-        let barH = h * 0.12
+        let barH = h * (portrait ? 0.065 : 0.12)
         let barFill: Color = wire.style == "cable" ? accent.opacity(0.9) : surface
         func brandMark(_ x: CGFloat, _ y: CGFloat, _ bw: CGFloat, _ bh: CGFloat) {
             rect(x, y, bw, bh, wire.style == "cable" ? .white : accent, radius: 2)
@@ -122,20 +127,20 @@ struct LayoutThumb: View {
 
         switch wire.home {
         case "hero":
-            let hh = (yEnd - y) * 0.46
+            let hh = (yEnd - y) * (portrait ? 0.3 : 0.46)
             rect(x0, y, pw, hh, surface, radius: r)
             rect(x0, y, pw, hh * 0.5, accent.opacity(0.18), radius: r)
             for i in 0..<3 { rect(x0 + pw * 0.04, y + hh * (0.3 + CGFloat(i) * 0.16), pw * (i == 0 ? 0.34 : 0.24), hh * 0.08, ink.opacity(0.5), radius: 1) }
             rect(x0 + pw * 0.04, y + hh * 0.8, pw * 0.12, hh * 0.12, accent, radius: square ? 0 : 2)
             y += hh + gap
         case "banner":
-            let hh = (yEnd - y) * 0.3
+            let hh = (yEnd - y) * (portrait ? 0.2 : 0.3)
             rect(x0, y, pw, hh, surface, radius: r)
             rect(x0, y, pw * 0.5, hh, accent.opacity(0.18), radius: r)
             for i in 0..<2 { rect(x0 + pw * 0.04, y + hh * (0.25 + CGFloat(i) * 0.25), pw * 0.28, hh * 0.12, ink.opacity(0.5), radius: 1) }
             y += hh + gap
         case "carousel":
-            let hh = (yEnd - y) * 0.55
+            let hh = (yEnd - y) * (portrait ? 0.32 : 0.55)
             for (i, scale) in [0.62, 1.0, 0.62].enumerated() {
                 let cw = hh * 0.62 * scale, chh = hh * scale
                 let cx = x0 + pw / 2 + (CGFloat(i) - 1) * hh * 0.7 - cw / 2
@@ -174,22 +179,33 @@ struct LayoutThumb: View {
             let tiles = wire.home == "tiles"
             switch wire.cards {
             case "landscape", "logo":
-                let n = tiles ? 3 : 4
+                let n = portrait ? 2 : (tiles ? 3 : 4)
                 let cw = (pw - CGFloat(n - 1) * w * 0.015) / CGFloat(n)
                 let ch = min(avail - h * 0.06, cw * (tiles ? 0.8 : 0.56))
-                for i in 0..<n { rect(x0 + CGFloat(i) * (cw + w * 0.015), y + h * 0.05, cw, ch, surface, radius: wire.cards == "logo" ? 2 : r) }
+                let rows = portrait ? max(1, Int((avail - h * 0.02) / (ch + h * 0.06))) : 1
+                for row in 0..<rows {
+                    let yy = y + h * 0.05 + CGFloat(row) * (ch + h * 0.06)
+                    for i in 0..<n { rect(x0 + CGFloat(i) * (cw + w * 0.015), yy, cw, ch, surface, radius: wire.cards == "logo" ? 2 : r) }
+                }
             case "block":
                 let rowsN = max(1, Int((avail - h * 0.05) / (h * 0.11)))
                 let cw = (pw - 5 * w * 0.01) / 6
                 for rr in 0..<rowsN { for cc in 0..<6 { rect(x0 + CGFloat(cc) * (cw + w * 0.01), y + h * 0.05 + CGFloat(rr) * h * 0.11, cw, h * 0.095, (cc + rr) % 3 == 0 ? accent.opacity(0.45) : surface, radius: 0) } }
             default:
-                let ph = max(0, avail - h * 0.06)
+                // Rows of posters: one row on a wide screen, as many as fit on a phone's.
+                let rowH = portrait ? min(max(0, avail - h * 0.06), h * 0.17) : max(0, avail - h * 0.06)
+                let rows = portrait ? max(1, Int((avail - h * 0.02) / (rowH + h * 0.06))) : 1
+                let ph = rowH
                 let cw = ph * 0.62
                 let count = max(1, Int(pw / (cw + w * 0.015)))
-                for i in 0..<count {
-                    let cx = x0 + CGFloat(i) * (cw + w * 0.015)
-                    rect(cx, y + h * 0.05, cw, ph, surface, radius: r)
-                    if wire.cards == "plate" { rect(cx, y + h * 0.05 + ph * 0.72, cw, ph * 0.28, accent.opacity(0.35), radius: r) }
+                for row in 0..<rows {
+                    let yy = y + h * 0.05 + CGFloat(row) * (ph + h * 0.06)
+                    if row > 0 { rect(x0, yy - h * 0.04, pw * 0.3, h * 0.016, ink.opacity(0.4), radius: 1) }
+                    for i in 0..<count {
+                        let cx = x0 + CGFloat(i) * (cw + w * 0.015)
+                        rect(cx, yy, cw, ph, surface, radius: r)
+                        if wire.cards == "plate" { rect(cx, yy + ph * 0.72, cw, ph * 0.28, accent.opacity(0.35), radius: r) }
+                    }
                 }
             }
         }
