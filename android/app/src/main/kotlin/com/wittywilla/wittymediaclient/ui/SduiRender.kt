@@ -169,7 +169,11 @@ fun SduiPageView(
         if (!env.tv) TracksScroll(list)
         // A page's own heading: not on a TV, where the top menu says where you are, nor over a picture, nor on Home.
         // The page's large title, Home's too, as the Apple apps draw it; not over a tall first section (a hero), not on a TV.
-        val heading = title.takeIf { !env.tv && !tallFirst && it.isNotEmpty() }
+        // A layer shows its page's title at its top on a TV as well (docs/SDUI.md, layers).
+        val inLayer = LocalSduiLayerClose.current != null
+        val heading = title.takeIf { (!env.tv || inLayer) && !tallFirst && it.isNotEmpty() }
+        // On a TV the hints bar is drawn once, for a layer that is open, not again for the page under it.
+        val hintsUnder = env.tv && !inLayer && env.nav.layer != null
         val topRoom = if (env.tv) env.space("s") else if (tallFirst && !offline && screenTime == null) 0.dp else LocalTopRoom.current
         // On a TV the screen's bottom edge needs room only when the column reaches it: a Dock or the frame's system dock below
         // already keeps that edge, and the room it took cut the page's tabs off the top to fit a row of cards.
@@ -230,9 +234,9 @@ fun SduiPageView(
                                     // After the system's own small move for what took focus has begun, so this one is the one that stands.
                                     withFrameNanos { }
                                     withFrameNanos { }
-                                    // A section that shows whole with the page's top still in view leaves the page at its
+                                    // A section or row that shows whole with the page's top still in view leaves the page at its
                                     // top: moved up, what's above it (a page's tabs) would be cut to a sliver.
-                                    if (!inner && fitsFromTop(list, at + lead)) {
+                                    if (fitsFromTop(list, at + lead)) {
                                         if (reduce) list.scrollToItem(0) else list.animateScrollToItem(0)
                                         return@launch
                                     }
@@ -272,7 +276,7 @@ fun SduiPageView(
                     LazyColumn(Modifier.fillMaxSize(), state = list, contentPadding = PaddingValues(top = topRoom, bottom = bottomRoom), content = content)
                 }
             } }
-            if (dock != null) SduiScoped(dock, null) { SduiDockBar(dock, side) }
+            if (dock != null && !hintsUnder) SduiScoped(dock, null) { SduiDockBar(dock, side) }
             }
         }
     }
