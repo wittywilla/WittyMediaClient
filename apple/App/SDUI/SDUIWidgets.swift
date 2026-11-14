@@ -435,19 +435,30 @@ struct SDUINoticeView: View {
         return words.isEmpty ? "Dismiss" : words
     }
 
+    /// The main button, then Dismiss, quieter: after it on a TV, a tablet and a computer; below it on a phone
+    /// (docs/SDUI.md, Notice). On a TV each is its own focus stop, the main one first.
     @ViewBuilder private var button: some View {
-        HStack(spacing: layout.sp("s")) {
-            if !notice.shown("button").isEmpty, notice.action != nil, SDUIActor(model: model, center: center, store: store).canPerform(notice.action) {
-                Button(notice.shown("button")) { SDUIActor(model: model, center: center, store: store).perform(notice.action) }
-                    .action()
-                    .sduiFocusable(notice.isFocusable ? focus : nil, notice.id)
-            }
-            if let dismiss {
-                Button(dismissLabel) { SDUIActor(model: model, center: center, store: store).perform(dismiss) }
-                    .action()
-                    .accessibilityHint("Stops showing this")
-                    .accessibilityIdentifier("sdui.notice.dismiss." + notice.id)
-            }
+        if layout.phone {
+            VStack(alignment: .leading, spacing: layout.sp("s")) { main; dismissButton }
+        } else {
+            HStack(spacing: layout.sp("s")) { main; dismissButton }
+        }
+    }
+
+    @ViewBuilder private var main: some View {
+        if !notice.shown("button").isEmpty, notice.action != nil, SDUIActor(model: model, center: center, store: store).canPerform(notice.action) {
+            Button(notice.shown("button")) { SDUIActor(model: model, center: center, store: store).perform(notice.action) }
+                .action()
+                .sduiFocusable(notice.isFocusable ? focus : nil, notice.id)
+        }
+    }
+
+    @ViewBuilder private var dismissButton: some View {
+        if let dismiss {
+            Button(dismissLabel) { SDUIActor(model: model, center: center, store: store).perform(dismiss) }
+                .action(.quiet)
+                .accessibilityHint("Stops showing this")
+                .accessibilityIdentifier("sdui.notice.dismiss." + notice.id)
         }
     }
 
