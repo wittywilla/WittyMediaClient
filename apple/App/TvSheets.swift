@@ -147,31 +147,14 @@ struct GuideDetails: View {
             if later, channel.canTune, ask.cell.kind == .programme, let p {
                 Button(reminded ? "✓ Reminder set" : "Remind me") { Task { onSaid(await reminders.toggle(channel.key, p)) } }.action(selected: reminded)
             }
-            if model.has(TvFeature.catchup), ask.cell.kind != .none, let p, CatchupRules.canWatchFromStart(p, on: channel, now: now) {
+            if ask.cell.kind != .none, let p, CatchupRules.canWatchFromStart(p, on: channel, now: now) {
                 Button { onFromStart(p) } label: { Label("Watch from the start", systemImage: "backward.end") }.action()
             }
-            if channel.canRecord == true, model.household.allows(ProfileFeature.recordings), ask.cell.isBroadcast, ask.cell.end > now, let p, model.has(TvFeature.dvrRules) {
+            if channel.canRecord == true, model.household.allows(ProfileFeature.recordings), ask.cell.isBroadcast, ask.cell.end > now, let p {
                 Button("Record every airing…") { recordingWith = RecordAsk(programme: p, series: true) }.action()
                 Button("Record this…") { recordingWith = RecordAsk(programme: p, series: false) }.action()
-            } else if channel.canRecord == true, model.household.allows(ProfileFeature.recordings), ask.cell.isBroadcast, ask.cell.end > now, let p {
-                Button("Record every airing") {
-                    Task {
-                        do { try await client.recordSeries(channel: channel.key, title: p.title); onSaid("Every airing of \(p.title) will be recorded"); dismiss() }
-                        catch { onSaid((error as? APIError)?.message ?? "That couldn't be recorded.") }
-                    }
-                }
-                .action()
-                Button("Record this") {
-                    Task {
-                        do { try await client.record(channel: channel.key, title: p.title, sub: p.sub, start: p.start, stop: p.end); onSaid("Recording \(p.title)"); dismiss() }
-                        catch { onSaid((error as? APIError)?.message ?? "That couldn't be recorded.") }
-                    }
-                }
-                .action()
             }
-            if model.has(TvFeature.sets) {
-                Button("Add to set…") { adding = true }.action()
-            }
+            Button("Add to set…") { adding = true }.action()
             if model.user?.isAdmin == true, channel.kind == "library" {
                 NavigationLink("Edit channel", value: Route.page("/tv/channels")).action(.quiet)
             }

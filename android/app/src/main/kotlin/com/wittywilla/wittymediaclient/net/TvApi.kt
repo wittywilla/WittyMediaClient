@@ -29,7 +29,7 @@ suspend fun Api.leaveChannel(key: String, viewer: String) {
     call("POST", "/tv/${GuideRules.pathPart(key)}/leave?viewer=${GuideRules.pathPart(viewer)}", "{}")
 }
 
-// A page of the guide's channels with their schedule: see GuideRules.query.
+// A page of the guide's channels with their schedule: see GuidePaging.query.
 suspend fun Api.guidePage(query: String): Guide = read(query)
 
 // Every channel's number and name, for going through them without the schedule.
@@ -77,7 +77,7 @@ suspend fun Api.recordSeries(channel: String, title: String) {
     call("POST", "/recording-rules", json.encodeToString(SeriesAsk.serializer(), SeriesAsk(channel, title)))
 }
 
-// A recording's options, on a server with `tv-dvr-rules-2`: minutes before and after.
+// A recording's options: minutes before and after.
 @Serializable
 private data class PaddedRecordAsk(
     val channel: String,
@@ -89,7 +89,7 @@ private data class PaddedRecordAsk(
     val padAfter: Int,
 )
 
-// A series' options, on a server with `tv-dvr-rules-2`.
+// A series' options.
 @Serializable
 data class SeriesOptions(
     val anyChannel: Boolean = false,
@@ -142,7 +142,7 @@ suspend fun Api.removeReminder(id: Long) {
     call("DELETE", "/tv/reminders/$id")
 }
 
-// Channel sets (`tv-sets`, at /tv-sets): which channels the guide shows, in which order.
+// Channel sets (/tv-sets): which channels the guide shows, in which order.
 suspend fun Api.channelSets(): ChannelSets = read("/tv-sets")
 
 suspend fun Api.channelSet(id: String): ChannelSetDetail = read("/tv-sets/${setPath(id)}")
@@ -188,14 +188,14 @@ suspend fun Api.orderChannelSets(ids: List<String>) {
     call("PUT", "/tv-sets/order", body.toString())
 }
 
-// Every channel of a set (or those matching `q`), with only what the picker and dialling need (`tv-guide-paging`).
+// Every channel of a set (or those matching `q`), with only what the picker and dialling need.
 suspend fun Api.liteChannels(set: String?, q: String = "", limit: Int = 20000): Guide = read(GuidePaging.liteQuery(set, q, limit))
 
 // Where a channel (a number or a key) is in a set, after `q`: -1 when it isn't there.
 suspend fun Api.locateChannel(set: String?, q: String, wanted: String): Int =
     read<Guide>(GuidePaging.liteQuery(set, q, limit = 1, locate = wanted)).located ?: -1
 
-// A programme from its start, on a channel that keeps an archive (`tv-catchup`): the same answer as tune.
+// A programme from its start, on a channel that keeps an archive: the same answer as tune.
 suspend fun Api.catchup(key: String, programme: GuideProgramme, viewer: String): Tuned = read(CatchupRules.path(key, programme, viewer))
 
 @Serializable
@@ -250,6 +250,6 @@ suspend fun Api.saveTvLook(change: Map<String, JsonElement?>) {
 // The server's error words, or a plain fallback: what Apple TV says too.
 fun problemText(e: Throwable, fallback: String): String = (e as? ApiError)?.message?.takeIf { it.isNotEmpty() } ?: fallback
 
-// One programme in full, for More info (feature `tv-programme-info`): `start` is a moment in it, Unix seconds.
+// One programme in full, for More info: `start` is a moment in it, Unix seconds.
 suspend fun Api.programmeInfo(key: String, start: Long): JsonObject =
     json.parseToJsonElement(call("GET", "/tv/${GuideRules.pathPart(key)}/programme?start=$start")) as JsonObject

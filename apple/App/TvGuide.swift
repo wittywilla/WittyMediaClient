@@ -133,7 +133,6 @@ struct GuideView: View {
             store.setPageSize(size, keeping: spot.row)
             moveRow(spot.row)
         }
-        .onChange(of: model.features) { Task { await applyFeatures() } }
         .onAppear { comeBack() }
         // A look changed on another device shows when this one is picked up again.
         .onChange(of: scenePhase) { phase in
@@ -141,7 +140,7 @@ struct GuideView: View {
         }
         .onDisappear { leaveIfDone() }
         .sheet(item: $ask) { a in
-            if !a.day, model.has(TvFeature.programmeInfo), a.channel.canTune || a.programme != nil {
+            if !a.day, a.channel.canTune || a.programme != nil {
                 // WittyTV More info: the programme in full.
                 MoreInfoSheet(channel: a.channel.key, start: a.programme?.start ?? a.cell.start, onWatch: { key in ask = nil; watch(key) },
                               onFromStart: { _, _ in if let p = a.programme { ask = nil; fromStart(a.channel, p) } else { ask = nil } })
@@ -169,7 +168,7 @@ struct GuideView: View {
                   primaryButton: .default(Text("Show all channels")) { showAll(thenRow: e.row) }, secondaryButton: .cancel())
         }
         .sheet(isPresented: $channelsOpen, onDismiss: runAfterSheet) {
-            GuideChannelsSheet(setName: store.hasSets ? setName : nil, canFind: store.hasPaging, isAdmin: model.user?.isAdmin == true,
+            GuideChannelsSheet(setName: setName, canFind: true, isAdmin: model.user?.isAdmin == true,
                                total: store.total ?? 0, pageStart: store.pageStart, pageSize: store.pageSize) { action in
                 afterSheet = {
                     switch action {
@@ -218,7 +217,7 @@ struct GuideView: View {
                       next: GuideRules.next(after: currentCell?.programme(at: spot.at), cell: currentCell, on: current), now: now,
                       preview: previewKey, onWatch: watch, onDetails: { details(day: false) }, onDay: { details(day: true) },
                       onFavourite: favourite, onStep: { moveRow(spot.row + $0) }, onRecord: record, onSaid: say,
-                      onFromStart: model.has(TvFeature.catchup) ? { if let current, let p = currentCell?.programme(at: spot.at) { fromStart(current, p) } } : nil)
+                      onFromStart: { if let current, let p = currentCell?.programme(at: spot.at) { fromStart(current, p) } })
             if !store.error.isEmpty {
                 Text(store.error).font(dress.font(25, .bold)).foregroundStyle(dress.paint.err)
                     .frame(maxWidth: .infinity, alignment: .leading).padding(.horizontal, dress.edge).padding(.vertical, 8).background(dress.paint.panel)
@@ -415,8 +414,8 @@ struct GuideView: View {
                  remind: { cell in if let channel, let p = cell.programme { remind(channel, p) } },
                  favourite: { if let channel { favourite(channel) } },
                  watch: { if let channel { watch(channel.key) } },
-                 fromStart: model.has(TvFeature.catchup) ? { cell in if let channel, let p = cell.programme(at: max(cell.start, from)) { fromStart(channel, p) } } : nil,
-                 addToSet: store.hasSets ? { if let channel { adding = channel } } : nil)
+                 fromStart: { cell in if let channel, let p = cell.programme(at: max(cell.start, from)) { fromStart(channel, p) } },
+                 addToSet: { if let channel { adding = channel } })
             .equatable()
             .frame(height: dress.rowHeight)
     }
@@ -449,7 +448,7 @@ struct GuideView: View {
     // MARK: What happens
 
     private func start() async {
-        store.use(client, features: model.features)
+        store.use(client)
         store.setPageSize(device.pageSize, keeping: 0)
         async let lookLoaded: Void = looks.load(client: client, themeId: model.effectiveThemeId, app: model.tvAppColours)
         async let remindersLoaded: Void = reminders.load(client: client)
@@ -466,21 +465,10 @@ struct GuideView: View {
 
     /// The set this device chose on this server, while it's still there; otherwise all channels.
     private func applySets() async {
-        guard store.hasSets else { return }
         let id = await store.loadSets(remembered: device.set(for: GuideDevice.setKey(model: model, client: client)))
         if store.filter.set != id { store.setFilter(.init(set: id)) }
     }
 
-    /// The server said what it can do after the guide opened: sets and finding channels come on.
-    private func applyFeatures() async {
-        guard model.features != store.features else { return }
-        let hadSets = store.hasSets
-        store.use(client, features: model.features)
-        if store.hasSets, !hadSets {
-            await applySets()
-            await store.ensure(0)
-        }
-    }
 
     /// The sets again, after one was made, changed or deleted. One on screen that has gone is all channels again.
     private func reloadSets() async {
@@ -504,12 +492,8 @@ struct GuideView: View {
 
     /// All channels, then a row of them.
     private func showAll(thenRow r: Int) {
-        if store.hasSets {
-            device.remember(ChannelSetRules.all, for: GuideDevice.setKey(model: model, client: client))
-            store.setFilter(.init(set: ChannelSetRules.all))
-        } else {
-            store.setFilter(.init())
-        }
+        device.remember(ChannelSetRules.all, for: GuideDevice.setKey(model: model, client: client))
+        store.setFilter(.init(set: ChannelSetRules.all))
         Task { await store.ensure(r); moveRow(r) }
     }
 
@@ -707,7 +691,7 @@ struct GuideView: View {
                 goAt(hit.start, row: i)
                 await store.ensure(i)
             } else {
-                store.setFilter(.init(set: store.hasSets ? ChannelSetRules.all : ""))
+                store.setFilter(.init(set: ChannelSetRules.all))
                 let i = await store.locate(hit.channel) ?? 0
                 goAt(hit.start, row: i)
                 await store.ensure(i)

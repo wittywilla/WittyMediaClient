@@ -142,7 +142,7 @@ struct RecordingsView: View {
             if r.status == "done" {
                 Button { play(r) } label: { Label("Play", systemImage: "play.fill") }.buttonStyle(TvButtonStyle(dress: dress, on: true))
             }
-            if let info = r.moreInfo, model.has(TvFeature.programmeInfo) {
+            if let info = r.moreInfo {
                 Button { moreInfo = MoreInfoAsk(channel: info.channel, start: info.start) } label: { Label("More info", systemImage: "info.circle") }
                     .buttonStyle(TvButtonStyle(dress: dress))
             }
@@ -163,14 +163,13 @@ struct RecordingsView: View {
         return HStack(spacing: 16) {
             VStack(alignment: .leading, spacing: 2) {
                 Text(rule.title).font(dress.font(25, .bold)).foregroundStyle(p.text)
-                Text(rule.anyChannel == true ? "Every airing, on any channel" : "Every airing on \(rule.channel)").font(dress.font(18.75)).foregroundStyle(p.soft)
-                let options = RecordingOptions(padBefore: rule.padBefore ?? 0, padAfter: rule.padAfter ?? 0, newOnly: rule.newOnly ?? false, keep: rule.keep ?? 0).seriesWords
+                Text(rule.anyChannel ? "Every airing, on any channel" : "Every airing on \(rule.channel)").font(dress.font(18.75)).foregroundStyle(p.soft)
+                // The line above already says whether it's any channel.
+                let options = RecordingOptions(padBefore: rule.padBefore, padAfter: rule.padAfter, newOnly: rule.newOnly, keep: rule.keep).seriesWords
                 if !options.isEmpty { Text(options).font(dress.font(16.25)).foregroundStyle(p.soft) }
             }
             .frame(maxWidth: .infinity, alignment: .leading)
-            if model.has(TvFeature.dvrRules) {
-                Button("Options") { changing = rule }.buttonStyle(TvButtonStyle(dress: dress))
-            }
+            Button("Options") { changing = rule }.buttonStyle(TvButtonStyle(dress: dress))
             Button("Stop") { stop(rule) }.buttonStyle(TvButtonStyle(dress: dress))
         }
         .padding(.horizontal, 12).padding(.vertical, 8)

@@ -182,8 +182,8 @@ public enum GuideRules {
             && (!favourites || channel.favourite == true)
     }
 
-    /// What the server is asked for: a stretch of the schedule, a page of channels, and a filter. `set` and `q` are
-    /// only sent when there is one, so an older server is asked exactly what it always was.
+    /// What the server is asked for: a stretch of the schedule, a page of channels, a set, and a filter. `set` and `q`
+    /// are left out when there is none: all channels, every name.
     public static func query(from: Int64, offset: Int, limit: Int = page, kind: String = "", group: String = "", favourites: Bool = false,
                              set: String = "", q: String = "") -> String {
         "/guide?from=\(from)&hours=\(fetchHours)&offset=\(offset)&limit=\(limit)&kind=\(WittyClient.queryValue(kind))&group=\(WittyClient.queryValue(group))"
@@ -253,16 +253,15 @@ public struct RecordingRule: Decodable, Equatable, Identifiable {
     public let channelId: Int64?
     public let channel: String
     public let title: String
-    /// What `tv-dvr-rules-2` adds; an older server sends none of them.
-    public let anyChannel: Bool?
-    public let newOnly: Bool?
-    public let keep: Int?
-    public let padBefore: Int?
-    public let padAfter: Int?
+    public let anyChannel: Bool
+    public let newOnly: Bool
+    public let keep: Int
+    public let padBefore: Int
+    public let padAfter: Int
 
     /// Its options as they are, for changing them.
     public var options: RecordingOptions {
-        RecordingOptions(padBefore: padBefore ?? 0, padAfter: padAfter ?? 0, newOnly: newOnly ?? false, anyChannel: anyChannel ?? false, keep: keep ?? 0)
+        RecordingOptions(padBefore: padBefore, padAfter: padAfter, newOnly: newOnly, anyChannel: anyChannel, keep: keep)
     }
 }
 
