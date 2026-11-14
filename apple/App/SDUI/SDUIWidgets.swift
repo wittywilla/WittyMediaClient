@@ -424,11 +424,41 @@ struct SDUINoticeView: View {
         }
     }
 
+    /// The notice's own way to be put away (`dismiss`: a command, and the words for its button): the server
+    /// stops showing it, and the page is asked for again.
+    private var dismiss: SDUIAction? {
+        guard let d = notice.props.fields("dismiss"), !d.text("op").isEmpty else { return nil }
+        return SDUIAction(type: "command", op: d.text("op"), params: d.fields("params"))
+    }
+    private var dismissLabel: String {
+        let words = notice.props.fields("dismiss")?.text("label") ?? ""
+        return words.isEmpty ? "Dismiss" : words
+    }
+
+    /// The main button, then Dismiss, quieter: after it on a TV, a tablet and a computer; below it on a phone
+    /// (docs/SDUI.md, Notice). On a TV each is its own focus stop, the main one first.
     @ViewBuilder private var button: some View {
+        if layout.phone {
+            VStack(alignment: .leading, spacing: layout.sp("s")) { main; dismissButton }
+        } else {
+            HStack(spacing: layout.sp("s")) { main; dismissButton }
+        }
+    }
+
+    @ViewBuilder private var main: some View {
         if !notice.shown("button").isEmpty, notice.action != nil, SDUIActor(model: model, center: center, store: store).canPerform(notice.action) {
             Button(notice.shown("button")) { SDUIActor(model: model, center: center, store: store).perform(notice.action) }
                 .action()
                 .sduiFocusable(notice.isFocusable ? focus : nil, notice.id)
+        }
+    }
+
+    @ViewBuilder private var dismissButton: some View {
+        if let dismiss {
+            Button(dismissLabel) { SDUIActor(model: model, center: center, store: store).perform(dismiss) }
+                .action(.quiet)
+                .accessibilityHint("Stops showing this")
+                .accessibilityIdentifier("sdui.notice.dismiss." + notice.id)
         }
     }
 
@@ -460,6 +490,11 @@ struct SDUINoticeView: View {
         .overlay(alignment: .leading) { Rectangle().fill(tone).frame(width: 4) }
         .clipShape(RoundedRectangle(cornerRadius: draw.radius("Notice"), style: .continuous))
         .padding(.horizontal, layout.margin)
+        #if os(tvOS)
+        // The whole width is the notice's, so Up or Down from anywhere across the screen lands on its button,
+        // rather than skipping a button at the far end of it.
+        .focusSection()
+        #endif
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("sdui.section." + notice.id)
     }

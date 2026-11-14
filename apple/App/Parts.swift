@@ -56,14 +56,34 @@ struct AppNoticeLine: View {
             HStack(alignment: .top, spacing: Tokens.Space.s2) {
                 ProblemLine(model.notice).frame(maxWidth: .infinity, alignment: .leading)
                 Button { model.closeNotice() } label: {
-                    Image(systemName: "xmark").font(.subheadline.weight(.semibold)).foregroundStyle(palette.textSecondary)
+                    Image(systemName: "xmark").font(.subheadline.weight(.semibold))
                         .frame(minWidth: 44, minHeight: 44)
                         .contentShape(Rectangle())
                 }
-                .buttonStyle(.plain)
+                .buttonStyle(NoticeCloseStyle())
                 .accessibilityLabel("Close this notice")
             }
+            #if os(tvOS)
+            // Up or Down from anywhere across the screen reaches the ×, at the far end of the line.
+            .focusSection()
+            #endif
         }
+    }
+}
+
+/// The notice's ×: quiet until it has the remote's focus, then the page's text colour on a lifted disc, so it reads
+/// against what's behind it. A touch screen never focuses it, so it looks the same there as everywhere else.
+private struct NoticeCloseStyle: ButtonStyle {
+    @Environment(\.isFocused) private var focused
+    @Environment(\.palette) private var palette
+
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .foregroundStyle(focused ? palette.background : palette.textSecondary)
+            .background(Circle().fill(focused ? palette.text : Color.clear).padding(4))
+            .scaleEffect(focused ? 1.1 : 1)
+            .opacity(configuration.isPressed ? 0.6 : 1)
+            .animation(.easeOut(duration: 0.15), value: focused)
     }
 }
 

@@ -22,6 +22,11 @@ struct TvTopBar: View {
     var focus: FocusState<AppTab?>.Binding
     /// Which pill had focus last, nil while it's below the bar.
     @State private var inside: AppTab?
+    /// The pills together, and the room they have: wider than the room, some sit past its edge.
+    @State private var pillsWidth: CGFloat = 0
+    @State private var barWidth: CGFloat = 0
+    private var overflows: Bool { barWidth > 0 && pillsWidth > barWidth + 1 }
+    @Environment(\.palette) private var palette
 
     private func choose(_ tab: AppTab) {
         // WittyPlay's own frame instead of a tab, as on the website (the owner's: WittyPlay works the same on a television).
@@ -99,12 +104,27 @@ struct TvTopBar: View {
                     // Room for the last pill to come clear of the fade.
                     .padding(.trailing, TvTopBar.fade + ring)
                     .padding(.vertical, ring)
+                    .background(GeometryReader { Color.clear.preference(key: TvMenuWidth.self, value: $0.size.width) })
                 }
+                .onPreferenceChange(TvMenuWidth.self) { pillsWidth = $0 }
+                .background(GeometryReader { box in
+                    Color.clear.onAppear { barWidth = box.size.width }.sduiOnChange(of: box.size.width) { barWidth = $0 }
+                })
                 // Pills that don't fit fade out towards You, rather than stop short against the edge.
                 .mask(HStack(spacing: 0) {
                     Rectangle()
                     LinearGradient(colors: [.black, .clear], startPoint: .leading, endPoint: .trailing).frame(width: TvTopBar.fade)
                 })
+                // More places past the edge: a chevron in the fade says so, until the last of them has focus.
+                .overlay(alignment: .trailing) {
+                    if overflows, focus.wrappedValue == nil || focus.wrappedValue != row.last?.tab {
+                        Image(systemName: "chevron.right")
+                            .font(.system(size: 26, weight: .semibold))
+                            .foregroundStyle(palette.textSecondary)
+                            .frame(width: TvTopBar.fade)
+                            .accessibilityHidden(true)
+                    }
+                }
                 // The focused pill comes to the middle, so it's never in the fade.
                 .onChange(of: focus.wrappedValue) { next in
                     guard let next, next != .profile else { return }
@@ -138,6 +158,12 @@ struct TvTopBar: View {
 
     /// How far the pills that don't fit fade out, before the space before You.
     static let fade: CGFloat = 48
+}
+
+/// How wide the top bar's pills are together, to tell whether some sit past its edge.
+private struct TvMenuWidth: PreferenceKey {
+    static let defaultValue: CGFloat = 0
+    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) { value = max(value, nextValue()) }
 }
 
 /// A tab's icon and name, or You's avatar and the person's name. The chosen one has the accent behind it.
