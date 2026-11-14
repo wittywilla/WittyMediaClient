@@ -33,12 +33,14 @@ public struct SDUIDocument: Codable, Equatable, Sendable {
     public var screenTime: SDUIScreenTime?
     public var personal: SDUIPersonalInfo?
     public var meta: SDUIMeta?
+    /// What the page puts in the shell's own regions: a status bar and a round system dock (WittyPlay's frame).
+    public var regions: SDUIRegions?
 
-    enum CodingKeys: String, CodingKey { case version, catalog, page, layout, theme, root, screenTime, personal, meta }
+    enum CodingKeys: String, CodingKey { case version, catalog, page, layout, theme, root, screenTime, personal, meta, regions }
 
     public init(version: Int = SDUI.version, catalog: Int? = SDUI.catalog, page: SDUIPageInfo, layout: SDUILayout,
                 theme: SDUIThemeScope? = nil, root: SDUINode, screenTime: SDUIScreenTime? = nil,
-                personal: SDUIPersonalInfo? = nil, meta: SDUIMeta? = nil) {
+                personal: SDUIPersonalInfo? = nil, meta: SDUIMeta? = nil, regions: SDUIRegions? = nil) {
         self.version = version
         self.catalog = catalog
         self.page = page
@@ -48,6 +50,7 @@ public struct SDUIDocument: Codable, Equatable, Sendable {
         self.screenTime = screenTime
         self.personal = personal
         self.meta = meta
+        self.regions = regions
     }
 
     public init(from decoder: Decoder) throws {
@@ -65,6 +68,68 @@ public struct SDUIDocument: Codable, Equatable, Sendable {
         screenTime = try? box.decodeIfPresent(SDUIScreenTime.self, forKey: .screenTime)
         personal = try? box.decodeIfPresent(SDUIPersonalInfo.self, forKey: .personal)
         meta = try? box.decodeIfPresent(SDUIMeta.self, forKey: .meta)
+        regions = try? box.decodeIfPresent(SDUIRegions.self, forKey: .regions)
+    }
+}
+
+/// A page's content for the shell's optional regions (docs/SDUI.md, document.regions, catalogue revision 7): a status
+/// bar's profile, server and text, and a round system dock of the screen's destinations. A page with either is drawn in
+/// that frame, over the whole screen: WittyPlay Online's, as the website's PlayChrome draws it.
+public struct SDUIRegions: Codable, Equatable, Sendable {
+    public struct Status: Codable, Equatable, Sendable {
+        public var id: String
+        /// `profile` (the profile's name, `text` under it), `server` (the server's name, as its brand) or `text`.
+        public var kind: String
+        public var text: String?
+        public init(id: String, kind: String, text: String? = nil) { self.id = id; self.kind = kind; self.text = text }
+    }
+
+    public struct Dock: Codable, Equatable, Sendable, Identifiable {
+        public var id: String
+        public var label: String
+        public var icon: String?
+        /// Where it goes, as a website address; `/page/x?tab=y` opens a tab of a page.
+        public var route: String
+        /// `layer`: it opens over the page rather than in place of it.
+        public var `as`: String?
+        public init(id: String, label: String, icon: String? = nil, route: String, as: String? = nil) {
+            self.id = id; self.label = label; self.icon = icon; self.route = route; self.as = `as`
+        }
+    }
+
+    public var statusBar: [Status]
+    public var systemDock: [Dock]
+
+    public init(statusBar: [Status] = [], systemDock: [Dock] = []) { self.statusBar = statusBar; self.systemDock = systemDock }
+
+    public init(from decoder: Decoder) throws {
+        let box = try decoder.container(keyedBy: CodingKeys.self)
+        statusBar = (try? box.decodeIfPresent([Status].self, forKey: .statusBar)) ?? []
+        systemDock = (try? box.decodeIfPresent([Dock].self, forKey: .systemDock)) ?? []
+    }
+
+    /// Nothing in either region: no frame.
+    public var isEmpty: Bool { statusBar.isEmpty && systemDock.isEmpty }
+
+    /// The dock with Home first, as the website's (playPaths.ts dockFor): a dock without one gets WittyPlay's home.
+    public var dock: [Dock] {
+        guard !systemDock.isEmpty, !systemDock.contains(where: { $0.id == "home" || $0.route == WittyPlayPlace.home }) else { return systemDock }
+        return [Dock(id: "home", label: "Home", icon: "home", route: WittyPlayPlace.home)] + systemDock
+    }
+
+    /// Which dock entry is where the page is (regions.ts dockCurrent): one asking for a query wins on its own page with
+    /// that query; else one whose route is the page or a parent of it.
+    public func current(path: String, query: [String: String] = [:]) -> Int? {
+        let entries = dock
+        if let exact = entries.firstIndex(where: { entry in
+            let parts = entry.route.split(separator: "?", maxSplits: 1).map(String.init)
+            guard parts.count == 2, parts[0] == path else { return false }
+            return parts[1].split(separator: "&").allSatisfy { pair in
+                let kv = pair.split(separator: "=", maxSplits: 1).map(String.init)
+                return kv.count == 2 && query[kv[0]] == kv[1]
+            }
+        }) { return exact }
+        return entries.firstIndex { !$0.route.contains("?") && (path == $0.route || path.hasPrefix($0.route + "/")) }
     }
 }
 

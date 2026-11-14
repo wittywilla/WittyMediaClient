@@ -317,14 +317,19 @@ final class AppModel: ObservableObject {
     /// A games place WittyPlay takes over on a phone and a tablet, as on the website: a games library, a game's page,
     /// WittyPlay's own pages. Its address in WittyPlay, or nil to open it in the app as before.
     func wittyPlayAddress(_ route: Route) -> String? {
-        #if os(iOS) || os(visionOS)
+        #if os(iOS) || os(visionOS) || os(tvOS)
         guard wittyPlayInstalled else { return nil }
         switch route {
         case .library(let library) where library.hasGameScreens: return WittyPlayPlace.library(library.id)
         case .gameLibrary(let library, _): return WittyPlayPlace.library(library.id)
         case .page(let path) where WittyPlayPlace.isPlayPath(path): return path
+        #if os(tvOS)
+        // Apple TV draws WittyPlay's pages itself (in its frame, SDUIPageView.swift): they are already where they go.
+        case .sdui(let place) where WittyPlayPlace.isPlayPage(place.page): return nil
+        #else
         case .sdui(let place) where WittyPlayPlace.isPlayPage(place.page):
             return place.route.flatMap { WittyPlayPlace.isPlayPath($0) ? $0 : nil } ?? "/page/" + place.page
+        #endif
         case .sdui(let place) where place.page == "library":
             // The server's page for a library: a games library's is WittyPlay's view of it.
             guard let id = place.params["library"].flatMap({ Int64($0) }),
@@ -337,11 +342,32 @@ final class AppModel: ObservableObject {
         #endif
     }
 
-    /// Going to a place WittyPlay takes over opens WittyPlay instead of putting it on the stack.
+    /// Going to a place WittyPlay takes over opens WittyPlay instead: over everything on a phone and a tablet, and in its
+    /// place on the stack on Apple TV.
     private func playing(_ new: [Route], was old: [Route]) -> [Route] {
         guard new.count > old.count, let last = new.last, let address = wittyPlayAddress(last) else { return new }
+        #if os(tvOS)
+        return Array(new.dropLast()) + [Self.wittyPlayRoute(address)]
+        #else
         wittyPlay = address
         return Array(new.dropLast())
+        #endif
+    }
+
+    /// WittyPlay's page for an address, as Apple TV draws it.
+    static func wittyPlayRoute(_ address: String) -> Route {
+        let found = WittyPlayPlace.page(for: address)
+        return .sdui(SDUIPlace(page: found.page, params: found.params, route: "/page/" + found.page))
+    }
+
+    /// Opens WittyPlay at an address of its own: a phone's and a tablet's cover, or Apple TV's page from Home.
+    func openWittyPlay(_ address: String) {
+        #if os(tvOS)
+        tab = .home
+        paths[.home] = [Self.wittyPlayRoute(address)]
+        #else
+        wittyPlay = address
+        #endif
     }
 
     /// The player and the game page have the whole screen.
@@ -1040,7 +1066,7 @@ final class AppModel: ObservableObject {
             return
         }
         let route: Route = place.id == "couch" ? .web(WebPlayer.gamePCsPath) : .page(place.path)
-        if let address = wittyPlayAddress(route) { wittyPlay = address; return }
+        if let address = wittyPlayAddress(route) { openWittyPlay(address); return }
         var transaction = Transaction()
         transaction.disablesAnimations = tab == .home && (paths[.home]?.count ?? 0) == 1
         withTransaction(transaction) {
@@ -1051,7 +1077,7 @@ final class AppModel: ObservableObject {
 
     func openLibrary(_ library: Library) {
         let route = libraryRoute(library)
-        if let address = wittyPlayAddress(route) { wittyPlay = address; return }
+        if let address = wittyPlayAddress(route) { openWittyPlay(address); return }
         var transaction = Transaction()
         // From a section to a section: no slide, as the website's strip changes the page in place.
         transaction.disablesAnimations = tab == .home && (paths[.home]?.count ?? 0) == 1

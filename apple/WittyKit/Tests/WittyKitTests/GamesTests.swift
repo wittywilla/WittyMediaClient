@@ -50,13 +50,10 @@ final class GamesTests: XCTestCase {
     func testSessionModesAreObjects() throws {
         let full = try decode(GameSession.self, """
         {"id":"g1","itemId":1922,"console":"nes","aspect":1.306,"turns":0,"discs":1,
-         "modes":[{"id":"webrtc","video":["h264","vp8"]},{"id":"ws-h264","video":["h264"]},{"id":"ws-jpeg","video":["jpeg"]}]}
+         "modes":[{"id":"webrtc","video":["h264","vp8"],"stream":2},{"id":"websocket","video":["h264","jpeg"],"stream":2}]}
         """)
-        XCTAssertEqual(GameModes.order(full.modes), ["ws-h264", "ws-jpeg"])
-        XCTAssertThrowsError(try decode(GameSession.self, #"{"id":"g2","modes":["ws-jpeg"]}"#), "a bare name is no mode")
-        XCTAssertEqual(GameModes.order(nil), ["ws-h264", "ws-jpeg"])
-        XCTAssertEqual(GameModes.video(for: "ws-jpeg"), "jpeg")
-        XCTAssertEqual(GameModes.video(for: "ws-h264"), "h264")
+        XCTAssertEqual(GameModes.order(full.modes, webRTC: false), [GameModes.streamWebSocket])
+        XCTAssertThrowsError(try decode(GameSession.self, #"{"id":"g2","modes":["websocket"]}"#), "a bare name is no mode")
     }
 
     func testControlsKeepNullsAsTakenAway() throws {
@@ -110,20 +107,18 @@ final class GamesTests: XCTestCase {
 
     func testSocketAddressCarriesNoToken() throws {
         let client = WittyClient(base: "http://127.0.0.1:9797", token: "secret")
-        let request = try XCTUnwrap(client.gameSocketRequest("g/1", video: "h264"))
-        XCTAssertEqual(request.url?.absoluteString, "ws://127.0.0.1:9797/api/v1/play/g%2F1/ws?video=h264")
+        let request = try XCTUnwrap(client.gameStreamRequest("g/1"))
+        XCTAssertEqual(request.url?.absoluteString, "ws://127.0.0.1:9797/api/v1/modules/wittyplay/play/g%2F1/stream")
         XCTAssertEqual(request.value(forHTTPHeaderField: "Authorization"), "Bearer secret")
         XCTAssertFalse(request.url!.absoluteString.contains("secret"))
         let secure = WittyClient(base: "https://media.example", token: "t")
-        XCTAssertEqual(secure.gameSocketRequest("a", video: "jpeg")?.url?.scheme, "wss")
+        XCTAssertEqual(secure.gameStreamRequest("a")?.url?.scheme, "wss")
     }
 
     func testTransportsByMode() {
         let client = WittyClient(base: "http://127.0.0.1:9797", token: "t")
-        XCTAssertTrue(GameTransports.make(mode: "ws-h264", session: "s", client: client) is GameWebSocketTransport)
-        XCTAssertTrue(GameTransports.make(mode: "ws-jpeg", session: "s", client: client) is GameWebSocketTransport)
-        XCTAssertNil(GameTransports.make(mode: "webrtc", session: "s", client: client), "not one this app has yet")
         let hello = GameHello(app: "a", device: "d", name: "n", seats: [0], display: .init(hz: 60, width: 1, height: 1))
+        XCTAssertNil(GameTransports.make(mode: "ws-h264", session: "s", client: client, hello: hello), "the first stream is gone")
         for mode in GameModes.supported where mode != GameModes.streamWebRTC {
             XCTAssertNotNil(GameTransports.make(mode: mode, session: "s", client: client, hello: hello), "every mode the app asks for has a transport")
         }
@@ -261,7 +256,7 @@ final class GamesTests: XCTestCase {
 
     // MARK: Every button, as the server sends each console's controls
 
-    /// `defaults` cut from the local server's own answers to `GET /consoles/{id}/controls`.
+    /// `defaults` cut from the local server's own answers to `GET /modules/wittyplay/consoles/{id}/controls`.
     private static let consoleControls: [String: (gamepad: PadMap, keyboard: [String: String], targets: [Int])] = [
         "nes": (["0": .button(0), "2": .button(8), "3": .button(9), "4": .button(12), "5": .button(13), "6": .button(14), "7": .button(15), "8": .button(1)],
                 ["0": "KeyZ", "2": "ShiftRight", "3": "Enter", "4": "ArrowUp", "5": "ArrowDown", "6": "ArrowLeft", "7": "ArrowRight", "8": "KeyX"],
@@ -407,8 +402,7 @@ final class GamesTests: XCTestCase {
     // MARK: The stream
 
     func testBinaryMessages() {
-        XCTAssertEqual(GameStreamMessage.parse(Data([1, 1, 0, 0, 1, 0x67])), .video(keyframe: true, annexB: Data([0, 0, 1, 0x67])))
-        XCTAssertEqual(GameStreamMessage.parse(Data([1, 0, 9])), .video(keyframe: false, annexB: Data([9])))
+        XCTAssertEqual(GameStreamMessage.parse(Data([1, 1, 0, 0, 1, 0x67])), .unknown(1), "the first stream's video tag is gone")
         XCTAssertEqual(GameStreamMessage.parse(Data([2, 0xff, 0xd8])), .jpeg(Data([0xff, 0xd8])))
         // 32040 Hz, then one stereo frame and a stray byte, which is left out.
         XCTAssertEqual(GameStreamMessage.parse(Data([3, 0x28, 0x7d, 0, 0, 1, 2, 3, 4, 5])), .pcm(rate: 32040, samples: Data([1, 2, 3, 4])))
@@ -502,5 +496,19 @@ final class GamesTests: XCTestCase {
         XCTAssertNil(WebPlayer.serverGame("/games/game/12"))
         XCTAssertNil(WebPlayer.serverGame("/game/x"))
         XCTAssertNil(WebPlayer.serverGame("/item/12"))
+    }
+
+    func testWittyPlaysOwnCallsGoUnderItsModulePrefix() {
+        XCTAssertEqual(WittyClient.controlsPath(console: "snes", device: "pad 1", game: 7),
+                       "/modules/wittyplay/consoles/snes/controls?device=pad%201&game=7")
+        XCTAssertEqual(WittyClient.controlsPath(console: "n64", device: "tv", game: nil), "/modules/wittyplay/consoles/n64/controls?device=tv")
+        XCTAssertEqual(WittyClient.resolvePadPath(controller: "054c:0ce6", console: "nes", game: 1),
+                       "/modules/wittyplay/game-profiles/resolve?kind=gamepad&controller=054c%3A0ce6&console=nes&game=1")
+        XCTAssertEqual(WittyClient.backgroundPath, "/modules/wittyplay/game-background")
+        let client = WittyClient(base: "http://127.0.0.1:9797", token: "t")
+        XCTAssertEqual(client.gameStreamOfferRequest("s1")?.url?.absoluteString, "http://127.0.0.1:9797/api/v1/modules/wittyplay/play/s1/stream")
+        XCTAssertEqual(client.gameSaveThumbURL(7, slot: 2, version: 5)?.absoluteString,
+                       "http://127.0.0.1:9797/api/v1/modules/wittyplay/games/7/saves/2/thumb?v=5")
+        XCTAssertEqual(client.gameBezelURL(3)?.absoluteString, "http://127.0.0.1:9797/api/v1/modules/wittyplay/game-bezels/3")
     }
 }

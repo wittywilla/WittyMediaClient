@@ -37,11 +37,33 @@ struct SDUIPageScreen: View {
         return first.type == "DetailHeader" && first.props.text("layout") != "compact" && (first.picture != nil || first.poster != nil)
     }
 
-    var body: some View {
+    /// The page's regions, when it asks for WittyPlay's frame (Apple TV draws it: TvPlayFrame.swift).
+    private var regions: SDUIRegions? {
+        guard let found = store.screen?.document.regions, !found.isEmpty, chrome != .bare else { return nil }
+        return found
+    }
+
+    @ViewBuilder private var framed: some View {
+        #if os(tvOS)
+        if let regions {
+            TvPlayFrame(regions: regions, place: place) { content.frame(maxWidth: .infinity, maxHeight: .infinity) }
+                .moduleScope(WittyPlayPlace.isPlayPage(place.page) ? "wittyplay" : "")
+        } else {
+            content
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .pageBackground(palette)
+                .modifier(SDUIChrome(chrome: chrome, top: center.isTop(place), route: place.route, overPicture: overPicture))
+        }
+        #else
         content
             .frame(maxWidth: .infinity, maxHeight: .infinity)
             .pageBackground(palette)
             .modifier(SDUIChrome(chrome: chrome, top: center.isTop(place), route: place.route, overPicture: overPicture))
+        #endif
+    }
+
+    var body: some View {
+        framed
             .environmentObject(store)
             // Corners and type from the theme, by the catalogue's tokens for each component.
             .environment(\.sduiDraw, SDUIDraw(catalog: center.catalog, style: model.themeStyle))
