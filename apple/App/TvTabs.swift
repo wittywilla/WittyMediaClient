@@ -24,10 +24,28 @@ struct TvTopBar: View {
     @State private var inside: AppTab?
 
     private func choose(_ tab: AppTab) {
+        // WittyPlay's own frame instead of a tab, as on the website (the owner's: WittyPlay works the same on a television).
+        if let address = playAddress(tab) { model.openWittyPlay(address); return }
         if model.tab == tab {
             model.paths[tab] = []
         } else {
             model.tab = tab
+        }
+    }
+
+    /// The WittyPlay address a top-menu tab opens, when WittyPlay is installed: games, a games library, WittyPlay's entry.
+    private func playAddress(_ tab: AppTab) -> String? {
+        guard model.wittyPlayInstalled else { return nil }
+        switch tab {
+        case .games: return WittyPlayPlace.home
+        case .library(let id):
+            return model.libraries.first(where: { $0.id == id })?.hasGameScreens == true ? WittyPlayPlace.home : nil
+        case .sdui(let id):
+            guard let entry = center.entry(id) else { return nil }
+            if WittyPlayPlace.isPlayPath(entry.address) { return entry.address }
+            if let library = model.libraries.first(where: { "/library/\($0.id)" == entry.address }), library.hasGameScreens { return WittyPlayPlace.home }
+            return nil
+        default: return nil
         }
     }
 

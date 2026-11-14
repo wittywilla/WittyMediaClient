@@ -24,6 +24,21 @@ public enum WittyPlayPlace {
     /// A server page (an SDUI page's id) that is WittyPlay's.
     public static func isPlayPage(_ page: String) -> Bool { page == "wittyplay" || page.hasPrefix("wittyplay-") }
 
+    /// The server page a WittyPlay address is, drawn natively (Apple TV, which has no web pages): `/page/x?tab=y` is page
+    /// `x` with `tab=y`. WittyPlay's own website views (`/wittyplay/…`, a library's) have no page: WittyPlay Online's home.
+    public static func page(for address: String) -> (page: String, params: [String: String]) {
+        let parts = address.split(separator: "?", maxSplits: 1, omittingEmptySubsequences: false).map(String.init)
+        guard parts[0].hasPrefix("/page/"), isPlayPath(parts[0]) else { return ("wittyplay-online", [:]) }
+        var params: [String: String] = [:]
+        if parts.count > 1 {
+            for pair in parts[1].split(separator: "&") {
+                let kv = pair.split(separator: "=", maxSplits: 1).map(String.init)
+                if kv.count == 2 { params[kv[0]] = kv[1].removingPercentEncoding ?? kv[1] }
+            }
+        }
+        return (String(parts[0].dropFirst("/page/".count)), params)
+    }
+
     /// WittyPlay is on this server: its menu entry is in the server's navigation.
     public static func installed(routes: [String]) -> Bool { routes.contains { isPlayPath($0) } }
 }

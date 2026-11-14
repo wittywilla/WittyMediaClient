@@ -21,4 +21,37 @@ final class WittyPlayPlaceTests: XCTestCase {
         XCTAssertTrue(WittyPlayPlace.isPlayPage("wittyplay-online"))
         XCTAssertFalse(WittyPlayPlace.isPlayPage("library"))
     }
+
+    func testAnAddressAsAPageForApplesTv() {
+        XCTAssertEqual(WittyPlayPlace.page(for: "/page/wittyplay-online").page, "wittyplay-online")
+        XCTAssertEqual(WittyPlayPlace.page(for: "/page/wittyplay-online?tab=together").params, ["tab": "together"])
+        XCTAssertEqual(WittyPlayPlace.page(for: "/page/wittyplay-controllers").page, "wittyplay-controllers")
+        XCTAssertEqual(WittyPlayPlace.page(for: "/wittyplay/library/3").page, "wittyplay-online", "no page for a library's own view")
+    }
+}
+
+final class SDUIRegionsTests: XCTestCase {
+    private let json = #"""
+    {"statusBar":[{"id":"me","kind":"profile","text":"WittyPlay Online"},{"id":"server","kind":"server"}],
+     "systemDock":[{"id":"search","label":"Search","icon":"search","route":"/search"},
+                   {"id":"together","label":"Together","icon":"users","route":"/page/wittyplay-online?tab=together"},
+                   {"id":"controllers","label":"Controllers","icon":"devices","route":"/page/wittyplay-controllers","as":"layer"}]}
+    """#
+
+    func testReadsWittyPlaysRegionsAndPutsHomeFirst() throws {
+        let r = try JSONDecoder().decode(SDUIRegions.self, from: Data(json.utf8))
+        XCTAssertEqual(r.statusBar.map(\.kind), ["profile", "server"])
+        XCTAssertEqual(r.dock.map(\.id), ["home", "search", "together", "controllers"])
+        XCTAssertEqual(r.dock[3].as, "layer")
+        XCTAssertFalse(r.isEmpty)
+        XCTAssertTrue(SDUIRegions().isEmpty)
+    }
+
+    func testTheCurrentEntryIsTheWebsites() throws {
+        let r = try JSONDecoder().decode(SDUIRegions.self, from: Data(json.utf8))
+        XCTAssertEqual(r.current(path: "/page/wittyplay-online"), 0, "the page with no tab is Home")
+        XCTAssertEqual(r.current(path: "/page/wittyplay-online", query: ["tab": "together"]), 2)
+        XCTAssertEqual(r.current(path: "/page/wittyplay-controllers"), 3)
+        XCTAssertNil(r.current(path: "/library/2"))
+    }
 }
