@@ -83,7 +83,6 @@ fun RecordingsScreen(nav: Nav) {
     var info by remember { mutableStateOf<Recording?>(null) }
     // A series' options being changed, on a server with `tv-dvr-rules-2`.
     var changing by remember { mutableStateOf<RecordingRule?>(null) }
-    val rules2 = nav.has("tv-dvr-rules-2")
 
     suspend fun load() {
         try {
@@ -177,7 +176,7 @@ fun RecordingsScreen(nav: Nav) {
                     )
                 }
                 Column(Modifier.padding(vertical = dress.pt(8)), verticalArrangement = Arrangement.spacedBy(dress.pt(16))) {
-                    for (r in shown) RecordingRow(dress, r, nav.me?.isAdmin == true, onPlay = { play(r) }, onRemove = { asking = Asking(r, false) }, onDelete = { asking = Asking(r, true) }, onInfo = if (r.channelKey != null && nav.has("tv-programme-info")) ({ info = r }) else null)
+                    for (r in shown) RecordingRow(dress, r, nav.me?.isAdmin == true, onPlay = { play(r) }, onRemove = { asking = Asking(r, false) }, onDelete = { asking = Asking(r, true) }, onInfo = if (r.channelKey != null) ({ info = r }) else null)
                 }
             } else if (error.isEmpty()) {
                 Box(Modifier.fillMaxWidth().height(dress.pt(200)), contentAlignment = Alignment.Center) { Spinner(p.text, dress.pt(48)) }
@@ -185,7 +184,7 @@ fun RecordingsScreen(nav: Nav) {
             if (rules.isNotEmpty()) {
                 Text("Series", style = dress.font(21.25f, W.Bold), color = p.accent, modifier = Modifier.padding(top = dress.pt(20), bottom = dress.pt(8)).semantics { heading() })
                 Column(verticalArrangement = Arrangement.spacedBy(dress.pt(16))) {
-                    for (rule in rules) RuleRow(dress, rule, rules2, onChange = { changing = rule }) { stop(rule) }
+                    for (rule in rules) RuleRow(dress, rule, onChange = { changing = rule }) { stop(rule) }
                 }
             }
             Text(
@@ -263,7 +262,7 @@ private fun RecordingRow(dress: TvDress, r: Recording, admin: Boolean, onPlay: (
 }
 
 @Composable
-private fun RuleRow(dress: TvDress, rule: RecordingRule, options: Boolean, onChange: () -> Unit, onStop: () -> Unit) {
+private fun RuleRow(dress: TvDress, rule: RecordingRule, onChange: () -> Unit, onStop: () -> Unit) {
     val p = dress.paint
     val shape = RoundedCornerShape(dress.pt(dress.radius))
     Row(
@@ -279,9 +278,9 @@ private fun RuleRow(dress: TvDress, rule: RecordingRule, options: Boolean, onCha
     ) {
         Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(dress.pt(2))) {
             Text(rule.title, style = dress.font(25f, W.Bold), color = p.text)
-            Text(if (options) DvrRules.ruleWords(rule) else "Every airing on ${rule.channel}", style = dress.font(18.75f), color = p.soft)
+            Text(DvrRules.ruleWords(rule), style = dress.font(18.75f), color = p.soft)
         }
-        if (options) TvButton(dress, "Change", onChange)
+        TvButton(dress, "Change", onChange)
         TvButton(dress, "Stop", onStop)
     }
 }

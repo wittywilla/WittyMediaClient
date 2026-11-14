@@ -171,8 +171,6 @@ fun GuideScreen(nav: Nav) {
     val requesters = remember { HashMap<Pair<Int, Long>, FocusRequester>() }
     var focusedKey by remember { mutableStateOf<Pair<Int, Long>?>(null) }
     // What the server can do beyond the guide itself, once its features are read.
-    var catchupOn by remember { mutableStateOf(false) }
-    var rules2 by remember { mutableStateOf(false) }
     // Sets, finding a channel, a recording's options, and the offer to show All for a channel that's only there.
     var setPanel by remember { mutableStateOf<SetPanel?>(null) }
     var findOpen by remember { mutableStateOf(false) }
@@ -277,11 +275,6 @@ fun GuideScreen(nav: Nav) {
         }
     }
 
-    fun cycleKind() {
-        val k = store.filter.kind
-        store.choose(GuideFilter(kind = if (k.isEmpty()) "library" else if (k == "library") "tuner" else ""))
-    }
-
     // A set chosen: shown from its top, and remembered on this device for this server and account.
     fun chooseSet(id: String) {
         store.chooseSet(id)
@@ -300,7 +293,7 @@ fun GuideScreen(nav: Nav) {
     fun showAllAt(target: GuideSpot) {
         pending = target
         store.showAll()
-        if (store.hasSets) GuidePrefs.setSet(context, serverKey, account, SetRules.ALL)
+        GuidePrefs.setSet(context, serverKey, account, SetRules.ALL)
     }
 
     // The page before or after; in All, a screenful.
@@ -350,7 +343,7 @@ fun GuideScreen(nav: Nav) {
         scope.launch {
             store.reloadSets()
             val sets = store.sets
-            if (store.hasSets && sets != null && sets.none { it.id == store.set }) {
+            if (sets != null && sets.none { it.id == store.set }) {
                 chooseSet(SetRules.ALL)
             } else if (id == null || id == store.set) {
                 store.refresh()
@@ -367,37 +360,11 @@ fun GuideScreen(nav: Nav) {
     }
 
     fun record(channel: GuideChannel, p: GuideProgramme) {
-        if (rules2) {
-            recording = RecordWhat.One(channel, p)
-            return
-        }
-        scope.launch {
-            try {
-                api.record(channel.key, p.title, p.sub, p.start, p.end)
-                say("Recording ${p.title}")
-            } catch (e: CancellationException) {
-                throw e
-            } catch (e: Exception) {
-                say(problemText(e, "That couldn't be recorded."))
-            }
-        }
+        recording = RecordWhat.One(channel, p)
     }
 
     fun series(channel: GuideChannel, p: GuideProgramme) {
-        if (rules2) {
-            recording = RecordWhat.Series(channel, p)
-            return
-        }
-        scope.launch {
-            try {
-                api.recordSeries(channel.key, p.title)
-                say("Every airing of ${p.title} will be recorded")
-            } catch (e: CancellationException) {
-                throw e
-            } catch (e: Exception) {
-                say(problemText(e, "That couldn't be recorded."))
-            }
-        }
+        recording = RecordWhat.Series(channel, p)
     }
 
     fun favourite(channel: GuideChannel) {
@@ -563,12 +530,8 @@ fun GuideScreen(nav: Nav) {
     LaunchedEffect(api) {
         launch { TvLookStore.load(api, nav.effectiveThemeId(dark), appColours) }
         launch { TvReminders.load(api) }
-        // What this server can do decides how the rows are asked for, so it's known before the first of them.
-        val features = if (nav.featuresRead) nav.features else runCatching { api.capabilities().features.toSet() }.getOrDefault(nav.features)
-        catchupOn = "tv-catchup" in features
-        rules2 = "tv-dvr-rules-2" in features
-        store.configure(sets = "tv-sets" in features, paging = "tv-guide-paging" in features, pageSize = GuidePrefs.pageSize(context))
-        if (store.hasSets) store.chooseSet(store.loadSets(GuidePrefs.set(context, serverKey, account)))
+        store.configure(pageSize = GuidePrefs.pageSize(context))
+        store.chooseSet(store.loadSets(GuidePrefs.set(context, serverKey, account)))
         store.setFrom(from)
         store.ensure(0)
         store.loadLineup()
@@ -662,7 +625,7 @@ fun GuideScreen(nav: Nav) {
         DockEntry(DockKeys.RECORDINGS, "Recordings", enabled = com.wittywilla.wittymediaclient.player.ScreenTimeWatch.can("recordings")) { nav.push(TvRoute(TvScreen.Recordings)) },
         DockEntry(DockKeys.RECORD, "Record", enabled = recordable != null) { dockMenu = DockMenu.Record },
         // More info (i): the programme in full, over the guide.
-        DockEntry(DockKeys.INFO, "More info", enabled = current != null && currentCell?.programme != null && nav.has("tv-programme-info")) { moreInfo = true },
+        DockEntry(DockKeys.INFO, "More info", enabled = current != null && currentCell?.programme != null) { moreInfo = true },
     )
     fun dockPress(key: Char) {
         dockEntries.firstOrNull { it.key == key && it.enabled }?.action?.invoke()
@@ -703,7 +666,7 @@ fun GuideScreen(nav: Nav) {
                                 code in KeyEvent.KEYCODE_NUMPAD_0..KeyEvent.KEYCODE_NUMPAD_9 -> { dialled = DialRules.append(dialled, '0' + (code - KeyEvent.KEYCODE_NUMPAD_0)); true }
                                 code == KeyEvent.KEYCODE_PROG_RED -> { shift(-86400); true }
                                 code == KeyEvent.KEYCODE_PROG_GREEN -> { shift(86400); true }
-                                code == KeyEvent.KEYCODE_PROG_YELLOW -> { if (store.hasSets) cycleSet(1) else cycleKind(); true }
+                                code == KeyEvent.KEYCODE_PROG_YELLOW -> { cycleSet(1); true }
                                 code == KeyEvent.KEYCODE_PROG_BLUE -> { findOpen = true; true }
                                 DockKeys.opensDock(code) -> { runCatching { dockFocus.requestFocus() }; true }
                                 DockKeys.forKeyCode(code) != null -> { dockPress(DockKeys.forKeyCode(code)!!); true }
@@ -724,7 +687,7 @@ fun GuideScreen(nav: Nav) {
                         onFromStart = run {
                             val c = current
                             val p = currentCell?.programmeAt(spot.at)
-                            if (catchupOn && c != null && p != null && currentCell?.kind == GuideCell.Kind.Programme && CatchupRules.canWatchFromStart(c, p, now)) {
+                            if (c != null && p != null && currentCell?.kind == GuideCell.Kind.Programme && CatchupRules.canWatchFromStart(c, p, now)) {
                                 { fromStart(c, p) }
                             } else null
                         },
@@ -750,8 +713,7 @@ fun GuideScreen(nav: Nav) {
                         if (req == null) false else runCatching { req.requestFocus() }.isSuccess
                     })
                     if (dress.shape in listOf(TvShape.Box, TvShape.Receiver, TvShape.Teletext, TvShape.Listings)) {
-                        val c = if (store.hasSets) store.currentSet?.name ?: "All" else null
-                        GuideFooter(dress, store.filter.kind, c, onShift = { shift(it) }, onKind = { if (store.hasSets) cycleSet(1) else cycleKind() })
+                        GuideFooter(dress, store.currentSet?.name ?: "All", onShift = { shift(it) }, onSet = { cycleSet(1) })
                     }
                     GuideLegal(dress, notices, store.lineup)
                 }
@@ -764,8 +726,8 @@ fun GuideScreen(nav: Nav) {
         ask?.let { a ->
             GuideDetails(
                 nav, a, now, onWatch = ::watch, onSaid = ::say, onRecord = { c, p -> ask = null; record(c, p) }, onSeries = { c, p -> ask = null; series(c, p) }, onClose = { ask = null },
-                onFromStart = if (catchupOn) ({ c, p -> fromStart(c, p) }) else null,
-                onAddToSet = if (store.hasSets) ({ c -> ask = null; setPanel = SetPanel.AddTo(c) }) else null,
+                onFromStart = { c, p -> fromStart(c, p) },
+                onAddToSet = { c -> ask = null; setPanel = SetPanel.AddTo(c) },
             )
         }
         if (lookOpen) {
@@ -800,12 +762,12 @@ fun GuideScreen(nav: Nav) {
             val set = store.currentSet?.takeIf { it.isCustom && it.editable }
             CellMenu(
                 c, cell, now, close = { menu = null },
-                fromStart = if (catchupOn && p != null && cell.kind == GuideCell.Kind.Programme && CatchupRules.canWatchFromStart(c, p, now)) {
+                fromStart = if (p != null && cell.kind == GuideCell.Kind.Programme && CatchupRules.canWatchFromStart(c, p, now)) {
                     { menu = null; fromStart(c, p) }
                 } else {
                     null
                 },
-                onAddToSet = if (store.hasSets) { { menu = null; setPanel = SetPanel.AddTo(c) } } else null,
+                onAddToSet = { menu = null; setPanel = SetPanel.AddTo(c) },
                 removeFrom = set?.let { s -> s.name to { menu = null; removeFromSet(c) } },
                 onMore = { day -> menu = null; ask = GuideAsk(c, cell.programmeAt(spot.at), cell, day) },
                 onWatch = { menu = null; watch(c.key) },
@@ -832,28 +794,16 @@ fun GuideScreen(nav: Nav) {
         }
         dockMenu?.let { m ->
             val close = { dockMenu = null }
-            val filter = store.filter
-            val hasBoth = store.lineup.any { it.kind == "tuner" } && store.lineup.any { it.kind == "library" }
             val items = buildList {
                 when (m) {
                     DockMenu.Channels -> {
-                        if (store.hasSets) add(TvDialogButton("Channel sets…") { close(); setPanel = SetPanel.Picker })
+                        add(TvDialogButton("Channel sets…") { close(); setPanel = SetPanel.Picker })
                         add(TvDialogButton("Channels per page…") { close(); lookOpen = true })
                         add(TvDialogButton("Find a channel") { close(); findOpen = true })
                         if (nav.me?.isAdmin == true) add(TvDialogButton("Edit channels") { close(); nav.push(Route.OnPhone("Edit channels", "/tv/channels")) })
                     }
                     DockMenu.Filter -> {
-                        if (store.hasSets) {
-                            add(TvDialogButton("Choose a set…") { close(); setPanel = SetPanel.Picker })
-                        } else {
-                            add(TvDialogButton("All channels", preferred = filter.isAll) { close(); store.choose(GuideFilter()) })
-                            add(TvDialogButton(if (filter.favourites) "Favourites (on)" else "Favourites") { close(); store.choose(GuideFilter(favourites = !filter.favourites)) })
-                            for (g in store.groups) add(TvDialogButton(g, preferred = filter.group == g) { close(); store.choose(GuideFilter(group = if (filter.group == g) "" else g)) })
-                            if (hasBoth) {
-                                add(TvDialogButton("My library") { close(); store.choose(GuideFilter(kind = if (filter.kind == "library") "" else "library")) })
-                                add(TvDialogButton("Live TV") { close(); store.choose(GuideFilter(kind = if (filter.kind == "tuner") "" else "tuner")) })
-                            }
-                        }
+                        add(TvDialogButton("Choose a set…") { close(); setPanel = SetPanel.Picker })
                         add(TvDialogButton("Search the schedule") { close(); searchOpen = true })
                     }
                     DockMenu.Record -> recordable?.let { (c, p) ->
@@ -897,12 +847,6 @@ private fun GuideBar(
 ) {
     val p = dress.paint
     val shape = dress.shape
-    val filter = store.filter
-    val all = filter.isAll
-    // What the bar asks of the lineup, worked out when it changes rather than on every press.
-    val lineup = store.lineup
-    val hasBoth = remember(lineup) { lineup.any { it.kind == "tuner" } && lineup.any { it.kind == "library" } }
-    val anyFavourite = remember(lineup) { lineup.any { it.favourite } }
     val title = when (shape) {
         TvShape.Modern -> TvType(25f, W.Bold)
         TvShape.Receiver -> TvType(17.5f, W.Medium)
@@ -955,22 +899,12 @@ private fun GuideBar(
                 .padding(vertical = dress.pt(10), horizontal = dress.pt(8)),
             horizontalArrangement = Arrangement.spacedBy(dress.pt(16)),
         ) {
-            if (store.hasSets) {
-                // Sets take the filters' place: one control, which opens every set to choose from.
-                // The set before and after sit beside the set itself, as on Apple TV, so the guide keeps its height for rows.
-                val cycles = store.sets.orEmpty().size > 1
-                if (cycles) TvIconButton(dress, TvSymbols.ChevronLeft, "The set before", { onCycle(-1) })
-                TvButton(dress, (store.currentSet?.name ?: "All channels") + " ▾", onSets, kind = TvButtonKind.Chip, on = true, onBar = true, icon = Symbols.LiveTv)
-                if (cycles) TvIconButton(dress, Symbols.Next, "The set after", { onCycle(1) })
-            } else {
-                Chip(dress, "All", all) { store.choose(GuideFilter()) }
-                if (anyFavourite || filter.favourites) Chip(dress, "★ Favourites", filter.favourites) { store.choose(GuideFilter(favourites = !filter.favourites)) }
-                for (g in store.groups) Chip(dress, g, filter.group == g) { store.choose(GuideFilter(group = if (filter.group == g) "" else g)) }
-                if (hasBoth) {
-                    Chip(dress, "My library", filter.kind == "library") { store.choose(GuideFilter(kind = if (filter.kind == "library") "" else "library")) }
-                    Chip(dress, "Live TV", filter.kind == "tuner") { store.choose(GuideFilter(kind = if (filter.kind == "tuner") "" else "tuner")) }
-                }
-            }
+            // One control, which opens every set to choose from.
+            // The set before and after sit beside the set itself, as on Apple TV, so the guide keeps its height for rows.
+            val cycles = store.sets.orEmpty().size > 1
+            if (cycles) TvIconButton(dress, TvSymbols.ChevronLeft, "The set before", { onCycle(-1) })
+            TvButton(dress, (store.currentSet?.name ?: "All channels") + " ▾", onSets, kind = TvButtonKind.Chip, on = true, onBar = true, icon = Symbols.LiveTv)
+            if (cycles) TvIconButton(dress, Symbols.Next, "The set after", { onCycle(1) })
         }
         Row(Modifier.padding(vertical = dress.pt(10)), horizontalArrangement = Arrangement.spacedBy(dress.pt(16)), verticalAlignment = Alignment.CenterVertically) {
             TvIconButton(dress, TvSymbols.ChevronLeft, "Half an hour earlier", { onShift(-GuideRules.SLOT) }, onBar = true)
@@ -1052,9 +986,8 @@ private fun GuideGrid(
                 Text(
                     when {
                         store.search.isNotEmpty() -> "No channel here matches “${store.search}”."
-                        store.hasSets && store.currentSet?.kind == "favourites" -> "No favourites yet: hold Select on a channel to make it one."
-                        store.hasSets && store.currentSet?.isCustom == true -> "There are no channels you can see in this set yet."
-                        store.filter.favourites -> "No favourites yet: hold Select on a channel to make it one."
+                        store.currentSet?.kind == "favourites" -> "No favourites yet: hold Select on a channel to make it one."
+                        store.currentSet?.isCustom == true -> "There are no channels you can see in this set yet."
                         else -> "No channels match that."
                     },
                     style = dress.font(25f, W.Bold), color = p.err, modifier = Modifier.padding(vertical = dress.pt(12)),
@@ -1069,7 +1002,7 @@ private fun GuideGrid(
 
 // Underneath, on the shapes of the era: the coloured keys and what the remote does.
 @Composable
-private fun GuideFooter(dress: TvDress, kind: String, set: String?, onShift: (Long) -> Unit, onKind: () -> Unit) {
+private fun GuideFooter(dress: TvDress, set: String, onShift: (Long) -> Unit, onSet: () -> Unit) {
     val p = dress.paint
     val shape = dress.shape
     Row(
@@ -1091,7 +1024,7 @@ private fun GuideFooter(dress: TvDress, kind: String, set: String?, onShift: (Lo
     ) {
         Key(dress, "A", "Day −", p.keyA) { onShift(-86400) }
         Key(dress, "B", "Day +", p.keyB) { onShift(86400) }
-        Key(dress, "C", set ?: if (kind.isEmpty()) "All" else if (kind == "library") "Library" else "Live TV", p.keyC, onKind)
+        Key(dress, "C", set, p.keyC, onSet)
         Spacer(Modifier.weight(1f).width(dress.pt(16)))
         Text(
             "▲▼ Channel · ◄► Time · 0–9 Go to a channel · Select Watch · Hold Select for more · Play/Pause Watch the channel",

@@ -240,8 +240,8 @@ public struct SDUIPageLoader: Sendable {
         let answer: SDUIFresh<SDUIDiffAnswer>
         do {
             answer = try await client.sduiDiff(page, params: params, device: device, since: current.etag)
-        } catch let error as APIError where error.status == 404 || error.status == 400 {
-            // No diff to be had (an older server, or the page has gone): the page itself says which.
+        } catch let error as APIError where error.status == 404 {
+            // The page has gone: asking for it again says so in the page's own way.
             return try await load(page, params: params, device: device)
         }
         switch answer {

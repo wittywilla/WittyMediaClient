@@ -248,11 +248,6 @@ public struct ProgrammeInfo: Decodable, Equatable, Sendable {
     }
 }
 
-public extension TvFeature {
-    /// `GET /tv/{key}/programme`: WittyTV More info.
-    static let programmeInfo = "tv-programme-info"
-}
-
 public extension WittyClient {
     /// One programme in full; `start` is any moment in it, in Unix seconds. A 404 means it isn't there for this profile.
     func programmeInfo(channel key: String, start: Int64) async throws -> ProgrammeInfo {

@@ -26,7 +26,7 @@ import org.junit.Test
 import java.util.Locale
 
 // Channel sets, the guide a page at a time, finding a channel by its number, catch-up and a recording's options, as
-// the server's API for them is written (tv-sets, tv-guide-paging, tv-catchup, tv-dvr-rules-2).
+// the server's API for them is written.
 class GuideSetsTest {
     private val answer = """
         { "sets": [
@@ -203,9 +203,8 @@ class GuideSetsTest {
 
     @Test
     fun allAsksForPiecesAndLetsGoOfTheFarOnes() {
-        assertEquals(100, GuidePaging.chunk(0, paging = true))
-        assertEquals("an older server: as before", 30, GuidePaging.chunk(0, paging = false))
-        assertEquals(75, GuidePaging.chunk(75, paging = true))
+        assertEquals(100, GuidePaging.chunk(0))
+        assertEquals(75, GuidePaging.chunk(75))
         assertEquals(2..9, GuidePaging.keep(listOf(500, 520, 640), 100, 3))
         assertEquals(0..3, GuidePaging.keep(listOf(0, 12), 100, 3))
         assertTrue(GuidePaging.keep(emptyList(), 100).isEmpty())
@@ -292,8 +291,6 @@ class GuideSetsTest {
             """{"id":3,"channel":"tun-12","title":"Quiz","anyChannel":true,"newOnly":true,"keep":5,"padBefore":1,"padAfter":5}""",
         )
         assertEquals("Every airing on any channel · new episodes only · keep the newest 5 · starts 1 min early, ends 5 min late", DvrRules.ruleWords(rule))
-        val old = json.decodeFromString<RecordingRule>("""{"id":3,"channel":"BBC One","title":"Quiz"}""")
-        assertEquals("an older server's rule", "Every airing on BBC One", DvrRules.ruleWords(old))
         val r = json.decodeFromString<Recording>("""{"id":1,"title":"Quiz","status":"scheduled","conflict":true,"ruleTitle":"Quiz"}""")
         assertTrue(r.conflict)
         assertEquals("Quiz", r.ruleTitle)

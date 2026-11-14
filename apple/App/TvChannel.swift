@@ -47,7 +47,7 @@ struct ChannelPlayer: View {
             }
             if mini {
                 MiniGuide(dress: dress, tuned: key, set: chosenSet, onTune: tune, onClose: closeMini, onFull: toGuide,
-                          onInfo: model.has(TvFeature.programmeInfo) ? { c in info = MoreInfoAsk(channel: c, start: Int64(Date().timeIntervalSince1970)) } : nil,
+                          onInfo: { c in info = MoreInfoAsk(channel: c, start: Int64(Date().timeIntervalSince1970)) },
                           onLive: live.fromStart == nil ? nil : { closeMini(); live.backToLive(); showBanner() })
                     .padding(.horizontal, 77).padding(.bottom, 92)
                     .frame(maxHeight: .infinity, alignment: .bottom)
@@ -61,7 +61,7 @@ struct ChannelPlayer: View {
             }
             if dockOpen {
                 ChannelDock(dress: dress, live: live, onGuide: toGuide, onLook: { lookOpen = true }, onClose: closeDock,
-                            onInfo: model.has(TvFeature.programmeInfo) ? { info = MoreInfoAsk(channel: key, start: live.info?.now?.start ?? Int64(Date().timeIntervalSince1970)) } : nil)
+                            onInfo: { info = MoreInfoAsk(channel: key, start: live.info?.now?.start ?? Int64(Date().timeIntervalSince1970)) })
                     .frame(maxHeight: .infinity, alignment: .bottom)
             }
             if let programme = live.fromStart, !mini, !dockOpen {
@@ -115,8 +115,8 @@ struct ChannelPlayer: View {
         }
         .task {
             await TvLookStore.shared.load(client: client, themeId: model.effectiveThemeId, app: model.tvAppColours)
-            // Up and down go through the set the guide shows, on a server with sets.
-            if model.has(TvFeature.sets), !chosenSet.isEmpty {
+            // Up and down go through the set the guide shows.
+            if !chosenSet.isEmpty {
                 if let inSet = try? await client.channelList(set: chosenSet, limit: 20000) { lineup = uniqued(inSet.channels ?? []) }
             } else if let all = try? await client.lineup() {
                 lineup = uniqued(all.channels ?? [])
@@ -162,7 +162,7 @@ struct ChannelPlayer: View {
 
     /// The set this TV shows in the guide, as the server is asked for it; empty for all channels.
     private var chosenSet: String {
-        guard model.has(TvFeature.sets), let id = GuideDevice.shared.set(for: GuideDevice.setKey(model: model, client: client)),
+        guard let id = GuideDevice.shared.set(for: GuideDevice.setKey(model: model, client: client)),
               id != ChannelSetRules.all else { return "" }
         return id
     }

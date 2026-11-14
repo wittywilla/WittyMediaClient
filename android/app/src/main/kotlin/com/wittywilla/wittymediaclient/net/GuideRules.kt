@@ -54,9 +54,6 @@ object GuideRules {
     const val FETCH_HOURS = 8
     const val FETCH_SPAN = 3 * 3600L
 
-    // Rows asked for at a time.
-    const val PAGE = 30
-
     // A cell narrower than this can't show anything: several in a row are drawn as one.
     const val TINY_WIDTH = 14.0
 
@@ -195,17 +192,6 @@ object GuideRules {
         return if (m % 60 == 0) "${h}h" else "${h}h ${m % 60}m"
     }
 
-    // The channels a filter shows.
-    fun matches(channel: GuideChannel, kind: String, group: String, favourites: Boolean): Boolean =
-        (kind.isEmpty() || channel.kind == kind) &&
-            (group.isEmpty() || channel.group == group || channel.categories.orEmpty().contains(group)) &&
-            (!favourites || channel.favourite)
-
-    // What the server is asked for: a stretch of the schedule, a page of channels, and a filter.
-    fun query(from: Long, offset: Int, limit: Int = PAGE, kind: String = "", group: String = "", favourites: Boolean = false): String =
-        "/guide?from=$from&hours=$FETCH_HOURS&offset=$offset&limit=$limit&kind=${queryValue(kind)}&group=${queryValue(group)}" +
-            if (favourites) "&favourites=1" else ""
-
     // The programme after this one on the channel that's worth naming: not a slate or a gap.
     fun next(after: GuideProgramme?, cell: GuideCell?, channel: GuideChannel?): GuideProgramme? {
         if (channel == null) return null
@@ -273,10 +259,10 @@ data class Recording(
     val path: String? = null,
     val sizeBytes: Long? = null,
     val ruleId: Long? = null,
-    // On a server with `tv-dvr-rules-2`: no tuner would be free when it starts, and the series it's from.
+    // No tuner would be free when it starts, and the series it's from.
     val conflict: Boolean = false,
     val ruleTitle: String? = null,
-    // `tv-recording-refs`: the channel and programme to open More info with; absent when the profile may no longer watch it.
+    // The channel and programme to open More info with; absent when the profile may no longer watch it.
     val channelKey: String? = null,
     val programme: String? = null,
     val padBefore: Int = 0,
@@ -303,7 +289,7 @@ data class RecordingRule(
     val channelId: Long? = null,
     val channel: String = "",
     val title: String = "",
-    // On a server with `tv-dvr-rules-2`: on whichever channel shows it, only episodes it hasn't recorded, how many to
+    // On whichever channel shows it, only episodes it hasn't recorded, how many to
     // keep (0 keeps all), and minutes before and after.
     val anyChannel: Boolean = false,
     val newOnly: Boolean = false,
