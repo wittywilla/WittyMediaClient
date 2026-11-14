@@ -519,6 +519,10 @@ struct SDUISeasonListView: View {
     private var chosen: SDUISeason? { list.seasons.first(where: \.selected) ?? list.seasons.first }
     private func choose(_ season: SDUISeason) { Task { await store.choose(season, in: list, center: center) } }
     private var asList: Bool { !layout.isTV }
+    @ObservedObject private var views = SDUIEpisodeViews.shared
+    private var show: Int64? { SDUIEpisodeViews.show(on: store.screen) }
+    /// The episodes as a playlist, one line each: the choice for this show, else what the page sent.
+    private var playlist: Bool { (show.flatMap { views.chosen[$0] } ?? list.props.text("style")) == "list" }
 
     var body: some View {
         VStack(alignment: .leading, spacing: layout.sp("s")) {
@@ -526,10 +530,20 @@ struct SDUISeasonListView: View {
                 Text(list.title).sduiFont("title").foregroundStyle(palette.text).accessibilityAddTraits(.isHeader).padding(.horizontal, layout.margin)
             }
             if list.seasons.count > 1 || (list.seasons.count == 1 && layout.isTV) { seasons }
+            // Cards or a playlist, as the website's.
+            if let show { SDUIEpisodeLayoutSwitch(show: show, playlist: playlist) }
             if list.state == .error {
                 SDUISectionError(id: list.id) { Task { await store.retry(list, center: center) } }
             } else if list.state == .deferred || (store.busy.contains(list.id) && list.children.isEmpty) {
                 SDUIPlaceholderRow(count: layout.placeholders(cardWidth: Int(cardWidth)), width: cardWidth, height: cardHeight)
+            } else if playlist {
+                LazyVStack(alignment: .leading, spacing: layout.sp("xs")) {
+                    ForEach(Array(list.children.enumerated()), id: \.element.id) { index, card in
+                        SDUIEpisodeLine(card: card, synopsis: list.props.flag("showSynopsis") != false)
+                            .onAppear { if list.hasMore, index >= list.children.count - 4 { Task { await store.more(list, center: center) } } }
+                    }
+                }
+                .opacity(store.busy.contains(list.id) ? 0.5 : 1)
             } else if asList {
                 LazyVStack(alignment: .leading, spacing: layout.sp("s")) {
                     ForEach(Array(list.children.enumerated()), id: \.element.id) { index, card in
@@ -557,6 +571,7 @@ struct SDUISeasonListView: View {
         .accessibilityLabel(list.label)
         .accessibilityIdentifier("sdui.section." + list.id)
         .task(id: list.stateName) { await store.fill(list, center: center) }
+        .task(id: show) { if let show { await views.settle(show, client: model.client) } }
     }
 
     @ViewBuilder private var seasons: some View {

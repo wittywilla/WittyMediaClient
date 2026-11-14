@@ -217,6 +217,8 @@ data class Show(
     val contentRating: String = "",
     val network: String = "",
     val status: String = "",
+    // How its episodes are laid out for everyone, an administrator's choice: "cards", "list", or "" for the server's.
+    val view: String = "",
 )
 
 @Serializable
