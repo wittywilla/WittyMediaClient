@@ -5,3 +5,8 @@
 -keep class com.wittywilla.wittyconnect.** { *; }
 -dontwarn go.**
 -dontwarn com.wittywilla.wittyconnect.**
+
+# WebRTC (WittyPlay's version 2 stream): libwebrtc finds its Java side by name through JNI, org.jni_zero's
+# JniInit first, so R8 must keep both whole or the app ends the moment a game's stream starts.
+-keep class org.webrtc.** { *; }
+-keep class org.jni_zero.** { *; }
