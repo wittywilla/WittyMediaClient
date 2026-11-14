@@ -29,6 +29,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.compositionLocalOf
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -67,6 +68,9 @@ import coil3.request.ImageRequest
 // Where focus was on each screen, so that coming back puts it where it was.
 class FocusMemory {
     var last: String? = null
+    // Where a row that had focus stood in its list (the list's id and its place) when it went from the page while it had
+    // focus, as when a command changes the page: the row that comes in its place takes focus, as a remote expects.
+    var vanished by androidx.compose.runtime.mutableStateOf<Pair<String, Int>?>(null)
 }
 
 val LocalFocusMemory = compositionLocalOf { FocusMemory() }

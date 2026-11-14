@@ -27,6 +27,7 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
@@ -991,7 +992,24 @@ fun SduiLine(view: SduiView, parent: SduiView) {
             val image = p.image("image")
             val dense = parent.props.isOn("dense")
             // A row that does nothing is words to read, not a stop for a remote.
-            Pressable({ env.act(view.node.action) }, Modifier.fillMaxWidth().focusProperties { canFocus = press }, shape = RoundedCornerShape(env.pt(10)), fill = Color.Transparent, label = view.label, enabled = press, disabledAlpha = 1f, focusKey = focusKey, requestFocus = start, ring = env.tv && press, pressScale = 1f) {
+            val memory = LocalFocusMemory.current
+            val at = parent.children.indexOf(view)
+            // When it last had focus: a row taken from the page loses focus just before it goes, so one that goes moments
+            // after losing it went while it had it.
+            val held = remember { longArrayOf(0L) }
+            val succeeds = press && sduiTakesPlace(env, memory, parent, at)
+            DisposableEffect(view.id) {
+                onDispose { if (env.tv && System.nanoTime() - held[0] < VANISH_NS) memory.vanished = parent.id to at }
+            }
+            Pressable(
+                { env.act(view.node.action) },
+                Modifier.fillMaxWidth().focusProperties { canFocus = press }.onFocusChanged {
+                    if (it.isFocused || held[0] == -1L) held[0] = if (it.isFocused) -1L else System.nanoTime()
+                    if (it.isFocused && succeeds) memory.vanished = null
+                },
+                shape = RoundedCornerShape(env.pt(10)), fill = Color.Transparent, label = view.label, enabled = press, disabledAlpha = 1f,
+                focusKey = focusKey, requestFocus = start, takeFocus = succeeds, ring = env.tv && press, pressScale = 1f,
+            ) {
                 Row(Modifier.fillMaxWidth().heightIn(min = env.pt(if (env.tv) 90 else if (dense) 44 else 56)).padding(horizontal = env.pt(if (env.tv) 24 else 4)).clearAndSetSemantics { }, verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(env.space("s"))) {
                     val box = env.pt(if (env.tv) 66 else if (dense) 28 else 40)
                     if (image != null) SduiPicture(image, box, 1f, null, Modifier.size(box).clip(RoundedCornerShape(env.pt(6))))
@@ -1387,4 +1405,17 @@ private fun PersonInitials(name: String, size: Dp) {
     Box(Modifier.size(size).clip(CircleShape).background(MaterialTheme.colorScheme.surfaceVariant).clearAndSetSemantics { }, contentAlignment = Alignment.Center) {
         Text(initials(name), color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = env.size("pageTitle"), fontWeight = FontWeight.SemiBold)
     }
+}
+
+// On a TV, whether this row takes focus because the one that had it is gone from the page and this row is where it stood
+// (or the last pressable row of the list, where it stood past the end): after Done, its answer, not the top of the page.
+private const val VANISH_NS = 500_000_000L
+
+internal fun sduiTakesPlace(env: SduiEnv, memory: FocusMemory, parent: SduiView, at: Int): Boolean {
+    if (!env.tv) return false
+    val (list, was) = memory.vanished ?: return false
+    if (list != parent.id) return false
+    val pressable = parent.children.indices.filter { parent.children[it].node.action != null }
+    val here = pressable.firstOrNull { it >= was } ?: pressable.lastOrNull()
+    return here == at
 }
