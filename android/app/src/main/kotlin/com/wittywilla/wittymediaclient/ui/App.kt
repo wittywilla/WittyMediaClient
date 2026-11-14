@@ -266,7 +266,6 @@ class Nav(val app: WittyApp, private val s: Map<String, String>) {
         this.libraries = libraries
         val list = libraries.filter { it.inMainMenus }.map { MenuEntry("lib:" + it.id, it.name, WebIcons.forLibrary(it.type), libraryRoute(it)) }.toMutableList()
         if (libraries.isNotEmpty()) list += MenuEntry("collections", "Collections", WebIcons.Library, Route.Page("/collections", "Collections"))
-        if (runCatching { api.couchStatus().allowed }.getOrDefault(false)) list += MenuEntry("couch", "Game PCs", WebIcons.Gamepad, Route.Page("/couch", "Game PCs"))
         runCatching { api.modulePages() }.getOrDefault(emptyList()).filter { it.second.where == "main" }.forEach { (module, page) ->
             list += MenuEntry("m:$module:${page.id}", page.title, if (page.icon == "chart") WebIcons.Chart else WebIcons.Plug, Route.Page("/m/$module/${page.id}", page.title))
         }

@@ -576,9 +576,6 @@ data class RigPlay(
 )
 
 @Serializable
-data class CouchStatus(val allowed: Boolean = false)
-
-@Serializable
 data class RigWake(val ok: Boolean = false, val note: String = "")
 
 // You and settings: docs/APP-DESIGN.md. What the server's internal/server answers for an account.
