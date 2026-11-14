@@ -144,6 +144,7 @@ private const val TAB_HEIGHT = 52
 // Pages below the tabs: the website's shell on a phone or tablet; on a TV, as before.
 @Composable
 fun PageShell(nav: Nav, page: @Composable () -> Unit) {
+    if (inPlayFrame(nav)) { PlayFrame(nav, page); return }
     // A stacked page keeps the status bar and dock the page before it asked for, while it is of the same theme scope.
     val content: @Composable () -> Unit = { SduiRegionsFrame(nav, page) }
     if (LocalMetrics.current.tv) content() else PhoneShell(nav, content)
@@ -153,6 +154,7 @@ fun PageShell(nav: Nav, page: @Composable () -> Unit) {
 // along the top instead, where up from a tab's first row gets to them: see TvTabs.kt.
 @Composable
 fun Shell(nav: Nav, page: @Composable () -> Unit) {
+    if (inPlayFrame(nav)) { PlayFrame(nav, page); return }
     // The regions a page asked for (status bar, system dock) are drawn around it by the shell.
     val content: @Composable () -> Unit = { SduiRegionsFrame(nav, page) }
     val metrics = LocalMetrics.current
@@ -286,4 +288,17 @@ fun LogsScreen(nav: Nav) {
         runCatching { File(context.filesDir, "logs/client.log").readLines().takeLast(LOG_LINES).joinToString("\n") }.getOrDefault("").ifEmpty { "Nothing has been logged yet." }
     }
     TextPage(nav, "This app's log", text)
+}
+
+// A page that supplies the shell's regions (WittyPlay Online's status bar and system dock) takes the whole screen, as on the
+// website and the Apple apps: no tabs and no bottom bar, its own frame and palette, and Return To Server in its status bar.
+fun inPlayFrame(nav: Nav): Boolean = nav.regions?.let { r ->
+    (!r.hideStatusBar && r.regions.statusBar.isNotEmpty()) || (!r.hideSystemDock && r.regions.systemDock.isNotEmpty())
+} == true
+
+@Composable
+private fun PlayFrame(nav: Nav, page: @Composable () -> Unit) {
+    Box(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background).statusBarsPadding().navigationBarsPadding()) {
+        CompositionLocalProvider(LocalBottomRoom provides 0.dp) { SduiRegionsFrame(nav, page) }
+    }
 }

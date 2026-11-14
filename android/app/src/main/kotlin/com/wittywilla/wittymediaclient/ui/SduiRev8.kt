@@ -411,6 +411,14 @@ private fun SduiStatusBar(nav: Nav, state: SduiRegionsState) {
         }
         Spacer(Modifier.weight(1f))
         StatusClock()
+        // Out of WittyPlay's frame, back to the server's Home.
+        Pressable(
+            { nav.regions = null; nav.reset(Route.Home) }, shape = CircleShape, fill = scheme.surfaceVariant,
+            label = "Return To Server", focusKey = "status~return".takeIf { metrics.tv },
+        ) {
+            Text("Return To Server", color = scheme.onSurface, style = MaterialTheme.typography.label, maxLines = 1,
+                modifier = Modifier.padding(horizontal = metrics.u(12), vertical = metrics.u(6)))
+        }
     }
 }
 

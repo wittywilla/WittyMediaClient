@@ -12,7 +12,7 @@ import WittyKit
 ///
 /// This is iPhone and iPad only. Apple TV has no web view at all: tvOS doesn't offer WebKit to apps,
 /// so everything on Apple TV is native SwiftUI and AVPlayer, and a Mac uses its real browsers.
-private struct WebPlayerPage: UIViewRepresentable {
+struct WebPlayerPage: UIViewRepresentable {
     let base: String
     let token: String
     let url: URL

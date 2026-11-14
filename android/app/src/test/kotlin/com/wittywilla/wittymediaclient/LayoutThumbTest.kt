@@ -26,8 +26,8 @@ class LayoutThumbTest {
         assertTrue(Wire.of(lumen, "tv").dock)
     }
 
-    @Test fun `a form factor the server did not send takes desktop, else the plain look`() {
-        assertEquals("gloss", Wire.of(list.experiences[1].wire, "tablet").style)
+    @Test fun `a form factor the server did not send is the plain look, never the desktop's`() {
+        assertEquals(SduiWire(), Wire.of(list.experiences[1].wire, "phone"))
         assertEquals(SduiWire(), Wire.of(list.experiences[2].wire, "tv"))
     }
 
