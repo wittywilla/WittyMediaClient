@@ -83,8 +83,6 @@ public struct SavedServer: Codable, Identifiable, Equatable {
 public enum IdentityState: Equatable {
     /// Nothing answered.
     case unreachable
-    /// A server older than this check, and no key was remembered for it.
-    case older
     /// The answer proves nothing, so nothing about it can be believed.
     case bad
     /// Never seen before.
@@ -179,26 +177,22 @@ public enum Identity {
         return compare(publicKey: answer.publicKey, serverId: answer.serverId, url: url, saved: saved)
     }
 
-    /// A 404 is an older server, unless we remember this address proving itself:
-    /// then it's what a look-alike would say to avoid the question.
-    public static func unanswered(url: String, saved: [SavedServer]) -> IdentityState {
-        saved.contains { $0.url == url && !$0.publicKey.isEmpty } ? .bad : .older
-    }
+    /// Every WittyMediaServer answers the question; one that won't (a 404) can't be told from a look-alike avoiding it.
+    public static func unanswered(url: String, saved: [SavedServer]) -> IdentityState { .bad }
 
     /// May what belongs with this pin (a token, a code) go to the server that gave this proof?
     public static func fits(pin: String, proof: ServerProof) -> Bool {
-        if pin.isEmpty { return proof.state == .new || proof.state == .older }
+        // A sign-in kept with no key is from before servers proved theirs: nothing ties it to this one.
+        if pin.isEmpty { return false }
         return proof.state == .same && proof.publicKey == pin
     }
 
-    /// The person was looking at `shownKey`. Only that key may be sent anything. With no key to hold
-    /// it to (a server older than this check), only a server that still has none will do.
+    /// The person was looking at `shownKey`. Only that key may be sent anything.
     public static func beforeSending(shownKey: String, proof: ServerProof) -> BeforeSending {
         switch proof.state {
         case .unreachable: return .unreachable
         case .bad: return .refuse
         case .different: return .changed
-        case .older: return shownKey.isEmpty ? .send : .refuse
         case .new: return shownKey.isEmpty ? .send : .changed
         case .same: return proof.publicKey == shownKey ? .send : .changed
         }
@@ -211,7 +205,6 @@ public enum Identity {
         case .bad: return .refuse
         case .unreachable: return .lost
         case .new: return .askCode
-        case .older: return .signIn
         case .same: return tokenFits ? .open : .signIn
         }
     }
@@ -222,7 +215,7 @@ public enum Identity {
         case .different: return .warn
         case .bad: return .refuse
         case .unreachable: return .lost
-        case .new, .older, .same: return tokenFits ? .open : .signIn
+        case .new, .same: return tokenFits ? .open : .signIn
         }
     }
 }

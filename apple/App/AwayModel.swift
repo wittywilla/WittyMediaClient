@@ -117,7 +117,7 @@ extension AppModel {
         let proof = await WittyClient.identify(url, saved: [saved])
         switch proof.state {
         case .same: return true
-        case .new, .older: return saved.publicKey.isEmpty
+        case .new: return saved.publicKey.isEmpty
         default: return false
         }
     }

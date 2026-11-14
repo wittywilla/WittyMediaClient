@@ -47,14 +47,13 @@ final class GamesTests: XCTestCase {
         XCTAssertEqual(nes.cores?.first?.license, "GPL-2.0")
     }
 
-    func testSessionTakesModesEitherWay() throws {
+    func testSessionModesAreObjects() throws {
         let full = try decode(GameSession.self, """
         {"id":"g1","itemId":1922,"console":"nes","aspect":1.306,"turns":0,"discs":1,
          "modes":[{"id":"webrtc","video":["h264","vp8"]},{"id":"ws-h264","video":["h264"]},{"id":"ws-jpeg","video":["jpeg"]}]}
         """)
         XCTAssertEqual(GameModes.order(full.modes), ["ws-h264", "ws-jpeg"])
-        let names = try decode(GameSession.self, #"{"id":"g2","modes":["ws-jpeg","later-thing"]}"#)
-        XCTAssertEqual(GameModes.order(names.modes), ["ws-jpeg"])
+        XCTAssertThrowsError(try decode(GameSession.self, #"{"id":"g2","modes":["ws-jpeg"]}"#), "a bare name is no mode")
         XCTAssertEqual(GameModes.order(nil), ["ws-h264", "ws-jpeg"])
         XCTAssertEqual(GameModes.video(for: "ws-jpeg"), "jpeg")
         XCTAssertEqual(GameModes.video(for: "ws-h264"), "h264")
