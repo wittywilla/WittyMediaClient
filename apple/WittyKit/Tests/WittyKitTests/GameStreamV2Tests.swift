@@ -34,7 +34,7 @@ final class GameStreamV2Tests: XCTestCase {
         XCTAssertEqual(object["v"] as? Int, 2)
         XCTAssertEqual(object["device"] as? String, "appletv-abc")
         XCTAssertEqual(object["watch"] as? Bool, true)
-        XCTAssertEqual(object["video"] as? [String], ["h264"])
+        XCTAssertEqual(object["video"] as? [String], ["h264", "jpeg"])
         XCTAssertEqual(object["audio"] as? [String], ["pcm"], "no Opus until it's decoded here")
         XCTAssertEqual(object["seats"] as? [Int], [0, 1])
         XCTAssertEqual((object["display"] as? [String: Any])?["hz"] as? Double, 59.94)
@@ -67,23 +67,26 @@ final class GameStreamV2Tests: XCTestCase {
                        "words of our own when the server gives none")
     }
 
-    func testTheSecondStreamComesFirstWhereTheServerHasIt() throws {
+    func testOnlyThisAppsStreamIsUsedAndANewerOneAsksForAnUpdate() throws {
         let modes = try JSONDecoder().decode([GameMode].self, from: Data("""
-        [{"id":"webrtc","video":["h264"],"stream":2},{"id":"ws-h264","video":["h264"]},{"id":"ws-jpeg"}]
+        [{"id":"webrtc","video":["h264"],"stream":2},{"id":"websocket","video":["h264","jpeg"],"stream":2}]
         """.utf8))
-        XCTAssertEqual(GameModes.order(modes), [GameModes.streamWebSocket, "ws-h264", "ws-jpeg"])
-        XCTAssertEqual(GameModes.order([GameMode(id: "ws-h264"), GameMode(id: "ws-jpeg")]), ["ws-h264", "ws-jpeg"], "a server without it")
-        XCTAssertEqual(GameModes.order(nil), ["ws-h264", "ws-jpeg"])
+        XCTAssertEqual(GameModes.order(modes, webRTC: false), [GameModes.streamWebSocket])
+        XCTAssertFalse(GameModes.needsNewerApp(modes))
+        let newer = [GameMode(id: "websocket", stream: 3)]
+        XCTAssertEqual(GameModes.order(newer, webRTC: true), [], "no falling back to anything")
+        XCTAssertTrue(GameModes.needsNewerApp(newer))
+        XCTAssertEqual(GameModes.order(nil), [])
+        XCTAssertFalse(GameModes.needsNewerApp(nil))
+        XCTAssertFalse(GameModes.needsNewerApp([GameMode(id: "ws-h264")]), "nothing to play, but not newer either")
 
         let client = WittyClient(base: "http://127.0.0.1:9797", token: "secret")
         let request = try XCTUnwrap(client.gameStreamRequest("g1"))
         XCTAssertEqual(request.url?.absoluteString, "ws://127.0.0.1:9797/api/v1/play/g1/stream")
         XCTAssertEqual(request.value(forHTTPHeaderField: "Authorization"), "Bearer secret")
         let hello = GameHello(app: "a", device: "d", name: "n", seats: [0], display: .init(hz: 60, width: 1, height: 1))
-        let v2 = try XCTUnwrap(GameTransports.make(mode: GameModes.streamWebSocket, session: "g1", client: client, hello: hello) as? GameWebSocketTransport)
-        XCTAssertTrue(v2.isSecondStream)
-        XCTAssertNil(GameTransports.make(mode: GameModes.streamWebSocket, session: "g1", client: client), "it needs the hello")
-        XCTAssertFalse(try XCTUnwrap(GameTransports.make(mode: "ws-h264", session: "g1", client: client) as? GameWebSocketTransport).isSecondStream)
+        XCTAssertTrue(GameTransports.make(mode: GameModes.streamWebSocket, session: "g1", client: client, hello: hello) is GameWebSocketTransport)
+        XCTAssertEqual(hello.video, ["h264", "jpeg"], "a JPEG a frame where the server has no encoder")
     }
 
     func testHowLateFramesArrive() {
@@ -192,10 +195,9 @@ final class GameStreamV2Tests: XCTestCase {
     // MARK: WebRTC
 
     func testWebRTCComesFirstWhereTheAppHasIt() throws {
-        let modes = [GameMode(id: "webrtc", video: ["h264"], stream: 2), GameMode(id: "ws-h264"), GameMode(id: "ws-jpeg")]
-        XCTAssertEqual(GameModes.order(modes, webRTC: true), [GameModes.streamWebRTC, GameModes.streamWebSocket, "ws-h264", "ws-jpeg"])
-        XCTAssertEqual(GameModes.order(modes, webRTC: false), [GameModes.streamWebSocket, "ws-h264", "ws-jpeg"])
-        XCTAssertEqual(GameModes.order([GameMode(id: "ws-h264")], webRTC: true), ["ws-h264"], "no second stream, no WebRTC")
+        let modes = [GameMode(id: "webrtc", video: ["h264"], stream: 2), GameMode(id: "websocket", stream: 2)]
+        XCTAssertEqual(GameModes.order(modes, webRTC: true), [GameModes.streamWebRTC, GameModes.streamWebSocket])
+        XCTAssertEqual(GameModes.order(modes, webRTC: false), [GameModes.streamWebSocket])
         XCTAssertEqual(GameModes.firstPictureWait(GameModes.streamWebRTC), 8)
         XCTAssertEqual(GameModes.firstPictureWait(GameModes.streamWebSocket), 12)
     }

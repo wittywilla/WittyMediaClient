@@ -132,9 +132,7 @@ extension WittyClient {
         _ = try await call("DELETE", "/play/\(Self.pathPart(sid))")
     }
 
-    /// The WebSocket for a game: `video` is `h264` or `jpeg`. The sign-in goes in its header, as
-    /// for every other request, and never in the address.
-    /// The second stream's WebRTC offer, `POST /play/{sid}/stream`, signed in by header.
+    /// The stream's WebRTC offer, `POST /play/{sid}/stream`, signed in by header.
     public func gameStreamOfferRequest(_ sid: String) -> URLRequest? {
         guard let url = mediaURL("/api/v1/play/\(Self.pathPart(sid))/stream") else { return nil }
         var request = URLRequest(url: url)
@@ -145,13 +143,9 @@ extension WittyClient {
         return request
     }
 
-    /// The second stream's WebSocket: the hello goes first, as text.
+    /// The stream's WebSocket: the hello goes first, as text. The sign-in goes in its header, never the address.
     public func gameStreamRequest(_ sid: String) -> URLRequest? {
         socketRequest("/api/v1/play/\(Self.pathPart(sid))/stream")
-    }
-
-    public func gameSocketRequest(_ sid: String, video: String) -> URLRequest? {
-        socketRequest("/api/v1/play/\(Self.pathPart(sid))/ws?video=\(Self.queryValue(video))")
     }
 
     /// A WebSocket's request, signed in by header: the token never goes in the address.

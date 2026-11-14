@@ -374,6 +374,13 @@ final class GamePlayerModel: ObservableObject {
         disc = session.disc ?? 0
         discs = max(1, session.discs ?? 1)
         modes = GameModes.order(session.modes)
+        guard !modes.isEmpty else {
+            phase = .failed(GameModes.needsNewerApp(session.modes)
+                ? "This server streams games in a newer way than this app knows. Update WittyMediaClient to play."
+                : "This server offers no way to play this game here.")
+            Task.detached { [client] in try? await client.stopGame(session.id) }
+            return
+        }
         devices = (session.devices ?? []).filter { ($0.types ?? []).count > 1 }
         input.playerPorts = GamePorts.players(count: nil, devices: session.devices)
         plugged = Dictionary(devices.compactMap { d in d.current.map { (d.port, $0) } }, uniquingKeysWith: { a, _ in a })
@@ -500,7 +507,7 @@ final class GamePlayerModel: ObservableObject {
     // MARK: The connection
 
     private func connect() {
-        guard let session, !stopped else { return }
+        guard let session, !stopped, !modes.isEmpty else { return }
         transport?.close()
         let id = pipeline?.restart() ?? 0
         let mode = modes[min(modeAt, modes.count - 1)]
