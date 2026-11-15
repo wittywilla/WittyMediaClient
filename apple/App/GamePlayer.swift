@@ -265,6 +265,9 @@ final class GamePlayerModel: ObservableObject {
     private var client = WittyClient(base: "")
     private var gameId: Int64 = 0
     private var start: GameStart = .fresh
+    /// The account playing here, for giving up a seat; the seat's session once known.
+    private var me: Int64?
+    private var seatSid: String?
     private var modes: [String] = GameModes.supported
     private var modeAt = 0
     private var watchdog: Timer?
@@ -303,8 +306,9 @@ final class GamePlayerModel: ObservableObject {
         return made
     }
 
-    func begin(id: Int64, start: GameStart, client: WittyClient) async {
+    func begin(id: Int64, start: GameStart, client: WittyClient, user: Int64? = nil) async {
         guard pipeline == nil else { return }
+        me = user
         // The second stream over WebRTC, first where the server has it.
         GameTransports.webRTC = { offer, hello in GameWebRTCTransport(offer: offer, hello: hello) }
         self.client = client
@@ -339,30 +343,41 @@ final class GamePlayerModel: ObservableObject {
         settings = (try? await client.gameSettings(item: id)) ?? GameSettings(values: [:])
         guard live else { return }
         applySettings()
-        // A game in an archive is unpacked first, which can take a while on a small server.
-        do {
-            while !Task.isCancelled {
-                let state = try await client.prepareGame(id)
-                if state.ready { break }
-                phase = .preparing(state.fraction)
-                try await Task.sleep(nanoseconds: 1_000_000_000)
-            }
-        } catch {
-            fail(error)
-            return
-        }
-        guard live else { return }
-        phase = .starting
         let session: GameSession
-        do {
-            session = try await client.playGame(id, resume: start.resumes, safeMode: start.safeMode)
-        } catch {
-            fail(error)
-            return
+        if start.isSeat {
+            // Someone else's game: no unpacking or starting, only the seat (an invite accepted first).
+            phase = .starting
+            do {
+                session = try await seatSession()
+            } catch {
+                fail(error)
+                return
+            }
+        } else {
+            // A game in an archive is unpacked first, which can take a while on a small server.
+            do {
+                while !Task.isCancelled {
+                    let state = try await client.prepareGame(id)
+                    if state.ready { break }
+                    phase = .preparing(state.fraction)
+                    try await Task.sleep(nanoseconds: 1_000_000_000)
+                }
+            } catch {
+                fail(error)
+                return
+            }
+            guard live else { return }
+            phase = .starting
+            do {
+                session = try await client.playGame(id, resume: start.resumes, safeMode: start.safeMode)
+            } catch {
+                fail(error)
+                return
+            }
         }
         guard live else {
-            // Left while it started: it still has to be stopped, from a task that isn't cancelled.
-            Task.detached { [client] in try? await client.stopGame(session.id) }
+            // Left while it started: it still has to be stopped (or the seat given up), from a task that isn't cancelled.
+            end(session.id)
             return
         }
         self.session = session
@@ -378,7 +393,7 @@ final class GamePlayerModel: ObservableObject {
             phase = .failed(GameModes.needsNewerApp(session.modes)
                 ? "This server streams games in a newer way than this app knows. Update WittyMediaClient to play."
                 : "This server offers no way to play this game here.")
-            Task.detached { [client] in try? await client.stopGame(session.id) }
+            end(session.id)
             return
         }
         devices = (session.devices ?? []).filter { ($0.types ?? []).count > 1 }
@@ -389,7 +404,7 @@ final class GamePlayerModel: ObservableObject {
         let console = session.console ?? ""
         let controls = try? await client.gameControls(console: console, device: Self.deviceId, game: id)
         guard live else {
-            Task.detached { [client] in try? await client.stopGame(session.id) }
+            end(session.id)
             return
         }
         controlsData = controls
@@ -401,6 +416,28 @@ final class GamePlayerModel: ObservableObject {
         connect()
         watchdog = Timer.scheduledTimer(withTimeInterval: 1, repeats: true) { [weak self] _ in
             Task { @MainActor in self?.watch() }
+        }
+    }
+
+    /// The session a seat plays: the invite accepted once (starting again plays the same seat), or the one joined.
+    private func seatSession() async throws -> GameSession {
+        if seatSid == nil {
+            switch start {
+            case .invite(let invite): seatSid = try await client.acceptGameInvite(invite).sid
+            case .join(let sid): seatSid = sid
+            default: break
+            }
+        }
+        return try await client.gameSession(seatSid ?? "")
+    }
+
+    /// Stops a game of this account's own, or gives up a seat in someone else's (their game goes on), without waiting.
+    private func end(_ sid: String) {
+        if start.isSeat {
+            guard let me else { return }
+            Task.detached { [client] in try? await client.leaveGameSeat(sid, user: me) }
+        } else {
+            Task.detached { [client] in try? await client.stopGame(sid) }
         }
     }
 
@@ -887,7 +924,7 @@ final class GamePlayerModel: ObservableObject {
         watchdog?.invalidate()
         if let session {
             Self.endLogSession(session.id)
-            try? await client.stopGame(session.id)
+            if start.isSeat, let me { try? await client.leaveGameSeat(session.id, user: me) } else { try? await client.stopGame(session.id) }
         }
         busy = false
         leave = true
@@ -904,7 +941,7 @@ final class GamePlayerModel: ObservableObject {
         watchdog?.invalidate()
         if let session {
             Self.endLogSession(session.id)
-            Task.detached { [client] in try? await client.stopGame(session.id) }
+            end(session.id)
         }
     }
 
@@ -1043,7 +1080,7 @@ struct GamePlayerScreen: View {
         .task {
             // A game stops the music, as a film does.
             app.listening.pauseForVideo()
-            await game.begin(id: id, start: start, client: client)
+            await game.begin(id: id, start: start, client: client, user: app.user?.id)
         }
         .onDisappear { game.abandon() }
         #if !os(tvOS)

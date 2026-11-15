@@ -114,10 +114,7 @@ public enum WebPlayer {
                 if let key = kv.first, fields[String(key)] == nil { fields[String(key)] = kv.count > 1 ? String(kv[1]) : "" }
             }
         }
-        let resume = fields["resume"] == "1"
-        if let slot = fields["slot"].flatMap({ Int($0) }), slot > 0 { return (id, .slot(slot)) }
-        if fields["safe"] == "1" { return (id, .safe(resume: resume)) }
-        return (id, resume ? .resume : .fresh)
+        return (id, GameStart.from(fields.mapValues { $0.removingPercentEncoding ?? $0 }))
     }
 
     public static func sameServer(_ url: URL, base: String) -> Bool {

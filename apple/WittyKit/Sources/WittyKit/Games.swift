@@ -584,13 +584,35 @@ public enum GameStart: Hashable {
     case slot(Int)
     /// Defaults only, no cheats and no patches.
     case safe(resume: Bool)
+    /// A seat in someone else's game: an invite to accept first (`/game/{id}?invite=`), then play it as `join`.
+    case invite(String)
+    /// A seat in the game playing as this session (`/game/{id}?join=`). Leaving gives up the seat; the game goes on.
+    case join(String)
 
     public var resumes: Bool {
         switch self {
         case .resume: return true
         case .safe(let resume): return resume
-        case .fresh, .slot: return false
+        case .fresh, .slot, .invite, .join: return false
         }
+    }
+
+    /// Joining someone else's game rather than starting one of this account's own.
+    public var isSeat: Bool {
+        switch self {
+        case .invite, .join: return true
+        default: return false
+        }
+    }
+
+    /// Where a game's route and its query lead: `?invite=` and `?join=` to a seat, `?slot=`, `?safe=1`, `?resume=1`.
+    public static func from(_ fields: [String: String]) -> GameStart {
+        if let invite = fields["invite"], !invite.isEmpty { return .invite(invite) }
+        if let join = fields["join"], !join.isEmpty { return .join(join) }
+        let resume = fields["resume"] == "1"
+        if let slot = fields["slot"].flatMap({ Int($0) }), slot > 0 { return .slot(slot) }
+        if fields["safe"] == "1" { return .safe(resume: resume) }
+        return resume ? .resume : .fresh
     }
 
     public var safeMode: Bool { if case .safe = self { return true } else { return false } }

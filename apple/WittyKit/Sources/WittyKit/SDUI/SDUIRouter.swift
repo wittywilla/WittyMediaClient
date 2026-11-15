@@ -55,6 +55,8 @@ public struct SDUIRouter: Equatable, Sendable {
                 // An app's own screen gets everything the route named: the item to play, the channel's key, and
                 // the route itself, for a screen that shows more than one place (the guide and its recordings).
                 var all = found.merging(params) { _, new in new }
+                // And the route's query, under what the rule named (a game's `?invite=` or `?join=`).
+                for (name, value) in query where all[name] == nil { all[name] = value }
                 all["route"] = path
                 return .native(native, params: all)
             }

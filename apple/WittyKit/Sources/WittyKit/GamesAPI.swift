@@ -126,7 +126,25 @@ extension WittyClient {
                                   wait: Self.gameStartWait)
     }
 
-    public func gameSession(_ sid: String) async throws -> GameSession { try await decode("GET", Self.wittyPlay + "/play/\(Self.pathPart(sid))") }
+    public func gameSession(_ sid: String) async throws -> GameSession {
+        try await decode("GET", Self.wittyPlay + "/play/\(Self.pathPart(sid))?client=native")
+    }
+
+    /// What accepting an invite answers: the session to play as a seat.
+    public struct AcceptedInvite: Decodable, Sendable {
+        public let sid: String
+        public let seat: Int?
+    }
+
+    /// Accepts a friend's invite to a game: a seat in it, the lowest player free or watching when all are taken.
+    public func acceptGameInvite(_ id: String) async throws -> AcceptedInvite {
+        try await decode("POST", Self.wittyPlay + "/games/online/invites/\(Self.pathPart(id))/accept", body: Data("{}".utf8))
+    }
+
+    /// Gives up a seat in someone else's game; their game goes on.
+    public func leaveGameSeat(_ sid: String, user: Int64) async throws {
+        _ = try await call("DELETE", Self.wittyPlay + "/play/\(Self.pathPart(sid))/seats/\(user)")
+    }
 
     public func gameAction(_ sid: String, _ action: GameAction) async throws {
         _ = try await call("POST", Self.wittyPlay + "/play/\(Self.pathPart(sid))/action", body: try json(action))

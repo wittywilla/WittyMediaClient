@@ -89,6 +89,7 @@ struct TvPlayFrame<Content: View>: View {
 private struct TvPlayStatus: View {
     @EnvironmentObject private var model: AppModel
     @Environment(\.palette) private var palette
+    @ObservedObject private var batteries = BatteryWatch.shared
     let parts: [SDUIRegions.Status]
     let exit: () -> Void
 
@@ -120,6 +121,8 @@ private struct TvPlayStatus: View {
                 }
                 .accessibilityElement(children: .combine)
             }
+            // The controllers' batteries (and a device's, where it has one), as the website's status bar has them.
+            if !batteries.readings.isEmpty { BatteryChips(readings: batteries.readings) }
             TimelineView(.periodic(from: .now, by: 15)) { context in
                 Text(context.date, style: .time).font(.system(size: 26, weight: .semibold)).foregroundStyle(palette.text.opacity(0.85))
             }
@@ -132,6 +135,8 @@ private struct TvPlayStatus: View {
         .frame(height: 64)
         .padding(.bottom, Tokens.Space.s2)
         .focusSection()
+        .onAppear { batteries.start() }
+        .onDisappear { batteries.stop() }
     }
 }
 

@@ -19,6 +19,8 @@ struct SDUIActionRow: View {
     var beyond: ((Int) -> Void)?
     /// Told whether one of these has focus: a hero never advances while one has.
     var focusChanged: ((Bool) -> Void)?
+    /// A List row's buttons are words alone: an item's actions carry no icon.
+    var icons = true
     @FocusState private var inside: String?
 
     private var actor: SDUIActor { SDUIActor(model: model, center: center, store: store) }
@@ -30,7 +32,11 @@ struct SDUIActionRow: View {
         HStack(spacing: layout.sp(layout.isTV ? "s" : "xs")) {
             ForEach(shown) { button in
                 Button { actor.perform(button.action) } label: {
-                    Label(button.label, systemImage: SDUIIcon.symbol(button.icon.isEmpty ? button.id : button.icon, or: "circle"))
+                    if icons {
+                        Label(button.label, systemImage: SDUIIcon.symbol(button.icon.isEmpty ? button.id : button.icon, or: "circle"))
+                    } else {
+                        Text(button.label).lineLimit(1)
+                    }
                 }
                 .action(primary: button.primary, selected: button.pressed, pill: true)
                 .focused($inside, equals: button.id)

@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (C) 2026 WittyWilla and contributors
 #if os(iOS) || os(visionOS)
+import Combine
 import SwiftUI
 import WebKit
 import WittyKit
@@ -34,6 +35,8 @@ struct WebPlayerPage: UIViewRepresentable {
     final class Coordinator: NSObject, WKNavigationDelegate, WKDownloadDelegate {
         let parent: WebPlayerPage
         var watching: NSKeyValueObservation?
+        /// The batteries going to WittyPlay's page as they change.
+        var batteries: AnyCancellable?
         private var reloaded = false
         private var saving: URL?
 
@@ -88,6 +91,12 @@ struct WebPlayerPage: UIViewRepresentable {
             parent.onFail()
         }
 
+        /// Each page as it starts has the batteries now, before any change is sent.
+        func webView(_ webView: WKWebView, didCommit navigation: WKNavigation!) {
+            guard batteries != nil else { return }
+            webView.evaluateJavaScript(BatteryWatch.pageScript(), completionHandler: nil)
+        }
+
         func webView(_ webView: WKWebView, didFailProvisionalNavigation navigation: WKNavigation!, withError error: Error) {
             report(error)
         }
@@ -116,6 +125,22 @@ struct WebPlayerPage: UIViewRepresentable {
     /// server's content security policy refuses a `<style>` element, so the rules go in as a constructed sheet
     /// (iOS 16.4 and later; before that the page keeps its bars). Fixed words, with nothing of this app's or the
     /// person's in them.
+    /// The page's battery (`navigator.getBattery`) and each pad's (`battery`, which WittyPlay reads where a browser
+    /// adds one), from what the app sends as they change: `window.__wmcBattery(device, pads)`.
+    static let batteries = """
+    (function(){try{
+    var st={level:1,charging:true,chargingTime:0,dischargingTime:Infinity},pads=[],bm=new EventTarget();
+    ['level','charging','chargingTime','dischargingTime'].forEach(function(k){Object.defineProperty(bm,k,{get:function(){return st[k]}})});
+    navigator.getBattery=function(){return Promise.resolve(bm)};
+    window.__wmcBattery=function(d,p){st=d||{level:1,charging:true,chargingTime:0,dischargingTime:Infinity};pads=p||[];
+    ['levelchange','chargingchange','chargingtimechange'].forEach(function(e){bm.dispatchEvent(new Event(e))})};
+    var get=navigator.getGamepads&&navigator.getGamepads.bind(navigator);
+    if(get)navigator.getGamepads=function(){var n=0;return Array.prototype.map.call(get(),function(g){
+    if(!g||g.connected===false)return g;var b=pads[n++];if(!b)return g;
+    return new Proxy(g,{get:function(t,k){if(k==='battery')return b;var v=t[k];return typeof v==='function'?v.bind(t):v}})})};
+    }catch(e){}})();
+    """
+
     static let insideTheApp = """
     try{document.documentElement.setAttribute('data-app','wittymediaclient');\
     var c=new CSSStyleSheet();\
@@ -153,6 +178,7 @@ struct WebPlayerPage: UIViewRepresentable {
         let choice = id.isEmpty ? "localStorage.removeItem('wms.theme')" : "localStorage.setItem('wms.theme','\(id)')"
         config.userContentController.addUserScript(WKUserScript(source: "try{\(choice)}catch(e){}", injectionTime: .atDocumentStart, forMainFrameOnly: true))
         if !keptToGames {
+            config.userContentController.addUserScript(WKUserScript(source: Self.batteries, injectionTime: .atDocumentStart, forMainFrameOnly: true))
             config.userContentController.addUserScript(WKUserScript(source: Self.insideTheApp, injectionTime: .atDocumentStart, forMainFrameOnly: true))
             config.userContentController.addUserScript(WKUserScript(source: Self.gameLinks, injectionTime: .atDocumentStart, forMainFrameOnly: true))
         }
@@ -161,6 +187,13 @@ struct WebPlayerPage: UIViewRepresentable {
         web.backgroundColor = backdrop
         web.scrollView.backgroundColor = backdrop
         web.navigationDelegate = context.coordinator
+        if !keptToGames {
+            // WebKit gives a page neither the device's battery nor a controller's: the app's, as numbers only.
+            BatteryWatch.shared.start(announce: false)
+            context.coordinator.batteries = BatteryWatch.shared.$readings.receive(on: DispatchQueue.main).sink { [weak web] _ in
+                web?.evaluateJavaScript(BatteryWatch.pageScript(), completionHandler: nil)
+            }
+        }
         web.allowsLinkPreview = false // a preview would load another address, outside the checks above
         // This fires when the page changes its own address, which is how it closes its player.
         web.allowsBackForwardNavigationGestures = !keptToGames
@@ -202,6 +235,10 @@ struct WebPlayerPage: UIViewRepresentable {
 
     static func dismantleUIView(_ web: WKWebView, coordinator: Coordinator) {
         coordinator.watching = nil
+        if coordinator.batteries != nil {
+            coordinator.batteries = nil
+            BatteryWatch.shared.stop(announce: false)
+        }
         web.navigationDelegate = nil
         web.stopLoading() // the web view going away closes the stream's connection
     }

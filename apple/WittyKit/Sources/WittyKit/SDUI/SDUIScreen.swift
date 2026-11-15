@@ -400,6 +400,8 @@ public struct SDUIScreen: Equatable, Sendable {
                 lines("subtitle", 1)
                 e.picture = SDUIImageRef(p["image"])
                 e.icon = p.text("icon")
+                // The item's own buttons (a friend's Invite, an invite's Accept): drawn beside the row, never inside it.
+                e.buttons = Array(Builder.buttons(p).filter { $0.action != nil }.prefix(4))
             case "Divider":
                 e.role = "separator"
             case "NativeView":

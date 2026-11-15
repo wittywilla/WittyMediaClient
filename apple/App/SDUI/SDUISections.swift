@@ -377,6 +377,26 @@ struct SDUIListRow: View {
     }
 
     var body: some View {
+        if row.buttons.isEmpty {
+            main.padding(.horizontal, layout.margin - (layout.isTV ? layout.sp("s") : 0))
+        } else {
+            // The item's own buttons beside the row; under it when a phone has no room beside it.
+            let buttons = SDUIActionRow(buttons: row.buttons, owner: row.id, ownerFocusable: row.action == nil && !(stop && layout.isTV), icons: false)
+            ViewThatFits(in: .horizontal) {
+                HStack(spacing: layout.sp("s")) {
+                    main
+                    buttons.fixedSize()
+                }
+                VStack(alignment: .leading, spacing: layout.sp("xs")) {
+                    main
+                    buttons.padding(.bottom, layout.sp("xs"))
+                }
+            }
+            .padding(.horizontal, layout.margin - (layout.isTV ? layout.sp("s") : 0))
+        }
+    }
+
+    private var main: some View {
         Group {
             if let control {
                 if control.disabled || row.action == nil {
@@ -406,7 +426,6 @@ struct SDUIListRow: View {
                 label
             }
         }
-        .padding(.horizontal, layout.margin - (layout.isTV ? layout.sp("s") : 0))
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(([row.label] + row.badges.prefix(2).map { $0 } + (progress.map { ["\(Int(($0 * 100).rounded())) percent watched"] } ?? []))
             .filter { !$0.isEmpty }.joined(separator: ", "))

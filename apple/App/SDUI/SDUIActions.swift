@@ -130,7 +130,11 @@ struct SDUIActor {
             webPage(params["route"] ?? ServerPages.guide)
             #endif
         case "game":
-            if let item { push(.game(item)) }
+            // A friend's invite or a game joined is played as a seat at once; otherwise the game's own page.
+            if let item {
+                let start = GameStart.from(params)
+                push(start.isSeat ? .playGame(item, start) : .game(item))
+            }
         case "reader":
             if let item { webPage("/read/\(item)") }
         case "nowPlaying":
