@@ -43,6 +43,9 @@ final class GameBackOutTests: XCTestCase {
         }
         XCTAssertTrue(play.waitForExistence(timeout: 15) && play.isHittable, "Back on the game's page")
         XCTAssertTrue(play.hasFocus, "Focus back on Play")
+        // The page is asked again on coming back: Where you left off is the save made as the game stopped.
+        let leftOff = app.buttons.matching(NSPredicate(format: "label == 'Resume from just now'")).firstMatch
+        XCTAssertTrue(leftOff.waitForExistence(timeout: 10), "Where you left off says just now")
         // The remote moves focus again: it isn't held by the player.
         XCUIRemote.shared.press(.right)
         Thread.sleep(forTimeInterval: 1.5)

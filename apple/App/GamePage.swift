@@ -588,8 +588,17 @@ struct GameDetailView: View {
             }
         }
         .pageBackground(palette)
-        // Again on every return: a game just played has a new moment and time played.
         .task { await load() }
+        // Again on every return to it: a game just played has a new moment and time played. The page stays alive under
+        // the player, so its first task doesn't run again; the save at the stop can land just after, so it is asked twice.
+        .sduiOnChange(of: model.path.last == .game(id)) { onTop in
+            guard onTop else { return }
+            Task {
+                await load()
+                try? await Task.sleep(nanoseconds: 2_500_000_000)
+                await load()
+            }
+        }
         .alert("Delete this moment?", isPresented: Binding(get: { deleting != nil }, set: { if !$0 { deleting = nil } })) {
             Button("Delete", role: .destructive) { if let deleting { delete(deleting) } }
             Button("Cancel", role: .cancel) {}
