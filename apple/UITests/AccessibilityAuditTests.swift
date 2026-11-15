@@ -14,9 +14,7 @@ final class AccessibilityAuditTests: XCTestCase {
         let env = ProcessInfo.processInfo.environment
         guard env["WMC_AUDIT"] == "1" else { throw XCTSkip("Set TEST_RUNNER_WMC_AUDIT=1, in an app already signed in.") }
         guard #available(iOS 17.0, tvOS 17.0, *) else { throw XCTSkip("The audit needs iOS or tvOS 17.") }
-        let app = XCUIApplication()
-        app.launch()
-        Thread.sleep(forTimeInterval: 8)
+        let app = launchWithCode()
         audit("home", app)
 
         var routes: [(String, String)] = [("manage-libraries", "/manage/libraries"),
@@ -35,7 +33,12 @@ final class AccessibilityAuditTests: XCTestCase {
 
         // You: this app's Settings.
         open("/", in: app)
-        let you = app.buttons["You"].firstMatch
+        #if os(tvOS)
+        // The top bar shows when focus goes up to it.
+        for _ in 0..<5 { XCUIRemote.shared.press(.up); Thread.sleep(forTimeInterval: 0.5) }
+        #endif
+        // The You tab: "You" on a phone or tablet, the profile's pill (read as "You") in a television's top bar.
+        let you = app.buttons.matching(NSPredicate(format: "label ==[c] 'You'")).firstMatch
         if you.waitForExistence(timeout: 10) {
             choose(you, in: app)
             Thread.sleep(forTimeInterval: 4)
@@ -53,7 +56,9 @@ final class AccessibilityAuditTests: XCTestCase {
     private func open(_ route: String, in app: XCUIApplication) {
         let safe = CharacterSet.alphanumerics.union(CharacterSet(charactersIn: "-._~"))
         guard let url = URL(string: "wittymedia://route/" + (route.addingPercentEncoding(withAllowedCharacters: safe) ?? "")) else { return }
-        app.open(url)
+        // The system opens it in the app as it runs: XCUIApplication.open relaunches it, which signs a
+        // simulator build out.
+        XCUIDevice.shared.system.open(url)
         Thread.sleep(forTimeInterval: 6)
     }
 

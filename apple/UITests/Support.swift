@@ -47,3 +47,31 @@ extension XCUIElement {
         return self
     }
 }
+
+extension XCTestCase {
+    /// The app as it is on this simulator; when it asks to sign in, the one-time sign-in code the environment gives
+    /// (`TEST_RUNNER_WMC_CODE`, made by whoever runs the server) is typed on its keypad. No password is used.
+    @MainActor
+    func launchWithCode(file: StaticString = #filePath, line: UInt = #line) -> XCUIApplication {
+        let app = XCUIApplication()
+        // An app left running by the test before stays as it is: launching again would sign it out, as this
+        // simulator build keeps its sign-in only while it runs.
+        if app.state == .runningForeground || app.state == .runningBackground {
+            app.activate()
+        } else {
+            app.launch()
+        }
+        Thread.sleep(forTimeInterval: 6)
+        let enter = app.buttons["Enter the security code"].firstMatch
+        guard enter.waitForExistence(timeout: 4), let code = ProcessInfo.processInfo.environment["WMC_CODE"] else { return app }
+        choose(enter, in: app, file: file, line: line)
+        Thread.sleep(forTimeInterval: 2)
+        for digit in code {
+            let key = app.buttons[String(digit)].firstMatch
+            choose(key, in: app, file: file, line: line)
+            Thread.sleep(forTimeInterval: 0.8)
+        }
+        Thread.sleep(forTimeInterval: 8)
+        return app
+    }
+}

@@ -152,6 +152,8 @@ struct SDUIHeroView: View {
         }
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(slide.label)
+        // Where it is among the slides is read with the slide's words: the dots themselves are only drawn.
+        .accessibilityValue(slides.count > 1 ? "Title \(index + 1) of \(slides.count)" : "")
     }
 
     #if os(tvOS)
@@ -229,8 +231,7 @@ struct SDUIHeroView: View {
                 Circle().fill(at == index ? palette.text : palette.textHint.opacity(0.5)).frame(width: 10, height: 10)
             }
         }
-        .accessibilityElement(children: .ignore)
-        .accessibilityLabel("Title \(index + 1) of \(slides.count)")
+        .accessibilityHidden(true)
     }
 }
 
