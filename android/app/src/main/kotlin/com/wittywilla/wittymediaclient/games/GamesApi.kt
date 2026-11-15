@@ -127,7 +127,23 @@ class GamesApi(val api: Api) {
         return json.decodeFromString(call("POST", "$GAMES/$id/play", body.toString(), slow))
     }
 
-    suspend fun session(sid: String): GameSession = get("$PLAY/${q(sid)}")
+    // A seat (seat = true) asks as the host's player does, for what to stream.
+    suspend fun session(sid: String, seat: Boolean = false): GameSession = get("$PLAY/${q(sid)}" + if (seat) "?client=native" else "")
+
+    // Accepts a friend's invite to their game: the answer is the game's session, played as a seat.
+    suspend fun acceptInvite(invite: String): String =
+        (json.parseToJsonElement(call("POST", "$WITTYPLAY/games/online/invites/${q(invite)}/accept", "{}")) as? JsonObject)
+            ?.get("sid")?.let { (it as? JsonPrimitive)?.content }.orEmpty().ifEmpty { throw ApiError(502, "The invite didn't give a seat.") }
+
+    // Administrators: the game looked up again from the start, in the background; what people chose stays.
+    suspend fun refreshDetails(id: Long) {
+        call("POST", "$GAMES/$id/metadata/refresh", "{}")
+    }
+
+    // Gives up this account's seat in someone else's game; their game goes on.
+    suspend fun leaveSeat(sid: String, me: Long) {
+        call("DELETE", "$PLAY/${q(sid)}/seats/$me")
+    }
 
     // Answers the server's own answer, which for `speed` is the speed it was held to.
     suspend fun action(sid: String, action: GameAction): String = call("POST", "$PLAY/${q(sid)}/action", json.encodeToString(action))

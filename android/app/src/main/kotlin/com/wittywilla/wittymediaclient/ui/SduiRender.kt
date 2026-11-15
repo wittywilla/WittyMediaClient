@@ -334,7 +334,7 @@ private fun SduiRowView(row: SduiRow, gap: Dp) {
             val width = (span.content - between * (row.columns - 1)) / row.columns
             if (row.nearEnd && row.grid.hasMore) LaunchedEffect(row.grid.children.size) { env.more(row.grid.id, false) }
             Row(Modifier.fillMaxWidth().padding(horizontal = span.side).padding(top = if (row.index == 0) 0.dp else between), horizontalArrangement = Arrangement.spacedBy(between)) {
-                row.cards.forEach { card -> SduiCard(card, row.grid, width) }
+                row.cards.forEach { card -> Column(Modifier.width(width)) { SduiCard(card, row.grid, width); SduiItemButtons(card) } }
             }
         }
         is SduiRow.Line -> SduiScoped(row.parent, null) {

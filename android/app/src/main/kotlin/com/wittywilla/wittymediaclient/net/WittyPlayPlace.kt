@@ -50,7 +50,8 @@ object WittyPlayPlace {
     sealed interface Leave {
         data object Stay : Leave
         // As the frame asks: resume (resume=1), from a moment (slot=N), and with default settings only (safe=1).
-        data class Play(val game: Long, val resume: Boolean = true, val slot: Int? = null, val safe: Boolean = false) : Leave
+        // invite= and join=: a seat in a friend's game (an invite to accept, or the game's session), not one's own.
+        data class Play(val game: Long, val resume: Boolean = true, val slot: Int? = null, val safe: Boolean = false, val invite: String = "", val join: String = "") : Leave
         data object Home : Leave
         data object Search : Leave
         data class Elsewhere(val path: String) : Leave
@@ -64,7 +65,8 @@ object WittyPlayPlace {
             game != null -> {
                 val q = path.substringAfter('?', "").split('&').filter { it.isNotEmpty() }.associate { it.substringBefore('=') to it.substringAfter('=', "") }
                 val slot = q["slot"]?.toIntOrNull()
-                Leave.Play(game, resume = slot == null && q["resume"] != "0", slot = slot, safe = q["safe"] == "1")
+                fun text(name: String) = q[name].orEmpty().let { runCatching { java.net.URLDecoder.decode(it, "UTF-8") }.getOrDefault(it) }
+                Leave.Play(game, resume = slot == null && q["resume"] != "0", slot = slot, safe = q["safe"] == "1", invite = text("invite"), join = text("join"))
             }
             bare == "/" || bare.isEmpty() -> Leave.Home
             bare == "/search" -> Leave.Search

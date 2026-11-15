@@ -44,6 +44,10 @@ class WittyApp : Application(), SingletonImageLoader.Factory {
     // A title chosen on an Android TV's home screen, waiting for the app's screens to open it (data/TvHome.kt).
     var wantedRoute by mutableStateOf<String?>(null)
 
+    // A debug build only: a server address to open once signed in, for the instrumented tests (androidTest), which go
+    // through the screens as someone would. "layer:" first opens it as a layer.
+    var debugPath by mutableStateOf<String?>(null)
+
     // The controller last used, if the last thing pressed was on one.
     @Volatile
     var lastPad = -1

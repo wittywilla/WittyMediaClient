@@ -31,6 +31,7 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.hideFromAccessibility
 import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
@@ -426,7 +427,7 @@ fun SduiPageScreen(nav: Nav, page: String, params: Map<String, String>, top: Boo
         asking?.let { ask ->
             SduiConfirm(ask.confirm, ask.spec.label.ifEmpty { "Yes" }, { asking = null; runCommand(ask) }, { asking = null })
         }
-        Box(Modifier.size(1.dp).semantics { liveRegion = LiveRegionMode.Polite; contentDescription = settled })
+        Box(Modifier.size(1.dp).semantics { liveRegion = LiveRegionMode.Polite; if (settled.isEmpty()) hideFromAccessibility() else contentDescription = settled })
         if (!layered) nav.layer?.let { SduiLayer(nav, it) { nav.layer = null } }
         if (toast.isNotEmpty()) Toast(toast, { toast = "" }, Modifier.align(Alignment.BottomCenter).padding(bottom = if (metrics.tv) metrics.u(60) else (LocalBottomRoom.current - 4.dp).coerceAtLeast(16.dp)))
     }

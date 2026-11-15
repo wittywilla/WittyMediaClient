@@ -73,6 +73,7 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.LinkAnnotation
 import androidx.compose.ui.text.TextStyle
@@ -138,7 +139,8 @@ private fun SheetPanel(title: String, close: () -> Unit, fromRight: Boolean, foo
     val density = LocalDensity.current
     Box(Modifier.fillMaxSize()) {
         AnimatedVisibility(true, enter = fadeIn(tween(150))) {
-            Box(Modifier.fillMaxSize().background(Color(0x99000000)).clickable(remember { MutableInteractionSource() }, null, onClick = close))
+            // The shade over the page closes the sheet: named, so a screen reader says what a tap on it does.
+            Box(Modifier.fillMaxSize().background(Color(0x99000000)).clickable(remember { MutableInteractionSource() }, null, onClickLabel = "Close", onClick = close).semantics { contentDescription = "Close" })
         }
         AnimatedVisibility(
             true, Modifier.align(Alignment.BottomCenter),

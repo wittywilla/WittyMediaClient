@@ -648,7 +648,15 @@ class Nav(val app: WittyApp, private val s: Map<String, String>) {
             val item = target.params["item"].orEmpty()
             when (target.screen) {
                 "player" -> { playById(item, resume = true); return }
-                "game" -> { item.toLongOrNull()?.let { openGame(it) }; return }
+                "game" -> {
+                    val id = item.toLongOrNull() ?: return
+                    val invite = target.params["invite"].orEmpty()
+                    val join = target.params["join"].orEmpty()
+                    // A seat in a friend's game (an invite to accept, or a room joined): played at once, as the website's.
+                    if (invite.isNotEmpty() || join.isNotEmpty()) push(GamesRoute(GamesScreen.Play(id, com.wittywilla.wittymediaclient.games.GameStart(resume = false, invite = invite, join = join, me = me?.id ?: 0))))
+                    else openGame(id)
+                    return
+                }
                 "livePlayer" -> if (app.isTv) { target.params["key"]?.let { watchChannel(it) }; return }
             }
         }
@@ -1345,6 +1353,16 @@ fun AppRoot(app: WittyApp) {
             if (wanted != null && route.signedIn && nav.featuresRead) {
                 app.wantedRoute = null
                 nav.openFromHomeScreen(wanted)
+            }
+        }
+        val debugPath = app.debugPath
+        LaunchedEffect(debugPath, route.signedIn, nav.featuresRead) {
+            if (debugPath != null && route.signedIn && nav.featuresRead && app.applicationInfo.flags and android.content.pm.ApplicationInfo.FLAG_DEBUGGABLE != 0) {
+                app.debugPath = null
+                val layer = debugPath.startsWith("layer:")
+                val path = debugPath.removePrefix("layer:")
+                nav.layer = null
+                if (path == "/") nav.reset(Route.Home) else nav.go(nav.sduiRouter.resolve(path), layer = layer)
             }
         }
         // Once the app's own screens are up, whichever way it started.

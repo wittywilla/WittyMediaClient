@@ -35,7 +35,11 @@ import java.util.UUID
 
 // How a game starts: from the beginning, from the automatic save, from a slot (as the website's ?slot=), or with
 // the defaults only (no cheats, no patches).
-data class GameStart(val resume: Boolean, val slot: Int? = null, val safeMode: Boolean = false)
+// A seat in someone else's game: `invite` (an invite to accept first) or `join` (the game's session), and `me`, this
+// account, whose seat is given up on leaving. Their game goes on.
+data class GameStart(val resume: Boolean, val slot: Int? = null, val safeMode: Boolean = false, val invite: String = "", val join: String = "", val me: Long = 0) {
+    val joined: Boolean get() = invite.isNotEmpty() || join.isNotEmpty()
+}
 
 // The steps on the way to the first picture, as the website's loading screen names them.
 enum class GameStage(val words: String) {
@@ -67,6 +71,8 @@ class GamePlay(
     private val direct: DirectStream? = null,
 ) {
     val api = GamesApi(app.api)
+    // A seat in someone else's game: leaving gives up the seat rather than saving and stopping it.
+    val joined: Boolean get() = start.joined
     private val main = Handler(Looper.getMainLooper())
     val input = GameInput(app, scope, isTv)
     private var sound = GameSound(soundLatencySeconds("lowest"))
@@ -211,8 +217,9 @@ class GamePlay(
             val settingsCall = scope.async { runCatching { api.settings(gameId) }.getOrDefault(GameSettings.NONE) }
             val controlsCall = scope.async { runCatching { api.controls(console, deviceId, gameId) }.getOrNull() }
             val consolesCall = scope.async { runCatching { api.consoles() }.getOrDefault(emptyList()) }
-            // A game in an archive is unpacked first: ask about once a second, showing how far it's got.
-            while (true) {
+            // A game in an archive is unpacked first: ask about once a second, showing how far it's got. A seat in
+            // someone else's game is ready already.
+            while (!start.joined) {
                 val ready = api.prepare(gameId)
                 if (ready.ready) break
                 unpacked = ready.fraction
@@ -227,7 +234,11 @@ class GamePlay(
             sound = GameSound(soundLatencySeconds(settings.text("audio.latency", "lowest")))
             sound.setVolume(settings.number("audio.volume", 1.0), settings.flag("audio.mute", false))
             jpeg.smooth = settings.text("display.scaling", "sharp") == "smooth"
-            val started = api.play(gameId, start.resume, start.safeMode)
+            val started = if (start.joined) {
+                // An invite, once accepted, is this seat: starting again doesn't accept it twice.
+                if (start.join.isEmpty()) start = start.copy(join = api.acceptInvite(start.invite), invite = "")
+                api.session(start.join, seat = true)
+            } else api.play(gameId, start.resume, start.safeMode)
             session = started
             // What goes wrong while it plays is filed under the game's session on the server.
             ClientLog.session = started.id
@@ -294,7 +305,8 @@ class GamePlay(
         closeTransport()
         stopped = false
         lostAt = 0
-        if (session != null) start = GameStart(resume = true, safeMode = safeMode)
+        if (start.joined) Unit
+        else if (session != null) start = GameStart(resume = true, safeMode = safeMode)
         else if (safeMode) start = start.copy(safeMode = true)
         endLogSession()
         session = null
@@ -736,7 +748,7 @@ class GamePlay(
         if (ClientLog.session == sid) ClientLog.session = ""
     }
 
-    // Save and quit: the answer comes once everything is written, so the next device carries on from here.
+    // Save and quit (or, in someone else's game, give up the seat): the answer comes once everything is written, so the next device carries on from here.
     fun quit() {
         if (saving) return
         val sid = session?.id
@@ -751,7 +763,7 @@ class GamePlay(
         scope.launch {
             if (sid != null && direct == null) {
                 try {
-                    api.stop(sid)
+                    if (start.joined) api.leaveSeat(sid, start.me) else api.stop(sid)
                 } catch (e: CancellationException) {
                     throw e
                 } catch (e: ApiError) {
@@ -778,7 +790,8 @@ class GamePlay(
         if (!stopped && sid != null && direct == null) {
             stopped = true
             val api = api
-            app.scope.launch { runCatching { api.stop(sid) } }
+            val seat = start.takeIf { it.joined }
+            app.scope.launch { runCatching { if (seat != null) api.leaveSeat(sid, seat.me) else api.stop(sid) } }
         }
     }
 

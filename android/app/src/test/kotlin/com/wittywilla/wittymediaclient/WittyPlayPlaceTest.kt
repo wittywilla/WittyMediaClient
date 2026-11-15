@@ -40,6 +40,9 @@ class WittyPlayPlaceTest {
         assertEquals(Leave.Play(17), WittyPlayPlace.leave("/game/17"))
         assertEquals(Leave.Play(17, resume = true), WittyPlayPlace.leave("/game/17?resume=1"))
         assertEquals(Leave.Play(17, resume = false, slot = 3), WittyPlayPlace.leave("/game/17?slot=3"))
+        // A seat in a friend's game: an invite to accept, or a room joined.
+        assertEquals(Leave.Play(17, invite = "a b"), WittyPlayPlace.leave("/game/17?invite=a%20b"))
+        assertEquals(Leave.Play(17, join = "s9"), WittyPlayPlace.leave("/game/17?join=s9"))
         assertEquals(Leave.Play(17, resume = false, safe = true), WittyPlayPlace.leave("/game/17?resume=0&safe=1"))
         assertEquals(Leave.Home, WittyPlayPlace.leave("/"))
         assertEquals(Leave.Search, WittyPlayPlace.leave("/search?q=zelda"))

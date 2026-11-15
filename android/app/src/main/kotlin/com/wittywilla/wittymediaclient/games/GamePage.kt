@@ -84,12 +84,15 @@ fun blockedWords(check: GameCheck?, console: GameConsole?): String {
 fun canPlay(check: GameCheck?, console: GameConsole?, details: GameDetails?): Boolean =
     (check?.ready ?: console?.ready ?: false) && details?.problem.isNullOrEmpty()
 
+private const val REFRESH = "Refresh game details"
+
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun GamePageScreen(nav: GamesNav, gameId: Long, inShell: Boolean = false) {
     val look = gameLook()
     val api = remember(nav.api) { GamesApi(nav.api) }
     val scope = rememberCoroutineScope()
+    var refreshWords by remember(gameId) { mutableStateOf(REFRESH) }
     var game by remember { mutableStateOf<GameItem?>(null) }
     var check by remember { mutableStateOf<GameCheck?>(null) }
     var console by remember { mutableStateOf<GameConsole?>(null) }
@@ -232,6 +235,14 @@ fun GamePageScreen(nav: GamesNav, gameId: Long, inShell: Boolean = false) {
                                         else GameButton("Resume", { nav.play(g.id, GameStart(resume = true)) }, icon = GameIcons.Play, big = false)
                                     }
                                     GameButton("Start with default settings", { nav.play(g.id, GameStart(resume = auto != null, safeMode = true)) }, icon = GameIcons.Refresh, big = false)
+                                    // An administrator looks the game up again from the start, as the website's game page.
+                                    if (nav.admin) GameButton(refreshWords, {
+                                        if (refreshWords != REFRESH) return@GameButton
+                                        refreshWords = "Refreshing game details…"
+                                        scope.launch {
+                                            refreshWords = runCatching { api.refreshDetails(g.id) }.fold({ "Game details are being refreshed" }, { it.message ?: "The details couldn’t be refreshed. Try again." })
+                                        }
+                                    }, icon = GameIcons.Refresh, big = false)
                                 }
                             }
                             if (auto != null && ready) ResumeCard(api, g, auto, words) { nav.play(g.id, GameStart(resume = true)) }

@@ -52,6 +52,7 @@ fun GamesRouteScreen(nav: Nav, route: GamesRoute) {
             openGame = { id -> nav.push(GamesRoute(GamesScreen.Game(id))) },
             play = { id, start -> nav.push(GamesRoute(GamesScreen.Play(id, start))) },
             openLibrary = { id -> nav.replace(GamesRoute(GamesScreen.Library(id))) },
+            admin = nav.me?.isAdmin == true,
         )
     }
     when (val screen = route.screen) {

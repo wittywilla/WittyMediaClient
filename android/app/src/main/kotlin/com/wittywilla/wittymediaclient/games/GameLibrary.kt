@@ -90,6 +90,8 @@ class GamesNav(
     val openGame: (Long) -> Unit,
     val play: (Long, GameStart) -> Unit,
     val openLibrary: (Long) -> Unit,
+    // An administrator: may refresh a game's details.
+    val admin: Boolean = false,
 )
 
 // What was last shown, for coming back from a game without a blank page.

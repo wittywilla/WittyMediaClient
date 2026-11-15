@@ -50,6 +50,8 @@ android {
         targetSdk = 36
         versionCode = 9
         versionName = "0.5.0"
+        // The screens' accessibility checks (src/androidTest), run by hand against a signed-in debug build.
+        testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
     // One APK for each processor, as WebRTC's native library is 7 to 16 MB a processor, and a universal APK with all four
@@ -139,6 +141,17 @@ dependencies {
     wittyconnect?.let { implementation(files(it)) }
 
     testImplementation("junit:junit:4.13.2")
+
+    // The screens' accessibility checks: the Accessibility Test Framework through Compose and Espresso.
+    androidTestImplementation(platform("androidx.compose:compose-bom:2026.09.00"))
+    androidTestImplementation("androidx.compose.ui:ui-test-junit4")
+    androidTestImplementation("androidx.compose.ui:ui-test-junit4-accessibility")
+    androidTestImplementation("androidx.test:runner:1.7.0")
+    androidTestImplementation("androidx.test.ext:junit:1.3.0")
+    androidTestImplementation("androidx.test.espresso:espresso-core:3.7.0")
+    androidTestImplementation("androidx.test.espresso:espresso-accessibility:3.7.0")
+    androidTestImplementation("androidx.test.uiautomator:uiautomator:2.3.0")
+    debugImplementation("androidx.compose.ui:ui-test-manifest")
 }
 
 // The server's SDUI conformance fixtures (its pkg/sdui/conformance/fixtures, 3 MB of JSON) are read where they are,
