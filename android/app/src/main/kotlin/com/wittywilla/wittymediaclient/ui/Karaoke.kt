@@ -53,6 +53,7 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.hideFromAccessibility
 import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.LinkAnnotation
@@ -238,7 +239,7 @@ internal fun KaraokeScreen(nav: Nav, words: LyricsWords, title: String, artist: 
                             }
                             val nextSize = (screenH * 0.034f).coerceIn(19.2f, 40f)
                             Text(next?.text ?: " ", color = Np.fg3, fontSize = nextSize.sp, fontWeight = FontWeight.SemiBold, lineHeight = 1.3.em, textAlign = TextAlign.Center, modifier = Modifier.heightIn(min = (nextSize * 1.3f).dp))
-                            Box(Modifier.size(1.dp).semantics { liveRegion = LiveRegionMode.Polite; contentDescription = now?.text.orEmpty() })
+                            Box(Modifier.size(1.dp).semantics { liveRegion = LiveRegionMode.Polite; now?.text?.takeIf { it.isNotEmpty() }?.let { contentDescription = it } ?: hideFromAccessibility() })
                         }
                         // The count-in: a ring at the top, each number popping in.
                         if (count > 0) CountIn(count, screenH, Modifier.align(Alignment.TopCenter).padding(top = (screenH * 0.05f).coerceIn(4f, 60f).dp))

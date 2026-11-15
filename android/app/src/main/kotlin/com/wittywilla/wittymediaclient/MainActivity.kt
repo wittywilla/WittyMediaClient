@@ -49,6 +49,8 @@ class MainActivity : ComponentActivity() {
         // `adb shell am start -n com.wittywilla.wittymediaclient/.MainActivity --el WittyHomeHero <item id>`.
         if (applicationInfo.flags and ApplicationInfo.FLAG_DEBUGGABLE != 0) {
             (application as WittyApp).pinnedHero = intent.getLongExtra("WittyHomeHero", 0)
+            // And a server address to open once signed in: `--es WittyOpen /game/12` (see WittyApp.debugPath).
+            intent.getStringExtra("WittyOpen")?.let { (application as WittyApp).debugPath = it }
         }
         setContent { AppRoot(application as WittyApp) }
     }

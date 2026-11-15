@@ -48,6 +48,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.heading
+import androidx.compose.ui.semantics.hideFromAccessibility
 import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.semantics
@@ -295,7 +296,7 @@ fun BrandEditorScreen(nav: Nav, s: Map<String, String>) {
             }
         }
         // What was done and what went wrong, spoken as it happens and kept out of sight.
-        Box(Modifier.semantics { liveRegion = LiveRegionMode.Polite; contentDescription = said }.size(1.dp))
+        Box(Modifier.semantics { liveRegion = LiveRegionMode.Polite; if (said.isEmpty()) hideFromAccessibility() else contentDescription = said }.size(1.dp))
     }
 
     if (anyColour) {

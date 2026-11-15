@@ -75,6 +75,11 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LifecycleEventEffect
 import com.wittywilla.wittymediaclient.WittyApp
 import kotlinx.coroutines.delay
+import androidx.compose.ui.semantics.LiveRegionMode
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.hideFromAccessibility
+import androidx.compose.ui.semantics.liveRegion
+import androidx.compose.ui.semantics.semantics
 import kotlin.math.roundToInt
 
 // A game on screen: the server's stream, full screen, with nothing in the way. Back, Start and Select together,
@@ -160,6 +165,9 @@ fun GamePlayerScreen(app: WittyApp, gameId: Long, start: GameStart, direct: Dire
         }
 
         if (play.problem == null && play.stage != GameStage.Playing) Loading(play, touchScreen) { play.quit() }
+        var batteryNote by remember { mutableStateOf("") }
+        val batteries = rememberBatteries { batteryNote = it }
+        LaunchedEffect(batteryNote) { if (batteryNote.isNotEmpty()) { delay(10_000); batteryNote = "" } }
         play.problem?.let { Problem(play, it, onClose) }
         if (play.saving) Saving()
         play.menu?.let { page ->
@@ -168,6 +176,11 @@ fun GamePlayerScreen(app: WittyApp, gameId: Long, start: GameStart, direct: Dire
                 GamePlay.setTouchShown(context, touchOn)
             }
         }
+        // The batteries: a low one over the game (the menu shows them all), and said once, politely, when it runs low.
+        if (play.menu == null) batteries.filter(Batteries::isLow).takeIf { it.isNotEmpty() }?.let {
+            BatteryChips(it, look.small, Modifier.align(Alignment.TopCenter).windowInsetsPadding(WindowInsets.safeDrawing).padding(top = 12.dp))
+        }
+        Box(Modifier.size(1.dp).semantics { liveRegion = LiveRegionMode.Polite; if (batteryNote.isEmpty()) hideFromAccessibility() else contentDescription = batteryNote })
         if (play.toast.isNotEmpty()) {
             Text(
                 play.toast,
@@ -456,8 +469,9 @@ private fun GameMenuSheet(play: GamePlay, page: GameMenu, touchScreen: Boolean, 
                         Tile(GameIcons.Pad, "Controllers", { play.showMenu(GameMenu.Controllers) }, cell, sub = if (play.input.players.isNotEmpty()) "Connected" else "Players")
                         if (touchScreen) Tile(GameIcons.Touch, if (touchOn) "Hide touch" else "Show touch", toggleTouch, cell, sub = "Controls on screen", on = touchOn)
                         Tile(GameIcons.More, "More", { play.showMenu(GameMenu.More) }, cell)
-                        Tile(GameIcons.Quit, "Save and quit", { play.quit() }, cell, danger = true)
+                        Tile(GameIcons.Quit, if (play.joined) "Leave the game" else "Save and quit", { play.quit() }, cell, danger = true)
                     }
+                    BatteryChips(rememberBatteries(), look.small)
                 }
                 GameMenu.More -> FlowRow(maxItemsInEachRow = columns, horizontalArrangement = Arrangement.spacedBy(gap), verticalArrangement = Arrangement.spacedBy(gap)) {
                     val cell = Modifier.weight(1f)

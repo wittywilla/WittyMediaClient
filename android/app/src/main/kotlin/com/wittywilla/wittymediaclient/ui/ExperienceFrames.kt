@@ -2,6 +2,8 @@
 // Copyright (C) 2026 WittyWilla and contributors
 package com.wittywilla.wittymediaclient.ui
 
+import androidx.compose.foundation.selection.selectableGroup
+
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
@@ -38,6 +40,7 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.semantics
@@ -232,12 +235,13 @@ fun TopTabs(nav: Nav, height: Dp, status: Dp, solid: Boolean, modifier: Modifier
         "teleKeys" -> Color.Black
         else -> if (solid) page.copy(alpha = 0.92f) else Color.Transparent
     }
-    Column(modifier.fillMaxWidth().background(barFill).glass(RoundedCornerShape(0.dp))
+    // Named as the website's <nav aria-label="Menu">: a screen reader can land on the bar itself, and says what it is.
+    Column(modifier.fillMaxWidth().semantics { contentDescription = "Menu" }.background(barFill).glass(RoundedCornerShape(0.dp))
         .drawWithContent { drawContent(); if (solid) drawRect(line, Offset(0f, size.height - 1.dp.toPx()), Size(size.width, 1.dp.toPx())) }) {
         Spacer(Modifier.height(status))
         Row(Modifier.fillMaxWidth().height(height), verticalAlignment = Alignment.CenterVertically) {
             Row(
-                Modifier.weight(1f).horizontalScroll(rememberScrollState()).padding(horizontal = 12.dp).semantics { role = Role.Tab },
+                Modifier.weight(1f).horizontalScroll(rememberScrollState()).padding(horizontal = 12.dp).selectableGroup(),
                 horizontalArrangement = Arrangement.spacedBy(4.dp), verticalAlignment = Alignment.CenterVertically,
             ) {
                 entries.filter { it.second != Route.Profile }.forEachIndexed { at, (entry, route) ->

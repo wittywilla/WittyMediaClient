@@ -301,7 +301,7 @@ fun ServerPageScreen(
                         com.wittywilla.wittymediaclient.net.WittyPlayPlace.Leave.Stay -> Unit
                         is com.wittywilla.wittymediaclient.net.WittyPlayPlace.Leave.Play -> {
                             web.goBack()
-                            nav.push(GamesRoute(GamesScreen.Play(went.game, com.wittywilla.wittymediaclient.games.GameStart(resume = went.resume, slot = went.slot, safeMode = went.safe))))
+                            nav.push(GamesRoute(GamesScreen.Play(went.game, com.wittywilla.wittymediaclient.games.GameStart(resume = went.resume, slot = went.slot, safeMode = went.safe, invite = went.invite, join = went.join, me = nav.me?.id ?: 0))))
                         }
                         com.wittywilla.wittymediaclient.net.WittyPlayPlace.Leave.Home -> nav.reset(Route.Home)
                         com.wittywilla.wittymediaclient.net.WittyPlayPlace.Leave.Search -> nav.reset(Route.Search)

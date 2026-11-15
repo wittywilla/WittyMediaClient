@@ -504,6 +504,7 @@ private fun GamesLibraryInTab(nav: Nav, library: Library) {
             openGame = { id -> nav.push(GamesRoute(GamesScreen.Game(id))) },
             play = { id, start -> nav.push(GamesRoute(GamesScreen.Play(id, start))) },
             openLibrary = { id -> nav.push(GamesRoute(GamesScreen.Library(id))) },
+            admin = nav.me?.isAdmin == true,
         )
     }
     GamesLibraryScreen(games, library.id)

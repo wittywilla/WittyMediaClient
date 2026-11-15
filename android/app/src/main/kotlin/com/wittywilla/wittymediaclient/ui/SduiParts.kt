@@ -59,6 +59,9 @@ import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.clearAndSetSemantics
+import androidx.compose.ui.semantics.customActions
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.role
@@ -532,11 +535,23 @@ fun SduiHero(view: SduiView) {
                         }
                     }
                 }
-                if (slides.size > 1) Row(Modifier.fillMaxWidth().padding(top = env.space("xs")), horizontalArrangement = Arrangement.Center) {
-                    slides.forEachIndexed { i, slide ->
-                        val on = i == pager.currentPage
-                        Pressable({ scope.launch { pager.animateScrollToPage(i) } }, Modifier.size(24.dp), shape = CircleShape, fill = Color.Transparent, label = "Show ${slide.text["title"].orEmpty()}", selected = on, ring = false) {
-                            Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                // The dots, 24dp apart: a tap on one shows its slide. Too small to be targets of their own for a screen reader,
+                // they are one line that says which slide this is and goes to the next or previous, as a pager is.
+                if (slides.size > 1) {
+                    val at = pager.currentPage
+                    Row(
+                        Modifier.fillMaxWidth().padding(top = env.space("xs")).heightIn(min = 48.dp).clearAndSetSemantics {
+                            contentDescription = "Slide ${at + 1} of ${slides.size}: ${slides[at].text["title"].orEmpty()}"
+                            customActions = listOfNotNull(
+                                androidx.compose.ui.semantics.CustomAccessibilityAction("Next slide") { scope.launch { pager.animateScrollToPage((at + 1) % slides.size) }; true },
+                                androidx.compose.ui.semantics.CustomAccessibilityAction("Previous slide") { scope.launch { pager.animateScrollToPage((at - 1 + slides.size) % slides.size) }; true },
+                            )
+                        },
+                        horizontalArrangement = Arrangement.Center, verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        slides.forEachIndexed { i, _ ->
+                            val on = i == at
+                            Box(Modifier.size(24.dp, 48.dp).pointerInput(i) { detectTapGestures { scope.launch { pager.animateScrollToPage(i) } } }, contentAlignment = Alignment.Center) {
                                 Box(Modifier.size(if (on) 18.dp else 8.dp, 8.dp).clip(RoundedCornerShape(4.dp)).background(if (on) scheme.onBackground else scheme.onBackground.copy(alpha = 0.45f)))
                             }
                         }
@@ -1027,6 +1042,7 @@ fun SduiLine(view: SduiView, parent: SduiView) {
                     if (press) Icon(WebIcons.Right, null, tint = hint, modifier = Modifier.size(env.pt(if (env.tv) 32 else 16)))
                 }
             }
+            SduiItemButtons(view, Modifier.padding(horizontal = env.pt(if (env.tv) 24 else 4)))
         }
     }
 }

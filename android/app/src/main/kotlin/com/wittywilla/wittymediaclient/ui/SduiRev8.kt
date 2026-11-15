@@ -162,6 +162,20 @@ fun SduiDetailPanel(card: SduiView?, side: Dp) {
     }
 }
 
+// An item's own buttons (a friend's Invite, an invite's Accept and Decline) under it, as the website's: beside the row or
+// card, never inside it, so a button is never inside a button. A Shelf with a detail panel shows them there instead.
+@OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
+@Composable
+fun SduiItemButtons(item: SduiView, modifier: Modifier = Modifier) {
+    val env = LocalSdui.current
+    val buttons = SduiItemActions.of(item.props)
+    if (buttons.isEmpty()) return
+    androidx.compose.foundation.layout.FlowRow(
+        modifier.fillMaxWidth().padding(top = env.space("xs"), bottom = env.space("s")).focusGroup().then(if (env.tv) Modifier.remoteRow() else Modifier),
+        horizontalArrangement = Arrangement.spacedBy(env.space("s")), verticalArrangement = Arrangement.spacedBy(env.space("xs")),
+    ) { buttons.forEach { SduiGlyphButton(item, it) } }
+}
+
 @Composable
 private fun SduiGlyphButton(card: SduiView, button: SduiCardAction) {
     val env = LocalSdui.current
