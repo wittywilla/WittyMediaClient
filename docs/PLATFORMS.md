@@ -182,8 +182,8 @@ rows off the screen and a remote's focus with them. A server now only leaves the
 **Not checked for Android:** a real remote, a real device, a real network, and `NsdManager` on real hardware, which differs
 between devices and has known problems on some. Everything else is in [Android, as of 0.2.1](#android-as-of-021).
 
-**The Apple apps have never been compiled by Apple's tools,** as that needs a Mac. Expect compile errors. See
-[Apple, as of 0.3.1](#apple-as-of-031) for exactly what has and hasn't been checked.
+**The Apple apps compile with Xcode** and have run in the tvOS and iOS simulators against a real server, but never on a real
+Apple TV, iPhone or iPad: see [the table above](#platforms). [Apple, as of 0.3.1](#apple-as-of-031) is the record from before they were compiled.
 
 **Known limits of the identity check,** on every client: the very first connection trusts whatever key it
 is shown, so someone already impersonating the server at that moment gets pinned, and would see a code
@@ -632,6 +632,10 @@ Reopening with the kept sign-in. Android 7 to 15 haven't been run, and nor has t
 
 ## Apple, as of 0.3.1
 
+> **History.** This is what had been checked at 0.3.1, before the apps were compiled. Since then they build with Xcode and the
+> Apple TV and iPhone apps have run in the simulator: [the table at the top](#platforms) is the current state. The known limits
+> below haven't all been checked again since.
+
 **Run, on Linux with Swift 6.1 in a container:** every test in `apple/WittyKit` with `swift test`, including real connections to a
 stand-in server: redirects not followed, oversized answers dropped, version and revision checks, and cancelling. Signatures can't be
 verified on Linux, as it has no CryptoKit. Every answer is refused there, and those tests only run on Apple platforms.
@@ -678,8 +682,8 @@ anything, the Keychain, the web view, the Top Shelf, or generating the Xcode pro
 
 ## Checked on the desktop client
 
-On Windows, from source and as a packaged app, against both today's server and the `client-contract`
-branch, 24 checks passed using real key presses:
+On Windows, from source and as a packaged app, against the server and the client API it then had on a
+branch of its own (now the server's `docs/CLIENT-API.md`), 24 checks passed using real key presses:
 
 - The address screen, including refusals in plain words.
 - The server's page has no access to the app.
