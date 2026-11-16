@@ -428,6 +428,13 @@ public final class WittyClient: @unchecked Sendable {
         config.urlCache = nil
         let timing = URLSession(configuration: config)
         defer { timing.finishTasksAndInvalidate() }
+        #if canImport(FoundationNetworking)
+        // Linux's Foundation has no byte stream: the whole answer, timed from the request.
+        let start = Date()
+        guard let (data, response) = try? await timing.data(for: request), (response as? HTTPURLResponse)?.statusCode == 200,
+              data.count > 65_536 else { return 0 }
+        return (Double(data.count) * 8 / 1000 / max(0.05, Date().timeIntervalSince(start))).rounded()
+        #else
         guard let (bytes, response) = try? await timing.bytes(for: request), (response as? HTTPURLResponse)?.statusCode == 200 else { return 0 }
         var got = 0
         var first: Date?
@@ -441,6 +448,7 @@ public final class WittyClient: @unchecked Sendable {
         guard let first, got > 65_536 else { return 0 }
         let seconds = max(0.05, Date().timeIntervalSince(first))
         return (Double(got) * 8 / 1000 / seconds).rounded()
+        #endif
     }
 
     /// The volume correction a song is tagged with.

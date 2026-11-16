@@ -1,6 +1,9 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (C) 2026 WittyWilla and contributors
 import Foundation
+#if canImport(FoundationNetworking)
+import FoundationNetworking
+#endif
 
 // How a game reaches the player: its picture, sound and events come in, and controller states
 // go out. The player knows only this, so another way of streaming (the server's second stream,
@@ -187,6 +190,9 @@ public final class GameWebSocketTransport: NSObject, GameTransport, URLSessionWe
         task?.cancel(with: .normalClosure, reason: nil)
         session?.finishTasksAndInvalidate()
     }
+
+    /// Nothing to do when it opens; Linux's Foundation requires the method, Apple's doesn't.
+    public func urlSession(_ session: URLSession, webSocketTask: URLSessionWebSocketTask, didOpenWithProtocol protocol: String?) {}
 
     public func urlSession(_ session: URLSession, webSocketTask: URLSessionWebSocketTask,
                            didCloseWith closeCode: URLSessionWebSocketTask.CloseCode, reason: Data?) {
