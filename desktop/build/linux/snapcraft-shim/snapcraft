@@ -1,0 +1,24 @@
+#!/bin/bash
+# SPDX-License-Identifier: GPL-3.0-or-later
+# Copyright (C) 2026 WittyWilla and contributors
+#
+# Put before the real snapcraft on PATH by `npm run package:snap` (scripts/package-snap.mjs).
+# electron-builder 26 writes `desktop: meta/gui/<name>.desktop` into the app's snapcraft.yaml,
+# which snapcraft 8 and later look for under snap/ and don't find ("Failed to generate desktop
+# file"). Without that line, snapcraft installs snap/gui/<name>.desktop, which electron-builder
+# also writes, into meta/gui by itself. Remove this once electron-builder stops writing it.
+set -euo pipefail
+yaml=snap/snapcraft.yaml
+if [ -f "$yaml" ]; then
+  sed -i -E '/^[[:space:]]+desktop:[[:space:]]+meta\/gui\/[^[:space:]]+\.desktop[[:space:]]*$/d' "$yaml"
+fi
+here=$(cd "$(dirname "$0")" && pwd)
+# The real snapcraft: the next one on PATH after this folder.
+real=""
+IFS=: read -ra dirs <<< "$PATH"
+for d in "${dirs[@]}"; do
+  [ "$d" = "$here" ] && continue
+  if [ -x "$d/snapcraft" ]; then real="$d/snapcraft"; break; fi
+done
+[ -n "$real" ] || { echo "snapcraft is not installed" >&2; exit 127; }
+exec "$real" "$@"

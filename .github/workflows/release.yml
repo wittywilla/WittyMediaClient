@@ -112,9 +112,7 @@ jobs:
       - name: The tools that make the Snap
         if: matrix.format == 'snap'
         run: |
-          # 7.x: electron-builder 26 drives snapcraft the way 7 works; 8 fails to find the app's
-          # .desktop file ("Failed to generate desktop file ... meta/gui/wittymediaclient.desktop").
-          sudo snap install snapcraft --classic --channel=7.x/stable
+          sudo snap install snapcraft --classic
           sudo snap install lxd || sudo snap refresh lxd
           sudo lxd init --auto
           sudo iptables -P FORWARD ACCEPT

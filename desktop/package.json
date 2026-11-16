@@ -19,7 +19,7 @@
     "package:win": "npm run sync && node scripts/build-wittyconnect.mjs win-x64 --if-available && electron-builder --win",
     "package:linux": "npm run sync && node scripts/build-wittyconnect.mjs linux-x64 --if-available && electron-builder --linux",
     "package:flatpak": "npm run sync && node scripts/build-wittyconnect.mjs linux-x64 --if-available && electron-builder --linux flatpak --x64",
-    "package:snap": "npm run sync && node scripts/build-wittyconnect.mjs linux-x64 --if-available && electron-builder --linux snap --x64",
+    "package:snap": "npm run sync && node scripts/build-wittyconnect.mjs linux-x64 --if-available && node scripts/package-snap.mjs",
     "package:mac": "npm run sync && node scripts/build-wittyconnect.mjs mac-arm64 --if-available && node scripts/build-wittyconnect.mjs mac-x64 --if-available && electron-builder --mac",
     "test:real": "npm run sync && electron test/app/real-server.js",
     "package:freebsd": "npm run sync && node build/freebsd/package.mjs"
