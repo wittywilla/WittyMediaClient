@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (C) 2026 WittyWilla and contributors
+#if canImport(CoreVideo) // Apple only: WittyKit also builds and is tested on Linux
 import CoreVideo
+#endif
 import Foundation
 
 // What arrives on a game's stream (the server's docs/GAMING-STREAM.md): binary messages whose first
@@ -15,8 +17,10 @@ public enum GameStreamMessage: Equatable {
     case pcm(rate: Int, samples: Data)
     /// The second stream's sound: one 10 ms packet, 48 kHz stereo, with its 48 kHz timestamp.
     case opus(timestamp: UInt32, packet: Data)
+    #if canImport(CoreVideo)
     /// A frame a transport decoded itself, as WebRTC does: drawn as it is.
     case picture(CVPixelBuffer)
+    #endif
     /// An answer on the timing channel, which this app doesn't ask for.
     case timing(Data)
     case unknown(UInt8)

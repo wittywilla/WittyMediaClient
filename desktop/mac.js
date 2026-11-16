@@ -36,7 +36,7 @@ function windowChanged(before, after) {
 // The menu bar. Electron's roles give the system's own names, keys and items, and the
 // Edit menu is what makes copy, paste and select all work at all. Zooming is for the page,
 // whichever part of the window has the focus, as zooming the title bar would break it.
-function menu({ connected, changeServer, manageServers, away, stopAway, startAway, zoom, openLogs, copyDiagnostics }) {
+function menu({ connected, changeServer, manageServers, away, fromAway, zoom, openLogs, copyDiagnostics }) {
   return [
     { role: 'appMenu' },
     { role: 'editMenu' },
@@ -59,7 +59,8 @@ function menu({ connected, changeServer, manageServers, away, stopAway, startAwa
         // The list of servers this Mac remembers, to remove some, without leaving the one in use.
         { id: 'manage-servers', label: 'Manage Servers…', click: manageServers },
         // Reaching the server in use from away (peer to peer), as the Apple apps' You, From away.
-        ...(away ? [{ type: 'separator' }, { id: 'away', label: away === 'on' ? 'Stop Connecting from Away' : 'Connect from Away Again', click: away === 'on' ? stopAway : startAway }] : []),
+        // Its screen says how, and is where Stop and Connect again are, as on every platform.
+        ...(away ? [{ type: 'separator' }, { id: 'away', label: 'From Away…', click: fromAway }] : []),
       ],
     },
     { role: 'windowMenu' },

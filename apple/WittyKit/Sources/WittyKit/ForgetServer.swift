@@ -1,6 +1,9 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (C) 2026 WittyWilla and contributors
 import Foundation
+#if canImport(FoundationNetworking)
+import FoundationNetworking
+#endif
 
 // Removing a server from a device: what exactly goes, worked out here with nothing touched, so that it
 // can be tested. Everything the app keeps for that server, and nothing of any other. The app carries
@@ -60,7 +63,7 @@ public enum ServerKeys {
         var out: [(from: String, to: String)] = []
         for key in byAddress(old, in: keys, addresses: addresses) {
             for prefix in [theme, themeTokens, topMenu, sduiAvailable] where key.hasPrefix(prefix) {
-                out.append((key, prefix + new + key.dropFirst(prefix.count + old.count)))
+                out.append((key, prefix + new + String(key.dropFirst(prefix.count + old.count))))
             }
         }
         let peerOld = peerKey(move.from), peerNew = peerKey(move.to)

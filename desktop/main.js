@@ -124,7 +124,7 @@ function showHelpMenu(at) {
   const { width, height } = win.getContentBounds()
   Menu.buildFromTemplate([
     ...(server ? [{ label: 'Manage servers…', click: manageServers }] : []),
-    ...(awayState() ? [{ label: awayState() === 'on' ? 'Stop connecting from away' : 'Connect from away again', click: () => (awayState() === 'on' ? stopAway() : startAway()) }] : []),
+    ...(awayState() ? [{ label: 'From away…', click: showAwaySettings }] : []),
     ...(server ? [{ type: 'separator' }] : []),
     { label: 'Open logs folder', click: openLogs },
     { label: 'Copy diagnostic info', click: copyDiagnostics },
@@ -535,12 +535,18 @@ async function joinByInvite(link) {
     closeTunnel()
     return { error: 'invite-refused', message: guards.cleanMessage(answer.error) }
   }
-  // Who it is, proved: the key it shows now is the one remembered from here on.
-  const known = (saved.recent || []).find((s) => s.p2p && s.p2p.id === invite.serverId)
+  return finishJoining(mine, { id: invite.serverId, hints: invite.hints }, answer, invite.name, 'the invite')
+}
+
+// After the server has put this device on its list, by an invite or a code: who it is, proved
+// (the key it shows now is the one remembered from here on), signed in with the code that came
+// back, remembered, and opened.
+async function finishJoining(mine, where, answer, offeredName, how) {
+  const known = (saved.recent || []).find((s) => s.p2p && s.p2p.id === where.id)
   const name = known ? known.url : mine.origin
   const identity = await identify(name, mine.origin)
   if (!['new', 'same', 'none'].includes(identity.state)) { closeTunnel(); return { error: 'identity' } }
-  const info = { id: invite.serverId, hints: invite.hints, port: mine.port }
+  const info = { id: where.id, hints: where.hints, port: mine.port }
   const pinned = identity.publicKey && (saved.recent || []).find((s) => s.publicKey === identity.publicKey)
   const url = pinned ? pinned.url : name
   try {
@@ -554,19 +560,103 @@ async function joinByInvite(link) {
           expirationDate: Date.now() / 1000 + SESSION_DAYS * 86400,
         })
       } else {
-        log.warn('p2p', `The sign-in code that came with the invite was refused: ${res.status}`) // they sign in by hand
+        log.warn('p2p', `The sign-in code that came with ${how} was refused: ${res.status}`) // they sign in by hand
       }
     }
   } catch (err) {
-    log.noteError('warn', 'p2p', 'Signing in after the invite failed', err)
+    log.noteError('warn', 'p2p', `Signing in after ${how} failed`, err)
   }
   saved = state.remember(saved, {
-    url, name: guards.cleanName(answer.serverName || invite.name || (pinned && pinned.name)),
+    url, name: guards.cleanName(answer.serverName || offeredName || (pinned && pinned.name)),
     serverId: identity.serverId, publicKey: identity.publicKey, fingerprint: identity.fingerprint, p2p: info, lastSeen: Date.now(),
   })
   saveState()
   showServer(mine.origin)
   return { ok: true }
+}
+
+// Join from away: for a computer that has never been at home with its server. It shows a code;
+// someone signed in types it into the server (You, From away, A TV that shows a code), which puts
+// this device on its list. As the Apple and Android apps' Join from away (docs/APP-DESIGN.md).
+let joining = null
+
+async function joinAwayStart() {
+  joinAwayStop()
+  pairing = null
+  await finishForgetting()
+  const program = helperProgram()
+  if (!program) return { error: 'p2p-missing' }
+  let key
+  try { key = await deviceKey(program) } catch (err) {
+    log.noteError('warn', 'p2p', 'No connection key for joining from away', err)
+    return { error: 'p2p-failed' }
+  }
+  const run = new p2p.JoinRun(program, { key: key.key, name: deviceName(), platform: OS_NAME }, { log: (line) => log.info('p2p', line) })
+  joining = run
+  const code = await run.code
+  if (joining !== run) return { error: 'stopped' }
+  if (!code) { joining = null; return { error: 'p2p-failed' } }
+  log.info('p2p', 'Showing a code to join a server from away')
+  return { code }
+}
+
+// Waits for the server to take the code, then connects and signs in as an invite does.
+async function joinAwayWait() {
+  const run = joining
+  if (!run) return { error: 'stopped' }
+  const r = await run.result
+  if (joining !== run) return { error: 'stopped' }
+  joining = null
+  if (!r.ok) {
+    if (r.error !== 'stopped') log.warn('p2p', `Joining from away didn't work: ${r.error || r.reason || 'refused'}`)
+    return { error: r.error === 'expired' ? 'expired' : r.error === 'p2p-failed' || r.error === 'stopped' ? r.error : 'refused' }
+  }
+  const opened = await openTunnel({ id: r.serverId, hints: r.hints })
+  if (opened.error) return opened
+  const mine = tunnel
+  const st = await mine.run.whenConnected(AWAY_CONNECT_MS + 15000)
+  if (tunnel !== mine) return { error: 'p2p-failed' }
+  if (!p2p.connected(st)) { closeTunnel(); return { error: 'p2p-failed' } }
+  return finishJoining(mine, { id: r.serverId, hints: r.hints }, r, '', 'joining from away')
+}
+
+function joinAwayStop() {
+  if (joining) joining.stop()
+  joining = null
+}
+
+// What the From away screen says for the server in use: how it is reached now, whether this
+// device is on its list, and the end of the name the list shows for it.
+async function awayInfo() {
+  const available = !!helperProgram()
+  // On the From away screen the page in use is this one, so it is the server being managed.
+  const viaTunnelNow = tunnel ? (saved.recent || []).find((s) => s.p2p && s.p2p.id === tunnel.id) : null
+  const entry = server ? entryInUse() : managing ? (viaTunnelNow && [viaTunnelNow.url, tunnel.origin].includes(managing) ? viaTunnelNow : entryFor(managing)) : null
+  if (!entry) return { available, server: false }
+  const away = !!tunnel && (server ? server === tunnel.origin : entry === viaTunnelNow)
+  const key = p2p.loadKey(keyFile(), safeStorage)
+  return {
+    available, server: true, name: entry.name || '',
+    now: away ? (p2p.pathWords(tunnel.run.state) || 'Peer to peer') : 'home',
+    state: entry.awayOff ? 'off' : entry.p2p ? 'ready' : 'not-set-up',
+    device: entry.p2p && key ? `${deviceName()} · …${key.deviceId.slice(-6)}` : '',
+  }
+}
+
+// The From away screen, opened from Help while a server is in use; Back returns to it.
+function showAwaySettings() {
+  if (!server || !saved.server) return
+  managing = saved.server
+  showConnect({ 'from-away': '1' })
+}
+
+// Stop or Connect again, chosen on the From away screen: back to the server, then as from the
+// menu, so what each does is the same wherever it was chosen.
+async function awayChoice(stop) {
+  await backFromManaging()
+  if (!server) return
+  if (stop) await stopAway()
+  else await startAway()
 }
 
 // Takes this device off the server's list, and forgets how to reach it from away.
@@ -792,6 +882,8 @@ function recentForPage() {
   const now = Date.now()
   return (saved.recent || []).map((s) => ({
     url: s.url, name: s.name, logo: s.logo ? s.logo.data : '', id: s.serverId || '', days: dayOf(s, now), stale: servers.isStale(s, now),
+    // Reached from away: peer to peer, and only that way when it has no address of its own.
+    away: !!s.p2p && !s.awayOff, awayOnly: !!s.p2p && p2p.isP2POrigin(s.url),
   }))
 }
 
@@ -1151,7 +1243,7 @@ function servePages() {
 // The Mac's menu bar, which is where the title bar's Help is on a Mac.
 function macMenu() {
   return Menu.buildFromTemplate(mac.menu({
-    connected: Boolean(server), changeServer: () => leaveServer(), manageServers, away: awayState(), stopAway, startAway, zoom: zoomPage, openLogs, copyDiagnostics,
+    connected: Boolean(server), changeServer: () => leaveServer(), manageServers, away: awayState(), fromAway: showAwaySettings, zoom: zoomPage, openLogs, copyDiagnostics,
   }))
 }
 
@@ -1271,6 +1363,11 @@ ipcMain.handle('pair-poll', (e) => (fromConnect(e) ? pairPoll() : { status: 'exp
 ipcMain.handle('pair-pin', (e) => (fromConnect(e) ? pairPin() : { error: 'expired' }))
 ipcMain.on('pair-stop', (e) => { if (fromConnect(e)) pairing = null })
 ipcMain.handle('p2p-invite', (e, link) => (fromConnect(e) ? joinByInvite(String(link).slice(0, 4096)) : { error: 'invite' }))
+ipcMain.handle('p2p-join-start', (e) => (fromConnect(e) ? joinAwayStart() : { error: 'invalid' }))
+ipcMain.handle('p2p-join-wait', (e) => (fromConnect(e) ? joinAwayWait() : { error: 'invalid' }))
+ipcMain.on('p2p-join-stop', (e) => { if (fromConnect(e)) joinAwayStop() })
+ipcMain.handle('away-info', (e) => (fromConnect(e) ? awayInfo() : { available: false, server: false }))
+ipcMain.on('away-choice', (e, stop) => { if (fromConnect(e)) awayChoice(stop === true) })
 // Giving up on a server being reached from away: whatever comes of it isn't wanted now.
 ipcMain.on('p2p-stop', (e) => { if (fromConnect(e)) { awayGivenUp = true; closeTunnel() } })
 

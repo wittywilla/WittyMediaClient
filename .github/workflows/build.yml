@@ -266,6 +266,8 @@ jobs:
         with:
           persist-credentials: false
           repository: wittywilla/WittyMediaServer
+          # The server's branch of the same name as this release branch (v0.8.0-alpha), else its default.
+          ref: ${{ startsWith(github.base_ref, 'v0.') && github.base_ref || (github.ref_type == 'branch' && startsWith(github.ref_name, 'v0.') && github.ref_name) || '' }}
           path: .server
       # Wittyconnect, which reaches a server from away (peer to peer), is built from the server's source with
       # gomobile into android/app/libs; the build then requires it (-Pp2p=required), so no APK leaves without it.
@@ -301,15 +303,15 @@ jobs:
   # imports (Network, CryptoKit, FoundationNetworking) are all behind #if canImport.
   wittykit-linux:
     runs-on: ubuntu-latest
+    # Swift's own image: setup-swift doesn't support the Ubuntu 26.04 that ubuntu-latest now is.
+    # Keep its version with SWIFT_VERSION above (the container can't read env).
+    container: swift:6.1-noble
     permissions:
       contents: read
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      - uses: swift-actions/setup-swift@7ca6abe6b3b0e8b5421b88be48feee39cbf52c6a # v2.4.0
-        with:
-          swift-version: ${{ env.SWIFT_VERSION }}
       - name: Swift version
         run: swift --version
       - name: Build
@@ -352,6 +354,8 @@ jobs:
         with:
           persist-credentials: false
           repository: wittywilla/WittyMediaServer
+          # The server's branch of the same name as this release branch (v0.8.0-alpha), else its default.
+          ref: ${{ startsWith(github.base_ref, 'v0.') && github.base_ref || (github.ref_type == 'branch' && startsWith(github.ref_name, 'v0.') && github.ref_name) || '' }}
           path: .server
       - name: Build Wittyconnect from the server's source
         env:

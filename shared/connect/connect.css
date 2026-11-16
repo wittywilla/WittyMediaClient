@@ -392,6 +392,11 @@ button.server:hover .glyph, button.server:hover .pill { background: var(--bg-3);
 .badge .icon { width: 50%; height: 50%; }
 .facts { margin: 0 0 var(--sp-4); padding: var(--sp-4); border-radius: var(--r-lg); background: var(--bg-2); }
 .facts .where { margin: 0 0 var(--sp-3); font-weight: 500; overflow-wrap: anywhere; }
+/* From away: rows that open nothing, the label over its value. */
+.away-row { display: flex; justify-content: space-between; gap: var(--sp-4); margin: 0; padding: var(--sp-3) 0; overflow-wrap: anywhere; }
+.away-row + .away-row { border-top: 1px solid var(--bg-4); }
+.away-row .caption { color: var(--fg-3); }
+button.wide { width: 100%; }
 .fingerprint { font-family: var(--font-mono); overflow-wrap: anywhere; }
 .fingerprint.caption { margin-top: var(--sp-4); color: var(--fg-3); text-align: center; }
 

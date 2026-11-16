@@ -2,6 +2,101 @@
   "defaultTheme": "default",
   "themes": [
     {
+      "id": "aeroaurora",
+      "name": "Aero Aurora",
+      "scheme": "dark",
+      "colours": {
+        "background": "#0b2a4a",
+        "panel": "#123a5e",
+        "card": "#194a74",
+        "border": "#2e5b82",
+        "text": "#eaf6ff",
+        "textSecondary": "#a8cfe6",
+        "textHint": "#9bbacf",
+        "accent": "#38c6f4",
+        "onAccent": "#00243a",
+        "accentText": "#7fdcff",
+        "danger": "#ff99a2",
+        "ok": "#3ad29f"
+      }
+    },
+    {
+      "id": "aeroday",
+      "name": "Aero Day",
+      "scheme": "light",
+      "colours": {
+        "background": "#cfeeff",
+        "panel": "#ffffff",
+        "card": "#e7f6ff",
+        "border": "#d1e3ee",
+        "text": "#0b3a5a",
+        "textSecondary": "#2f6a8c",
+        "textHint": "#436e86",
+        "accent": "#166fa1",
+        "onAccent": "#ffffff",
+        "accentText": "#0a6aa8",
+        "danger": "#b8222f",
+        "ok": "#116b45"
+      }
+    },
+    {
+      "id": "aeromeadow",
+      "name": "Aero Meadow",
+      "scheme": "light",
+      "colours": {
+        "background": "#d9f5cc",
+        "panel": "#ffffff",
+        "card": "#ecfae4",
+        "border": "#d6e7d1",
+        "text": "#0d3a22",
+        "textSecondary": "#2f6b47",
+        "textHint": "#477455",
+        "accent": "#217a36",
+        "onAccent": "#ffffff",
+        "accentText": "#146b2e",
+        "danger": "#b8222f",
+        "ok": "#116b45"
+      }
+    },
+    {
+      "id": "aerosunset",
+      "name": "Aero Sunset",
+      "scheme": "light",
+      "colours": {
+        "background": "#ffd9b8",
+        "panel": "#fff6ee",
+        "card": "#ffe9d6",
+        "border": "#edd4c6",
+        "text": "#4a1b3a",
+        "textSecondary": "#7a3d62",
+        "textHint": "#865468",
+        "accent": "#b23800",
+        "onAccent": "#ffffff",
+        "accentText": "#ae3f0f",
+        "danger": "#b8222f",
+        "ok": "#116b45"
+      }
+    },
+    {
+      "id": "cable",
+      "name": "Cable blue",
+      "scheme": "dark",
+      "colours": {
+        "background": "#08125e",
+        "panel": "#0b1a8a",
+        "card": "#0f2bb8",
+        "border": "#2740bf",
+        "text": "#ffffff",
+        "textSecondary": "#d6defc",
+        "textHint": "#a9b1d9",
+        "accent": "#ffd84a",
+        "onAccent": "#08125e",
+        "accentText": "#ffd84a",
+        "danger": "#ff8a94",
+        "ok": "#3ad29f"
+      }
+    },
+    {
       "id": "cinema",
       "name": "Cinema",
       "scheme": "dark",
@@ -151,6 +246,44 @@
         "accentText": "#a14b1b",
         "danger": "#b8222f",
         "ok": "#116b45"
+      }
+    },
+    {
+      "id": "satellite",
+      "name": "Satellite",
+      "scheme": "dark",
+      "colours": {
+        "background": "#0c1418",
+        "panel": "#16262e",
+        "card": "#1f3540",
+        "border": "#344852",
+        "text": "#eef3f6",
+        "textSecondary": "#aebdc6",
+        "textHint": "#8e9ca3",
+        "accent": "#ff8a1f",
+        "onAccent": "#1a0e00",
+        "accentText": "#ffa84d",
+        "danger": "#ff6b78",
+        "ok": "#3ad29f"
+      }
+    },
+    {
+      "id": "teletext",
+      "name": "Teletext",
+      "scheme": "dark",
+      "colours": {
+        "background": "#000000",
+        "panel": "#0000a8",
+        "card": "#00005a",
+        "border": "#1a1a6a",
+        "text": "#ffffff",
+        "textSecondary": "#00ffff",
+        "textHint": "#00c7c7",
+        "accent": "#ffff00",
+        "onAccent": "#000000",
+        "accentText": "#ffff00",
+        "danger": "#ff6b78",
+        "ok": "#3ad29f"
       }
     }
   ]

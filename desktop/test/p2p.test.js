@@ -224,3 +224,47 @@ test('the path is said in words', () => {
   assert.match(p2p.pathWords({ path: 'offline' }), /reconnecting/)
   assert.strictEqual(p2p.pathWords(null), '')
 })
+
+test('joining by a code: the key goes down the pipe, the code is shown as typed, and the answer is kept to what the app uses', async () => {
+  const { child, run } = fakeHelper()
+  const j = new p2p.JoinRun('/x/wittyconnect', { key: KEY, name: 'Study PC', platform: 'Windows' }, { run })
+  await tick()
+  assert.deepStrictEqual(run.calls[0].args, ['join'])
+  assert.deepStrictEqual(JSON.parse(child.written), { key: KEY, name: 'Study PC', platform: 'Windows' })
+  child.say({ event: 'code', code: 'not-a-code' })
+  child.say({ event: 'code', code: 'K7QM-2XHD' })
+  assert.strictEqual(await j.code, 'K7QM-2XHD')
+  child.say({ event: 'joined', result: { ok: true, serverId: SERVER, addrs: ['/ip4/203.0.113.4/udp/4100/quic-v1', 'rubbish'], code: '123456', serverName: 'Home', extra: 'x' } })
+  assert.deepStrictEqual(await j.result, { ok: true, serverId: SERVER, hints: ['/ip4/203.0.113.4/udp/4100/quic-v1'], code: '123456', serverName: 'Home' })
+})
+
+test('joining by a code: a refusal, a code that ran out, a helper that stops, and giving up are each told apart', async () => {
+  const refused = fakeHelper()
+  const a = new p2p.JoinRun('/x/wittyconnect', { key: KEY }, { run: refused.run })
+  refused.child.say({ event: 'code', code: 'K7QM-2XHD' })
+  refused.child.say({ event: 'joined', result: { ok: false, reason: 'wrong' } })
+  assert.deepStrictEqual(await a.result, { ok: false, reason: 'wrong', error: '' })
+
+  const late = fakeHelper()
+  const b = new p2p.JoinRun('/x/wittyconnect', { key: KEY }, { run: late.run })
+  late.child.say({ event: 'error', error: 'expired' })
+  assert.strictEqual(await b.code, '')
+  assert.deepStrictEqual(await b.result, { ok: false, error: 'expired' })
+
+  const dead = fakeHelper()
+  const c = new p2p.JoinRun('/x/wittyconnect', { key: KEY }, { run: dead.run })
+  dead.child.emit('exit', 1)
+  assert.deepStrictEqual(await c.result, { ok: false, error: 'p2p-failed' })
+
+  const left = fakeHelper()
+  const d = new p2p.JoinRun('/x/wittyconnect', { key: KEY }, { run: left.run })
+  left.child.say({ event: 'code', code: 'K7QM-2XHD' })
+  await d.code
+  d.stop()
+  assert.deepStrictEqual(await d.result, { ok: false, error: 'stopped' })
+  await tick()
+  assert.ok(left.child.ended, 'its input is closed, which tells it to stop')
+
+  const none = new p2p.JoinRun('/nowhere', { key: KEY }, { run: () => { throw new Error('ENOENT') } })
+  assert.deepStrictEqual(await none.result, { ok: false, error: 'p2p-failed' })
+})
