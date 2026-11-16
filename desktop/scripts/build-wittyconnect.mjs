@@ -26,7 +26,7 @@ const lenient = args.includes('--if-available')
 const TARGETS = {
   'mac-arm64': ['darwin', 'arm64'], 'mac-x64': ['darwin', 'amd64'],
   'win-x64': ['windows', 'amd64'], 'linux-x64': ['linux', 'amd64'], 'linux-arm64': ['linux', 'arm64'],
-  'freebsd-x64': ['freebsd', 'amd64'],
+  'freebsd-x64': ['freebsd', 'amd64'], 'freebsd-arm64': ['freebsd', 'arm64'],
 }
 const OS = { darwin: 'mac', win32: 'win', linux: 'linux', freebsd: 'freebsd' }
 const mine = `${OS[process.platform] || process.platform}-${process.arch}`
@@ -45,7 +45,7 @@ const source = [process.env.WITTYMEDIASERVER_SRC, join(desktop, '..', '..', 'Wit
 if (!source) give('WittyMediaServer\'s source wasn\'t found. Set WITTYMEDIASERVER_SRC to a checkout that has cmd/wittyconnect.')
 try { execFileSync('go', ['version'], { stdio: 'ignore' }) } catch { give('Go isn\'t installed, and the helper is a Go program.') }
 
-const wanted = args.includes('--all') ? Object.keys(TARGETS).filter((t) => t !== 'freebsd-x64') : [args.find((a) => TARGETS[a]) || mine]
+const wanted = args.includes('--all') ? Object.keys(TARGETS).filter((t) => !t.startsWith('freebsd-')) : [args.find((a) => TARGETS[a]) || mine]
 for (const target of wanted) {
   if (!TARGETS[target]) give(`No helper is built for ${target}.`)
   const [goos, goarch] = TARGETS[target]

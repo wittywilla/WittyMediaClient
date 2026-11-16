@@ -43,7 +43,8 @@ function electronPort() {
   return ports.sort((a, b) => Number(b.slice(8)) - Number(a.slice(8)))[0]
 }
 
-// There's no compiled code in it, so it fits any FreeBSD with an Electron for this processor.
+// Its only compiled code is the helper, a static Go program, so it fits any FreeBSD with an
+// Electron for this processor.
 function freebsdAbi() {
   if (stageOnly) return 'FreeBSD:*:*'
   const abi = spawnSync('pkg', ['config', 'ABI'], { encoding: 'utf8' }).stdout.trim()
@@ -98,6 +99,19 @@ writeDesktopEntry(join(prefix, 'share', 'applications', `${NAME}.desktop`))
 cpSync(join(desktop, 'build', 'icon.png'), join(prefix, 'share', 'icons', 'hicolor', '512x512', 'apps', `${NAME}.png`))
 cpSync(join(desktop, '..', 'LICENSE'), join(shareDir, 'LICENSE'))
 cpSync(join(desktop, '..', 'NOTICE'), join(shareDir, 'NOTICE'))
+
+// Wittyconnect, which reaches a server from away, beside app.asar, where p2p.js looks for it on
+// FreeBSD. Built by scripts/build-wittyconnect.mjs freebsd-x64 (or freebsd-arm64). A package
+// without it couldn't connect from away, so none is made; --stage-only goes on without it.
+const helperDir = join(desktop, 'bin', `freebsd-${process.arch === 'arm64' ? 'arm64' : 'x64'}`)
+try {
+  cpSync(join(helperDir, 'wittyconnect'), join(shareDir, 'wittyconnect'))
+  chmodSync(join(shareDir, 'wittyconnect'), 0o755)
+  cpSync(join(helperDir, 'THIRD-PARTY-NOTICES.wittyconnect.txt'), join(shareDir, 'THIRD-PARTY-NOTICES.wittyconnect.txt'))
+} catch (e) {
+  if (!stageOnly) throw new Error(`The connection helper isn't in ${helperDir}: run node scripts/build-wittyconnect.mjs with freebsd-x64 or freebsd-arm64 first.`)
+  console.warn(`No connection helper in ${helperDir}: staged without it.`)
+}
 
 const abi = freebsdAbi()
 const version = pkg.version.replaceAll('-', '.')

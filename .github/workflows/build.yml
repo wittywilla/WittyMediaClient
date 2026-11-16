@@ -238,6 +238,23 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
+      # Wittyconnect for FreeBSD, cross-built here from the server's source into desktop/bin; the VM gets this
+      # folder, and package:freebsd refuses to make a package without it.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+          repository: wittywilla/WittyMediaServer
+          path: .server
+          ref: ${{ startsWith(github.base_ref, 'v0.') && github.base_ref || (github.ref_type == 'branch' && startsWith(github.ref_name, 'v0.') && github.ref_name) || '' }}
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7
+        with:
+          go-version-file: .server/go.mod
+          cache: false
+      - name: Build Wittyconnect for FreeBSD
+        working-directory: desktop
+        env:
+          WITTYMEDIASERVER_SRC: ${{ github.workspace }}/.server
+        run: node scripts/build-wittyconnect.mjs freebsd-x64
       - name: Package on FreeBSD
         uses: vmactions/freebsd-vm@c46abacb49f09938ca4e1702d15d836285d694cc # v1.5.9
         with:
