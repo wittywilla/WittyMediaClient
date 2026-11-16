@@ -45,6 +45,27 @@ jobs:
         run: |
           want="$(sed -n 's/.*"version": *"\([^"]*\)".*/\1/p' desktop/package.json | head -1)"
           [ "v$want" = "$GITHUB_REF_NAME" ] || { echo "desktop/package.json says $want, and the tag is $GITHUB_REF_NAME"; exit 1; }
+      # Wittyconnect, the helper that reaches a server from away (desktop/p2p.js), is built from the server's
+      # source into desktop/bin, where electron-builder picks it up. Required: no package leaves without it.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+          repository: wittywilla/WittyMediaServer
+          path: .server
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7
+        with:
+          go-version-file: .server/go.mod
+          cache: false
+      - name: Build Wittyconnect from the server's source
+        working-directory: desktop
+        env:
+          WITTYMEDIASERVER_SRC: ${{ github.workspace }}/.server
+        run: |
+          case "$RUNNER_OS" in
+            Windows) node scripts/build-wittyconnect.mjs win-x64 ;;
+            macOS) node scripts/build-wittyconnect.mjs mac-arm64 && node scripts/build-wittyconnect.mjs mac-x64 ;;
+            *) node scripts/build-wittyconnect.mjs linux-x64 ;;
+          esac
       - name: The tools that make the .rpm and .pacman
         if: runner.os == 'Linux'
         run: sudo apt-get update && sudo apt-get install -y rpm libarchive-tools
@@ -56,6 +77,8 @@ jobs:
           npm ci --ignore-scripts --no-audit --no-fund
           npm test
           npm run sync && npx electron-builder ${{ matrix.target }}
+      - name: The connection helper is in every package
+        run: bash scripts/test/helper-packaged.sh desktop/out
       # Plasma Bigscreen has no package of its own: it lists the Linux one, which opens as a TV app there.
       - name: Plasma Bigscreen lists the package's launcher entry
         if: runner.os == 'Linux'
@@ -94,6 +117,27 @@ jobs:
         run: |
           want="$(sed -n 's/.*"version": *"\([^"]*\)".*/\1/p' desktop/package.json | head -1)"
           [ "v$want" = "$GITHUB_REF_NAME" ] || { echo "desktop/package.json says $want, and the tag is $GITHUB_REF_NAME"; exit 1; }
+      # Wittyconnect, the helper that reaches a server from away (desktop/p2p.js), is built from the server's
+      # source into desktop/bin, where electron-builder picks it up. Required: no package leaves without it.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+          repository: wittywilla/WittyMediaServer
+          path: .server
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7
+        with:
+          go-version-file: .server/go.mod
+          cache: false
+      - name: Build Wittyconnect from the server's source
+        working-directory: desktop
+        env:
+          WITTYMEDIASERVER_SRC: ${{ github.workspace }}/.server
+        run: |
+          case "$RUNNER_OS" in
+            Windows) node scripts/build-wittyconnect.mjs win-x64 ;;
+            macOS) node scripts/build-wittyconnect.mjs mac-arm64 && node scripts/build-wittyconnect.mjs mac-x64 ;;
+            *) node scripts/build-wittyconnect.mjs linux-x64 ;;
+          esac
       - name: Install
         working-directory: desktop
         run: npm ci --ignore-scripts --no-audit --no-fund
@@ -141,6 +185,22 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           persist-credentials: false
+      # Wittyconnect for FreeBSD, cross-built here from the server's source into desktop/bin; the VM gets this
+      # folder, and package:freebsd refuses to make a package without it.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+          repository: wittywilla/WittyMediaServer
+          path: .server
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7
+        with:
+          go-version-file: .server/go.mod
+          cache: false
+      - name: Build Wittyconnect for FreeBSD
+        working-directory: desktop
+        env:
+          WITTYMEDIASERVER_SRC: ${{ github.workspace }}/.server
+        run: node scripts/build-wittyconnect.mjs freebsd-x64
       - name: Package on FreeBSD
         uses: vmactions/freebsd-vm@c46abacb49f09938ca4e1702d15d836285d694cc # v1.5.9
         with:
@@ -251,10 +311,15 @@ jobs:
           persist-credentials: false
           repository: wittywilla/WittyMediaServer
           path: .server
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7
+        with:
+          go-version-file: .server/go.mod
+          cache: false
       - name: Build Wittyconnect from the server's source
         env:
           WITTYMEDIASERVER_SRC: .server
-        run: bash apple/scripts/build-wittyconnect.sh --if-available
+        # Required: 0.5.1's iPhone and Apple TV apps shipped without it because Go wasn't set up here.
+        run: bash apple/scripts/build-wittyconnect.sh
       - name: Generate the Xcode project
         working-directory: apple
         run: xcodegen generate

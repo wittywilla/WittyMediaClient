@@ -99,6 +99,8 @@ fun DesignPage(
     actions: (@Composable FlowRowScope.() -> Unit)? = null,
     // Above the eyebrow: a server's lockup (its logo and coloured name) or a person's face, on the sign-in screens.
     top: (@Composable () -> Unit)? = null,
+    // The top, title and lead centred over the page, as Design 2's Choose a server has them.
+    centred: Boolean = false,
     content: @Composable ColumnScope.() -> Unit,
 ) {
     val metrics = LocalMetrics.current
@@ -106,13 +108,15 @@ fun DesignPage(
         val sizes = DesignSizes.of(metrics, maxWidth.value)
         CompositionLocalProvider(LocalDesignSizes provides sizes) {
             Column(
-                Modifier.fillMaxSize().verticalScroll(rememberScrollState())
+                // Clear of the status and navigation bars when nothing around it is (DesignScreen already is, and
+                // what it took is used up, so nothing is padded twice); the background still runs under them.
+                Modifier.fillMaxSize().safeDrawingPadding().verticalScroll(rememberScrollState())
                     .padding(horizontal = if (metrics.tv) metrics.u(DesignTokens.Tv.gutter.toInt()) else metrics.gutter, vertical = if (metrics.tv) metrics.u(60) else Space.S6),
                 horizontalAlignment = Alignment.CenterHorizontally,
             ) {
                 Column(Modifier.fillMaxWidth().then(if (metrics.tv) Modifier else Modifier.widthIn(max = 760.dp))) {
-                    if (top != null) Box(Modifier.padding(bottom = sizes.gap * 1.6f)) { top() }
-                    DesignHead(title, eyebrow, lead)
+                    if (top != null) Box(Modifier.fillMaxWidth().padding(bottom = sizes.gap * 1.6f), contentAlignment = if (centred) Alignment.Center else Alignment.TopStart) { top() }
+                    DesignHead(title, eyebrow, lead, if (centred) Modifier.fillMaxWidth() else Modifier, centred = centred)
                     content()
                     DesignActions(foot, actions)
                 }
@@ -161,10 +165,11 @@ fun DesignSized(content: @Composable () -> Unit) {
 
 /** The page's eyebrow, title and lead, for a screen that has its own frame (a sheet, a panel inside a page). */
 @Composable
-fun DesignHead(title: String, eyebrow: String = "", lead: String = "", modifier: Modifier = Modifier) {
+fun DesignHead(title: String, eyebrow: String = "", lead: String = "", modifier: Modifier = Modifier, centred: Boolean = false) {
     val s = LocalDesignSizes.current
     val scheme = MaterialTheme.colorScheme
-    Column(modifier) {
+    val align = if (centred) androidx.compose.ui.text.style.TextAlign.Center else null
+    Column(modifier, horizontalAlignment = if (centred) Alignment.CenterHorizontally else Alignment.Start) {
         if (eyebrow.isNotEmpty()) {
             Text(
                 eyebrow.uppercase(), color = LocalExtraColours.current.accentText, fontSize = s.small, fontWeight = FontWeight.Bold,
@@ -174,12 +179,12 @@ fun DesignHead(title: String, eyebrow: String = "", lead: String = "", modifier:
         if (title.isNotEmpty()) {
             Text(
                 title, color = scheme.onBackground, fontSize = s.title, fontWeight = FontWeight.ExtraBold, letterSpacing = (-0.03).em,
-                lineHeight = s.title * 1.1f, modifier = Modifier.semantics { heading() },
+                lineHeight = s.title * 1.1f, textAlign = align, modifier = Modifier.semantics { heading() },
             )
         }
         if (lead.isNotEmpty()) {
             Text(
-                lead, color = scheme.onSurfaceVariant, fontSize = s.body, lineHeight = s.body * 1.5f,
+                lead, color = scheme.onSurfaceVariant, fontSize = s.body, lineHeight = s.body * 1.5f, textAlign = align,
                 modifier = Modifier.padding(top = s.gap * 0.6f).widthIn(max = s.leadWidth),
             )
         }
