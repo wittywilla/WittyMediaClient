@@ -12,6 +12,9 @@ stay honest: **written** does not mean **works**.
 | **Not started** | Nothing exists yet. |
 | **Blocked** | Needs something only the owner can get. |
 
+**Games don't work with a 0.8.x server.** WittyPlay's emulation isn't working in WittyMediaServer 0.8.x, and the apps crash if a game is
+started.
+
 **Android has run on emulators and on nothing else.** [Features](#features) has what each client does, and how far each was seen.
 [Android, as of 0.2.1](#android-as-of-021) lists more of what was seen and what wasn't. Using it for the first time found real bugs that nothing before it could, so anything on that list marked as not run
 should be expected to have some too.
@@ -36,7 +39,7 @@ should be expected to have some too.
 | Fire TV | **Compiled** | Not run: no image for it here. Needs Fire OS 6 or later: the first Fire TV Sticks are too old for Compose. |
 | Android phones | **Ran on an emulator** | Android 16 in full, and Android 6 (API 23, the oldest it supports) for connecting, playing and a network drop. No real phone yet. |
 | Android tablets | **Ran on an emulator** | Android 16, 2560×1600, sideways: signing in, Home, a library, an item, and the server's pages. They use the phone's screens with wider margins. |
-| Apple TV | **Compiled** | By Xcode 27 on macOS 27, unsigned, for the device and the simulator. Never run. [The first check](OWNER-STEPS.md#step-3-try-apple-needs-a-mac) is one script. |
+| Apple TV | **Ran in the simulator** | Compiled by Xcode 27 on macOS 27, unsigned, for the device and the simulator. Run in the tvOS 27 simulator against a real server: [the server's pages](#server-driven-pages-on-apple), [from away](#from-away-peer-to-peer) and [forgetting servers](#removing-remembered-servers-what-was-run). Never on a real Apple TV: [the owner's checks](OWNER-STEPS.md#try-apple-needs-a-mac). |
 | iPhone | **Ran in the simulator** | iPhone 17, iOS 27: connected by address, signed in with a password, Home, a library, an item page, and a film played. Never on a real iPhone. |
 | iPad | **Compiled** | The same app as the iPhone, with the tablet's wider margins and cards. |
 | Apple Vision Pro | **Compiled** | The iPhone and iPad app, built for visionOS 2 and later as an app of its own, with the iPad's layout: the floating bar, the server's pages in a web view, and picture in picture. Never run, not even in the simulator. |
@@ -637,7 +640,7 @@ verified on Linux, as it has no CryptoKit. Every answer is refused there, and th
 type-checked against small stand-ins written for SwiftUI, AVFoundation and the rest, for each of the three platforms. That wasn't repeated for what
 0.3.0 added: the server's pages on iPhone and iPad, and Apple TV's screens in `TvViews.swift`. Expect those to need the most fixing.
 
-`apple/scripts/check-on-mac.sh` is the first real check: see [the steps](OWNER-STEPS.md#step-3-try-apple-needs-a-mac).
+`apple/scripts/check-on-mac.sh` is the first real check: see [the steps](OWNER-STEPS.md#try-apple-needs-a-mac).
 
 **Never done:** compiling with Xcode, running on any device or simulator, focus with a real remote, VoiceOver, AVPlayer playing
 anything, the Keychain, the web view, the Top Shelf, or generating the Xcode project from `project.yml`, which has only been read.

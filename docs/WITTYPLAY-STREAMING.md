@@ -1,5 +1,8 @@
 # WittyPlay streaming: the server plays, the TV shows
 
+> **Not working in 0.8.x.** WittyPlay's emulation doesn't work with WittyMediaServer 0.8.x, and the apps crash if a game is
+> started. This page is the design and what was built; it doesn't mean games play today.
+
 How games play on a TV that can't run them: the server runs the emulator, sends the picture and sound
 down as a low-latency stream, and the app sends controller states back up. This is the design, and
 what the Apple TV app does with it.

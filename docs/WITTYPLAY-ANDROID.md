@@ -1,9 +1,12 @@
 # WittyPlay on Android
 
+> **Not working in 0.8.x.** WittyPlay's emulation doesn't work with WittyMediaServer 0.8.x, and the apps crash if a game is
+> started. This page is the design and what was built; it doesn't mean games play today.
+
 How the server's games play in the Android app on phones, tablets and Android TV. The server runs every game and streams
 it; the app shows the picture, plays the sound and sends the controls (WittyMediaServer `docs/GAMING-API.md`). No emulator
 and no game file is ever on the device. The design is [How the apps look](APP-DESIGN.md), "Games everywhere"; the
-protocol choices are the Apple player's (`docs/WITTYPLAY-STREAMING.md` on the Apple TV branch), made the same way here.
+protocol choices are the Apple player's ([WITTYPLAY-STREAMING.md](WITTYPLAY-STREAMING.md)), made the same way here.
 
 ## The connection
 

@@ -5,7 +5,8 @@ port is a matter of building and testing, not a redesign. [PLATFORMS.md](PLATFOR
 has been checked; this page says what the plan is.
 
 **Where this stands:** Android TV has run on an emulator with arrow keys and OK, against a real server, and nothing has yet run on
-a real TV or remote: [PLATFORMS.md](PLATFORMS.md#android-as-of-021) has the details. Apple's SwiftUI has never been compiled.
+a real TV or remote: [PLATFORMS.md](PLATFORMS.md#android-as-of-021) has the details. The Apple apps compile with Xcode 27, CI builds them on
+every pull request, and Apple TV and iPhone have run in their simulators; nothing has run on a real Apple TV.
 
 ## The decision
 
@@ -49,8 +50,8 @@ Kotlin Multiplatform and a shared UI toolkit were looked at and turned down: see
 | **Frame rate** | The same setting | Media3's default, which only switches when it's seamless. Turning on full switching is an experiment for a real TV |
 | **Audio passthrough** | Left to AVPlayer | Media3 passes through what `AudioCapabilities` reports over HDMI |
 | **Remote commands, now playing** | `externalMetadata` and the system player | `MediaSession`: while a film is open, and for as long as there's a queue for sound, in a `MediaSessionService` |
-| **Top shelf or channels** | Top Shelf extension, reading a file the app writes. No network or token in it | **Not built.** See below |
-| **Live TV** | **Not built** | **Not built** |
+| **Top shelf or channels** | Top Shelf extension, reading a file the app writes. No network or token in it | The app's own channel and Watch Next entries, with `sdui-topshelf`. Never seen on a home screen: [PLATFORMS.md](PLATFORMS.md#server-driven-pages-on-android) |
+| **Live TV** | Its own guide and channel screens | The server's guide page |
 | **Screen readers** | VoiceOver labels and groups | TalkBack labels, roles, states and live regions |
 
 ## Android TV, step by step
@@ -61,20 +62,18 @@ Kotlin Multiplatform and a shared UI toolkit were looked at and turned down: see
 3. **Check with a D-pad. Done on the emulator:** starting up, finding a server, the number pad, Home, rows, Back returning focus, the
    seek bar, the track lists and Back from the player. What that found is in the [changelog](../CHANGELOG.md).
 4. **Then a cheap TV stick**, which is the device this app is judged on.
-5. **Channels.** The Watch Next row and a channel of our own (`androidx.tvprovider`). Its pictures are the question: the
-   launcher can't send a sign-in, so it needs either local copies behind a read-only `ContentProvider` or a stream token
-   in the address. Local copies are the safer of the two, and match what the Top Shelf does. It also needs a `wittymedia://`
-   link into the app, with digits only, as on Apple TV. Left out until there's a device to see it on, because each of
-   those adds something exposed to other apps.
-6. **Google Play's TV checks** want a banner, no required touch screen (done), and a D-pad path to everything.
+5. **Channels. Built, never seen.** The Watch Next row and a channel of our own (`androidx.tvprovider`), from the server's
+   `GET /sdui/topshelf`. The launcher can't send a sign-in, so the pictures are fetched into the app's cache and lent to it,
+   as the Top Shelf does. Compiled only: not once seen on a home screen ([PLATFORMS.md](PLATFORMS.md#server-driven-pages-on-android)).
+6. **Google Play's TV checks** want a banner (done), no required touch screen (done), and a D-pad path to everything.
 
 ## Apple TV, step by step
 
-1. **On a Mac:** `xcodegen generate`, and fix what the first compile finds. Availability of newer SwiftUI calls and
-   concurrency strictness are the likeliest.
-2. **Choose a team** for `WittyMedia-tvOS` and `WittyMedia-TopShelf`, and tick the App Group on both. Without it the Top
+1. **Build it. Done.** `xcodegen generate` in `apple/`, then Xcode 27. CI does it on every pull request.
+2. **Run it in the simulator. Done** against a real server: [PLATFORMS.md](PLATFORMS.md#server-driven-pages-on-apple).
+3. **Choose a team** for `WittyMedia-tvOS` and `WittyMedia-TopShelf`, and tick the App Group on both. Without it the Top
    Shelf is simply empty.
-3. Work through the Apple TV list in [OWNER-STEPS.md](OWNER-STEPS.md).
+4. Work through the Apple TV list in [OWNER-STEPS.md](OWNER-STEPS.md#try-apple-needs-a-mac).
 
 **Games on a PC:** with no web view, an Apple TV can only start the game on the PC and say what to do next. No
 Moonlight client on Apple devices has a URL scheme, and its GPL-3.0 code can't go inside this app. A separate Apple TV
