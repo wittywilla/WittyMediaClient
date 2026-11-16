@@ -219,6 +219,12 @@ fun ServerCard(
     actions: List<CustomAccessibilityAction> = emptyList(),
     // At the end instead of "Last used", such as a button that removes it.
     trailing: (@Composable () -> Unit)? = null,
+    // Design 2's Choose a server: a round avatar (the logo, or the name's first letter) in place of the mark, a small
+    // icon before the line (home, from anywhere, found here), and for a server reached peer to peer a blue dot and
+    // a "Peer to peer" chip ([peerChip]).
+    avatar: Boolean = false,
+    lineIcon: androidx.compose.ui.graphics.vector.ImageVector? = null,
+    peerChip: String = "",
 ) {
     val scheme = MaterialTheme.colorScheme
     val metrics = LocalMetrics.current
@@ -244,7 +250,9 @@ fun ServerCard(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(s.gap),
         ) {
-            if (saved) {
+            if (saved && avatar) {
+                ServerAvatar(name, logo, mark, peer = peerChip.isNotEmpty())
+            } else if (saved) {
                 ServerMark(mark, logo)
             } else {
                 Box(Modifier.size(mark).clip(markShape(mark)).background(scheme.outline), contentAlignment = Alignment.Center) {
@@ -253,7 +261,10 @@ fun ServerCard(
             }
             Column(Modifier.weight(1f)) {
                 Text(name, color = scheme.onSurface, fontSize = s.body, fontWeight = FontWeight.Bold, lineHeight = s.body * 1.3f, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                Text(detail, color = scheme.onSurfaceVariant, fontSize = s.tiny, lineHeight = s.tiny * 1.35f, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    if (lineIcon != null) Icon(lineIcon, contentDescription = null, tint = scheme.onSurfaceVariant, modifier = Modifier.padding(end = 5.dp).size(s.tiny.value.dp * 1.15f))
+                    Text(detail, color = scheme.onSurfaceVariant, fontSize = s.tiny, lineHeight = s.tiny * 1.35f, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                }
                 val seen = listOfNotNull(reached.ifEmpty { null }, if (stale) words["staleServer"] else null).joinToString(" · ")
                 if (seen.isNotEmpty()) {
                     Text(seen, color = extra.hint, fontSize = s.tiny, lineHeight = s.tiny * 1.35f, maxLines = 1, overflow = TextOverflow.Ellipsis)
@@ -262,6 +273,7 @@ fun ServerCard(
             when {
                 trailing != null -> trailing()
                 connecting -> Spinner(extra.hint, metrics.u(if (metrics.tv) 30 else 20))
+                peerChip.isNotEmpty() -> PeerChip(peerChip)
                 lastUsed -> Text(words["lastUsed"].orEmpty(), color = extra.accentText, fontSize = s.small, fontWeight = FontWeight.Bold, maxLines = 1)
             }
         }
