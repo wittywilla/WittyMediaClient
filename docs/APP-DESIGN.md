@@ -205,6 +205,9 @@ TVs use the same layer and the same list. WittyTV's guide keeps its own looks on
   - **In the app** the marks are drawn natively, sharp at every size: on Apple from `apple/App/BrandArt.swift`
     (`BrandArt.server` and `BrandArt.client`), which `BrandMark` paints. A server's mark is the default; the app's own
     (`BrandMark(app: true)`) is used wherever the app means itself, such as the lockup on Choose your server.
+    On the desktop app (Windows, macOS, Linux) the same two marks are SVGs in `shared/brand`
+    (`mark-client.svg`, `mark-server.svg`), which `desktop/scripts/sync-shared.mjs` hands the connect page as
+    `brand.js`, since that page shows images only as `data:` addresses.
   - **Apple's icons** are in `apple/Brand`: on iPhone and iPad one 1024 icon with dark and tinted versions, on Apple
     Vision Pro a three-layer icon (`AppIcon.solidimagestack`), and on Apple TV a three-layer icon that moves with the
     remote, for the Home screen and the App Store, and the Top Shelf images (standard and wide) shown when the app
