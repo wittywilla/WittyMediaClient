@@ -112,12 +112,20 @@ jobs:
       - name: The tools that make the Snap
         if: matrix.format == 'snap'
         run: |
-          sudo snap install snapcraft --classic
-          sudo snap install lxd || sudo snap refresh lxd
+          # The Snap Store sometimes times out: after four tries the snap is skipped, with a
+          # warning, so the other packages are still built and checked. SNAP_OK guards the rest.
+          for try in 1 2 3 4; do
+            if sudo snap install snapcraft --classic && { sudo snap install lxd || sudo snap refresh lxd; }; then
+              echo "SNAP_OK=1" >> "$GITHUB_ENV"; break
+            fi
+            [ "$try" = 4 ] && { echo "::warning::The Snap Store didn't answer: the snap wasn't built"; exit 0; }
+            echo "::warning::snap install failed (try $try); trying again in 30s"; sleep 30
+          done
           sudo lxd init --auto
           sudo iptables -P FORWARD ACCEPT
           sudo usermod --append --groups lxd "$USER"
       - name: Package
+        if: matrix.format != 'snap' || env.SNAP_OK == '1'
         working-directory: desktop
         env:
           DEBUG: ${{ matrix.format == 'flatpak' && '@malept/flatpak-bundler' || '' }}
@@ -128,6 +136,7 @@ jobs:
             npm run package:flatpak
           fi
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
+        if: matrix.format != 'snap' || env.SNAP_OK == '1'
         with:
           name: desktop-${{ matrix.format }}
           path: desktop/out/*.${{ matrix.format }}
