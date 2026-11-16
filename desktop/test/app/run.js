@@ -585,7 +585,10 @@ async function run() {
     await step('Help opens under its button', async () => {
       await inBar("document.getElementById('help').click()")
       await until('the menu', () => menus.length === 1)
-      assert.deepStrictEqual(menus[0].labels.slice(0, 3), ['Manage servers…', undefined, 'Open logs folder'], 'with a server open')
+      // A separator has no label: undefined on Linux, '' on Windows. Connecting from away is
+      // offered only where the connect helper has been built (npm run build:connect).
+      const labels = menus[0].labels.map((l) => l || undefined).filter((l) => !/from away/.test(l || ''))
+      assert.deepStrictEqual(labels.slice(0, 3), ['Manage servers…', undefined, 'Open logs folder'], 'with a server open')
       assert.ok(Number.isInteger(menus[0].options.x) && menus[0].options.y > 0)
     })
   } else {
@@ -961,7 +964,9 @@ async function onTv() {
     // Every button on a TV is a pill, and a focused field shows the ring and not a second, accent outline.
     const connect = await inPage(`(() => { const b = Array.from(document.querySelectorAll('button')).find((x) => x.textContent === ${JSON.stringify(S.connect)}); return { radius: parseFloat(getComputedStyle(b).borderTopLeftRadius), height: b.getBoundingClientRect().height } })()`)
     assert.ok(connect.radius >= connect.height / 2, JSON.stringify(connect))
-    assert.strictEqual(await inPage("getComputedStyle(document.querySelector('.field fieldset')).borderTopWidth"), '1px')
+    // A 1px border is one device pixel: 0.666667px in CSS on a display scaled to 150%.
+    const border = await inPage("(() => { const w = parseFloat(getComputedStyle(document.querySelector('.field fieldset')).borderTopWidth); return { w, px: w * devicePixelRatio } })()")
+    assert.ok(border.w > 0 && border.w <= 1 && Math.round(border.px) === 1, JSON.stringify(border))
     await shot('tv-address')
     await key('Escape')
     await onHeading(S.findTitle)
