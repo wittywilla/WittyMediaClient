@@ -4,7 +4,12 @@
 
 # WittyMediaClient
 
-Apps that connect to a WittyMediaServer, for TV boxes, phones, tablets and desktops. You need one if you'd rather not use a browser on that device. Most of this is early, and [Platforms](#platforms) says how far each one has been run.
+Apps that connect to a [WittyMediaServer](https://github.com/wittywilla/WittyMediaServer), for TV boxes, phones, tablets and desktops: a desktop app (Electron) for Windows, macOS, Linux, FreeBSD and KDE Plasma Bigscreen, and native apps for Android, Android TV, iPhone, iPad and Apple TV. You need one if you'd rather not use a browser on that device. They are client apps only: your media stays on your own server, and the apps contact nothing except the server you choose.
+
+This is alpha software. WittyMediaClient 0.5.x goes with WittyMediaServer 0.8.0-alpha. Most of it is early, and [Platforms](#platforms) says how far each app has been run. More about the server is at <https://wittymediaserver.com>.
+
+> **Known problem in 0.8.x: don't start a game from the apps.** Game emulation doesn't work with WittyMediaServer 0.8.x, and the
+> apps crash if a game is started. Films, shows, music and the rest are not affected.
 
 <!-- pictures -->
 
@@ -27,7 +32,7 @@ Apps that connect to a WittyMediaServer, for TV boxes, phones, tablets and deskt
 - **Finds your server** on the network, or takes its address, and signs in with a code or a password. It checks the server's identity first.
 - **Plays your films and shows,** with resume, on the native apps. The desktop app is a frameless window around the server's web interface, so it has everything the server has.
 - **Works with a remote, a keyboard or a touch screen.**
-- **Plays games on someone's own PC** through the server's page where it can, with the separately installed Moonlight app as the fallback. No part of that has reached a real PC from these apps yet.
+- **Plays games on someone's own PC** through the server's page where it can, with the separately installed Moonlight app as the fallback. No part of that has reached a real PC from these apps yet. The server's own games (WittyPlay) don't work in 0.8.x: see the known problem above.
 
 Native apps say plainly that an item can't play yet, rather than failing, for anything but video and games on someone's own PC. Music and books need the desktop app or a browser for now.
 
@@ -37,7 +42,7 @@ Native apps say plainly that an item can't play yet, rather than failing, for an
 | [`android/`](android) | Android TV, Google TV, Fire TV, phones and tablets, on ARM and x86, 32-bit and 64-bit, with an APK for each: Kotlin, Compose, Media3 |
 | [`apple/`](apple) | Apple TV, iPhone, iPad and Apple Vision Pro: SwiftUI, AVPlayer, laid out as the Android app. A Mac has the desktop app |
 | [`shared/`](shared) | What every app shares, as plain data: themes, wording, button meanings and test cases |
-| [`docs/`](docs) | [Installing and removing](docs/INSTALLING.md), [design](docs/DESIGN.md), [status](docs/PLATFORMS.md), [porting to TVs](docs/PORTING.md), [what the owner needs to do](docs/OWNER-STEPS.md) |
+| [`docs/`](docs) | [Installing and removing](docs/INSTALLING.md), [design](docs/DESIGN.md), [status](docs/PLATFORMS.md), [porting to TVs](docs/PORTING.md), [how the apps look](docs/APP-DESIGN.md), [Plasma Bigscreen](docs/PLASMA-BIGSCREEN.md), games ([experience](docs/WITTYPLAY-EXPERIENCE.md), [streaming](docs/WITTYPLAY-STREAMING.md), [Android](docs/WITTYPLAY-ANDROID.md)), [checks only the owner can do](docs/OWNER-STEPS.md) |
 
 How to use your server is in **Help** inside WittyMediaServer.
 
@@ -105,9 +110,9 @@ adb shell getprop ro.product.cpu.abilist
 
 A device refuses an APK it can't run when installing it, and nothing changes. All five have the same version, so any one can replace another. They're signed with a throwaway key and are for testing, so they can't update to a store version without uninstalling first. There's no store listing yet.
 
-**iPhone and iPad.** Each release has `wittymediaclient-<version>-ios.ipa`, one file for both. It's unsigned, for [AltStore](https://altstore.io), [SideStore](https://sidestore.io) or Sideloadly, which sign it with your own Apple ID as they install it. The release's `apps.json` is a source for AltStore and SideStore: add its address there and the app is listed, with its updates. With a free Apple ID an app has to be refreshed every 7 days, which those stores do for you. The app has no icon of its own yet, and has never run on a real iPhone or iPad.
+**iPhone and iPad.** Each release has `wittymediaclient-<version>-ios.ipa`, one file for both. It's unsigned, for [AltStore](https://altstore.io), [SideStore](https://sidestore.io) or Sideloadly, which sign it with your own Apple ID as they install it. The release's `apps.json` is a source for AltStore and SideStore: add its address there and the app is listed, with its updates. With a free Apple ID an app has to be refreshed every 7 days, which those stores do for you. The app has run in the iOS simulator, and never on a real iPhone or iPad.
 
-**Apple TV.** Each release has `wittymediaclient-<version>-tvos.ipa`, unsigned as well. AltStore and SideStore don't install to an Apple TV, so it needs a tool that signs and installs there: Sideloadly, or Xcode on a Mac. Its Top Shelf stays empty unless the signer gives the app and its extension the same App Group: [the owner's steps](docs/OWNER-STEPS.md#step-3-try-apple-needs-a-mac).
+**Apple TV.** Each release has `wittymediaclient-<version>-tvos.ipa`, unsigned as well. AltStore and SideStore don't install to an Apple TV, so it needs a tool that signs and installs there: Sideloadly, or Xcode on a Mac. Its Top Shelf stays empty unless the signer gives the app and its extension the same App Group: [the owner's steps](docs/OWNER-STEPS.md#try-apple-needs-a-mac).
 
 **Apple Vision Pro.** There's nothing to download yet. It needs a Mac to build.
 
@@ -133,7 +138,9 @@ A device refuses an APK it can't run when installing it, and nothing changes. Al
 | Android on x86 and ARM | An APK for each of the four, and a universal one. The emulators were 64-bit x86, and the other three are compiled, never run |
 | Google TV, Fire TV, tablets | Compiled, never run |
 | iPhone | Run in the iOS 27 simulator: connected, signed in, Home, a library, an item, and a film played. Never on a real iPhone |
-| Apple TV, iPad, Apple Vision Pro | Compiled by Xcode 27 on a Mac, unsigned, for the devices and their simulators |
+| Apple TV | Compiled by Xcode 27 on a Mac, unsigned, and run in the tvOS 27 simulator against a real server: the server's pages, reaching it from away, forgetting servers. Never on a real Apple TV |
+| iPad, Apple Vision Pro | Compiled by Xcode 27 on a Mac, unsigned, for the devices and their simulators. Never run |
+| Games, every app | **Don't work with a 0.8.x server**, and the apps crash if a game is started |
 
 **No real device or remote has touched any of the Android builds,** and finding servers hasn't been tried on a real network anywhere. [Platform status](docs/PLATFORMS.md) says exactly what was seen and what wasn't.
 
@@ -189,7 +196,7 @@ cd apple/WittyKit
 swift test
 ```
 
-The apps themselves need a Mac and XcodeGen: see [what the owner needs to do](docs/OWNER-STEPS.md).
+The apps themselves need a Mac with Xcode and XcodeGen: in `apple`, `xcodegen generate`, then open `WittyMedia.xcodeproj`. CI builds them on every pull request. `bash apple/scripts/check-on-mac.sh` builds each one and opens it in a simulator, and [the owner's steps](docs/OWNER-STEPS.md#try-apple-needs-a-mac) cover signing and real devices.
 
 **Shared data.** The sample server answers those tests use are checked against a real server with `WMS_TOKEN=<token> node shared/scripts/check-fixtures.mjs <server address>`. After a theme changes in the server, rerun `node shared/scripts/build-themes.mjs` with a clone of WittyMediaServer beside this one, or `WMS_THEMES` set to its `themes` folder. CI fails if `shared/data/themes.json` is out of date.
 

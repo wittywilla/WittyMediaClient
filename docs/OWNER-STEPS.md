@@ -1,7 +1,7 @@
 # What the owner needs to do
 
-Things only you can do, in the order they make sense. Nothing here has been done for you: no accounts,
-no signing and no publishing. Prices are what these programmes have charged and may have changed, so
+Things only the owner can do: checks on real devices, accounts, signing and publishing. Nothing here has been
+done for you. Prices are what these programmes have charged and may have changed, so
 check the sign-up page before paying.
 
 ## Decisions
@@ -15,41 +15,19 @@ These change what gets built. Each has a recommendation.
    change, so say now if you want something else.
 3. **The name people see.** Every app is "WittyMediaClient". The Xcode project and its targets are still called WittyMedia, which
    nobody sees.
-4. **Artwork.** Every app needs an icon, and TVs need a wide banner too.
 
-## Step 1: Let CI build the apps
+CI builds every app on GitHub's computers, for every pull request, and every release carries the installers, APKs and IPAs. Building
+Android there accepts the Android SDK licence terms on your behalf: they're at <https://developer.android.com/studio/terms>.
 
-CI builds the Android and Apple apps on GitHub's computers. Android's build and tests have already passed on this machine. For the Apple
-apps this is the first time their code will ever be compiled. **Expect failures the first time**: fixing them is normal.
+## Try Android (free, no account)
 
-The native apps need the `client-contract` branch merged too, or they can't connect. Nothing here pushes
-or merges, so that's your call. The simplest way is to ask your main Claude session to merge both
-branches and push them, once you're happy.
+The Android apps have only run on emulators. **Games don't work with a 0.8.x server, and the app crashes if one is started**, so leave
+games out of these checks.
 
-Pushing runs Android's build on GitHub's machines, which accepts the Android SDK licence terms there on
-your behalf. Read them at <https://developer.android.com/studio/terms> if you want to check first.
-
-GitHub Actions is free for public repositories. For a private one, the Mac builds use your free minutes
-quickly.
-
-## Android on this machine
-
-**Nothing to do here.** You decided, and accepted Google's Android SDK licence (`android-sdk-license`), and the tools are installed in WSL at
-`~/android-sdk`. They take about 12 GB, plus 3.6 GB for an Android 6 image added to test the oldest version the app supports, under that same
-licence. Any Claude chat can build the APKs and run them on emulators, and the `dev` user is already in the `kvm` group.
-
-Nothing else has been accepted, and `sdkmanager` here doesn't ask first: it installs and accepts by itself. Google TV, Play, preview and ARM images
-come under other licences and aren't installed, so a chat has to read a package's licence before installing it. Some older images are under a
-preview licence too, such as the Android 8, 9, 10 and 11 TV images and the Android 9 phone image.
-
-## Step 2: Try Android (free, no account)
-
-Once CI is green:
-
-1. On GitHub, open the repository's **Actions** tab, then the latest **wittymediaclient** run.
-2. Under **Artifacts**, download **wittymedia-android-sideload**, and unzip it. It has an APK for each kind of processor and
-   `app-universal-sideload.apk`, which works on any of them: the README's Android section says which to choose.
-3. Put it on the device:
+1. From the [releases page](https://github.com/wittywilla/WittyMediaClient/releases), download an APK: the README's Android section
+   says which. `wittymediaclient-<version>-android-universal.apk` works on any device. A build that isn't released yet is under
+   **Artifacts** in the `build` workflow's run, as **client-android**.
+2. Put it on the device:
    - **Phone or tablet:** copy it over and open it. Android asks you to allow installing from that app.
    - **Android TV, Google TV, Fire TV:** in Settings, turn on Developer options and network debugging
      (the menu differs by device). Then, from a computer with Android's `adb` tool, run the two commands
@@ -60,7 +38,7 @@ adb connect 192.168.1.50
 ```
 
 ```bash
-adb install app-universal-sideload.apk
+adb install wittymediaclient-<version>-android-universal.apk
 ```
 
 This build is signed with a throwaway key. It's for testing only, and can't be updated to a store version
@@ -87,43 +65,24 @@ The music player needs a real device too, as emulators make no sound:
 9. On a TV, press Home while it plays. Does the card on the home screen open the app? On the emulator its Open button did nothing, because of the system.
 10. Play an audiobook for a minute, close it, and reopen it on another device. Does it say Resume, and go to the same place?
 
-## Step 3: Try Apple (needs a Mac)
+## Try Apple (needs a Mac)
 
-Apple only allows building and installing from a Mac. **Everything that can be done without one has been. Nothing
-further can be checked until these steps run.**
+Apple only allows building and installing from a Mac. The apps compile with Xcode 27, CI builds them on every pull request, and the
+iPhone and Apple TV apps have run in their simulators against a real server. None has run on a real device. As on Android, **games don't
+work with a 0.8.x server, and the app crashes if one is started**.
 
-**First, the quick check, which needs no Apple account.** It takes about 20 minutes, most of it Xcode building, and
-touches nothing but the folder it runs in.
-
-1. Install **Xcode** from the Mac App Store (free), open it once, and let it finish installing its parts.
-2. In Terminal, install the tool that makes the Xcode project, if you don't have it. This needs [Homebrew](https://brew.sh).
-
-```bash
-brew install xcodegen
-```
-
-3. Get the code onto the Mac. If the branch has been pushed, clone it as usual. If not, make a single file of it on the PC, in the repository's
-   folder, copy that file over by USB or a shared folder, and open it on the Mac:
+**The quick check, which needs no Apple account.** It takes about 20 minutes, most of it Xcode building, and touches nothing but the
+folder it runs in. With Xcode installed from the Mac App Store and opened once, and XcodeGen (`brew install xcodegen`, which needs
+[Homebrew](https://brew.sh)), in a clone of this repository:
 
 ```bash
-git bundle create WittyMediaClient.bundle clients-ui-audit
+bash apple/scripts/check-on-mac.sh
 ```
 
-```bash
-git clone -b clients-ui-audit WittyMediaClient.bundle WittyMediaClient
-```
+It runs WittyKit's tests, builds for Apple TV, iPhone and iPad, opens each in a simulator and takes a picture. What it finds is in
+`apple/build-logs`: a report, every build's log, and a picture of each app's first screen.
 
-4. Run the check:
-
-```bash
-bash WittyMediaClient/apple/scripts/check-on-mac.sh
-```
-
-5. Send back the folder it names at the end, `apple/build-logs`. It holds a report, every build's log, and a picture of each app's first
-   screen. **Expect compile errors:** this code has never met Apple's compiler. Fixing them from those logs is the next job, and it
-   can be done from Windows, one run of this script at a time.
-
-**Then, once that builds, on your own devices:**
+**On your own devices:**
 
 1. Install **Xcode** from the Mac App Store (free), and open it once.
 2. In Terminal, install the tool that creates the Xcode project: `brew install xcodegen`. This needs
@@ -173,7 +132,7 @@ app works the same, with an empty Top Shelf.
 **On iPhone and iPad, please check:** that Music, a book, photos, a DVD's menu and the TV guide each open inside the app, signed in, and that the
 system's Back and the swipe from the edge both get out of them. Download a photo's original, and see that it's in Files, under this app.
 
-**Please check on an Apple TV and report back:** nothing here has ever run, so all of this is open.
+**Please check on an Apple TV and report back:** it has only run in the simulator, so all of this is open.
 
 1. Does the Siri Remote move through everything, with focus always visible? Try swiping and clicking the clickpad.
 2. Does Back ever quit from the middle of signing in? It should only leave from the top of a tab.
@@ -190,7 +149,7 @@ system's Back and the swipe from the edge both get out of them. Download a photo
 **Before submitting to Apple:** the iPhone app's background audio will need explaining: it's there for picture in
 picture. The icons and Top Shelf images are in `apple/Brand`, written by `scripts/sync-brand.sh`.
 
-## Step 4: Publish, when you're ready
+## Publish, when you're ready
 
 Only worth doing once the apps work on real devices.
 
@@ -237,13 +196,12 @@ These ran for real under Wine and in Linux containers, and only a person with th
 2. Open it. Check that the window shows the app, Applications and the uninstaller without anything overlapping, and drag the app across.
 3. Open the app, using **Open Anyway** in **System Settings > Privacy & Security**, and connect to a server.
 4. Quit it, and run **Uninstall WittyMediaClient.command** from the `.dmg`. Check the list it shows, type `yes`, and check that the
-   list is gone. If something of the app's stays in `~/Library`, tell your main Claude session its name so it can be added.
+   list is gone. If something of the app's stays in `~/Library`, open an issue with its name so it can be added.
 
 **Signing.** Until these are signed, Windows and macOS warn on every download. For Windows, a code-signing certificate; for
 macOS, the Apple Developer Program and its notarising. Then set electron-builder's `CSC_LINK` and `CSC_KEY_PASSWORD` secrets in the
 release workflow, remove its `CSC_IDENTITY_AUTO_DISCOVERY: 'false'`, and remove `identity` and `hardenedRuntime` from `mac` in
-`desktop/package.json`, which make the stand-in signature an unsigned Mac build needs. Ask your main Claude session to make that change when you
-have them.
+`desktop/package.json`, which make the stand-in signature an unsigned Mac build needs.
 
 ## FreeBSD and Plasma Bigscreen, on real hardware
 

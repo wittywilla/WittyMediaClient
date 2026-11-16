@@ -1,5 +1,8 @@
 # WittyPlay: the games experience
 
+> **Not working in 0.8.x.** WittyPlay's emulation doesn't work with WittyMediaServer 0.8.x, and the apps crash if a game is
+> started. This page is the design and what was built; it doesn't mean games play today.
+
 **Prototype:** [WittyPlay prototype](https://claude.ai/artifact/ArXyR6wEt5xHdHkapHYE2p): the Shelves home (and the
 two directions it was chosen over), the moment a game boots, the game menu built from each core's data (one screen, two
 screens, discs), every input method with hints that match it, the TV, and every server theme. Click through it; every
