@@ -6,6 +6,17 @@ Written 2026-11-16 on the Windows PC, for Claude on the owner's MacBook. Everyth
 Xcode, the iPhone and Apple TV simulators, and the macOS desktop app. Work through it in order.
 Tick each box in this file as you go, commit the ticks, and say in the PR what was run and what wasn't.
 
+**State when this was written: 0.5.2 is released from `main`** (tag `v0.5.2`). It holds everything
+below. The owner thinks Apple TV is fine. macOS, iPhone and iPad have **not** been run with these
+changes: the checks here are in case they don't match the Apple TV page or don't connect. If a check
+fails, fix it on a branch off `main`, with a GitHub issue first, and release it as the next small version
+(0.5.3) only with the owner's OK.
+
+**Proven on GitHub's macOS runner (CI, 2026-11-16):** `apple/scripts/build-wittyconnect.sh` builds
+`Wittyconnect.xcframework` without `--if-available` (106 libraries in its notices), and the tvOS and
+iOS apps compile with it. The desktop app's `.app` was packaged on macOS by `build.yml`, and
+`helper-packaged.sh` passed there. Nothing was *run* on a Mac.
+
 ## What the owner asked for
 
 1. **Every copy of WittyMediaClient must connect peer to peer, for real.** Windows, macOS, Linux, Flatpak,
@@ -22,7 +33,7 @@ Tick each box in this file as you go, commit the ticks, and say in the PR what w
      line, green Encrypted lock, dashed line, your server), the ways in as real buttons, and three tick
      chips (End to end encrypted, Nothing opened on your router, Invite only).
 
-## What was wrong, and what the PC already fixed (branch `desktop-design2-p2p`)
+## What was wrong, and what 0.5.2 fixed (PR 59, merged)
 
 - **0.5.1's desktop installers had no helper.** `release.yml`'s desktop job ran `electron-builder` directly,
   never checked out WittyMediaServer, never had Go, so `wittyconnect` was never built. Fixed: the desktop,
@@ -42,21 +53,40 @@ Tick each box in this file as you go, commit the ticks, and say in the PR what w
 - **Android** got the same panel and cards (`android/.../ui/ConnectAnywhere.kt`, `ConnectScreens.kt`).
 - **Proven on Windows 11**: `desktop/test/app/p2p-real.js`, all three runs (home, away with the home
   address gone, invite through Join with a link or code). Never yet on macOS with the new page.
+- **Proven on the Android phone emulator**: the app built with the library (`-Pp2p=required`) joined a
+  server by an invite link pasted under Join with a link or code, and the server logged it connected
+  directly. Joining by a shown code needs the server's address book (DHT), which that test kept off.
 
-## 1. Get the branches
+## What to compare against
+
+The Apple TV's Choose a server page is the reference. The desktop page is `shared/connect` (same
+strings in `shared/data/strings.en.json`); the iPhone's is `apple/App/ConnectParts.swift` and
+`ConnectViews.swift`. Things most likely to differ on the iPhone, worth looking at first:
+
+- **Strings.** The desktop and Android now use `findTitle` "Choose a server", `findSubtitle` "Pick one
+  you've used, one on this network, or connect from anywhere.", `recentServers` "Your servers",
+  `foundServers` "On this network", `peerChip`, and the `anywhere*` keys. If the Apple app reads its own
+  copy of the strings, check it has the same words (`grep -rn "Choose a server\|anywhereTitle" apple/`).
+- **Panel buttons.** Desktop: Join with a link or code, Show a code to type in. Android: Join with a link
+  or code (a screen that takes a pasted link and also shows a code), Scan a QR code, Enter an address.
+  The iPhone should offer the same ways in; section 6 below.
+- **Colours.** Peer blue `#0a84ff`, Encrypted green `#3ad29f`, as the desktop's `--peer` and `--ok`.
+- **The lockup.** The client mark (screen on a stand, W in a ring, mint dot), never the old purple circle
+  with a play triangle.
+
+## 1. Get the code
 
 ```bash
 cd ~/<where the repos are>/WittyMediaClient
-git fetch origin
-git switch desktop-design2-p2p
+git fetch origin && git switch main && git pull
 cd ../WittyMediaServer
-git fetch origin
-git switch desktop-brand-marks
+git fetch origin && git switch v0.8.0-alpha && git pull
 ```
 
-If the branches aren't on GitHub yet, the owner hasn't pushed them from the PC: ask them to.
+The server's `v0.8.0-alpha` has genicon writing `shared/brand/mark-*.svg` (PR 393). The release built the
+helper and library from the server's default branch (`master`); either works for these checks.
 
-- [ ] Both branches checked out side by side (`WittyMediaClient` and `WittyMediaServer` in one folder).
+- [ ] Both checked out side by side (`WittyMediaClient` and `WittyMediaServer` in one folder).
 
 ## 2. The brand files are current
 
@@ -181,12 +211,11 @@ code to type in" button to `remoteWays` on iOS that opens the same join-by-code 
 
 ## 7. Before a release
 
-- [ ] Push a test tag to a fork, or run `release.yml` with `workflow_dispatch` if it has one, and read
-      the apple job's log: there must be no `NOT BUILT`. The desktop jobs' "The connection helper is in
-      every package" step must pass on Windows, macOS and Linux.
-- [ ] Bump WittyMediaClient's version in small steps (memory: version bumps), and say in CHANGELOG.md:
-      peer to peer now ships in every package (it didn't in 0.5.1), and the desktop and Android
-      Choose a server page match Apple's.
+- [ ] Download 0.5.2's macOS `.dmg` and the iPhone `.ipa` from the GitHub release, and check the
+      helper is inside: `WittyMediaClient.app/Contents/Resources/wittyconnect`, and
+      `Payload/*.app/Frameworks/Wittyconnect.framework` (or the library linked into the app binary).
+- [ ] If anything above needed a fix: bump to 0.5.3 (memory: version bumps), say so in CHANGELOG.md,
+      and release it with the owner's OK.
 
 ## Never
 
