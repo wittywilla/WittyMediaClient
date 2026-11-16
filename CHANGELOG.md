@@ -3,7 +3,11 @@
 What changed in WittyMediaClient, newest first. What changed before it had a repository of its own is in the
 [WittyMediaServer changelog](https://github.com/wittywilla/WittyMediaServer/blob/master/CHANGELOG.md).
 
-## Unreleased
+## 0.5.1
+
+- The Linux snap is built and kept with the release, and no longer tried for the Snap Store (0.5.0's release stopped there).
+
+## 0.5.0
 
 - **Apple: every look's finish, scene and type set; the layout editor; the server-name editor.** The theme's `look` (`GET /theme`)
   now reaches every surface: glass on cards, rows, the Dock and groups, gloss on buttons and the main action, bevel on what can be
