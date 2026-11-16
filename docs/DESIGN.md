@@ -68,7 +68,7 @@ the server.
 
 ## Connecting to a server
 
-The API is `docs/CLIENT-API.md`, owned by the `client-contract` work. The flow on every client:
+The API is the server's `docs/CLIENT-API.md`. The flow on every client:
 
 1. **Find.** The app lists servers it finds on the local network, and always offers "Enter an
    address" beside them. On TV the first found server already has focus, so one press selects it.
