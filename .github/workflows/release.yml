@@ -295,10 +295,15 @@ jobs:
           persist-credentials: false
           repository: wittywilla/WittyMediaServer
           path: .server
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7
+        with:
+          go-version-file: .server/go.mod
+          cache: false
       - name: Build Wittyconnect from the server's source
         env:
           WITTYMEDIASERVER_SRC: .server
-        run: bash apple/scripts/build-wittyconnect.sh --if-available
+        # Required: 0.5.1's iPhone and Apple TV apps shipped without it because Go wasn't set up here.
+        run: bash apple/scripts/build-wittyconnect.sh
       - name: Generate the Xcode project
         working-directory: apple
         run: xcodegen generate

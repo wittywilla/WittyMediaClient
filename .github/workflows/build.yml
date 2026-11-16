@@ -381,6 +381,10 @@ jobs:
           # The server's branch of the same name as this release branch (v0.8.0-alpha), else its default.
           ref: ${{ startsWith(github.base_ref, 'v0.') && github.base_ref || (github.ref_type == 'branch' && startsWith(github.ref_name, 'v0.') && github.ref_name) || '' }}
           path: .server
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7
+        with:
+          go-version-file: .server/go.mod
+          cache: false
       - name: Build Wittyconnect from the server's source
         env:
           WITTYMEDIASERVER_SRC: .server
