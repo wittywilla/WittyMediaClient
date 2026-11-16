@@ -425,7 +425,14 @@ final class GamesTests: XCTestCase {
 
     func testAnnexBSplitsUnits() {
         let sps: [UInt8] = [0x67, 0x42, 0xe0, 0x1f], pps: [UInt8] = [0x68, 0xce, 0x3c, 0x80], idr: [UInt8] = [0x65, 0x88, 0x84, 0x00, 0x21]
-        let stream = Data([0, 0, 0, 1, 0x09, 0xf0] + [0, 0, 0, 1] + sps + [0, 0, 1] + pps + [0, 0, 0, 1] + idr)
+        // Built in steps: as one long sum of arrays, Linux's compiler gives up type-checking it.
+        var bytes: [UInt8] = [0, 0, 0, 1, 0x09, 0xf0, 0, 0, 0, 1]
+        bytes += sps
+        bytes += [0, 0, 1]
+        bytes += pps
+        bytes += [0, 0, 0, 1]
+        bytes += idr
+        let stream = Data(bytes)
         let units = AnnexB.units(stream)
         XCTAssertEqual(units.map { AnnexB.type($0) }, [9, 7, 8, 5])
         XCTAssertEqual(units[1], Data(sps))
