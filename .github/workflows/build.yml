@@ -197,7 +197,7 @@ jobs:
               status=${PIPESTATUS[0]}
               set -e
               [ "$status" = 0 ] && break
-              grep -qE 'api\.snapcraft\.io|unable to contact snap store|cannot get nonce from store|store server' "$RUNNER_TEMP/snap.log" || exit "$status"
+              grep -qE 'api\.snapcraft\.io|unable to contact snap store|cannot get nonce from store|store server|Error installing snap' "$RUNNER_TEMP/snap.log" || exit "$status"
               if [ "$try" = 3 ]; then
                 echo "::warning::The Snap Store didn't answer while packaging: the snap wasn't built"
                 echo "SNAP_OK=0" >> "$GITHUB_ENV"; exit 0
