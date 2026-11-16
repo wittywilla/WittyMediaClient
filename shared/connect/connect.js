@@ -224,7 +224,9 @@
     const picture = o.found ? el('span', { className: 'glyph' }, icon('rack')) : serverMark(s.logo)
     // A remembered server also says when it was last reached, so an old one can be told from one in use.
     const reached = o.found || !canForget ? '' : reachedWords(s)
-    const where = [s.name ? hostOf(s.url) : '', reached].filter(Boolean).join(' · ')
+    // A server only ever reached from away has no address to show: it says so instead ("From
+    // away", as "Reached from away" beside "Reached 3 days ago" would say it twice).
+    const where = [s.awayOnly ? (reached ? S.rowAway : S.awayOnly) : s.name ? hostOf(s.url) : '', reached].filter(Boolean).join(' · ')
     const words = o.found ? [hostOf(s.url), S.foundOnNetwork] : [s.name || hostOf(s.url), where]
     const card = el('button', { type: 'button', className: 'server', onclick: () => { listFocus = s.url; choose(s.url, '', card) } },
       picture, el('span', { className: 'who' }, el('span', { className: 'name', textContent: words[0] }), el('span', { className: 'where', textContent: words[1] })))
@@ -423,6 +425,8 @@
     // The main action until there's a server to choose.
     const enterAddress = button(S.enterAddress, () => { listFocus = ENTER_ADDRESS; addressScreen() }, { icon: 'link', kind: recent.length ? 'secondary' : 'primary', className: 'enter' })
     actions.push(enterAddress)
+    // For a device that has never been at home with its server: it shows a code to type in there.
+    if (bridge.joinAway) actions.push(button(S.joinAway, () => joinAwayScreen(), { kind: 'quiet', icon: 'link', className: 'join-away' }))
     const foot = []
     if (bridge.openLogs) foot.push(button(S.openLogs, () => bridge.openLogs(), { kind: 'quiet', className: 'small' }))
     foot.push(legal())
@@ -818,6 +822,76 @@
 
   // Arrow keys move to the nearest control in that direction. Inside a text box
   // left and right belong to the text, so only up and down leave it.
+  // Join from away: the code in a card, as large as a TV's at home, then a spinner until someone
+  // signed in to the server has typed it in there. A code that ran out, or was refused, says so
+  // and offers a new one. docs/APP-DESIGN.md, From away.
+  function joinAwayScreen() {
+    const shown = el('span', { 'aria-hidden': 'true' })
+    const spoken = el('span', { className: 'sr-only' })
+    const code = el('p', { className: 'pair-code' }, shown, spoken)
+    const waiting = el('p', { className: 'waiting', role: 'status' }, spinner(), el('span', { textContent: S.joinAwayWaiting }))
+    const said = problem('')
+    const again = button(S.pairNew, () => begin(), { kind: 'primary' })
+    const leave = () => { bridge.joinAway.stop(); listScreen() }
+    const turn = show({
+      back: leave,
+      words: [el('h1', { textContent: S.joinAwayTitle }), el('p', { className: 'lead', textContent: S.joinAwayHint })],
+      actions: [code, waiting, said.node, again],
+    })
+    onLeave = () => bridge.joinAway.stop()
+    async function begin() {
+      said.say('')
+      again.hidden = true
+      code.hidden = true
+      waiting.hidden = false
+      let r
+      try { r = await bridge.joinAway.start() } catch (e) { r = { error: 'p2p-failed' } }
+      if (turn !== screen) return
+      if (!r.code) { ended(ERRORS[r.error] || S.errAwayFailed); return }
+      shown.textContent = r.code
+      spoken.textContent = r.code.split('').filter((c) => c !== '-').join(' ')
+      code.hidden = false
+      let done
+      try { done = await bridge.joinAway.wait() } catch (e) { done = { error: 'p2p-failed' } }
+      if (turn !== screen || done.ok || done.error === 'stopped') return
+      ended(done.error === 'expired' ? S.joinAwayExpired : done.error === 'refused' ? S.joinAwayRefused : ERRORS[done.error] || S.errAwayFailed)
+    }
+    function ended(words) {
+      code.hidden = true
+      waiting.hidden = true
+      said.say(words)
+      again.hidden = false
+      again.focus()
+    }
+    begin()
+  }
+
+  // From away, for the server in use, opened from Help: how it is reached now, whether this device
+  // is on its list and what the list calls it, then Stop (which asks first) or Connect again.
+  async function fromAwayScreen() {
+    let info
+    try { info = await bridge.awayInfo() } catch (e) { info = { server: false } }
+    const back = () => bridge.manageBack()
+    if (!info.server) { back(); return }
+    const row = (label, value) => el('p', { className: 'away-row' }, el('span', { className: 'caption', textContent: label }), el('span', { textContent: value }))
+    const now = info.now === 'home' ? S.awayAtHomeNow : info.now || S.awayNoWay
+    const ready = info.state === 'ready'
+    const rows = [row(S.awayNow, now), row(S.rowAway, ready ? S.awayReady : S.awayNotSetUp)]
+    if (ready && info.device) rows.push(row(S.awayDevice, info.device))
+    const hint = info.state === 'off' ? S.awayOffHint : ready ? S.awayReadyHint : S.awaySetUpHint
+    const actions = [el('div', { className: 'facts' }, ...rows), el('p', { className: 'lead', textContent: hint })]
+    if (info.state === 'off') actions.push(button(S.awayStart, () => bridge.awayChoice(false), { kind: 'secondary' }))
+    else if (ready) {
+      actions.push(button(S.awayStop, () => show({
+        escape: () => fromAwayScreen(),
+        className: 'warning',
+        words: [el('h1', { textContent: S.awayStop }), el('p', { className: 'lead', textContent: S.awayStopConfirm })],
+        actions: [button(S.cancel, () => fromAwayScreen(), { kind: 'primary' }), button(S.awayStop, () => bridge.awayChoice(true), { kind: 'destructive' })],
+      }), { kind: 'destructive', className: 'wide' }))
+    }
+    show({ back, words: [el('h1', { textContent: S.rowAway }), el('p', { className: 'lead', textContent: S.awayHint })], actions })
+  }
+
   function moveFocus(dir) {
     const cur = document.activeElement
     const all = Array.from(app.querySelectorAll('button:not(:disabled):not([hidden]), input')).filter((n) => n.offsetWidth > 0 || n.offsetHeight > 0)
@@ -874,5 +948,6 @@
   if (mismatch) choose(mismatch)
   else if (self.wittyClient && params.get('away')) waitScreen(S.awayConnecting, () => { if (bridge.awayStop) bridge.awayStop() })
   else if (self.wittyClient && params.get('manage')) refreshManaged().then(() => listScreen())
+  else if (bridge.awayInfo && params.get('from-away')) fromAwayScreen()
   else listScreen(params.get('certificate') ? S.errCertificate : params.get('lost') ? S.errLost : params.get('away-failed') ? S.errAwayFailed : '')
 })()

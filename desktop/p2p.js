@@ -277,6 +277,79 @@ class Tunnel extends EventEmitter {
   }
 }
 
+const JOIN_CODE = /^[0-9A-HJKMNP-TV-Z]{4}-[0-9A-HJKMNP-TV-Z]{4}$/
+
+// What the helper says about joining, kept to what the app uses: whether the server took the
+// code, which server it is and where, and the sign-in code that came with it.
+function cleanJoined(r) {
+  if (!r || typeof r !== 'object' || r.ok !== true || !validId(r.serverId)) {
+    return { ok: false, reason: r && typeof r.reason === 'string' ? r.reason.slice(0, 40) : '', error: r && typeof r.error === 'string' ? r.error.slice(0, 300) : '' }
+  }
+  return {
+    ok: true, serverId: r.serverId, hints: cleanHints(r.addrs),
+    code: typeof r.code === 'string' && /^[0-9]{6}$/.test(r.code) ? r.code : '',
+    serverName: typeof r.serverName === 'string' ? r.serverName.slice(0, 80) : '',
+  }
+}
+
+// Joining a server from away by a code this device shows ("wittyconnect join"): someone signed in
+// types the code into the server. code resolves with the code to show; result with the server's
+// answer ({ ok, serverId, hints, code, serverName }) or { ok: false, error } ('expired' when the
+// fifteen minutes ran out). stop() gives up.
+class JoinRun {
+  constructor(program, config, { run = spawn, log = () => {} } = {}) {
+    this.stopped = false
+    this.buffer = ''
+    let gotCode
+    let gotResult
+    this.code = new Promise((resolve) => { gotCode = resolve })
+    this.result = new Promise((resolve) => { gotResult = resolve })
+    this.finish = (r) => { gotCode(''); gotResult(r); gotCode = gotResult = () => {} }
+    this.showCode = (c) => { gotCode(c); gotCode = () => {} }
+    try {
+      this.child = run(program, ['join'], { stdio: ['pipe', 'pipe', 'pipe'], windowsHide: true })
+    } catch (err) {
+      this.finish({ ok: false, error: 'p2p-failed' })
+      return
+    }
+    this.child.on('error', () => this.finish({ ok: false, error: 'p2p-failed' }))
+    this.child.on('exit', () => this.finish({ ok: false, error: this.stopped ? 'stopped' : 'p2p-failed' }))
+    this.child.stdout.setEncoding('utf8')
+    this.child.stdout.on('data', (d) => this.read(d))
+    this.child.stderr.setEncoding('utf8')
+    this.child.stderr.on('data', (d) => { for (const line of String(d).split('\n')) if (line.trim()) log(line.trim().slice(0, 400)) })
+    this.child.stdin.on('error', () => {})
+    // The key goes down the pipe, never on the command line.
+    try { this.child.stdin.write(`${JSON.stringify(config)}\n`) } catch { /* 'exit' says so */ }
+  }
+
+  read(chunk) {
+    this.buffer += chunk
+    if (this.buffer.length > 1 << 16) this.buffer = ''
+    let at
+    while ((at = this.buffer.indexOf('\n')) >= 0) {
+      const line = this.buffer.slice(0, at)
+      this.buffer = this.buffer.slice(at + 1)
+      let e
+      try { e = JSON.parse(line) } catch { continue }
+      if (!e || typeof e !== 'object') continue
+      if (e.event === 'code' && JOIN_CODE.test(e.code)) this.showCode(e.code)
+      else if (e.event === 'joined') this.finish(cleanJoined(e.result))
+      else if (e.event === 'error') this.finish({ ok: false, error: e.error === 'expired' ? 'expired' : 'p2p-failed' })
+    }
+  }
+
+  stop() {
+    if (this.stopped) return
+    this.stopped = true
+    this.finish({ ok: false, error: 'stopped' })
+    if (!this.child) return
+    try { this.child.stdin.end() } catch { /* already gone */ }
+    const child = this.child
+    setTimeout(() => { try { child.kill() } catch { /* already gone */ } }, 1500).unref()
+  }
+}
+
 // In words, for the title bar: how the server is being reached right now.
 function pathWords(s) {
   switch (s && s.path) {
@@ -290,6 +363,6 @@ function pathWords(s) {
 }
 
 module.exports = {
-  Tunnel, parseInvite, looksLikeInvite, originFor, isP2POrigin, cleanInfo, cleanHints, cleanState, connected, validId,
+  Tunnel, JoinRun, cleanJoined, parseInvite, looksLikeInvite, originFor, isP2POrigin, cleanInfo, cleanHints, cleanState, connected, validId,
   helperPath, loadKey, saveKey, forgetKey, makeKey, pathWords, COOKIE, HEADER,
 }

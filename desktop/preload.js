@@ -82,6 +82,14 @@ if (location.protocol === 'wittymedia-app:') {
     // An invite link to a server away from home, and giving up on reaching one.
     invite: (link) => ipcRenderer.invoke('p2p-invite', link),
     awayStop: () => ipcRenderer.send('p2p-stop'),
+    // Join from away by a code this computer shows, and the From away screen.
+    joinAway: {
+      start: () => ipcRenderer.invoke('p2p-join-start'),
+      wait: () => ipcRenderer.invoke('p2p-join-wait'),
+      stop: () => ipcRenderer.send('p2p-join-stop'),
+    },
+    awayInfo: () => ipcRenderer.invoke('away-info'),
+    awayChoice: (stop) => ipcRenderer.send('away-choice', stop === true),
     openLogs: () => ipcRenderer.send('open-logs'),
     ...(TV ? { tv: true, topBack: () => ipcRenderer.send('tv-back', false) } : {}),
   })

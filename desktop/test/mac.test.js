@@ -82,12 +82,11 @@ test('on a Mac the title bar leaves the window\'s buttons and Help to the system
   assert.match(read('titlebar', 'platform.js'), /classList\.add\('mac'\)/)
 })
 
-test('From away: Stop or Connect again, only when the server in use can be reached that way', () => {
+test('From away: its screen, only when the server in use can be reached that way', () => {
   const done = []
-  const find = (away) => menu({ connected: true, away, stopAway: () => done.push('stop'), startAway: () => done.push('start') }).flatMap((m) => m.submenu || []).find((i) => i.id === 'away')
+  const find = (away) => menu({ connected: true, away, fromAway: () => done.push('screen') }).flatMap((m) => m.submenu || []).find((i) => i.id === 'away')
   assert.strictEqual(find(''), undefined)
   find('on').click(); find('off').click()
-  assert.deepStrictEqual(done, ['stop', 'start'])
-  assert.strictEqual(find('on').label, 'Stop Connecting from Away')
-  assert.strictEqual(find('off').label, 'Connect from Away Again')
+  assert.deepStrictEqual(done, ['screen', 'screen'])
+  assert.strictEqual(find('on').label, 'From Away…')
 })
