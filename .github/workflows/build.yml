@@ -188,7 +188,22 @@ jobs:
           DEBUG: ${{ matrix.format == 'flatpak' && '@malept/flatpak-bundler' || '' }}
         run: |
           if [ "${{ matrix.format }}" = snap ]; then
-            sg lxd -c "npm run package:snap"
+            # Packaging asks the Snap Store again, for snapd in the build container. When the store is
+            # what failed, it's tried again; after three tries the snap is skipped, with a warning, as
+            # when the tools couldn't be installed. Any other failure fails the job.
+            for try in 1 2 3; do
+              set +e
+              sg lxd -c "npm run package:snap" 2>&1 | tee "$RUNNER_TEMP/snap.log"
+              status=${PIPESTATUS[0]}
+              set -e
+              [ "$status" = 0 ] && break
+              grep -qE 'api\.snapcraft\.io|unable to contact snap store|cannot get nonce from store|store server|Error installing snap' "$RUNNER_TEMP/snap.log" || exit "$status"
+              if [ "$try" = 3 ]; then
+                echo "::warning::The Snap Store didn't answer while packaging: the snap wasn't built"
+                echo "SNAP_OK=0" >> "$GITHUB_ENV"; exit 0
+              fi
+              echo "::warning::packaging the snap couldn't reach the Snap Store (try $try); trying again in 30s"; sleep 30
+            done
           else
             npm run package:flatpak
           fi
