@@ -7,6 +7,19 @@ What changed in WittyMediaClient, newest first. What changed before it had a rep
 
 - **Android TV follows the server's TV levels (WittyMediaServer #469).** A server page opens on a TV unless the server's table says it is for a computer, so game settings, controllers, collections and the like open again instead of a QR card. The card now says where to change it (the WittyMediaClient app on a Windows or Mac computer, or a web browser), with what is set now, and a QR code a phone can open. The layout editor and name and logo are made on a computer. A server without the table keeps the old behaviour.
 
+## 0.5.2
+
+- **Peer to peer ships in every package.** 0.5.1's Windows, macOS and Linux apps (and the Flatpak and snap) said "its
+  connection helper is missing": the release never built it. Its iPhone and Apple TV apps had no peer-to-peer library,
+  and the FreeBSD package never had a helper. Every release job now builds the helper or library from the server's
+  source, and a release without it fails instead of shipping. On FreeBSD the helper sits beside `app.asar`, where the
+  app now looks for it.
+- **Choose a server, as on Apple TV, on the desktop and Android.** The new logo in the lockup; YOUR SERVERS and ON THIS
+  NETWORK; round server pictures, with a blue dot and a **Peer to peer** chip for a server reached from away; and the
+  **Connect from anywhere** panel, with its picture (this device, Encrypted, your server), **Join with a link or code**,
+  **Show a code to type in** on the desktop (Scan a QR code and Enter an address on Android), and three promises: end to
+  end encrypted, nothing opened on your router, invite only.
+
 ## 0.5.1
 
 - The Linux snap is built and kept with the release, and no longer tried for the Snap Store (0.5.0's release stopped there).

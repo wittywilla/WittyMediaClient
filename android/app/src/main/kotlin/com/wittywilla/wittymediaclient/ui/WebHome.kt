@@ -271,12 +271,12 @@ private fun Hero(nav: Nav, featured: List<Item>, preview: Boolean) {
             Crossfade(item, animationSpec = tween(420, easing = CubicBezierEasing(0.4f, 0f, 0.2f, 1f)), label = "hero") { shown ->
                 WebArt(nav.app.api.backdropUrl(shown), "", wide, wide / height, Modifier.fillMaxSize())
             }
-            Box(Modifier.fillMaxSize().background(Brush.verticalGradient(0.18f to page.copy(alpha = 0f), 0.44f to page.copy(alpha = 0.72f), 0.66f to page.copy(alpha = 0.94f), 1f to page)))
+            Box(Modifier.fillMaxSize().background(HeroScrim.foot(page, HeroScrim.strength)))
             Column(Modifier.align(Alignment.BottomStart).padding(start = 16.dp, end = 16.dp, bottom = if (preview) 12.dp else 24.dp).fillMaxWidth()) {
                 Text(item.title, color = scheme.onBackground, fontSize = 30.sp, fontWeight = FontWeight.SemiBold, letterSpacing = (-0.022).em, lineHeight = 34.sp, modifier = Modifier.padding(bottom = 12.dp))
                 val facts = HeroLook.facts(item)
                 if (facts.isNotEmpty()) HeroFactsRow(facts, Modifier.padding(bottom = 12.dp))
-                if (!preview && item.overview.isNotEmpty()) Text(item.overview, color = scheme.onBackground.copy(alpha = 0.86f), fontSize = 15.sp, lineHeight = 23.sp, maxLines = 2, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(bottom = 20.dp))
+                if (!preview && item.overview.isNotEmpty()) Text(item.overview, color = scheme.onBackground, fontSize = 15.sp, lineHeight = 23.sp, maxLines = 2, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(bottom = 20.dp))
                 FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     MainButton(nav, item)
                     if (item.isDisc && item.disc?.hasMenus == true) WebButton("Disc menu", { nav.push(Route.Page(OpenLook.discMenu(item))) }, WebButtonKind.Secondary)

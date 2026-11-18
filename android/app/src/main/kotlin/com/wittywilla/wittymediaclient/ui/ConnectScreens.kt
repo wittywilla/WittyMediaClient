@@ -322,7 +322,8 @@ fun ConnectScreen(nav: Nav, s: Map<String, String>, message: String) {
         // Design 2's connect page (the canvas's `connect`): the servers this device has used, those found on the network,
         // then the ways to reach a server that isn't here (peer to peer, a QR code, an address), then this device's servers.
         DesignPage(
-            s["findTitle"].orEmpty(), eyebrow = APP_NAME, lead = s["findSubtitle"].orEmpty(), foot = s["legalConnect"].orEmpty(), tag = "connect",
+            s["findTitle"].orEmpty(), lead = s["findSubtitle"].orEmpty(), foot = s["legalConnect"].orEmpty(), tag = "connect",
+            top = { Lockup("", null, app = true) }, centred = !tv,
         ) {
             DesignNote(problem, Modifier.padding(top = LocalDesignSizes.current.gap), error = true)
             Notice(nav.pickerNotice, Modifier.padding(top = LocalDesignSizes.current.gap))
@@ -331,7 +332,7 @@ fun ConnectScreen(nav: Nav, s: Map<String, String>, message: String) {
                 // has used is on top, the last used first, so a long list found on the network never pushes it out of
                 // sight. Off, the found servers come first, as before.
                 val foundBlock = @Composable {
-                    DesignSection(s["foundServers"].orEmpty()) {
+                    ConnectSection(s["foundServers"].orEmpty()) {
                         if (found.isEmpty()) {
                             when {
                                 cantSearch -> DesignNote(s["findNotSupported"].orEmpty())
@@ -346,7 +347,7 @@ fun ConnectScreen(nav: Nav, s: Map<String, String>, message: String) {
                         foundOnly.forEachIndexed { i, server ->
                             key(server.id) {
                                 ServerCard(
-                                    hostAndPort(server.url), s["foundOnNetwork"].orEmpty(), { connect(server.url) }, saved = false,
+                                    hostAndPort(server.url), s["foundOnNetwork"].orEmpty(), { connect(server.url) }, saved = false, lineIcon = LineIcons.Wifi,
                                     connecting = connecting == server.url, requestFocus = i == 0 && !moved && (!savedFirst || recent.isEmpty()), focusKey = "found-${server.id}",
                                     takeFocus = focusOn == "found-${server.id}",
                                 )
@@ -356,7 +357,7 @@ fun ConnectScreen(nav: Nav, s: Map<String, String>, message: String) {
                 }
                 val savedBlock = @Composable {
                     if (recent.isNotEmpty()) {
-                        DesignSection(s["recentServers"].orEmpty()) {
+                        ConnectSection(s["recentServers"].orEmpty()) {
                             recent.forEachIndexed { i, server ->
                                 key(server.url) {
                                     val name = shownName(server)
@@ -378,6 +379,8 @@ fun ConnectScreen(nav: Nav, s: Map<String, String>, message: String) {
                                                 longClickLabel = if (tv) s["removeServer"] else fill(s["serverOptions"], "name" to name),
                                                 actions = listOf(CustomAccessibilityAction(removeLabel) { if (tv) asking = server else remove(server); true }),
                                                 trailing = if (editing) { { RemoveButton(removeLabel, { remove(server) }) } } else null,
+                                                avatar = true, lineIcon = if (viaPeer) LineIcons.Globe else LineIcons.House,
+                                                peerChip = if (viaPeer) s["peerChip"].orEmpty() else "",
                                             )
                                             DropdownMenu(menuFor == server, { menuFor = null }, containerColor = MaterialTheme.colorScheme.surface) {
                                                 DropdownMenuItem(
@@ -402,32 +405,24 @@ fun ConnectScreen(nav: Nav, s: Map<String, String>, message: String) {
                 }
                 if (savedFirst) { savedBlock(); foundBlock() } else { foundBlock(); savedBlock() }
             }
-            // Connecting to a server that isn't on this network, as plainly as the ones that are: peer to peer by an invite
-            // link or a code this device shows, a QR code (an invite or an address), or an address typed in.
-            DesignSection(s["remoteTitle"].orEmpty()) {
-                val peer = nav.app.peers.available
-                val ways = buildList {
-                    if (peer) add("join-away")
-                    if (canScan) add("scan-code")
-                    add("enter-address")
+            // Connecting from anywhere, peer to peer, made obvious: Design 2's panel with its picture of the connection
+            // and the ways in as real buttons (apple/App/ConnectParts.swift, ConnectAnywherePanel). Always shown: a copy
+            // without the peer-to-peer library says so when Join is chosen.
+            ConnectAnywherePanel(s) {
+                WittyButton(
+                    s["anywhereJoinLink"].orEmpty(), { if (nav.app.peers.available) nav.push(Route.JoinAway) else problem = s["errAwayMissing"].orEmpty() },
+                    Modifier.fillMaxWidth(), kind = ButtonKind.Primary, icon = Symbols.Address, focusKey = "join-away", takeFocus = focusOn == "join-away",
+                )
+                if (canScan) {
+                    WittyButton(
+                        s["remoteScanCard"].orEmpty(), { problem = ""; scan = if (cameraAllowed(context)) ConnectScan.On else ConnectScan.Why },
+                        Modifier.fillMaxWidth(), icon = Symbols.Qr, focusKey = "scan-code",
+                    )
                 }
-                DesignCards(ways.size, columns = ways.size) { i ->
-                    when (ways[i]) {
-                        "join-away" -> DesignCard(
-                            s["remoteJoinCard"].orEmpty(), { nav.push(Route.JoinAway) }, sub = s["remoteJoinCardSub"].orEmpty(), icon = Symbols.Globe,
-                            focusKey = "join-away", takeFocus = focusOn == "join-away",
-                        )
-                        "scan-code" -> DesignCard(
-                            s["remoteScanCard"].orEmpty(), { problem = ""; scan = if (cameraAllowed(context)) ConnectScan.On else ConnectScan.Why },
-                            sub = s["remoteScanCardSub"].orEmpty(), icon = Symbols.Qr, focusKey = "scan-code",
-                        )
-                        else -> DesignCard(
-                            s["remoteAddressCard"].orEmpty(), { showForm = true; problem = "" }, sub = s["remoteAddressCardSub"].orEmpty(), icon = Symbols.Address,
-                            requestFocus = firstKey == "enter-address", takeFocus = focusOn == "enter-address", focusKey = "enter-address", on = nothing,
-                        )
-                    }
-                }
-                if (peer) DesignNote(s["remoteNote"].orEmpty(), tone = true)
+                WittyButton(
+                    s["enterAddress"].orEmpty(), { showForm = true; problem = "" }, Modifier.fillMaxWidth(), icon = Symbols.Address,
+                    requestFocus = firstKey == "enter-address", takeFocus = focusOn == "enter-address", focusKey = "enter-address",
+                )
             }
             // Where every remembered server can be removed: one, all, or those not reached for a while.
             if (recent.isNotEmpty()) {

@@ -47,6 +47,16 @@ offers is reachable from every app: arranged for the device, never left out. See
 7. **Motion that explains.** Short fades and lifts (150–240 ms) that show where something came from.
    With Reduce Motion on, nothing moves that the person didn't move.
 
+### One fix, every screen
+
+The server's `docs/UI-PLATFORMS.md` says where an interface fix belongs so every platform gets it: tokens
+(`themes/tokens.json`, `themes/*/theme.json`), SDUI specs (`pkg/sdui`), then shared parts. The apps take them as
+data, never as copies: `scripts/gen-design-tokens.py` writes the sizes, `shared/scripts/build-themes.mjs` writes the
+themes and the connect screen's colours (`shared/connect/theme.css`), and CI fails when either is behind the server.
+When the server fixes a shared part (a hero, a row, a header), the apps' part of the same name follows the rule that
+fix is based on: words over a picture sit on a scrim in the page's colour at the theme's `heroScrim` (Android's
+`ui/HeroScrim.kt`); a page starts 16 under the bar; pictures fade into the page; focus is always visible.
+
 ## Foundations
 
 ### Colour roles
@@ -205,6 +215,9 @@ TVs use the same layer and the same list. WittyTV's guide keeps its own looks on
   - **In the app** the marks are drawn natively, sharp at every size: on Apple from `apple/App/BrandArt.swift`
     (`BrandArt.server` and `BrandArt.client`), which `BrandMark` paints. A server's mark is the default; the app's own
     (`BrandMark(app: true)`) is used wherever the app means itself, such as the lockup on Choose your server.
+    On the desktop app (Windows, macOS, Linux) the same two marks are SVGs in `shared/brand`
+    (`mark-client.svg`, `mark-server.svg`), which `desktop/scripts/sync-shared.mjs` hands the connect page as
+    `brand.js`, since that page shows images only as `data:` addresses.
   - **Apple's icons** are in `apple/Brand`: on iPhone and iPad one 1024 icon with dark and tinted versions, on Apple
     Vision Pro a three-layer icon (`AppIcon.solidimagestack`), and on Apple TV a three-layer icon that moves with the
     remote, for the Home screen and the App Store, and the Top Shelf images (standard and wide) shown when the app

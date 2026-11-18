@@ -2,30 +2,16 @@
 /* Copyright (C) 2026 WittyWilla and contributors */
 /* The connect screen, drawn as docs/APP-DESIGN.md draws the sign-in screens, with the server's
    design tokens under the same names (its docs/DESIGN.md and web/src/styles.css), in the default
-   theme's colours (shared/data/themes.json; a test holds them equal). The page opens before any
+   theme's colours (theme.css, written from the server's themes, so a change there reaches this page). The page opens before any
    server's theme can apply, so it has one look: this one. Sizes are the design's points, one to a
    pixel, written in rem. On a TV (.tv) a rem is sixteen TV units instead, a hundred-and-twentieth of
    the screen's width, so the page fills the screen the same way at any resolution. Old TV browsers
    don't know min(), so each newer value has a plain one before it. */
 :root {
   color-scheme: dark;
-  --bg: #0f1115;
-  --bg-2: #171a21;
-  --bg-3: #1f232c;
-  --bg-4: #2a2f3a;
-  --fg: #e8eaf0;
-  --fg-2: #a9afbd;
-  --fg-3: #848b99;
-  --accent: #7955ff;
-  --accent-2: #6a4df0;
-  --accent-fg: #ffffff;
-  --accent-text: #9174ff;
-  --danger: #ff5c6c;
-  /* A field's outline. The design's border colour is too faint to find a field by. */
-  --control-line: #6f7480;
-  /* Derived, as the design says: the glow at the top is the accent at 16%, and so is danger's tint. */
-  --glow: rgba(121, 85, 255, .16);
-  --danger-tint: rgba(255, 92, 108, .16);
+  /* The default theme's colours, under the server's names, are in theme.css (written from the server's themes by
+     shared/scripts/build-themes.mjs). The blue that marks a server reached peer to peer is the apps' own. */
+  --peer: #0a84ff;
   /* The brand mark's own colours, which no theme changes. */
   --mark-tile: #1b1e25;
   --mark-from: #9d7bff;
@@ -41,6 +27,8 @@
   --font-mono: ui-monospace, "Cascadia Mono", SFMono-Regular, Menlo, Consolas, monospace;
   /* Display, Title, Headline, Section, Body, Label, Secondary and Caption. */
   --text-display: 1.875rem;
+  /* Choose a server's title, which Design 2 draws larger than any other. */
+  --text-hero: 2.5rem;
   --text-title: 1.5rem;
   --text-headline: 1.25rem;
   --text-section: 1.0625rem;
@@ -390,6 +378,70 @@ button.server:hover .glyph, button.server:hover .pill { background: var(--bg-3);
   color: var(--danger);
 }
 .badge .icon { width: 50%; height: 50%; }
+/* Choose a server, as Design 2 draws it on every device: the lockup and title centred over a wider
+   column, small-capital section labels with a hairline to the edge, and round avatars on the cards.
+   A TV keeps its own two-sided layout (.tv main), with the same parts. */
+:root:not(.tv) main.choose { max-width: calc(40rem + 2 * var(--gutter)); }
+:root:not(.tv) .choose .words { text-align: center; }
+:root:not(.tv) .choose .lockup { justify-content: center; margin-bottom: var(--sp-5); }
+.choose h1.display { font-weight: 800; letter-spacing: -.04em; }
+:root:not(.tv) .choose h1.display { font-size: var(--text-hero); }
+.choose .lead { margin-bottom: var(--sp-4); }
+h2.section {
+  margin: var(--sp-8) 0 var(--sp-3);
+  color: var(--fg-2); font-size: var(--text-caption); font-weight: 700; letter-spacing: .08em; text-transform: uppercase;
+}
+h2.section::after { content: ""; flex: 1; height: 1px; margin-left: var(--sp-3); background: var(--bg-4); }
+.server .avatar {
+  position: relative; display: flex; flex: none; align-items: center; justify-content: center;
+  width: var(--card-mark); height: var(--card-mark); margin-right: var(--sp-3); border-radius: 50%; background: var(--accent);
+}
+.server .avatar .letter { color: var(--accent-fg); font-size: calc(var(--card-mark) * .42); font-weight: 800; }
+.server .avatar .logo { width: 62%; height: 62%; object-fit: contain; }
+.server .avatar .reach { position: absolute; right: -.0625rem; bottom: -.0625rem; width: 28%; height: 28%; border: 2px solid var(--bg-2); border-radius: 50%; }
+.server .avatar .reach.peer { background: var(--peer); }
+.server .where { display: flex; align-items: center; }
+.server .where .icon { width: 1em; height: 1em; margin-right: .3125rem; stroke-width: 1.8; }
+.server .where span { overflow: hidden; text-overflow: ellipsis; }
+.pill.peer { background: rgba(121, 85, 255, .18); color: var(--accent-text); font-weight: 700; }
+button.server:hover .pill.peer { background: rgba(121, 85, 255, .26); }
+/* Connect from anywhere: peer to peer in a panel of its own, tinted with the accent. */
+.anywhere {
+  margin: var(--sp-8) 0 0;
+  padding: var(--sp-5);
+  border: 1px solid rgba(121, 85, 255, .35);
+  border-radius: var(--r-lg);
+  background: linear-gradient(135deg, rgba(121, 85, 255, .14), var(--bg-2) 70%);
+}
+.anywhere-head { display: flex; align-items: flex-start; }
+.anywhere-badge {
+  display: flex; flex: none; align-items: center; justify-content: center;
+  width: 2.75rem; height: 2.75rem; margin-right: var(--sp-3);
+  border-radius: var(--r-md); background: rgba(121, 85, 255, .16); color: var(--accent-text);
+}
+.anywhere-badge .icon { width: 1.5rem; height: 1.5rem; }
+.anywhere h2 { margin: 0 0 var(--sp-1); font-size: var(--text-headline); font-weight: 700; }
+.anywhere-head p { margin: 0; color: var(--fg-2); font-size: var(--text-secondary); line-height: var(--leading-body); }
+/* The picture: this device, a dashed line, the lock, a dashed line, the server. */
+.p2p-picture { display: flex; align-items: center; margin: var(--sp-5) 0; }
+.p2p-node { display: flex; flex: none; flex-direction: column; align-items: center; color: var(--fg); font-size: var(--text-caption); font-weight: 600; }
+.p2p-node .icon { width: 1.75rem; height: 1.75rem; margin-bottom: var(--sp-1); }
+.p2p-node span { color: var(--fg-2); white-space: nowrap; }
+.p2p-line { flex: 1; min-width: var(--sp-3); height: 0; margin: 0 var(--sp-2); border-top: 2px dashed var(--fg-3); transform: translateY(-.6rem); }
+.p2p-lock {
+  display: flex; flex: none; align-items: center; transform: translateY(-.6rem);
+  padding: var(--sp-1) var(--sp-3); border-radius: var(--r-pill);
+  background: rgba(58, 210, 159, .16); color: var(--ok); font-size: var(--text-caption); font-weight: 700;
+}
+.p2p-lock .icon { width: 1rem; height: 1rem; margin-right: var(--sp-1); }
+.anywhere-ways > * + * { margin-top: var(--sp-2); }
+.promises { display: flex; flex-wrap: wrap; margin: var(--sp-4) 0 0; padding: 0; list-style: none; }
+.promises li {
+  display: flex; align-items: center; margin: var(--sp-2) var(--sp-2) 0 0;
+  padding: var(--sp-1) var(--sp-3); border-radius: var(--r-pill);
+  background: rgba(128, 128, 128, .14); font-size: var(--text-caption); font-weight: 600;
+}
+.promises .icon { width: 1rem; height: 1rem; margin-right: var(--sp-1); color: var(--ok); }
 .facts { margin: 0 0 var(--sp-4); padding: var(--sp-4); border-radius: var(--r-lg); background: var(--bg-2); }
 .facts .where { margin: 0 0 var(--sp-3); font-weight: 500; overflow-wrap: anywhere; }
 /* From away: rows that open nothing, the label over its value. */

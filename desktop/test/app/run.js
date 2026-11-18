@@ -355,7 +355,7 @@ async function seeded(url) {
     await step('a state file full of nonsense doesn\'t stop the app starting', async () => {
       await onConnect()
       await onHeading(S.findTitle)
-      assert.ok(!(await pageText()).includes(S.recentServers))
+      assert.ok(!(await pageText()).toLowerCase().includes(S.recentServers.toLowerCase()))
     })
   }
   if (scenario === 'certificate') {
@@ -587,7 +587,7 @@ async function run() {
       await until('the menu', () => menus.length === 1)
       // A separator has no label: undefined on Linux, '' on Windows. Connecting from away is
       // offered only where the connect helper has been built (npm run build:connect).
-      const labels = menus[0].labels.map((l) => l || undefined).filter((l) => !/from away/.test(l || ''))
+      const labels = menus[0].labels.map((l) => l || undefined).filter((l) => !/from away/i.test(l || ''))
       assert.deepStrictEqual(labels.slice(0, 3), ['Manage servers…', undefined, 'Open logs folder'], 'with a server open')
       assert.ok(Number.isInteger(menus[0].options.x) && menus[0].options.y > 0)
     })
@@ -683,7 +683,7 @@ async function run() {
     assert.strictEqual(await inBar("document.getElementById('change').hidden"), true)
     if (MAC) assert.strictEqual(Menu.getApplicationMenu().getMenuItemById('change-server').enabled, false)
     assert.deepStrictEqual(await inPage('Object.keys(window.wittyClient).includes("probe")'), true)
-    assert.ok((await pageText()).includes(S.recentServers))
+    assert.ok((await pageText()).toLowerCase().includes(S.recentServers.toLowerCase()))
     assert.strictEqual(await inPage("document.querySelectorAll('.server img.logo').length"), 1, 'shown before the server answers')
     await shot('list-recent')
   })

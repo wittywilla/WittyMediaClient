@@ -110,6 +110,9 @@ data class AppTheme(
     // its accent text and its text colour (docs/THEMES.md, derived tokens).
     val brandAccent: ThemeColour = accentText,
     val focus: ThemeColour = text,
+    // How solid the scrim in the page's colour behind a hero's words is, 0 to 1: the theme's `tv.heroScrim`. The
+    // server's rule for words over a picture (its docs/UI-PLATFORMS.md, PR 444): at least this behind the words.
+    val heroScrim: Double = ThemeTranslator.DEFAULT_HERO_SCRIM,
 )
 
 // GET /themes/{id}/tokens.json. Lengths are kept loose: one an uploaded theme wrote oddly is left out, not the theme.
@@ -121,7 +124,12 @@ data class ThemeTokens(
     val colors: Map<String, String>? = null,
     val lengths: Map<String, JsonElement>? = null,
     val webOnly: Boolean? = null,
+    val tv: Tv? = null,
 ) {
+    // The part of a theme the server works out for screens across the room and for words over pictures.
+    @Serializable
+    data class Tv(val heroScrim: Double? = null)
+
     fun length(key: String): Double? {
         val raw = lengths?.get(key) as? JsonPrimitive ?: return null
         return raw.doubleOrNull ?: raw.content.toDoubleOrNull()
@@ -219,8 +227,12 @@ object ThemeTranslator {
             radius = radius,
             brandAccent = token("brand-accent") ?: token("brandAccent") ?: token("accent-text") ?: accent,
             focus = token("focus") ?: text,
+            heroScrim = tokens.tv?.heroScrim?.takeIf { it > 0.0 && it <= 1.0 } ?: DEFAULT_HERO_SCRIM,
         )
     }
+
+    // The server's default (its internal/themes/design.go, DefaultHeroScrim), for a theme that names none.
+    const val DEFAULT_HERO_SCRIM = 0.8
 
     // The person's own look, made exactly as the website's theme maker makes it.
     fun translateMade(input: ThemeMakerInput): AppTheme {

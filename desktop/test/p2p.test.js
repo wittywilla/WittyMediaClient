@@ -97,6 +97,9 @@ test('the helper is looked for where it is installed', () => {
   assert.strictEqual(at(['/tmp/evil', installed], { resourcesPath: '/opt/app/resources', packaged: true, env: { WITTYCONNECT: '/tmp/evil' } }), installed)
   assert.strictEqual(at(['/tmp/mine'], { packaged: false, env: { WITTYCONNECT: '/tmp/mine' } }), '/tmp/mine')
   assert.ok(p2p.helperPath({ exists: () => true, platform: 'win32', arch: 'x64', env: {}, resourcesPath: 'C:\\app', packaged: true }).endsWith('wittyconnect.exe'))
+  // FreeBSD: the system's Electron runs our app.asar, and the helper is beside it.
+  const bsd = path.join('/usr/local/share/wittymediaclient', 'wittyconnect')
+  assert.strictEqual(at([bsd], { platform: 'freebsd', resourcesPath: '/usr/local/share/electron42/resources', packaged: true, here: path.join('/usr/local/share/wittymediaclient', 'app.asar') }), bsd)
 })
 
 test('the device key is kept for this user only, sealed when the system can', () => {

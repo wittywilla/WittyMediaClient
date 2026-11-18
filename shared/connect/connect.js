@@ -62,6 +62,7 @@
   let connecting = '' // the server whose card shows a spinner while it's asked
   let screen = 0 // which screen this is, so an answer that arrives late can tell it has been left
   const ENTER_ADDRESS = 'enter-address'
+  const JOIN_LINK = 'join-link'
   let toast = null // what was just removed, to say so on the list with a way to take it back
   const canForget = typeof bridge.forget === 'function'
   // The words with their {gaps} filled in.
@@ -87,9 +88,16 @@
     return n
   }
 
-  // The page loads no images, so its few icons are drawn here, in the colour of their words.
-  // On a 24 grid, as Material Symbols and SF Symbols are.
+  // The page loads no images but the marks, so its few icons are drawn here, in the colour of
+  // their words. On a 24 grid, as Material Symbols and SF Symbols are.
   const ICONS = {
+    house: ['M4 10.5L12 4l8 6.5', 'M6 9v10a1 1 0 0 0 1 1h3.5v-5.5h3V20H17a1 1 0 0 0 1-1V9'],
+    wifi: ['M2.5 9a14 14 0 0 1 19 0', 'M5.5 12.5a9.5 9.5 0 0 1 13 0', 'M8.7 15.9a5 5 0 0 1 6.6 0', 'M12 19.5h.01'],
+    globe: ['M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18z', 'M3 12h18', 'M12 3c2.5 2.6 3.8 5.6 3.8 9s-1.3 6.4-3.8 9c-2.5-2.6-3.8-5.6-3.8-9s1.3-6.4 3.8-9z'],
+    lock: ['M6.5 10.5h11a1.5 1.5 0 0 1 1.5 1.5v7a1.5 1.5 0 0 1-1.5 1.5h-11A1.5 1.5 0 0 1 5 19v-7a1.5 1.5 0 0 1 1.5-1.5z', 'M8.5 10.5V8a3.5 3.5 0 0 1 7 0v2.5'],
+    tick: ['M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18z', 'M8 12.2l2.7 2.7L16 9.6'],
+    screen: ['M4.5 4.5h15A1.5 1.5 0 0 1 21 6v9.5a1.5 1.5 0 0 1-1.5 1.5h-15A1.5 1.5 0 0 1 3 15.5V6a1.5 1.5 0 0 1 1.5-1.5z', 'M9 20.5h6', 'M12 17v3.5'],
+    keypad: ['M4.5 6.5h15A1.5 1.5 0 0 1 21 8v8a1.5 1.5 0 0 1-1.5 1.5h-15A1.5 1.5 0 0 1 3 16V8a1.5 1.5 0 0 1 1.5-1.5z', 'M7 12h.01', 'M10.5 12h.01', 'M14 12h.01', 'M17.5 12h.01'],
     back: ['M15 5l-7 7 7 7'],
     next: ['M9 5l7 7-7 7'],
     link: ['M10.2 13.8a4 4 0 0 0 5.66 0l3.2-3.2a4 4 0 0 0-5.66-5.66l-1.1 1.1', 'M13.8 10.2a4 4 0 0 0-5.66 0l-3.2 3.2a4 4 0 0 0 5.66 5.66l1.1-1.1'],
@@ -102,28 +110,25 @@
   const icon = (name, className) => svg('svg', { viewBox: '0 0 24 24', class: `icon ${name} ${className || ''}`, 'aria-hidden': 'true' },
     ...ICONS[name].map((d) => svg('path', { d })))
 
-  // The server's own icon (web/public/icon.svg in WittyMediaServer), drawn from its geometry.
-  let marks = 0
-  function mark(className) {
-    const fill = `url(#mark-${++marks})`
-    return svg('svg', { viewBox: '0 0 64 64', class: `mark ${className || ''}`, 'aria-hidden': 'true' },
-      svg('defs', {}, svg('linearGradient', { id: `mark-${marks}`, x1: '0', y1: '0', x2: '1', y2: '1' },
-        svg('stop', { offset: '0', class: 'mark-from' }), svg('stop', { offset: '1', class: 'mark-to' }))),
-      svg('rect', { width: '64', height: '64', rx: '14', class: 'mark-tile' }),
-      svg('circle', { cx: '32', cy: '32', r: '20', fill: 'none', stroke: fill, 'stroke-width': '5' }),
-      svg('path', { d: 'M27 23l14 9-14 9z', fill }))
+  // The family's marks (the W in its orbit), drawn by WittyMediaServer's genicon into
+  // shared/brand and carried here as brand.js: the app's own where it means itself, the
+  // server's where it means a server. docs/APP-DESIGN.md, Brand.
+  const BRAND = self.WittyBrand || {}
+  function mark(kind, className) {
+    const src = BRAND[kind === 'client' ? 'client' : 'server']
+    return el('img', { className: `mark ${className || ''}`, src: src || '', alt: '' })
   }
 
   const wordmark = (last) => el('span', { className: 'wordmark' }, 'Witty', el('span', { className: 'media', textContent: 'Media' }), last)
 
   // A server's picture: its own logo, which the app fetched once it proved who it is, or the mark.
   const serverMark = (logo) => (typeof logo === 'string' && logo.indexOf('data:image/') === 0
-    ? el('img', { className: 'mark logo', src: logo, alt: '' }) : mark())
+    ? el('img', { className: 'mark logo', src: logo, alt: '' }) : mark('server'))
 
   // The app is WittyMediaClient until a server has been added; then the screens of that server
   // carry its own name (WittyMediaServer, as the wordmark, when it has none of its own) and logo.
   function lockup(server) {
-    if (!server) return el('div', { className: 'lockup' }, mark(), wordmark('Client'))
+    if (!server) return el('div', { className: 'lockup' }, mark('client'), wordmark('Client'))
     return el('div', { className: 'lockup' }, serverMark(server.logo), serverName(server.name, 'wordmark'))
   }
 
@@ -221,7 +226,7 @@
   // nothing about itself until it's added: the plain server icon, and its address alone.
   function serverCard(s, opts) {
     const o = opts || {}
-    const picture = o.found ? el('span', { className: 'glyph' }, icon('rack')) : serverMark(s.logo)
+    const picture = o.found ? el('span', { className: 'glyph' }, icon('rack')) : avatar(s)
     // A remembered server also says when it was last reached, so an old one can be told from one in use.
     const reached = o.found || !canForget ? '' : reachedWords(s)
     // A server only ever reached from away has no address to show: it says so instead ("From
@@ -229,8 +234,10 @@
     const where = [s.awayOnly ? (reached ? S.rowAway : S.awayOnly) : s.name ? hostOf(s.url) : '', reached].filter(Boolean).join(' · ')
     const words = o.found ? [hostOf(s.url), S.foundOnNetwork] : [s.name || hostOf(s.url), where]
     const card = el('button', { type: 'button', className: 'server', onclick: () => { listFocus = s.url; choose(s.url, '', card) } },
-      picture, el('span', { className: 'who' }, el('span', { className: 'name', textContent: words[0] }), el('span', { className: 'where', textContent: words[1] })))
+      picture, el('span', { className: 'who' }, el('span', { className: 'name', textContent: words[0] }),
+        el('span', { className: 'where' }, ...(words[1] ? [icon(o.found ? 'wifi' : s.awayOnly ? 'globe' : 'house'), el('span', { textContent: words[1] })] : []))))
     if (managed && s.url === managed && !o.found) card.appendChild(el('span', { className: 'pill', textContent: S.inUse }))
+    else if (s.awayOnly && !o.found) card.appendChild(el('span', { className: 'pill peer', textContent: S.peerChip }))
     else if (o.lastUsed) card.appendChild(el('span', { className: 'pill', textContent: S.lastUsed }))
     else if (s.stale && !o.found) card.appendChild(el('span', { className: 'pill stale', textContent: S.staleServer }))
     card.appendChild(icon('next', 'chevron'))
@@ -238,6 +245,21 @@
     card.dataset.url = s.url
     if (s.url === connecting) busyCard(card)
     return card
+  }
+
+  // A saved server's picture, as Design 2 draws it: its own logo, or its first letter on a
+  // gradient of a colour its name picks, with a blue dot when it's reached peer to peer.
+  function avatar(s) {
+    const name = s.name || 'WittyMediaServer'
+    let hue = 0
+    for (let i = 0; i < name.length; i++) hue = (hue * 31 + name.charCodeAt(i)) % 360
+    const own = typeof s.logo === 'string' && s.logo.indexOf('data:image/') === 0
+    const face = own ? el('img', { className: 'logo', src: s.logo, alt: '' })
+      : el('span', { className: 'letter', textContent: (name.trim()[0] || 'W').toUpperCase() })
+    const round = el('span', { className: 'avatar', 'aria-hidden': 'true' }, face)
+    if (!own) round.style.background = `linear-gradient(135deg, hsl(${hue}, 55%, 62%), hsl(${(hue + 29) % 360}, 65%, 36%))`
+    if (s.awayOnly) round.appendChild(el('span', { className: 'reach peer' }))
+    return round
   }
 
   function reachedWords(s) {
@@ -394,7 +416,7 @@
     if (bridge.onForgetAsk) bridge.onForgetAsk((url) => { const s = recent.find((r) => r.url === url); if (s && renderFound) removeOne(s) })
     // Found now and used before is one server, listed once: told by who it is, not only by where.
     const isSaved = (f) => recent.some((s) => s.url === f.url || (s.id && s.id === f.id))
-    const recentHeading = el('h2', { textContent: S.recentServers })
+    const recentHeading = el('h2', { className: 'section', textContent: S.recentServers })
     const status = el('p', { role: 'status', textContent: S.findSearching })
     const searching = el('div', { className: 'note' }, spinner(), status)
     const words = [el('h1', { className: 'display', textContent: S.findTitle }), el('p', { className: 'lead', textContent: S.findSubtitle })]
@@ -403,7 +425,7 @@
     const current = managed ? recent.find((s) => s.url === managed) : null
     if (current) actions.push(button(fill(S.backToServer, { name: nameOf(current) }), () => bridge.manageBack(), { kind: 'primary', icon: 'back', className: 'manage-back' }))
     const foundPart = bridge.supportsDiscovery
-      ? [el('h2', {}, S.foundServers, el('span', { className: 'dot', 'aria-hidden': 'true' })), searching, foundList]
+      ? [el('h2', { className: 'section' }, S.foundServers, el('span', { className: 'dot', 'aria-hidden': 'true' })), searching, foundList]
       : [el('div', { className: 'note' }, el('p', { textContent: S.findNotSupported }))]
     const savedPart = []
     if (toast) savedPart.push(toastNode())
@@ -425,12 +447,12 @@
     // The main action until there's a server to choose.
     const enterAddress = button(S.enterAddress, () => { listFocus = ENTER_ADDRESS; addressScreen() }, { icon: 'link', kind: recent.length ? 'secondary' : 'primary', className: 'enter' })
     actions.push(enterAddress)
-    // For a device that has never been at home with its server: it shows a code to type in there.
-    if (bridge.joinAway) actions.push(button(S.joinAway, () => joinAwayScreen(), { kind: 'quiet', icon: 'link', className: 'join-away' }))
+    // Peer to peer, made obvious: its own panel with the ways in.
+    if (bridge.invite || bridge.joinAway) actions.push(anywherePanel())
     const foot = []
     if (bridge.openLogs) foot.push(button(S.openLogs, () => bridge.openLogs(), { kind: 'quiet', className: 'small' }))
     foot.push(legal())
-    show({ words, actions, foot, escape: current ? () => bridge.manageBack() : undefined })
+    show({ className: 'choose', words, actions, foot, escape: current ? () => bridge.manageBack() : undefined })
 
     // Servers come and go while this is on screen: keep focus on the same one,
     // and offer the first one found until the person has moved themselves.
@@ -460,7 +482,7 @@
     const startedAt = Date.now()
     renderFound()
     // Coming back: to the thing that was chosen, and discovery leaves it there.
-    const cameFrom = listFocus === ENTER_ADDRESS ? enterAddress : Array.from(app.querySelectorAll('button:not([hidden])')).find((b) => b.dataset.url === listFocus)
+    const cameFrom = listFocus === ENTER_ADDRESS ? enterAddress : listFocus === JOIN_LINK ? app.querySelector('button.join-link') : Array.from(app.querySelectorAll('button:not([hidden])')).find((b) => b.dataset.url === listFocus)
     if (cameFrom) {
       cameFrom.focus()
       userMoved = true
@@ -475,10 +497,36 @@
     return undefined
   }
 
-  function addressScreen(message, value) {
+  // Design 2's "Connect from anywhere" (docs/APP-DESIGN.md): a globe badge, what it is, a small
+  // picture of the connection, the ways in as real buttons, and three promises with ticks. The
+  // same panel as on Android and Apple. Always shown: a copy without the connection helper says
+  // so when a way in is chosen.
+  function anywherePanel() {
+    const node = (name, words) => el('span', { className: 'p2p-node' }, icon(name), el('span', { textContent: words }))
+    const line = () => el('span', { className: 'p2p-line' })
+    const picture = el('div', { className: 'p2p-picture', role: 'img', 'aria-label': S.anywherePicture },
+      node('screen', S.anywhereDevice), line(),
+      el('span', { className: 'p2p-lock' }, icon('lock'), el('span', { textContent: S.anywhereEncrypted })),
+      line(), node('rack', S.anywhereServer))
+    const ways = []
+    if (bridge.invite) ways.push(button(S.anywhereJoinLink, () => { listFocus = JOIN_LINK; addressScreen('', '', true) }, { kind: 'primary', icon: 'link', className: 'join-link' }))
+    // For a device that has never been at home with its server: it shows a code to type in there.
+    if (bridge.joinAway) ways.push(button(S.anywhereShowCode, () => joinAwayScreen(), { kind: 'secondary', icon: 'keypad', className: 'join-away' }))
+    const promise = (words) => el('li', {}, icon('tick'), el('span', { textContent: words }))
+    return el('section', { className: 'anywhere', 'aria-labelledby': 'anywhere-title' },
+      el('div', { className: 'anywhere-head' },
+        el('span', { className: 'anywhere-badge', 'aria-hidden': 'true' }, icon('globe')),
+        el('div', {}, el('h2', { id: 'anywhere-title', textContent: S.anywhereTitle }), el('p', { textContent: S.anywhereHint }))),
+      picture,
+      el('div', { className: 'anywhere-ways' }, ...ways),
+      el('ul', { className: 'promises' }, promise(S.anywherePromiseEncrypted), promise(S.anywherePromiseRouter), promise(S.anywherePromiseInvite)))
+  }
+
+  // An address, or (invite) an invite link to a server away from home: one field, Connect.
+  function addressScreen(message, value, invite) {
     const input = el('input', {
       id: 'address', type: 'text', value: value || '', autocapitalize: 'off', spellcheck: false,
-      autocomplete: 'off', inputMode: 'url', placeholder: '192.168.1.20',
+      autocomplete: 'off', inputMode: 'url', placeholder: invite ? 'wittymedia://p2p/…' : '192.168.1.20',
       'aria-describedby': 'address-hint address-error',
     })
     const error = problem('', 'address-error')
@@ -491,9 +539,11 @@
     input.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); go.click() } })
     show({
       back: listAvailable ? () => listScreen() : null,
-      words: [el('h1', { textContent: S.addressTitle }), el('p', { id: 'address-hint', className: 'lead', textContent: S.addressHint })]
-        .concat(bridge.invite ? [el('p', { className: 'lead', textContent: S.inviteHint })] : []),
-      actions: [field(input, S.addressLabel, 'link'), error.node, go],
+      words: invite
+        ? [el('h1', { textContent: S.inviteTitle }), el('p', { id: 'address-hint', className: 'lead', textContent: S.inviteLead })]
+        : [el('h1', { textContent: S.addressTitle }), el('p', { id: 'address-hint', className: 'lead', textContent: S.addressHint })]
+          .concat(bridge.invite ? [el('p', { className: 'lead', textContent: S.inviteHint })] : []),
+      actions: [field(input, invite ? S.inviteLabel : S.addressLabel, 'link'), error.node, go],
       foot: [legal()],
     })
   }
