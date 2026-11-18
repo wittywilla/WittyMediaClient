@@ -255,7 +255,7 @@ the desktop connect screen and Android follow it. These need the Mac. Tick each 
 Written 2026-11-18 with WittyMediaServer #469 (what a TV offers: the server's TV levels, its `docs/TV-MODE.md`).
 Android TV was done on the PC. Nothing below was run; each item needs a Mac or Plasma Bigscreen.
 
-**For Claude on the Mac:** work through this list, tick items off, and delete this file once it is empty.
+**For Claude on the Mac:** work through this list and tick items off here.
 Merge nothing and don't release or tag without the owner's OK.
 
 ### Apple TV (tvOS)
