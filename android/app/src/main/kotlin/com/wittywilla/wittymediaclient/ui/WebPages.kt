@@ -289,7 +289,7 @@ private fun DetailHero(url: String?, moving: (@Composable () -> Unit)? = null) {
         )
         // The title's canvas, over the still picture and under the shade, when it has one (CanvasLoop.kt).
         moving?.invoke()
-        Box(Modifier.fillMaxSize().background(Brush.verticalGradient(0f to page.copy(alpha = 0.15f), 0.35f to page.copy(alpha = 0.35f), 0.7f to page.copy(alpha = 0.7f), 1f to page)))
+        Box(Modifier.fillMaxSize().background(Brush.verticalGradient(0f to page.copy(alpha = 0.15f), 0.35f to page.copy(alpha = 0.35f), 0.7f to page.copy(alpha = maxOf(0.7f, HeroScrim.strength)), 1f to page)))
     }
 }
 

@@ -48,10 +48,17 @@ data class ThemeColours(
     val accentText: String = accent,
     val danger: String,
     val ok: String = accent,
+    // Worked out by the server for each theme (shared/scripts/build-themes.mjs reads them from its theme.json).
+    val focus: String? = null,
+    val scrim: String? = null,
+    val onImage: String? = null,
+    val borderStrong: String? = null,
+    val accentHover: String? = null,
+    val controlLine: String? = null,
 )
 
 @Serializable
-data class ThemeData(val id: String, val scheme: String, val colours: ThemeColours, val name: String = id)
+data class ThemeData(val id: String, val scheme: String, val colours: ThemeColours, val name: String = id, val heroScrim: Double? = null)
 
 @Serializable
 data class ThemeFile(val defaultTheme: String, val themes: List<ThemeData>)
@@ -75,25 +82,29 @@ fun ThemeData.asTokens() = ThemeTokens(
         "bg" to colours.background, "bg-2" to colours.panel, "bg-3" to colours.card, "border" to colours.border,
         "fg" to colours.text, "fg-2" to colours.textSecondary, "fg-3" to colours.textHint, "accent" to colours.accent,
         "accent-fg" to colours.onAccent, "accent-text" to colours.accentText, "danger" to colours.danger, "ok" to colours.ok,
+    ) + listOfNotNull(
+        colours.focus?.let { "focus" to it }, colours.accentHover?.let { "accent-2" to it },
+        colours.controlLine?.let { "control-line" to it },
     ),
+    tv = ThemeTokens.Tv(heroScrim = heroScrim),
 )
 
 // A built-in theme, translated; one this app doesn't know gets the default look.
 fun bundledTheme(file: ThemeFile, id: String): AppTheme =
     ThemeTranslator.translate((file.themes.firstOrNull { it.id == id } ?: file.themes.first { it.id == file.defaultTheme }).asTokens())
 
-// The 4dp grid.
+// The 4dp grid, from the server's tokens (themes/tokens.json, `space`), so a change there reaches this app.
 object Space {
-    val S1 = 4.dp
-    val S2 = 8.dp
-    val S3 = 12.dp
-    val S4 = 16.dp
-    val S5 = 20.dp
-    val S6 = 24.dp
-    val S8 = 32.dp
-    val S10 = 40.dp
-    val S12 = 48.dp
-    val S16 = 64.dp
+    val S1 = DesignTokens.Space.n1.dp
+    val S2 = DesignTokens.Space.n2.dp
+    val S3 = DesignTokens.Space.n3.dp
+    val S4 = DesignTokens.Space.n4.dp
+    val S5 = DesignTokens.Space.n5.dp
+    val S6 = DesignTokens.Space.n6.dp
+    val S8 = DesignTokens.Space.n8.dp
+    val S10 = DesignTokens.Space.n10.dp
+    val S12 = DesignTokens.Space.n12.dp
+    val S16 = DesignTokens.Space.n16.dp
 }
 
 object Radius {
@@ -113,7 +124,8 @@ data class Metrics(
     val edge: Dp,
     val cardWidth: Dp,
     val minTarget: Dp,
-    val focusRing: Dp = 3.dp,
+    // A keyboard's or game pad's ring on a phone or tablet: the tokens' `focus.input.keys`.
+    val focusRing: Dp = DesignTokens.Focus.Input.Keys.width.dp,
     val focusScale: Float = 1f,
     // How far a focused card lifts (up, in dp), and whether a control takes focus as a fill of the text colour
     // rather than a ring (docs/plans/DESIGN-2.md, section 2: focus style ring-lift for media, fill for controls).

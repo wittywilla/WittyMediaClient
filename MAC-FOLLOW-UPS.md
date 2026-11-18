@@ -217,6 +217,33 @@ code to type in" button to `remoteWays` on iOS that opens the same join-by-code 
 - [ ] If anything above needed a fix: bump to 0.5.3 (memory: version bumps), say so in CHANGELOG.md,
       and release it with the owner's OK.
 
+## 8. Interface parity with the server's 0.8.1 audit (issue 60)
+
+Added 2026-11-18 from the Windows PC. The server's interface audit (WittyMediaServer issue 438, its
+`docs/UI-PLATFORMS.md`) fixes problems once, in tokens, SDUI specs and shared parts. On Windows, PR 62 made
+the desktop connect screen and Android follow it. These need the Mac. Tick each and say in the PR what ran.
+
+- [ ] **Hero scrim on iPhone, iPad, Apple TV and the macOS app's native screens.** `shared/data/themes.json`
+  now has each theme's `heroScrim`, and WittyKit's `Theme.heroScrim` is already read from the server's
+  `tv.heroScrim`, but nothing draws with it. Every hero and title header that puts words over a picture
+  (`App/ItemPages.swift`, `App/BrowseViews.swift`, `App/MobileShell.swift`, the SDUI hero) should have a scrim
+  in the page's own colour, at least `heroScrim` where the words are, fading out past them; words at full
+  colour (no 0.86 opacity). Android's `ui/HeroScrim.kt` is the reference: with the old 0.72 it is exactly the
+  shade the phone had, so only themes that raised it look different.
+- [ ] **Read the new theme colours.** `themes.json` also carries `focus`, `scrim`, `onImage`, `borderStrong`,
+  `accentHover` and `controlLine`. Decode them (Codable ignores them today) and use `focus` for the ring.
+- [ ] **Page top under the bar.** A page's first line is 16pt (`space.4`) under the floating bar, and a hero
+  that opens the page goes under the bar (the audit's R7). Check Home, a library, Settings and a title page
+  on iPhone, iPad and Apple TV, in light, dark and an Aero theme.
+- [ ] **Pictures never stop on a line** (server PR 411): a hero's foot fades into the page; a hero below
+  setup notices fades at its top too. Check Home and a title page.
+- [ ] **Focus ring:** Apple TV 4 units, 1.06, lifted 6 (`DesignTokens.Tv.Focus`); iPad with a keyboard 3pt
+  (`focus.input.keys`). Check it is visible on every theme, including Contrast and the Aero themes.
+- [ ] **macOS desktop app:** the server's page under the 32px title bar at phone and desktop widths, and in
+  full screen (no title bar, no gap). The connect screen now loads `theme.css`: check it still opens.
+- [ ] **Android emulator pass** if it wasn't done on the PC: Home's billboard and a title header in Default,
+  Light, Contrast and Aero Sunset; page top under the bar; the TV rail's focus ring.
+
 ## Never
 
 - Never use or stop the owner's installed server (port 9797) for any of this.
