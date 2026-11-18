@@ -109,7 +109,8 @@ class OverShell {
 val LocalOverShell = compositionLocalOf<OverShell?> { null }
 
 private const val TOP_BAR = 52
-private const val TAB_BAR = 60
+// The phone's tab bar, from the server's tokens (layout.tabBar), as the website's --tabbar-h.
+private val TAB_BAR = DesignTokens.Layout.tabBar.toInt()
 private const val DOCK_SPACE = 88
 
 @Composable
@@ -171,7 +172,9 @@ fun PhoneShell(nav: Nav, content: @Composable () -> Unit) {
     val docked = video != null || listening
     // .content's bottom padding: 24 + the bar's space (60 + 16 + inset) + 88 while something is docked.
     val bottomRoom = 24.dp + TAB_BAR.dp + 16.dp + inset + if (docked) DOCK_SPACE.dp else 0.dp
-    val topRoom = status + TOP_BAR.dp + 8.dp
+    // A page's first line starts one --page-top (space 4, 16) under the bar, as on the website (the server's audit, R7);
+    // a hero that opens the page goes under the bar instead (WebHome, SduiRender).
+    val topRoom = status + TOP_BAR.dp + Space.S4
     val top = isTopPage(nav.current, nav.menu, served?.map { it.second }.orEmpty())
 
     // The experience's frame (ExperienceFrames.kt): a sidebar or a rail down the side, tabs across the top, or the floating

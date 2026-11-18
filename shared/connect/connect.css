@@ -2,33 +2,16 @@
 /* Copyright (C) 2026 WittyWilla and contributors */
 /* The connect screen, drawn as docs/APP-DESIGN.md draws the sign-in screens, with the server's
    design tokens under the same names (its docs/DESIGN.md and web/src/styles.css), in the default
-   theme's colours (shared/data/themes.json; a test holds them equal). The page opens before any
+   theme's colours (theme.css, written from the server's themes, so a change there reaches this page). The page opens before any
    server's theme can apply, so it has one look: this one. Sizes are the design's points, one to a
    pixel, written in rem. On a TV (.tv) a rem is sixteen TV units instead, a hundred-and-twentieth of
    the screen's width, so the page fills the screen the same way at any resolution. Old TV browsers
    don't know min(), so each newer value has a plain one before it. */
 :root {
   color-scheme: dark;
-  --bg: #0f1115;
-  --bg-2: #171a21;
-  --bg-3: #1f232c;
-  --bg-4: #2a2f3a;
-  --fg: #e8eaf0;
-  --fg-2: #a9afbd;
-  --fg-3: #848b99;
-  --accent: #7955ff;
-  --accent-2: #6a4df0;
-  --accent-fg: #ffffff;
-  --accent-text: #9174ff;
-  --danger: #ff5c6c;
-  /* The theme's success colour, and the blue that marks a server reached peer to peer, as on Apple and Android. */
-  --ok: #3ad29f;
+  /* The default theme's colours, under the server's names, are in theme.css (written from the server's themes by
+     shared/scripts/build-themes.mjs). The blue that marks a server reached peer to peer is the apps' own. */
   --peer: #0a84ff;
-  /* A field's outline. The design's border colour is too faint to find a field by. */
-  --control-line: #6f7480;
-  /* Derived, as the design says: the glow at the top is the accent at 16%, and so is danger's tint. */
-  --glow: rgba(121, 85, 255, .16);
-  --danger-tint: rgba(255, 92, 108, .16);
   /* The brand mark's own colours, which no theme changes. */
   --mark-tile: #1b1e25;
   --mark-from: #9d7bff;

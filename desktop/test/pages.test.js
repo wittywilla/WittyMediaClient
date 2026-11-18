@@ -42,17 +42,22 @@ test('the only pictures on the connect screen are the ones the app hands it', ()
   assert.strictEqual(policy(read(shared, 'connect', 'index.html'))['img-src'], 'data:')
 })
 
-test('the connect screen uses the default theme\'s colours, under the server\'s names', () => {
+test('the connect screen wears the default theme\'s colours from the server, and keeps no copy of its own', () => {
   const colours = themes.themes.find((t) => t.id === themes.defaultTheme).colours
+  const theme = read(shared, 'connect', 'theme.css')
   const names = {
     '--bg': 'background', '--bg-2': 'panel', '--bg-3': 'card', '--bg-4': 'border', '--fg': 'text', '--fg-2': 'textSecondary',
-    '--fg-3': 'textHint', '--accent': 'accent', '--accent-fg': 'onAccent', '--accent-text': 'accentText', '--danger': 'danger',
+    '--fg-3': 'textHint', '--accent': 'accent', '--accent-2': 'accentHover', '--accent-fg': 'onAccent',
+    '--accent-text': 'accentText', '--danger': 'danger', '--ok': 'ok', '--control-line': 'controlLine',
   }
   for (const [token, key] of Object.entries(names)) {
-    const m = new RegExp(`${token}:\\s*(#[0-9a-fA-F]{6})\\b`).exec(css)
+    const m = new RegExp(`${token}:\\s*(#[0-9a-fA-F]{6})\\b`).exec(theme)
     assert.ok(m, `${token} is set`)
     assert.strictEqual(m[1].toLowerCase(), colours[key], token)
+    assert.ok(!css.includes(`${token}:`), `${token} is only in theme.css`)
   }
+  const page = read(shared, 'connect', 'index.html')
+  assert.ok(page.indexOf('href="theme.css"') < page.indexOf('href="connect.css"'), 'theme.css comes first')
 })
 
 test('the connect screen has no one-off colours or sizes outside its tokens', () => {
@@ -80,7 +85,7 @@ function contrast(a, b) {
 }
 
 test('its text and focus ring can be read on what they sit on', () => {
-  const token = (name) => new RegExp(`${name}:\\s*(#[0-9a-fA-F]{6})\\b`).exec(css)[1]
+  const token = (name) => new RegExp(`${name}:\\s*(#[0-9a-fA-F]{6})\\b`).exec(read(shared, 'connect', 'theme.css'))[1]
   for (const surface of ['--bg', '--bg-3']) {
     for (const text of ['--fg', '--fg-2', '--danger', '--accent-text']) {
       assert.ok(contrast(token(text), token(surface)) >= 4.5, `${text} on ${surface}`)

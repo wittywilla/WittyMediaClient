@@ -463,7 +463,7 @@ fun SduiHero(view: SduiView) {
             val backdrop = slide.props.image("image")
             Box(Modifier.fillMaxWidth().height(tall)) {
                 SduiPicture(backdrop, wide, wide / tall, null, Modifier.fillMaxSize(), alignment = Alignment.TopCenter)
-                Box(Modifier.fillMaxSize().background(Brush.horizontalGradient(0f to page, 0.35f to page.copy(alpha = 0.82f), 0.75f to Color.Transparent)))
+                Box(Modifier.fillMaxSize().background(HeroScrim.side(page, HeroScrim.strength, least = 0.82f)))
                 Box(Modifier.fillMaxSize().background(Brush.verticalGradient(0.6f to Color.Transparent, 1f to page)))
                 val buttons = slide.actionButtons
                 Column(
@@ -473,7 +473,7 @@ fun SduiHero(view: SduiView) {
                     SduiLogoOrTitle(slide, "heading", env.pt(700), slide.line("title", 2))
                     slide.text["facts"]?.let { SduiFacts(it, lines = 1) }
                     slide.text["synopsis"]?.takeIf { view.props["showSynopsis"]?.toString() != "false" }?.let {
-                        Text(it, color = scheme.onBackground.copy(alpha = 0.86f), fontSize = env.size("body"), maxLines = slide.line("synopsis", 3), overflow = TextOverflow.Ellipsis)
+                        Text(it, color = scheme.onBackground, fontSize = env.size("body"), maxLines = slide.line("synopsis", 3), overflow = TextOverflow.Ellipsis)
                     }
                     Row(
                         Modifier.padding(top = env.space("xs")).onFocusChanged { inside = it.hasFocus }
@@ -522,12 +522,12 @@ fun SduiHero(view: SduiView) {
                     val slide = slides[at]
                     Box(Modifier.fillMaxSize().semantics(mergeDescendants = false) { contentDescription = slide.label }) {
                         SduiPicture(slide.props.image("image"), wide, wide / tall, null, Modifier.fillMaxSize(), alignment = Alignment.TopCenter)
-                        Box(Modifier.fillMaxSize().background(Brush.verticalGradient(0.18f to page.copy(alpha = 0f), 0.44f to page.copy(alpha = 0.72f), 0.66f to page.copy(alpha = 0.94f), 1f to page)))
+                        Box(Modifier.fillMaxSize().background(HeroScrim.foot(page, HeroScrim.strength)))
                         Column(Modifier.align(Alignment.BottomStart).padding(horizontal = LocalSduiSpan.current.side).padding(bottom = env.space("s")).then(if (env.tablet) Modifier.fillMaxWidth(0.5f) else Modifier.fillMaxWidth())) {
                             SduiLogoOrTitle(slide, "pageTitle", wide * 0.7f, slide.line("title", 2))
                             slide.text["facts"]?.let { SduiFacts(it, Modifier.padding(top = env.space("s"))) }
                             slide.text["synopsis"]?.takeIf { view.props["showSynopsis"]?.toString() != "false" && !banner }?.let {
-                                Text(it, color = scheme.onBackground.copy(alpha = 0.86f), fontSize = env.size("body"), maxLines = slide.line("synopsis", 3), overflow = TextOverflow.Ellipsis, lineHeight = env.size("body") * 1.45f, modifier = Modifier.padding(top = env.space("s")))
+                                Text(it, color = scheme.onBackground, fontSize = env.size("body"), maxLines = slide.line("synopsis", 3), overflow = TextOverflow.Ellipsis, lineHeight = env.size("body") * 1.45f, modifier = Modifier.padding(top = env.space("s")))
                             }
                             FlowRow(Modifier.padding(top = env.space("m")), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                                 slide.actionButtons.forEach { SduiActionButton(it, focusKey = "${slide.id}~${it.id}") }
@@ -591,7 +591,7 @@ fun SduiDetailHeader(view: SduiView) {
             Box(Modifier.fillMaxWidth().heightIn(min = env.pt(620))) {
                 if (backdrop != null) {
                     SduiPicture(backdrop, wide, 16f / 9f, null, Modifier.matchParentSize(), alignment = Alignment.TopCenter)
-                    Box(Modifier.matchParentSize().background(Brush.horizontalGradient(0f to page, 0.4f to page.copy(alpha = 0.85f), 0.85f to page.copy(alpha = 0.2f))))
+                    Box(Modifier.matchParentSize().background(HeroScrim.side(page, HeroScrim.strength, wordsTo = 0.4f, clearAt = 0.85f, least = 0.85f, beyond = 0.2f)))
                     Box(Modifier.matchParentSize().background(Brush.verticalGradient(0.55f to Color.Transparent, 1f to page)))
                 }
                 Row(Modifier.padding(start = side, end = side, top = env.space("m"), bottom = env.space("s")), horizontalArrangement = Arrangement.spacedBy(env.space("m")), verticalAlignment = Alignment.Bottom) {
@@ -605,7 +605,7 @@ fun SduiDetailHeader(view: SduiView) {
                         SduiLogoOrTitle(view, "pageTitle", env.pt(800), view.line("title", 2))
                         view.text["tagline"]?.let { Text(it, color = scheme.onSurfaceVariant, fontSize = env.size("body"), fontStyle = FontStyle.Italic, maxLines = 1, overflow = TextOverflow.Ellipsis) }
                         view.text["facts"]?.let { SduiFacts(it, lines = 1) }
-                        view.text["overview"]?.let { Text(it, color = scheme.onBackground.copy(alpha = 0.86f), fontSize = env.size("body"), maxLines = view.line("overview", 4), overflow = TextOverflow.Ellipsis) }
+                        view.text["overview"]?.let { Text(it, color = scheme.onBackground, fontSize = env.size("body"), maxLines = view.line("overview", 4), overflow = TextOverflow.Ellipsis) }
                         view.progress?.let { SduiProgressLine(it, Modifier.padding(top = env.space("xs")).widthIn(max = env.pt(600))) }
                         // The buttons centred under the words, as on every device, in a row that scrolls when they don't fit.
                         BoxWithConstraints(Modifier.fillMaxWidth().padding(top = env.space("xs"))) {
@@ -1082,7 +1082,7 @@ fun SduiBanner(view: SduiView, side: Dp) {
             Box(Modifier.fillMaxWidth().height(tall).clearAndSetSemantics { }) {
                 if (image != null) {
                     SduiPicture(image, wide, wide / tall, null, Modifier.fillMaxSize())
-                    Box(Modifier.fillMaxSize().background(Brush.horizontalGradient(0f to scheme.surface.copy(alpha = 0.92f), 0.7f to scheme.surface.copy(alpha = 0.25f))))
+                    Box(Modifier.fillMaxSize().background(HeroScrim.side(scheme.surface, HeroScrim.strength, wordsTo = 0.6f, clearAt = 1f, least = 0.6f, beyond = 0.25f)))
                 } else {
                     Box(Modifier.fillMaxSize().border(1.dp, scheme.outline, corner))
                 }

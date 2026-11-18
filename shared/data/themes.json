@@ -5,6 +5,7 @@
       "id": "aeroaurora",
       "name": "Aero Aurora",
       "scheme": "dark",
+      "heroScrim": 0.74,
       "colours": {
         "background": "#0b2a4a",
         "panel": "#123a5e",
@@ -17,13 +18,20 @@
         "onAccent": "#00243a",
         "accentText": "#7fdcff",
         "danger": "#ff99a2",
-        "ok": "#3ad29f"
+        "ok": "#3ad29f",
+        "focus": "#7fdcff",
+        "scrim": "#000000ad",
+        "onImage": "#ffffff",
+        "borderStrong": "#eaf6ff33",
+        "accentHover": "#31aed7",
+        "controlLine": "#4f9ad9"
       }
     },
     {
       "id": "aeroday",
       "name": "Aero Day",
       "scheme": "light",
+      "heroScrim": 0.78,
       "colours": {
         "background": "#cfeeff",
         "panel": "#ffffff",
@@ -36,13 +44,20 @@
         "onAccent": "#ffffff",
         "accentText": "#0a6aa8",
         "danger": "#b8222f",
-        "ok": "#116b45"
+        "ok": "#116b45",
+        "focus": "#0a6aa8",
+        "scrim": "#000000ad",
+        "onImage": "#ffffff",
+        "borderStrong": "#0b3a5a33",
+        "accentHover": "#1a88c5",
+        "controlLine": "#688aa0"
       }
     },
     {
       "id": "aeromeadow",
       "name": "Aero Meadow",
       "scheme": "light",
+      "heroScrim": 0.78,
       "colours": {
         "background": "#d9f5cc",
         "panel": "#ffffff",
@@ -55,13 +70,20 @@
         "onAccent": "#ffffff",
         "accentText": "#146b2e",
         "danger": "#b8222f",
-        "ok": "#116b45"
+        "ok": "#116b45",
+        "focus": "#146b2e",
+        "scrim": "#000000ad",
+        "onImage": "#ffffff",
+        "borderStrong": "#0d3a2233",
+        "accentHover": "#299944",
+        "controlLine": "#708f78"
       }
     },
     {
       "id": "aerosunset",
       "name": "Aero Sunset",
       "scheme": "light",
+      "heroScrim": 0.78,
       "colours": {
         "background": "#ffd9b8",
         "panel": "#fff6ee",
@@ -74,13 +96,20 @@
         "onAccent": "#ffffff",
         "accentText": "#ae3f0f",
         "danger": "#b8222f",
-        "ok": "#116b45"
+        "ok": "#116b45",
+        "focus": "#ae3f0f",
+        "scrim": "#000000ad",
+        "onImage": "#ffffff",
+        "borderStrong": "#4a1b3a33",
+        "accentHover": "#e06b36",
+        "controlLine": "#99757d"
       }
     },
     {
       "id": "cable",
       "name": "Cable blue",
       "scheme": "dark",
+      "heroScrim": 0.74,
       "colours": {
         "background": "#08125e",
         "panel": "#0b1a8a",
@@ -93,13 +122,20 @@
         "onAccent": "#08125e",
         "accentText": "#ffd84a",
         "danger": "#ff8a94",
-        "ok": "#3ad29f"
+        "ok": "#3ad29f",
+        "focus": "#ffd84a",
+        "scrim": "#000000ad",
+        "onImage": "#ffffff",
+        "borderStrong": "#ffffff33",
+        "accentHover": "#e0be41",
+        "controlLine": "#6d83f3"
       }
     },
     {
       "id": "cinema",
       "name": "Cinema",
       "scheme": "dark",
+      "heroScrim": 0.78,
       "colours": {
         "background": "#14110e",
         "panel": "#1c1815",
@@ -112,13 +148,20 @@
         "onAccent": "#17120a",
         "accentText": "#eeb159",
         "danger": "#ff6f6a",
-        "ok": "#58cf9a"
+        "ok": "#58cf9a",
+        "focus": "#eeb159",
+        "scrim": "#000000ad",
+        "onImage": "#ffffff",
+        "borderStrong": "#f2ece433",
+        "accentHover": "#d18f28",
+        "controlLine": "#796958"
       }
     },
     {
       "id": "contrast",
       "name": "High contrast",
       "scheme": "dark",
+      "heroScrim": 0.88,
       "colours": {
         "background": "#000000",
         "panel": "#000000",
@@ -131,13 +174,20 @@
         "onAccent": "#000000",
         "accentText": "#ffe14d",
         "danger": "#ff9c9c",
-        "ok": "#6df2b8"
+        "ok": "#6df2b8",
+        "focus": "#ffe14d",
+        "scrim": "#000000ad",
+        "onImage": "#ffffff",
+        "borderStrong": "#ffffff33",
+        "accentHover": "#ffd400",
+        "controlLine": "#b0b0b0"
       }
     },
     {
       "id": "default",
       "name": "Witty",
       "scheme": "dark",
+      "heroScrim": 0.72,
       "colours": {
         "background": "#0f1115",
         "panel": "#171a21",
@@ -150,13 +200,20 @@
         "onAccent": "#ffffff",
         "accentText": "#9174ff",
         "danger": "#ff5c6c",
-        "ok": "#3ad29f"
+        "ok": "#3ad29f",
+        "focus": "#9174ff",
+        "scrim": "#000000ad",
+        "onImage": "#ffffff",
+        "borderStrong": "#e8eaf033",
+        "accentHover": "#6a4df0",
+        "controlLine": "#6f7480"
       }
     },
     {
       "id": "evergreen",
       "name": "Evergreen",
       "scheme": "dark",
+      "heroScrim": 0.74,
       "colours": {
         "background": "#0d1512",
         "panel": "#141e1a",
@@ -169,13 +226,20 @@
         "onAccent": "#06140e",
         "accentText": "#4fcf97",
         "danger": "#ff6b78",
-        "ok": "#4fcf97"
+        "ok": "#4fcf97",
+        "focus": "#4fcf97",
+        "scrim": "#000000ad",
+        "onImage": "#ffffff",
+        "borderStrong": "#e6efe933",
+        "accentHover": "#259a68",
+        "controlLine": "#507768"
       }
     },
     {
       "id": "light",
       "name": "Light",
       "scheme": "light",
+      "heroScrim": 0.76,
       "colours": {
         "background": "#f4f5f8",
         "panel": "#ffffff",
@@ -188,13 +252,20 @@
         "onAccent": "#ffffff",
         "accentText": "#6d4fe0",
         "danger": "#cf2537",
-        "ok": "#117b50"
+        "ok": "#117b50",
+        "focus": "#6d4fe0",
+        "scrim": "#000000ad",
+        "onImage": "#ffffff",
+        "borderStrong": "#15171c33",
+        "accentHover": "#5838c9",
+        "controlLine": "#838992"
       }
     },
     {
       "id": "midnight",
       "name": "Midnight",
       "scheme": "dark",
+      "heroScrim": 0.74,
       "colours": {
         "background": "#0b1120",
         "panel": "#111a2e",
@@ -207,13 +278,20 @@
         "onAccent": "#ffffff",
         "accentText": "#6ea4ff",
         "danger": "#ff6b78",
-        "ok": "#3ad29f"
+        "ok": "#3ad29f",
+        "focus": "#6ea4ff",
+        "scrim": "#000000ad",
+        "onImage": "#ffffff",
+        "borderStrong": "#e6ecf733",
+        "accentHover": "#2560d4",
+        "controlLine": "#496bb4"
       }
     },
     {
       "id": "oled",
       "name": "True black",
       "scheme": "dark",
+      "heroScrim": 0.7,
       "colours": {
         "background": "#000000",
         "panel": "#0b0b0d",
@@ -226,13 +304,20 @@
         "onAccent": "#ffffff",
         "accentText": "#9f86ff",
         "danger": "#ff5c6c",
-        "ok": "#3ad29f"
+        "ok": "#3ad29f",
+        "focus": "#9f86ff",
+        "scrim": "#000000ad",
+        "onImage": "#ffffff",
+        "borderStrong": "#f2f2f533",
+        "accentHover": "#6a4df0",
+        "controlLine": "#616170"
       }
     },
     {
       "id": "paper",
       "name": "Paper",
       "scheme": "light",
+      "heroScrim": 0.76,
       "colours": {
         "background": "#f6f2ea",
         "panel": "#fffdf8",
@@ -245,13 +330,20 @@
         "onAccent": "#ffffff",
         "accentText": "#a14b1b",
         "danger": "#b8222f",
-        "ok": "#116b45"
+        "ok": "#116b45",
+        "focus": "#a14b1b",
+        "scrim": "#000000ad",
+        "onImage": "#ffffff",
+        "borderStrong": "#221d1633",
+        "accentHover": "#8a3f16",
+        "controlLine": "#8b8272"
       }
     },
     {
       "id": "satellite",
       "name": "Satellite",
       "scheme": "dark",
+      "heroScrim": 0.74,
       "colours": {
         "background": "#0c1418",
         "panel": "#16262e",
@@ -264,13 +356,20 @@
         "onAccent": "#1a0e00",
         "accentText": "#ffa84d",
         "danger": "#ff6b78",
-        "ok": "#3ad29f"
+        "ok": "#3ad29f",
+        "focus": "#ffa84d",
+        "scrim": "#000000ad",
+        "onImage": "#ffffff",
+        "borderStrong": "#eef3f633",
+        "accentHover": "#e0791b",
+        "controlLine": "#4c829d"
       }
     },
     {
       "id": "teletext",
       "name": "Teletext",
       "scheme": "dark",
+      "heroScrim": 0.74,
       "colours": {
         "background": "#000000",
         "panel": "#0000a8",
@@ -283,7 +382,13 @@
         "onAccent": "#000000",
         "accentText": "#ffff00",
         "danger": "#ff6b78",
-        "ok": "#3ad29f"
+        "ok": "#3ad29f",
+        "focus": "#ffff00",
+        "scrim": "#000000ad",
+        "onImage": "#ffffff",
+        "borderStrong": "#ffffff33",
+        "accentHover": "#e0e000",
+        "controlLine": "#6262ff"
       }
     }
   ]
