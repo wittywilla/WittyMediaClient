@@ -385,6 +385,13 @@ class Nav(val app: WittyApp, private val s: Map<String, String>) {
     // The catalogue's routes, read once for each sign-in; the app's own copy until then.
     var sduiRouter by mutableStateOf(SduiRouter())
         private set
+    // How much of each screen a TV offers, from the server's catalogue (net/TvLevels.kt).
+    var tvLevels by mutableStateOf<com.wittywilla.wittymediaclient.net.TvLevelTable?>(null)
+        private set
+
+    // A server page, opened: on a TV, an editor it doesn't offer is the QR card instead (docs/TV-MODE.md on the server).
+    fun serverPage(title: String, path: String): Route =
+        if (app.isTv && com.wittywilla.wittymediaclient.net.tvShowsCard(tvLevels, path)) Route.OnPhone(title, path) else Route.Page(path, title)
 
     // The main menu as the server has it for this profile and device. Null until read, and on a server without it.
     var sduiNav by mutableStateOf<SduiNavigation?>(null)
@@ -422,8 +429,8 @@ class Nav(val app: WittyApp, private val s: Map<String, String>) {
         val io = kotlinx.coroutines.Dispatchers.IO
         if (sduiNav == null) kotlinx.coroutines.withContext(io) { client.keptNavigation() }?.let { sduiNav = it }
         kotlinx.coroutines.withContext(io) { runCatching { client.navigation() } }.onSuccess { if (sdui === client) sduiNav = it.value }.onFailure { handleExpired(it) }
-        kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Default) { runCatching { client.catalog().let { SduiCardStyles.use(it.cardStyles); SduiRouter(it.routes, it.commands) } } }
-            .onSuccess { if (sdui === client) sduiRouter = it }
+        kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Default) { runCatching { client.catalog().let { SduiCardStyles.use(it.cardStyles); SduiRouter(it.routes, it.commands) to it.tvLevels } } }
+            .onSuccess { if (sdui === client) { sduiRouter = it.first; tvLevels = it.second } }
         loadExperiences()
     }
 
@@ -595,7 +602,7 @@ class Nav(val app: WittyApp, private val s: Map<String, String>) {
             }
             when (target.screen) {
                 "settings" -> target.params["section"]?.takeIf { it.isNotEmpty() }?.let {
-                    if (app.isTv) Route.OnPhone("Settings", "/settings/$it") else Route.Page("/settings/$it", "Settings")
+                    serverPage("Settings", "/settings/$it")
                 } ?: Route.Profile
                 "profiles" -> Route.Profile
                 "guide" -> when {

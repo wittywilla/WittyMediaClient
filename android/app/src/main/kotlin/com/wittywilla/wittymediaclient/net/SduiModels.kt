@@ -324,6 +324,8 @@ data class SduiCatalog(
     val routes: List<SduiRouteSpec> = emptyList(),
     val commands: List<SduiCommandSpec> = emptyList(),
     val cardStyles: List<SduiCardStyleSpec> = emptyList(),
+    // How much of each screen a TV offers (TvLevels.kt). Null from a server older than it.
+    val tvLevels: TvLevelTable? = null,
 )
 
 @Serializable

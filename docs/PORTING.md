@@ -168,3 +168,24 @@ Android TV shows the server's own page for everything but video, and that's wher
 Apple TV has no web view, so it has screens of its own for music, photos and channels, and says plainly what it can't show. What's left to build there, from the
 server's `docs/CLIENT-API.md`, "What a TV app must build itself": disc menus, a reader, radio, games, and music beyond albums and tracks. [Features](PLATFORMS.md#features)
 has where each stands.
+
+## What a TV offers: the server's TV levels
+
+Every screen has a TV level in the server's table (its `docs/TV-MODE.md`, sent in the SDUI catalogue as `tvLevels`):
+`full`, `view` or `desktopOnly`. A TV app follows it, so the server's own TV mode and every TV app make the same choices.
+
+- **desktopOnly**: in place of the editor, a card with the screen's name, the table's note ("To change this, use the
+  WittyMediaClient app on a Windows or Mac computer, or a web browser."), the page's address, a QR code of it, and a
+  few lines of what is set now from `GET /sdui/tv-summary/{summary}`. Back has focus. When the server's address is one
+  only the TV can reach, the QR code uses the first of the summary's `addresses` (the server on the home network).
+- **view**: the values shown, nothing changed. On Android TV the server's own page does this (`?tv=1`).
+- **full**: as now. Console and gaming screens (controllers, mapping, game settings, cores) are always a TV's own.
+
+A server older than `tvLevels` sends no table: a TV app then keeps its old behaviour (every server page a QR card on
+Android TV). The desktop app on a Windows or Mac computer keeps every screen; only TV mode (`--tv`) is limited, and
+that is the server's page, so it follows the table by itself.
+
+Android TV: `net/TvLevels.kt` (the rules, tested in `TvLevelsTest`), `Nav.serverPage()` (a server page opens unless
+it is desktopOnly), `OnPhoneScreen` (the card), and the app's own layout and name-and-logo editors, which are
+`desktopOnly` parts (`app.layout-editor`, `app.brand-editor`). Apple TV and Plasma Bigscreen: see
+[MAC-FOLLOW-UPS.md](../MAC-FOLLOW-UPS.md) and below.

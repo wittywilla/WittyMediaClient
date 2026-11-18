@@ -179,10 +179,13 @@ fun YouScreen(nav: Nav, s: Map<String, String>) {
                     YouNative.Profiles -> HouseholdRoute(HouseholdScreen.Profiles)
                     YouNative.RemoteControl -> RemoteRoute.Devices
                     YouNative.WatchParty -> RemoteRoute.Party(null)
+                    // The layout editor and name and logo are made on a computer, not a TV: their card, with the address.
+                    YouNative.EditLayout -> if (nav.app.isTv && !com.wittywilla.wittymediaclient.net.tvPartOpens(nav.tvLevels, "app.layout-editor")) Route.OnPhone(title, "/settings/appearance") else Route.You(opens.screen)
+                    YouNative.NameAndLogo -> if (nav.app.isTv && !com.wittywilla.wittymediaclient.net.tvPartOpens(nav.tvLevels, "app.brand-editor")) Route.OnPhone(title, "/settings/appearance#name") else Route.You(opens.screen)
                     else -> Route.You(opens.screen)
                 }
                 is YouOpens.Sdui -> return
-                is YouOpens.Page -> if (nav.app.isTv) Route.OnPhone(title, opens.path) else Route.Page(opens.path, title)
+                is YouOpens.Page -> nav.serverPage(title, opens.path)
             },
         )
     }

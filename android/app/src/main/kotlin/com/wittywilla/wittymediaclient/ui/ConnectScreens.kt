@@ -88,6 +88,7 @@ import com.wittywilla.wittymediaclient.net.Profiles
 import com.wittywilla.wittymediaclient.net.ServerFinder
 import com.wittywilla.wittymediaclient.net.probeServer
 import com.wittywilla.wittymediaclient.net.problemWords
+import com.wittywilla.wittymediaclient.net.screenFor
 import java.io.IOException
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.delay
@@ -1135,12 +1136,22 @@ private const val RECOVERY_MOST = 32
 // the address under it, as Apple TV has.
 @Composable
 fun OnPhoneScreen(nav: Nav, s: Map<String, String>, title: String, path: String) {
-    val address = remember(path) { runCatching { nav.app.api.mediaUrl(path) }.getOrDefault("") }
+    // An editor a TV doesn't open (the server's tvLevels, net/TvLevels.kt) says so in the server's words, with what
+    // is set now; anything else a TV sends to a phone just says to open it there.
+    val screen = remember(path, nav.tvLevels) { nav.tvLevels?.screenFor(path) }
+    val note = nav.tvLevels?.note.orEmpty().takeIf { screen != null || path.startsWith("/settings/appearance") }
+    var summary by remember(path) { mutableStateOf(com.wittywilla.wittymediaclient.net.TvSummary()) }
+    LaunchedEffect(path) { runCatching { nav.app.api.tvSummary(screen?.summary.orEmpty()) }.onSuccess { summary = it } }
+    val base = remember(path) { runCatching { nav.app.api.mediaUrl("/") }.getOrDefault("") }
+    val address = if (base.isEmpty()) "" else com.wittywilla.wittymediaclient.net.tvCardAddress(base, path, summary.addresses)
     DesignScreen(
-        title, nav::pop, lead = s["openOnPhone"].orEmpty(), tag = "on-phone",
+        title, nav::pop, lead = note?.ifEmpty { null } ?: s["openOnPhone"].orEmpty(), tag = "on-phone",
         actions = { WittyButton(s["back"].orEmpty(), nav::pop, kind = ButtonKind.Primary, tall = true, takeFocus = true) },
     ) {
         if (address.isNotEmpty()) DesignSection("") { QrCard(address, address) }
+        if (summary.lines.isNotEmpty()) DesignSection("") {
+            summary.lines.forEach { Text(it, color = MaterialTheme.colorScheme.onSurface, fontSize = LocalDesignSizes.current.body) }
+        }
     }
 }
 
