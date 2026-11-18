@@ -73,8 +73,8 @@ class ServerPagesTest {
 
     @Test
     fun aTvAsksForBigScreenMode() {
-        assertEquals("/tv?tv=1", pageAddress("/tv", isTv = true))
-        assertEquals("/library/3?genre=x&tv=1", pageAddress("/library/3?genre=x", isTv = true))
+        assertEquals("/tv?tv=1&client=tv", pageAddress("/tv", isTv = true))
+        assertEquals("/library/3?genre=x&tv=1&client=tv", pageAddress("/library/3?genre=x", isTv = true))
         assertEquals("/tv", pageAddress("/tv", isTv = false))
     }
 

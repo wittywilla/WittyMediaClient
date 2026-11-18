@@ -246,7 +246,7 @@ function showServer(url) {
   startedAfresh = true
   bar.webContents.send('server', url)
   updateMenu()
-  quietly(content.webContents.loadURL(TV ? tv.tenFootAddress(url) : url))
+  quietly(content.webContents.loadURL(TV ? tv.tenFootAddress(url, tv.bigscreen(process.env)) : url))
   log.kick()
   // Reached from away, the title bar says how. Reached directly, the app learns the other way.
   sayPath(tunnel && server === tunnel.origin ? p2p.pathWords(tunnel.run.state) : '')

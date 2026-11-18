@@ -7,11 +7,16 @@
 const BIGSCREEN_PLATFORM = 'mediacenter'
 const BIGSCREEN_SHELL = 'org.kde.plasma.bigscreen'
 
+// The session is Plasma Bigscreen: a TV, whatever the app was started with.
+function bigscreen(env = {}) {
+  return String(env.PLASMA_PLATFORM || '').split(':').includes(BIGSCREEN_PLATFORM) || env.PLASMA_DEFAULT_SHELL === BIGSCREEN_SHELL
+}
+
 // --tv and --no-tv decide if they're there, and the session decides if they aren't.
 function wanted(argv = [], env = {}) {
   if (argv.includes('--no-tv')) return false
   if (argv.includes('--tv')) return true
-  return String(env.PLASMA_PLATFORM || '').split(':').includes(BIGSCREEN_PLATFORM) || env.PLASMA_DEFAULT_SHELL === BIGSCREEN_SHELL
+  return bigscreen(env)
 }
 
 // What a TV needs from Chromium. The sign-in cookie is kept in the system's keyring, whose first
@@ -27,12 +32,15 @@ function switches(env = {}) {
   return [...needed, ['enable-wayland-ime'], ['wayland-text-input-version', '3']]
 }
 
-// The address that turns on the server's own big screen mode: larger type and the stronger
-// focus. The server's page remembers it for this device.
-function tenFootAddress(url) {
+// The address that turns on the server's own TV mode: larger type and the stronger focus. The server's
+// page remembers it for this device. It also says what this device is (the server's docs/TV-MODE.md): on
+// Plasma Bigscreen a TV, whose editors send to a computer with a QR code; anywhere else a computer started
+// with --tv, whose editors offer Leave TV mode instead.
+function tenFootAddress(url, onTv = false) {
   const address = new URL(url)
   address.searchParams.set('tv', '1')
+  address.searchParams.set('client', onTv ? 'tv' : 'desktop')
   return address.href
 }
 
-module.exports = { wanted, switches, tenFootAddress }
+module.exports = { wanted, bigscreen, switches, tenFootAddress }

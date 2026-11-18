@@ -41,8 +41,10 @@ test('a TV never opens the keyring set-up wizard', () => {
 })
 
 test('the big screen address keeps the server and what was asked for', () => {
-  assert.strictEqual(tenFootAddress('http://192.168.1.20:8096'), 'http://192.168.1.20:8096/?tv=1')
-  assert.strictEqual(tenFootAddress('https://media.example/home?x=1'), 'https://media.example/home?x=1&tv=1')
+  assert.strictEqual(tenFootAddress('http://192.168.1.20:8096'), 'http://192.168.1.20:8096/?tv=1&client=desktop')
+  assert.strictEqual(tenFootAddress('https://media.example/home?x=1'), 'https://media.example/home?x=1&tv=1&client=desktop')
+  // Plasma Bigscreen is a TV: the server's editors send it to a computer, with a QR code.
+  assert.strictEqual(tenFootAddress('http://192.168.1.20:8096', true), 'http://192.168.1.20:8096/?tv=1&client=tv')
   assert.strictEqual(new URL(tenFootAddress('http://a.example')).origin, 'http://a.example')
 })
 

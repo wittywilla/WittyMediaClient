@@ -276,9 +276,10 @@ Merge nothing and don't release or tag without the owner's OK.
 
 ### Plasma Bigscreen
 
-7. Plasma Bigscreen shows the server's own pages with `?tv=1`, so it follows the table without changes. Check on
-   the real shell: open You, then Libraries, Live transcoding and Channels and tuners; each should be the card with
-   Back focused, and Back (Escape from the remote) should return. Open Controllers and My game settings: both should
-   work fully with a pad.
-8. The desktop app started with `--tv`: the same check on Linux, Windows and macOS. Started without `--tv` it must
-   still open every editor.
+7. Plasma Bigscreen shows the server's own pages with `?tv=1&client=tv` (the desktop app sees the Bigscreen session),
+   so it is a TV device. Check on the real shell: open You, then Libraries, Live transcoding and Channels and tuners;
+   each should be the card with the address, a QR code and Back focused, and Back (Escape from the remote) should
+   return. Open Controllers and My game settings: both should work fully with a pad.
+8. The desktop app started with `--tv` anywhere else sends `client=desktop`: a computer in TV mode. Check on Linux,
+   Windows and macOS that the same screens say "Leave TV mode to change this." with no QR code, that Leave TV mode
+   opens the same page in the normal layout with Back to TV mode, and that started without `--tv` every editor opens.

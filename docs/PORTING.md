@@ -182,8 +182,10 @@ Every screen has a TV level in the server's table (its `docs/TV-MODE.md`, sent i
 - **full**: as now. Console and gaming screens (controllers, mapping, game settings, cores) are always a TV's own.
 
 A server older than `tvLevels` sends no table: a TV app then keeps its old behaviour (every server page a QR card on
-Android TV). The desktop app on a Windows or Mac computer keeps every screen; only TV mode (`--tv`) is limited, and
-that is the server's page, so it follows the table by itself.
+Android TV). The desktop app on a Windows or Mac computer keeps every screen out of TV mode. In TV mode it is the
+server's page, which follows the table by itself; the app says what it is in the address: `client=tv` on a Plasma
+Bigscreen session (a TV device: the address and a QR code), `client=desktop` when started with `--tv` anywhere else
+(a computer: "Leave TV mode to change this." and a Leave TV mode button). Android TV's `pageAddress` adds `client=tv`.
 
 Android TV: `net/TvLevels.kt` (the rules, tested in `TvLevelsTest`), `Nav.serverPage()` (a server page opens unless
 it is desktopOnly), `OnPhoneScreen` (the card), and the app's own layout and name-and-logo editors, which are
