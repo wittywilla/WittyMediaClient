@@ -9,6 +9,8 @@ import com.wittywilla.wittymediaclient.net.ThemeMakerInput
 import com.wittywilla.wittymediaclient.net.ThemeTokens
 import com.wittywilla.wittymediaclient.net.ThemeTranslator
 import com.wittywilla.wittymediaclient.net.json
+import com.wittywilla.wittymediaclient.ui.ThemeFile
+import com.wittywilla.wittymediaclient.ui.asTokens
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
@@ -22,6 +24,23 @@ import java.io.File
 
 // docs/APP-DESIGN.md, Themes: the translation and the theme maker, as Apple's ThemeTests check them.
 class ThemeTest {
+    // The server's rule for words over a picture (its PR 444): each theme says how solid the page-colour scrim behind a
+    // hero's words is, and the app draws with it, from the server's tokens and from the bundled themes alike.
+    @Test
+    fun theHeroScrimComesFromTheTheme() {
+        assertEquals(0.86, ThemeTranslator.translate(ThemeTokens(id = "x", tv = ThemeTokens.Tv(heroScrim = 0.86))).heroScrim, 1e-9)
+        assertEquals(ThemeTranslator.DEFAULT_HERO_SCRIM, ThemeTranslator.translate(ThemeTokens(id = "x")).heroScrim, 1e-9)
+        assertEquals(ThemeTranslator.DEFAULT_HERO_SCRIM, ThemeTranslator.translate(ThemeTokens(id = "x", tv = ThemeTokens.Tv(heroScrim = 4.0))).heroScrim, 1e-9)
+        val file = json.decodeFromString(ThemeFile.serializer(), File("../../shared/data/themes.json").readText())
+        for (theme in file.themes) {
+            val scrim = theme.heroScrim
+            assertTrue(theme.id, scrim != null && scrim > 0.5 && scrim <= 1.0)
+            val drawn = ThemeTranslator.translate(theme.asTokens())
+            assertEquals(theme.id, scrim!!, drawn.heroScrim, 1e-9)
+            assertEquals(theme.id, ThemeColour.parse(theme.colours.focus), drawn.focus)
+        }
+    }
+
     @Test
     fun theThemeMakerMatchesTheWebsite() {
         val examples = json.parseToJsonElement(File("../../shared/data/theme-maker-examples.json").readText()).jsonObject
