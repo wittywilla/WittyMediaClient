@@ -73,15 +73,18 @@ function parseInvite(text) {
 const looksLikeInvite = (text) => /^\s*wittymedia:\/\/p2p\//i.test(String(text))
 
 // Where the helper is: beside the app's own files once installed, in bin/ from a checkout
-// (npm run build:connect puts it there), or wherever WITTYCONNECT says.
-function helperPath({ resourcesPath, packaged, env = process.env, platform = process.platform, arch = process.arch, exists = fs.existsSync } = {}) {
+// (npm run build:connect puts it there), or wherever WITTYCONNECT says. On FreeBSD the app is an
+// app.asar run by the system's Electron, whose resources folder isn't ours: there the helper is
+// beside app.asar (build/freebsd/package.mjs), since nothing runs from inside an archive.
+function helperPath({ resourcesPath, packaged, env = process.env, platform = process.platform, arch = process.arch, exists = fs.existsSync, here = __dirname } = {}) {
   const name = platform === 'win32' ? 'wittyconnect.exe' : 'wittyconnect'
   const places = []
   if (!packaged && env.WITTYCONNECT) places.push(env.WITTYCONNECT)
   if (resourcesPath) places.push(path.join(resourcesPath, name))
+  if (/\.asar$/i.test(here)) places.push(path.join(path.dirname(here), name))
   // bin/ is named as electron-builder names systems, since packaging copies from it.
   const os = { darwin: 'mac', win32: 'win' }[platform] || platform
-  places.push(path.join(__dirname, 'bin', `${os}-${arch}`, name))
+  places.push(path.join(here, 'bin', `${os}-${arch}`, name))
   return places.find((p) => exists(p)) || ''
 }
 

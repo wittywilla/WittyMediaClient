@@ -16,3 +16,7 @@ mkdirSync(out, { recursive: true })
 cpSync(join(shared, 'connect'), out, { recursive: true, filter: (p) => !p.endsWith('.test.js') })
 const strings = readFileSync(join(shared, 'data', 'strings.en.json'), 'utf8')
 writeFileSync(join(out, 'strings.js'), `self.WittyStrings = ${strings.trim()}\n`)
+// The family's marks (shared/brand, drawn by scripts/sync-brand.sh), as pictures the page may
+// show: its policy allows images only as data: addresses.
+const mark = (name) => `data:image/svg+xml;base64,${readFileSync(join(shared, 'brand', `mark-${name}.svg`)).toString('base64')}`
+writeFileSync(join(out, 'brand.js'), `self.WittyBrand = ${JSON.stringify({ client: mark('client'), server: mark('server') }, null, 2)}\n`)
