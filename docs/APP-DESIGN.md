@@ -47,6 +47,16 @@ offers is reachable from every app: arranged for the device, never left out. See
 7. **Motion that explains.** Short fades and lifts (150–240 ms) that show where something came from.
    With Reduce Motion on, nothing moves that the person didn't move.
 
+### One fix, every screen
+
+The server's `docs/UI-PLATFORMS.md` says where an interface fix belongs so every platform gets it: tokens
+(`themes/tokens.json`, `themes/*/theme.json`), SDUI specs (`pkg/sdui`), then shared parts. The apps take them as
+data, never as copies: `scripts/gen-design-tokens.py` writes the sizes, `shared/scripts/build-themes.mjs` writes the
+themes and the connect screen's colours (`shared/connect/theme.css`), and CI fails when either is behind the server.
+When the server fixes a shared part (a hero, a row, a header), the apps' part of the same name follows the rule that
+fix is based on: words over a picture sit on a scrim in the page's colour at the theme's `heroScrim` (Android's
+`ui/HeroScrim.kt`); a page starts 16 under the bar; pictures fade into the page; focus is always visible.
+
 ## Foundations
 
 ### Colour roles
