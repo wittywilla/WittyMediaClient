@@ -228,6 +228,21 @@ test('the path is said in words', () => {
   assert.strictEqual(p2p.pathWords(null), '')
 })
 
+test('through a relay, what the relay allows is kept and said, and nothing else from it', () => {
+  const s = p2p.cleanState({ path: 'relayed', community: true, relayKbps: 4000, relayMaxHeight: 720, relayAllows: 'Up to 4 Mbit/s per connection,\u0000 pictures up to 720p.' + 'x'.repeat(400) })
+  assert.strictEqual(s.relayKbps, 4000)
+  assert.strictEqual(s.relayMaxHeight, 720)
+  assert.ok(!/\u0000/.test(s.relayAllows) && s.relayAllows.length === 300)
+  assert.strictEqual(p2p.pathWords(s), 'Peer to peer · through a relay · 4 Mbit/s, 720p')
+  assert.ok(p2p.pathWords(s).length <= 60, 'fits the title bar')
+  assert.strictEqual(p2p.pathWords(p2p.cleanState({ path: 'relayed', community: true, relayKbps: 1500 })), 'Peer to peer · through a relay · 1.5 Mbit/s')
+  assert.strictEqual(p2p.pathWords(p2p.cleanState({ path: 'relayed', community: true })), 'Peer to peer · through a relay')
+  // Nonsense, or a relay that only introduces, says no limits.
+  assert.deepStrictEqual(p2p.cleanState({ path: 'relayed', community: true, relayKbps: '4000', relayMaxHeight: 99999 }), { path: 'relayed', community: true })
+  assert.deepStrictEqual(p2p.cleanState({ path: 'relayed', community: false, relayKbps: 4000 }), { path: 'relayed', community: false })
+  assert.strictEqual(p2p.cleanState({ path: 'direct', relayKbps: 4000 }).relayKbps, undefined)
+})
+
 test('joining by a code: the key goes down the pipe, the code is shown as typed, and the answer is kept to what the app uses', async () => {
   const { child, run } = fakeHelper()
   const j = new p2p.JoinRun('/x/wittyconnect', { key: KEY, name: 'Study PC', platform: 'Windows' }, { run })

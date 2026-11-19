@@ -7,6 +7,7 @@ import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.booleanOrNull
+import kotlinx.serialization.json.intOrNull
 import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
@@ -114,7 +115,15 @@ object PeerRules {
         val o = runCatching { json.parseToJsonElement(text).jsonObject }.getOrNull() ?: return PeerState()
         fun str(k: String) = (o[k] as? JsonPrimitive)?.takeIf { it.isString }?.content.orEmpty()
         val path = str("path").takeIf { it in setOf("connecting", "offline", "local", "direct", "relayed") } ?: "connecting"
-        return PeerState(path, str("transport"), (o["community"] as? JsonPrimitive)?.booleanOrNull == true, plain(str("error"), 300))
+        val community = path == "relayed" && (o["community"] as? JsonPrimitive)?.booleanOrNull == true
+        // What a relay that carries whole connections said it allows; nothing from any other.
+        fun int(k: String, lo: Int, hi: Int) = (o[k] as? JsonPrimitive)?.takeIf { !it.isString }?.intOrNull?.takeIf { community && it in lo..hi } ?: 0
+        return PeerState(
+            path, str("transport"), community, plain(str("error"), 300),
+            relayKbps = int("relayKbps", 100, 10_000_000),
+            relayMaxHeight = int("relayMaxHeight", 144, 4320),
+            relayAllows = if (community) plain(str("relayAllows"), 300) else "",
+        )
     }
 
     // The server's answer to an invite or to a code this device showed. `code` is an ordinary sign-in code, to redeem
@@ -145,16 +154,38 @@ object PeerRules {
 }
 
 // How the server is being reached right now, as the library reports it.
-data class PeerState(val path: String = "connecting", val transport: String = "", val community: Boolean = false, val error: String = "") {
+data class PeerState(
+    val path: String = "connecting",
+    val transport: String = "",
+    val community: Boolean = false,
+    val error: String = "",
+    // What the relay said it allows: kbit/s per connection and the picture height streams keep to (0: not said),
+    // and the same in a sentence.
+    val relayKbps: Int = 0,
+    val relayMaxHeight: Int = 0,
+    val relayAllows: String = "",
+) {
     // Requests can be sent.
     val connected: Boolean get() = path == "local" || path == "direct" || path == "relayed"
 
-    // In words, wherever the app says which server it is on. A relay is always said.
+    // A relay's limits, short: "4 Mbit/s, 720p".
+    val relayLimits: String
+        get() = listOfNotNull(
+            relayKbps.takeIf { it > 0 }?.let { if (it >= 1000) "${"%.1f".format(java.util.Locale.ROOT, it / 1000.0).removeSuffix(".0")} Mbit/s" else "$it kbit/s" },
+            relayMaxHeight.takeIf { it > 0 }?.let { "${it}p" },
+        ).joinToString(", ")
+
+    // In words, wherever the app says which server it is on. A relay is always said, with what it allows, so a
+    // smaller picture has its reason in sight.
     val words: String
         get() = when (path) {
             "local" -> "Peer to peer · same network"
             "direct" -> "Peer to peer · direct"
-            "relayed" -> if (community) "Peer to peer · through a relay" else "Peer to peer · connecting directly…"
+            "relayed" -> when {
+                !community -> "Peer to peer · connecting directly…"
+                relayLimits.isNotEmpty() -> "Peer to peer · through a relay · $relayLimits"
+                else -> "Peer to peer · through a relay"
+            }
             "offline" -> "Peer to peer · reconnecting…"
             else -> "Peer to peer · connecting…"
         }

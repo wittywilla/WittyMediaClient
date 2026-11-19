@@ -85,20 +85,64 @@ public enum PeerConnect {
         public var transport: String?
         public var community: Bool?
         public var error: String?
+        /// What the relay said it allows: kbit/s per connection and the picture height streams keep
+        /// to, and the same in a sentence. Only from a relay that carries whole connections.
+        public var relayKbps: Int?
+        public var relayMaxHeight: Int?
+        public var relayAllows: String?
 
         public init(json: String) {
             if let s = try? JSONDecoder().decode(State.self, from: Data(json.utf8)) { self = s }
         }
 
+        private enum CodingKeys: String, CodingKey { case path, transport, community, error, relayKbps, relayMaxHeight, relayAllows }
+
+        /// Field by field, so that one odd value (from a newer or older library) loses only itself.
+        public init(from decoder: Decoder) throws {
+            let c = try decoder.container(keyedBy: CodingKeys.self)
+            path = try c.decode(Path.self, forKey: .path)
+            transport = try? c.decodeIfPresent(String.self, forKey: .transport)
+            community = try? c.decodeIfPresent(Bool.self, forKey: .community)
+            error = try? c.decodeIfPresent(String.self, forKey: .error)
+            guard path == .relayed, community == true else { return }
+            func int(_ k: CodingKeys, _ range: ClosedRange<Int>) -> Int? {
+                guard let v = try? c.decodeIfPresent(Int.self, forKey: k), range.contains(v) else { return nil }
+                return v
+            }
+            relayKbps = int(.relayKbps, 100...10_000_000)
+            relayMaxHeight = int(.relayMaxHeight, 144...4320)
+            if let s = try? c.decodeIfPresent(String.self, forKey: .relayAllows) {
+                relayAllows = String(String(s.unicodeScalars.filter { !CharacterSet.controlCharacters.contains($0) }).prefix(300))
+            }
+        }
+
         /// Requests can be sent.
         public var connected: Bool { path == .local || path == .direct || path == .relayed }
 
-        /// In words, to show wherever the app says which server it is on. A relay is always said.
+        /// A relay's limits, short: "4 Mbit/s, 720p".
+        public var relayLimits: String {
+            var parts: [String] = []
+            if let k = relayKbps {
+                if k >= 1000 {
+                    let m = (Double(k) / 100).rounded() / 10
+                    parts.append(m == m.rounded() ? "\(Int(m)) Mbit/s" : "\(m) Mbit/s")
+                } else {
+                    parts.append("\(k) kbit/s")
+                }
+            }
+            if let h = relayMaxHeight { parts.append("\(h)p") }
+            return parts.joined(separator: ", ")
+        }
+
+        /// In words, to show wherever the app says which server it is on. A relay is always said,
+        /// with what it allows, so a smaller picture has its reason in sight.
         public var words: String {
             switch path {
             case .local: return "Peer to peer · same network"
             case .direct: return "Peer to peer · direct"
-            case .relayed: return community == true ? "Peer to peer · through a relay" : "Peer to peer · connecting directly…"
+            case .relayed:
+                guard community == true else { return "Peer to peer · connecting directly…" }
+                return relayLimits.isEmpty ? "Peer to peer · through a relay" : "Peer to peer · through a relay · \(relayLimits)"
             case .offline: return "Peer to peer · reconnecting…"
             case .connecting: return "Peer to peer · connecting…"
             }

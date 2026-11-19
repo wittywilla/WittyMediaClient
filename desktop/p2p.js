@@ -136,7 +136,18 @@ const PATHS = ['connecting', 'offline', 'local', 'direct', 'relayed']
 function cleanState(s) {
   if (!s || typeof s !== 'object' || !PATHS.includes(s.path)) return { path: 'connecting' }
   const out = { path: s.path }
-  if (s.path === 'relayed') out.community = s.community === true
+  if (s.path === 'relayed') {
+    out.community = s.community === true
+    // What the relay said it allows (a relay that carries whole connections says so before use).
+    const int = (v, lo, hi) => (Number.isInteger(v) && v >= lo && v <= hi ? v : 0)
+    if (out.community) {
+      const kbps = int(s.relayKbps, 100, 10000000)
+      const height = int(s.relayMaxHeight, 144, 4320)
+      if (kbps) out.relayKbps = kbps
+      if (height) out.relayMaxHeight = height
+      if (typeof s.relayAllows === 'string' && s.relayAllows) out.relayAllows = s.relayAllows.replace(/[\x00-\x1f\x7f]/g, ' ').slice(0, 300)
+    }
+  }
   if (typeof s.transport === 'string' && /^(quic|tcp)$/.test(s.transport)) out.transport = s.transport
   if (typeof s.error === 'string') out.error = s.error.replace(/[\x00-\x1f\x7f]/g, ' ').slice(0, 300)
   return out
@@ -353,12 +364,25 @@ class JoinRun {
   }
 }
 
-// In words, for the title bar: how the server is being reached right now.
+// A relay's limits, short: "4 Mbit/s, 720p".
+function relayLimits(s) {
+  const parts = []
+  if (s.relayKbps) parts.push(s.relayKbps >= 1000 ? `${+(s.relayKbps / 1000).toFixed(1)} Mbit/s` : `${s.relayKbps} kbit/s`)
+  if (s.relayMaxHeight) parts.push(`${s.relayMaxHeight}p`)
+  return parts.join(', ')
+}
+
+// In words, for the title bar: how the server is being reached right now. Through a relay,
+// what the relay allows is said too, so a smaller picture has its reason in sight.
 function pathWords(s) {
   switch (s && s.path) {
     case 'local': return 'Peer to peer · same network'
     case 'direct': return 'Peer to peer · direct'
-    case 'relayed': return s.community ? 'Peer to peer · through a relay' : 'Peer to peer · connecting directly…'
+    case 'relayed': {
+      if (!s.community) return 'Peer to peer · connecting directly…'
+      const limits = relayLimits(s)
+      return limits ? `Peer to peer · through a relay · ${limits}` : 'Peer to peer · through a relay'
+    }
     case 'offline': return 'Peer to peer · reconnecting…'
     case 'connecting': return 'Peer to peer · connecting…'
     default: return ''
