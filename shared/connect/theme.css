@@ -9,13 +9,13 @@
   --fg: #e8eaf0;
   --fg-2: #a9afbd;
   --fg-3: #848b99;
-  --accent: #7955ff;
+  --accent: #6334ff;
   --accent-2: #6a4df0;
   --accent-fg: #ffffff;
-  --accent-text: #9174ff;
+  --accent-text: #9271ff;
   --danger: #ff5c6c;
   --ok: #3ad29f;
   --control-line: #6f7480;
-  --glow: rgba(121, 85, 255, .16);
+  --glow: rgba(99, 52, 255, .16);
   --danger-tint: rgba(255, 92, 108, .16);
 }
