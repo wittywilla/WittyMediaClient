@@ -194,7 +194,7 @@ fun ProfilesScreen(nav: Nav, s: Map<String, String>) {
         val more = s["profilesOnServer"].orEmpty()
         DesignSection("") {
             DesignRow(
-                more, onClick = { nav.push(if (nav.app.isTv) Route.OnPhone(more, USERS_PAGE) else Route.Page(USERS_PAGE, s["rowProfiles"].orEmpty())) },
+                more, onClick = { nav.push(nav.serverPage(more, USERS_PAGE)) },
                 sub = s["profilesOnServerHint"].orEmpty(), focusKey = "profiles-server",
             )
         }

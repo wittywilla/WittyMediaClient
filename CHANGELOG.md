@@ -3,6 +3,10 @@
 What changed in WittyMediaClient, newest first. What changed before it had a repository of its own is in the
 [WittyMediaServer changelog](https://github.com/wittywilla/WittyMediaServer/blob/master/CHANGELOG.md).
 
+## Unreleased
+
+- **Android TV follows the server's TV levels (WittyMediaServer #469).** A server page opens on a TV unless the server's table says it is for a computer, so game settings, controllers, collections and the like open again instead of a QR card. The card now says where to change it (the WittyMediaClient app on a Windows or Mac computer, or a web browser), with what is set now, and a QR code a phone can open. The layout editor and name and logo are made on a computer. A server without the table keeps the old behaviour. The server's pages are told what the app is (`client=tv` on Android TV and Plasma Bigscreen, `client=desktop` for the desktop app started with `--tv`), so a computer in TV mode is offered Leave TV mode instead of a QR code.
+
 ## 0.5.2
 
 - **Peer to peer ships in every package.** 0.5.1's Windows, macOS and Linux apps (and the Flatpak and snap) said "its

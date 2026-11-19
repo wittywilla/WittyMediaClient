@@ -64,10 +64,11 @@ fun GuideProgramme.minutesLeft(now: Long) = ((end - now + 59) / 60).coerceAtLeas
 const val COLLECTIONS_PATH = "/collections"
 const val SETTINGS_PATH = "/settings"
 
-// The whole of the page's address. A TV asks for big screen mode: larger type and a stronger focus.
+// The whole of the page's address. A TV asks for TV mode (larger type and a stronger focus), and says it is a TV:
+// the server's editors then send it to a computer with a QR code, as the app's own card does (TvLevels.kt).
 fun pageAddress(path: String, isTv: Boolean): String {
     if (!isTv) return path
-    return path + (if ('?' in path) '&' else '?') + "tv=1"
+    return path + (if ('?' in path) '&' else '?') + "tv=1&client=tv"
 }
 
 // Android names a controller's buttons by where they sit, so a Nintendo pad's A, on the right, arrives as

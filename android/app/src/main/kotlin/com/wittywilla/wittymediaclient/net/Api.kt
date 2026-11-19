@@ -156,6 +156,8 @@ class Api(val base: String, val token: String, private val quick: Boolean = fals
     private suspend inline fun <reified T> getList(path: String): List<T> = json.decodeFromString<List<T>?>(call("GET", path)).orEmpty()
 
     suspend fun capabilities(): Capabilities = get("/capabilities")
+    // What a TV shows in place of an editor it doesn't open (TvLevels.kt): what is set now, and the addresses at home.
+    suspend fun tvSummary(id: String): TvSummary = get("/sdui/tv-summary/" + query(id.ifEmpty { "none" }))
     suspend fun status(): ServerStatus = get("/status")
     suspend fun profiles(): Profiles = get("/profiles")
     suspend fun home(): Home = get("/home")
