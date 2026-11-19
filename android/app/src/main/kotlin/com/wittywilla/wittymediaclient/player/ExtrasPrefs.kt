@@ -15,12 +15,19 @@ data class ExtrasChoices(
     val autoRecap: Boolean = false,
     val autoCredits: Boolean = false,
     val autoAdverts: Boolean = false,
+    val autoPreview: Boolean = false,
+    val autoCustom: Boolean = false,
+    // What a video's own .wittyinfo says to skip by itself: on unless turned off, as on the website.
+    val fileAuto: Boolean = true,
     // The looping video behind a song's or a title's artwork.
     val canvas: Boolean = true,
 ) {
-    val auto: AutoSkip get() = AutoSkip(intro = autoIntro, recap = autoRecap, credits = autoCredits, adverts = autoAdverts)
+    val auto: AutoSkip get() = AutoSkip(intro = autoIntro, recap = autoRecap, credits = autoCredits, adverts = autoAdverts, preview = autoPreview, custom = autoCustom, fileAuto = fileAuto)
 
-    fun withAuto(value: AutoSkip): ExtrasChoices = copy(autoIntro = value.intro, autoRecap = value.recap, autoCredits = value.credits, autoAdverts = value.adverts)
+    fun withAuto(value: AutoSkip): ExtrasChoices = copy(
+        autoIntro = value.intro, autoRecap = value.recap, autoCredits = value.credits, autoAdverts = value.adverts,
+        autoPreview = value.preview, autoCustom = value.custom, fileAuto = value.fileAuto,
+    )
 }
 
 object ExtrasPrefs {

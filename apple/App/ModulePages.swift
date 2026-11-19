@@ -46,6 +46,44 @@ struct ModuleOnPhonePage: View {
     }
 }
 
+/// An editor the server keeps for a computer (its TV levels, WittyMediaServer 0.8.1, TvLevels.swift): the server's own
+/// words ("To change this, use the WittyMediaClient app on a Windows or Mac computer, or a web browser."), what is set
+/// now, and the page's code and address, on the server's home address when this TV reached it some other way.
+struct EditorOnComputerPage: View {
+    @EnvironmentObject private var model: AppModel
+    @Environment(\.palette) private var palette
+    @Environment(\.designSizes) private var sizes
+    let path: String
+    let screen: TvScreenLevel
+    let note: String
+    @State private var summary = TvSummary()
+
+    private var address: String { TvLevels.cardAddress(base: model.client.base, path: path, home: summary.addresses) }
+
+    var body: some View {
+        DesignPage(eyebrow: screen.title.isEmpty ? "On a computer" : screen.title,
+                   title: "Change this on a computer",
+                   lead: note.isEmpty ? "To change this, use the WittyMediaClient app on a Windows or Mac computer, or a web browser." : note,
+                   foot: "What's set there is kept on the server, so this TV uses it too.",
+                   identifier: "design.tv-level") {
+            if !summary.lines.isEmpty {
+                VStack(alignment: .leading, spacing: sizes.gap) {
+                    ForEach(Array(summary.lines.enumerated()), id: \.offset) { _, line in
+                        Text(line).font(.system(size: sizes.body)).foregroundStyle(palette.text)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                }
+                .accessibilityElement(children: .combine)
+                .accessibilityLabel("Set now: " + summary.lines.joined(separator: ", "))
+            }
+            if let url = URL(string: address) { ModuleCode(url: url) }
+        }
+        .task(id: path) {
+            if let found = try? await model.client.tvSummary(screen.summary) { summary = found }
+        }
+    }
+}
+
 private struct ModuleCode: View {
     @Environment(\.palette) private var palette
     @Environment(\.designSizes) private var sizes

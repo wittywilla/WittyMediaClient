@@ -1,6 +1,153 @@
 <!-- SPDX-License-Identifier: GPL-3.0-or-later -->
 <!-- Copyright (C) 2026 WittyWilla and contributors -->
-# Mac follow-ups: peer to peer everywhere, and one Choose a server page
+# Mac follow-ups
+
+Newest first. Each section is one pass that needs a Mac: Xcode, the iPhone and Apple TV simulators, the macOS desktop
+app. Work through the newest first, tick each box here as you go, commit the ticks, and say in the PR what ran and what
+didn't. The GitHub issues labelled `mac` point at these sections.
+
+## 0.8.1-alpha: what the Mac must do
+
+Written 2026-11-19 on the Windows PC, for Claude on the owner's MacBook. WittyMediaServer 0.8.1-alpha added TV mode
+levels, skip parts from `.wittyinfo` files, karaoke's three-slider Mix and more; [docs/PARITY-0.8.1.md](docs/PARITY-0.8.1.md)
+says, feature by feature and platform by platform, what the apps already had, what was done on Windows, and what is left.
+This section is the Mac's part of it. The server's own Mac items (its installer and service, the data folder, the
+graphics paths, karaoke on Apple silicon) are in WittyMediaServer's `MAC-FOLLOW-UPS.md`, under the same heading.
+
+Issues: iPhone and iPad #68, Apple TV #69, the macOS desktop app #70 (server: wittywilla/WittyMediaServer#527 to #530).
+
+**Written on Windows, never run on any Apple device or simulator** (WittyKit's part was compiled and its tests run with
+Swift 6.1 on Linux; the apps were only compiled, by CI's macOS runner):
+
+| File | What changed |
+|---|---|
+| `apple/WittyKit/Sources/WittyKit/MediaSkips.swift` | `segments`, previews, parts someone named ("Skip dream sequence"), a scene after the credits, parts only marked, `SkipPrefs.fileAuto` and `SkipPrefs.none` |
+| `apple/WittyKit/Sources/WittyKit/KaraokeStems.swift` | The Mix is Voice, Background Music (`music`) and Track (`track`); new gains |
+| `apple/WittyKit/Sources/WittyKit/TvLevels.swift` (new), `SDUI/SDUICatalog.swift` | The server's TV levels table from the catalogue, `tvSummary` |
+| `apple/App/MediaPages.swift` | You → Playing: Previews, Other parts someone named, What the video's own file says to skip |
+| `apple/App/MediaSkips.swift` | A watch party skips nothing by itself, not even what a file asks |
+| `apple/App/KaraokeStemsViews.swift` | "Voice" and "Mix" on the bar; the Mix lists the three sliders |
+| `apple/App/ModulePages.swift`, `Shell.swift`, `SDUI/SDUIActions.swift` | Apple TV: `EditorOnComputerPage`, the card for an editor the server keeps for a computer, and SDUI routes to one go there |
+
+The same changes on Android **ran** on the emulators here: compare against the pictures in `docs/mac-081/`, named
+below (all of them, desktop included, are in `D:\projects-0.8.0\_status\082-fixes\clients\` on the PC).
+
+### Steps
+
+- [ ] **1. The code.** WittyMediaClient's PR from branch `clients-081-parity` (into `v0.8.1-alpha`), and the server's
+  `v0.8.1-alpha`, side by side:
+
+  ```bash
+  cd ~/<where the repos are>/WittyMediaClient
+  git fetch origin && git switch clients-081-parity && git pull
+  cd ../WittyMediaServer
+  git fetch origin && git switch v0.8.1-alpha && git pull
+  ```
+
+  If the PR is merged by then, use `v0.8.1-alpha` in both.
+
+- [ ] **2. A 0.8.1 server on the Mac**, with fresh data, on port 19555 so it can't be mistaken for another:
+
+  ```bash
+  cd ~/<where the repos are>/WittyMediaServer
+  (cd web && npm ci && npm run build)
+  go build -o /tmp/wms-081/wittymediaserver ./cmd/wittymediaserver
+  /tmp/wms-081/wittymediaserver serve -data /tmp/wms-081/data -listen 0.0.0.0:19555 -open-browser=false
+  ```
+
+  Open `http://127.0.0.1:19555` in Safari and go through setup: an account, metadata writing off, and two libraries,
+  one with a film or episode **three minutes long or more**, one with an album. Then give that video the test
+  `.wittyinfo` from this repository (recap 0:00 to 0:15, intro 0:20 to 0:40, a part named "Dream sequence" 0:50 to
+  1:10 that skips itself, a preview at 1:20 that is only marked, credits 2:00 to 2:50 with a scene after them from 2:30):
+
+  ```bash
+  TOKEN=$(curl -s -X POST http://127.0.0.1:19555/api/login -H 'Content-Type: application/json' \
+    -d '{"name":"<you>","password":"<your password>"}' | sed -n 's/.*"token":"\([^"]*\)".*/\1/p')
+  ITEM=<the video's id, from its page's address>
+  curl -s -X PUT "http://127.0.0.1:19555/api/wittyinfo/item/$ITEM" -H "Authorization: Bearer $TOKEN" \
+    -H 'Content-Type: application/json' \
+    -d "{\"info\": $(cat ../WittyMediaClient/docs/mac-081/skip-test.wittyinfo.json)}"
+  curl -s "http://127.0.0.1:19555/api/media/$ITEM/markers" -H "Authorization: Bearer $TOKEN"
+  ```
+
+  Expected: the last answer has `segments` with six parts and `"source":"wittyinfo"`.
+
+- [ ] **3. WittyKit's tests on macOS.**
+
+  ```bash
+  cd ~/<where the repos are>/WittyMediaClient/apple/WittyKit && swift test
+  ```
+
+  Expected: every test passes, `MediaSkipsTests`, `KaraokeStemsTests` and the new `TvLevelsTests` among them. On Linux
+  they did; the Mac is the first to run them with Apple's own Foundation.
+
+- [ ] **4. Build both apps and open them in the simulators.**
+
+  ```bash
+  cd ~/<where the repos are>/WittyMediaClient && bash apple/scripts/check-on-mac.sh
+  ```
+
+  Expected: every line of `apple/build-logs/report.txt` says `ok`. A `FAIL building` lists the errors: fix them here
+  (CI's macOS runner compiled these files, so a failure is most likely a newer Xcode).
+
+- [ ] **5. iPhone (simulator), against the server from step 2** (`http://<the Mac's address>:19555`, or
+  `http://127.0.0.1:19555` from the simulator):
+  - [ ] **You → Playing (Skip buttons):** Intros, Recaps, Credits, Adverts, Previews, Other parts someone named, all
+    "Ask"; then **What the video's own file says to skip**, "By itself". Compare `docs/mac-081/android-phone-07-playing-on-this-device.png`.
+  - [ ] **Play the video from step 2** from the start and leave it: **Skip recap** shows at 0:05 and goes to 0:15;
+    **Skip intro** at 0:25; at 0:50 it jumps to 1:10 by itself, saying **Skipped dream sequence** with Undo (Undo goes
+    back to 0:50 and the part then plays); at 1:25 there is **no** button (the preview is only marked); at 2:05
+    **Skip credits** goes to **2:30**, the scene after them, not to the next episode.
+  - [ ] **Karaoke:** play a song of the album, open the player, **Karaoke**. While it's made it says "Preparing
+    karaoke…"; then the bar has **Voice** (a slider), **Sing** and **Mix**. Mix shows Voice, Background Music and
+    Track at 100%, "Quick version" and Reset. Compare `docs/mac-081/android-phone-11-karaoke-mix.png`. Background Music to 0: the
+    music goes and the voice stays. On the quick version the music can't go below the voice on Apple (the gain stops
+    at nothing; Android and the website take the music out of the whole song): say whether that is good enough.
+  - [ ] **Theme contrast:** You → Theme, try Witty, Light, High contrast, Teletext and Aero Day. The Skip buttons,
+    the karaoke Mix and the new rows read in each.
+
+- [ ] **6. iPad (simulator):** the same as step 5, sideways, quickly: the Mix sits in the middle and no row is cut off.
+
+- [ ] **7. Apple TV (simulator), with the remote only** (arrows, Select, Menu: the Siri Remote window in the simulator):
+  - [ ] **The skip check of step 5**, with the remote: each button takes focus when it shows, Select skips.
+  - [ ] **TV levels:** open a server editor the table keeps for a computer: Home's **Your libraries → Manage**, or
+    You → Libraries where it's listed. Expected: **Change this on a computer** with the server's sentence ("To change
+    this, use the WittyMediaClient app on a Windows or Mac computer, or a web browser."), what is set now ("2 libraries",
+    "movies 1, music 1"), and a QR code with the server's address on your network. Compare
+    `docs/mac-081/android-tv-05-libraries-card.png`. A page the table doesn't list (one of a module's) still shows the old "Open this
+    on a phone or computer" card. If no route on Apple TV reaches such an editor, say so in the PR.
+  - [ ] **Karaoke with the remote:** Down from the bar reaches the Mix; Up and Down move between Voice, Background
+    Music, Track and Reset; Left and Right move a level 5% at a time. Compare `docs/mac-081/android-tv-07-karaoke-remote.png`.
+  - [ ] **10-foot contrast and focus:** in Witty, Light, High contrast and Teletext, the focus ring shows on every
+    row, slider and button of these screens.
+
+- [ ] **8. The hero scrim on Apple (not done on Windows).** WittyMediaServer #444 puts words over a picture on a scrim
+  in the theme's own page colour, at least the theme's `tv.heroScrim`. Android does this in `ui/HeroScrim.kt`; the
+  Apple apps still draw their own fixed fades (`apple/App/SDUI/SDUIHeader.swift` around lines 176 and 345,
+  `BrowseViews.swift` 401, `GamePage.swift` 548). Port `HeroScrim` (read `tv.heroScrim` with the theme, default 0.72),
+  use it in those places, and check Home's hero and a title's page in Light and Aero Sunset: dark words on a light
+  wash, light words on a dark one.
+
+- [ ] **9. The macOS desktop app.**
+
+  ```bash
+  cd ~/<where the repos are>/WittyMediaClient/desktop
+  npm ci && npm test && npm run test:app
+  WMC_SERVER=http://127.0.0.1:19555 WMC_USER=<you> WMC_PASSWORD=<your password> WMC_SHOTS=/tmp/wmc-mac npm run test:real
+  WMC_SERVER=http://127.0.0.1:19555 WMC_USER=<you> WMC_PASSWORD=<your password> WMC_SHOTS=/tmp/wmc-mac-tv npm run test:real -- --tv
+  ```
+
+  Expected: `npm test` passes; `test:real` says "All 8 passed" and with `--tv` "All 11 passed". The TV menu should
+  match `docs/mac-081/desktop-tv-09-menu.png`. Then `npm run package:mac`, open the `.dmg`, start the app with `--tv`
+  (`open -a WittyMediaClient --args --tv`), go to Settings → Libraries: it should say **Leave TV mode to change this**
+  with a **Leave TV mode** button (a computer in TV mode, never the QR card).
+
+- [ ] **10. Report:** tick these boxes, commit with the pictures of steps 5 to 9 (in `docs/mac-081/`), push, and say in
+  the PR what ran, what didn't, and what was fixed. Close the `mac` issues this section answers.
+
+---
+
+## 0.5.2 (2026-11-16): peer to peer everywhere, and one Choose a server page
 
 Written 2026-11-16 on the Windows PC, for Claude on the owner's MacBook. Everything here needs a Mac:
 Xcode, the iPhone and Apple TV simulators, and the macOS desktop app. Work through it in order.

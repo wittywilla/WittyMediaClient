@@ -58,7 +58,7 @@ class KaraokeRulesTest {
         // A role this app doesn't know plays as music; the whole song among parts, and a part with no address, don't.
         assertEquals(listOf("vocals", "instrumental", "choir"), answer.playable.map { it.id })
         assertEquals(1.0, answer.playable[2].defaultGain, 0.0)
-        assertEquals(listOf("Vocals", "Music", "Choir"), KaraokeMix.sliders(answer).map { it.label })
+        assertEquals(listOf("Voice", "Background Music", "Track"), KaraokeMix.sliders(answer).map { it.label })
 
         val waiting = KaraokeAnswer.parse("""{"state":"preparing","stems":null,"progress":40,"pollSec":3}""")!!
         assertEquals(40, waiting.progress)
@@ -74,34 +74,39 @@ class KaraokeRulesTest {
     }
 
     @Test
-    fun partsEachPlayAtTheirOwnLevel() {
+    fun partsPlayAtVoiceBackgroundMusicAndTrack() {
         assertEquals(0.9, KaraokeMix.vocalsDefault(parts), 0.0)
+        // The voice at t·v, every other part at t·m times its own level.
         assertLevels(listOf(0.9, 1.0, 0.8, 1.0), KaraokeMix.gains(parts, KaraokeControls()))
-        val set = KaraokeControls().moveVocals(0.25).move(parts, "drums", 0.5)
-        assertLevels(listOf(0.25, 0.5, 0.8, 1.0), KaraokeMix.gains(parts, set))
-        // The vocals part's own slider in More is the big one.
-        assertEquals(0.4, KaraokeControls().move(parts, "vocals", 0.4).levels.vocals!!, 0.0)
-        assertEquals(0.25, KaraokeMix.level(parts, set.levels, "vocals"), 0.0)
-        assertEquals(0.8, KaraokeMix.level(parts, set.levels, "bass"), 0.0)
-        // Levels stay inside 0…1, whatever asks.
-        assertLevels(listOf(1.0, 0.0, 0.8, 1.0), KaraokeMix.gains(parts, KaraokeControls().moveVocals(7.0).move(parts, "drums", -1.0)))
-        assertEquals(listOf("Vocals", "Drums", "Bass", "Other"), KaraokeMix.sliders(parts).map { it.label })
+        val set = KaraokeControls().moveVocals(0.25).move(KaraokeMix.BACKGROUND, 0.5)
+        assertLevels(listOf(0.25, 0.5, 0.4, 0.5), KaraokeMix.gains(parts, set))
+        val quiet = set.move(KaraokeMix.TRACK, 0.5)
+        assertLevels(listOf(0.125, 0.25, 0.2, 0.25), KaraokeMix.gains(parts, quiet))
+        assertEquals(0.25, KaraokeMix.level(parts, set.levels, KaraokeMix.VOCALS), 0.0)
+        assertEquals(0.5, KaraokeMix.level(parts, set.levels, KaraokeMix.BACKGROUND), 0.0)
+        assertEquals(1.0, KaraokeMix.level(parts, set.levels, KaraokeMix.TRACK), 0.0)
+        // Levels stay inside 0…1, whatever asks, and an id that isn't a slider changes nothing.
+        assertLevels(listOf(1.0, 0.0, 0.0, 0.0), KaraokeMix.gains(parts, KaraokeControls().moveVocals(7.0).move(KaraokeMix.BACKGROUND, -1.0)))
+        assertEquals(KaraokeControls(), KaraokeControls().move("drums", 0.2))
+        // The same three sliders for every version.
+        assertEquals(listOf("vocals", "music", "track"), KaraokeMix.sliders(parts).map { it.id })
+        assertEquals(KaraokeMix.sliders(parts), KaraokeMix.sliders(blend))
     }
 
     @Test
-    fun aBlendCrossesTheWholeSongWithItsMusic() {
-        // gain(full) = m·v, gain(instrumental) = m·(1−v): straight lines.
+    fun aBlendIsTheWholeSongLessItsMusic() {
+        // gain(full) = t·v, gain(instrumental) = t·(m−v): straight lines, and the music adds up to t·m.
         assertLevels(listOf(1.0, 0.0), KaraokeMix.gains(blend, KaraokeControls()))
         assertLevels(listOf(0.0, 1.0), KaraokeMix.gains(blend, KaraokeControls().moveVocals(0.0)))
         assertLevels(listOf(0.25, 0.75), KaraokeMix.gains(blend, KaraokeControls().moveVocals(0.25)))
-        val quieter = KaraokeControls().moveVocals(0.25).move(blend, KaraokeMix.MUSIC, 0.5)
-        assertLevels(listOf(0.125, 0.375), KaraokeMix.gains(blend, quieter))
-        assertEquals(listOf("vocals" to "Vocals", "instrumental" to "Music"), KaraokeMix.sliders(blend).map { it.id to it.label })
-        assertEquals(0.3, KaraokeControls().move(blend, "vocals", 0.3).levels.vocals!!, 0.0)
+        val quieter = KaraokeControls().moveVocals(0.25).move(KaraokeMix.BACKGROUND, 0.5).move(KaraokeMix.TRACK, 0.5)
+        assertLevels(listOf(0.125, 0.125), KaraokeMix.gains(blend, quieter))
+        // The music below the voice: its gain goes negative, taking the music out of the whole song.
+        assertLevels(listOf(1.0, -1.0), KaraokeMix.gains(blend, KaraokeControls().move(KaraokeMix.BACKGROUND, 0.0)))
         // The voice's own level comes from the whole song's in a blend.
         val soft = blend.copy(stems = listOf(stem("full", "full", 0.6), stem("instrumental", "music", 0.5)))
         assertEquals(0.6, KaraokeMix.vocalsDefault(soft), 0.0)
-        assertLevels(listOf(0.3, 0.2), KaraokeMix.gains(soft, KaraokeControls()))
+        assertLevels(listOf(0.6, 0.4), KaraokeMix.gains(soft, KaraokeControls()))
     }
 
     @Test
@@ -114,17 +119,17 @@ class KaraokeRulesTest {
         assertLevels(listOf(0.0, 1.0), KaraokeMix.gains(blend, singing))
         // And back.
         assertLevels(listOf(0.7, 1.0, 0.8, 1.0), KaraokeMix.gains(parts, singing.toggleSing()))
-        // Moving the Vocals slider turns Sing off; another part's slider doesn't.
+        // Moving the Voice slider turns Sing off; the others don't.
         assertFalse(singing.moveVocals(0.2).sing)
-        assertFalse(singing.move(parts, "vocals", 0.2).sing)
-        assertTrue(singing.move(parts, "drums", 0.2).sing)
+        assertFalse(singing.move(KaraokeMix.VOCALS, 0.2).sing)
+        assertTrue(singing.move(KaraokeMix.BACKGROUND, 0.2).sing)
         // Sing starts off.
         assertFalse(KaraokeControls().sing)
     }
 
     @Test
     fun resetGoesBackToTheServersLevels() {
-        val set = KaraokeControls().moveVocals(0.1).move(parts, "bass", 0.1).toggleSing().reset()
+        val set = KaraokeControls().moveVocals(0.1).move(KaraokeMix.TRACK, 0.1).toggleSing().reset()
         assertEquals(KaraokeControls(), set)
         assertLevels(listOf(0.9, 1.0, 0.8, 1.0), KaraokeMix.gains(parts, set))
     }
@@ -140,13 +145,15 @@ class KaraokeRulesTest {
 
     @Test
     fun levelsAreKeptForEachProfile() {
-        val levels = KaraokeControls().moveVocals(0.35).move(parts, "drums", 0.5).move(parts, "bass", 0.0).levels
+        val levels = KaraokeControls().moveVocals(0.35).move(KaraokeMix.BACKGROUND, 0.5).move(KaraokeMix.TRACK, 0.0).levels
         assertEquals(levels, KaraokeLevels.read(levels.toJson()))
         assertEquals(KaraokeLevels(), KaraokeLevels.read(KaraokeLevels().toJson()))
         // Nothing kept, and anything unreadable, is the server's own levels.
         assertEquals(KaraokeLevels(), KaraokeLevels.read(null))
         assertEquals(KaraokeLevels(), KaraokeLevels.read("not json"))
-        assertEquals(KaraokeLevels(1.0, mapOf("drums" to 0.0)), KaraokeLevels.read("""{"vocals":4,"stems":{"drums":-2,"bass":"loud"},"new":1}"""))
+        assertEquals(KaraokeLevels(1.0, 0.0), KaraokeLevels.read("""{"vocals":4,"music":-2,"track":"loud","new":1}"""))
+        // What an older version kept, a level for each part, keeps only the voice's.
+        assertEquals(KaraokeLevels(0.4), KaraokeLevels.read("""{"vocals":0.4,"stems":{"drums":0.1}}"""))
         assertEquals(KaraokeLevels(), KaraokeLevels.read("""{"vocals":"x","stems":[1]}"""))
         // One place for each account on each server.
         val keys = setOf(KaraokeLevels.key("https://a.example", 1), KaraokeLevels.key("https://a.example", 2), KaraokeLevels.key("https://b.example", 1))

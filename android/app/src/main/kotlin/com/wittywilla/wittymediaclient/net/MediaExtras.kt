@@ -25,17 +25,36 @@ object ExtrasFeature {
 
 // MARK: markers
 
-// A stretch of a video, in the film's own seconds.
+// A stretch of a video, in the film's own seconds. `action`, from a .wittyinfo: "button" (a Skip button while it
+// plays), "auto" (skipped by itself when the profile follows the file) or "mark" (only marked, never a button).
 @Serializable
-data class SkipRange(val startSec: Double = 0.0, val endSec: Double = 0.0, val label: String = "")
+data class SkipRange(val startSec: Double = 0.0, val endSec: Double = 0.0, val label: String = "", val action: String = "")
 
-// GET /media/{id}/markers. `sources` says where each kind came from: manual, skip.json, edl, chapters, detected, show.
+// One part of a video in the server's list of every part, in time order (WittyMediaServer 0.8.1). `kind` is intro,
+// recap, credits, commercial, preview, postcredits (a scene after the credits) or custom (a part someone named, in
+// `label`).
+@Serializable
+data class MarkerSegment(
+    val kind: String = "",
+    val startSec: Double = 0.0,
+    val endSec: Double = 0.0,
+    val label: String = "",
+    val action: String = "button",
+    val source: String = "",
+)
+
+// GET /media/{id}/markers. `sources` says where each kind came from: wittyinfo, manual, skip.json, edl, chapters,
+// detected, show. A .wittyinfo adds `preview`, `postCredits` and `custom`, and every server from 0.8.1 `segments`.
 @Serializable
 data class MediaMarkers(
     val intro: SkipRange? = null,
     val recap: SkipRange? = null,
     val credits: SkipRange? = null,
     val commercials: List<SkipRange> = emptyList(),
+    val preview: SkipRange? = null,
+    val postCredits: SkipRange? = null,
+    val custom: List<SkipRange> = emptyList(),
+    val segments: List<MarkerSegment> = emptyList(),
     val source: String = "none",
     val sources: Map<String, String> = emptyMap(),
 )

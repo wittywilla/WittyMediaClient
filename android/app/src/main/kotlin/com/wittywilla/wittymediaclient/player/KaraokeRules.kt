@@ -63,39 +63,51 @@ data class KaraokeAnswer(
     }
 }
 
-// What's remembered for a profile: the voice's level, and each part's by its id. Nothing kept means the server's own.
-data class KaraokeLevels(val vocals: Double? = null, val stems: Map<String, Double> = emptyMap()) {
+// What's remembered for a profile: where the Mix's three sliders are, Voice, Background Music and Track (the server's
+// docs/CLIENT-API.md, "Karaoke that sets itself up"). Nothing kept means the server's own level for the voice and
+// full for the others.
+data class KaraokeLevels(val vocals: Double? = null, val music: Double? = null, val track: Double? = null) {
     fun toJson(): String = JsonObject(
         buildMap {
-            vocals?.let { put("vocals", JsonPrimitive(it)) }
-            put("stems", JsonObject(stems.mapValues { JsonPrimitive(it.value) }))
+            vocals?.let { put(KaraokeMix.VOCALS, JsonPrimitive(it)) }
+            music?.let { put(KaraokeMix.BACKGROUND, JsonPrimitive(it)) }
+            track?.let { put(KaraokeMix.TRACK, JsonPrimitive(it)) }
         },
     ).toString()
+
+    fun with(id: String, to: Double): KaraokeLevels {
+        val level = to.coerceIn(0.0, 1.0)
+        return when (id) {
+            KaraokeMix.VOCALS -> copy(vocals = level)
+            KaraokeMix.BACKGROUND -> copy(music = level)
+            KaraokeMix.TRACK -> copy(track = level)
+            else -> this
+        }
+    }
 
     companion object {
         // Where a profile's levels are kept in the app's preferences: one for each account on each server.
         fun key(server: String, profile: Long) = "wms.karaoke.levels|$server|$profile"
 
-        // Anything unreadable is nothing remembered; a level outside 0…1 is brought inside.
+        // Anything unreadable is nothing remembered; a level outside 0…1 is brought inside. What an older version of
+        // this app kept, a level for each part (`stems`), is let go: only the voice's carries over.
         fun read(text: String?): KaraokeLevels {
             val o = runCatching { json.parseToJsonElement(text.orEmpty()).jsonObject }.getOrNull() ?: return KaraokeLevels()
             fun level(of: kotlinx.serialization.json.JsonElement?) = runCatching { of?.jsonPrimitive?.doubleOrNull }.getOrNull()?.takeIf { it.isFinite() }?.coerceIn(0.0, 1.0)
-            val stems = runCatching { o["stems"]?.jsonObject }.getOrNull().orEmpty().mapNotNull { (id, v) -> level(v)?.let { id to it } }.toMap()
-            return KaraokeLevels(level(o["vocals"]), stems)
+            return KaraokeLevels(level(o[KaraokeMix.VOCALS]), level(o[KaraokeMix.BACKGROUND]), level(o[KaraokeMix.TRACK]))
         }
     }
 }
 
-// A slider of the "More" list: which level it moves, and what it's called.
+// A slider of the Mix: which level it moves, and what it's called.
 data class KaraokeSlider(val id: String, val label: String)
 
 // What the singer has set: the levels, and Sing, which silences the voice without forgetting where its slider was.
 data class KaraokeControls(val levels: KaraokeLevels = KaraokeLevels(), val sing: Boolean = false) {
-    // Moving the Vocals slider turns Sing off.
-    fun moveVocals(to: Double) = KaraokeControls(levels.copy(vocals = to.coerceIn(0.0, 1.0)), false)
+    // Moving the Voice slider turns Sing off.
+    fun moveVocals(to: Double) = KaraokeControls(levels.with(KaraokeMix.VOCALS, to), false)
 
-    fun move(answer: KaraokeAnswer, id: String, to: Double) =
-        if (KaraokeMix.isVocals(answer, id)) moveVocals(to) else copy(levels = levels.copy(stems = levels.stems + (id to to.coerceIn(0.0, 1.0))))
+    fun move(id: String, to: Double) = if (id == KaraokeMix.VOCALS) moveVocals(to) else copy(levels = levels.with(id, to))
 
     fun toggleSing() = copy(sing = !sing)
 
@@ -104,50 +116,61 @@ data class KaraokeControls(val levels: KaraokeLevels = KaraokeLevels(), val sing
 }
 
 object KaraokeMix {
+    // The stems' ids in a blend.
     const val FULL = "full"
     const val MUSIC = "instrumental"
+
+    // The Mix's three sliders, the same whatever version is playing: the singer, everything else together, and the
+    // whole song.
     const val VOCALS = "vocals"
+    const val BACKGROUND = "music"
+    const val TRACK = "track"
+    val SLIDERS = listOf(KaraokeSlider(VOCALS, "Voice"), KaraokeSlider(BACKGROUND, "Background Music"), KaraokeSlider(TRACK, "Track"))
+
     const val MOST_STEMS = 8
     const val STEP = 0.05
 
     private fun level(gain: Double) = if (gain.isFinite()) gain.coerceIn(0.0, 1.0) else 1.0
 
-    // The part the big Vocals slider moves, where the voice is a part of its own.
+    // The part that is the voice, where the voice is a part of its own.
     fun vocalsStem(answer: KaraokeAnswer): KaraokeStem? = if (answer.blend) null else answer.playable.firstOrNull { it.role == "vocals" }
-
-    fun isVocals(answer: KaraokeAnswer, id: String) = if (answer.blend) id == VOCALS else id == vocalsStem(answer)?.id
 
     // The voice's level as the server set it: the vocals part's, or the whole song's in a blend.
     fun vocalsDefault(answer: KaraokeAnswer): Double =
         level((if (answer.blend) answer.playable.firstOrNull { it.id == FULL } else vocalsStem(answer))?.defaultGain ?: 1.0)
 
-    // Where the Vocals slider stands, whatever Sing is doing.
+    // Where the Voice slider stands, whatever Sing is doing.
     fun vocals(answer: KaraokeAnswer, levels: KaraokeLevels): Double = levels.vocals ?: vocalsDefault(answer)
 
-    // Where a slider of the "More" list stands.
-    fun level(answer: KaraokeAnswer, levels: KaraokeLevels, id: String): Double =
-        if (isVocals(answer, id)) vocals(answer, levels)
-        else levels.stems[id] ?: level(answer.playable.firstOrNull { it.id == id }?.defaultGain ?: 1.0)
+    // Where a slider of the Mix stands.
+    fun level(answer: KaraokeAnswer, levels: KaraokeLevels, id: String): Double = when (id) {
+        VOCALS -> vocals(answer, levels)
+        BACKGROUND -> levels.music ?: 1.0
+        TRACK -> levels.track ?: 1.0
+        else -> 1.0
+    }
 
-    // The sliders of "More": one for each part by its name, or Vocals and Music for a blend.
-    fun sliders(answer: KaraokeAnswer): List<KaraokeSlider> =
-        if (answer.blend) {
-            if (answer.playable.isEmpty()) emptyList() else listOf(KaraokeSlider(VOCALS, "Vocals"), KaraokeSlider(MUSIC, "Music"))
-        } else answer.playable.map { KaraokeSlider(it.id, it.label.ifEmpty { it.id.replaceFirstChar(Char::uppercase) }) }
+    // The Mix: Voice, Background Music and Track, for every version.
+    @Suppress("UNUSED_PARAMETER")
+    fun sliders(answer: KaraokeAnswer): List<KaraokeSlider> = SLIDERS
 
-    // How loud each playable part plays, in the mixer's order. Parts: each at its own level, the voice's being the
-    // Vocals slider. A blend, with the voice at v and the music at m: the whole song at m·v and the music at m·(1−v),
-    // straight lines, as the two are the same recording.
+    // How loud each playable part plays, in the mixer's order, for Voice v, Background Music m and Track t (Sing is
+    // v = 0). Parts: the voice at t·v and every other part at t·m times the server's own level for it. A blend (the
+    // whole song, and its music without the voice): the whole song at t·v and the music at t·(m−v), straight lines.
+    // The music is in both, so it adds up to t·m and the voice to t·v; with the music below the voice the music's gain
+    // goes negative and takes the music out of the whole song, leaving the voice. The mixer sums samples, so a negative
+    // gain is a subtraction there.
     fun gains(answer: KaraokeAnswer, controls: KaraokeControls): List<Double> {
         val v = if (controls.sing) 0.0 else vocals(answer, controls.levels)
+        val m = level(answer, controls.levels, BACKGROUND)
+        val t = level(answer, controls.levels, TRACK)
         val parts = answer.playable
         if (answer.blend) {
             if (parts.isEmpty()) return emptyList()
-            val m = level(answer, controls.levels, MUSIC)
-            return listOf(m * v, m * (1 - v))
+            return listOf(t * v, t * (m - v))
         }
         val voice = vocalsStem(answer)?.id
-        return parts.map { if (it.id == voice) v else level(answer, controls.levels, it.id) }
+        return parts.map { if (it.id == voice) t * v else t * m * level(it.defaultGain) }
     }
 
     // A TV remote's left and right: 5% at a time, on the 5% marks.

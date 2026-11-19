@@ -63,15 +63,19 @@ final class KaraokeStemsTests: XCTestCase {
 
     // MARK: How loud each part is
 
-    func testPartsPlayAtTheirOwnLevels() {
+    func testPartsPlayAtVoiceBackgroundMusicAndTrack() {
         var levels = StemLevels()
         XCTAssertEqual(StemMix.gains(parts(), levels), ["vocals": 1, "drums": 0.9, "bass": 1, "other": 1])
         levels.setVocals(0.25)
-        levels.setStem("bass", 0.5)
-        XCTAssertEqual(StemMix.gains(parts(), levels), ["vocals": 0.25, "drums": 0.9, "bass": 0.5, "other": 1])
-        XCTAssertEqual(StemMix.sliders(parts(), levels).map(\.id), ["vocals", "drums", "bass", "other"])
-        XCTAssertEqual(StemMix.sliders(parts(), levels).map(\.label), ["Vocals", "Drums", "Bass", "Other"])
-        XCTAssertEqual(StemMix.sliders(parts(), levels).map(\.level), [0.25, 0.9, 0.5, 1])
+        levels.setStem(StemMix.musicId, 0.5)
+        XCTAssertEqual(StemMix.gains(parts(), levels), ["vocals": 0.25, "drums": 0.45, "bass": 0.5, "other": 0.5])
+        levels.setStem(StemMix.trackId, 0.5)
+        XCTAssertEqual(StemMix.gains(parts(), levels), ["vocals": 0.125, "drums": 0.225, "bass": 0.25, "other": 0.25])
+        XCTAssertEqual(StemMix.sliders(parts(), levels).map(\.id), ["vocals", "music", "track"])
+        XCTAssertEqual(StemMix.sliders(parts(), levels).map(\.label), ["Voice", "Background Music", "Track"])
+        XCTAssertEqual(StemMix.sliders(parts(), levels).map(\.level), [0.25, 0.5, 0.5])
+        // A level an older version kept for a part moves nothing now.
+        XCTAssertEqual(StemMix.gains(parts(), StemLevels(stems: ["drums": 0])), ["vocals": 1, "drums": 0.9, "bass": 1, "other": 1])
     }
 
     func testAWholeSongCopyAmongPartsIsNotPlayed() {
@@ -81,26 +85,31 @@ final class KaraokeStemsTests: XCTestCase {
         XCTAssertEqual(StemMix.played(status).map(\.id), ["vocals", "drums", "bass", "other"])
     }
 
-    func testBlendCrossesBetweenTheWholeSongAndTheInstrumental() {
+    func testBlendIsTheWholeSongLessItsMusic() {
         var levels = StemLevels()
-        // The voice starts from the whole song's suggested level.
+        // The voice starts from the whole song's suggested level: the whole song at t·v, the music at t·(m−v).
         XCTAssertEqual(StemMix.vocalsLevel(blend(), levels), 0.8)
         var gains = StemMix.gains(blend(), levels)
         XCTAssertEqual(gains["full"] ?? -1, 0.8, accuracy: 1e-9)
         XCTAssertEqual(gains["instrumental"] ?? -1, 0.2, accuracy: 1e-9)
         levels.setVocals(0.25)
-        levels.setStem("instrumental", 0.5)
+        levels.setStem(StemMix.musicId, 0.5)
+        levels.setStem(StemMix.trackId, 0.5)
         gains = StemMix.gains(blend(), levels)
         XCTAssertEqual(gains["full"] ?? -1, 0.125, accuracy: 1e-9)
-        XCTAssertEqual(gains["instrumental"] ?? -1, 0.375, accuracy: 1e-9)
-        // A straight line: the two always add up to the music's level.
-        for v in stride(from: 0.0, through: 1.0, by: 0.1) {
+        XCTAssertEqual(gains["instrumental"] ?? -1, 0.125, accuracy: 1e-9)
+        // A straight line: the two add up to the music's level while the music is above the voice.
+        levels.setStem(StemMix.trackId, 1)
+        for v in stride(from: 0.0, through: 0.5, by: 0.1) {
             levels.setVocals(v)
             let g = StemMix.gains(blend(), levels)
             XCTAssertEqual((g["full"] ?? 0) + (g["instrumental"] ?? 0), 0.5, accuracy: 1e-9)
         }
-        XCTAssertEqual(StemMix.sliders(blend(), levels).map(\.label), ["Vocals", "Music"])
-        XCTAssertEqual(StemMix.sliders(blend(), levels).map(\.id), ["vocals", "instrumental"])
+        // Below the voice the music stops at nothing here (a mixer node's volume can't be negative).
+        levels.setVocals(1)
+        levels.setStem(StemMix.musicId, 0)
+        XCTAssertEqual(StemMix.gains(blend(), levels), ["full": 1, "instrumental": 0])
+        XCTAssertEqual(StemMix.sliders(blend(), levels).map(\.label), ["Voice", "Background Music", "Track"])
     }
 
     func testSingTakesTheVoiceOutAndKeepsItsSlider() {

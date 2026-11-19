@@ -456,13 +456,19 @@ private struct PillShell: View {
 /// One of the server's pages, on a device that can't show it inside this app.
 struct ElsewhereNote: View {
     @EnvironmentObject private var model: AppModel
+    #if os(tvOS)
+    @EnvironmentObject private var center: SDUICenter
+    #endif
     @Environment(\.palette) private var palette
     let path: String
 
     var body: some View {
         #if os(tvOS)
-        // The same card Android TV shows: the page's code for a phone's camera, and its address.
-        if let url = model.client.mediaURL(path) {
+        // The same card Android TV shows: the page's code for a phone's camera, and its address. An editor the server's
+        // TV levels keep for a computer (0.8.1) says so in the server's words, with what is set now.
+        if let table = center.catalog.tvLevels, let screen = table.screen(for: path), screen.level == TvLevel.desktopOnly {
+            EditorOnComputerPage(path: path, screen: screen, note: table.note)
+        } else if let url = model.client.mediaURL(path) {
             ModuleOnPhonePage(path: path, url: url)
         } else {
             Secondary("Open \(model.client.base) on a phone, tablet or computer.").padding(Tokens.gutter)

@@ -414,7 +414,7 @@ struct MediaSettingsView: View {
     @Namespace private var scope
 
     /// The canvas's order: the parts people meet first come first.
-    private static let order: [SkipKind] = [.intro, .recap, .credits, .commercial]
+    private static let order: [SkipKind] = [.intro, .recap, .credits, .commercial, .preview, .custom]
 
     /// A part skipped by itself, or a button that asks, for one kind.
     private func skipRow(_ kind: SkipKind) -> some View {
@@ -435,7 +435,17 @@ struct MediaSettingsView: View {
         DesignPage(eyebrow: "You · Playing", title: "Skip buttons",
                    lead: "Skip intro, recap and credits when the server has found them.", identifier: "skip-settings") {
             DesignSection(title: "Skipping") {
-                DesignRows { ForEach(Self.order, id: \.self) { skipRow($0) } }
+                DesignRows {
+                    ForEach(Self.order, id: \.self) { skipRow($0) }
+                    // What a video's own .wittyinfo says to skip by itself (WittyMediaServer 0.8.1): on unless turned off.
+                    DesignRow(title: "What the video's own file says to skip", value: prefs.fileAuto ? "By itself" : "Ask", on: prefs.fileAuto) {
+                        prefs.fileAuto.toggle()
+                        SkipPrefs.save(prefs)
+                    }
+                    .accessibilityLabel("What the video's own file says to skip")
+                    .designSwitch(prefs.fileAuto ? "By itself" : "Ask")
+                    .accessibilityIdentifier("auto-skip-file")
+                }
             }
             DesignSection(title: "") {
                 DesignNote(text: "The skip button appears over the picture and takes focus when it does. A part set to skip by itself is skipped once, as the video plays into it, with a moment to go back. Kept on this device, for every profile that uses it.")

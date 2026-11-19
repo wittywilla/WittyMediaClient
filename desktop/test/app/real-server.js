@@ -220,6 +220,9 @@ async function run() {
       await press('Down', tvMenu())
       assert.strictEqual(await tvMenu().executeJavaScript('document.activeElement.id'), 'change')
       await press('Down', tvMenu())
+      // Manage servers sits between them once a server is in use.
+      assert.strictEqual(await tvMenu().executeJavaScript('document.activeElement.id'), 'manage')
+      await press('Down', tvMenu())
       assert.strictEqual(await tvMenu().executeJavaScript('document.activeElement.id'), 'quit')
       await press('Escape', tvMenu())
       await wait(300)
@@ -243,7 +246,8 @@ async function run() {
 require(path.join(process.env.WMC_APP || path.join(__dirname, '..', '..'), 'main.js'))
 run().then(() => {
   console.log(`\nAll ${passed.length} passed on ${process.platform} ${process.arch}, Electron ${process.versions.electron}, Chromium ${process.versions.chrome}.`)
-  fs.rmSync(dataDir, { recursive: true, force: true })
+  // On Windows Chromium still holds files in it until the app has gone: what's left is in the temporary folder.
+  try { fs.rmSync(dataDir, { recursive: true, force: true }) } catch (err) { console.log(`(left ${dataDir}: ${err.code})`) }
   app.exit(0)
 }).catch((err) => {
   console.error(`\nFAILED after ${passed.length} passed: ${err.message}`)

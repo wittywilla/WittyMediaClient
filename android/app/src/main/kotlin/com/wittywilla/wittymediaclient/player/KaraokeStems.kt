@@ -85,7 +85,7 @@ class KaraokeStems(private val app: WittyApp, private val listening: Listening, 
     fun setVocals(level: Double) = change(controls.moveVocals(level))
 
     fun setLevel(id: String, level: Double) {
-        change(controls.move(answer ?: return, id, level))
+        change(controls.move(id, level))
     }
 
     fun toggleSing() = change(controls.toggleSing(), keep = false)
