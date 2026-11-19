@@ -5,6 +5,7 @@ What changed in WittyMediaClient, newest first. What changed before it had a rep
 
 ## Unreleased
 
+- **Through a relay, the apps say what it allows (#65).** "Peer to peer · through a relay · 4 Mbit/s, 720p" on the desktop title bar, Android and Apple: the relay's own limits, which the server keeps its films to (WittyMediaServer #476). A relay that only introduces, or a library older than this, says nothing more.
 - **Android TV follows the server's TV levels (WittyMediaServer #469).** A server page opens on a TV unless the server's table says it is for a computer, so game settings, controllers, collections and the like open again instead of a QR card. The card now says where to change it (the WittyMediaClient app on a Windows or Mac computer, or a web browser), with what is set now, and a QR code a phone can open. The layout editor and name and logo are made on a computer. A server without the table keeps the old behaviour. The server's pages are told what the app is (`client=tv` on Android TV and Plasma Bigscreen, `client=desktop` for the desktop app started with `--tv`), so a computer in TV mode is offered Leave TV mode instead of a QR code.
 
 ## 0.5.2

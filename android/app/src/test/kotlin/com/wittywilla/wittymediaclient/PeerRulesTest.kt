@@ -79,6 +79,22 @@ class PeerRulesTest {
     }
 
     @Test
+    fun whatARelayAllowsIsSaidAndNothingElseFromIt() {
+        val s = PeerRules.state("""{"path":"relayed","community":true,"relayKbps":4000,"relayMaxHeight":720,"relayAllows":"Up to 4 Mbit/s per connection,\u0007 pictures up to 720p."}""")
+        assertEquals(4000, s.relayKbps)
+        assertEquals(720, s.relayMaxHeight)
+        assertEquals("Peer to peer · through a relay · 4 Mbit/s, 720p", s.words)
+        assertTrue(s.relayAllows.none { it.isISOControl() })
+        assertEquals("Peer to peer · through a relay · 1.5 Mbit/s", PeerRules.state("""{"path":"relayed","community":true,"relayKbps":1500}""").words)
+        // Nonsense, a relay that only introduces, or a direct path, says no limits.
+        val odd = PeerRules.state("""{"path":"relayed","community":true,"relayKbps":"4000","relayMaxHeight":99999}""")
+        assertEquals(0, odd.relayKbps)
+        assertEquals(0, odd.relayMaxHeight)
+        assertEquals(0, PeerRules.state("""{"path":"relayed","community":false,"relayKbps":4000}""").relayKbps)
+        assertEquals(0, PeerRules.state("""{"path":"direct","relayKbps":4000}""").relayKbps)
+    }
+
+    @Test
     fun anAnswerKeepsOnlyASixDigitCodeAndARealId() {
         val ok = PeerRules.answer("""{"ok":true,"code":"123456","serverName":"Home","serverId":"$id","addrs":["/ip4/10.0.0.2/tcp/1","x"]}""")
         assertTrue(ok.ok)

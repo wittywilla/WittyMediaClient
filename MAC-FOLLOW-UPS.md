@@ -283,3 +283,18 @@ Merge nothing and don't release or tag without the owner's OK.
 8. The desktop app started with `--tv` anywhere else sends `client=desktop`: a computer in TV mode. Check on Linux,
    Windows and macOS that the same screens say "Leave TV mode to change this." with no QR code, that Leave TV mode
    opens the same page in the normal layout with Back to TV mode, and that started without `--tv` every editor opens.
+
+## What a relay allows (issue 65, WittyMediaServer #476)
+
+Written 2026-11-18 on the Windows PC. The connection library now reports, through a relay that carries whole
+connections, what the relay allows: `relayKbps`, `relayMaxHeight` and `relayAllows`. The apps say it beside
+"through a relay", for example **Peer to peer · through a relay · 4 Mbit/s, 720p**.
+
+Checked on the PC: the desktop's `test/p2p.test.js`, and WittyKit's `PeerConnectTests` built and run with Swift 6.1 on
+Linux. **Not checked:** the Android unit test (`PeerRulesTest.whatARelayAllowsIsSaidAndNothingElseFromIt`) and any app
+on a real device.
+
+- [ ] `cd android && ./gradlew testDebugUnitTest --tests '*PeerRulesTest*'` passes
+- [ ] `swift test --filter PeerConnectTests` passes in `apple/WittyKit` with Xcode
+- [ ] With the server and a WittyRelay from the server's `docs/REMOTE.md`, "Try it yourself", an iPhone or Apple TV
+      simulator on a network that blocks direct connections shows the line with the limits

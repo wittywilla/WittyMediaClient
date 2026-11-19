@@ -44,6 +44,22 @@ final class PeerConnectTests: XCTestCase {
         XCTAssertEqual(PeerConnect.State(json: #"{"path":"made-up"}"#).path, .connecting)
     }
 
+    func testWhatARelayAllowsIsSaidAndNothingElseFromIt() {
+        let s = PeerConnect.State(json: #"{"path":"relayed","community":true,"relayKbps":4000,"relayMaxHeight":720,"relayAllows":"Up to 4 Mbit/s,\u0007 720p."}"#)
+        XCTAssertEqual(s.relayKbps, 4000)
+        XCTAssertEqual(s.relayMaxHeight, 720)
+        XCTAssertEqual(s.words, "Peer to peer · through a relay · 4 Mbit/s, 720p")
+        XCTAssertEqual(s.relayAllows, "Up to 4 Mbit/s, 720p.")
+        XCTAssertEqual(PeerConnect.State(json: #"{"path":"relayed","community":true,"relayKbps":1500}"#).words, "Peer to peer · through a relay · 1.5 Mbit/s")
+        // One odd value loses only itself; a relay that only introduces, or a direct path, says no limits.
+        let odd = PeerConnect.State(json: #"{"path":"relayed","community":true,"relayKbps":"4000","relayMaxHeight":99999}"#)
+        XCTAssertEqual(odd.path, .relayed)
+        XCTAssertNil(odd.relayKbps)
+        XCTAssertNil(odd.relayMaxHeight)
+        XCTAssertNil(PeerConnect.State(json: #"{"path":"relayed","community":false,"relayKbps":4000}"#).relayKbps)
+        XCTAssertNil(PeerConnect.State(json: #"{"path":"direct","relayKbps":4000}"#).relayKbps)
+    }
+
     func testIDs() {
         XCTAssertTrue(PeerConnect.isID(server))
         XCTAssertFalse(PeerConnect.isID("QmNnooDu7bfjPFoTZYxMNLWUQJyrVwtbZg5gBMjTezGAJN"))
