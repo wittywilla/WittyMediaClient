@@ -116,11 +116,13 @@ public struct KaraokeStatus: Decodable, Equatable, Sendable {
     }
 }
 
-/// Where the sliders are. Nil means "as the server suggests".
+/// Where the Mix's sliders are: Voice, Background Music and Track (the server's docs/CLIENT-API.md, "Karaoke that sets
+/// itself up"). Nil means "as the server suggests".
 public struct StemLevels: Codable, Equatable, Sendable {
-    /// The big Vocals slider, 0 to 1.
+    /// The big Voice slider, 0 to 1.
     public var vocals: Double?
-    /// Every other part, by its id, 0 to 1.
+    /// The other two by their ids, `music` (Background Music) and `track` (Track), 0 to 1. What an older version kept
+    /// here, a level for each part by its id, is read and then left alone: no slider moves it.
     public var stems: [String: Double]
     /// Sing: the voice off without losing where its slider was. Never kept for another day.
     public var sing = false
@@ -139,7 +141,7 @@ public struct StemLevels: Codable, Equatable, Sendable {
         stems = ((try? c.decodeIfPresent([String: Double].self, forKey: .stems)) ?? [:]).mapValues(StemMix.level)
     }
 
-    /// Moving the Vocals slider also turns Sing off.
+    /// Moving the Voice slider also turns Sing off.
     public mutating func setVocals(_ level: Double) {
         vocals = StemMix.level(level)
         sing = false
@@ -153,9 +155,9 @@ public struct StemLevels: Codable, Equatable, Sendable {
     public mutating func reset() { self = StemLevels() }
 }
 
-/// One slider under More.
+/// One slider of the Mix.
 public struct StemSlider: Equatable, Sendable, Identifiable {
-    /// `vocals` is the same slider as the big one; anything else is a part's id.
+    /// `vocals` is the same slider as the big one; `music` is Background Music and `track` the whole song.
     public let id: String
     public let label: String
     public let level: Double
@@ -167,6 +169,9 @@ public enum StemMix {
     public static let vocalsId = "vocals"
     public static let fullId = "full"
     public static let instrumentalId = "instrumental"
+    /// The Mix's other two sliders: everything but the singer, together, and the whole song.
+    public static let musicId = "music"
+    public static let trackId = "track"
 
     /// A level kept within 0 to 1.
     public static func level(_ value: Double) -> Double { value.isFinite ? min(1, max(0, value)) : 1 }
@@ -199,50 +204,38 @@ public enum StemMix {
         level(levels.vocals ?? vocalsDefault(status))
     }
 
-    /// Where another part's slider is.
-    public static func stemLevel(_ stem: KaraokeStem, _ levels: StemLevels) -> Double {
-        level(levels.stems[stem.id] ?? stem.defaultGain)
-    }
+    /// Where Background Music or Track is: full unless moved.
+    public static func mixLevel(_ id: String, _ levels: StemLevels) -> Double { level(levels.stems[id] ?? 1) }
 
-    /// The gain of every played part, by id.
+    /// The gain of every played part, by id, for Voice v, Background Music m and Track t (Sing is v = 0).
     ///
-    /// Parts: each plays at its own level, and the Vocals slider is the voice's. Blend: with the voice at v and the
-    /// music at m, the whole song plays at m·v and the instrumental at m·(1−v); a straight line and not equal power,
-    /// as the two are nearly the same sound. Sing is v = 0.
+    /// Parts: the voice at t·v, and every other part at t·m times the server's own level for it. Blend (the whole song,
+    /// and its music without the voice): the whole song at t·v and the music at t·(m−v), straight lines, so the music
+    /// adds up to t·m and the voice to t·v. On the website and Android the music's gain goes negative when the music
+    /// is below the voice, taking the music out of the whole song; an `AVAudioMixerNode` can't play a part upside down,
+    /// so here it stops at nothing: with the music below the voice, the quick version is the whole song at t·v.
     public static func gains(_ status: KaraokeStatus, _ levels: StemLevels) -> [String: Double] {
         let v = levels.sing ? 0 : vocalsLevel(status, levels)
+        let m = mixLevel(musicId, levels)
+        let t = mixLevel(trackId, levels)
         var out: [String: Double] = [:]
         if isBlend(status) {
-            guard let music = status.stems.first(where: { $0.id == instrumentalId }) else { return [:] }
-            let m = stemLevel(music, levels)
-            out[fullId] = m * v
-            out[instrumentalId] = m * (1 - v)
+            guard status.stems.contains(where: { $0.id == instrumentalId }) else { return [:] }
+            out[fullId] = t * v
+            out[instrumentalId] = max(0, t * (m - v))
             return out
         }
         for stem in played(status) {
-            out[stem.id] = stem.role == "vocals" ? v : stemLevel(stem, levels)
+            out[stem.id] = stem.role == "vocals" ? t * v : t * m * level(stem.defaultGain)
         }
         return out
     }
 
-    /// The sliders under More: one for each part by its name, or for a blend "Vocals" and "Music".
+    /// The Mix: Voice, Background Music and Track, the same whatever version is playing.
     public static func sliders(_ status: KaraokeStatus, _ levels: StemLevels) -> [StemSlider] {
-        let vocals = vocalsLevel(status, levels)
-        if isBlend(status) {
-            guard let music = status.stems.first(where: { $0.id == instrumentalId }) else { return [] }
-            return [StemSlider(id: vocalsId, label: "Vocals", level: vocals),
-                    StemSlider(id: music.id, label: "Music", level: stemLevel(music, levels))]
-        }
-        var seenVoice = false
-        return played(status).compactMap { stem in
-            if stem.role == "vocals" {
-                // One voice: a second would have no slider of its own to answer to.
-                if seenVoice { return nil }
-                seenVoice = true
-                return StemSlider(id: vocalsId, label: stem.label, level: vocals)
-            }
-            return StemSlider(id: stem.id, label: stem.label, level: stemLevel(stem, levels))
-        }
+        [StemSlider(id: vocalsId, label: "Voice", level: vocalsLevel(status, levels)),
+         StemSlider(id: musicId, label: "Background Music", level: mixLevel(musicId, levels)),
+         StemSlider(id: trackId, label: "Track", level: mixLevel(trackId, levels))]
     }
 
     /// "Separated" for real parts, "Quick version" for the approximate one.

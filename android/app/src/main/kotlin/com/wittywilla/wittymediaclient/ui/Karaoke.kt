@@ -246,7 +246,7 @@ internal fun KaraokeScreen(nav: Nav, words: LyricsWords, title: String, artist: 
                     }
                 }
             }
-            // Each part's own level, Reset, and which version is playing.
+            // The Mix's three levels, Reset, and which version is playing.
             if (parts != null && more) StemLevels(parts, stems, compact)
             // The controls (`.kar-bar`): wrapping, in the middle, 8 apart.
             FlowRow(
@@ -261,19 +261,22 @@ internal fun KaraokeScreen(nav: Nav, words: LyricsWords, title: String, artist: 
                 NpRound(WebIcons.Next, "Next line", 52.dp, 20.dp) { goLine(1) }
                 if (!compact) Box(Modifier.padding(horizontal = 4.dp).size(1.dp, 34.dp).background(Np.line))
                 // The singer's voice: a level of its own where the song's parts are playing, with Sing to silence
-                // it in one press; or else on, lower, lowest.
+                // it in one press, and Mix for Voice, Background Music and Track. A server that makes the parts
+                // (karaoke-auto) only ever has the Mix: while they're being made the note below says how far along
+                // they are, and the old on, lower, lowest (which cancelled the middle of the stereo) is for a server
+                // without them.
                 if (parts != null) {
                     val level = KaraokeMix.vocals(parts, stems.controls.levels)
                     Row(
                         Modifier.clip(RoundedCornerShape(50)).background(Np.chip).padding(start = 16.dp, end = 12.dp, top = 3.dp, bottom = 3.dp).heightIn(min = 46.dp),
                         verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp),
                     ) {
-                        Text("Vocals", color = Color.White, fontSize = if (compact) 13.sp else 15.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.clearAndSetSemantics { })
-                        KarSlider(if (stems.controls.sing) 0.0 else level, "Vocals", Modifier.width(if (compact) 150.dp else 220.dp), change = stems::setVocals)
+                        Text("Voice", color = Color.White, fontSize = if (compact) 13.sp else 15.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.clearAndSetSemantics { })
+                        KarSlider(if (stems.controls.sing) 0.0 else level, "Voice", Modifier.width(if (compact) 150.dp else 220.dp), change = stems::setVocals)
                     }
                     NpChip("Sing", on = stems.controls.sing, label = if (stems.controls.sing) "Sing: the voice is off" else "Sing: turn the voice off", onClick = stems::toggleSing)
-                    NpChip("More", on = more, label = if (more) "Hide each part's level" else "Each part's level") { more = !more }
-                } else Row(Modifier.clip(RoundedCornerShape(50)).background(Np.chip).padding(3.dp).semantics { contentDescription = "Singer's voice" }, horizontalArrangement = Arrangement.spacedBy(2.dp)) {
+                    NpChip("Mix", on = more, label = if (more) "Hide the Mix" else "Mix: Voice, Background Music and Track") { more = !more }
+                } else if (!auto) Row(Modifier.clip(RoundedCornerShape(50)).background(Np.chip).padding(3.dp).semantics { contentDescription = "Singer's voice" }, horizontalArrangement = Arrangement.spacedBy(2.dp)) {
                     com.wittywilla.wittymediaclient.ui.Karaoke.VOCALS.forEach { (cut, name) ->
                         val on = sound.vocalCut == cut
                         Pressable({ listening.setSound { it.copy(vocalCut = cut) } }, Modifier.heightIn(min = 46.dp), shape = RoundedCornerShape(50), fill = if (on) Color.White else Color.Transparent, label = name, selected = on, ring = LocalMetrics.current.tv) {
@@ -322,9 +325,9 @@ private fun KarSlider(level: Double, label: String, modifier: Modifier = Modifie
     }
 }
 
-// "More" (`.kar-more`), the Mix: a row for each part there is, by its name, with its level as a slider at the row's end
-// (or Vocals and Music for the quick version); then which version is playing, with how far a better one has got, and
-// Reset, back to what the server set. Design 2's rows (DesignPage.kt) on karaoke's own dark stage.
+// The Mix (`.kar-more`): Voice, Background Music and Track, each a row with its level as a slider at the row's end,
+// whatever version is playing; then which version that is, with how far a better one has got, and Reset, back to what
+// the server set. Design 2's rows (DesignPage.kt) on karaoke's own dark stage.
 @Composable
 private fun StemLevels(answer: KaraokeAnswer, stems: com.wittywilla.wittymediaclient.player.KaraokeStems, compact: Boolean) {
     val controls = stems.controls
@@ -335,12 +338,12 @@ private fun StemLevels(answer: KaraokeAnswer, stems: com.wittywilla.wittymediacl
             Column(
                 Modifier.widthIn(max = 560.dp).fillMaxWidth()
                     .heightIn(max = (LocalConfiguration.current.screenHeightDp * 0.42f).dp).verticalScroll(rememberScrollState())
-                    .semantics { contentDescription = "Each part's level" },
+                    .semantics { contentDescription = "Mix" },
             ) {
                 DesignSection("") {
                     KaraokeMix.sliders(answer).forEach { slider ->
                         val level = KaraokeMix.level(answer, controls.levels, slider.id)
-                        val silenced = controls.sing && KaraokeMix.isVocals(answer, slider.id)
+                        val silenced = controls.sing && slider.id == KaraokeMix.VOCALS
                         val shown = if (silenced) 0.0 else level
                         DesignRow(
                             slider.label,
@@ -357,7 +360,7 @@ private fun StemLevels(answer: KaraokeAnswer, stems: com.wittywilla.wittymediacl
                     }
                     val better = KaraokeWords.improving(answer)
                     DesignRow(
-                        KaraokeWords.quality(answer).ifEmpty { "Each part's level" }, sub = better,
+                        KaraokeWords.quality(answer).ifEmpty { "Mix" }, sub = better,
                         modifier = if (better.isNotEmpty()) Modifier.semantics { liveRegion = LiveRegionMode.Polite } else Modifier,
                         trailing = { DesignChip("Reset", stems::reset, label = "Reset every level") },
                     )

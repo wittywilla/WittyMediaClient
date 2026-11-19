@@ -3,6 +3,7 @@
 package com.wittywilla.wittymediaclient.ui
 
 import com.wittywilla.wittymediaclient.net.pageFillsScreen
+import com.wittywilla.wittymediaclient.net.screenFor
 import android.graphics.Color
 import android.provider.Settings
 import androidx.activity.ComponentActivity
@@ -389,6 +390,20 @@ class Nav(val app: WittyApp, private val s: Map<String, String>) {
     var tvLevels by mutableStateOf<com.wittywilla.wittymediaclient.net.TvLevelTable?>(null)
         private set
 
+    // The card in place of a server page a TV doesn't offer, or null when it opens. Only with the server's table.
+    fun tvCardFor(target: SduiTarget): Route? {
+        val table = tvLevels ?: return null
+        if (!app.isTv) return null
+        val route = when (target) {
+            is SduiTarget.Page -> target.route
+            is SduiTarget.Native -> target.route
+            is SduiTarget.Unknown -> target.route
+        }
+        val screen = table.screenFor(route.ifEmpty { return null }) ?: return null
+        if (screen.level != com.wittywilla.wittymediaclient.net.TV_DESKTOP_ONLY) return null
+        return Route.OnPhone(screen.title, route)
+    }
+
     // A server page, opened: on a TV, an editor it doesn't offer is the QR card instead (docs/TV-MODE.md on the server).
     fun serverPage(title: String, path: String): Route =
         if (app.isTv && com.wittywilla.wittymediaclient.net.tvShowsCard(tvLevels, path)) Route.OnPhone(title, path) else Route.Page(path, title)
@@ -650,6 +665,10 @@ class Nav(val app: WittyApp, private val s: Map<String, String>) {
 
     // Opens a place the server names: one of its pages, one of the app's screens, or something played. A page can be a layer.
     fun go(target: SduiTarget, layer: Boolean = false) {
+        // A server page this app draws itself keeps to the server's TV levels too: an editor a TV doesn't offer
+        // (Libraries with its folder paths to type, the menu's pages, channels...) is the card that sends it to a
+        // computer, as the server's own TV mode does. With no table (an older server) everything opens, as before.
+        tvCardFor(target)?.let { push(it); return }
         if (layer && target is SduiTarget.Page) { this.layer = target; return }
         if (target is SduiTarget.Native) {
             val item = target.params["item"].orEmpty()

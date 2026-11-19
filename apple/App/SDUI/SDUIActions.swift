@@ -80,6 +80,15 @@ struct SDUIActor {
     }
 
     func go(_ destination: SDUIDestination, route: String? = nil, layer: Bool = false) {
+        #if os(tvOS)
+        // A server page this app draws itself keeps to the server's TV levels (0.8.1): an editor a TV doesn't offer
+        // (Libraries with its folder paths to type, the menu's pages, channels...) is the card that sends it to a
+        // computer (ElsewhereNote, EditorOnComputerPage), as the server's own TV mode does. No table: it opens.
+        if let route, TvLevels.isDesktopOnly(center.catalog.tvLevels, route) {
+            push(.page(route))
+            return
+        }
+        #endif
         switch destination {
         case .page(let page, let params):
             if page == "home", params.isEmpty {

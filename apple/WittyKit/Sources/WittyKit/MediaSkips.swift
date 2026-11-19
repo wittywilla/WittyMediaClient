@@ -5,20 +5,47 @@ import Foundation
 // Where a video's skippable parts are, and what the player does about them: the website's markers.ts, plus what the
 // apps add (skipping by itself, and a way back). The server works the parts out from what an administrator set, a
 // `.skip.json` or `.edl` beside the file, chapter names, what comparing a season's episodes found, and the show's own
-// intro: docs/PLAYING.md, "Skip intro", and docs/CLIENT-API.md, "Media extras".
+// intro: docs/PLAYING.md, "Skip intro", and docs/CLIENT-API.md, "Media extras". From WittyMediaServer 0.8.1 a
+// `.wittyinfo` beside the video adds previews, a scene after the credits and parts someone named, each with an action
+// (a button, skipped by itself, or only marked), and every part comes in one list, `segments`.
 
-/// One stretch of a video, in the film's own time.
+/// One stretch of a video, in the film's own time. `label` names a part someone named; `action` is "button", "auto"
+/// (skipped by itself where the profile follows the file) or "mark" (only marked: never a button).
 public struct SkipRange: Decodable, Equatable {
     public let startSec: Double
     public let endSec: Double
+    public let label: String?
+    public let action: String?
 
-    public init(startSec: Double, endSec: Double) {
+    public init(startSec: Double, endSec: Double, label: String? = nil, action: String? = nil) {
         self.startSec = startSec
         self.endSec = endSec
+        self.label = label
+        self.action = action
     }
 
     /// A range that ends before it starts is nothing to skip.
     var sound: Bool { startSec.isFinite && endSec.isFinite && endSec > startSec && startSec >= 0 }
+}
+
+/// One part in the server's list of every part, in time order. `kind` is intro, recap, credits, commercial, preview,
+/// postcredits (a scene after the credits) or custom (a part someone named, in `label`).
+public struct SkipSegment: Decodable, Equatable {
+    public let kind: String
+    public let startSec: Double
+    public let endSec: Double
+    public let label: String?
+    public let action: String?
+    public let source: String?
+
+    public init(kind: String, startSec: Double, endSec: Double, label: String? = nil, action: String? = nil, source: String? = nil) {
+        self.kind = kind
+        self.startSec = startSec
+        self.endSec = endSec
+        self.label = label
+        self.action = action
+        self.source = source
+    }
 }
 
 /// What `GET /media/{id}/markers` answers. Everything is optional: a part the video hasn't got is null.
@@ -27,17 +54,28 @@ public struct SkipMarkers: Decodable, Equatable {
     public let recap: SkipRange?
     public let credits: SkipRange?
     public let commercials: [SkipRange]?
-    /// Where the most trusted part came from: manual, skip.json, edl, chapters, detected, show or none.
+    /// From a `.wittyinfo`: a preview of the next episode, a scene after the credits, and parts someone named.
+    public let preview: SkipRange?
+    public let postCredits: SkipRange?
+    public let custom: [SkipRange]?
+    /// Every part, in time order (0.8.1 and later). When it's there, it's what the player goes by.
+    public let segments: [SkipSegment]?
+    /// Where the most trusted part came from: wittyinfo, manual, skip.json, edl, chapters, detected, show or none.
     public let source: String?
     /// The same for each part: "intro": "detected".
     public let sources: [String: String]?
 
     public init(intro: SkipRange? = nil, recap: SkipRange? = nil, credits: SkipRange? = nil, commercials: [SkipRange]? = nil,
+                preview: SkipRange? = nil, postCredits: SkipRange? = nil, custom: [SkipRange]? = nil, segments: [SkipSegment]? = nil,
                 source: String? = nil, sources: [String: String]? = nil) {
         self.intro = intro
         self.recap = recap
         self.credits = credits
         self.commercials = commercials
+        self.preview = preview
+        self.postCredits = postCredits
+        self.custom = custom
+        self.segments = segments
         self.source = source
         self.sources = sources
     }
@@ -47,11 +85,23 @@ public struct SkipMarkers: Decodable, Equatable {
         self.init(intro: intro.map { SkipRange(startSec: $0.startSec, endSec: $0.endSec) })
     }
 
-    public var isEmpty: Bool { intro == nil && recap == nil && credits == nil && (commercials ?? []).isEmpty }
+    public var isEmpty: Bool {
+        intro == nil && recap == nil && credits == nil && (commercials ?? []).isEmpty && preview == nil && (custom ?? []).isEmpty
+            && (segments ?? []).isEmpty
+    }
 }
 
+/// The parts that can have a button, in the order they win when two overlap (the website's markers.ts).
 public enum SkipKind: String, CaseIterable, Codable {
-    case recap, intro, commercial, credits
+    case recap, intro, commercial, custom, preview, credits
+
+    /// The server's word for a kind in `segments`. A scene after the credits, and anything unknown, has no button.
+    public init?(segment kind: String) {
+        switch kind {
+        case "commercial", "commercials": self = .commercial
+        default: self.init(rawValue: kind)
+        }
+    }
 
     /// The button's words, as the website's.
     public var button: String {
@@ -59,6 +109,8 @@ public enum SkipKind: String, CaseIterable, Codable {
         case .recap: return "Skip recap"
         case .intro: return "Skip intro"
         case .commercial: return "Skip adverts"
+        case .custom: return "Skip this part"
+        case .preview: return "Skip preview"
         case .credits: return "Skip credits"
         }
     }
@@ -69,6 +121,8 @@ public enum SkipKind: String, CaseIterable, Codable {
         case .recap: return "Skipped the recap"
         case .intro: return "Skipped the intro"
         case .commercial: return "Skipped the adverts"
+        case .custom: return "Skipped a part"
+        case .preview: return "Skipped the preview"
         case .credits: return "Skipped the credits"
         }
     }
@@ -79,6 +133,8 @@ public enum SkipKind: String, CaseIterable, Codable {
         case .recap: return "Recaps"
         case .intro: return "Intros"
         case .commercial: return "Adverts"
+        case .custom: return "Other parts someone named"
+        case .preview: return "Previews"
         case .credits: return "Credits"
         }
     }
@@ -86,6 +142,9 @@ public enum SkipKind: String, CaseIterable, Codable {
     /// Where the part came from, for an administrator: "found by comparing episodes".
     public static func sourceWords(_ source: String?) -> String {
         switch source {
+        case "wittyinfo": return "from the title's .wittyinfo"
+        case "wittyinfo-season": return "from the season's .wittyinfo"
+        case "wittyinfo-show": return "from the show's .wittyinfo"
         case "manual": return "set by hand"
         case "skip.json": return "from a .skip.json beside the file"
         case "edl": return "from an .edl beside the file"
@@ -106,13 +165,25 @@ public struct SkipOffer: Equatable {
     public let next: Bool
     /// The same for the same part of the same video, however often it's offered.
     public let id: String
+    /// What someone called a custom part ("Dream sequence"), or "".
+    public let name: String
+    /// The video's `.wittyinfo` says to skip this part by itself.
+    public let fileAuto: Bool
 
-    public var label: String { next ? "Next episode" : kind.button }
+    public var label: String {
+        if next { return "Next episode" }
+        return kind == .custom && !name.isEmpty ? "Skip " + SkipRules.lowerFirst(SkipRules.short(name)) : kind.button
+    }
 
-    public init(kind: SkipKind, from: Double, to: Double, next: Bool = false) {
+    /// What's said once it skipped by itself.
+    public var skipped: String { kind == .custom && !name.isEmpty ? "Skipped " + SkipRules.lowerFirst(name) : kind.skipped }
+
+    public init(kind: SkipKind, from: Double, to: Double, next: Bool = false, name: String = "", fileAuto: Bool = false) {
         self.kind = kind
         self.to = to
         self.next = next
+        self.name = name
+        self.fileAuto = fileAuto
         self.id = "\(kind.rawValue)@\(Int((from * 10).rounded()))"
     }
 }
@@ -125,24 +196,78 @@ public enum SkipRules {
     /// In the last half minute the player's own "next episode" takes over.
     static let nextTakesOver = 30.0
 
+    /// A named part's name is cut here on its button, as the website does.
+    static let nameMax = 40
+
+    static func short(_ name: String) -> String { name.count > nameMax ? String(name.prefix(nameMax - 1)) + "…" : name }
+    static func lowerFirst(_ text: String) -> String { text.prefix(1).lowercased() + text.dropFirst() }
+
+    /// One part that can have a button: its kind, where it is, and what the file says about it.
+    public struct Part: Equatable {
+        public let kind: SkipKind
+        public let startSec: Double
+        public let endSec: Double
+        public let name: String
+        public let fileAuto: Bool
+        /// These credits stop where a scene after them starts: skipping them never skips it, and they never count as
+        /// running to the end.
+        public let toScene: Bool
+    }
+
+    /// Where a scene after the credits starts, when one starts inside these credits or just after them.
+    static func sceneAfter(_ markers: SkipMarkers, _ start: Double, _ end: Double) -> Double? {
+        let fromField = markers.postCredits.flatMap { $0.sound ? $0.startSec : nil }
+        let fromList = markers.segments?.first { $0.kind == "postcredits" && SkipRange(startSec: $0.startSec, endSec: $0.endSec).sound }?.startSec
+        guard let scene = fromField ?? fromList, scene > start, scene <= end + endSlack else { return nil }
+        return scene
+    }
+
+    /// Every part with a button, in the order they win (recap, intro, adverts, named parts, preview, credits) and then
+    /// by time. From `segments` when the server sends it; else from the separate fields. A part only marked, and a
+    /// scene after the credits, have none.
+    public static func parts(_ markers: SkipMarkers) -> [Part] {
+        func part(_ kind: SkipKind, _ start: Double, _ end: Double, _ label: String?, _ action: String?) -> Part? {
+            guard action != "mark", SkipRange(startSec: start, endSec: end).sound else { return nil }
+            let scene = kind == .credits ? sceneAfter(markers, start, end) : nil
+            let name = kind == .custom ? (label ?? "").trimmingCharacters(in: .whitespaces) : ""
+            return Part(kind: kind, startSec: start, endSec: scene.map { min($0, end) } ?? end, name: name, fileAuto: action == "auto", toScene: scene != nil)
+        }
+        let order = SkipKind.allCases
+        func sorted(_ list: [Part]) -> [Part] {
+            list.sorted { a, b in
+                let ia = order.firstIndex(of: a.kind) ?? 0, ib = order.firstIndex(of: b.kind) ?? 0
+                return ia != ib ? ia < ib : a.startSec < b.startSec
+            }
+        }
+        if let segments = markers.segments, !segments.isEmpty {
+            return sorted(segments.compactMap { seg in SkipKind(segment: seg.kind).flatMap { part($0, seg.startSec, seg.endSec, seg.label, seg.action) } })
+        }
+        var out: [Part] = []
+        func add(_ kind: SkipKind, _ range: SkipRange?) {
+            if let range, let p = part(kind, range.startSec, range.endSec, range.label, range.action) { out.append(p) }
+        }
+        add(.recap, markers.recap)
+        add(.intro, markers.intro)
+        for advert in markers.commercials ?? [] { add(.commercial, advert) }
+        for named in markers.custom ?? [] { add(.custom, named) }
+        add(.preview, markers.preview)
+        add(.credits, markers.credits)
+        return sorted(out)
+    }
+
     /// The part playing at `now`, if skipping it is worth a button (the website's skipAt): more than a second of it
     /// is left, and for credits there is something after them. Credits that run to the end are what "next episode" is
-    /// for, so that's what they offer when there is one, until the player's own countdown takes over.
+    /// for, so that's what they offer when there is one, until the player's own countdown takes over. Credits with a
+    /// scene after them go to the scene.
     public static func offer(_ markers: SkipMarkers?, at now: Double, duration: Double, hasNext: Bool) -> SkipOffer? {
         guard let markers, now.isFinite else { return nil }
-        func inside(_ range: SkipRange?) -> Bool {
-            guard let range, range.sound else { return false }
-            return now >= range.startSec && now < range.endSec - tail
-        }
-        if let recap = markers.recap, inside(recap) { return SkipOffer(kind: .recap, from: recap.startSec, to: recap.endSec) }
-        if let intro = markers.intro, inside(intro) { return SkipOffer(kind: .intro, from: intro.startSec, to: intro.endSec) }
-        for advert in markers.commercials ?? [] where inside(advert) {
-            return SkipOffer(kind: .commercial, from: advert.startSec, to: advert.endSec)
-        }
-        if let credits = markers.credits, inside(credits), duration > 0 {
-            if credits.endSec < duration - endSlack { return SkipOffer(kind: .credits, from: credits.startSec, to: credits.endSec) }
+        for p in parts(markers) where now >= p.startSec && now < p.endSec - tail {
+            let offer = SkipOffer(kind: p.kind, from: p.startSec, to: p.endSec, name: p.name, fileAuto: p.fileAuto)
+            guard p.kind == .credits, !p.toScene else { return offer }
+            guard duration > 0 else { continue }
+            if p.endSec < duration - endSlack { return offer }
             if hasNext, now < duration - nextTakesOver {
-                return SkipOffer(kind: .credits, from: credits.startSec, to: credits.endSec, next: true)
+                return SkipOffer(kind: .credits, from: p.startSec, to: p.endSec, next: true, fileAuto: p.fileAuto)
             }
         }
         return nil
@@ -160,26 +285,41 @@ public enum SkipRules {
         add("Recap", "recap", markers.recap)
         add("Intro", "intro", markers.intro)
         for advert in markers.commercials ?? [] { add("Adverts", "commercials", advert) }
+        for named in markers.custom ?? [] { add(named.label.map { "“\($0)”" } ?? "A part someone named", "custom", named) }
+        add("Preview", "preview", markers.preview)
         add("Credits", "credits", markers.credits)
+        add("A scene after the credits", "postCredits", markers.postCredits)
         return lines
     }
 }
 
-/// Which parts this device skips by itself. Kept on the device, like the player's other choices; off until chosen.
+/// Which parts this device skips by itself. Kept on the device, like the player's other choices; off until chosen,
+/// except following the file: what a video's `.wittyinfo` says to skip by itself is skipped unless turned off, as the
+/// website's `autoSkip.fileAuto`.
 public struct SkipPrefs: Codable, Equatable {
     public var intro = false
     public var recap = false
     public var credits = false
     public var adverts = false
+    public var preview = false
+    public var custom = false
+    public var fileAuto = true
 
-    public init(intro: Bool = false, recap: Bool = false, credits: Bool = false, adverts: Bool = false) {
+    public init(intro: Bool = false, recap: Bool = false, credits: Bool = false, adverts: Bool = false,
+                preview: Bool = false, custom: Bool = false, fileAuto: Bool = true) {
         self.intro = intro
         self.recap = recap
         self.credits = credits
         self.adverts = adverts
+        self.preview = preview
+        self.custom = custom
+        self.fileAuto = fileAuto
     }
 
-    private enum CodingKeys: String, CodingKey { case intro, recap, credits, adverts }
+    /// Nothing skips by itself, not even what a file asks: while something else decides where the film is.
+    public static let none = SkipPrefs(fileAuto: false)
+
+    private enum CodingKeys: String, CodingKey { case intro, recap, credits, adverts, preview, custom, fileAuto }
 
     // A saved set from another version keeps what it can.
     public init(from decoder: Decoder) throws {
@@ -188,6 +328,9 @@ public struct SkipPrefs: Codable, Equatable {
         recap = (try? c.decodeIfPresent(Bool.self, forKey: .recap)) ?? false
         credits = (try? c.decodeIfPresent(Bool.self, forKey: .credits)) ?? false
         adverts = (try? c.decodeIfPresent(Bool.self, forKey: .adverts)) ?? false
+        preview = (try? c.decodeIfPresent(Bool.self, forKey: .preview)) ?? false
+        custom = (try? c.decodeIfPresent(Bool.self, forKey: .custom)) ?? false
+        fileAuto = (try? c.decodeIfPresent(Bool.self, forKey: .fileAuto)) ?? true
     }
 
     public func skips(_ kind: SkipKind) -> Bool {
@@ -196,8 +339,13 @@ public struct SkipPrefs: Codable, Equatable {
         case .recap: return recap
         case .credits: return credits
         case .commercial: return adverts
+        case .preview: return preview
+        case .custom: return custom
         }
     }
+
+    /// This part: its kind was chosen, or its file says to skip it and this device follows the file.
+    public func skips(_ offer: SkipOffer) -> Bool { skips(offer.kind) || (offer.fileAuto && fileAuto) }
 
     public mutating func set(_ kind: SkipKind, _ on: Bool) {
         switch kind {
@@ -205,10 +353,12 @@ public struct SkipPrefs: Codable, Equatable {
         case .recap: recap = on
         case .credits: credits = on
         case .commercial: adverts = on
+        case .preview: preview = on
+        case .custom: custom = on
         }
     }
 
-    public var any: Bool { intro || recap || credits || adverts }
+    public var any: Bool { intro || recap || credits || adverts || preview || custom || fileAuto }
 
     static let key = "wms.skip.auto"
 
@@ -231,7 +381,9 @@ public struct SkipNotice: Equatable {
     public let kind: SkipKind
     /// Where the film was when it jumped: Undo goes back there.
     public let from: Double
-    public var words: String { kind.skipped }
+    /// What someone called a custom part, or "".
+    public var name: String = ""
+    public var words: String { kind == .custom && !name.isEmpty ? "Skipped " + SkipRules.lowerFirst(name) : kind.skipped }
 }
 
 /// Skipping by itself, for one video from when it opens until it's left. The rules:
@@ -314,9 +466,9 @@ public struct SkipTracker {
             settled.insert(offer.id)
             return nil
         }
-        guard playing, prefs.skips(offer.kind), !settled.contains(offer.id) else { return nil }
+        guard playing, prefs.skips(offer), !settled.contains(offer.id) else { return nil }
         settled.insert(offer.id)
-        notice = SkipNotice(kind: offer.kind, from: now)
+        notice = SkipNotice(kind: offer.kind, from: now, name: offer.name)
         // The jump is this tracker's own: arriving there isn't a person's seek into something else.
         landing = (offer.to, 5)
         return offer.to

@@ -1,0 +1,14 @@
+{
+  "format": "wittyinfo",
+  "version": 1,
+  "scope": "item",
+  "authorship": { "author": "WittyMediaClient's Mac checks", "license": "CC0-1.0", "source": "A test of the apps' skip buttons; times fit any video of 3 minutes or more." },
+  "segments": [
+    { "id": "seg-1", "type": "recap", "start": 0, "end": 15 },
+    { "id": "seg-2", "type": "intro", "start": 20, "end": 40 },
+    { "id": "seg-3", "type": "custom", "start": 50, "end": 70, "label": "Dream sequence", "action": "auto" },
+    { "id": "seg-4", "type": "preview", "start": 80, "end": 95, "action": "mark" },
+    { "id": "seg-5", "type": "credits", "start": 120, "end": 170 },
+    { "id": "seg-6", "type": "postcredits", "start": 150, "end": 170 }
+  ]
+}

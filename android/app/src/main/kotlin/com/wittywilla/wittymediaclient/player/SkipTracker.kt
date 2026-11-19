@@ -84,7 +84,7 @@ class SkipTracker {
                     val skip = now
                     if (skip != null && skip.span == span) {
                         seek(skip.toSec)
-                        said(span.kind.done + ".")
+                        said(SkipRules.doneOf(span) + ".")
                     } else {
                         // Credits to the end: what comes after them is the next episode, when there is one.
                         nextId()?.let(playNext)

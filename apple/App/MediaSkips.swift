@@ -59,7 +59,7 @@ final class SkipDriver: ObservableObject {
     func tick(film: Double, duration: Double, hasNext: Bool, playing: Bool, rate: Double) -> Double? {
         let now = SkipRules.offer(markers, at: film, duration: duration, hasNext: hasNext)
         if now != offer { offer = now }
-        let prefs = skipsByItself ? SkipPrefs.load() : SkipPrefs()
+        let prefs = skipsByItself ? SkipPrefs.load() : SkipPrefs.none
         let to = tracker.tick(now: film, rate: rate, playing: playing, offer: now, prefs: prefs)
         if tracker.notice != notice { show(tracker.notice) }
         return to

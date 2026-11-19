@@ -27,11 +27,19 @@ internal fun PlayingHereScreen(nav: Nav, s: Map<String, String>) {
     val off = s["off"].orEmpty()
     // Recaps, adverts and credits are only marked by a server that names skip-markers; an older one knows intros alone.
     val kinds = if (nav.has(ExtrasFeature.MARKERS)) listOf(SkipKind.Intro, SkipKind.Recap, SkipKind.Credits, SkipKind.Commercial) else listOf(SkipKind.Intro)
-    val names = mapOf(SkipKind.Intro to "skipIntros", SkipKind.Recap to "skipRecaps", SkipKind.Credits to "skipCredits", SkipKind.Commercial to "skipAdverts")
+    // A server that reads .wittyinfo files (0.8.1) also marks previews and parts people named, and a file can say to
+    // skip a part by itself. It doesn't name that as a feature of its own, so any server with markers shows the rows:
+    // on an older one there is just nothing for them to skip.
+    val wittyinfo = nav.has(ExtrasFeature.MARKERS)
+    val shown = if (wittyinfo) kinds + listOf(SkipKind.Preview, SkipKind.Custom) else kinds
+    val names = mapOf(
+        SkipKind.Intro to "skipIntros", SkipKind.Recap to "skipRecaps", SkipKind.Credits to "skipCredits", SkipKind.Commercial to "skipAdverts",
+        SkipKind.Preview to "skipPreviews", SkipKind.Custom to "skipCustom",
+    )
     SettingsPage(nav, s["rowPlayingHere"].orEmpty(), s["playingHereHint"].orEmpty()) {
         GroupedList(
             s["skipAutoCaption"].orEmpty(),
-            kinds.mapIndexed { index, kind ->
+            shown.mapIndexed { index, kind ->
                 val chosen = choices.auto.wants(kind)
                 GroupRow(
                     s[names.getValue(kind)].orEmpty(), onClick = { keep(choices.withAuto(choices.auto.with(kind, !chosen))) },
@@ -39,7 +47,16 @@ internal fun PlayingHereScreen(nav: Nav, s: Map<String, String>) {
                     chevron = false, selected = chosen, focusKey = "skip-${kind.key}", requestFocus = index == 0,
                     trailing = { Toggle(chosen) },
                 )
-            },
+            } + if (wittyinfo) {
+                val follow = choices.fileAuto
+                listOf(
+                    GroupRow(
+                        s["skipFileAuto"].orEmpty(), onClick = { keep(choices.copy(fileAuto = !follow)) },
+                        icon = Symbols.Playback, tint = Color(0xFF3E5BD0), value = if (follow) on else off,
+                        chevron = false, selected = follow, focusKey = "skip-file", trailing = { Toggle(follow) },
+                    ),
+                )
+            } else emptyList(),
         )
         Hint(s["skipAutoHint"].orEmpty() + if (SkipKind.Credits in kinds) " " + s["skipCreditsHint"].orEmpty() else "")
         if (nav.has(ExtrasFeature.CANVAS)) {

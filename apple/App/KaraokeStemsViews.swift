@@ -111,12 +111,13 @@ struct KaraokeStemsControl: View {
                     .accessibilityIdentifier("karaoke-stems-words")
             }
             if let loaded = stems.loaded, case .ready = stems.machine.phase {
-                let vocals = StemLevelSlider(label: "Vocals", level: StemMix.vocalsLevel(loaded, stems.levels), ink: ink, big: true) { stems.setVocals($0) }
+                let vocals = StemLevelSlider(label: "Voice", level: StemMix.vocalsLevel(loaded, stems.levels), ink: ink, big: true) { stems.setVocals($0) }
                     .accessibilityIdentifier("karaoke-vocals")
                 let buttons = Group {
                     pill("Sing", on: stems.levels.sing) { stems.toggleSing() }
                         .accessibilityHint("Turns the singer's voice off, and back to where it was")
-                    pill("More", on: more) { more.toggle() }
+                    pill("Mix", on: more) { more.toggle() }
+                        .accessibilityHint("Voice, Background Music and Track")
                 }
                 // One line where there's room; on a phone the slider has the width and the buttons go under it.
                 ViewThatFits(in: .horizontal) {

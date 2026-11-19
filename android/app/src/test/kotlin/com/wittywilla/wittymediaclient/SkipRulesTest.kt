@@ -172,4 +172,75 @@ class SkipRulesTest {
         assertFalse(choices.wants(SkipKind.Intro))
         assertEquals(AutoSkip(adverts = true), choices.with(SkipKind.Credits, false))
     }
+
+    // A 0.8.1 server's answer for a film with a .wittyinfo: every part in `segments`, a preview only marked, a part
+    // someone named that skips itself, and a scene after the credits.
+    private val wittyinfo = """{"intro":{"startSec":30,"endSec":95},"recap":null,"credits":{"startSec":5400,"endSec":5600},"commercials":[],
+        "preview":{"startSec":5650,"endSec":5700,"action":"mark"},"postCredits":{"startSec":5580,"endSec":5640},"custom":[{"startSec":2000,"endSec":2100,"label":"Dream sequence","action":"auto"}],
+        "segments":[{"kind":"intro","startSec":30,"endSec":95,"action":"button","source":"wittyinfo"},
+        {"kind":"custom","startSec":2000,"endSec":2100,"label":"Dream sequence","action":"auto","source":"wittyinfo"},
+        {"kind":"credits","startSec":5400,"endSec":5600,"action":"button","source":"wittyinfo"},
+        {"kind":"postcredits","startSec":5580,"endSec":5640,"action":"button","source":"wittyinfo"},
+        {"kind":"preview","startSec":5650,"endSec":5700,"action":"mark","source":"wittyinfo"},
+        {"kind":"chapter-art","startSec":1,"endSec":2,"action":"button","source":"wittyinfo"}],
+        "source":"wittyinfo","sources":{"intro":"wittyinfo","credits":"wittyinfo"}}"""
+
+    @Test
+    fun aWittyinfosPartsComeFromItsSegments() {
+        val spans = SkipRules.spans(markers(wittyinfo), null)
+        // The scene after the credits, a part only marked and a kind this app doesn't know have no button.
+        assertEquals(listOf(SkipKind.Intro, SkipKind.Custom, SkipKind.Credits), spans.map { it.kind })
+        val custom = spans.single { it.kind == SkipKind.Custom }
+        assertEquals("Dream sequence", custom.name)
+        assertTrue(custom.fileAuto)
+        assertEquals("Skip dream sequence", SkipRules.labelOf(custom))
+        assertEquals("Skipped dream sequence", SkipRules.doneOf(custom))
+        assertEquals("Skip intro", SkipRules.labelOf(spans.first()))
+    }
+
+    @Test
+    fun creditsStopWhereASceneAfterThemStarts() {
+        val spans = SkipRules.spans(markers(wittyinfo), null)
+        val credits = spans.single { it.kind == SkipKind.Credits }
+        assertEquals(5580.0, credits.endSec, 0.0)
+        assertTrue(credits.toScene)
+        // Not "to the end": the button takes you to the scene, and the next episode doesn't start over it.
+        val skip = SkipRules.skipAt(spans, 5450.0, 5700.0)
+        assertEquals(SkipKind.Credits, skip?.span?.kind)
+        assertEquals(5580.0, skip!!.toSec, 0.0)
+        assertNull(SkipRules.upNextFrom(spans, 5700.0))
+        assertNull(SkipRules.skipAt(spans, 5600.0, 5700.0))
+    }
+
+    @Test
+    fun theOlderFieldsCarryTheNewKindsToo() {
+        val noSegments = MediaMarkers(
+            preview = SkipRange(100.0, 160.0), custom = listOf(SkipRange(300.0, 360.0, "Opening song")),
+            credits = SkipRange(500.0, 600.0, action = "mark"),
+        )
+        val spans = SkipRules.spans(noSegments, null)
+        assertEquals(listOf(SkipKind.Custom, SkipKind.Preview), spans.map { it.kind })
+        assertEquals("Skip opening song", SkipRules.skipAt(spans, 310.0, 900.0)?.label)
+        assertEquals("Skip preview", SkipRules.skipAt(spans, 110.0, 900.0)?.label)
+    }
+
+    @Test
+    fun aFileSaysWhatSkipsItselfUnlessTurnedOff() {
+        val spans = SkipRules.spans(markers(wittyinfo), null)
+        val custom = spans.single { it.kind == SkipKind.Custom }
+        val intro = spans.single { it.kind == SkipKind.Intro }
+        assertTrue(AutoSkip().wants(custom))
+        assertFalse(AutoSkip().wants(intro))
+        assertFalse(AutoSkip(fileAuto = false).wants(custom))
+        assertTrue(AutoSkip(fileAuto = false, custom = true).wants(custom))
+        assertTrue(AutoSkipper().due(custom, AutoSkip()))
+    }
+
+    @Test
+    fun aLongNameIsCutOnItsButton() {
+        val name = "A very long name that somebody gave to this part of the film"
+        val label = SkipRules.labelOf(SkipSpan(SkipKind.Custom, 0.0, 10.0, name = name))
+        assertEquals("Skip " + name.take(39).replaceFirstChar(Char::lowercaseChar) + "…", label)
+        assertEquals("Skip this part", SkipRules.labelOf(SkipSpan(SkipKind.Custom, 0.0, 10.0)))
+    }
 }
