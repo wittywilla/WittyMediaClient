@@ -14,6 +14,8 @@ says, feature by feature and platform by platform, what the apps already had, wh
 This section is the Mac's part of it. The server's own Mac items (its installer and service, the data folder, the
 graphics paths, karaoke on Apple silicon) are in WittyMediaServer's `MAC-FOLLOW-UPS.md`, under the same heading.
 
+Issues: iPhone and iPad #68, Apple TV #69, the macOS desktop app #70 (server: wittywilla/WittyMediaServer#527 to #530).
+
 **Written on Windows, never run on any Apple device or simulator** (WittyKit's part was compiled and its tests run with
 Swift 6.1 on Linux; the apps were only compiled, by CI's macOS runner):
 
