@@ -13,7 +13,8 @@ and a module's page Apple TV can't show) is now one centred card, as the sign-in
 under the glow, the setting's symbol and name, one line, the QR code large on a white tile with "or open" and the
 address under it, what is set now in a card, **Back** focused, and the server's own words at the foot. One view,
 `OnAComputerCard` in `apple/App/ModulePages.swift`, draws both `EditorOnComputerPage` and `ModuleOnPhonePage`.
-Compiled by CI's macOS runner only. Android TV's twin ran here: compare `docs/mac-081/tv-card-android-1080p.png`.
+Compiled by CI's macOS runner only. Android TV's twin ran here, at 1080p and 720p: compare
+`D:\projects-0.8.0\_status	v-settings\card-after-*.png` on the PC (and `web-after-*.png` for the web's TV mode).
 
 - [ ] **1.** Apple TV simulator (1080p), against the 0.8.1 server of the section below, signed in as its administrator.
 - [ ] **2.** You → **Libraries**, **Metadata and artwork**, **Live transcoding**, **Remote Access**, **Backup**: each card

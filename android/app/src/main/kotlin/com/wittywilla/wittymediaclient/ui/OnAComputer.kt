@@ -65,11 +65,11 @@ fun OnAComputerCard(
         BoxWithConstraints(Modifier.fillMaxSize().safeDrawingPadding()) {
             // The code is as large as the screen allows with the rest still showing: a 720p TV has the same room in
             // TV units as a 1080p one, a phone's window less.
-            val qr: Dp = min(metrics.u(360), maxHeight * 0.34f)
+            val qr: Dp = min(metrics.u(300), maxHeight * 0.28f)
             Column(
-                Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = metrics.gutter, vertical = metrics.u(48)),
+                Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = metrics.gutter, vertical = metrics.u(24)),
                 horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.spacedBy(metrics.u(22), Alignment.CenterVertically),
+                verticalArrangement = Arrangement.spacedBy(metrics.u(16), Alignment.CenterVertically),
             ) {
                 lockup?.invoke()
                 Row(
@@ -77,17 +77,17 @@ fun OnAComputerCard(
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(metrics.u(20), Alignment.CenterHorizontally),
                 ) {
-                    if (icon != null) Icon(icon, contentDescription = null, tint = LocalExtraColours.current.accentText, modifier = Modifier.size(metrics.u(64)))
+                    if (icon != null) Icon(icon, contentDescription = null, tint = LocalExtraColours.current.accentText, modifier = Modifier.size(metrics.u(56)))
                     Text(
-                        title, color = scheme.onBackground, fontSize = sp(64), fontWeight = FontWeight.ExtraBold, textAlign = TextAlign.Center,
-                        lineHeight = sp(72), maxLines = 2,
+                        title, color = scheme.onBackground, fontSize = sp(56), fontWeight = FontWeight.ExtraBold, textAlign = TextAlign.Center,
+                        lineHeight = sp(64), maxLines = 2,
                     )
                 }
                 if (line.isNotEmpty()) {
                     Text(line, color = scheme.onSurfaceVariant, fontSize = sp(32), textAlign = TextAlign.Center, modifier = Modifier.widthIn(max = metrics.u(1300)))
                 }
                 if (address.isNotEmpty()) {
-                    Box(Modifier.padding(top = metrics.u(6)).clip(metrics.corner(24)).background(Color.White).padding(metrics.u(28))) {
+                    Box(Modifier.padding(top = metrics.u(6)).clip(metrics.corner(24)).background(Color.White).padding(metrics.u(24))) {
                         QrCode(address, qr, Modifier.semantics { contentDescription = "$orOpen $address" })
                     }
                     Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(metrics.u(4))) {

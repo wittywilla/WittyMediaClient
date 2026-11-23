@@ -96,8 +96,8 @@ struct OnAComputerCard: View {
             SignInGlow()
             GeometryReader { geo in
                 ScrollView {
-                    column(qr: min(360, geo.size.height * 0.34))
-                        .padding(.vertical, 48)
+                    column(qr: min(300, geo.size.height * 0.28))
+                        .padding(.vertical, 24)
                         .frame(maxWidth: .infinity, minHeight: geo.size.height)
                 }
                 .unclippedScroll()
@@ -108,12 +108,12 @@ struct OnAComputerCard: View {
     }
 
     @ViewBuilder private func column(qr: CGFloat) -> some View {
-        VStack(spacing: 22) {
+        VStack(spacing: 16) {
             BrandLockup().scaleEffect(0.7).frame(height: 56)
             HStack(spacing: 20) {
                 Image(systemName: symbol).font(.system(size: 56, weight: .semibold)).foregroundStyle(palette.accentText)
                     .accessibilityHidden(true)
-                Text(title).font(.system(size: 64, weight: .heavy)).foregroundStyle(palette.text)
+                Text(title).font(.system(size: 56, weight: .heavy)).foregroundStyle(palette.text)
                     .multilineTextAlignment(.center).lineLimit(2)
             }
             .accessibilityElement(children: .combine)
@@ -127,7 +127,7 @@ struct OnAComputerCard: View {
                     Image(image, scale: 1, label: Text(say("tvCardOrOpen") + " " + address))
                         .interpolation(.none).resizable().scaledToFit()
                         .frame(width: qr, height: qr)
-                        .padding(28)
+                        .padding(24)
                         .background(RoundedRectangle(cornerRadius: 24, style: .continuous).fill(Color.white))
                 }
                 VStack(spacing: 4) {
