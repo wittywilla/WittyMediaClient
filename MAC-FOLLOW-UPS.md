@@ -27,6 +27,110 @@ Compiled by CI's macOS runner only. Android TV's twin ran here: compare `docs/ma
   phone or computer, with no "set now" card.
 - [ ] **5.** Light theme (You → Look and theme → Light): the glow, the white tile and the words still read.
 
+## 0.8.1-alpha UI changes on Apple: what the Mac must check (2026-11-22)
+
+Written 2026-11-22 on the Windows PC, for Claude on the owner's MacBook. After #67, the server's 0.8.1 UI changes
+(karaoke #524, backdrops #545, the mini player #523, menu placement #538, and more) were ported to the Apple apps in
+WittyMediaClient #82 (branch `apple-081-ui`). [docs/PARITY-0.8.1.md](docs/PARITY-0.8.1.md), under "The UI changes
+after client #67", lists every change and where it stands: ported, already so, web only (free), or owned by another
+session. Do this section before the older one below; they can share the server from its step 2.
+
+**Written on Windows, never run on any Apple device or simulator.** WittyKit's part was compiled and its tests run with
+Swift 6.1 on Linux (749 pass). The apps were only compiled, by CI's macOS runner:
+
+| File | What changed |
+|---|---|
+| `apple/WittyKit/Sources/WittyKit/VoiceFx.swift` (new) | Voice settings' controls, ranges, the nine presets and As recorded, what's kept, and the numbers for the audio units |
+| `apple/WittyKit/Sources/WittyKit/KaraokeStems.swift` | The voice is out each time karaoke starts (`sing` is true), `toggleGuide`, `guideLevel` 0.2, `pristine`, `voiceParts` |
+| `apple/WittyKit/Sources/WittyKit/HeroFade.swift` (new) | The fade curve of #545 |
+| `apple/App/StemPlayer.swift` | **New audio units**: the voice through its bus, EQ (low cut, warmth, presence, air), the dynamics processor, doubling and echo delays, reverb and pan; the music through its bus and EQ (bass, treble, room for the voice) |
+| `apple/App/KaraokeStems.swift` | `fx` and its store, `toggleGuide`, `hearVoice`, `voiceOut`, `waiting` |
+| `apple/App/KaraokeStemsViews.swift` | The Mix's contents, `KaraokeVoiceFxPanel`, `KaraokeChip`, Apple TV's `KaraokeStemsPanels` |
+| `apple/App/MusicPanels.swift` (`KaraokeView`) | The first screen, the Mix and Voice settings as a side panel or sheet, idle hiding, the visualizer's styles |
+| `apple/App/MusicPlayerUI.swift`, `Listening.swift` | The iPad bar's More menu (Lyrics, Karaoke, Visualizer), a solid bar backing |
+| `apple/App/HeroFadeMask.swift` (new), `ItemPages.swift`, `SDUI/SDUIHeader.swift`, `BrowseViews.swift` | Backdrops masked, not painted over |
+| `apple/App/SDUI/SDUICenter.swift` | The strip of sections: of what's placed in More, only the libraries and Collections |
+| `apple/App/TvWordsView.swift` | Apple TV's karaoke screen uses the new bar |
+
+Reference pictures (the website after each change) are in `docs/mac-081/ui/`, with more on the PC under
+`D:\projects-0.8.0\_status\082-fixes\` (`karaoke\`, `hero-edges\`, `layout\`).
+
+### Steps
+
+- [ ] **1. The code and a server.** `git switch apple-081-ui` in WittyMediaClient (or `v0.8.1-alpha` once #82 has
+  merged), and the server's `v0.8.1-alpha`, built and run as step 2 of the section below (port 19555, fresh data, a
+  film with a backdrop, and an album). For karaoke, the server must make the parts: Settings → Lyrics and music
+  information → karaoke on (the quick version needs nothing installed). Using the same server, set Demucs up as the
+  server's own Mac step 4 says, then check the separated version too.
+- [ ] **2. WittyKit's tests on macOS**: `cd apple/WittyKit && swift test`. Expected: all pass, among them the new
+  `VoiceFxTests` and `HeroFadeTests`, and `KaraokeStemsTests` with the voice out by default.
+- [ ] **3. Build and open the apps**: `bash apple/scripts/check-on-mac.sh`. Expected: every line of
+  `apple/build-logs/report.txt` says `ok`.
+- [ ] **4. iPhone (simulator), karaoke.** Play a song from the album, open the player, **Karaoke**.
+  - [ ] The first screen is the words, **Previous line**, **Play**, **Next line**, **Guide voice** and **Mix**, with
+    nothing else on the bar. Compare `docs/mac-081/ui/karaoke-phone-kar-first-screen.jpg`.
+  - [ ] **The singer is out** as it starts, on the quick version and the separated one, even if the Voice slider was
+    left at 100% last time. **Guide voice** brings them back quietly (20%), and a second press takes them out again.
+  - [ ] **Mix** opens a sheet from the bottom (it can be dragged taller): Voice, Background Music and Track, **Voice
+    off**, **Guide voice**, **Reset** (dimmed until something moves), "Separated." or "Quick version." with the
+    note, the Key and words' timing steppers, Follow along / Read, and **Voice settings**. Compare
+    `karaoke-phone-kar-mix.jpg`. While the version is being made, the same sliders show dimmed with "Preparing
+    karaoke… n%".
+  - [ ] **Voice settings**: Presets and Advanced. Presets has three rows (Female vocal, Mid-range vocal, Low vocal), each
+    with High, Medium and Low, and **As recorded**. Choosing one is heard straight away: listen for the echo and room
+    on Female vocal, High, against As recorded. Compare `karaoke-phone-kar-voice-presets.jpg`. With the voice out it
+    says so, with **Hear the voice**. Advanced on a phone shows only the "bigger screen" note. Close the app and
+    open karaoke again: the preset is kept, and the voice is out again.
+  - [ ] **Idle**: leave it 4 seconds and the title row and "Behind the words" fade away; the words don't move. A tap
+    on the words brings them back, and another hides them. With VoiceOver on, they never hide.
+  - [ ] **Behind the words → Visualizer**: Bars, Waves, Drift and **More** sit under it. Choosing one changes the
+    visualizer behind the words, and Now Playing's visualizer is the same one afterwards.
+  - [ ] **Sound check (the real risk)**: with Female vocal, High chosen and Echo moved in Advanced on an iPad, the sound
+    never drops out and never clips while the parts play, seek, pause and change song. If the dynamics processor
+    (`kAudioUnitSubType_DynamicsProcessor`) misbehaves, say so and bypass it rather than ship silence.
+- [ ] **5. iPad (simulator), on its side.**
+  - [ ] Karaoke's **Mix** and **Voice settings** open as a panel at the right, with the words still showing. Compare
+    `karaoke-desktop-kar-mix.jpg` and `karaoke-desktop-kar-first-screen.jpg`. Voice settings is on the bar here.
+    Advanced lists every control in four groups, with its value ("+3 dB", "320 ms", "Centre").
+  - [ ] **The music bar** (the wide one along the bottom): after the queue and the volume there is **⋯ More** with
+    Lyrics, Karaoke and Visualizer. Each opens the full player at that part. Compare
+    `layout-miniplayer-more-menu-open-1440.jpg`.
+  - [ ] In **Aero Day** or another glass theme, no page text reads through the bar.
+- [ ] **6. Backdrops (#545)**, on iPhone and iPad, in Witty, Light, Aero Sunset and Aero Aurora (scene themes):
+  - [ ] Open a film. The picture at the top fades into the page with no straight line where it ends, and on an iPad
+    no hard edges at the sides. The title's words still read where they overlap it. Compare
+    `docs/mac-081/ui/hero-edges-real-phone.jpg` and `hero-edges-after-widths.jpg`.
+  - [ ] An SDUI title page (a show, a game) the same.
+- [ ] **7. The strip of sections (#538)**, on iPhone: with WittyIntegratedFileBrowser or another module that places
+  itself in More, and an administrator signed in: the strip along the top lists the libraries and Collections, not
+  Server folders. Server folders is in Menu. Compare `537-nav-after-phone.jpg`.
+- [ ] **8. Apple TV (simulator), with the remote only.**
+  - [ ] Now Playing → **Karaoke**: the bar shows **Guide voice**, **Mix** and **Voice settings**. Each opens below; Up
+    and Down move between rows, Left and Right a slider 5% at a time. Voice settings' presets are reached with the
+    arrows, and Advanced says to use a computer. Compare `karaoke-tv-kar-voice-presets.jpg` and
+    `karaoke-tv-kar-mix.jpg`.
+  - [ ] Home's billboard and a title's page: the picture fades out at the bottom with no line, in Witty and Aero
+    Sunset. The words at the left read as before.
+  - [ ] The top menu: if a module placed in More (Server folders) shows in the scrolling row, say in the PR whether it
+    should move behind a More item instead. That's a design question for the owner, not fixed here.
+  - [ ] No keyboard shortcut shows anywhere (the standing rule). The only remote hints are the game player's controls
+    and "Play/Pause twice for live".
+- [ ] **9. The macOS desktop app.** Nothing native changed. With the server from step 1, check these show as the
+  website does, since they are the website: karaoke's new first screen and Mix (press **K** on a song), the mini
+  player's More menu, a film's backdrop in Aero Sunset, and in `--tv` mode (`open -a WittyMediaClient --args --tv`)
+  no keyboard hints on the karaoke screen. The menu bar's zoom shortcuts are the system's own and are fine.
+- [ ] **10. After #531 (readability) merges** into the server's `v0.8.1-alpha`, regenerate the shared theme data
+  (`WMS_THEMES=../WittyMediaServer/themes node shared/scripts/build-themes.mjs`, as ci.yml checks it and client commit `0dbb225` did; any computer can do this part), commit it, and check
+  the selected row and badges in Witty, Light and Paper on iPhone and Apple TV.
+- [ ] **11. Report**: tick these boxes, add the pictures from steps 4 to 8 to `docs/mac-081/ui/` with `-mac` in their
+  names, and say in #82 (or a follow-up PR) what ran and what was fixed. Close or update the `mac` issues: #68
+  (iPhone and iPad), #69 (Apple TV), #70 (macOS desktop).
+
+Not ported (gaps listed in the parity table): karaoke's Controls menu, Album art beside the words, the theme's
+`tv.heroScrim` on Apple (step 8 below), and Apple TV's album page (waiting for tv-album-081).
+
+---
+
 ## WittyTV guide and Who's watching? on Apple TV (not done on Windows)
 
 The Android TV changes in this pass have no Apple TV twin yet, and Swift can't be compiled on the Windows PC. For the Mac:

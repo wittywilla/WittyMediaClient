@@ -64,8 +64,11 @@ final class Listening: ObservableObject {
     @Published var screenShown = false
     /// Opens it with the queue showing: the tablet bar's Queue button, as the website's.
     var screenWithQueue = false
-    /// Opens it with the visualizer on: the tablet bar's Visualizer button.
+    /// Opens it with the visualizer on: the tablet bar's Visualizer, in its More menu.
     var screenWithVisualizer = false
+    /// Opens it with the lyrics showing, or in karaoke: the tablet bar's More menu (WittyMediaServer #523).
+    var screenWithLyrics = false
+    var screenWithKaraoke = false
     /// The bar folded to a round button in the corner, as the website keeps it (`wms.audio.collapsed`).
     @Published var barCollapsed = UserDefaults.standard.bool(forKey: "wms.audio.collapsed") {
         didSet { UserDefaults.standard.set(barCollapsed, forKey: "wms.audio.collapsed") }

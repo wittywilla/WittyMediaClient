@@ -124,10 +124,12 @@ public struct StemLevels: Codable, Equatable, Sendable {
     /// The other two by their ids, `music` (Background Music) and `track` (Track), 0 to 1. What an older version kept
     /// here, a level for each part by its id, is read and then left alone: no slider moves it.
     public var stems: [String: Double]
-    /// Sing: the voice off without losing where its slider was. Never kept for another day.
-    public var sing = false
+    /// Sing: the voice off without losing where its slider was. Never kept for another day, and on whenever karaoke
+    /// starts: the singer is taken out every time, in the quick version and the separated one (WittyMediaServer #524).
+    /// The guide voice, or the Voice slider, put them back.
+    public var sing = true
 
-    public init(vocals: Double? = nil, stems: [String: Double] = [:], sing: Bool = false) {
+    public init(vocals: Double? = nil, stems: [String: Double] = [:], sing: Bool = true) {
         self.vocals = vocals
         self.stems = stems
         self.sing = sing
@@ -151,7 +153,12 @@ public struct StemLevels: Codable, Equatable, Sendable {
 
     public mutating func toggleSing() { sing.toggle() }
 
-    /// Everything back to what the server suggests.
+    /// The guide voice, one press from karaoke's first screen: the singer quietly back, or out again.
+    public mutating func toggleGuide(_ status: KaraokeStatus) {
+        if StemMix.guide(status, self) { sing = true } else { setVocals(StemMix.guideLevel) }
+    }
+
+    /// Everything back to how karaoke starts: the voice out, the music and the track full.
     public mutating func reset() { self = StemLevels() }
 }
 
@@ -172,6 +179,25 @@ public enum StemMix {
     /// The Mix's other two sliders: everything but the singer, together, and the whole song.
     public static let musicId = "music"
     public static let trackId = "track"
+
+    /// The played parts the singer is in, which Voice settings shape: the vocals, or in the quick version the whole song.
+    public static func voiceParts(_ status: KaraokeStatus) -> Set<String> {
+        if isBlend(status) { return [fullId] }
+        return Set(played(status).filter { $0.role == "vocals" }.map(\.id))
+    }
+
+    /// How loud the guide voice is: the singer, quietly, to follow.
+    public static let guideLevel = 0.2
+
+    /// Whether the guide voice is on: the singer is in, at any level above nothing.
+    public static func guide(_ status: KaraokeStatus, _ levels: StemLevels) -> Bool {
+        !levels.sing && vocalsLevel(status, levels) > 0
+    }
+
+    /// Whether the Mix is as karaoke starts: the voice out and every slider where the server puts it.
+    public static func pristine(_ status: KaraokeStatus, _ levels: StemLevels) -> Bool {
+        levels.sing && levels.vocals == nil && levels.stems[musicId] == nil && levels.stems[trackId] == nil
+    }
 
     /// A level kept within 0 to 1.
     public static func level(_ value: Double) -> Double { value.isFinite ? min(1, max(0, value)) : 1 }

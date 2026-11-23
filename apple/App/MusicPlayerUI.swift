@@ -181,7 +181,7 @@ struct AudioBar: View {
             }
         }
         .padding(.leading, 5).padding(.trailing, 8).padding(.vertical, 5)
-        .background(Capsule().fill(palette.panel))
+        .background(Capsule().fill(palette.panel).background(Capsule().fill(palette.background)))
         .overlay(Capsule().strokeBorder(palette.control, lineWidth: 1))
         .shadow(color: .black.opacity(0.45), radius: 15, y: 10)
         .frame(maxWidth: .infinity, alignment: .trailing)
@@ -247,7 +247,9 @@ struct AudioBar: View {
         }
         .padding(.top, wide ? 12 : 8)
         .padding([.horizontal, .bottom], wide ? 12 : 8)
-        .background(RoundedRectangle(cornerRadius: Tokens.Radius.xl, style: .continuous).fill(palette.panel))
+        // Solid under a see-through panel colour (a glass theme), so the page never reads through it (#551).
+        .background(RoundedRectangle(cornerRadius: Tokens.Radius.xl, style: .continuous).fill(palette.panel)
+            .background(RoundedRectangle(cornerRadius: Tokens.Radius.xl, style: .continuous).fill(palette.background)))
         .overlay(RoundedRectangle(cornerRadius: Tokens.Radius.xl, style: .continuous).strokeBorder(palette.control, lineWidth: 1))
         .overlay(alignment: .top) {
             progress
@@ -319,22 +321,19 @@ struct AudioBar: View {
                         .background(palette.panel.ignoresSafeArea())
                 }
             BarButton(symbol: "list.bullet", label: books ? "Chapters" : "Queue") { open(queue: true) }
+            // Lyrics, Karaoke and the Visualizer in a More menu, as the website's bar since #523: the bar keeps the
+            // queue, the volume, full screen, Collapse and Stop.
             if !books {
-                Button { open(visualizer: true) } label: {
-                    HStack(spacing: 6) {
-                        Image(systemName: "waveform").font(.system(size: 17)).foregroundStyle(palette.accentText)
-                        if roomy { Text("Visualizer").font(.system(size: 13, weight: .semibold)).foregroundStyle(palette.text) }
-                    }
-                    .padding(.horizontal, roomy ? 12 : 10)
-                    .frame(minHeight: 40)
-                    .background(Capsule().fill(palette.accent.opacity(0.16)))
-                    .overlay(Capsule().strokeBorder(palette.accent.opacity(0.4), lineWidth: 1.5))
-                    .padding(.horizontal, 2)
-                    .frame(minHeight: 44)
-                    .contentShape(Capsule())
+                Menu {
+                    Button { listening.screenWithLyrics = true; open() } label: { Label("Lyrics", systemImage: "quote.bubble") }
+                    Button { listening.screenWithKaraoke = true; open() } label: { Label("Karaoke", systemImage: "music.mic") }
+                    Button { open(visualizer: true) } label: { Label("Visualizer", systemImage: "waveform") }
+                } label: {
+                    Image(systemName: "ellipsis").font(.system(size: 18, weight: .semibold)).foregroundStyle(palette.text)
+                        .frame(width: 44, height: 44)
+                        .contentShape(Circle())
                 }
-                .buttonStyle(BarPressStyle())
-                .accessibilityLabel("Visualizer")
+                .accessibilityLabel("More")
             }
             BarButton(symbol: "arrow.up.left.and.arrow.down.right", label: "Full screen") { open() }
             BarButton(symbol: "chevron.down", label: "Collapse the player") { listening.barCollapsed = true }
@@ -559,7 +558,8 @@ struct PhoneNowPlaying: View {
             let insets = EdgeInsets(top: safe.top, leading: 0, bottom: safe.bottom, trailing: 0)
             KaraokeView(item: item, lyrics: words.lyrics, loading: loading, glow: glow,
                         offset: words.offset, setOffset: { (offset: Double) in words.setOffset(offset, client: client) }, close: { karaoke = false },
-                        insets: insets, viz: viz, vizHere: vizHere && vizLoaded, canvas: canvasStatus)
+                        insets: insets, viz: viz, vizHere: vizHere && vizLoaded,
+                        setVizStyle: { (style: String) in setViz { $0.style = style } }, canvas: canvasStatus)
                 .transition(.move(edge: .bottom))
         }
     }
@@ -597,7 +597,11 @@ struct PhoneNowPlaying: View {
         .tint(.white)
         .onAppear {
             if listening.screenWithQueue { panel = .queue }
+            if listening.screenWithLyrics, music { panel = .lyrics }
+            if listening.screenWithKaraoke, music { karaoke = true }
             listening.screenWithQueue = false
+            listening.screenWithLyrics = false
+            listening.screenWithKaraoke = false
         }
         .onChange(of: vizLoaded) { loaded in
             guard loaded, listening.screenWithVisualizer else { return }

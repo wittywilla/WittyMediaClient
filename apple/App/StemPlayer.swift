@@ -134,6 +134,8 @@ final class StemPlayer {
         let id: String
         let node: AVAudioPlayerNode
         let file: AVAudioFile
+        /// The singer is in this part: Voice settings' pan applies to it.
+        let voice: Bool
     }
 
     /// How far ahead a start is set, so every part has time to be ready for it.
@@ -152,12 +154,30 @@ final class StemPlayer {
     private var base: (position: Double, host: UInt64)?
     private var changes: NSObjectProtocol?
 
-    /// Opens every part. Throws if one can't be read, which is the cue to play the normal track.
-    init(files: [(id: String, url: URL)]) throws {
+    // Voice settings (WittyKit's VoiceFx.swift, the website's fxChain.ts): the singer's part goes through its own bus,
+    // tone, compression, doubling, echo and reverb before the mix; every other part through the music's bus and its
+    // tone. Each unit is bypassed while its control is off, so a song sounds as it was made.
+    private let voiceBus = AVAudioMixerNode()
+    private let voiceTone = AVAudioUnitEQ(numberOfBands: 4)
+    private let squeeze = AVAudioUnitEffect(audioComponentDescription: AudioComponentDescription(
+        componentType: kAudioUnitType_Effect, componentSubType: kAudioUnitSubType_DynamicsProcessor,
+        componentManufacturer: kAudioUnitManufacturer_Apple, componentFlags: 0, componentFlagsMask: 0))
+    private let doubling = AVAudioUnitDelay()
+    private let echo = AVAudioUnitDelay()
+    private let room = AVAudioUnitReverb()
+    private var roomShape = -1
+    private let musicBus = AVAudioMixerNode()
+    private let musicTone = AVAudioUnitEQ(numberOfBands: 3)
+
+    /// Opens every part. Throws if one can't be read, which is the cue to play the normal track. `voice` names the
+    /// parts the singer is in: the vocals, or in the quick version the whole song (its voice is what's left without
+    /// the music, so Voice settings there are close, not exact).
+    init(files: [(id: String, url: URL)], voice: Set<String> = [StemMix.vocalsId]) throws {
         guard !files.isEmpty else { throw StemTrouble.unreadable }
         engine.attach(mix)
         engine.attach(eq)
         engine.attach(pitch)
+        for unit in [voiceBus, voiceTone, squeeze, doubling, echo, room, musicBus, musicTone] as [AVAudioNode] { engine.attach(unit) }
         for (index, frequency) in Equaliser.frequencies.enumerated() {
             let band = eq.bands[index]
             band.filterType = index == 0 ? .lowShelf : index == Equaliser.frequencies.count - 1 ? .highShelf : .parametric
@@ -172,12 +192,41 @@ final class StemPlayer {
             guard file.length > 0, file.processingFormat.sampleRate > 0 else { throw StemTrouble.unreadable }
             let node = AVAudioPlayerNode()
             engine.attach(node)
-            engine.connect(node, to: mix, format: file.processingFormat)
-            decks.append(Deck(id: part.id, node: node, file: file))
+            engine.connect(node, to: voice.contains(part.id) ? voiceBus : musicBus, format: file.processingFormat)
+            decks.append(Deck(id: part.id, node: node, file: file, voice: voice.contains(part.id)))
         }
         guard let format = AVAudioFormat(standardFormatWithSampleRate: decks[0].file.processingFormat.sampleRate, channels: 2) else {
             throw StemTrouble.unreadable
         }
+        // The voice: its bus, tone, compression, doubling, echo, reverb, then the mix. The music: its bus, its tone, the mix.
+        engine.connect(voiceBus, to: voiceTone, format: format)
+        engine.connect(voiceTone, to: squeeze, format: format)
+        engine.connect(squeeze, to: doubling, format: format)
+        engine.connect(doubling, to: echo, format: format)
+        engine.connect(echo, to: room, format: format)
+        engine.connect(room, to: mix, format: format)
+        engine.connect(musicBus, to: musicTone, format: format)
+        engine.connect(musicTone, to: mix, format: format)
+        let tones: [(AVAudioUnitEQFilterType, Float)] = [(.highPass, 20), (.lowShelf, 200), (.parametric, 3000), (.highShelf, 10000)]
+        for (band, tone) in zip(voiceTone.bands, tones) {
+            band.filterType = tone.0
+            band.frequency = tone.1
+            band.bandwidth = 1
+            band.gain = 0
+            band.bypass = false
+        }
+        let music: [(AVAudioUnitEQFilterType, Float, Float)] = [(.lowShelf, 120, 1), (.highShelf, 6000, 1), (.parametric, 2500, 1.6)]
+        for (band, tone) in zip(musicTone.bands, music) {
+            band.filterType = tone.0
+            band.frequency = tone.1
+            band.bandwidth = tone.2
+            band.gain = 0
+            band.bypass = false
+        }
+        doubling.delayTime = 0.025
+        doubling.feedback = 0
+        doubling.lowPassCutoff = 12000
+        echo.lowPassCutoff = 9000
         engine.connect(mix, to: eq, format: format)
         engine.connect(eq, to: pitch, format: format)
         engine.connect(pitch, to: engine.mainMixerNode, format: format)
@@ -248,6 +297,49 @@ final class StemPlayer {
         let off = key == 0 && abs(rate - 1) < 0.0001
         if pitch.bypass != off { pitch.bypass = off }
         shape()
+    }
+
+    /// Voice settings, heard at once. The website's compressor (threshold and ratio) becomes the system's dynamics
+    /// processor: the same threshold, its headroom narrowing as the ratio rises, and the same make-up gain.
+    func set(fx: VoiceFx) {
+        let n = fx.nodes
+        let bands = voiceTone.bands
+        bands[0].frequency = Float(max(20, n.lowCutHz))
+        bands[0].bypass = n.lowCutHz <= 20
+        bands[1].gain = Float(n.bassDb)
+        bands[2].gain = Float(n.presenceDb)
+        bands[3].gain = Float(n.airDb)
+        voiceTone.bypass = n.lowCutHz <= 20 && n.bassDb == 0 && n.presenceDb == 0 && n.airDb == 0
+        squeeze.bypass = n.compression <= 0
+        if n.compression > 0 {
+            let unit = squeeze.audioUnit
+            AudioUnitSetParameter(unit, AudioUnitParameterID(kDynamicsProcessorParam_Threshold), kAudioUnitScope_Global, 0,
+                                  AudioUnitParameterValue(n.thresholdDb), 0)
+            AudioUnitSetParameter(unit, AudioUnitParameterID(kDynamicsProcessorParam_HeadRoom), kAudioUnitScope_Global, 0,
+                                  AudioUnitParameterValue(max(0.5, 24 / n.ratio)), 0)
+            AudioUnitSetParameter(unit, AudioUnitParameterID(kDynamicsProcessorParam_OverallGain), kAudioUnitScope_Global, 0,
+                                  AudioUnitParameterValue(n.makeUpDb), 0)
+        }
+        doubling.wetDryMix = Float(VoiceFxNodes.wetDry(n.double))
+        doubling.bypass = n.double <= 0
+        echo.delayTime = max(0.06, min(2, n.echoTime))
+        echo.feedback = Float(min(80, max(0, n.echoFeedback * 100)))
+        echo.wetDryMix = Float(VoiceFxNodes.wetDry(n.echo))
+        echo.bypass = n.echo <= 0
+        let shape = VoiceFxNodes.roomIndex(n.room)
+        if shape != roomShape {
+            roomShape = shape
+            let rooms: [AVAudioUnitReverbPreset] = [.smallRoom, .mediumRoom, .largeRoom, .mediumHall, .largeHall]
+            room.loadFactoryPreset(rooms[shape])
+        }
+        room.wetDryMix = Float(VoiceFxNodes.wetDry(n.reverb))
+        room.bypass = n.reverb <= 0
+        for deck in decks where deck.voice { deck.node.pan = Float(max(-1, min(1, n.pan))) }
+        let music = musicTone.bands
+        music[0].gain = Float(n.musicBassDb)
+        music[1].gain = Float(n.musicTrebleDb)
+        music[2].gain = Float(n.pocketDb)
+        musicTone.bypass = n.musicBassDb == 0 && n.musicTrebleDb == 0 && n.pocketDb == 0
     }
 
     /// The equaliser and levelling as the rest of the app has them now.

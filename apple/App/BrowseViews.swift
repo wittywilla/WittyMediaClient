@@ -400,8 +400,7 @@ private struct WideHero: View {
                 .clipped()
                 .overlay(LinearGradient(stops: [.init(color: palette.background, location: 0), .init(color: .clear, location: 0.75)],
                                         startPoint: .leading, endPoint: .trailing))
-                .overlay(LinearGradient(stops: [.init(color: .clear, location: 0.6), .init(color: palette.background, location: 1)],
-                                        startPoint: .top, endPoint: .bottom))
+                .heroFade(from: HeroFade.billboard)
                 .accessibilityHidden(true)
         }
     }

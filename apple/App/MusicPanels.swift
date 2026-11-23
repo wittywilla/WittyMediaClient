@@ -703,12 +703,16 @@ private struct TapAlongView: View {
 
 // MARK: - Karaoke
 
-/// Big words that fill in as they're sung, a count-in before each line after a break, the next line waiting below,
-/// the voice turned down and the key moved to suit the singer.
+/// Big words that fill in as they're sung, a count-in before each line after a break, the next line waiting below.
+/// The first screen is the website's since WittyMediaServer #524: the words, the previous and next line and Play, Guide
+/// voice, Mix and Voice settings. The sliders, Reset, Key and the words' timing are in the Mix, at the side on a wide
+/// screen and a sheet on a phone. The singer starts out every time; the top row and what's behind the words step aside
+/// when nothing is touched for a while (a tap brings them back, and another hides them), but never for VoiceOver.
 struct KaraokeView: View {
     @EnvironmentObject private var listening: Listening
     @EnvironmentObject private var model: AppModel
     @Environment(\.client) private var client
+    @Environment(\.accessibilityVoiceOverEnabled) private var voiceOver
     let item: Item
     let lyrics: Lyrics?
     let loading: Bool
@@ -720,15 +724,27 @@ struct KaraokeView: View {
     var insets = EdgeInsets()
     var viz = VisualizerPrefs()
     var vizHere = true
+    /// Choosing the visualizer's style here chooses it for Now Playing too: one setting.
+    var setVizStyle: ((String) -> Void)?
     @ObservedObject var canvas: CanvasStatus
     @ObservedObject private var store = MusicShowStore.shared
     @State private var mono = false
+    @State private var panel: KaraokePanel?
+    @State private var idle = false
+    @State private var idleTimer: Task<Void, Never>?
     private let monoCheck = Timer.publish(every: 1.5, on: .main, in: .common).autoconnect()
+
+    enum KaraokePanel: String, Identifiable {
+        case mix, voice
+        var id: String { rawValue }
+    }
 
     private var lines: [LyricLine] { lyrics?.timed ?? [] }
 
-    /// A server that makes a song's separate parts: their sliders take the place of Voice lower once they play.
+    /// A server that makes a song's separate parts: the Mix's sliders take the place of the old Voice lower.
     private var auto: Bool { model.has("karaoke-auto") }
+
+    private var ink: StemInk { StemInk(text: NPInk.fg, quiet: NPInk.fg2, chip: NPInk.chip, fill: .white, onFill: .black) }
 
     private func goLine(_ by: Int, from index: Int) {
         let to = max(0, index + by)
@@ -737,6 +753,24 @@ struct KaraokeView: View {
     }
 
     private func setKey(_ key: Double) { listening.setSound { $0.keyShift = max(-6, min(6, key)) } }
+
+    // MARK: Stepping aside
+
+    /// The top row and what's behind the words show again, and step aside after four seconds of nothing.
+    private func wake() {
+        if idle { withAnimation(.easeOut(duration: 0.3)) { idle = false } }
+        idleTimer?.cancel()
+        idleTimer = Task { @MainActor in
+            try? await Task.sleep(nanoseconds: 4_000_000_000)
+            guard !Task.isCancelled, panel == nil, !voiceOver else { return }
+            withAnimation(.easeOut(duration: 0.6)) { idle = true }
+        }
+    }
+
+    private func togglePanel(_ which: KaraokePanel) {
+        panel = panel == which ? nil : which
+        wake()
+    }
 
     var body: some View {
         GeometryReader { geo in
@@ -751,42 +785,59 @@ struct KaraokeView: View {
                     .ignoresSafeArea()
                 VStack(spacing: 0) {
                     top(h)
-                    HStack(alignment: .top, spacing: 16) {
-                        MusicShowToggle(canvas: canvas, visualizer: vizHere, compact: compact)
-                        LyricsModeToggle(timed: !lines.isEmpty)
-                    }
-                    .padding(.horizontal, 16).padding(.top, 8)
+                        .opacity(idle ? 0 : 1)
+                    behind(compact: compact)
+                        .opacity(idle ? 0 : 1)
+                        .padding(.horizontal, 16).padding(.top, 8)
                     stage(h)
                         .frame(maxHeight: .infinity)
-                    if auto {
-                        KaraokeStemsControl(stems: listening.stems, ink: StemInk(text: NPInk.fg, quiet: NPInk.fg2, chip: NPInk.chip,
-                                                                                 fill: .white, onFill: .black))
-                            .padding(.horizontal, 16).padding(.top, 4)
-                    }
-                    controls(compact: compact)
-                    Text(note).font(.system(size: 13)).foregroundStyle(NPInk.fg2).multilineTextAlignment(.center)
-                        .frame(minHeight: 18)
-                        .padding(.horizontal, 16).padding(.bottom, max(10, insets.bottom))
+                        .contentShape(Rectangle())
+                        .onTapGesture {
+                            if idle || panel != nil { wake() } else if !voiceOver { withAnimation(.easeOut(duration: 0.3)) { idle = true } }
+                        }
+                    bar(compact: compact)
+                        .padding(.bottom, max(10, insets.bottom))
                 }
                 // Never wider than the screen, whatever a row inside would like.
                 .frame(width: geo.size.width)
                 .padding(.top, insets.top)
+                // A wide screen: the panel at the side, the words still in view.
+                .overlay(alignment: .trailing) {
+                    if let panel, !compact {
+                        panelView(panel, compact: false)
+                            .frame(width: min(400, geo.size.width * 0.42))
+                            .frame(maxHeight: .infinity)
+                            .background(NPInk.panel.ignoresSafeArea())
+                            .overlay(alignment: .leading) { NPInk.line.frame(width: 1).ignoresSafeArea() }
+                            .transition(.move(edge: .trailing))
+                    }
+                }
+                .sheet(item: Binding(get: { compact ? panel : nil }, set: { panel = $0 })) { which in
+                    panelView(which, compact: true)
+                        .presentationDetents([.medium, .large])
+                        .presentationDragIndicator(.visible)
+                        .background(NPInk.pop.ignoresSafeArea())
+                        .environment(\.colorScheme, .dark)
+                }
             }
+            .animation(.easeOut(duration: 0.25), value: panel)
         }
         .environment(\.colorScheme, .dark)
         .onReceive(monoCheck) { _ in
             guard listening.sound.vocalCut > 0 else { if mono { mono = false }; return }
             if let found = SoundEngine.shared.nearlyMono() { mono = found }
         }
+        .onAppear { wake() }
         // Coming back, the voice and key are as they were: this was for the song, not for good.
         .onDisappear {
+            idleTimer?.cancel()
             listening.stems.close()
             listening.setSound { $0.vocalCut = 0; $0.keyShift = 0 }
         }
         .task(id: auto) {
             if auto { listening.stems.open(song: item.id, client: client, profile: String(model.user?.id ?? 0)) }
         }
-        .accessibilityAction(.escape) { close() }
+        .accessibilityAction(.escape) { if panel != nil { panel = nil } else { close() } }
     }
 
     private var note: String {
@@ -810,6 +861,43 @@ struct KaraokeView: View {
             .accessibilityLabel("Leave karaoke")
         }
         .padding(.horizontal, 16).padding(.top, 14)
+    }
+
+    /// What's behind the words, and the visualizer's style while it's the one (the same setting as Now Playing's); the
+    /// Follow along or Read choice beside it where there's room (in the Mix on a phone).
+    private func behind(compact: Bool) -> some View {
+        HStack(alignment: .top, spacing: 16) {
+            VStack(alignment: .leading, spacing: 6) {
+                MusicShowToggle(canvas: canvas, visualizer: vizHere, compact: compact)
+                if store.show == .viz, vizHere, let setVizStyle { styles(setVizStyle) }
+            }
+            if !compact { LyricsModeToggle(timed: !lines.isEmpty) }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    /// Bars, Waves, Drift, and More for the rest.
+    private func styles(_ choose: @escaping (String) -> Void) -> some View {
+        let native = VisualizerEffects.all.filter(\.native)
+        let other = VisualizerEffects.named(viz.style).flatMap { $0.native ? nil : $0 }
+        return HStack(spacing: 6) {
+            ForEach(native) { effect in
+                Button { choose(effect.id) } label: { Text(effect.name) }
+                    .action(selected: viz.style == effect.id, pill: true)
+                    .accessibilityAddTraits(viz.style == effect.id ? [.isSelected] : [])
+            }
+            Menu {
+                ForEach(VisualizerEffects.picker) { effect in
+                    Button { choose(effect.id) } label: {
+                        if viz.style == effect.id { Label(effect.name, systemImage: "checkmark") } else { Text(effect.name) }
+                    }
+                }
+            } label: { Text(other?.name ?? "More") }
+            .action(selected: other != nil, pill: true)
+            .accessibilityLabel("More visualizer styles")
+        }
+        .accessibilityElement(children: .contain)
+        .accessibilityLabel("Visualizer style")
     }
 
     @ViewBuilder
@@ -897,27 +985,54 @@ struct KaraokeView: View {
         }
     }
 
-    private func controls(compact: Bool) -> some View {
+    /// The first screen's bar: the previous line, Play, the next line, then Guide voice, Mix and Voice settings.
+    private func bar(compact: Bool) -> some View {
         let index = Karaoke.lineIndex(lines, listening.positionSec() * 1000 - offset)
         return FlowRow(spacing: 8, lineSpacing: 8) {
-            NPRoundButton(symbol: "backward.end.fill", label: "Previous line", size: 52) { goLine(-1, from: index) }
-            Button { listening.toggle() } label: {
+            NPRoundButton(symbol: "backward.end.fill", label: "Previous line", size: 52) { goLine(-1, from: index); wake() }
+            Button { listening.toggle(); wake() } label: {
                 Image(systemName: listening.isPlaying ? "pause.fill" : "play.fill").font(.system(size: 26, weight: .bold)).foregroundStyle(Color.black)
                     .frame(width: 64, height: 64).background(Circle().fill(Color.white))
             }
             .buttonStyle(.plain)
             .accessibilityLabel(listening.isPlaying ? "Pause" : "Play")
-            NPRoundButton(symbol: "forward.end.fill", label: "Next line", size: 52) { goLine(1, from: index) }
+            NPRoundButton(symbol: "forward.end.fill", label: "Next line", size: 52) { goLine(1, from: index); wake() }
             if !compact { NPInk.line.frame(width: 1, height: 34).padding(.horizontal, 4) }
-            // The parts, once they play, are how the voice is turned down.
-            if !listening.stemsHeard {
+            KaraokeBarChips(stems: listening.stems, auto: auto, compact: compact, panel: panel, ink: ink, toggle: togglePanel, woke: wake)
+        }
+        .padding(.horizontal, 12).padding(.vertical, 8)
+    }
+
+    // MARK: The Mix and Voice settings
+
+    private func panelView(_ which: KaraokePanel, compact: Bool) -> some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 14) {
+                HStack {
+                    Text(which == .mix ? "Mix" : "Voice settings").font(.title3.weight(.bold)).foregroundStyle(NPInk.fg)
+                        .accessibilityAddTraits(.isHeader)
+                    Spacer(minLength: 0)
+                    NPRoundButton(symbol: "xmark", label: which == .mix ? "Close" : "Close voice settings") { panel = nil }
+                }
+                if which == .mix { mix(compact: compact) } else { KaraokeVoiceFxPanel(stems: listening.stems, ink: ink, roomy: !compact) }
+            }
+            .padding(16)
+        }
+    }
+
+    @ViewBuilder
+    private func mix(compact: Bool) -> some View {
+        if auto {
+            KaraokeStemsControl(stems: listening.stems, ink: ink)
+        } else {
+            // A server without separate parts: the voice turned down from the song itself.
             HStack(spacing: 2) {
                 ForEach(Array(Karaoke.vocals.enumerated()), id: \.offset) { _, choice in
                     let on = listening.sound.vocalCut == choice.0
                     Button(choice.1) { listening.setSound { $0.vocalCut = choice.0 } }
-                        .font(.system(size: compact ? 13 : 15, weight: .semibold))
+                        .font(.system(size: 15, weight: .semibold))
                         .foregroundStyle(on ? Color.black : Color.white)
-                        .padding(.horizontal, compact ? 10 : 16).frame(minHeight: 46)
+                        .padding(.horizontal, 14).frame(minHeight: 46)
                         .background(Capsule().fill(on ? Color.white : .clear))
                         .accessibilityAddTraits(on ? [.isSelected] : [])
                 }
@@ -926,26 +1041,37 @@ struct KaraokeView: View {
             .background(Capsule().fill(NPInk.chip))
             .accessibilityElement(children: .contain)
             .accessibilityLabel("Singer's voice")
-            }
-            stepper(words: Karaoke.keyWords(listening.sound.keyShift), compact: compact,
+        }
+        FlowRow(spacing: 8, lineSpacing: 8) {
+            stepper(words: Karaoke.keyWords(listening.sound.keyShift),
                     lower: ("Lower key", listening.sound.keyShift > -6, { setKey(listening.sound.keyShift - 1) }),
                     raise: ("Raise key", listening.sound.keyShift < 6, { setKey(listening.sound.keyShift + 1) }))
-            stepper(words: Karaoke.timingWords(offset), compact: compact,
+                .accessibilityElement(children: .contain).accessibilityLabel("Musical key")
+            stepper(words: Karaoke.timingWords(offset),
                     lower: ("Words sooner", true, { setOffset(offset - 100) }),
                     raise: ("Words later", true, { setOffset(offset + 100) }))
+                .accessibilityElement(children: .contain).accessibilityLabel("Timing of the words")
         }
-        .padding(.horizontal, 12).padding(.vertical, 8)
+        if compact {
+            LyricsModeToggle(timed: !lines.isEmpty)
+            if auto {
+                KaraokeChip(title: "Voice settings", on: !listening.stems.fx.isOff, ink: ink) { panel = .voice }
+            }
+        }
+        if !note.isEmpty {
+            Text(note).font(.system(size: 13)).foregroundStyle(NPInk.fg2).fixedSize(horizontal: false, vertical: true)
+        }
     }
 
-    private func stepper(words: String, compact: Bool, lower: (String, Bool, () -> Void), raise: (String, Bool, () -> Void)) -> some View {
+    private func stepper(words: String, lower: (String, Bool, () -> Void), raise: (String, Bool, () -> Void)) -> some View {
         HStack(spacing: 4) {
             Button(action: lower.2) {
                 Text("−").font(.system(size: 20, weight: .bold)).foregroundStyle(Color.white)
                     .frame(width: 46, height: 46).background(Circle().fill(NPInk.chip))
             }
             .buttonStyle(.plain).disabled(!lower.1).opacity(lower.1 ? 1 : 0.4).accessibilityLabel(lower.0)
-            Text(words).font(.system(size: compact ? 13 : 14, weight: .semibold).monospacedDigit()).foregroundStyle(Color.white)
-                .frame(minWidth: compact ? 74 : 92)
+            Text(words).font(.system(size: 14, weight: .semibold).monospacedDigit()).foregroundStyle(Color.white)
+                .frame(minWidth: 92)
             Button(action: raise.2) {
                 Text("+").font(.system(size: 20, weight: .bold)).foregroundStyle(Color.white)
                     .frame(width: 46, height: 46).background(Circle().fill(NPInk.chip))
@@ -954,6 +1080,31 @@ struct KaraokeView: View {
         }
         .padding(3)
         .background(Capsule().fill(NPInk.chip))
+    }
+}
+
+/// Guide voice, Mix and Voice settings on karaoke's bar, drawn again as the parts arrive and the levels move.
+private struct KaraokeBarChips: View {
+    @ObservedObject var stems: KaraokeStems
+    let auto: Bool
+    let compact: Bool
+    let panel: KaraokeView.KaraokePanel?
+    let ink: StemInk
+    let toggle: (KaraokeView.KaraokePanel) -> Void
+    let woke: () -> Void
+
+    var body: some View {
+        // The singer starts out; the guide voice brings them back quietly, and takes them out again.
+        if auto, stems.loaded != nil || stems.waiting {
+            KaraokeChip(title: "Guide voice", symbol: "music.mic", on: stems.guide, ink: ink, enabled: stems.loaded != nil) { stems.toggleGuide(); woke() }
+                .accessibilityHint("Keeps the singer quietly, as a guide")
+        }
+        KaraokeChip(title: "Mix", symbol: "slider.horizontal.3", on: panel == .mix, ink: ink) { toggle(.mix) }
+            .accessibilityHint("The voice, the music and the track, the key and the words' timing")
+        if auto, !compact {
+            KaraokeChip(title: "Voice settings", on: panel == .voice || !stems.fx.isOff, ink: ink) { toggle(.voice) }
+                .accessibilityHint("Echo, reverb, tone and more, for the voice and the music")
+        }
     }
 }
 

@@ -175,9 +175,9 @@ struct SDUIHeroView: View {
                     .transition(.opacity)
                     .overlay(LinearGradient(stops: [.init(color: palette.background, location: 0), .init(color: palette.background.opacity(0.6), location: 0.4),
                                                     .init(color: .clear, location: 0.8)], startPoint: .leading, endPoint: .trailing))
-                    .overlay(LinearGradient(stops: [.init(color: .clear, location: 0.6), .init(color: palette.background, location: 1)],
-                                            startPoint: .top, endPoint: .bottom))
                     .clipped()
+                    // Into the page by its own alpha (#545), so a theme's scene behind it shows no line where it ends.
+                    .heroFade(from: HeroFade.billboard)
                     .accessibilityHidden(true)
             }
         }
@@ -344,9 +344,8 @@ struct SDUIDetailHeaderView: View {
                     .opacity(0.55)
                     .overlay(LinearGradient(stops: [.init(color: palette.background, location: 0), .init(color: .clear, location: 0.8)],
                                             startPoint: .leading, endPoint: .trailing))
-                    .overlay(LinearGradient(stops: [.init(color: .clear, location: 0.55), .init(color: palette.background, location: 1)],
-                                            startPoint: .top, endPoint: .bottom))
                     .clipped()
+                    .heroFade(from: HeroFade.title)
                     .accessibilityHidden(true)
             }
         }
@@ -365,9 +364,9 @@ struct SDUIDetailHeaderView: View {
                     .frame(height: min(width * 9 / 16, 460))
                     // The title's canvas, where it has one, loops over the still (MediaCanvas.swift decides when).
                     .overlay { CanvasLayer(item: store.params["item"].flatMap { Int64($0) }, active: !model.listening.screenShown) }
-                    .overlay(LinearGradient(stops: [.init(color: .clear, location: 0.5), .init(color: palette.background, location: 1)],
-                                            startPoint: .top, endPoint: .bottom))
                     .clipped()
+                    // Into the page by its own alpha (#545): no line where a theme's scene or gradient meets it.
+                    .heroFade(from: 0.5, sides: wide)
             }
             HStack(alignment: .top, spacing: layout.sp("m")) {
                 if (wide || style == "poster"), header.poster != nil, style != "compact" {
