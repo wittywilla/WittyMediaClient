@@ -274,7 +274,7 @@ fun ChannelScreen(nav: Nav, start: String) {
                 }
                 .focusable(!mini && !dock && !failedHere),
         ) {
-            LivePicture(Modifier.fillMaxSize())
+            LivePicture(Modifier.fillMaxSize(), fullScreen = true)
             if (LiveTv.key == key && LiveTv.playing && LiveTv.info?.now?.kind == "slate") {
                 Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                     SlateCard(dress, LiveTv.info?.name ?: channel?.name.orEmpty(), LiveTv.info?.next)
@@ -396,6 +396,10 @@ fun ChannelBanner(dress: TvDress, channel: GuideChannel?, info: Tuned?, now: Lon
     val p = dress.paint
     val shape = dress.shape
     val programme = info?.now
+    // In a bumper or a gap the channel's "programme" is its slate: the banner names what comes next instead, and Next is
+    // the next real programme, never another slate (#85).
+    val slate = programme?.kind == "slate"
+    val upcoming = GuideRules.upcoming(programme, channel, info?.next)
     val radius = if (shape == TvShape.Receiver || shape == TvShape.Teletext || shape == TvShape.Listings) 0f else if (shape == TvShape.Outline) 14f else 6f
     val corner = RoundedCornerShape(dress.pt(radius))
     val plainBg = shape == TvShape.Receiver || shape == TvShape.Teletext || shape == TvShape.Listings || shape == TvShape.Outline || shape == TvShape.Compact
@@ -428,14 +432,15 @@ fun ChannelBanner(dress: TvDress, channel: GuideChannel?, info: Tuned?, now: Lon
         }
         Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(dress.pt(3))) {
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(dress.pt(8))) {
-                val title = programme?.title ?: info?.name ?: channel?.name.orEmpty()
+                val title = GuideRules.headline(programme, upcoming, info?.name ?: channel?.name.orEmpty())
                 Text(if (shape == TvShape.Teletext) title.uppercase() else title, style = dress.font(25f, W.Bold), color = p.text, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false))
                 programme?.rating?.let {
                     Text(it, style = dress.font(15f), color = p.text, modifier = Modifier.border(dress.pt(1), p.soft, RoundedCornerShape(dress.pt(dress.radius))).padding(horizontal = dress.pt(5)))
                 }
             }
             Text(
-                programme?.sub ?: if (info == null) "Tuning…" else if (programme == null) "No guide data" else "",
+                if (slate) upcoming?.let { "At ${tvClock(it.start)}" } ?: "Back soon"
+                    else programme?.sub ?: if (info == null) "Tuning…" else if (programme == null) "No guide data" else "",
                 style = dress.font(18.75f, W.Bold), color = p.accent, maxLines = 1, overflow = TextOverflow.Ellipsis,
             )
             if (fromStart) Text("Watching from the start", style = dress.font(16.25f, W.Bold), color = p.accent, maxLines = 1)
@@ -450,7 +455,7 @@ fun ChannelBanner(dress: TvDress, channel: GuideChannel?, info: Tuned?, now: Lon
                     Text(tvClock(programme.end), style = small, color = p.soft, maxLines = 1)
                 }
             }
-            info?.next?.let { Text("Next: ${it.title} · ${GuideRules.span(it.start, it.end)}", style = dress.font(16.25f), color = p.soft, maxLines = 1, overflow = TextOverflow.Ellipsis) }
+            (if (slate) null else upcoming)?.let { Text("Next: ${it.title} · ${GuideRules.span(it.start, it.end)}", style = dress.font(16.25f), color = p.soft, maxLines = 1, overflow = TextOverflow.Ellipsis) }
             info?.playing?.let { Text("Playing now: ${it.title}", style = dress.font(16.25f), color = p.soft, maxLines = 1, overflow = TextOverflow.Ellipsis) }
             (info?.notices ?: channel?.notices).orEmpty().forEach { Text(it, style = dress.font(16.25f), color = p.accent, maxLines = 2, overflow = TextOverflow.Ellipsis) }
             Text("Select: now and next · ▲▼ channel · Back: the guide", style = dress.font(15f), color = p.soft, modifier = Modifier.padding(top = dress.pt(4)))

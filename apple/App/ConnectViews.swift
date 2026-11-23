@@ -472,9 +472,18 @@ struct CodeView: View {
         Button(say("showCodeInstead")) { model.signIn(to: server, way: .shownCode) }.action(.quiet).fixedSize()
     }
 
+    // A TV reads the TV words; a phone or iPad is told it can be signed in the same way (client #80).
+    private var codeHintKey: String {
+        #if os(tvOS)
+        "codeHint"
+        #else
+        "codeHintPhone"
+        #endif
+    }
+
     var body: some View {
         SignInLayout(back: back) {
-            SignInHeading(title: say("codeTitle"), detail: say("codeHint"))
+            SignInHeading(title: say("codeTitle"), detail: say(codeHintKey))
             ServerPill(name: server.name)
             CodeBoxes(digits: entry.digits, checking: entry.busy, wrongTries: wrongTries)
             // Room is kept for the message, or the keys would move under a finger as it comes and goes.

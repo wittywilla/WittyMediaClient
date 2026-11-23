@@ -70,6 +70,26 @@ class SduiRulesTest {
          "meta":{"etag":"W/\"a\"","ttlSeconds":60},"somethingNew":{"x":1}}
     """.trimIndent()
 
+    // A library page with one grid, in the state given: the server's empty library (Podcasts with nothing in it, #77).
+    private fun library(grid: String) = SduiScreen(doc("""
+        {"version":1,"catalog":2,"page":{"id":"library","kind":"library","title":"Podcasts","route":"/library/5"},
+         "root":{"type":"Page","id":"page","props":{"title":"Podcasts"},"children":[$grid]}}
+    """.trimIndent()))
+
+    @Test
+    fun aTvPageWithOnlyEmptySectionsIsAnEmptyPage() {
+        fun rows(grid: String) = com.wittywilla.wittymediaclient.ui.SduiRows.flatten(library(grid), true) { 4 }
+        val empty = """{"type":"Grid","id":"all","state":"empty","props":{"title":"All","emptyText":"Nothing here yet."}}"""
+        assertTrue(com.wittywilla.wittymediaclient.ui.SduiRows.nothingToShow(rows(empty)))
+        val loading = """{"type":"Grid","id":"all","state":"deferred","props":{"title":"All"}}"""
+        assertFalse("still on its way", com.wittywilla.wittymediaclient.ui.SduiRows.nothingToShow(rows(loading)))
+        val full = """{"type":"Grid","id":"all","props":{"title":"All"},"children":[{"type":"Card","id":"c1","props":{"title":"One"}}]}"""
+        assertFalse("a card to land on", com.wittywilla.wittymediaclient.ui.SduiRows.nothingToShow(rows(full)))
+        val withHero = """{"type":"Hero","id":"hero","children":[{"type":"Card","id":"h","props":{"title":"H"}}]},$empty"""
+        assertFalse("a page with something else on it", com.wittywilla.wittymediaclient.ui.SduiRows.nothingToShow(rows(withHero)))
+        assertFalse("nothing at all isn't an empty library", com.wittywilla.wittymediaclient.ui.SduiRows.nothingToShow(emptyList()))
+    }
+
     @Test
     fun aDocumentReadsWithFieldsAndComponentsItHasNeverHeardOf() {
         val d = doc(home)

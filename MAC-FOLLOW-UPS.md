@@ -6,6 +6,25 @@ Newest first. Each section is one pass that needs a Mac: Xcode, the iPhone and A
 app. Work through the newest first, tick each box here as you go, commit the ticks, and say in the PR what ran and what
 didn't. The GitHub issues labelled `mac` point at these sections.
 
+## 0.8.2-alpha: security checks that need Apple devices (2026-11-23)
+
+Written on the Windows PC during the 0.8.2 security pass. The code was read there; these need a Mac, a simulator or a
+device to confirm at run time. Report what each showed in the PR that ticks them.
+
+- [ ] **1.** Sign in on the iPhone simulator, then look at the keychain item the app keeps (Xcode's debugger, or
+  `security dump-keychain` for the simulator's keychain): it is accessible after first unlock, this device only, and
+  nothing else of the sign-in is in `UserDefaults` (`defaults read` on the app's container plist).
+- [ ] **2.** With the app in the background on Apple TV, open `wittymedia://item/1`, `wittymedia://show/1`,
+  `wittymedia://route/%2Fwatch%2F1` and a few malformed ones (too long, a query, another scheme's address): the first
+  three open only once signed in, the others do nothing, and nothing crashes.
+- [ ] **3.** Point the iPhone app at a server by its `https://` address with a self-signed certificate: it refuses,
+  says why, and doesn't offer to carry on. At a plain `http://` address on the home network it connects; at a plain
+  `http://` public address it refuses (App Transport Security allows local networking only).
+- [ ] **4.** Pair the Apple TV with a phone by QR code and PIN, then check Console.app for the app's process: no
+  sign-in token, PIN or pairing secret appears in the logs.
+- [ ] **5.** In the macOS desktop app (Electron), open the developer tools shortcut (Cmd-Alt-I) in the released
+  build: nothing opens. Drag a web address onto the window: the app doesn't navigate to it.
+
 ## WittyMediaClient 0.6.0: what's left for the owner (2026-11-23)
 
 0.6.0 was tagged from the Windows PC with `tag.yml`, and `release.yml` built and published every package: Windows,
@@ -22,6 +41,43 @@ Apple builds weren't tested on Apple devices yet. Before the next update, on the
 - [ ] **4.** Anything else that needs your own accounts (an Apple Developer certificate and notarisation, a Play Store
   or App Store listing) is optional and listed in `docs/OWNER-STEPS.md`; none of it is needed for this release.
 - [ ] **5.** Tell the next session what you found, so the fixes go into 0.8.2-alpha.
+
+## 0.8.2-alpha: the client issue fixes on Apple (2026-11-23)
+
+Written 2026-11-23 on the Windows PC for client issues #76, #77, #80 and #85, with Android fixed and checked on its
+emulators. Only the parts that apply to Apple were ported. WittyKit's part was compiled and its tests run with Swift
+6.1 on Linux. The apps were only compiled, by CI's macOS runner.
+
+| Where | What changed on Apple |
+|---|---|
+| `apple/WittyKit/Sources/WittyKit/GuideRules.swift` | `GuideRules.upcoming(after:on:told:)` and `GuideRules.headline(_:upcoming:fallback:)`: in a slate (a bumper or a gap) a banner names the next real programme, never another slate (#85). Tested in `GuideRulesTests.testASlateNamesWhatComesAfterIt`. |
+| `apple/App/TvChannel.swift` (`ChannelBanner`) | In a slate: "Up next: <title>", then "At <time>", and no second Next line. |
+| `apple/App/TvGuide.swift` (guide hero, `SlateCard`, preview) | The hero's title in a slate is "Up next: <title>"; neither shows a slate as what's coming up. The preview says "Tuning…" only until the channel first plays, not over a moving picture when it buffers. |
+| `apple/App/ConnectViews.swift` (`CodeView`) | iPhone and iPad read `codeHintPhone` ("It signs in phones too…"); Apple TV keeps `codeHint` (#80). |
+
+Not ported, and why:
+- #76 (no focus after Next on the colours step) came from Android's focus memory. Apple's chooser
+  (`AppearanceViews.swift`) has its own focus; step 4 below checks it.
+- #77 (empty library on a TV): on Android TV an empty library page now shows its title, the server's words and a
+  focused button. On tvOS, focus stays in the top tab bar when a page has nothing focusable. Step 5 checks whether
+  that is enough.
+- #80's see-through chooser and the mini player's message are Android-only code.
+
+- [ ] **1.** Build and run the Apple TV simulator (1080p) against a 0.8.1 server with a library channel. Make one in the
+  web app: Live TV, then New channel, with rules and "Real TV starts on the half hour" on, so the schedule has gaps.
+- [ ] **2.** Tune the channel during a gap (the guide shows its slate cells dimmed). The banner should say "Up next:
+  <a real title>" and "At <time>". Nowhere should "We'll be right back" appear as a programme or as Next. The picture
+  itself still shows the "We'll be right back" card, which is correct.
+- [ ] **3.** In the guide, highlight the same channel during a gap: the hero's title should be "Up next: <title>".
+- [ ] **4.** First run on Apple TV: Choose a layout, then Next. On Choose colours, something should be focused at once
+  (a theme), and the first press of Down shouldn't land on the preview.
+- [ ] **5.** An empty library (an empty Podcasts folder) on Apple TV: the page shouldn't be blank with focus nowhere.
+  If it is, port Android's `SduiTvEmpty` (`android/.../ui/SduiRender.kt`): the title, the words and a focused button.
+- [ ] **6.** iPhone simulator: Sign in with a code. The words should say a phone can be signed in this way, and must
+  not mention a TV only.
+- [ ] **7.** (With #102 merged.) Apple TV simulator, two servers on the network, one named so it sorts first and
+  started a few seconds after the other: on Choose a server, the row that took focus first must stay where it is when
+  the second answers, and OK must open the highlighted server (`Discovery.keepOrder`, `ConnectViews.swift` `show`).
 
 ## 0.8.1-alpha: the centred card for a computer's settings (2026-11-22)
 
