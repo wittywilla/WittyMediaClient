@@ -5,6 +5,20 @@ What changed in WittyMediaClient, newest first. What changed before it had a rep
 
 ## Unreleased
 
+**Android TV and Apple TV**
+
+- **A channel in a bumper or a gap** names the next real programme ("Up next: …, at 8:30") in its banner and in the guide, not "We'll be right back".
+- **An empty library on Android TV** shows its name, why it's empty and a button to focus, not a line at the top edge with nothing to select.
+- **First-time setup on Android TV:** the colours step starts with a theme focused, and the preview no longer takes the first press. Import a theme is hidden on a TV.
+- **A live channel on Android TV fills the screen** (it could be drawn small in a corner).
+- **The guide's preview** no longer says "Tuning…" over a channel that is already playing.
+
+**Android phone**
+
+- **The mini player says why a film stopped** ("Can't reach your server") when the network drops, instead of showing only a Play button.
+- **Sign in with a code says it works for phones too**, not only for TVs.
+- **The first-run chooser fills the screen**, so Home no longer shows through above and below it.
+- **The library names along the top of Home** read clearly over a bright picture.
 - **Karaoke on Android TV** has no "Fill the screen" button (a TV is already full screen), and a song with no words says where to add them in words a remote can read.
 - **The keyboard shortcuts button** in the Android video player shows only when a keyboard is attached.
 

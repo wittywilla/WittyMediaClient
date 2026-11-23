@@ -193,13 +193,19 @@ function openTvMenu() {
   }
   const details = { hasServer: Boolean(server), away: awayState() }
   const show = () => {
-    win.contentView.addChildView(tvMenu)
-    layout()
     tvMenu.webContents.focus()
     tvMenu.webContents.send('tv-menu-open', details)
   }
-  if (tvMenu.webContents.getURL()) show()
-  else tvMenu.webContents.loadURL(TV_MENU_PAGE).then(show).catch((err) => log.noteError('error', 'app', 'The TV menu could not be opened', err))
+  // In the window first: a view that isn't in one never finishes loading, so the menu never opened the first time.
+  win.contentView.addChildView(tvMenu)
+  layout()
+  if (tvMenu.webContents.getURL() && !tvMenu.webContents.isLoading()) show()
+  else if (!tvMenu.webContents.getURL()) {
+    tvMenu.webContents.loadURL(TV_MENU_PAGE).then(show).catch((err) => {
+      log.noteError('error', 'app', 'The TV menu could not be opened', err)
+      closeTvMenu()
+    })
+  }
 }
 
 function closeTvMenu() {
@@ -1331,10 +1337,14 @@ function createWindow() {
   }
   win.on('closed', () => { endDiscovery(); saveState(); app.quit() })
 
-  bar.webContents.loadURL(BAR_PAGE).then(startUp).catch((err) => {
+  // A hidden view never finishes loading, and a TV hides the bar from the start: waiting for it left a TV's window
+  // blank. A TV starts at once; the bar loads whenever it's shown, and has nothing to say on a TV until then.
+  const barLoaded = bar.webContents.loadURL(BAR_PAGE)
+  ;(TV ? Promise.resolve() : barLoaded).then(startUp).catch((err) => {
     log.noteError('error', 'crash', 'The window could not be got ready', err, { page: 'main process' })
     showConnect()
   })
+  if (TV) barLoaded.catch((err) => log.noteError('warn', 'app', 'The title bar could not be loaded', err, { page: 'main process' }))
 }
 
 ipcMain.handle('probe', (e, url) => (fromConnect(e) ? probe(String(url)) : { error: 'invalid' }))

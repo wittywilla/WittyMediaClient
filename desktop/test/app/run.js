@@ -37,6 +37,9 @@ if (shots) app.commandLine.appendSwitch('disable-features', 'CalculateNativeWinO
 // Which run this is: the whole first-time journey, a code approved on a phone, the TV's
 // look, or starting with something already remembered.
 const scenario = process.argv[2] || 'journey'
+// tv-full: a TV's real window, full screen, as Plasma Bigscreen or --tv opens it. Only its start and its menu are
+// checked, so the screen is taken over for a few seconds at most.
+if (scenario === 'tv-full') process.argv.push('--tv')
 if (scenario === 'tv') {
   process.argv.push('--tv')
   // A TV's window fills the screen, which on a desktop would take it over while the test runs.
@@ -138,7 +141,15 @@ const PLAYING_PAGE = `<!doctype html><html><head><title>Playing</title></head><b
 <audio id="a" src="/silence.wav" loop autoplay></audio>
 <script>
 window.ticks = 0
-setInterval(() => { window.ticks++ }, 100)
+window.tickTimes = []
+setInterval(() => { window.ticks++; window.tickTimes.push(performance.now()) }, 100)
+// The typical time between ticks since a moment: about 100 ms running freely, a second or more once a hidden page's
+// timers are slowed. A busy machine misses some ticks, so it's the median gap that tells, not how many there were.
+window.tickGap = (since) => {
+  const t = window.tickTimes.filter((x) => x >= since)
+  const gaps = t.slice(1).map((x, i) => x - t[i]).sort((a, b) => a - b)
+  return gaps.length ? gaps[Math.floor(gaps.length / 2)] : Infinity
+}
 document.addEventListener('visibilitychange', () => { if (document.hidden) document.getElementById('a').pause() })
 </script></body></html>`
 
@@ -223,6 +234,9 @@ const inBar = (code) => views().bar.executeJavaScript(code)
 const heading = () => inPage("(document.querySelector('h1') || {}).textContent")
 const focused = () => inPage('document.activeElement.textContent || document.activeElement.id')
 const pageText = () => inPage('document.body.innerText')
+// Focus moves a moment after a key: a busy machine (CI's macOS runner) hadn't moved it 40 ms later. Wait for it.
+const focusOn = (expected, why = '') => until(`focus on ${JSON.stringify(expected)}${why ? ` (${why})` : ''}`, async () => (await focused()) === expected)
+const focusStarts = (start, why = '') => until(`focus on ${JSON.stringify(start)}…${why ? ` (${why})` : ''}`, async () => String(await focused()).startsWith(start))
 const clickText = (text) => inPage(`Array.from(document.querySelectorAll('button')).find((b) => b.textContent.startsWith(${JSON.stringify(text)})).click()`)
 const onHeading = (text) => until(`the screen "${text}"`, async () => (await heading()) === text)
 
@@ -297,14 +311,15 @@ async function seeded(url) {
       assert.deepStrictEqual(blocks.started, ['prevent-app-suspension'])
       win.hide()
       await wait(500)
-      const before = await audio('({ t: a.currentTime, ticks: window.ticks })')
+      const before = await audio('({ t: a.currentTime, ticks: window.ticks, at: performance.now() })')
       await wait(1500)
-      const after = await audio('({ t: a.currentTime, ticks: window.ticks, seen: document.visibilityState, paused: a.paused })')
+      const after = await audio(`({ t: a.currentTime, ticks: window.ticks, gap: window.tickGap(${before.at}), seen: document.visibilityState, paused: a.paused })`)
       assert.strictEqual(after.seen, 'visible', 'never told it is hidden, so nothing pauses')
       assert.strictEqual(after.paused, false)
       // Looped three seconds: it moved on, whichever way round it went.
       assert.ok(after.t !== before.t, `still playing: ${before.t} then ${after.t}`)
-      assert.ok(after.ticks - before.ticks >= 10, `timers not slowed: ${after.ticks - before.ticks} ticks in 1.5 s`)
+      // Slowed, a hidden page's timer runs once a second at most; a loaded CI machine can still drop a tick or two.
+      assert.ok(after.ticks - before.ticks >= 3 && after.gap < 500, `timers not slowed: ${after.ticks - before.ticks} ticks in 1.5 s, typically ${Math.round(after.gap)} ms apart`)
     })
     await step('with the website\'s setting off, the page is told it is hidden, like a browser tab, and pauses', async () => {
       await inPage("document.documentElement.dataset.backgroundPlay = 'off'; 0")
@@ -418,22 +433,22 @@ async function run() {
     assert.ok(!/Home|Shed/.test(await pageText()), 'not the name it announces, until it is added')
     await shot('list-found')
     await key('Down')
-    assert.ok((await focused()).startsWith('10.0.0.3:9797'), 'down moves to the next')
+    await focusStarts('10.0.0.3:9797', 'down moves to the next')
     await key('Down')
-    assert.strictEqual(await focused(), S.enterAddress)
+    await focusOn(S.enterAddress)
   })
 
   await step('the address screen: labelled, with a way back that needs no keyboard', async () => {
     await clickText(S.enterAddress)
     await onHeading(S.addressTitle)
-    assert.strictEqual(await focused(), 'address')
+    await focusOn('address')
     assert.strictEqual(await inPage("document.querySelector('label').htmlFor"), 'address')
     assert.strictEqual(await inPage("document.getElementById('address-error').getAttribute('role')"), 'alert')
     assert.match(await inPage("document.getElementById('address').getAttribute('aria-describedby')"), /address-error/)
     await shot('address')
     await key('Escape')
     await onHeading(S.findTitle)
-    assert.strictEqual(await focused(), S.enterAddress, 'back puts focus where it was')
+    await focusOn(S.enterAddress, 'back puts focus where it was')
     await clickText(S.enterAddress)
     await onHeading(S.addressTitle)
     await clickText(S.back)
@@ -1007,12 +1022,40 @@ async function onTv() {
   })
 }
 
+// A full-screen TV window starts on the connect page, Back with nowhere to go opens the TV menu, and Back closes it.
+// Both used to wait for a page loading in a view that wasn't shown, which never finished: a blank TV, then no menu.
+async function tvFullScreen() {
+  await app.whenReady()
+  const connect = () => webContents.getAllWebContents().find((w) => w.getURL().startsWith('wittymedia-app://connect'))
+  const menu = () => webContents.getAllWebContents().find((w) => w.getURL().includes('tvmenu'))
+  await step('a full-screen TV window opens on the connect page', async () => {
+    await until('the connect page', () => connect() && !connect().isLoading(), 20000)
+    await until('its heading', () => connect().executeJavaScript("(document.querySelector('h1') || {}).textContent"), 8000)
+    assert.strictEqual(await connect().executeJavaScript("document.documentElement.classList.contains('tv')"), true)
+  })
+  await step('Back with nowhere to go opens the TV menu, and Back closes it', async () => {
+    const press = async (to, keyCode) => {
+      to.sendInputEvent({ type: 'keyDown', keyCode })
+      to.sendInputEvent({ type: 'keyUp', keyCode })
+      await wait(100)
+    }
+    await press(connect(), 'Escape')
+    await until('the TV menu', () => menu() && !menu().isLoading() && menu().isFocused(), 8000)
+    await press(menu(), 'Escape')
+    await until('the page to have the keys again', () => connect().isFocused(), 8000)
+  })
+}
+
 // Started in this order because Electron must have the app's file before it is ready, and
 // a remembered server has to be answering by the time the app asks it who it is.
 function start() {
   if (scenario === 'journey') {
     require('../../main.js')
     return run()
+  }
+  if (scenario === 'tv-full') {
+    require('../../main.js')
+    return tvFullScreen()
   }
   if (scenario === 'pair' || scenario === 'tv') {
     require('../../main.js')

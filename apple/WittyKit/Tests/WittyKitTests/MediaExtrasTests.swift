@@ -103,6 +103,7 @@ final class MediaExtrasTests: XCTestCase {
             }
             return Data("HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: \(body.utf8.count)\r\nConnection: close\r\n\r\n\(body)".utf8)
         }
+        addTeardownBlock { server.stop() }
         let client = WittyClient(base: server.address, token: "session")
         let canvas = try await client.canvas(item: 9)
         let address = try await client.canvasURL(canvas, item: 9)

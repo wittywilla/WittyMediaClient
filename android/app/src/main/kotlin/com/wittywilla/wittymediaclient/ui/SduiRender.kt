@@ -44,6 +44,7 @@ import com.wittywilla.wittymediaclient.net.SduiScreen
 import com.wittywilla.wittymediaclient.net.SduiScreenTime
 import com.wittywilla.wittymediaclient.net.SduiTokens
 import com.wittywilla.wittymediaclient.net.SduiView
+import com.wittywilla.wittymediaclient.net.child
 import com.wittywilla.wittymediaclient.net.str
 import com.wittywilla.wittymediaclient.tv.GuideScreen
 import kotlinx.coroutines.delay
@@ -125,12 +126,45 @@ object SduiRows {
     }
 
     private fun keyed(row: SduiRow, key: String): SduiRow = SduiRowAlias(key, row)
+
+    // The sections that say "nothing here" for themselves when they have nothing.
+    private val EMPTY_KINDS = setOf("Grid", "List", "TrackList", "SeasonList", "Row", "Shelf")
+
+    // A page whose every section is answered and empty: a library with nothing in it yet. Not one still loading or failed.
+    fun nothingToShow(rows: List<SduiRow>): Boolean = rows.isNotEmpty() && rows.all {
+        it is SduiRow.Block && it.view.type in EMPTY_KINDS && !it.view.deferred && !it.view.failed && (it.view.empty || it.view.children.isEmpty())
+    }
 }
 
 // A row under another key, for the rare page that repeats an ID.
 class SduiRowAlias(key: String, val row: SduiRow) : SduiRow(key, row.kind)
 
 private val TALL_FIRST = setOf("Hero", "DetailHeader")
+
+
+// A TV page with nothing in it: its title, the server's words for why, its hint, and the way on ("Scan now", or Customise),
+// which takes the focus so the remote has somewhere to be.
+@Composable
+private fun SduiTvEmpty(title: String, empty: SduiView, customise: (() -> Unit)?, side: androidx.compose.ui.unit.Dp) {
+    val env = LocalSdui.current
+    val words = empty.text["empty"]?.ifEmpty { null } ?: "Nothing here yet."
+    val hint = empty.props.str("emptyHint")
+    val action = empty.props.child("emptyAction")
+    val label = action?.str("label").orEmpty()
+    val run = action?.child("action")?.let { runCatching { com.wittywilla.wittymediaclient.net.json.decodeFromJsonElement(com.wittywilla.wittymediaclient.net.SduiAction.serializer(), it) }.getOrNull() }
+    Column(
+        Modifier.fillMaxWidth().padding(horizontal = side).padding(top = env.space("l")),
+        verticalArrangement = Arrangement.spacedBy(env.space("s")),
+    ) {
+        if (title.isNotEmpty()) Text(title, color = MaterialTheme.colorScheme.onBackground, fontSize = env.size("pageTitle"), fontWeight = FontWeight.Bold, modifier = Modifier.semantics { heading() })
+        Text(words, color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = env.size("body"))
+        if (hint.isNotEmpty()) Text(hint, color = LocalExtraColours.current.hint, fontSize = env.size("body"))
+        Row(Modifier.padding(top = env.space("s")), horizontalArrangement = Arrangement.spacedBy(env.space("s"))) {
+            if (label.isNotEmpty() && run != null) WittyButton(label, { env.act(run) }, kind = ButtonKind.Primary, pill = true, takeFocus = true, focusKey = empty.id + "~empty")
+            if (customise != null) WittyButton("Customise", customise, kind = ButtonKind.Secondary, pill = true, icon = Symbols.Tune, takeFocus = label.isEmpty() || run == null, focusKey = "~customise")
+        }
+    }
+}
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class)
 @Composable
@@ -171,6 +205,9 @@ fun SduiPageView(
         // The page's large title, Home's too, as the Apple apps draw it; not over a tall first section (a hero), not on a TV.
         // A layer shows its page's title at its top on a TV as well (docs/SDUI.md, layers).
         val inLayer = LocalSduiLayerClose.current != null
+        // A TV page with nothing on it but empty sections (a library with nothing in it yet) is drawn as one empty state,
+        // with its title and something focused, not a caption at the top edge with nothing to land on (#77).
+        val emptyTv = env.tv && !inLayer && !offline && SduiRows.nothingToShow(rows)
         val heading = title.takeIf { (!env.tv || inLayer) && !tallFirst && it.isNotEmpty() }
         // On a TV the hints bar is drawn once, for a layer that is open, not again for the page under it.
         val hintsUnder = env.tv && !inLayer && env.nav.layer != null
@@ -216,7 +253,8 @@ fun SduiPageView(
                     )
                 }
                 val lead = (if (offline) 1 else 0) + (if (screenTime != null) 1 else 0) + (if (heading != null) 1 else 0)
-                itemsIndexed(rows.filter { it !is SduiRow.Native }, key = { _, row -> row.key }, contentType = { _, row -> row.kind }) { at, row ->
+                if (emptyTv) item(key = "~empty", contentType = "empty") { SduiTvEmpty(title, (rows.first() as SduiRow.Block).view, customise, side) }
+                else itemsIndexed(rows.filter { it !is SduiRow.Native }, key = { _, row -> row.key }, contentType = { _, row -> row.kind }) { at, row ->
                     if (!env.tv) SduiRowView(row, gap) else {
                         // A remote going down the page: the section focus has come into goes to the top of the screen, its
                         // heading with it. The first one takes the page back to its very top.
@@ -251,7 +289,7 @@ fun SduiPageView(
                 }
                 if (native == null) {
                     if (layout.truncated) item(key = "~truncated", contentType = "note") { SduiPageNote("This page has more than this device shows at once.", Modifier.padding(horizontal = side).padding(top = gap)) }
-                    if (customise != null) item(key = "~customise", contentType = "customise") {
+                    if (customise != null && !emptyTv) item(key = "~customise", contentType = "customise") {
                         // "Customise", a pill with its sliders at the page's margin, as Apple's.
                         Box(Modifier.fillMaxWidth().padding(horizontal = side).padding(top = gap, bottom = env.space("xs")), contentAlignment = if (env.tv) Alignment.Center else Alignment.CenterStart) {
                             WittyButton("Customise", customise, kind = ButtonKind.Secondary, pill = true, icon = Symbols.Tune, focusKey = "~customise")

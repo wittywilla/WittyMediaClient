@@ -82,6 +82,7 @@ import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
@@ -846,7 +847,9 @@ fun VideoDock(nav: Nav, session: VideoSession, aboveBar: Dp, modifier: Modifier 
                     Column(Modifier.weight(1f).clickable(onClick = nav::expandVideo)) {
                         Text(item?.showTitle?.ifEmpty { null } ?: item?.title.orEmpty(), color = Dark.fg, fontSize = 14.sp, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis)
                         val second = if (item?.season != null) listOf(item.episodeWords(), item.title).filter { it.isNotEmpty() }.joinToString(" · ") else item?.year?.toString().orEmpty()
-                        if (second.isNotEmpty()) Text(second, color = Dark.fg2, fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                        // A dropped network or a refused stream says so here, as the full player does (#80), not just a Play button.
+                        if (session.problem.isNotEmpty()) DockProblem(session.problem)
+                        else if (second.isNotEmpty()) Text(second, color = Dark.fg2, fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
                     }
                     PlayerIcon(if (session.playing) WebIcons.Pause else WebIcons.Play, if (session.playing) "Pause" else "Play", 34.dp, 26.dp, session::playPause)
                     PlayerIcon(WebIcons.Expand, "Expand", 34.dp, 20.dp, nav::expandVideo)
@@ -872,6 +875,7 @@ fun VideoDock(nav: Nav, session: VideoSession, aboveBar: Dp, modifier: Modifier 
                     verticalArrangement = Arrangement.spacedBy(2.dp),
                 ) {
                     Text(item?.showTitle?.ifEmpty { null } ?: item?.title.orEmpty(), color = Dark.fg, fontSize = 14.sp, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    if (session.problem.isNotEmpty()) DockProblem(session.problem)
                     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(2.dp)) {
                         PlayerIcon(WebIcons.Back, "Back 10 seconds", 34.dp, 20.dp, { session.seekFilm(session.filmSec - 10) })
                         PlayerIcon(if (session.playing) WebIcons.Pause else WebIcons.Play, if (session.playing) "Pause" else "Play", 34.dp, 26.dp, session::playPause)
@@ -885,4 +889,13 @@ fun VideoDock(nav: Nav, session: VideoSession, aboveBar: Dp, modifier: Modifier 
             }
         }
     }
+}
+
+// What went wrong, in the dock's second line: read out when it appears.
+@Composable
+private fun DockProblem(words: String) {
+    Text(
+        words, color = Dark.fg2, fontSize = 12.sp, maxLines = 2, overflow = TextOverflow.Ellipsis,
+        modifier = Modifier.semantics { liveRegion = androidx.compose.ui.semantics.LiveRegionMode.Polite },
+    )
 }

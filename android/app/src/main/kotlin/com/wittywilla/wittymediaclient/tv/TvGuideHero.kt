@@ -208,15 +208,18 @@ private fun HeroMain(
     val shadow = if (shape == TvShape.Modern || shape == TvShape.Outline) Shadow(p.bg, Offset(0f, dress.pt(1).value * 2), dress.pt(3).value * 2) else null
     val factsTop = dress.pt(if (shape == TvShape.Modern) 6 else if (shape == TvShape.Cinema || shape == TvShape.Outline) 8 else 3)
     ChannelLine(dress, channel)
-    HeroTitle(dress, programme?.title ?: channel?.name ?: " ", shadow)
+    // A slate (a bumper or a gap) isn't a programme: the hero names what comes after it (#85).
+    val slate = programme?.kind == "slate"
+    HeroTitle(dress, GuideRules.headline(programme, next, channel?.name ?: " "), shadow)
     HeroMeta(dress, channel, programme, shadow, factsTop)
     if (real && programme != null) HeroWhen(dress, programme, now, shadow)
-    if (next != null) {
+    if (next != null && next.kind != "slate") {
         Text(
             buildAnnotatedString {
-                append("Next ")
+                append(if (slate) "At " else "Next ")
                 withStyle(SpanStyle(fontWeight = FontWeight.Bold, color = p.text)) { append(tvClock(next.start)) }
-                append(" " + next.title)
+                // In a slate the title already names it: only when.
+                if (!slate) append(" " + next.title)
             },
             style = dress.font(dress.heroFacts).copy(shadow = shadow), color = p.soft, maxLines = 1, overflow = TextOverflow.Ellipsis,
             modifier = Modifier.padding(top = factsTop),
@@ -546,7 +549,8 @@ fun GuidePreview(nav: Nav, dress: TvDress, channel: String, name: String, onWatc
                     channel.isEmpty() -> "No preview for this channel"
                     LiveTv.key != channel -> name
                     LiveTv.state == LiveTv.State.Failed -> if (LiveTv.why.length > 90) "Not available" else LiveTv.why
-                    else -> if (LiveTv.playing) null else "Tuning…"
+                    // Only before the channel first plays: a moment of buffering later left "Tuning…" over a moving picture.
+                    else -> if (LiveTv.state == LiveTv.State.Tuning && !LiveTv.playing) "Tuning…" else null
                 }
                 if (words != null) {
                     Text(words, style = dress.font(15f).copy(fontFamily = null), color = Color.White, textAlign = TextAlign.Center, modifier = Modifier.padding(dress.pt(8)))
@@ -595,7 +599,8 @@ fun SlateCard(dress: TvDress, name: String, next: GuideProgramme?, scale: Float 
             style = plain.copy(fontSize = dress.sp(maxOf(14f, 47.5f * s)), fontWeight = FontWeight.Bold, shadow = Shadow(Color.Black.copy(alpha = 0.6f), Offset(dress.pt(2).value * 2, dress.pt(2).value * 2), 0f)),
             color = Color.White, textAlign = TextAlign.Center,
         )
-        if (next != null) {
+        // Another slate after this one isn't worth naming (#85).
+        if (next != null && next.kind != "slate" && next.kind != "none") {
             Text("Coming up at ${tvClock(next.start)}: ${next.title}", style = plain.copy(fontSize = dress.sp(maxOf(9f, 21.25f * s))), color = Color.White.copy(alpha = 0.85f), textAlign = TextAlign.Center)
         }
     }
