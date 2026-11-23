@@ -675,3 +675,18 @@ Checked on the PC: WittyKit built and its `Peer` tests (30) run with Swift 6.1 o
       one was ended with the device)
 - [ ] `./desktop/test/app/p2p-real.js --phase=revoked` passes on macOS after `--phase=home` and `--phase=away` (see the
       file for what to set)
+
+## Centring, the same everywhere (WittyMediaServer #609)
+
+`docs/APP-DESIGN.md`, Centring, is the rule: the column centred in the window; headings, lead text, the lockup, the
+server's pill, single buttons and notices centred; things side by side (code boxes, a code beside its QR code, a row of
+buttons or links) centred as a group; lists, server cards and forms read from the start. On a TV the words and what to
+do keep their two halves, each centred in its half. The desktop app follows it (`shared/connect/connect.css`); the
+phone and TV apps were not built or checked on the PC.
+
+- [ ] Android phone and Android TV: Add a server, Enter a code, Paste a link, sign-in and the settings screens centre
+      their lockup, title and lead like the desktop app (no left-aligned title inside a centred column)
+- [ ] Android TV and Apple TV: on the two-sided connect screens, the words half is centred in its half, and the links
+      under the number pad are centred under it
+- [ ] iPhone, iPad, Apple TV and Mac: the same screens in WittyKit and the App target follow the rule
+- [ ] Pictures before and after for each, next to the desktop ones in the pull request
