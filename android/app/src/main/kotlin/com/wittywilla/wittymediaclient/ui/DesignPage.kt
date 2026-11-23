@@ -453,11 +453,17 @@ private fun Modifier.tvPageTop(tv: Boolean, scroll: androidx.compose.foundation.
     if (!tv) return this
     val focus = androidx.compose.ui.platform.LocalFocusManager.current
     val scope = androidx.compose.runtime.rememberCoroutineScope()
+    // The first focus brings its row into view a moment after the page appears, which scrolled the heading away:
+    // until a key is pressed the page stays at its top.
+    val pressed = androidx.compose.runtime.remember { booleanArrayOf(false) }
     androidx.compose.runtime.LaunchedEffect(Unit) {
-        kotlinx.coroutines.delay(400)
-        scroll.scrollTo(0)
+        repeat(12) {
+            kotlinx.coroutines.delay(250)
+            if (!pressed[0] && scroll.value > 0) scroll.scrollTo(0)
+        }
     }
     return this.onPreviewKeyEvent { e ->
+        if (e.type == androidx.compose.ui.input.key.KeyEventType.KeyDown) pressed[0] = true
         if (e.type == androidx.compose.ui.input.key.KeyEventType.KeyDown && e.key == androidx.compose.ui.input.key.Key.DirectionUp) {
             val moved = focus.moveFocus(androidx.compose.ui.focus.FocusDirection.Up)
             if (!moved && scroll.value > 0) {
