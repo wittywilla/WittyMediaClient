@@ -363,7 +363,12 @@ fun SduiPageScreen(nav: Nav, page: String, params: Map<String, String>, top: Boo
         when (val effect = nav.sduiRouter.effect(action)) {
             is SduiEffect.Open -> if (effect.layer) nav.go(effect.target, layer = true) else { layerClose?.invoke(); nav.go(effect.target) }
             // The server sends no Play when screen time is over; one kept from before is answered with why.
-            is SduiEffect.Play -> if (screenTime != null) toast = screenTime.message.ifEmpty { "Screen time is over for now." } else nav.playById(effect.item, effect.resume)
+            is SduiEffect.Play -> when {
+                screenTime != null -> toast = screenTime.message.ifEmpty { "Screen time is over for now." }
+                effect.shuffle -> nav.playAlbumOf(effect.item, shuffle = true)
+                else -> nav.playById(effect.item, effect.resume)
+            }
+            is SduiEffect.Queue -> if (screenTime != null) toast = screenTime.message.ifEmpty { "Screen time is over for now." } else nav.playAlbumOf(effect.item, enqueue = true) { toast = "Added to the queue" }
             is SduiEffect.External -> if (screen?.layout?.externalLinks != false) runCatching { context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(effect.url)).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) }
             SduiEffect.Back -> if (layerClose != null) layerClose() else nav.back()
             is SduiEffect.SelectTab -> chosen = chosen + ("tab" to effect.tab)

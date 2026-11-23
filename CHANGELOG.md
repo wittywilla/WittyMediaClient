@@ -5,6 +5,12 @@ What changed in WittyMediaClient, newest first. What changed before it had a rep
 
 ## Unreleased
 
+- **Android TV's album page (WittyMediaServer #558).** It started 620 points down the screen whatever the page held,
+  with its buttons centred, so a 2-CD album showed two songs above a box of key hints. Now a page with a cover and no
+  backdrop starts its songs under the buttons; the buttons line up from the left with **Play**, **Shuffle** and
+  **More** (Add to queue, Go to artist, Share: the server's `menuAfter`); an album with no art shows a tile with its
+  name; each disc's songs are headed **Disc 1**, **Disc 2**; a guest's name shows under its song; the playing song has
+  a playing mark; rows are a little shorter; and a Dock that holds only the key hints is one short line.
 - **WittyTV guide on Android TV shows whole channels.** In the Live TV tab the grid had room for a sliver of one row at 1080p. The preview starts smaller, the hero sits right under the top bar, the grid takes a whole number of rows (five at 1080p and 720p), and the always-on shortcut bar is gone: a **Shortcuts** button beside Guide and All channels shows or hides Look, Day, Channels, Filter, Recordings, Record, More info and Help (closed at first, remembered on the device; Back closes it; Menu opens it and focuses it; the letter keys and coloured buttons work either way). No keyboard letters are shown on a TV, and the hint line moved into Help.
 - **Who's watching? on Android TV is the web's picker**: one centred column on a soft glow, the lockup, a large title with a proper apostrophe, the faces centred with names under them, "Sign in with another account" and "Sign in with your phone" stacked, and Change server as a small link. Smaller faces when there are more than four profiles.
 - **Live TV's channel banner shows for 3 seconds** on Android TV and Apple TV, as on the website (WittyMediaServer #556), instead of seven.
