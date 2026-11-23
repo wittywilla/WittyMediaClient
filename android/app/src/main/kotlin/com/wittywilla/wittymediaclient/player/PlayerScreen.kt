@@ -96,6 +96,7 @@ import com.wittywilla.wittymediaclient.diag.ClientLog
 import com.wittywilla.wittymediaclient.net.Item
 import com.wittywilla.wittymediaclient.net.Playback
 import com.wittywilla.wittymediaclient.net.PlaybackRequest
+import com.wittywilla.wittymediaclient.net.QualityMenu
 import com.wittywilla.wittymediaclient.net.Track
 import com.wittywilla.wittymediaclient.net.problemWords
 import com.wittywilla.wittymediaclient.ui.ActionButton
@@ -121,14 +122,14 @@ const val PLAYBACK_PROFILE = "androidtv"
 private const val LOST = "Lost contact with your server. Check that it is running, then try again."
 
 private fun trackName(t: Track): String {
-    val language = t.languageName.ifEmpty { if (t.language.isEmpty()) "Unknown" else Locale.forLanguageTag(t.language).displayLanguage.ifEmpty { t.language } }
+    val language = t.languageName.ifEmpty { if (t.language.isEmpty() || t.language == "und") "Unlabelled" else Locale.forLanguageTag(t.language).displayLanguage.ifEmpty { t.language } }
     // A text subtitle's format means nothing to anyone. A picture-based one's does: it may have to be burned in.
     val codec = if (t.text) "" else t.codec.uppercase(Locale.ROOT)
     return listOf(language, t.title, codec, if (t.channels > 0) "${t.channels}ch" else "")
         .filter { it.isNotEmpty() }.joinToString(" · ")
 }
 
-private enum class Picker { None, Audio, Subtitles }
+private enum class Picker { None, Audio, Subtitles, Quality }
 
 // What to ask the server for. A new value of this opens or changes the stream. Reload means the
 // address may well be the same and the player has given up on it, so it has to open it again.
@@ -138,6 +139,8 @@ private data class Ask(
     val startSec: Double? = null,
     val convert: Boolean = false,
     val flatten3d: Boolean = false,
+    // The viewer's choice of size and rate for this video: null leaves it to the server (Auto).
+    val quality: String? = null,
     val reload: Boolean = false,
     val waitMs: Long = 0,
     val attempt: Int = 0,
@@ -306,6 +309,7 @@ fun PlayerScreen(nav: Nav, id: Long, startOver: Boolean) {
                     maxBitrateKbps = DeviceProfile.maxBitrateKbps(context),
                     forceTranscode = if (ask.convert) true else null,
                     flatten3d = if (ask.flatten3d) true else null,
+                    quality = ask.quality,
                 ),
             )
             val before = stream
@@ -557,7 +561,17 @@ fun PlayerScreen(nav: Nav, id: Long, startOver: Boolean) {
                 current.explain?.lines.orEmpty().forEach { Text(it, color = Color(0xFFD0D0D8), style = MaterialTheme.typography.bodyMedium) }
                 ActionButton("Close", { showInfo = false }, takeFocus = true)
             }
-        } else if (picker != Picker.None && current != null) {
+        } else if (picker == Picker.Quality && current?.quality != null) {
+            val menu = current.quality
+            QualityList(
+                menu = menu,
+                onPick = { choice ->
+                    ask = ask.copy(quality = choice, startSec = clock.lastPlace() ?: currentFilmSec(), reload = true, waitMs = 0, attempt = ask.attempt + 1)
+                    picker = Picker.None
+                },
+                modifier = Modifier.align(Alignment.Center).safeDrawingPadding(),
+            )
+        } else if (picker != Picker.None && picker != Picker.Quality && current != null) {
             TrackList(
                 tracks = if (picker == Picker.Audio) current.audio else current.subtitles,
                 selected = if (picker == Picker.Audio) current.audioIndex else current.subtitleIndex,
@@ -587,6 +601,7 @@ fun PlayerScreen(nav: Nav, id: Long, startOver: Boolean) {
                 hasNext = current?.nextId != null,
                 hasAudioChoice = (current?.audio?.size ?: 0) > 1,
                 hasSubtitles = (current?.subtitles?.size ?: 0) > 0,
+                hasQuality = (current?.quality?.presets?.size ?: 0) > 0,
                 hasInfo = current?.explain != null,
                 stereo = current?.stereo.orEmpty().isNotEmpty(),
                 flattened = ask.flatten3d,
@@ -602,6 +617,7 @@ fun PlayerScreen(nav: Nav, id: Long, startOver: Boolean) {
                 onNext = ::playNext,
                 onAudio = { picker = Picker.Audio },
                 onSubtitles = { picker = Picker.Subtitles },
+                onQuality = { picker = Picker.Quality },
                 onBack = nav::pop,
                 onPlayOn = if (nav.app.remote.canControl) ({ nav.app.remote.sourcePlayingVideo()?.let { nav.push(com.wittywilla.wittymediaclient.ui.RemoteRoute.PlayOn(it)) } }) else null,
                 onParty = if (nav.has(SYNCPLAY_FEATURE) && (item?.kind ?: "video") == "video") ({ if (nav.app.remote.party.room != null) partyOpen = true else nav.push(com.wittywilla.wittymediaclient.ui.RemoteRoute.Party(id)) }) else null,
@@ -756,6 +772,7 @@ private fun Controls(
     hasNext: Boolean,
     hasAudioChoice: Boolean,
     hasSubtitles: Boolean,
+    hasQuality: Boolean,
     hasInfo: Boolean,
     stereo: Boolean,
     flattened: Boolean,
@@ -769,6 +786,7 @@ private fun Controls(
     onNext: () -> Unit,
     onAudio: () -> Unit,
     onSubtitles: () -> Unit,
+    onQuality: () -> Unit,
     onBack: () -> Unit,
     onPlayOn: (() -> Unit)? = null,
     onParty: (() -> Unit)? = null,
@@ -797,6 +815,7 @@ private fun Controls(
             }
             if (hasAudioChoice) ActionButton("Audio", onAudio, focusKey = "c-audio")
             if (hasSubtitles) ActionButton("Subtitles", onSubtitles, focusKey = "c-subtitles")
+            if (hasQuality) ActionButton("Quality", onQuality, focusKey = "c-quality")
             if (stereo) ActionButton(if (flattened) "Show as stored" else "Show in 2D", onFlatten, focusKey = "c-flatten")
             if (hasInfo) ActionButton("Info", onInfo, focusKey = "c-info")
             if (hasNext && !nextDue) ActionButton("Next episode", onNext, focusKey = "c-next")
@@ -810,6 +829,30 @@ private fun Controls(
                     modifier = Modifier.semantics { contentDescription = "${spokenClock(filmSec)} of ${spokenClock(durationSec)}" },
                 )
             }
+        }
+    }
+}
+
+// The easy quality menu: Auto, Original, then each size the server offers for this picture, the one in use marked.
+@Composable
+private fun QualityList(menu: QualityMenu, onPick: (String) -> Unit, modifier: Modifier = Modifier) {
+    fun rate(kbps: Int) = if (kbps >= 1000) "${if (kbps % 1000 == 0) kbps / 1000 else "%.1f".format(Locale.ROOT, kbps / 1000.0)} Mbit/s" else "$kbps kbit/s"
+    val now = menu.choice
+    val auto = now.isEmpty() || now == "auto"
+    Column(
+        modifier
+            .widthIn(max = 520.dp)
+            .background(Color(0xEE101114), Radius.LG)
+            .verticalScroll(rememberScrollState())
+            .padding(Space.S4),
+        verticalArrangement = Arrangement.spacedBy(Space.S2),
+    ) {
+        Text("Quality", color = Color.White, style = MaterialTheme.typography.titleMedium)
+        ActionButton("Auto", { onPick("") }, Modifier.fillMaxWidth(), selected = auto, takeFocus = auto)
+        ActionButton("Original" + if (menu.sourceHeight > 0) " · ${menu.sourceHeight}p" else "", { onPick("original") }, Modifier.fillMaxWidth(), selected = now == "original", takeFocus = now == "original")
+        menu.presets.forEach { p ->
+            val on = now == p.choice
+            ActionButton("${p.name} · ${rate(p.kbps)}", { onPick(p.choice) }, Modifier.fillMaxWidth(), selected = on, takeFocus = on)
         }
     }
 }
