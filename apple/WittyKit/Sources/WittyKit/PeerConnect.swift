@@ -43,8 +43,19 @@ public enum PeerConnect {
         let secret = items.first { $0.name == "s" }?.value ?? ""
         let allowed = CharacterSet(charactersIn: "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789_-")
         guard isID(id), (16...64).contains(secret.count), secret.unicodeScalars.allSatisfy(allowed.contains) else { return nil }
-        let name = String((items.first { $0.name == "n" }?.value ?? "").prefix(80))
+        let name = shownName(items.first { $0.name == "n" }?.value ?? "", limit: 80)
         return Invite(serverID: id, secret: secret, name: name, hints: hints(items.filter { $0.name == "a" }.compactMap(\.value)))
+    }
+
+    /// A name that came in a link, fit to show: no control characters, and none of the invisible
+    /// ones that turn text around, so a name can't be made to read as something else beside it.
+    public static func shownName(_ text: String, limit: Int) -> String {
+        let invisible: Set<UInt32> = [0x061C, 0x200E, 0x200F, 0x202A, 0x202B, 0x202C, 0x202D, 0x202E, 0x2066, 0x2067, 0x2068, 0x2069, 0xFEFF]
+        var kept = String.UnicodeScalarView()
+        for u in text.unicodeScalars where !(u.properties.generalCategory == .control) && !invisible.contains(u.value) {
+            kept.append(u)
+        }
+        return String(String(kept).trimmingCharacters(in: .whitespacesAndNewlines).prefix(limit)).trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
     /// Addresses worth handing to the library: multiaddrs, and nothing that could hide in one.

@@ -37,6 +37,16 @@ class PeerRulesTest {
     }
 
     @Test
+    fun aNameThatCameInAnInviteIsShownAsPlainText() {
+        fun name(n: String) = PeerRules.invite("wittymedia://p2p/$id?s=abcdefABCDEF0123_-xy&n=" + java.net.URLEncoder.encode(n, "UTF-8"))!!.name
+        assertEquals("Homegnp.exe", name("Home\u202egnp.exe"))
+        assertEquals("Bank", name(" \u2066Bank\u2069\u001b "))
+        assertEquals("TV", name("\ufeffTV\u200f"))
+        val house = String(Character.toChars(0x1F3E0))
+        assertEquals(house.repeat(80), name(house.repeat(90)))
+    }
+
+    @Test
     fun anInviteIsReadAndNothingElse() {
         val link = "wittymedia://p2p/$id?s=abcdefABCDEF0123_-xy&n=Home%20server&a=%2Fip4%2F10.0.0.2%2Ftcp%2F19742&a=bad"
         val invite = PeerRules.invite(link)!!

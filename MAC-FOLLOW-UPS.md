@@ -595,3 +595,22 @@ on a real device.
 - [ ] `swift test --filter PeerConnectTests` passes in `apple/WittyKit` with Xcode
 - [ ] With the server and a WittyRelay from the server's `docs/REMOTE.md`, "Try it yourself", an iPhone or Apple TV
       simulator on a network that blocks direct connections shows the line with the limits
+
+## Peer to peer, hardened (0.8.2)
+
+Written 2026-11-23 on the Windows PC. An invite link's server name is shown without control characters or the
+invisible ones that turn text around (`PeerConnect.shownName`, the same on Android and the desktop). The server now
+also ends a device's sign-ins when it is taken off the list.
+
+Checked on the PC: WittyKit built and its `Peer` tests (30) run with Swift 6.1 on Linux; the desktop's
+`test/p2p.test.js`; the desktop's real peer-to-peer harness (`test/app/p2p-real.js`, home, away, invite and the new
+`revoked` phase) under xvfb on Linux against a local server. **Not checked:** anything in Xcode or on a device.
+
+- [ ] `swift test --filter PeerInviteTests` passes in `apple/WittyKit` with Xcode
+- [ ] On an iPhone and an Apple TV simulator, an invite whose name has a right-to-left override (`n=Home%E2%80%AEtxt.exe`)
+      shows "Hometxt.exe" before connecting
+- [ ] On an iPhone reaching the server from away: take the iPhone off the list in Settings, Remote Access on the server.
+      The app stops getting answers at once, and after "Change server" and back it asks for a sign-in again (the old
+      one was ended with the device)
+- [ ] `./desktop/test/app/p2p-real.js --phase=revoked` passes on macOS after `--phase=home` and `--phase=away` (see the
+      file for what to set)
