@@ -102,6 +102,15 @@ test('the helper is looked for where it is installed', () => {
   assert.strictEqual(at([bsd], { platform: 'freebsd', resourcesPath: '/usr/local/share/electron42/resources', packaged: true, here: path.join('/usr/local/share/wittymediaclient', 'app.asar') }), bsd)
 })
 
+test('a name that came in an invite is shown as plain text', () => {
+  const link = (n) => `wittymedia://p2p/${SERVER}?s=abcdefghijklmnopqrstuv&n=${encodeURIComponent(n)}`
+  assert.strictEqual(p2p.parseInvite(link('Home\u202egnp.exe')).name, 'Homegnp.exe')
+  assert.strictEqual(p2p.parseInvite(link(' \u2066Bank\u2069\x1b[31m ')).name, 'Bank[31m')
+  assert.strictEqual(p2p.parseInvite(link('\ufeffTV\u200f')).name, 'TV')
+  // Cut between characters, never inside one.
+  assert.strictEqual(p2p.parseInvite(link('\u{1F3E0}'.repeat(90))).name, '\u{1F3E0}'.repeat(80))
+})
+
 test('the device key is kept for this user only, sealed when the system can', () => {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'wmc-p2p-'))
   const file = path.join(dir, 'p2p-key.json')
@@ -124,6 +133,34 @@ test('the device key is kept for this user only, sealed when the system can', ()
     assert.strictEqual(p2p.loadKey(file, null), null)
     p2p.forgetKey(file)
     assert.strictEqual(fs.existsSync(file), false)
+  } finally { fs.rmSync(dir, { recursive: true, force: true }) }
+})
+
+test('a key kept in the clear is sealed once the system can, and a sealed one is never replaced while locked', () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'wmc-p2p-'))
+  const file = path.join(dir, 'p2p-key.json')
+  const safe = {
+    available: false,
+    isEncryptionAvailable() { return this.available },
+    encryptString: (s) => Buffer.from(s.split('').reverse().join('')),
+    decryptString: (b) => b.toString().split('').reverse().join(''),
+  }
+  try {
+    // Kept while the system had no protection to give (a Linux desktop with no keyring running).
+    p2p.saveKey(file, safe, { key: KEY, deviceId: DEVICE })
+    assert.ok(fs.readFileSync(file, 'utf8').includes(KEY))
+    assert.strictEqual(p2p.keyLocked(file, safe), false)
+    // The keyring is there now: the next read seals it.
+    safe.available = true
+    assert.deepStrictEqual(p2p.loadKey(file, safe), { key: KEY, deviceId: DEVICE })
+    assert.ok(!fs.readFileSync(file, 'utf8').includes(KEY), 'still in the clear after protection became available')
+    assert.deepStrictEqual(p2p.loadKey(file, safe), { key: KEY, deviceId: DEVICE })
+    // Locked again: the key can't be read, and it is said to be locked rather than missing, so
+    // no new key is made over it.
+    safe.available = false
+    assert.strictEqual(p2p.loadKey(file, safe), null)
+    assert.strictEqual(p2p.keyLocked(file, safe), true)
+    assert.strictEqual(p2p.keyLocked(path.join(dir, 'none.json'), safe), false)
   } finally { fs.rmSync(dir, { recursive: true, force: true }) }
 })
 
