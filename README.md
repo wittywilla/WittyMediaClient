@@ -17,9 +17,9 @@ This is alpha software. WittyMediaClient 0.5.x goes with WittyMediaServer 0.8.0-
 
 <sub>WittyMediaClient on a desktop, connected to a test server. From a test server. The server's [credits list](https://github.com/wittywilla/WittyMediaServer/blob/master/docs/images/CREDITS.md) names everything shown.</sub>
 
-![The big-screen view for a TV](docs/images/big-screen.webp)
+![TV mode: the server's libraries as large tiles, with Home, Live TV, Libraries, Books, More and Search along the top](docs/images/tv-mode.webp)
 
-<sub>The big-screen view the app shows on a TV, here in a browser. From a test server. The server's [credits list](https://github.com/wittywilla/WittyMediaServer/blob/master/docs/images/CREDITS.md) names everything shown.</sub>
+<sub>TV mode, the layout the TV apps use, here in a browser. From a test server. The server's [credits list](https://github.com/wittywilla/WittyMediaServer/blob/master/docs/images/CREDITS.md) names everything shown.</sub>
 
 ![The home page at phone width](docs/images/phone-home.webp)
 

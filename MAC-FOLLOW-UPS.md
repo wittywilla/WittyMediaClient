@@ -6,6 +6,20 @@ Newest first. Each section is one pass that needs a Mac: Xcode, the iPhone and A
 app. Work through the newest first, tick each box here as you go, commit the ticks, and say in the PR what ran and what
 didn't. The GitHub issues labelled `mac` point at these sections.
 
+## Pictures the Windows PC couldn't take (2026-11-23)
+
+The README's and the server's pictures were retaken for 0.8.1-alpha on Windows, from a test server filled only with
+the openly licensed media in `D:\WittyDemoMedia` (its README says how to rebuild that server). Pictures of the apps
+themselves need a real window or a simulator, which that session couldn't open, so these are left:
+
+- [ ] **1.** `docs/images/client-home.webp` here and in the server's `docs/images/`: still the 0.8.0 desktop app.
+  Open the macOS desktop app, connect to a demo server built from the release's branch (never one with your own
+  media), and take Home at 1920 × 1080. Credit it as the old one is: "WittyMediaClient on a desktop, connected to a test server".
+- [ ] **2.** iPhone, iPad and Apple TV pictures, if the README or a store listing is to show them: Home, a film's page,
+  the TV guide with **Shortcuts** open, and an album's page (the 0.8.1 TV album page), from the simulators, signed in
+  to the same demo server. Add each to `docs/images/CREDITS.md`.
+- [ ] **3.** Use made-up profile names only, and keep the menu bar, Dock and other apps out of the frame.
+
 ## WittyMediaClient 0.6.0: what's left for the owner (2026-11-23)
 
 0.6.0 was tagged from the Windows PC with `tag.yml`, and `release.yml` built and published every package: Windows,
