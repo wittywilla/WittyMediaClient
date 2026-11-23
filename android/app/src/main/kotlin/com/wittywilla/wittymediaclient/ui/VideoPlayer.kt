@@ -147,9 +147,9 @@ private fun Item.episodeWords(): String =
 
 // The line under the title: the show and episode, else the year, then how it plays once that's known.
 private fun subLine(it: Item?, mode: String): String {
-    val head = if (it == null) "" else listOfNotNull(it.showTitle?.ifEmpty { null }, it.episodeWords().ifEmpty { null }).joinToString(" · ").ifEmpty { it.year?.toString().orEmpty() }
+    val head = if (it == null) "" else listOfNotNull(it.showTitle?.ifEmpty { null }, it.episodeWords().ifEmpty { null }).factsLine().ifEmpty { it.year?.toString().orEmpty() }
     val words = when (mode) { "direct" -> "Direct play"; "remux" -> "Rewrapped"; "transcode" -> "Transcoding"; else -> "" }
-    return listOf(head, words).filter { it.isNotEmpty() }.joinToString(" · ")
+    return listOf(head, words).filter { it.isNotEmpty() }.factsLine()
 }
 
 private fun speedWords(s: Double): String = if (s == 1.0) "Normal" else "${trimmed(s)}×"
@@ -651,7 +651,7 @@ private fun TrackPicker(session: VideoSession, audio: Boolean, tv: Boolean, clos
     data class Tile(val title: String, val sub: String, val detail: String, val lang: String, val off: Boolean, val chosen: Boolean, val pick: () -> Unit)
     val tiles = if (audio) {
         stream.audio.map { t ->
-            Tile(language(t), t.title, listOf(t.codec.uppercase(Locale.ROOT), if (t.channels > 0) "${t.channels} ch" else "").filter { it.isNotEmpty() }.joinToString(" · "), t.language, false, t.index == stream.audioIndex) { session.chooseAudio(t.index) }
+            Tile(language(t), t.title, listOf(t.codec.uppercase(Locale.ROOT), if (t.channels > 0) "${t.channels} ch" else "").filter { it.isNotEmpty() }.factsLine(), t.language, false, t.index == stream.audioIndex) { session.chooseAudio(t.index) }
         }
     } else {
         val burned = stream.subtitleDelivery == "burn"
@@ -783,7 +783,7 @@ private fun WatchNextCard(nav: Nav, session: VideoSession, modifier: Modifier) {
             ServerImage(nav.app.api.posterUrl(next), 90.dp, if (episode) 16f / 9f else 2f / 3f, Modifier.width(90.dp).clip(RoundedCornerShape(6.dp)).background(Dark.bg3), placeholder = next.title)
             Column(Modifier.weight(1f)) {
                 Text(session.nextShow?.title?.ifEmpty { null } ?: next.showTitle?.ifEmpty { null } ?: next.title, color = Dark.fg, fontSize = 15.sp, fontWeight = FontWeight.SemiBold, maxLines = 2, overflow = TextOverflow.Ellipsis)
-                Text(if (episode) listOf(next.episodeWords(), next.title).filter { it.isNotEmpty() }.joinToString(" · ") else next.year?.toString().orEmpty(), color = Dark.fg3, fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                Text(if (episode) listOf(next.episodeWords(), next.title).filter { it.isNotEmpty() }.factsLine() else next.year?.toString().orEmpty(), color = Dark.fg3, fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
             }
         }
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -921,7 +921,7 @@ fun VideoDock(nav: Nav, session: VideoSession, aboveBar: Dp, modifier: Modifier 
                 ) {
                     Column(Modifier.weight(1f).clickable(onClick = nav::expandVideo)) {
                         Text(item?.showTitle?.ifEmpty { null } ?: item?.title.orEmpty(), color = Dark.fg, fontSize = 14.sp, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                        val second = if (item?.season != null) listOf(item.episodeWords(), item.title).filter { it.isNotEmpty() }.joinToString(" · ") else item?.year?.toString().orEmpty()
+                        val second = if (item?.season != null) listOf(item.episodeWords(), item.title).filter { it.isNotEmpty() }.factsLine() else item?.year?.toString().orEmpty()
                         // A dropped network or a refused stream says so here, as the full player does (#80), not just a Play button.
                         if (session.problem.isNotEmpty()) DockProblem(session.problem)
                         else if (second.isNotEmpty()) Text(second, color = Dark.fg2, fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)

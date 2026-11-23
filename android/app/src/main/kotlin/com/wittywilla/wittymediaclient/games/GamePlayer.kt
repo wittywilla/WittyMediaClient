@@ -81,6 +81,7 @@ import androidx.compose.ui.semantics.hideFromAccessibility
 import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.semantics
 import kotlin.math.roundToInt
+import com.wittywilla.wittymediaclient.ui.factsLine
 
 // A game on screen: the server's stream, full screen, with nothing in the way. Back, Start and Select together,
 // Escape or the corner button open the game menu, as on the website's player; the picture owns the controls
@@ -443,7 +444,7 @@ private fun GameMenuSheet(play: GamePlay, page: GameMenu, touchScreen: Boolean, 
         ) {
             val game = play.item
             val (title, sub) = when (page) {
-                GameMenu.Main -> (game?.title.orEmpty()) to listOf(play.consoleName, play.session?.core.orEmpty()).filter { it.isNotEmpty() }.joinToString(" · ")
+                GameMenu.Main -> (game?.title.orEmpty()) to listOf(play.consoleName, play.session?.core.orEmpty()).filter { it.isNotEmpty() }.factsLine()
                 GameMenu.Save -> "Save" to "Choose a slot"
                 GameMenu.Load -> "Load" to "Choose a save"
                 GameMenu.Controllers -> "Controllers" to (game?.title.orEmpty())

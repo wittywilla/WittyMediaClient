@@ -68,6 +68,7 @@ import com.wittywilla.wittymediaclient.ui.title
 import com.wittywilla.wittymediaclient.ui.u
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.launch
+import com.wittywilla.wittymediaclient.ui.factsLine
 
 // Channel sets (the server's `tv-sets`): which channels the guide shows, in which order, as the server's page offers
 // them. The picker lists every set in sections; an account makes its own, names them, chooses and orders their
@@ -172,7 +173,7 @@ private fun SectionHeading(words: String) {
 private fun setDetail(set: ChannelSet): String = buildList {
     add(SetRules.countWords(set.count))
     if (set.isCustom && set.shared) add("Shared")
-}.joinToString(" · ")
+}.factsLine()
 
 // Everything to do with sets, whichever is open.
 @Composable

@@ -270,7 +270,7 @@ fun ManageServersScreen(nav: Nav, s: Map<String, String>) {
                     servers.forEachIndexed { i, server ->
                         val name = shownName(server)
                         val stale = isStale(server.lastSeen, now, nav.app.store.recentSince)
-                        val sub = listOfNotNull(server.url, reachedWords(s, server.lastSeen, now), if (stale) s["staleServer"] else null).joinToString(" · ")
+                        val sub = listOfNotNull(server.url, reachedWords(s, server.lastSeen, now), if (stale) s["staleServer"] else null).factsLine()
                         DesignRow(
                             name, sub = sub,
                             leading = { ServerMark(metrics.u(if (tv) 40 else 32), LogoCache.file(context, server.url, server.brandLogo)) },

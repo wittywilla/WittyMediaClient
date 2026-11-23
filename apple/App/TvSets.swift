@@ -221,7 +221,7 @@ struct ChannelSetsManager: View {
             VStack(alignment: .leading, spacing: 2) {
                 Text(set.name).font(.wmLabel).lineLimit(1)
                 Text([set.count.map { $0 == 1 ? "1 channel" : "\($0) channels" }, set.shared == true ? "Shared with everyone" : nil,
-                      set.isMine ? nil : "Shared by this server's administrator"].compactMap { $0 }.joined(separator: " · "))
+                      set.isMine ? nil : "Shared by this server's administrator"].compactMap { $0 }.factsLine())
                     .font(.wmSecondary).foregroundStyle(palette.textSecondary)
             }
             .frame(maxWidth: .infinity, alignment: .leading)

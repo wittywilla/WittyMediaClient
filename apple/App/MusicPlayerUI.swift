@@ -190,7 +190,7 @@ struct AudioBar: View {
 
     private func bar(_ now: QueuedTrack) -> some View {
         let books = now.keepsPlace
-        let sub = listening.problem.isEmpty ? [now.artist, now.album].filter { !$0.isEmpty }.joined(separator: " · ") : listening.problem
+        let sub = listening.problem.isEmpty ? [now.artist, now.album].filter { !$0.isEmpty }.factsLine() : listening.problem
         return HStack(spacing: wide ? 4 : Tokens.Space.s2) {
             Button { open() } label: {
                 PosterArt(url: client.posterURL(now.item), title: now.title, width: wide ? 64 : 48)

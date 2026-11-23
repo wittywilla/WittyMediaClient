@@ -277,13 +277,13 @@ public struct CardLook: Equatable {
         if item.progress?.watched == true { badges.append(.seen) }
         let subtitle: String
         if item.showId != nil {
-            subtitle = [item.episodeLabel, wide ? item.title : Runtime.words(item.runtimeSec)].filter { !$0.isEmpty }.joined(separator: " · ")
+            subtitle = [item.episodeLabel, wide ? item.title : Runtime.words(item.runtimeSec)].filter { !$0.isEmpty }.factsLine()
         } else if audio {
             subtitle = [item.albumArtist, item.artist].compactMap { $0 }.first { !$0.isEmpty } ?? ""
         } else if item.kind == "book" {
             subtitle = (item.artist?.isEmpty == false ? item.artist : nil) ?? year ?? ""
         } else {
-            subtitle = [year ?? "", length].filter { !$0.isEmpty }.joined(separator: " · ")
+            subtitle = [year ?? "", length].filter { !$0.isEmpty }.factsLine()
         }
         let showTitle = item.showTitle ?? ""
         return CardLook(title: !showTitle.isEmpty && wide ? showTitle : item.title, subtitle: subtitle,
@@ -294,7 +294,7 @@ public struct CardLook: Equatable {
     public static func show(_ show: Show) -> CardLook {
         let seasons = show.seasonCount ?? 0
         let subtitle = [show.year.flatMap { $0 == 0 ? nil : String($0) }, "\(seasons) \(seasons == 1 ? "season" : "seasons")"]
-            .compactMap { $0 }.joined(separator: " · ")
+            .compactMap { $0 }.factsLine()
         var badges: [CardBadge] = []
         if let left = show.unwatched, let all = show.episodeCount, left > 0, left < all { badges.append(.unwatched(left)) }
         if show.unwatched == 0 { badges.append(.seen) }
@@ -357,7 +357,7 @@ public enum ShuffleLook {
     /// The year, how long it is, and two genres.
     public static func facts(_ item: Item) -> String {
         [item.year.flatMap { $0 == 0 ? nil : String($0) } ?? "", Runtime.words(item.runtimeSec), (item.genres ?? []).prefix(2).joined(separator: ", ")]
-            .filter { !$0.isEmpty }.joined(separator: " · ")
+            .filter { !$0.isEmpty }.factsLine()
     }
 }
 

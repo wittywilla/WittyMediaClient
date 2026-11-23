@@ -390,7 +390,7 @@ struct RemoteView: View {
             default: break
             }
         }
-        return parts.joined(separator: " · ")
+        return parts.factsLine()
     }
 
     @ViewBuilder private func scrubber(_ device: RemoteDevice) -> some View {

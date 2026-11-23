@@ -119,7 +119,7 @@ fun limitsSummary(s: Map<String, String>, u: ManagedUser): String {
     val off = a.off.filter { it != "editProfile" }
     if (off.isNotEmpty()) parts += text(s, if (off.size == 1) "sumOffOne" else "sumOff", "n" to off.size)
     if (!u.hasPassword) parts += s["sumNoPassword"].orEmpty()
-    return parts.filter { it.isNotEmpty() }.joinToString(" · ")
+    return parts.filter { it.isNotEmpty() }.factsLine()
 }
 
 private fun roleWords(s: Map<String, String>, u: ManagedUser) = s[roleKey(u.isAdmin, u.kind)].orEmpty()

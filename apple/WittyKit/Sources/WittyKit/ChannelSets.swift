@@ -380,6 +380,6 @@ public struct RecordingOptions: Equatable {
     /// A series rule's options in a line, for the list of series.
     public var seriesWords: String {
         [anyChannel ? "Any channel" : "", newOnly ? "New episodes only" : "", keep > 0 ? RecordingOptions.keepName(keep) : "",
-         padBefore + padAfter > 0 ? paddingWords : ""].filter { !$0.isEmpty }.joined(separator: " · ")
+         padBefore + padAfter > 0 ? paddingWords : ""].filter { !$0.isEmpty }.factsLine()
     }
 }

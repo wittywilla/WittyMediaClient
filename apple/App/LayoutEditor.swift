@@ -501,7 +501,7 @@ struct LayoutEditorView: View {
         if row.pinned { words.append("pinned") }
         if row.locked { words.append("always shown") }
         if let size = row.cardSize { words.append(["s": "small cards", "m": "medium cards", "l": "large cards"][size] ?? size) }
-        return words.isEmpty ? "Shelf" : words.joined(separator: " · ")
+        return words.isEmpty ? "Shelf" : words.factsLine()
     }
 
     // MARK: The panel

@@ -415,7 +415,7 @@ private fun coverSpan(spot: MusicLook.CoverPlace, size: Float, depth: Float): Pa
 private fun AlbumTile(nav: Nav, library: Long, album: Album, modifier: Modifier = Modifier, book: Boolean = false, noArtist: Boolean = false) {
     val scheme = MaterialTheme.colorScheme
     val extra = LocalExtraColours.current
-    val sub = listOf(if (noArtist) "" else album.artist, album.year?.takeIf { it != 0 }?.toString().orEmpty()).filter { it.isNotEmpty() }.joinToString(" · ")
+    val sub = listOf(if (noArtist) "" else album.artist, album.year?.takeIf { it != 0 }?.toString().orEmpty()).filter { it.isNotEmpty() }.factsLine()
     val title = album.title.ifEmpty { "Unknown album" }
     Pressable(
         { nav.push(Route.Album(library, album.title, album.artist)) }, modifier, shape = RoundedCornerShape(10.dp), fill = Color.Transparent,
@@ -581,7 +581,7 @@ private fun TrackRow(nav: Nav, t: Item, at: Int, newDisc: Int?, showAlbum: Boole
                     ) {
                         Text(t.title, color = if (on) extra.accentText else scheme.onBackground, fontSize = 14.sp, fontWeight = FontWeight.Medium, lineHeight = BODY_LINE.em, maxLines = 1, overflow = TextOverflow.Ellipsis)
                         val under = when {
-                            showAlbum -> listOf(t.artist, t.album).filter { it.isNotEmpty() }.joinToString(" · ")
+                            showAlbum -> listOf(t.artist, t.album).filter { it.isNotEmpty() }.factsLine()
                             episodes -> MusicLook.episodeLine(t)
                             else -> null
                         }

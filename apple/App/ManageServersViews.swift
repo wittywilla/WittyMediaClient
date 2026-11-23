@@ -302,7 +302,7 @@ struct ManageServersList: View {
         let mark = model.isInUse(server) ? say("groupThisServer") : stale ? say("staleServer") : ""
         // A TV has the width for one line and a pill. A phone has two lines, the mark leading the second.
         let detail = metrics.tv ? "\(ServerWords.address(server)) · \(ServerWords.reached(server))"
-            : ServerWords.address(server) + "\n" + [mark, ServerWords.reached(server)].filter { !$0.isEmpty }.joined(separator: " · ")
+            : ServerWords.address(server) + "\n" + [mark, ServerWords.reached(server)].filter { !$0.isEmpty }.factsLine()
         let badge = metrics.tv ? mark : ""
         Button { remove(server) } label: {
             RowLabel(icon: "server.rack", tint: "#0a6fb8", title: ServerWords.name(server), value: say("remove"), detail: detail,

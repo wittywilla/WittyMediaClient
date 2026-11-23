@@ -869,8 +869,8 @@ private struct TitleExtrasView: View {
         let item = extra.item
         let wideTitle = item.showTitle?.isEmpty == false ? item.showTitle! : item.title
         let sub = item.showId != nil
-            ? [item.episodeLabel, item.title].filter { !$0.isEmpty }.joined(separator: " · ")
-            : [item.year.map(String.init) ?? "", TitleLook.runtime(item.runtimeSec)].filter { !$0.isEmpty }.joined(separator: " · ")
+            ? [item.episodeLabel, item.title].filter { !$0.isEmpty }.factsLine()
+            : [item.year.map(String.init) ?? "", TitleLook.runtime(item.runtimeSec)].filter { !$0.isEmpty }.factsLine()
         return VStack(alignment: .leading, spacing: Tokens.Space.s1) {
             Button { go(.item(item.id)) } label: {
                 PosterCard(title: wideTitle, subtitle: sub, url: client.posterURL(item), progress: item.progressFraction, aspect: 16.0 / 9.0, width: cardWidth)

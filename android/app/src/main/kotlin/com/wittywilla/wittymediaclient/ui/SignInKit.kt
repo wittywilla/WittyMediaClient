@@ -265,7 +265,7 @@ fun ServerCard(
                     if (lineIcon != null) Icon(lineIcon, contentDescription = null, tint = scheme.onSurfaceVariant, modifier = Modifier.padding(end = 5.dp).size(s.tiny.value.dp * 1.15f))
                     Text(detail, color = scheme.onSurfaceVariant, fontSize = s.tiny, lineHeight = s.tiny * 1.35f, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 }
-                val seen = listOfNotNull(reached.ifEmpty { null }, if (stale) words["staleServer"] else null).joinToString(" · ")
+                val seen = listOfNotNull(reached.ifEmpty { null }, if (stale) words["staleServer"] else null).factsLine()
                 if (seen.isNotEmpty()) {
                     Text(seen, color = extra.hint, fontSize = s.tiny, lineHeight = s.tiny * 1.35f, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 }
