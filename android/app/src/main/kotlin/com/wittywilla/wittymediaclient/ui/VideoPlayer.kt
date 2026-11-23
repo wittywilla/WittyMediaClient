@@ -722,7 +722,7 @@ private fun TrackPicker(session: VideoSession, audio: Boolean, tv: Boolean, clos
                 .clickable(remember { MutableInteractionSource() }, null) {}.padding(horizontal = 8.dp, vertical = 10.dp),
         ) {
             Row(Modifier.fillMaxWidth().padding(start = 8.dp), verticalAlignment = Alignment.CenterVertically) {
-                Text(name.uppercase(Locale.getDefault()), color = Dark.fg2, fontSize = 12.sp, fontWeight = FontWeight.SemiBold, letterSpacing = 0.08.em, modifier = Modifier.weight(1f).semantics { heading() })
+                Text(name.uppercase(Locale.ROOT), color = Dark.fg2, fontSize = 12.sp, fontWeight = FontWeight.SemiBold, letterSpacing = 0.08.em, modifier = Modifier.weight(1f).semantics { heading() })
                 SmallButton("Close", null, "Close", close, fill = Color.Transparent, size = 14)
             }
             if (tiles.size >= TrackOrder.SEARCH_FROM) {
@@ -734,7 +734,7 @@ private fun TrackPicker(session: VideoSession, audio: Boolean, tv: Boolean, clos
                     if (headed && group != last && group != TrackOrder.Group.Off) {
                         val w = words[group].orEmpty()
                         item(key = "h-$group") {
-                            Text(w.uppercase(Locale.getDefault()), color = Dark.fg2, fontSize = 11.sp, fontWeight = FontWeight.SemiBold, letterSpacing = 0.08.em,
+                            Text(w.uppercase(Locale.ROOT), color = Dark.fg2, fontSize = 11.sp, fontWeight = FontWeight.SemiBold, letterSpacing = 0.08.em,
                                 modifier = Modifier.padding(start = 12.dp, top = 12.dp, bottom = 4.dp).semantics { heading() })
                         }
                     }
