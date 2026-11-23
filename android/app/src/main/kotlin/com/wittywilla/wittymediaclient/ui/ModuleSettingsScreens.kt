@@ -20,6 +20,11 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.ui.input.key.key
+import androidx.compose.ui.input.key.onPreviewKeyEvent
+import androidx.compose.ui.input.key.type
 import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.semantics
@@ -189,8 +194,18 @@ internal fun SettingRows(
             val now = ModuleSettingsRules.number(view, row.key)
             val shown = ModuleSettingsRules.shown(view, row)
             if (!canEdit) DesignRow(row.label, value = shown, sub = help, focusKey = key, requestFocus = requestFocus, onClick = {})
+            // The remote steps it: Left is −, Right is +. The row holds focus, so the buttons are what a finger or
+            // a pointer presses; a remote never has to reach inside the row.
             else DesignRow(
-                row.label, sub = help, focusKey = key, requestFocus = requestFocus, onClick = {}, label = listOf(row.label, help, shown).filter { it.isNotEmpty() }.joinToString(", "),
+                row.label, sub = help, focusKey = key, requestFocus = requestFocus, onClick = {},
+                modifier = Modifier.onPreviewKeyEvent { e ->
+                    if (e.type != KeyEventType.KeyDown) return@onPreviewKeyEvent false
+                    val by = when (e.key) { Key.DirectionLeft -> -1; Key.DirectionRight -> 1; else -> 0 }
+                    if (by == 0) return@onPreviewKeyEvent false
+                    val next = ModuleSettingsRules.stepped(row, now, by.toLong())
+                    if (next != now) save(row, JsonPrimitive(next))
+                    true
+                }, label = listOf(row.label, help, shown).filter { it.isNotEmpty() }.joinToString(", "),
                 trailing = {
                     val ds = LocalDesignSizes.current
                     Row(horizontalArrangement = Arrangement.spacedBy(LocalMetrics.current.u(8)), verticalAlignment = Alignment.CenterVertically) {

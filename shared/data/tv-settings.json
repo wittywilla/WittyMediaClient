@@ -621,6 +621,7 @@
               "store": "server",
               "key": "uiLanguage",
               "kind": "enum",
+              "default": "en",
               "label": "tvsAppearanceUiLanguageLabel",
               "help": "tvsAppearanceUiLanguageHelp",
               "options": [
