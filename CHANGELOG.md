@@ -5,6 +5,12 @@ What changed in WittyMediaClient, newest first. What changed before it had a rep
 
 ## Unreleased
 
+**Connect and sign-in screens: one centred card (wittywilla/WittyMediaServer#624)**
+
+- **Every connect screen is one card, centred both ways**, with the app's logo and name, or the server's once one is
+  chosen, at its top. On the sign-in and security-code screens the server's name now comes before the heading. It
+  fits a 1280×720 window without scrolling, and the same goes for the desktop app, a TV, Android and Apple.
+
 **Games on a phone or tablet**
 
 - **A slow first picture is waited for.** Once a game's connection is through, its first picture gets 45 seconds (a big game, or a server with no graphics card, can take a while) before the app tries another way, instead of giving up after 12.

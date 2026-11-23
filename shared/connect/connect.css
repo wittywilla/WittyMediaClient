@@ -593,3 +593,45 @@ main.compact { padding-top: var(--sp-6); padding-bottom: var(--sp-6); }
 :root:not(.tv) .words { text-align: center; }
 :root:not(.tv) .lockup { justify-content: center; }
 :root:not(.tv) .links { justify-content: center; }
+
+/* Every screen is a standalone page (WittyMediaServer's docs/DESIGN.md, "Standalone pages"; docs/APP-DESIGN.md,
+   Centring): one card, centred both ways, with a logo and a name at its top (the app's, or the server's once one
+   is chosen), small enough for a 1280×720 window and a phone without scrolling. A long list of servers may still
+   scroll: the card grows and the page scrolls round it. shared/connect/e2e checks it at the sizes people use. */
+body { display: flex; flex-direction: column; align-items: center; justify-content: center; padding: var(--sp-4); }
+main {
+  position: relative; min-height: 0; margin: auto 0; flex: none;
+  max-width: calc(var(--column) + 2 * var(--sp-8));
+  padding: var(--sp-8);
+  border: 1px solid var(--bg-4); border-radius: calc(var(--r-lg) * 1.5);
+  background: var(--bg-2); box-shadow: 0 12px 40px rgba(0, 0, 0, .35);
+}
+main::before, main::after { display: none; }
+.lockup { margin-bottom: var(--sp-5); }
+.server-pill { margin: 0 0 var(--sp-3); background: var(--bg-3); }
+:root:not(.tv) main.choose { max-width: calc(40rem + 2 * var(--sp-8)); }
+:root:not(.tv) .choose .lockup { margin-bottom: var(--sp-3); }
+.legal { margin-top: var(--sp-5); }
+/* The way back is in the card's corner; the words leave room for it. */
+button.back { top: var(--sp-2); left: var(--sp-2); width: auto; }
+main.with-back { padding-top: calc(var(--sp-8) + var(--sp-4)); }
+/* Short windows (a 1280×720 laptop): less air, the same card. */
+@media (max-height: 820px) {
+  :root:not(.tv) body { padding-block: var(--sp-3); }
+  :root:not(.tv) main { padding: var(--sp-6); }
+  :root:not(.tv) main.with-back { padding-top: calc(var(--sp-6) + var(--sp-8)); }
+  :root:not(.tv) .choose h1.display { font-size: var(--text-display); }
+  :root:not(.tv) h2 { margin: var(--sp-5) 0 var(--sp-2); }
+  :root:not(.tv) .lead { margin-bottom: var(--sp-4); }
+  :root:not(.tv) .lockup { margin-bottom: var(--sp-3); }
+  :root:not(.tv) .actions > button { margin-top: var(--sp-2); }
+}
+/* A phone: the card nearly fills the width. */
+@media (max-width: 30rem) {
+  body { padding: var(--sp-3); }
+  :root:not(.tv) main { padding: var(--sp-5); }
+  :root:not(.tv) main.with-back { padding-top: calc(var(--sp-5) + var(--sp-10)); }
+}
+/* A TV: the same card, as wide as its two halves need, inside the safe gutter. */
+:root.tv body { padding: var(--sp-6) var(--sp-10); }
+.tv main { max-width: 100rem; padding: var(--sp-8) var(--sp-10); }

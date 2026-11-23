@@ -467,9 +467,10 @@ White, radius 14, 16 inside, the code black on white, at 180 on a phone and 280 
 ## Signing in
 
 Every sign-in screen has the glow (on Apple TV over the brand's backdrop, veiled in `background` at 60% on the left
-fading to 25% on the right so the words read), a single centred column (max 440 wide on a phone or tablet), and the lockup at the
-top unless it shows a person instead. On a phone the column starts a third of the way down when it's short, and scrolls
-when it isn't. Back, where there's somewhere to go back to, is the system's: the back button top left on Apple, the
+fading to 25% on the right so the words read), and one card (`panel`, a 20 corner) centred both ways, max 440 wide inside
+on a phone or tablet, with the lockup or the server's pill at its top unless it shows a person instead. It fits a
+1280×720 window and a phone without scrolling, and scrolls only when it can't fit (WittyMediaServer's docs/DESIGN.md,
+"Standalone pages"; `shared/connect/e2e` checks the desktop's at the sizes people use). Back, where there's somewhere to go back to, is the system's: the back button top left on Apple, the
 back gesture or a top-left arrow on Android.
 
 ### 1. Choose your server
