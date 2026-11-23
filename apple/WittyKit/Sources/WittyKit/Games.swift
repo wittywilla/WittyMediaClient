@@ -494,6 +494,20 @@ public struct ResolvedPad: Decodable, Equatable {
 // MARK: - Words
 
 public enum GameWords {
+    /// The stream's refusals (docs/GAMING-STREAM.md) are for programs: their text is never shown. Nil for
+    /// one about the connection itself, which the server closes: the player then tries the next way of
+    /// connecting, or says plainly that the picture didn't come, with a retry.
+    public static func refusal(code: String, port: Int?) -> String? {
+        switch code {
+        case "seat-taken":
+            if let port { return "Player \(port + 1) is being played on another device" }
+            return "That player is being played on another device"
+        case "bad-seat": return "This game doesn't have that player"
+        case "bad-hello", "no-session", "busy", "no-codec", "too-large", "failed": return nil
+        default: return "That didn't work. Try again."
+        }
+    }
+
     /// The server's names for its save slots.
     public static func slotName(_ slot: Int) -> String {
         switch slot {

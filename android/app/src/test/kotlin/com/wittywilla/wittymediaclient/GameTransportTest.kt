@@ -8,6 +8,8 @@ import com.wittywilla.wittymediaclient.games.GameModeInfo
 import com.wittywilla.wittymediaclient.games.GameRoute
 import com.wittywilla.wittymediaclient.games.GameSession
 import com.wittywilla.wittymediaclient.games.GameTransport
+import com.wittywilla.wittymediaclient.games.GameWords
+import com.wittywilla.wittymediaclient.games.HelloFirst
 import com.wittywilla.wittymediaclient.games.GamesApi
 import com.wittywilla.wittymediaclient.games.PadState
 import com.wittywilla.wittymediaclient.games.StreamHello
@@ -114,6 +116,31 @@ class GameTransportTest {
         assertNull("a bare name is not a mode", GameModeInfo.from(json.parseToJsonElement("\"ws-jpeg\"")))
     }
 
+    // The server refuses a stream whose first message isn't the hello: anything sent while the socket opens waits
+    // (events) or is dropped (pad states and keyframe requests, which are sent again anyway).
+    @Test
+    fun theHelloGoesFirstWhateverWasSentBefore() {
+        val out = ArrayList<String>()
+        val gate = HelloFirst(writeText = { out += "text:$it" }, writeBinary = { out += "binary:${it.size}" })
+        gate.binary(PadState(0, 0).encoded())
+        gate.text("{\"type\":\"seats\"}")
+        gate.binary(byteArrayOf(0xF7.toByte()))
+        assertEquals("nothing goes before the hello", emptyList<String>(), out)
+        gate.open("{\"type\":\"hello\"}", byteArrayOf(0xF8.toByte()))
+        assertEquals(listOf("text:{\"type\":\"hello\"}", "binary:1", "text:{\"type\":\"seats\"}"), out)
+        gate.binary(byteArrayOf(1, 2))
+        gate.open("{\"type\":\"hello\"}")
+        assertEquals("after it, everything goes, and only one hello", listOf("binary:2"), out.drop(3))
+    }
+
+    @Test
+    fun theStreamsRefusalsAreNeverShownAsTheyCome() {
+        assertNull("the connection is tried again instead", GameWords.refusal("bad-hello", null))
+        assertNull(GameWords.refusal("busy", null))
+        assertEquals("Player 2 is being played on another device", GameWords.refusal("seat-taken", 1))
+        assertEquals("That didn't work. Try again.", GameWords.refusal("a-new-code", null))
+    }
+
     @Test
     fun aStandInsLoopbackCandidatesAreReachedFromAnEmulator() {
         val answer = "v=0\r\nc=IN IP4 127.0.0.1\r\na=candidate:1 1 udp 2130706431 127.0.0.1 9822 typ host\r\na=mid:0\r\n"
@@ -154,6 +181,10 @@ class GameTransportTest {
                 }
                 val hello = StreamHello("WittyMediaClient Android test", "android-live-test", "Live test")
                 val transport = WebSocketV2Transport(api, api.streamEndpoint(session.id), hello, receiver)
+                // What the player sends while a socket is still opening, as from away: the hello still goes first.
+                transport.send(PadState(0, 0).encoded())
+                transport.requestKeyframe()
+                transport.sendEvent(seatsRequest(listOf(0)))
                 try {
                     assertTrue("$route opened", opened.await(10, TimeUnit.SECONDS))
                     assertTrue("$route keyframe", keyframe.await(10, TimeUnit.SECONDS))

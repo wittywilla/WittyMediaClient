@@ -111,6 +111,12 @@ object PeerRules {
     // The local address the library listens on.
     fun localBase(port: Int): String = "http://127.0.0.1:$port"
 
+    // The secret as a web view's cookie: a page loaded from the local address carries it on every request, its
+    // WebSockets included, and no script on the page can read it. Null for a secret that can't be one.
+    fun secretCookie(secret: String): String? =
+        if (secret.isEmpty() || !secret.all { it in SECRET_CHARS }) null
+        else "$SECRET_COOKIE=$secret; Path=/; HttpOnly; SameSite=Strict"
+
     fun state(text: String): PeerState {
         val o = runCatching { json.parseToJsonElement(text).jsonObject }.getOrNull() ?: return PeerState()
         fun str(k: String) = (o[k] as? JsonPrimitive)?.takeIf { it.isString }?.content.orEmpty()

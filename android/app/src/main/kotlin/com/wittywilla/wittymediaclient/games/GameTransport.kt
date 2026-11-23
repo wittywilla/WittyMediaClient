@@ -134,6 +134,43 @@ class ArrivalDelay(private val windowMs: Long = 10_000) {
 
 private const val REPORT_MS = 500L
 
+// A version 2 stream's first message must be the hello, as text (docs/GAMING-STREAM.md). Until it has gone, binary
+// messages are dropped (pad states are sent again every 250 ms, and the stream starts with a keyframe anyway) and
+// events wait, a few at most, to follow it in order. From any thread.
+class HelloFirst(private val writeText: (String) -> Unit, private val writeBinary: (ByteArray) -> Unit) {
+    private val lock = Any()
+    private var greeted = false
+    private val waiting = ArrayList<String>()
+
+    fun open(hello: String, after: ByteArray? = null) = synchronized(lock) {
+        if (greeted) return
+        writeText(hello)
+        after?.let(writeBinary)
+        waiting.forEach(writeText)
+        waiting.clear()
+        greeted = true
+    }
+
+    fun binary(message: ByteArray) {
+        synchronized(lock) { if (!greeted) return }
+        writeBinary(message)
+    }
+
+    fun text(event: String) {
+        synchronized(lock) {
+            if (!greeted) {
+                if (waiting.size < MOST_WAITING_EVENTS) waiting += event
+                return
+            }
+        }
+        writeText(event)
+    }
+
+    private companion object {
+        const val MOST_WAITING_EVENTS = 16
+    }
+}
+
 // Version 2 over a WebSocket: GET /play/{sid}/stream. The hello goes first, as text; the server answers with the
 // stream's description, then the picture from a keyframe. Its delayMs reports go twice a second.
 class WebSocketV2Transport(api: GamesApi, endpoint: StreamEndpoint, hello: StreamHello, private val receiver: GameTransport.Receiver) : GameTransport {
@@ -142,6 +179,20 @@ class WebSocketV2Transport(api: GamesApi, endpoint: StreamEndpoint, hello: Strea
 
     @Volatile
     private var closed = false
+
+    // OkHttp sends what was asked for before the socket opened as soon as it opens, ahead of the hello that goes in
+    // onOpen. The player sends pad states every 250 ms and asks for keyframes whenever it likes, so on a connection
+    // that takes a while to open (from away, peer to peer) one of those went first, and the server refused the
+    // connection: "the first message must be the hello, as text". Nothing goes out before the hello now.
+    private val gate = HelloFirst(
+        writeText = { opened?.send(it) },
+        writeBinary = { opened?.send(ByteString.of(*it)) },
+    )
+
+    // The socket as onOpen hands it over, which can be before the constructor has finished.
+    @Volatile
+    private var opened: WebSocket? = null
+
     private val socket: WebSocket = api.openWebSocketUrl(endpoint.url, Listener(hello))
 
     private val report: Runnable = object : Runnable {
@@ -156,13 +207,9 @@ class WebSocketV2Transport(api: GamesApi, endpoint: StreamEndpoint, hello: Strea
         }
     }
 
-    override fun send(message: ByteArray) {
-        socket.send(ByteString.of(*message))
-    }
+    override fun send(message: ByteArray) = gate.binary(message)
 
-    override fun sendEvent(event: JsonObject) {
-        socket.send(event.toString())
-    }
+    override fun sendEvent(event: JsonObject) = gate.text(event.toString())
 
     override fun requestKeyframe() = send(TimingRequests.keyframe)
 
@@ -176,8 +223,8 @@ class WebSocketV2Transport(api: GamesApi, endpoint: StreamEndpoint, hello: Strea
         private var described = false
 
         override fun onOpen(webSocket: WebSocket, response: Response) {
-            webSocket.send(hello.toJson(type = true).toString())
-            webSocket.send(ByteString.of(*TimingRequests.decodingOurselves))
+            opened = webSocket
+            gate.open(hello.toJson(type = true).toString(), TimingRequests.decodingOurselves)
             main.postDelayed(report, REPORT_MS)
         }
 
