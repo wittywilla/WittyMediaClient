@@ -12,9 +12,11 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.MaterialTheme
@@ -221,23 +223,19 @@ fun PairWithQr(nav: Nav, s: Map<String, String>, onBack: () -> Unit, onUsePasswo
         }
     }
     val ended = showing == null && phase != PairPhase.Starting
-    // Design 2's page under this server's lockup: the PIN and the code to scan, then the other ways in.
-    DesignScreen(
-        s["pairQrTitle"].orEmpty(), onBack, lead = if (showing != null) s["pairQrHint"].orEmpty() else "", tag = "pairing",
-        top = { Lockup(nav.brandName, nav.brandLogo) },
-        actions = {
-            if (ended) {
-                if (phase == PairPhase.Busy) WittyButton(s["usePassword"].orEmpty(), onUsePassword, kind = ButtonKind.Primary, tall = true, takeFocus = true, focusKey = "pair-password")
-                else WittyButton(s["pairNew"].orEmpty(), { round++ }, kind = ButtonKind.Primary, tall = true, takeFocus = true, focusKey = "pair-new")
-            }
-            val server = nav.server
-            if (server != null && server.publicKey.isNotEmpty()) {
-                WittyButton(s["codeTitle"].orEmpty(), { nav.push(Route.Code(server)) }, kind = ButtonKind.Secondary, focusKey = "typed-code")
-            }
-            if (phase != PairPhase.Busy) WittyButton(s["usePassword"].orEmpty(), onUsePassword, kind = ButtonKind.Secondary, requestFocus = showing != null, focusKey = "use-password")
-            WittyButton(s["changeServer"].orEmpty(), nav::changeServer, kind = ButtonKind.Quiet, focusKey = "change-server")
-        },
-    ) {
+    val actionButtons: @Composable () -> Unit = {
+        if (ended) {
+            if (phase == PairPhase.Busy) WittyButton(s["usePassword"].orEmpty(), onUsePassword, kind = ButtonKind.Primary, tall = true, takeFocus = true, focusKey = "pair-password", modifier = if (metrics.tv) Modifier.fillMaxWidth() else Modifier)
+            else WittyButton(s["pairNew"].orEmpty(), { round++ }, kind = ButtonKind.Primary, tall = true, takeFocus = true, focusKey = "pair-new", modifier = if (metrics.tv) Modifier.fillMaxWidth() else Modifier)
+        }
+        val server = nav.server
+        if (server != null && server.publicKey.isNotEmpty()) {
+            WittyButton(s["codeTitle"].orEmpty(), { nav.push(Route.Code(server)) }, kind = ButtonKind.Secondary, focusKey = "typed-code", modifier = if (metrics.tv) Modifier.fillMaxWidth() else Modifier)
+        }
+        if (phase != PairPhase.Busy) WittyButton(s["usePassword"].orEmpty(), onUsePassword, kind = ButtonKind.Secondary, requestFocus = showing != null, focusKey = "use-password", modifier = if (metrics.tv) Modifier.fillMaxWidth() else Modifier)
+        WittyButton(s["changeServer"].orEmpty(), nav::changeServer, kind = ButtonKind.Quiet, focusKey = "change-server")
+    }
+    val body: @Composable () -> Unit = {
         DesignSection("") {
             if (showing != null) {
                 val seconds = PairRules.secondsLeft(leftAtAnswer, now - answeredAt)
@@ -267,6 +265,33 @@ fun PairWithQr(nav: Nav, s: Map<String, String>, onBack: () -> Unit, onUsePasswo
                 }
             }
         }
+    }
+    if (metrics.tv) {
+        // On a TV the page is one centred column, as Who's watching is: the lockup, the title, the PIN and the code to
+        // scan, then the other ways in stacked under them. Nothing hugs the left edge or runs off the top.
+        val widthDp = androidx.compose.ui.platform.LocalConfiguration.current.screenWidthDp.toFloat()
+        androidx.compose.runtime.CompositionLocalProvider(LocalDesignSizes provides DesignSizes.of(metrics, widthDp)) {
+            TvWhoPage(
+                s["pairQrTitle"].orEmpty(),
+                top = { Lockup(nav.brandName, nav.brandLogo) },
+                problem = {
+                    if (showing != null) Text(s["pairQrHint"].orEmpty(), color = scheme.onSurfaceVariant, style = MaterialTheme.typography.body, textAlign = androidx.compose.ui.text.style.TextAlign.Center, modifier = Modifier.padding(bottom = metrics.u(12)).widthIn(max = metrics.u(900)))
+                },
+                profiles = { Column(Modifier.widthIn(max = metrics.u(760)), horizontalAlignment = Alignment.CenterHorizontally) { body() } },
+                actions = { actionButtons() },
+                foot = {},
+                onBack = onBack,
+            )
+        }
+        return
+    }
+    // Design 2's page under this server's lockup: the PIN and the code to scan, then the other ways in.
+    DesignScreen(
+        s["pairQrTitle"].orEmpty(), onBack, lead = if (showing != null) s["pairQrHint"].orEmpty() else "", tag = "pairing",
+        top = { Lockup(nav.brandName, nav.brandLogo) },
+        actions = { actionButtons() },
+    ) {
+        body()
     }
 }
 
