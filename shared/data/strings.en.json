@@ -43,6 +43,7 @@
   "notKept": "This device couldn't keep your sign-in safely, so you'll be asked to sign in again next time.",
   "usePassword": "Use a password instead",
   "useCode": "Sign in with a code",
+  "usePhone": "Sign in with your phone",
   "showCodeInstead": "Show a code on this screen instead",
   "nextEpisodeIn": "Next episode in",
   "cancel": "Cancel",

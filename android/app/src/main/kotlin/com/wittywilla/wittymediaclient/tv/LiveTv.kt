@@ -373,6 +373,10 @@ object GuidePrefs {
         prefs(context).edit().apply { if (id == SetRules.ALL) remove(key) else putString(key, id) }.apply()
     }
 
+    private const val SHORTCUTS = "wms.tv.shortcuts"
+    fun shortcuts(context: Context): Boolean = prefs(context).getBoolean(SHORTCUTS, false)
+    fun setShortcuts(context: Context, on: Boolean) = prefs(context).edit().putBoolean(SHORTCUTS, on).apply()
+
     fun pageSize(context: Context): Int = GuidePaging.size(prefs(context).getInt(PAGE_SIZE, GuidePaging.DEFAULT))
     fun setPageSize(context: Context, size: Int) = prefs(context).edit().putInt(PAGE_SIZE, GuidePaging.size(size)).apply()
 }

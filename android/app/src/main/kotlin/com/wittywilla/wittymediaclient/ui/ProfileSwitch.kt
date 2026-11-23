@@ -191,11 +191,46 @@ fun WhoIsWatchingScreen(nav: Nav, s: Map<String, String>) {
             else -> {
                 val size = metrics.u(
                     when {
-                        metrics.tv -> 200
+                        metrics.tv -> if (list.size > 4) 150 else 200
                         metrics.tablet -> 140
                         else -> 104
                     },
                 )
+                if (metrics.tv) {
+                    TvWhoPage(
+                        s["whoTitle"].orEmpty(),
+                        top = { Lockup(nav.brandName, nav.brandLogo) },
+                        problem = { DesignNote(problem, error = true) },
+                        profiles = {
+                            FlowRow(
+                                Modifier.fillMaxWidth().remoteRow(),
+                                horizontalArrangement = Arrangement.spacedBy(metrics.u(48), Alignment.CenterHorizontally),
+                                verticalArrangement = Arrangement.spacedBy(metrics.u(20)),
+                            ) {
+                                list.forEachIndexed { i, p ->
+                                    key(p.id) {
+                                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                            ProfileTile(p.asProfile(), size, { pick(p) }, requestFocus = if (list.any { it.current }) p.current else i == 0, focusKey = "switch-${p.id}")
+                                            Text(
+                                                when {
+                                                    p.current -> s["switchCurrent"].orEmpty()
+                                                    p.hasPassword -> s["switchLocked"].orEmpty()
+                                                    else -> ""
+                                                },
+                                                color = if (p.current) LocalExtraColours.current.accentText else LocalExtraColours.current.hint,
+                                                fontSize = LocalDesignSizes.current.tiny, fontWeight = FontWeight.Bold, textAlign = TextAlign.Center,
+                                            )
+                                        }
+                                    }
+                                }
+                            }
+                        },
+                        actions = { WittyButton(s["otherAccount"].orEmpty(), nav::signOut, kind = ButtonKind.Secondary, focusKey = "other-account", modifier = Modifier.fillMaxWidth()) },
+                        foot = {},
+                        onBack = nav::pop,
+                    )
+                    return@CompositionLocalProvider
+                }
                 // Design 2's page head and actions around W4's profile tiles.
                 DesignScreen(
                     s["whoTitle"].orEmpty(), nav::pop,

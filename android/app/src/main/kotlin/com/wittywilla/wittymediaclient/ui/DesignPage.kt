@@ -178,7 +178,7 @@ fun DesignHead(title: String, eyebrow: String = "", lead: String = "", modifier:
         }
         if (title.isNotEmpty()) {
             Text(
-                title, color = scheme.onBackground, fontSize = s.title, fontWeight = FontWeight.ExtraBold, letterSpacing = (-0.03).em,
+                title.replace('\'', '’'), color = scheme.onBackground, fontSize = s.title, fontWeight = FontWeight.ExtraBold, letterSpacing = (-0.03).em,
                 lineHeight = s.title * 1.1f, textAlign = align, modifier = Modifier.semantics { heading() },
             )
         }

@@ -910,13 +910,39 @@ private fun WhoStep(
     onUseCode: () -> Unit,
 ) {
     val metrics = LocalMetrics.current
+    // A TV with many people draws smaller faces so two centred rows and the buttons below them still fit.
     val size = metrics.u(
         when {
-            metrics.tv -> 200
+            metrics.tv -> if (profiles.size > 4) 150 else 200
             metrics.tablet -> 140
             else -> 104
         },
     )
+    if (metrics.tv) {
+        // The TV's picker is the web's: one centred column (TvWhoPage).
+        TvWhoPage(
+            s["whoTitle"].orEmpty(),
+            top = { ServerLockup(nav) },
+            problem = { DesignNote(problem, error = true) },
+            profiles = {
+                FlowRow(
+                    Modifier.fillMaxWidth().remoteRow(),
+                    horizontalArrangement = Arrangement.spacedBy(metrics.u(48), Alignment.CenterHorizontally),
+                    verticalArrangement = Arrangement.spacedBy(metrics.u(28)),
+                ) {
+                    profiles.forEachIndexed { i, p ->
+                        key(p.id) { ProfileTile(p, size, { if (!busy) onPick(p) }, requestFocus = i == 0, focusKey = "profile-${p.id}") }
+                    }
+                }
+            },
+            actions = {
+                WittyButton(s["otherAccount"].orEmpty(), onOtherAccount, kind = ButtonKind.Secondary, focusKey = "other-account", modifier = Modifier.fillMaxWidth())
+                WittyButton(s["usePhone"] ?: s["useCode"].orEmpty(), onUseCode, kind = ButtonKind.Secondary, focusKey = "use-code", modifier = Modifier.fillMaxWidth())
+            },
+            foot = { WittyButton(s["changeServer"].orEmpty(), nav::changeServer, kind = ButtonKind.Quiet, focusKey = "change-server") },
+        )
+        return
+    }
     DesignPage(
         s["whoTitle"].orEmpty(), tag = "who", top = { ServerLockup(nav) },
         actions = { CodeLinks(nav, s, onUseCode, onOtherAccount) },
