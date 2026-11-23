@@ -187,10 +187,10 @@ fun ChannelScreen(nav: Nav, start: String) {
         runCatching { api.lineup() }.getOrNull()?.let { lineup = uniqueChannels(it.channels) }
     }
     LaunchedEffect(key, channel?.brand) { TvLogos.ask(listOfNotNull(channel?.brand), api) }
-    // What's on says itself for a moment on every change, then gets out of the way.
+    // What's on says itself for three seconds on every change, then gets out of the way.
     LaunchedEffect(bannerShown) {
         if (!banner) return@LaunchedEffect
-        delay(7000)
+        delay(3000)
         banner = false
     }
     // When a programme ends the banner moves on to the next.
