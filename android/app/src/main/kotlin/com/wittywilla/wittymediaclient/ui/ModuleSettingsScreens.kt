@@ -155,26 +155,29 @@ fun ModuleSettingsScreen(nav: Nav, s: Map<String, String>, url: String, title: S
 
 // One setting's rows, in the order the app's grouped list had them: a switch, a choice (its options as chips), a number
 // with − and +, a secret, some text, or something to read, reachable all the same.
+// Also the TV's own Settings pages (TvSettingsScreens.kt), which say why a row is only read in `readOnly`.
 @Composable
-private fun SettingRows(
+internal fun SettingRows(
     view: ModuleSettingsView, row: ModuleSettingRow, s: Map<String, String>, problem: String,
     save: (ModuleSettingRow, JsonElement?) -> Unit,
+    readOnly: String = s["moduleReadOnly"].orEmpty(),
+    requestFocus: Boolean = false,
 ) {
     val canEdit = ModuleSettingsRules.editable(view, row)
-    val help = listOf(row.help, problem, if (!canEdit && row.kind != "info") s["moduleReadOnly"].orEmpty() else "").filter { it.isNotEmpty() }.joinToString(" · ")
+    val help = listOf(row.help, problem, if (!canEdit && row.kind != "info") readOnly else "").filter { it.isNotEmpty() }.joinToString(" · ")
     val key = "setting-${row.key.ifEmpty { row.label }}"
     when (row.kind) {
         "bool" -> {
             val on = ModuleSettingsRules.bool(view, row.key)
             val words = LocalWords.current
             val said = if (on) words["on"] ?: "On" else words["off"] ?: "Off"
-            DesignRow(row.label, value = said, sub = help, on = on, state = said, selected = on, focusKey = key, onClick = if (canEdit) ({ save(row, JsonPrimitive(!on)) }) else null)
+            DesignRow(row.label, value = said, sub = help, on = on, state = said, selected = on, focusKey = key, requestFocus = requestFocus, onClick = if (canEdit) ({ save(row, JsonPrimitive(!on)) }) else ({}))
         }
         "enum" -> {
             val current = ModuleSettingsRules.text(view, row.key)
-            if (!canEdit) DesignRow(row.label, value = ModuleSettingsRules.shown(view, row), sub = help, focusKey = key, onClick = {})
+            if (!canEdit) DesignRow(row.label, value = ModuleSettingsRules.shown(view, row), sub = help, focusKey = key, requestFocus = requestFocus, onClick = {})
             else {
-                DesignRow(row.label, value = ModuleSettingsRules.shown(view, row), on = true, sub = help, focusKey = key, onClick = {})
+                DesignRow(row.label, value = ModuleSettingsRules.shown(view, row), on = true, sub = help, focusKey = key, requestFocus = requestFocus, onClick = {})
                 DesignChips {
                     row.options.forEach { option ->
                         DesignChip(option.label, { if (option.value != current) save(row, JsonPrimitive(option.value)) }, on = option.value == current, focusKey = "$key-${option.value}")
@@ -185,9 +188,9 @@ private fun SettingRows(
         "int" -> {
             val now = ModuleSettingsRules.number(view, row.key)
             val shown = ModuleSettingsRules.shown(view, row)
-            if (!canEdit) DesignRow(row.label, value = shown, sub = help, focusKey = key)
+            if (!canEdit) DesignRow(row.label, value = shown, sub = help, focusKey = key, requestFocus = requestFocus, onClick = {})
             else DesignRow(
-                row.label, sub = help, focusKey = key, onClick = {}, label = listOf(row.label, help, shown).filter { it.isNotEmpty() }.joinToString(", "),
+                row.label, sub = help, focusKey = key, requestFocus = requestFocus, onClick = {}, label = listOf(row.label, help, shown).filter { it.isNotEmpty() }.joinToString(", "),
                 trailing = {
                     val ds = LocalDesignSizes.current
                     Row(horizontalArrangement = Arrangement.spacedBy(LocalMetrics.current.u(8)), verticalAlignment = Alignment.CenterVertically) {
@@ -201,7 +204,7 @@ private fun SettingRows(
         "secret" -> DesignRow(row.label, value = if (row.key in view.secretsSet) s["moduleSecretSet"].orEmpty() else s["moduleSecretNotSet"].orEmpty(), on = row.key in view.secretsSet, sub = help, focusKey = key, onClick = {})
         "string" -> DesignRow(row.label, value = if (canEdit) "" else ModuleSettingsRules.shown(view, row), sub = help, focusKey = key, onClick = {})
         // Something to read, reachable all the same.
-        else -> DesignRow(row.label, sub = row.help, focusKey = key, onClick = {})
+        else -> DesignRow(row.label, value = ModuleSettingsRules.text(view, row.key), sub = row.help, focusKey = key, requestFocus = requestFocus, onClick = {})
     }
 }
 

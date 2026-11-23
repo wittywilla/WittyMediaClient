@@ -116,40 +116,43 @@ struct ModuleSettingsView: View {
 }
 
 /// One row of a module's settings, by its kind. Every one can be reached by a finger, a keyboard and the remote's
-/// focus, and is read out with its label, value, unit and help.
-private struct ModuleSettingRow: View {
+/// focus, and is read out with its label, value, unit and help. Also Apple TV's own Settings pages (TvSettingsViews.swift),
+/// which say in `readOnlyNote` why a row is only read.
+struct ModuleSettingRow: View {
     @Environment(\.palette) private var palette
     @Environment(\.metrics) private var metrics
     let row: ModuleSettings.Row
     let settings: ModuleSettings
     let problem: String
+    var readOnlyNote: String = ""
     let save: (JSONValue) -> Void
     @State private var open = false
     @State private var text = ""
     @State private var editing = false
 
     private var help: String { PlainWords.clean(row.help ?? "", limit: 500) }
+    private var readHelp: String { [help, readOnlyNote].filter { !$0.isEmpty }.joined(separator: " · ") }
     private var label: String { PlainWords.clean(row.label, limit: 80) }
     private var value: JSONValue? { row.key.flatMap { settings.values[$0] } }
 
     /// A value to read: an `info` row, a row of a kind this app doesn't know, or one this profile can't change.
     private var readOnly: some View {
         Button {} label: {
-            SettingRow(title: label, detail: help) {
+            SettingRow(title: label, detail: row.kind == "info" ? help : readHelp) {
                 Text(settings.shown(row)).font(.wmSecondary).foregroundStyle(palette.textSecondary)
             }
         }
         .rowStyle()
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(label)
-        .accessibilityValue(row.kind == "info" ? "" : settings.shown(row) + ", read only")
-        .accessibilityHint(help)
+        .accessibilityValue(row.kind == "info" ? settings.shown(row) : settings.shown(row) + ", read only")
+        .accessibilityHint(row.kind == "info" ? help : readHelp)
         .accessibilityAddTraits(.isStaticText)
     }
 
     private func number(_ by: Int) {
         let now = value?.int ?? row.min ?? 0
-        var next = now + by
+        var next = now + by * max(1, row.step ?? 1)
         if let min = row.min { next = max(min, next) }
         if let max = row.max { next = min(max, next) }
         if next != now { save(.number(Double(next))) }

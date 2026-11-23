@@ -131,6 +131,10 @@ enum Route: Hashable {
     /// The layout editor (LayoutEditor.swift) and the server's name and mark editor, for administrators (BrandEditor.swift).
     case layoutEditor, brandEditor
     case moduleSettings(String)
+    /// A desktop Settings page Apple TV draws itself, by its id in shared/data/tv-settings.json: see TvSettingsViews.swift.
+    case tvSettings(String)
+    /// An editor kept for a computer, by its address on the server: the card with its code (ModulePages.swift).
+    case onComputer(String, title: String)
     /// Apple TV's choice of libraries for the top menu: see YouViews.swift.
     case topMenu
     /// WittyPlay on Apple TV: a games library or one console's games in it, a game's page, and a

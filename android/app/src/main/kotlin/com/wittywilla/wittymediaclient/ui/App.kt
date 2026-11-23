@@ -128,6 +128,8 @@ sealed interface Route {
     // One module's settings, at the address the server gave (ui/ModuleSettingsScreens.kt).
     // `page` is the one page of the module's settings to show; empty shows them all.
     data class ModuleSettings(val url: String, val title: String, val page: String = "") : Route { override val key = "module-settings:$url:$page" }
+    // A desktop Settings page a TV draws itself (ui/TvSettingsScreens.kt, shared/data/tv-settings.json).
+    data class TvSettings(val page: String) : Route { override val key = "tv-settings:$page" }
     data object Logs : Route { override val key = "logs" }
     // With something chosen, as the website's /library/3?genre=Drama: from a title's genre, tag or service.
     data class Library(val library: com.wittywilla.wittymediaclient.net.Library, val chosen: Map<String, String> = emptyMap()) : Route {
@@ -162,7 +164,7 @@ sealed interface Route {
     // The app's own screens leave room for the mini player. A film, a server's page and signing in don't have it.
     val hasMiniPlayer: Boolean
         get() = when (this) {
-            Home, Search, Profile, Libraries, Games, Notices, Logs, is Library, is Pinned, is Show, is Item, is Album, is Artist, is You, is Sdui, is OwnItem -> true
+            Home, Search, Profile, Libraries, Games, Notices, Logs, is Library, is Pinned, is Show, is Item, is Album, is Artist, is You, is Sdui, is OwnItem, is TvSettings -> true
             else -> false
         }
 }
@@ -1427,6 +1429,7 @@ fun AppRoot(app: WittyApp) {
                         Route.Notices -> NoticesScreen(nav)
                         Route.JoinAway -> JoinAwayScreen(nav, strings)
                         is Route.ModuleSettings -> ModuleSettingsScreen(nav, strings, route.url, route.title, route.page)
+                        is Route.TvSettings -> TvSettingsScreen(nav, strings, route.page)
                         Route.Logs -> LogsScreen(nav)
                         is Route.Library -> {
                             val body = @Composable {

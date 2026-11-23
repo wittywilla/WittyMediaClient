@@ -51,6 +51,8 @@ data class ModuleSettingRow(
     val max: Long? = null,
     val unit: String = "",
     val maxLength: Int = 0,
+    // How far − and + go: 1 for a module's rows; the TV's own pages (TvSettings.kt) give larger ones.
+    val step: Long = 1,
 )
 
 object ModuleSettingsRules {
@@ -86,7 +88,7 @@ object ModuleSettingsRules {
 
     // One step of a number: within the row's bounds.
     fun stepped(row: ModuleSettingRow, now: Long?, by: Long): Long {
-        val next = (now ?: row.min ?: 0) + by
+        val next = (now ?: row.min ?: 0) + by * row.step.coerceAtLeast(1)
         val low = row.min ?: Long.MIN_VALUE
         val high = row.max ?: Long.MAX_VALUE
         return next.coerceIn(low, high)

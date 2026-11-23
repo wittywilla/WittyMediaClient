@@ -195,6 +195,14 @@ private struct TabRoot: View {
                     case .brandEditor: BrandEditorView().plainNavigation()
                     case .moduleSettings(let module): ModuleSettingsView(module: module).plainNavigation()
                     #if os(tvOS)
+                    case .tvSettings(let page): TvSettingsPageView(pageId: page).plainNavigation()
+                    case .onComputer(let path, let title): EditorOnComputerPage(path: path, screen: TvScreenLevel(path: path, level: TvLevel.desktopOnly, title: title), note: "").plainNavigation()
+                    #else
+                    // Phones, tablets and computers open the server's own page for these.
+                    case .tvSettings: EmptyView()
+                    case .onComputer(let path, _): ElsewhereNote(path: path)
+                    #endif
+                    #if os(tvOS)
                     case .topMenu: TopMenuView().plainNavigation()
                     #else
                     case .topMenu: EmptyView()

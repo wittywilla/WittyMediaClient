@@ -1,0 +1,1248 @@
+{
+  "about": "The desktop Settings pages a TV draws itself (docs/TV-SETTINGS-PARITY.md), in the shape of a module's settings (the server's docs/SDUI-MODULES.md) with where each value is kept. Text is a key in strings.en.json.",
+  "stores": {
+    "server": {
+      "get": "/settings",
+      "put": "/settings",
+      "write": "patch",
+      "admin": true
+    },
+    "ui": {
+      "get": "/me/ui",
+      "put": "/me/ui",
+      "write": "merge"
+    },
+    "streaming": {
+      "get": "/me/streaming",
+      "put": "/me/streaming",
+      "write": "merge",
+      "root": "prefs"
+    },
+    "about": {
+      "get": "/about"
+    }
+  },
+  "pages": [
+    {
+      "id": "quality",
+      "path": "/settings/quality",
+      "title": "tvsQualityTitle",
+      "lead": "tvsQualityLead",
+      "icon": "hd",
+      "level": "full",
+      "groups": [
+        {
+          "title": "tvsQualityProfileTitle",
+          "footer": "tvsQualityProfileFooter",
+          "rows": [
+            {
+              "store": "streaming",
+              "key": "prefs.home",
+              "kind": "enum",
+              "label": "tvsQualityPrefsHomeLabel",
+              "help": "tvsQualityPrefsHomeHelp",
+              "options": [
+                {
+                  "value": "",
+                  "label": "tvsQualityChoiceOptNone"
+                },
+                {
+                  "value": "original",
+                  "label": "tvsQualityChoiceOptOriginal"
+                },
+                {
+                  "value": "h2160-b20000",
+                  "label": "tvsQualityChoiceOptH2160B20000"
+                },
+                {
+                  "value": "h1080-b8000",
+                  "label": "tvsQualityChoiceOptH1080B8000"
+                },
+                {
+                  "value": "h720-b4000",
+                  "label": "tvsQualityChoiceOptH720B4000"
+                },
+                {
+                  "value": "h480-b1500",
+                  "label": "tvsQualityChoiceOptH480B1500"
+                },
+                {
+                  "value": "h360-b800",
+                  "label": "tvsQualityChoiceOptH360B800"
+                }
+              ],
+              "other": "tvsQualityPrefsHomeOther"
+            },
+            {
+              "store": "streaming",
+              "key": "prefs.away",
+              "kind": "enum",
+              "label": "tvsQualityPrefsAwayLabel",
+              "help": "tvsQualityPrefsAwayHelp",
+              "options": [
+                {
+                  "value": "",
+                  "label": "tvsQualityChoiceOptNone"
+                },
+                {
+                  "value": "original",
+                  "label": "tvsQualityChoiceOptOriginal"
+                },
+                {
+                  "value": "h2160-b20000",
+                  "label": "tvsQualityChoiceOptH2160B20000"
+                },
+                {
+                  "value": "h1080-b8000",
+                  "label": "tvsQualityChoiceOptH1080B8000"
+                },
+                {
+                  "value": "h720-b4000",
+                  "label": "tvsQualityChoiceOptH720B4000"
+                },
+                {
+                  "value": "h480-b1500",
+                  "label": "tvsQualityChoiceOptH480B1500"
+                },
+                {
+                  "value": "h360-b800",
+                  "label": "tvsQualityChoiceOptH360B800"
+                }
+              ],
+              "other": "tvsQualityPrefsAwayOther"
+            }
+          ]
+        },
+        {
+          "title": "tvsQualityLimitsTitle",
+          "footer": "tvsQualityLimitsFooter",
+          "rows": [
+            {
+              "store": "streaming",
+              "key": "profile",
+              "kind": "info",
+              "format": "limit",
+              "label": "tvsQualityProfileLabel"
+            },
+            {
+              "store": "streaming",
+              "key": "remote",
+              "kind": "info",
+              "format": "limit",
+              "label": "tvsQualityRemoteLabel"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "skipping",
+      "path": "/settings/playback#skipping",
+      "title": "tvsSkippingTitle",
+      "lead": "tvsSkippingLead",
+      "icon": "skip_next",
+      "level": "full",
+      "groups": [
+        {
+          "title": "tvsSkippingSkippingTitle",
+          "footer": "tvsSkippingSkippingFooter",
+          "rows": [
+            {
+              "store": "ui",
+              "key": "autoSkip.intro",
+              "kind": "bool",
+              "default": false,
+              "label": "tvsSkippingAutoSkipIntroLabel",
+              "help": "tvsSkippingAutoSkipIntroHelp"
+            },
+            {
+              "store": "ui",
+              "key": "autoSkip.recap",
+              "kind": "bool",
+              "default": false,
+              "label": "tvsSkippingAutoSkipRecapLabel",
+              "help": "tvsSkippingAutoSkipRecapHelp"
+            },
+            {
+              "store": "ui",
+              "key": "autoSkip.credits",
+              "kind": "bool",
+              "default": false,
+              "label": "tvsSkippingAutoSkipCreditsLabel",
+              "help": "tvsSkippingAutoSkipCreditsHelp"
+            },
+            {
+              "store": "ui",
+              "key": "autoSkip.adverts",
+              "kind": "bool",
+              "default": false,
+              "label": "tvsSkippingAutoSkipAdvertsLabel",
+              "help": "tvsSkippingAutoSkipAdvertsHelp"
+            },
+            {
+              "store": "ui",
+              "key": "autoSkip.preview",
+              "kind": "bool",
+              "default": false,
+              "label": "tvsSkippingAutoSkipPreviewLabel",
+              "help": "tvsSkippingAutoSkipPreviewHelp"
+            },
+            {
+              "store": "ui",
+              "key": "autoSkip.custom",
+              "kind": "bool",
+              "default": false,
+              "label": "tvsSkippingAutoSkipCustomLabel",
+              "help": "tvsSkippingAutoSkipCustomHelp"
+            },
+            {
+              "store": "ui",
+              "key": "autoSkip.fileAuto",
+              "kind": "bool",
+              "default": true,
+              "label": "tvsSkippingAutoSkipFileAutoLabel",
+              "help": "tvsSkippingAutoSkipFileAutoHelp"
+            }
+          ]
+        },
+        {
+          "title": "tvsSkippingContentTitle",
+          "footer": "tvsSkippingContentFooter",
+          "rows": [
+            {
+              "store": "ui",
+              "key": "contentFilters.violence",
+              "kind": "enum",
+              "default": "off",
+              "label": "tvsSkippingContentFiltersViolenceLabel",
+              "options": [
+                {
+                  "value": "off",
+                  "label": "tvsSkippingFilterOptOff"
+                },
+                {
+                  "value": "warn",
+                  "label": "tvsSkippingFilterOptWarn"
+                },
+                {
+                  "value": "mute",
+                  "label": "tvsSkippingFilterOptMute"
+                },
+                {
+                  "value": "skip",
+                  "label": "tvsSkippingFilterOptSkip"
+                }
+              ]
+            },
+            {
+              "store": "ui",
+              "key": "contentFilters.language",
+              "kind": "enum",
+              "default": "off",
+              "label": "tvsSkippingContentFiltersLanguageLabel",
+              "options": [
+                {
+                  "value": "off",
+                  "label": "tvsSkippingFilterOptOff"
+                },
+                {
+                  "value": "warn",
+                  "label": "tvsSkippingFilterOptWarn"
+                },
+                {
+                  "value": "mute",
+                  "label": "tvsSkippingFilterOptMute"
+                },
+                {
+                  "value": "skip",
+                  "label": "tvsSkippingFilterOptSkip"
+                }
+              ]
+            },
+            {
+              "store": "ui",
+              "key": "contentFilters.nudity",
+              "kind": "enum",
+              "default": "off",
+              "label": "tvsSkippingContentFiltersNudityLabel",
+              "options": [
+                {
+                  "value": "off",
+                  "label": "tvsSkippingFilterOptOff"
+                },
+                {
+                  "value": "warn",
+                  "label": "tvsSkippingFilterOptWarn"
+                },
+                {
+                  "value": "mute",
+                  "label": "tvsSkippingFilterOptMute"
+                },
+                {
+                  "value": "skip",
+                  "label": "tvsSkippingFilterOptSkip"
+                }
+              ]
+            },
+            {
+              "store": "ui",
+              "key": "contentFilters.sex",
+              "kind": "enum",
+              "default": "off",
+              "label": "tvsSkippingContentFiltersSexLabel",
+              "options": [
+                {
+                  "value": "off",
+                  "label": "tvsSkippingFilterOptOff"
+                },
+                {
+                  "value": "warn",
+                  "label": "tvsSkippingFilterOptWarn"
+                },
+                {
+                  "value": "mute",
+                  "label": "tvsSkippingFilterOptMute"
+                },
+                {
+                  "value": "skip",
+                  "label": "tvsSkippingFilterOptSkip"
+                }
+              ]
+            },
+            {
+              "store": "ui",
+              "key": "contentFilters.drugs",
+              "kind": "enum",
+              "default": "off",
+              "label": "tvsSkippingContentFiltersDrugsLabel",
+              "options": [
+                {
+                  "value": "off",
+                  "label": "tvsSkippingFilterOptOff"
+                },
+                {
+                  "value": "warn",
+                  "label": "tvsSkippingFilterOptWarn"
+                },
+                {
+                  "value": "mute",
+                  "label": "tvsSkippingFilterOptMute"
+                },
+                {
+                  "value": "skip",
+                  "label": "tvsSkippingFilterOptSkip"
+                }
+              ]
+            },
+            {
+              "store": "ui",
+              "key": "contentFilters.frightening",
+              "kind": "enum",
+              "default": "off",
+              "label": "tvsSkippingContentFiltersFrighteningLabel",
+              "options": [
+                {
+                  "value": "off",
+                  "label": "tvsSkippingFilterOptOff"
+                },
+                {
+                  "value": "warn",
+                  "label": "tvsSkippingFilterOptWarn"
+                },
+                {
+                  "value": "mute",
+                  "label": "tvsSkippingFilterOptMute"
+                },
+                {
+                  "value": "skip",
+                  "label": "tvsSkippingFilterOptSkip"
+                }
+              ]
+            },
+            {
+              "store": "ui",
+              "key": "contentFilters.flashing",
+              "kind": "enum",
+              "default": "off",
+              "label": "tvsSkippingContentFiltersFlashingLabel",
+              "options": [
+                {
+                  "value": "off",
+                  "label": "tvsSkippingFilterOptOff"
+                },
+                {
+                  "value": "warn",
+                  "label": "tvsSkippingFilterOptWarn"
+                },
+                {
+                  "value": "mute",
+                  "label": "tvsSkippingFilterOptMute"
+                },
+                {
+                  "value": "skip",
+                  "label": "tvsSkippingFilterOptSkip"
+                }
+              ]
+            },
+            {
+              "store": "ui",
+              "key": "contentFilters.discrimination",
+              "kind": "enum",
+              "default": "off",
+              "label": "tvsSkippingContentFiltersDiscriminationLabel",
+              "options": [
+                {
+                  "value": "off",
+                  "label": "tvsSkippingFilterOptOff"
+                },
+                {
+                  "value": "warn",
+                  "label": "tvsSkippingFilterOptWarn"
+                },
+                {
+                  "value": "mute",
+                  "label": "tvsSkippingFilterOptMute"
+                },
+                {
+                  "value": "skip",
+                  "label": "tvsSkippingFilterOptSkip"
+                }
+              ]
+            },
+            {
+              "store": "ui",
+              "key": "contentFilters.other",
+              "kind": "enum",
+              "default": "off",
+              "label": "tvsSkippingContentFiltersOtherLabel",
+              "options": [
+                {
+                  "value": "off",
+                  "label": "tvsSkippingFilterOptOff"
+                },
+                {
+                  "value": "warn",
+                  "label": "tvsSkippingFilterOptWarn"
+                },
+                {
+                  "value": "mute",
+                  "label": "tvsSkippingFilterOptMute"
+                },
+                {
+                  "value": "skip",
+                  "label": "tvsSkippingFilterOptSkip"
+                }
+              ]
+            },
+            {
+              "store": "ui",
+              "key": "contentFilters.minSeverity",
+              "kind": "enum",
+              "default": "0",
+              "encode": "number",
+              "label": "tvsSkippingContentFiltersMinSeverityLabel",
+              "help": "tvsSkippingContentFiltersMinSeverityHelp",
+              "options": [
+                {
+                  "value": "0",
+                  "label": "tvsSkippingSeverityOpt0"
+                },
+                {
+                  "value": "2",
+                  "label": "tvsSkippingSeverityOpt2"
+                },
+                {
+                  "value": "3",
+                  "label": "tvsSkippingSeverityOpt3"
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "playback",
+      "path": "/settings/playback",
+      "title": "tvsPlaybackTitle",
+      "lead": "tvsPlaybackLead",
+      "icon": "smart_display",
+      "level": "view",
+      "admin": true,
+      "groups": [
+        {
+          "title": "tvsPlaybackPlayerTitle",
+          "rows": [
+            {
+              "store": "server",
+              "key": "maxSpeed",
+              "kind": "enum",
+              "label": "tvsPlaybackMaxSpeedLabel",
+              "help": "tvsPlaybackMaxSpeedHelp",
+              "options": [
+                {
+                  "value": "2",
+                  "label": "tvsPlaybackSpeedOpt2"
+                },
+                {
+                  "value": "4",
+                  "label": "tvsPlaybackSpeedOpt4"
+                },
+                {
+                  "value": "6",
+                  "label": "tvsPlaybackSpeedOpt6"
+                },
+                {
+                  "value": "8",
+                  "label": "tvsPlaybackSpeedOpt8"
+                },
+                {
+                  "value": "16",
+                  "label": "tvsPlaybackSpeedOpt16"
+                }
+              ]
+            },
+            {
+              "store": "server",
+              "key": "episodeView",
+              "kind": "enum",
+              "label": "tvsPlaybackEpisodeViewLabel",
+              "help": "tvsPlaybackEpisodeViewHelp",
+              "options": [
+                {
+                  "value": "cards",
+                  "label": "tvsPlaybackEpisodesOptCards"
+                },
+                {
+                  "value": "list",
+                  "label": "tvsPlaybackEpisodesOptList"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "title": "tvsPlaybackStreamingTitle",
+          "rows": [
+            {
+              "store": "server",
+              "key": "remoteStreaming",
+              "kind": "enum",
+              "default": "standard",
+              "label": "tvsPlaybackRemoteStreamingLabel",
+              "help": "tvsPlaybackRemoteStreamingHelp",
+              "options": [
+                {
+                  "value": "standard",
+                  "label": "tvsPlaybackStreamingOptStandard"
+                },
+                {
+                  "value": "robust",
+                  "label": "tvsPlaybackStreamingOptRobust"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "rows": [
+            {
+              "id": "skipping",
+              "kind": "link",
+              "to": "tv:skipping",
+              "level": "full",
+              "label": "tvsPlaybackSkippingLabel",
+              "help": "tvsPlaybackSkippingHelp"
+            },
+            {
+              "id": "limits",
+              "kind": "desktopOnly",
+              "to": "/settings/playback#video-quality",
+              "label": "tvsPlaybackLimitsLabel",
+              "help": "tvsPlaybackLimitsHelp"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "appearance",
+      "path": "/settings/appearance",
+      "title": "tvsAppearanceTitle",
+      "lead": "tvsAppearanceLead",
+      "icon": "palette",
+      "level": "full",
+      "groups": [
+        {
+          "title": "tvsAppearanceLookTitle",
+          "rows": [
+            {
+              "id": "theme",
+              "kind": "link",
+              "to": "app:theme",
+              "label": "tvsAppearanceThemeLabel",
+              "help": "tvsAppearanceThemeHelp"
+            },
+            {
+              "id": "look",
+              "kind": "link",
+              "to": "app:look",
+              "label": "tvsAppearanceLookLabel",
+              "help": "tvsAppearanceLookHelp"
+            }
+          ]
+        },
+        {
+          "title": "tvsAppearanceMotionTitle",
+          "rows": [
+            {
+              "store": "ui",
+              "key": "posterTilt",
+              "kind": "bool",
+              "default": true,
+              "label": "tvsAppearancePosterTiltLabel",
+              "help": "tvsAppearancePosterTiltHelp"
+            },
+            {
+              "store": "ui",
+              "key": "canvases",
+              "kind": "bool",
+              "default": true,
+              "label": "tvsAppearanceCanvasesLabel",
+              "help": "tvsAppearanceCanvasesHelp"
+            }
+          ]
+        },
+        {
+          "title": "tvsAppearanceLanguageTitle",
+          "admin": true,
+          "rows": [
+            {
+              "store": "server",
+              "key": "uiLanguage",
+              "kind": "enum",
+              "label": "tvsAppearanceUiLanguageLabel",
+              "help": "tvsAppearanceUiLanguageHelp",
+              "options": [
+                {
+                  "value": "en",
+                  "label": "English"
+                },
+                {
+                  "value": "es",
+                  "label": "Español"
+                },
+                {
+                  "value": "fr",
+                  "label": "Français"
+                },
+                {
+                  "value": "de",
+                  "label": "Deutsch"
+                },
+                {
+                  "value": "it",
+                  "label": "Italiano"
+                },
+                {
+                  "value": "pt-BR",
+                  "label": "Português (Brasil)"
+                },
+                {
+                  "value": "pt-PT",
+                  "label": "Português (Portugal)"
+                },
+                {
+                  "value": "nl",
+                  "label": "Nederlands"
+                },
+                {
+                  "value": "sv",
+                  "label": "Svenska"
+                },
+                {
+                  "value": "da",
+                  "label": "Dansk"
+                },
+                {
+                  "value": "no",
+                  "label": "Norsk"
+                },
+                {
+                  "value": "fi",
+                  "label": "Suomi"
+                },
+                {
+                  "value": "pl",
+                  "label": "Polski"
+                },
+                {
+                  "value": "cs",
+                  "label": "Čeština"
+                },
+                {
+                  "value": "hu",
+                  "label": "Magyar"
+                },
+                {
+                  "value": "el",
+                  "label": "Ελληνικά"
+                },
+                {
+                  "value": "tr",
+                  "label": "Türkçe"
+                },
+                {
+                  "value": "ru",
+                  "label": "Русский"
+                },
+                {
+                  "value": "uk",
+                  "label": "Українська"
+                },
+                {
+                  "value": "ja",
+                  "label": "日本語"
+                },
+                {
+                  "value": "ko",
+                  "label": "한국어"
+                },
+                {
+                  "value": "zh",
+                  "label": "中文"
+                },
+                {
+                  "value": "hi",
+                  "label": "हिन्दी"
+                },
+                {
+                  "value": "ar",
+                  "label": "العربية"
+                },
+                {
+                  "value": "he",
+                  "label": "עברית"
+                },
+                {
+                  "value": "th",
+                  "label": "ไทย"
+                },
+                {
+                  "value": "vi",
+                  "label": "Tiếng Việt"
+                }
+              ]
+            },
+            {
+              "store": "server",
+              "key": "audioLanguage",
+              "kind": "enum",
+              "also": [
+                "menuLanguage"
+              ],
+              "label": "tvsAppearanceAudioLanguageLabel",
+              "help": "tvsAppearanceAudioLanguageHelp",
+              "options": [
+                {
+                  "value": "",
+                  "label": "tvsAppearanceAudioOptNone"
+                },
+                {
+                  "value": "en",
+                  "label": "English"
+                },
+                {
+                  "value": "es",
+                  "label": "Español"
+                },
+                {
+                  "value": "fr",
+                  "label": "Français"
+                },
+                {
+                  "value": "de",
+                  "label": "Deutsch"
+                },
+                {
+                  "value": "it",
+                  "label": "Italiano"
+                },
+                {
+                  "value": "pt",
+                  "label": "Português"
+                },
+                {
+                  "value": "nl",
+                  "label": "Nederlands"
+                },
+                {
+                  "value": "sv",
+                  "label": "Svenska"
+                },
+                {
+                  "value": "da",
+                  "label": "Dansk"
+                },
+                {
+                  "value": "no",
+                  "label": "Norsk"
+                },
+                {
+                  "value": "fi",
+                  "label": "Suomi"
+                },
+                {
+                  "value": "pl",
+                  "label": "Polski"
+                },
+                {
+                  "value": "cs",
+                  "label": "Čeština"
+                },
+                {
+                  "value": "hu",
+                  "label": "Magyar"
+                },
+                {
+                  "value": "el",
+                  "label": "Ελληνικά"
+                },
+                {
+                  "value": "tr",
+                  "label": "Türkçe"
+                },
+                {
+                  "value": "ru",
+                  "label": "Русский"
+                },
+                {
+                  "value": "uk",
+                  "label": "Українська"
+                },
+                {
+                  "value": "ja",
+                  "label": "日本語"
+                },
+                {
+                  "value": "ko",
+                  "label": "한국어"
+                },
+                {
+                  "value": "zh",
+                  "label": "中文"
+                },
+                {
+                  "value": "hi",
+                  "label": "हिन्दी"
+                },
+                {
+                  "value": "ar",
+                  "label": "العربية"
+                },
+                {
+                  "value": "he",
+                  "label": "עברית"
+                },
+                {
+                  "value": "th",
+                  "label": "ไทย"
+                },
+                {
+                  "value": "vi",
+                  "label": "Tiếng Việt"
+                }
+              ]
+            },
+            {
+              "store": "server",
+              "key": "timeZoneNow",
+              "kind": "info",
+              "level": "view",
+              "label": "tvsAppearanceTimeZoneNowLabel",
+              "help": "tvsAppearanceTimeZoneNowHelp"
+            }
+          ]
+        },
+        {
+          "title": "tvsAppearanceComputerTitle",
+          "rows": [
+            {
+              "id": "colours",
+              "kind": "desktopOnly",
+              "to": "/settings/appearance#colours",
+              "label": "tvsAppearanceColoursLabel",
+              "help": "tvsAppearanceColoursHelp"
+            },
+            {
+              "id": "import",
+              "kind": "desktopOnly",
+              "to": "/settings/appearance#theme",
+              "label": "tvsAppearanceImportLabel",
+              "help": "tvsAppearanceImportHelp"
+            },
+            {
+              "id": "personal",
+              "kind": "desktopOnly",
+              "to": "/settings/appearance#your-colours",
+              "label": "tvsAppearancePersonalLabel",
+              "help": "tvsAppearancePersonalHelp"
+            },
+            {
+              "id": "everyone",
+              "kind": "desktopOnly",
+              "to": "/settings/appearance#colours-for-everyone",
+              "admin": true,
+              "label": "tvsAppearanceEveryoneLabel",
+              "help": "tvsAppearanceEveryoneHelp"
+            },
+            {
+              "id": "brand",
+              "kind": "desktopOnly",
+              "store": "server",
+              "key": "brandName",
+              "to": "/settings/appearance#name",
+              "admin": true,
+              "label": "tvsAppearanceBrandNameLabel",
+              "help": "tvsAppearanceBrandNameHelp"
+            }
+          ]
+        },
+        {
+          "title": "tvsAppearancePlayerTitle",
+          "rows": [
+            {
+              "id": "playerlook",
+              "kind": "info",
+              "label": "tvsAppearancePlayerlookLabel",
+              "help": "tvsAppearancePlayerlookHelp"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "activity",
+      "path": "/settings/activity",
+      "title": "tvsActivityTitle",
+      "lead": "tvsActivityLead",
+      "icon": "monitoring",
+      "level": "full",
+      "groups": [
+        {
+          "title": "tvsActivityMineTitle",
+          "rows": [
+            {
+              "store": "ui",
+              "key": "activityHidden",
+              "kind": "bool",
+              "invert": true,
+              "default": false,
+              "label": "tvsActivityActivityHiddenLabel",
+              "help": "tvsActivityActivityHiddenHelp"
+            }
+          ]
+        },
+        {
+          "title": "tvsActivityServerTitle",
+          "footer": "tvsActivityServerFooter",
+          "admin": true,
+          "rows": [
+            {
+              "store": "server",
+              "key": "activityEnabled",
+              "kind": "bool",
+              "default": true,
+              "encode": "flag",
+              "label": "tvsActivityActivityEnabledLabel",
+              "help": "tvsActivityActivityEnabledHelp"
+            },
+            {
+              "store": "server",
+              "key": "activityViewers",
+              "kind": "enum",
+              "default": "admins",
+              "label": "tvsActivityActivityViewersLabel",
+              "help": "tvsActivityActivityViewersHelp",
+              "options": [
+                {
+                  "value": "admins",
+                  "label": "tvsActivityWhoOptAdmins"
+                },
+                {
+                  "value": "adults",
+                  "label": "tvsActivityWhoOptAdults"
+                },
+                {
+                  "value": "everyone",
+                  "label": "tvsActivityWhoOptEveryone"
+                }
+              ]
+            },
+            {
+              "store": "server",
+              "key": "statsViewers",
+              "kind": "enum",
+              "default": "admins",
+              "label": "tvsActivityStatsViewersLabel",
+              "help": "tvsActivityStatsViewersHelp",
+              "options": [
+                {
+                  "value": "admins",
+                  "label": "tvsActivityWhoOptAdmins"
+                },
+                {
+                  "value": "adults",
+                  "label": "tvsActivityWhoOptAdults"
+                },
+                {
+                  "value": "everyone",
+                  "label": "tvsActivityWhoOptEveryone"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "title": "tvsActivityHistoryTitle",
+          "footer": "tvsActivityHistoryFooter",
+          "admin": true,
+          "rows": [
+            {
+              "store": "server",
+              "key": "activityKeepCount",
+              "kind": "int",
+              "encode": "string",
+              "default": 500,
+              "min": 10,
+              "max": 5000,
+              "step": 50,
+              "label": "tvsActivityActivityKeepCountLabel",
+              "unit": "tvsActivityActivityKeepCountUnit"
+            },
+            {
+              "store": "server",
+              "key": "activityKeepDays",
+              "kind": "int",
+              "encode": "string",
+              "default": 30,
+              "min": 1,
+              "max": 365,
+              "step": 1,
+              "label": "tvsActivityActivityKeepDaysLabel",
+              "unit": "tvsActivityActivityKeepDaysUnit"
+            },
+            {
+              "id": "clear",
+              "kind": "desktopOnly",
+              "to": "/settings/activity#history",
+              "label": "tvsActivityClearLabel",
+              "help": "tvsActivityClearHelp"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "sharing",
+      "path": "/settings/sharing",
+      "title": "tvsSharingTitle",
+      "lead": "tvsSharingLead",
+      "icon": "link",
+      "level": "view",
+      "groups": [
+        {
+          "title": "tvsSharingUploadsTitle",
+          "rows": [
+            {
+              "store": "server",
+              "key": "uploads",
+              "kind": "bool",
+              "encode": "flag",
+              "default": true,
+              "label": "tvsSharingUploadsLabel",
+              "help": "tvsSharingUploadsHelp"
+            },
+            {
+              "store": "server",
+              "key": "uploadMaxMb",
+              "kind": "enum",
+              "label": "tvsSharingUploadMaxMbLabel",
+              "options": [
+                {
+                  "value": "512",
+                  "label": "tvsSharingMaxOpt512"
+                },
+                {
+                  "value": "2048",
+                  "label": "tvsSharingMaxOpt2048"
+                },
+                {
+                  "value": "4096",
+                  "label": "tvsSharingMaxOpt4096"
+                },
+                {
+                  "value": "16384",
+                  "label": "tvsSharingMaxOpt16384"
+                },
+                {
+                  "value": "65536",
+                  "label": "tvsSharingMaxOpt65536"
+                }
+              ]
+            },
+            {
+              "store": "server",
+              "key": "uploadAccountMb",
+              "kind": "enum",
+              "label": "tvsSharingUploadAccountMbLabel",
+              "options": [
+                {
+                  "value": "10240",
+                  "label": "tvsSharingRoomOpt10240"
+                },
+                {
+                  "value": "102400",
+                  "label": "tvsSharingRoomOpt102400"
+                },
+                {
+                  "value": "1048576",
+                  "label": "tvsSharingRoomOpt1048576"
+                },
+                {
+                  "value": "0",
+                  "label": "tvsSharingRoomOpt0"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "title": "tvsSharingLinksTitle",
+          "rows": [
+            {
+              "store": "server",
+              "key": "shareLinks",
+              "kind": "bool",
+              "encode": "flag",
+              "default": true,
+              "label": "tvsSharingShareLinksLabel",
+              "help": "tvsSharingShareLinksHelp"
+            }
+          ]
+        },
+        {
+          "title": "tvsSharingRemoteTitle",
+          "rows": [
+            {
+              "store": "server",
+              "key": "remoteControl",
+              "kind": "bool",
+              "encode": "flag",
+              "default": true,
+              "label": "tvsSharingRemoteControlLabel",
+              "help": "tvsSharingRemoteControlHelp"
+            }
+          ]
+        },
+        {
+          "title": "tvsSharingPartiesTitle",
+          "rows": [
+            {
+              "store": "server",
+              "key": "syncplay",
+              "kind": "bool",
+              "encode": "flag",
+              "default": true,
+              "label": "tvsSharingSyncplayLabel"
+            },
+            {
+              "store": "server",
+              "key": "syncplayCreate",
+              "kind": "enum",
+              "default": "everyone",
+              "label": "tvsSharingSyncplayCreateLabel",
+              "options": [
+                {
+                  "value": "everyone",
+                  "label": "tvsSharingCreateOptEveryone"
+                },
+                {
+                  "value": "adults",
+                  "label": "tvsSharingCreateOptAdults"
+                },
+                {
+                  "value": "admins",
+                  "label": "tvsSharingCreateOptAdmins"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "title": "tvsSharingYoursTitle",
+          "rows": [
+            {
+              "id": "links",
+              "kind": "desktopOnly",
+              "to": "/settings/sharing#your-links",
+              "label": "tvsSharingLinksLabel",
+              "help": "tvsSharingLinksHelp"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "about",
+      "path": "/settings/about",
+      "title": "tvsAboutTitle",
+      "lead": "tvsAboutLead",
+      "icon": "info",
+      "level": "view",
+      "groups": [
+        {
+          "title": "tvsAboutVersionTitle",
+          "footer": "tvsAboutVersionFooter",
+          "rows": [
+            {
+              "store": "about",
+              "key": "version",
+              "kind": "info",
+              "label": "tvsAboutVersionLabel"
+            },
+            {
+              "store": "about",
+              "key": "modules",
+              "kind": "list",
+              "item": {
+                "label": "name",
+                "value": "version"
+              },
+              "label": "tvsAboutModulesLabel"
+            }
+          ]
+        },
+        {
+          "rows": [
+            {
+              "id": "updates",
+              "kind": "desktopOnly",
+              "to": "/settings/about#updates",
+              "admin": true,
+              "label": "tvsAboutUpdatesLabel",
+              "help": "tvsAboutUpdatesHelp"
+            },
+            {
+              "id": "licences",
+              "kind": "desktopOnly",
+              "to": "/settings/about#third-party-licenses",
+              "label": "tvsAboutLicencesLabel",
+              "help": "tvsAboutLicencesHelp"
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

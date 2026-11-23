@@ -6,6 +6,71 @@ Newest first. Each section is one pass that needs a Mac: Xcode, the iPhone and A
 app. Work through the newest first, tick each box here as you go, commit the ticks, and say in the PR what ran and what
 didn't. The GitHub issues labelled `mac` point at these sections.
 
+## 0.8.2-alpha: Apple TV's own Settings pages (2026-11-22)
+
+Written 2026-11-22 on the Windows PC. The TV apps now draw the desktop Settings pages a remote can use themselves
+(wittywilla/WittyMediaClient#72; the table of every setting is [docs/TV-SETTINGS-PARITY.md](docs/TV-SETTINGS-PARITY.md)):
+Video quality, Skipping and content, Appearance and Activity change things; Playback, Sharing and photos and About show
+their values; the editors kept for a computer are rows that open the card with the QR code. The pages are data,
+`shared/data/tv-settings.json`, drawn with the module-settings rows Apple TV already had.
+
+**Written on Windows, never run on any Apple device or simulator** (WittyKit's part compiled and its tests passed with
+Swift 6.1 on Linux, the app only compiled by CI's macOS runner):
+
+| File | What changed |
+|---|---|
+| `apple/WittyKit/Sources/WittyKit/TvSettings.swift` (new), `Tests/WittyKitTests/TvSettingsTests.swift` (new) | The pages, how values are read and how a change is sent |
+| `apple/WittyKit/Sources/WittyKit/SDUI/SDUIModules.swift` | A row's `step` |
+| `apple/App/TvSettingsViews.swift` (new) | Apple TV: `TvSettingsPageView` |
+| `apple/App/LayoutModulesSettings.swift` | `ModuleSettingRow` is shared, with a read-only note and the step |
+| `apple/App/AppModel.swift`, `Shell.swift` | Routes `.tvSettings(id)` and `.onComputer(path, title:)` |
+| `apple/App/YouViews.swift` | You's new rows on Apple TV |
+
+The same pages **ran** on Android TV here: compare with the pictures in `docs/mac-082/` (all of them are in
+`D:\projects-0.8.0\_status\tv-settings\` on the PC).
+
+### Steps
+
+- [ ] **1. The code.** WittyMediaClient's branch `tv-settings-082` (its draft PR), or `v0.8.2-alpha` once merged, and
+  the server's `v0.8.1-alpha` (or `v0.8.2-alpha`):
+
+  ```bash
+  cd ~/<where the repos are>/WittyMediaClient && git fetch origin && git switch tv-settings-082 && git pull
+  ```
+
+- [ ] **2. A server** as in step 2 of the 0.8.1 section below (port 19555, fresh data, one library is enough), signed in
+  as its administrator. Make a second profile, an adult who isn't an administrator, in Settings → Profiles.
+- [ ] **3. WittyKit's tests:** `cd apple/WittyKit && swift test --filter TvSettingsTests`. Expected: 5 tests pass.
+- [ ] **4. Build and open Apple TV:** `bash apple/scripts/check-on-mac.sh`, then the Apple TV simulator against the
+  server, signed in as the administrator. Use only the simulator's remote (arrows, select, Menu) from here on.
+- [ ] **5. You.** Expected new rows: **Video quality** and **Skipping and content** (Yours), **Appearance and
+  branding** (On this device, after Look and theme), **Pages and menu**, **Network** and **Data folder** (Server).
+  **Playback and discs**, **Activity**, **Share links** and **About this server** open the new pages, not the
+  "Open this on a phone" card. Compare `docs/mac-082/02-you.png`.
+- [ ] **6. Video quality.** Two rows, At home and Away from home, each "Auto (recommended)"; select one: its list
+  opens; choose **720p, about 4 Mb/s**: the row says it, "Saved." shows. In Safari, `http://<server>/settings/quality`
+  shows 720p at home too. Limits: "No limit" twice. Compare `docs/mac-082/03-quality.png`.
+- [ ] **7. Skipping and content.** Seven switches (all Off but **Do as the video's file says**, On) and ten choices
+  (Play it, Any strength). Turn **Skip intros** On; Safari's Settings → Playback → Skipping shows it on. Compare
+  `docs/mac-082/04-skipping.png`.
+- [ ] **8. Appearance.** Theme and Look open Apple TV's Theme. **Moving posters** and **Moving backgrounds** On;
+  turning one off saves. **Language of the server's pages** lists 27 languages by their own names; choose Deutsch,
+  then English again (Safari's pages follow). **Time zone** is read only. **Made on a computer**: Make a theme, Import
+  a theme, Your colours, Colours for everyone, **Name and logo** (with the server's name): each opens the card with
+  the address and a code, and Menu comes back. Compare `docs/mac-082/05-appearance.png`.
+- [ ] **9. Activity.** Show the activity button On; Activity button On; Who else can see it and statistics "Only
+  administrators"; Keep at most **500 tasks** (+ makes 550, − 500), For no longer than **30 days**; Clear the history
+  opens the card. Compare `docs/mac-082/06-activity.png`.
+- [ ] **10. Playback, Sharing and photos, About** show a note at the top ("To change this, use the WittyMediaClient
+  app…") and values only: selecting a row changes nothing, and the remote can still reach every row to the end.
+  About lists WittyMediaServer's version and each module with its version. Compare `docs/mac-082/07-playback.png`,
+  `08-sharing.png`, `09-about.png`.
+- [ ] **11. Pages and menu, Network, Data folder** open the card ("Change this on a computer") with the address and a code.
+- [ ] **12. The other profile.** Sign in as the adult who isn't an administrator: Video quality, Skipping and content,
+  Appearance (without Language and time zone, Colours for everyone and Name and logo), Activity (only Show the activity
+  button) and Share links (only Your links). No Playback row, no Server group.
+- [ ] **13.** Tick these, commit, and comment on the `mac` issue for this section with what ran and what didn't.
+
 ## 0.8.1-alpha: what the Mac must do
 
 Written 2026-11-19 on the Windows PC, for Claude on the owner's MacBook. WittyMediaServer 0.8.1-alpha added TV mode

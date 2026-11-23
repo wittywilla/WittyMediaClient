@@ -71,6 +71,25 @@ struct YouView: View {
         row(.page(path), icon, tint, title, value: value)
     }
 
+    /// A desktop Settings page: Apple TV draws it itself (TvSettingsViews.swift, docs/TV-SETTINGS-PARITY.md); other
+    /// devices open the server's own page.
+    @ViewBuilder private func settingsPage(_ id: String, _ path: String, _ icon: String, _ tint: String = RowTint.quiet, title: String, value: String = "") -> some View {
+        #if os(tvOS)
+        row(.tvSettings(id), icon, tint, title, value: value)
+        #else
+        page(path, icon, tint, title: title, value: value)
+        #endif
+    }
+
+    /// An editor kept for a computer: on Apple TV its card with the code, even where the server's TV table doesn't list it.
+    @ViewBuilder private func computerPage(_ path: String, _ icon: String, title: String) -> some View {
+        #if os(tvOS)
+        row(.onComputer(path, title: say(title)), icon, RowTint.quiet, title)
+        #else
+        page(path, icon, title: title)
+        #endif
+    }
+
     @ViewBuilder private var groups: some View {
         ListGroup(title: say("groupAccount")) {
             row(.names, "person.text.rectangle", RowTint.account, "rowNames", value: user?.shownName ?? "")
@@ -107,9 +126,15 @@ struct YouView: View {
             page("/review", "sparkles", RowTint.year, title: "rowYourYear")
             page("/collections", "square.stack", RowTint.teal, title: "rowCollections")
             if model.household.allows(ProfileFeature.sharing) {
-                page("/settings/sharing", "link", RowTint.account, title: "rowShareLinks")
+                settingsPage("sharing", "/settings/sharing", "link", RowTint.account, title: "rowShareLinks")
             }
-            page("/settings/activity", "waveform.path.ecg", RowTint.gold, title: "rowActivity")
+            settingsPage("activity", "/settings/activity", "waveform.path.ecg", RowTint.gold, title: "rowActivity")
+            // The picture size and data videos play at, at home and away: the profile's own, on every device.
+            settingsPage("quality", "/settings/quality", "4k.tv", RowTint.password, title: "rowVideoQuality")
+            #if os(tvOS)
+            // What the player skips by itself, for this profile everywhere (the web has it under Playback or Appearance).
+            row(.tvSettings("skipping"), "forward.end.alt", RowTint.twoStep, "rowSkipping")
+            #endif
             if hasGames {
                 page("/settings/games", "gamecontroller", RowTint.devices, title: "rowGameSettings")
                 page("/controllers", "dpad", RowTint.password, title: "rowControllers")
@@ -117,6 +142,10 @@ struct YouView: View {
         }
         ListGroup(title: say("groupDevice")) {
             row(.theme, "paintpalette", RowTint.teal, "rowLookAndTheme", value: ThemeView.name(of: model.themeChoice, server: model.themeId, list: model.themeList))
+            #if os(tvOS)
+            // The web's Appearance, for everyone: motion, the language and what's made on a computer.
+            row(.tvSettings("appearance"), "paintbrush.pointed", RowTint.teal, "rowAppearance")
+            #endif
             if model.has("theme-personal") {
                 NavigationLink(value: Route.personalColours) {
                     RowLabel(icon: "paintbrush", tint: RowTint.teal, title: "Your colours")
@@ -157,12 +186,15 @@ struct YouView: View {
                 row(.sdui(SDUIPlace(page: "manage-libraries", params: [:], route: "/manage/libraries")), "books.vertical", RowTint.quiet, "rowLibraries")
                 page("/settings/metadata", "photo.on.rectangle", title: "rowMetadata")
                 page("/fix-matches", "wand.and.stars", title: "rowFixMatches")
-                page("/settings/playback", "play.rectangle", title: "rowPlayback")
+                settingsPage("playback", "/settings/playback", "play.rectangle", title: "rowPlayback")
+                page("/settings/pages", "sidebar.left", title: "rowPagesMenu")
                 page("/settings/channels", "antenna.radiowaves.left.and.right", title: "rowLiveTv")
                 page("/settings/gaming", "gamecontroller", title: "rowGaming")
                 page("/settings/couch", "desktopcomputer", title: "rowGamePcs")
                 page("/settings/transcoding", "bolt", title: "rowTranscoding")
                 page("/settings/library-transcoding", "arrow.triangle.2.circlepath", title: "rowLibraryTranscoding")
+                page("/settings/network", "network", title: "rowNetwork")
+                computerPage("/settings/data-folder", "folder", title: "rowDataFolder")
                 page("/settings/remote", "globe", title: "rowRemote")
                 NavigationLink(value: Route.brandEditor) {
                     RowLabel(icon: "textformat", tint: RowTint.teal, title: "Server name and logo")
@@ -185,7 +217,7 @@ struct YouView: View {
         }
         ListGroup(title: say("groupHelp")) {
             page("/help", "questionmark.circle", RowTint.gold, title: "rowHelp")
-            page("/settings/about", "info.circle", title: "rowAboutServer", value: serverVersion)
+            settingsPage("about", "/settings/about", "info.circle", title: "rowAboutServer", value: serverVersion)
             page("/legal", "doc.plaintext", title: "rowLegal")
             row(.notices, "text.book.closed", RowTint.quiet, "rowLicences")
             row(.logs, "list.bullet.rectangle", RowTint.quiet, "rowAppLog")

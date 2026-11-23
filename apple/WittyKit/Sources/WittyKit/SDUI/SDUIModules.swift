@@ -45,6 +45,8 @@ public struct ModuleSettings: Decodable, Equatable, Sendable {
         public var max: Int?
         public var unit: String?
         public var maxLength: Int?
+        /// How far − and + go: 1 for a module's rows; the TV's own Settings pages (TvSettings.swift) give larger ones.
+        public var step: Int?
         public var id: String { key ?? "info:" + label }
 
         public var isProfile: Bool { scope == "profile" }

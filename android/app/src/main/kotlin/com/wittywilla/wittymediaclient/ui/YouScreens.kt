@@ -106,6 +106,8 @@ private val ICONS: Map<String, () -> ImageVector> = mapOf(
     // From away: the globe the app already has, for reaching the server from anywhere.
     "settings_input_antenna" to { Symbols.Globe },
     "cast" to { Symbols.Devices }, "groups" to { Symbols.Group },
+    // The TV's own Settings pages (TvSettingsScreens.kt) and the editors kept for a computer.
+    "hd" to { Symbols.Tune }, "skip_next" to { Symbols.Next }, "lan" to { Symbols.Antenna }, "folder" to { Symbols.Backup },
 )
 
 private fun youIcon(name: String): ImageVector = ICONS[name]?.invoke() ?: Symbols.Info
@@ -186,6 +188,8 @@ fun YouScreen(nav: Nav, s: Map<String, String>) {
                 }
                 is YouOpens.Sdui -> return
                 is YouOpens.Page -> nav.serverPage(title, opens.path)
+                is YouOpens.Tv -> Route.TvSettings(opens.page)
+                is YouOpens.Card -> Route.OnPhone(title, opens.path)
             },
         )
     }

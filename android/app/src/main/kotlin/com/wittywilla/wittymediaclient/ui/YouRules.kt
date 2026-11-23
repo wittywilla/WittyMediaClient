@@ -14,6 +14,10 @@ sealed interface YouOpens {
     data class Page(val path: String) : YouOpens
     // One of the server's SDUI pages (its catalogue's routes), drawn by the app the same on a phone, tablet and TV.
     data class Sdui(val path: String) : YouOpens
+    // A desktop Settings page a TV draws itself, from shared/data/tv-settings.json (net/TvSettings.kt).
+    data class Tv(val page: String) : YouOpens
+    // An editor kept for a computer: its QR card on a TV, even where the server's table doesn't list it yet.
+    data class Card(val path: String) : YouOpens
 }
 
 // `icon` is a Material Symbols name, `tint` the icon tile's colour (null: the quiet grey, danger: "danger").
@@ -53,6 +57,14 @@ private const val QUIET = "#5d6474"
 private fun native(key: String, icon: String, tint: String?, screen: YouNative) = YouRow(key, icon, tint, YouOpens.Native(screen))
 private fun page(key: String, icon: String, tint: String?, path: String) = YouRow(key, icon, tint, YouOpens.Page(path))
 
+// The server's page on a phone or tablet; on a TV, the TV's own drawing of it (docs/TV-SETTINGS-PARITY.md).
+private fun tvPage(who: YouWho, key: String, icon: String, tint: String?, page: String, path: String) =
+    YouRow(key, icon, tint, if (who.onTv) YouOpens.Tv(page) else YouOpens.Page(path))
+
+// An editor kept for a computer: the server's page on a phone or tablet, the QR card on a TV.
+private fun card(who: YouWho, key: String, icon: String, tint: String?, path: String) =
+    YouRow(key, icon, tint, if (who.onTv) YouOpens.Card(path) else YouOpens.Page(path))
+
 fun youGroups(who: YouWho): List<YouGroup> {
     val groups = mutableListOf<YouGroup>()
     groups += YouGroup(
@@ -76,8 +88,12 @@ fun youGroups(who: YouWho): List<YouGroup> {
         listOfNotNull(
             page("rowYourYear", "auto_awesome", "#c9302f", "/review"),
             page("rowCollections", "library_books", "#0e7c6f", "/collections"),
-            if ("sharing" !in who.off) page("rowShareLinks", "link", "#0a6fb8", "/settings/sharing") else null,
-            page("rowActivity", "monitoring", "#99690a", "/settings/activity"),
+            if ("sharing" !in who.off) tvPage(who, "rowShareLinks", "link", "#0a6fb8", "sharing", "/settings/sharing") else null,
+            tvPage(who, "rowActivity", "monitoring", "#99690a", "activity", "/settings/activity"),
+            // The picture size and data videos play at, at home and away: the profile's own, on every device.
+            tvPage(who, "rowVideoQuality", "hd", "#3e5bd0", "quality", "/settings/quality"),
+            // What the player skips by itself: the profile's own, on the web under Playback or Appearance.
+            if (who.onTv) YouRow("rowSkipping", "skip_next", "#2e7d3c", YouOpens.Tv("skipping")) else null,
             if (who.hasGames && "games" !in who.off) page("rowGameSettings", "sports_esports", "#7f46b8", "/settings/games") else null,
             if (who.hasGames && "games" !in who.off) page("rowControllers", "gamepad", "#3e5bd0", "/controllers") else null,
             // Playing on and steering other devices, and watching together: the app's own screens.
@@ -94,6 +110,8 @@ fun youGroups(who: YouWho): List<YouGroup> {
             // Where the shell's parts and the page's sections are, for this device or for everyone (the layout editor).
             if (who.layoutEditor) native("rowEditLayout", "toolbar", "#7f46b8", YouNative.EditLayout) else null,
             native("rowTheme", "palette", "#0e7c6f", YouNative.Theme),
+            // The web's Appearance, on a TV for everyone: motion, the language and what's made on a computer.
+            if (who.onTv) YouRow("rowAppearance", "brush", "#0e7c6f", YouOpens.Tv("appearance")) else null,
             // Which libraries join the bar along the top: a TV's alone.
             if (who.onTv) native("rowTopMenu", "toolbar", "#bd2f85", YouNative.TopMenu) else null,
             // The servers this device remembers, to remove the ones no longer wanted.
@@ -107,19 +125,23 @@ fun youGroups(who: YouWho): List<YouGroup> {
     if (who.admin) {
         groups += YouGroup(
             "groupServer",
-            listOf(
+            listOfNotNull(
                 YouRow("rowLibraries", "video_library", QUIET, YouOpens.Sdui("/manage/libraries")),
                 page("rowMetadata", "image_search", QUIET, "/settings/metadata"),
                 page("rowFixMatches", "auto_fix_high", QUIET, "/fix-matches"),
-                page("rowPlayback", "smart_display", QUIET, "/settings/playback"),
+                tvPage(who, "rowPlayback", "smart_display", QUIET, "playback", "/settings/playback"),
+                page("rowPagesMenu", "toolbar", QUIET, "/settings/pages"),
                 page("rowLiveTv", "live_tv", QUIET, "/settings/channels"),
                 page("rowGaming", "sports_esports", QUIET, "/settings/gaming"),
                 page("rowGamePcs", "computer", QUIET, "/settings/couch"),
                 page("rowTranscoding", "bolt", QUIET, "/settings/transcoding"),
                 page("rowLibraryTranscoding", "autorenew", QUIET, "/settings/library-transcoding"),
+                page("rowNetwork", "lan", QUIET, "/settings/network"),
+                card(who, "rowDataFolder", "folder", QUIET, "/settings/data-folder"),
                 page("rowRemote", "public", QUIET, "/settings/remote"),
                 native("rowNameAndLogo", "badge", "#7f46b8", YouNative.NameAndLogo),
-                page("rowAppearance", "brush", QUIET, "/settings/appearance"),
+                // On a TV it is with this device's rows, for everyone.
+                if (who.onTv) null else page("rowAppearance", "brush", QUIET, "/settings/appearance"),
                 page("rowWittyRigs", "dns", QUIET, "/settings/wittyrigs"),
             ),
         )
@@ -139,7 +161,7 @@ fun youGroups(who: YouWho): List<YouGroup> {
         "groupHelp",
         listOf(
             page("rowHelp", "help", "#99690a", "/help"),
-            page("rowAboutServer", "info", QUIET, "/settings/about"),
+            tvPage(who, "rowAboutServer", "info", QUIET, "about", "/settings/about"),
             page("rowLegal", "gavel", QUIET, "/legal"),
             native("rowLicences", "menu_book", QUIET, YouNative.Licences),
             native("rowAppLog", "receipt_long", QUIET, YouNative.Log),
