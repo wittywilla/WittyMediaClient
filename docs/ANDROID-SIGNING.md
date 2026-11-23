@@ -23,6 +23,7 @@ The app ID, versionCodes, minimum Android version (6.0, API 23) and the five APK
 ## How releases are signed now
 
 - `release.yml` builds the `release` build type, signed with **the release key**: one permanent PKCS12 key, never in this repository. It reads the key from the **`android-release`** environment's secrets, which only version tags (`v*`) can use. Signing is v1 (Android 6), v2 (7 and later) and v3, so the key can be rotated one day without an uninstall.
+- **The release key's certificate**, which every release from 0.6.1 on carries, has this SHA-256 fingerprint: `BB:7E:BE:53:9D:37:88:4D:65:B9:7B:9F:01:6B:CA:5D:01:BB:D9:99:80:01:3C:C0:A0:8E:75:7E:FA:A4:ED:72`. Check an APK with `apksigner verify --print-certs <apk>`.
 - **No key, no release.** Without the secrets, the "The release key" step fails, and `-PreleaseSigning=required` makes Gradle fail too. A release never falls back to a debug key or a new one.
 - **versionCode** comes from the versionName in `android/app/build.gradle.kts`: `(major × 10000 + minor × 100 + patch) × 100`. 0.6.1 is 60100, so the code always goes up with the version. All five APKs of a release share it, so any one can replace another.
 - **`sideload`** is still signed with the build machine's debug key, for pull requests and testing on a device. It is never published.

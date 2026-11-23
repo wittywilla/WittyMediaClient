@@ -22,23 +22,31 @@ out=${OUT:-}
 [ -z "$out" ] || mkdir -p "$out"
 
 say() { echo "[upgrade-test] $*"; }
-die() { echo "::error::upgrade test: $*"; shot failed; exit 1; }
+die() {
+	echo "::error::upgrade test: $*"
+	shot failed
+	echo "--- crash log"; sh_ logcat -d -b crash 2>/dev/null | tail -40 || true
+	echo "--- the app's log"; sh_ logcat -d 2>/dev/null | grep -E "AndroidRuntime|ActivityTaskManager|$pkg" | tail -40 || true
+	exit 1
+}
 sh_() { adb shell "$@" </dev/null | tr -d '\r'; }
 shot() { [ -z "$out" ] || adb exec-out screencap -p >"$out/$1.png" </dev/null 2>/dev/null || true; }
-info() { sh_ dumpsys package "$pkg" | sed -n "s/^ *$1=//p" | head -1; }
+# Output is read whole before it is searched: "adb ... | grep -q" fails under pipefail when grep stops early.
+info() { local d; d=$(sh_ dumpsys package "$pkg"); sed -n "s/^ *$1=//p" <<<"$d" | head -1; }
 code() { info versionCode | cut -d' ' -f1; }
-running() { sh_ ps -A 2>/dev/null | grep -q "$pkg" || sh_ ps | grep -q "$pkg"; }
+running() { local p; p=$(sh_ ps -A 2>/dev/null || true); [ -n "$p" ] && [ "$(wc -l <<<"$p")" -gt 5 ] || p=$(sh_ ps || true); grep -q "$pkg" <<<"$p"; }
 open_app() {
-	sh_ am start -W -a android.intent.action.MAIN -c android.intent.category.LAUNCHER -p "$pkg" >/dev/null 2>&1 \
-		|| sh_ monkey -p "$pkg" -c android.intent.category.LAUNCHER 1 >/dev/null 2>&1 || true
+	# As the launcher does: the app's launcher activity, on a phone or a TV, from API 23 on.
+	sh_ monkey -p "$pkg" -c android.intent.category.LAUNCHER 1 >/dev/null 2>&1 \
+		|| sh_ monkey -p "$pkg" -c android.intent.category.LEANBACK_LAUNCHER 1 >/dev/null 2>&1 || true
 	# A shrunk build's first start is slow on an emulator.
 	for _ in $(seq 1 30); do running && break; sleep 1; done
 	sleep 12
 	running || die "the app isn't running 12 seconds after it was opened"
-	if sh_ logcat -d -b crash 2>/dev/null | grep -q "Process: $pkg"; then
-		sh_ logcat -d -b crash | tail -40
-		die "the app crashed"
-	fi
+	local crashes
+	crashes=$(sh_ logcat -d -b crash 2>/dev/null || true)
+	grep -q "Process: $pkg" <<<"$crashes" && die "the app crashed"
+	return 0
 }
 
 adb wait-for-device
