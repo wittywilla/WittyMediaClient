@@ -50,6 +50,7 @@
   "foundServers": "On this network",
   "codeTitle": "Enter the security code",
   "codeHint": "On a phone or computer signed in to this server, open Sign in a TV (under You, or under your name in the corner on the web) and get a code there.",
+  "codeHintPhone": "On a computer or another phone signed in to this server, open Sign in a TV (under You, or under your name in the corner on the web). It signs in phones too: get a code there and type it here.",
   "codeLabel": "Security code",
   "codeEntered": "digits entered",
   "codeDelete": "Delete",

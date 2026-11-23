@@ -328,8 +328,10 @@ private fun LibraryStrip(nav: Nav, modifier: Modifier, overPicture: Boolean) {
                 contentAlignment = Alignment.Center,
             ) {
                 Text(
-                    entry.label, color = if (on) scheme.onBackground else scheme.onSurfaceVariant, fontSize = 15.sp, fontWeight = FontWeight.Bold, maxLines = 1,
-                    style = if (overPicture) MaterialTheme.typography.body.copy(shadow = androidx.compose.ui.graphics.Shadow(scheme.background.copy(alpha = 0.5f), Offset(0f, 1f), 0f)) else MaterialTheme.typography.body,
+                    // Over a picture the muted grey was lost on a light photo (#80): every name in the text colour, the current
+                    // one told by its underline, with a soft glow of the page colour around the letters.
+                    entry.label, color = if (on || overPicture) scheme.onBackground else scheme.onSurfaceVariant, fontSize = 15.sp, fontWeight = FontWeight.Bold, maxLines = 1,
+                    style = if (overPicture) MaterialTheme.typography.body.copy(shadow = androidx.compose.ui.graphics.Shadow(scheme.background.copy(alpha = 0.85f), Offset(0f, 1f), 8f)) else MaterialTheme.typography.body,
                 )
             }
         }
