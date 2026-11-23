@@ -15,7 +15,7 @@ their values; the editors kept for a computer are rows that open the card with t
 `shared/data/tv-settings.json`, drawn with the module-settings rows Apple TV already had.
 
 **Written on Windows, never run on any Apple device or simulator** (WittyKit's part compiled and its tests passed with
-Swift 6.1 on Linux, the app only compiled by CI's macOS runner):
+Swift 6.1 on Linux, the app only compiled by CI's macOS runner). Issue: #90.
 
 | File | What changed |
 |---|---|
