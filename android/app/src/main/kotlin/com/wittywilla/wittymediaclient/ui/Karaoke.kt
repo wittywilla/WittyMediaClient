@@ -178,7 +178,8 @@ internal fun KaraokeScreen(nav: Nav, words: LyricsWords, title: String, artist: 
                     Text(title, color = Np.fg, fontSize = (screenH * 0.024f).coerceIn(16f, 24f).sp, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis)
                     Text(artist, color = Np.fg2, fontSize = (screenH * 0.019f).coerceIn(14.4f, 19.2f).sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 }
-                NpRound(WebIcons.Full, if (filled) "Show the system's bars" else "Fill the screen", 44.dp, 20.dp, on = false) {
+                // A TV has no system bars to hide: the button did nothing there but take a stop of the remote.
+                if (!LocalMetrics.current.tv) NpRound(WebIcons.Full, if (filled) "Show the system's bars" else "Fill the screen", 44.dp, 20.dp, on = false) {
                     filled = !filled
                     activity?.let { showBars(it, !filled) }
                 }
@@ -199,7 +200,13 @@ internal fun KaraokeScreen(nav: Nav, words: LyricsWords, title: String, artist: 
                             lyrics.plain, color = Color.White, fontSize = 17.sp, lineHeight = 1.55.em, textAlign = TextAlign.Center,
                             modifier = Modifier.heightIn(max = (screenH * 0.38f).dp).verticalScroll(rememberScrollState()),
                         )
-                        val sub = buildAnnotatedString {
+                        // A remote can't reach a link inside words, and the words are fixed on a phone or computer: a TV says so.
+                        val onTv = LocalMetrics.current.tv
+                        val sub = if (onTv) buildAnnotatedString {
+                            append("Put a timed ")
+                            withStyle(SpanStyle(fontFamily = FontFamily.Monospace)) { append(".lrc") }
+                            append(" file beside the song on the server, or on a phone or computer open Lyrics, then Fix, then Tap along.")
+                        } else buildAnnotatedString {
                             append("A timed ")
                             withStyle(SpanStyle(fontFamily = FontFamily.Monospace)) { append(".lrc") }
                             append(" file beside the song gives karaoke what it needs, or use Lyrics, then Fix, then Tap along. ")
@@ -209,7 +216,7 @@ internal fun KaraokeScreen(nav: Nav, words: LyricsWords, title: String, artist: 
                                 nav.push(Route.Help("/help/lyrics-karaoke#adding-your-own-lyrics"))
                             }) { append("How to add your own") }
                         }
-                        Text(sub, color = Np.fg2, fontSize = 14.sp, lineHeight = 1.45.em, textAlign = TextAlign.Center)
+                        Text(sub, color = Np.fg2, fontSize = if (onTv) 20.sp else 14.sp, lineHeight = 1.45.em, textAlign = TextAlign.Center)
                     }
                     else -> {
                         val count = com.wittywilla.wittymediaclient.ui.Karaoke.countIn(lines, ms)

@@ -5,6 +5,9 @@ What changed in WittyMediaClient, newest first. What changed before it had a rep
 
 ## Unreleased
 
+- **Karaoke on Android TV** has no "Fill the screen" button (a TV is already full screen), and a song with no words says where to add them in words a remote can read.
+- **The keyboard shortcuts button** in the Android video player shows only when a keyboard is attached.
+
 ## 0.6.0
 
 Released 2026-11-23.
