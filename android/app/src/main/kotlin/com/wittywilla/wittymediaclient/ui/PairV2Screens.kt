@@ -235,7 +235,7 @@ fun PairWithQr(nav: Nav, s: Map<String, String>, onBack: () -> Unit, onUsePasswo
         if (phase != PairPhase.Busy) WittyButton(s["usePassword"].orEmpty(), onUsePassword, kind = ButtonKind.Secondary, requestFocus = showing != null, focusKey = "use-password", modifier = if (metrics.tv) Modifier.fillMaxWidth() else Modifier)
         WittyButton(s["changeServer"].orEmpty(), nav::changeServer, kind = ButtonKind.Quiet, focusKey = "change-server")
     }
-    val body: @Composable () -> Unit = {
+    val pinPart: @Composable () -> Unit = {
         DesignSection("") {
             if (showing != null) {
                 val seconds = PairRules.secondsLeft(leftAtAnswer, now - answeredAt)
@@ -249,6 +249,8 @@ fun PairWithQr(nav: Nav, s: Map<String, String>, onBack: () -> Unit, onUsePasswo
             }
             DesignNote(problem, error = true)
         }
+    }
+    val qrPart: @Composable () -> Unit = {
         if (showing != null) {
             // The app's own code carries the server's ID and a check, for the app to scan. A phone without the
             // app reads the web address instead, with its own camera, and types the PIN on the page it opens.
@@ -266,6 +268,7 @@ fun PairWithQr(nav: Nav, s: Map<String, String>, onBack: () -> Unit, onUsePasswo
             }
         }
     }
+    val body: @Composable () -> Unit = { pinPart(); qrPart() }
     if (metrics.tv) {
         // On a TV the page is one centred column, as Who's watching is: the lockup, the title, the PIN and the code to
         // scan, then the other ways in stacked under them. Nothing hugs the left edge or runs off the top.
@@ -277,7 +280,13 @@ fun PairWithQr(nav: Nav, s: Map<String, String>, onBack: () -> Unit, onUsePasswo
                 problem = {
                     if (showing != null) Text(s["pairQrHint"].orEmpty(), color = scheme.onSurfaceVariant, style = MaterialTheme.typography.body, textAlign = androidx.compose.ui.text.style.TextAlign.Center, modifier = Modifier.padding(bottom = metrics.u(12)).widthIn(max = metrics.u(900)))
                 },
-                profiles = { Column(Modifier.widthIn(max = metrics.u(760)), horizontalAlignment = Alignment.CenterHorizontally) { body() } },
+                profiles = {
+                    // The PIN and its notes beside the code to scan, so the other ways in stay on screen under them.
+                    Row(Modifier.widthIn(max = metrics.u(1300)), horizontalArrangement = Arrangement.spacedBy(metrics.u(56))) {
+                        Column(Modifier.weight(1f)) { pinPart() }
+                        Column(Modifier.widthIn(max = metrics.u(380))) { qrPart() }
+                    }
+                },
                 actions = { actionButtons() },
                 foot = {},
                 onBack = onBack,
