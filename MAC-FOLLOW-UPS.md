@@ -6,6 +6,25 @@ Newest first. Each section is one pass that needs a Mac: Xcode, the iPhone and A
 app. Work through the newest first, tick each box here as you go, commit the ticks, and say in the PR what ran and what
 didn't. The GitHub issues labelled `mac` point at these sections.
 
+## 0.8.2-alpha: Apple ports left for the next update (2026-11-22)
+
+The owner's call: WittyMediaClient #82 (the Apple port of the 0.8.1 UI changes) ships in 0.8.1 as it is, and the Mac
+checks of the sections below come with the next incremental update. The Android TV changes below landed or are landing
+for 0.8.1, but **Apple TV doesn't have them yet**. They're ported for 0.8.2 on the draft PR from branch `apple-082-ui`
+("[0.8.2] …"), and tracked by the `mac` issues #68 (iPhone and iPad) and #69 (Apple TV). Tick each box when it's
+ported, then again when it has run on a simulator or device.
+
+| From | What Apple TV (and where noted, iPhone and iPad) needs | Ported | Ran |
+|---|---|---|---|
+| Client #84 (WittyTV guide, Who's watching?) | Guide: the preview at most 440 wide (a width chosen with + stays), small hero top padding under the tab bar, the grid snapped to whole rows, a **Shortcuts** chip in the guide bar in place of the always-on dock (closed by default, remembered per device, Menu opens and focuses it, Back closes it), no keyboard letter badges, the footer hint as a Help entry in that row, legal text on one line. Who's watching?: one centred column (lockup, large title with a typographic apostrophe, faces centred with names, "Sign in with another account" and "Sign in with your phone" stacked, Change server as a small link, no "Enter the security code" pill), smaller faces above four profiles, shared string `usePhone`. #84's own `MAC-FOLLOW-UPS.md` section "WittyTV guide and Who's watching? on Apple TV" has the details | [ ] | [ ] |
+| Client #87 (quality menu) | The video player's **Quality** button when `/playback` offers `quality`: Auto, Original (with the height), then each size with its rate ("720p · 4 Mbit/s"), the one in use marked; a choice asks `/playback` again at the current place with `quality` (`""`, `original`, `h<height>-b<kbps>`). A track with no language reads "Unlabelled". iPhone and iPad too: it's the native player's gap in PARITY-0.8.1.md | [ ] | [ ] |
+| Client #88 (pairing, picker) | "Sign in with your phone" as one centred column like Who's watching? (lockup, title, hint, PIN and code, the other ways stacked full width); the signed-out Who's watching? starts on the profile last chosen on that server | [ ] | [ ] |
+| Client #89 (TV album page, server #558/#564) | The album page on a TV: the header's minimum height only over a backdrop; Play, Shuffle and **More** (`menuAfter`: Add to queue, Go to artist, Share) from the left; "Disc 1" / "Disc 2" headings, a guest's `credit` under its song, a play mark for the playing song, shorter rows; spoken "Disc 2, Track 1, …"; Shuffle (`play` with `shuffle`) and Add to queue (`queue.add`); no box of key hints | [ ] | [ ] |
+| Android-test-081, PRs to come | The connect screen's safe margin, the see-through first-run chooser, remote digits not switching the legend to keyboard glyphs: check each PR for an Apple section | [ ] | [ ] |
+| PARITY-0.8.1.md gaps | Karaoke's Controls menu and Album art beside the words; the theme's `tv.heroScrim` on Apple (step 8 of the 2026-11-19 section) | [ ] | [ ] |
+
+---
+
 ## 0.8.1-alpha UI changes on Apple: what the Mac must check (2026-11-22)
 
 Written 2026-11-22 on the Windows PC, for Claude on the owner's MacBook. After #67, the server's 0.8.1 UI changes
