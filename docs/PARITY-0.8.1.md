@@ -77,7 +77,8 @@ Reference pictures: `docs/mac-081/ui/` here, and `D:\projects-0.8.0\_status\082-
 | Phone shell: top strip, activity button over Help, action row cut off (#551; ui-audit-081, no PR yet) | Not needed (desktop) | Already so: the strip lists only what's behind Menu, and the action row is one row with ⋯. There's no activity button on Apple | Not needed |
 | Setup's form and Games step (#550), the too-old-module message (ui-audit-081) | Free | Not needed: setup and module installs are the server's pages | Not needed |
 | TV album page with disc groups; no keyboard hints in TV mode (tv-album-081, no PR yet) | Free | Already so: an album groups its songs by disc | Gap: Apple TV's album page waits for tv-album-081's design. Keyboard hints: Apple TV shows none (`ShellShortcuts.swift` isn't built for tvOS), and its only remote hints are essential ones (the game player's controls, "Play/Pause twice for live") |
-| WittyTV guide with the shortcuts toggle; a profile picker like the desktop's | Free | **Owned by android-test-081**, which does its own Apple side | Same |
+| WittyTV guide with the shortcuts toggle; a profile picker like the desktop's | Free | Who's watching? as one centred column: **owned by android-test-081** (client #84) | Guide (preview at most 440 wide, rows snapped, a Shortcuts chip in place of the dock, no letter badges, Help entry, legal on one line) and Who's watching?: **owned by android-test-081**. Android TV is done in client #84, and its `MAC-FOLLOW-UPS.md` section "WittyTV guide and Who's watching? on Apple TV" has the Apple steps. Not ported here |
+| Video player quality and audio menu, the connect screen's safe margin, the see-through first-run chooser, remote digits keeping the legend's glyphs (android-test-081, PRs to come) | Free | Owned by android-test-081: check its PRs for an Apple section | Same |
 | TV settings | Free | Owned by tv-settings-parity | Owned by tv-settings-parity |
 
 ## Also found while running it
