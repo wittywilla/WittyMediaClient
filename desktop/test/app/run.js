@@ -37,6 +37,9 @@ if (shots) app.commandLine.appendSwitch('disable-features', 'CalculateNativeWinO
 // Which run this is: the whole first-time journey, a code approved on a phone, the TV's
 // look, or starting with something already remembered.
 const scenario = process.argv[2] || 'journey'
+// tv-full: a TV's real window, full screen, as Plasma Bigscreen or --tv opens it. Only its start and its menu are
+// checked, so the screen is taken over for a few seconds at most.
+if (scenario === 'tv-full') process.argv.push('--tv')
 if (scenario === 'tv') {
   process.argv.push('--tv')
   // A TV's window fills the screen, which on a desktop would take it over while the test runs.
@@ -1007,12 +1010,40 @@ async function onTv() {
   })
 }
 
+// A full-screen TV window starts on the connect page, Back with nowhere to go opens the TV menu, and Back closes it.
+// Both used to wait for a page loading in a view that wasn't shown, which never finished: a blank TV, then no menu.
+async function tvFullScreen() {
+  await app.whenReady()
+  const connect = () => webContents.getAllWebContents().find((w) => w.getURL().startsWith('wittymedia-app://connect'))
+  const menu = () => webContents.getAllWebContents().find((w) => w.getURL().includes('tvmenu'))
+  await step('a full-screen TV window opens on the connect page', async () => {
+    await until('the connect page', () => connect() && !connect().isLoading(), 20000)
+    await until('its heading', () => connect().executeJavaScript("(document.querySelector('h1') || {}).textContent"), 8000)
+    assert.strictEqual(await connect().executeJavaScript("document.documentElement.classList.contains('tv')"), true)
+  })
+  await step('Back with nowhere to go opens the TV menu, and Back closes it', async () => {
+    const press = async (to, keyCode) => {
+      to.sendInputEvent({ type: 'keyDown', keyCode })
+      to.sendInputEvent({ type: 'keyUp', keyCode })
+      await wait(100)
+    }
+    await press(connect(), 'Escape')
+    await until('the TV menu', () => menu() && !menu().isLoading() && menu().isFocused(), 8000)
+    await press(menu(), 'Escape')
+    await until('the page to have the keys again', () => connect().isFocused(), 8000)
+  })
+}
+
 // Started in this order because Electron must have the app's file before it is ready, and
 // a remembered server has to be answering by the time the app asks it who it is.
 function start() {
   if (scenario === 'journey') {
     require('../../main.js')
     return run()
+  }
+  if (scenario === 'tv-full') {
+    require('../../main.js')
+    return tvFullScreen()
   }
   if (scenario === 'pair' || scenario === 'tv') {
     require('../../main.js')
