@@ -1429,6 +1429,19 @@ ipcMain.on('discover-start', (e) => {
 })
 
 ipcMain.on('open-logs', (e) => { if (fromConnect(e)) openLogs() })
+// The server's Settings, in this app, has this app's own rows as the phone apps do (the server's settingsmenu.json):
+// its servers, From away and its log. Only the server's own page asks, and only for these.
+ipcMain.handle('settings-info', (e) => {
+  if (!fromServerPage(e)) return null
+  const away = awayState()
+  return { servers: (saved.recent || []).length, away: away !== '', awayWords: away === 'on' ? 'On' : away === 'off' ? 'Off' : '' }
+})
+ipcMain.on('settings-open', (e, id) => {
+  if (!fromServerPage(e)) return
+  if (id === 'servers') manageServers()
+  else if (id === 'away' && awayState()) showAwaySettings()
+  else if (id === 'appLog') openLogs()
+})
 
 // The website's "Keep playing when this tab is in the background": false only when it's turned off.
 ipcMain.on('background-play', (e, on) => { if (fromServerPage(e)) awake.allowed(on !== false) })

@@ -98,6 +98,11 @@ if (location.protocol === 'wittymedia-app:') {
       status: () => ipcRenderer.invoke('moonlight-status'),
       launch: (args) => ipcRenderer.invoke('moonlight-launch', args),
     },
+    // This app's own rows in the server's Settings: Servers on this device, From away, This app's log.
+    settings: {
+      info: () => ipcRenderer.invoke('settings-info'),
+      open: (id) => ipcRenderer.send('settings-open', String(id)),
+    },
   })
   const report = () => {
     const css = getComputedStyle(document.documentElement)
