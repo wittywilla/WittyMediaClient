@@ -1139,15 +1139,20 @@ fun OnPhoneScreen(nav: Nav, s: Map<String, String>, title: String, path: String)
     LaunchedEffect(path) { runCatching { nav.app.api.tvSummary(screen?.summary.orEmpty()) }.onSuccess { summary = it } }
     val base = remember(path) { runCatching { nav.app.api.mediaUrl("/") }.getOrDefault("") }
     val address = if (base.isEmpty()) "" else com.wittywilla.wittymediaclient.net.tvCardAddress(base, path, summary.addresses)
-    DesignScreen(
-        title, nav::pop, lead = note?.ifEmpty { null } ?: s["openOnPhone"].orEmpty(), tag = "on-phone",
-        actions = { WittyButton(s["back"].orEmpty(), nav::pop, kind = ButtonKind.Primary, tall = true, takeFocus = true) },
-    ) {
-        if (address.isNotEmpty()) DesignSection("") { QrCard(address, address) }
-        if (summary.lines.isNotEmpty()) DesignSection("") {
-            summary.lines.forEach { Text(it, color = MaterialTheme.colorScheme.onSurface, fontSize = LocalDesignSizes.current.body) }
-        }
-    }
+    // Centred, as the sign-in screens: OnAComputer.kt. The server's own words (naming the WittyMediaClient app) at the foot.
+    val editor = note != null
+    OnAComputerCard(
+        title = title,
+        line = if (editor) s["tvCardLine"].orEmpty() else s["openOnPhone"].orEmpty().removeSuffix(":"),
+        address = address,
+        summary = summary.lines,
+        onBack = nav::pop,
+        backLabel = s["back"].orEmpty(),
+        orOpen = s["tvCardOrOpen"].orEmpty(),
+        footer = if (editor) listOf(note.orEmpty(), s["tvCardApplies"].orEmpty()).filter { it.isNotEmpty() }.joinToString(" ") else "",
+        icon = onAComputerIcon(path),
+        lockup = { ServerLockup(nav) },
+    )
 }
 
 // "This server isn't set up yet": first-time setup happens in a web browser only, and the app doesn't connect (or try to
