@@ -21,6 +21,7 @@ What changed in WittyMediaClient, newest first. What changed before it had a rep
 
 **Android TV and Apple TV**
 
+- **Film and show names under posters on Android TV** are smaller and take up to two lines, so the whole name can be read ("Bullet Train Explosion", not "Bullet Train …").
 - **A channel in a bumper or a gap** names the next real programme ("Up next: …, at 8:30") in its banner and in the guide, not "We'll be right back".
 - **An empty library on Android TV** shows its name, why it's empty and a button to focus, not a line at the top edge with nothing to select.
 - **First-time setup on Android TV:** the colours step starts with a theme focused, and the preview no longer takes the first press. Import a theme is hidden on a TV.

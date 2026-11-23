@@ -271,10 +271,14 @@ private fun CardWords(view: SduiView, centred: Boolean) {
     var first = true
     @Composable
     fun line(words: String, lines: Int, title: Boolean) {
-        // The title in the title size and the rest in the caption size, as the specification says for every device.
+        // The title in the title size and the rest in the caption size. On a TV the title size is a row heading's, which
+        // fits a dozen letters across a poster: there the title is in the body size, on up to two lines, so a film's
+        // whole name can be read from the couch.
+        val titleSize = if (env.tv) "body" else "title"
         Text(
-            words, color = if (title) scheme.onBackground else hint, fontSize = env.size(if (title) "title" else "caption"),
-            fontWeight = if (title) FontWeight.SemiBold else FontWeight.Normal, maxLines = lines.coerceAtLeast(1), overflow = TextOverflow.Ellipsis, textAlign = align,
+            words, color = if (title) scheme.onBackground else hint, fontSize = env.size(if (title) titleSize else "caption"),
+            fontWeight = if (title) FontWeight.SemiBold else FontWeight.Normal, maxLines = (if (title && env.tv) maxOf(lines, 2) else lines).coerceAtLeast(1),
+            overflow = TextOverflow.Ellipsis, textAlign = align,
             modifier = Modifier.fillMaxWidth().padding(top = env.pt(if (first) (if (env.tv) 14 else 8) else (if (env.tv) 4 else 2))),
         )
         first = false
