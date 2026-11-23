@@ -5,6 +5,15 @@ What changed in WittyMediaClient, newest first. What changed before it had a rep
 
 ## Unreleased
 
+**Desktop: adding a server (wittywilla/WittyMediaServer#605)**
+
+- **One Add a server screen:** servers found on this network, then **Enter a code**, **Paste a link** and **Type an
+  address**. The code is the one a server shows under **Connect a device**; the app asks the servers it can reach, and
+  only the one that made it can prove so and sign this device in. After choosing a server, one sign-in screen takes
+  its code (or a six-digit **Sign in a TV** code), or the password on the server's own page.
+- **Connect from anywhere's panel and Join from away's code are gone:** pasting the link does the first, and the code
+  the second needed the public address book to find the server, which too often it didn't.
+
 **Android TV and Apple TV**
 
 - **A channel in a bumper or a gap** names the next real programme ("Up next: …, at 8:30") in its banner and in the guide, not "We'll be right back".

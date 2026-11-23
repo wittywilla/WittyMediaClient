@@ -36,6 +36,7 @@ const tv = require('./tv.js')
 const playback = require('./playback.js')
 const mac = require('./mac.js')
 const p2p = require('./p2p.js')
+const connectCode = require('./code.js')
 
 const TITLE_BAR = 32
 const CONNECT_PAGE = guards.CONNECT_PAGE
@@ -69,6 +70,7 @@ let win, bar, content, tvMenu, secure
 let server = '' // the origin the content view may show
 let lastServer = ''
 let stopDiscovery = null
+let foundNow = [] // what discovery last found, for Enter a code to ask
 let shown = null // what the connect screen last showed about a server, to hold it to that
 let pairing = null // a code on show for someone to approve: { url, at, secret }, and the secret stays here
 // The connection to a server away from home, while there is one: { run, id, origin, port, deviceId }.
@@ -582,56 +584,6 @@ async function finishJoining(mine, where, answer, offeredName, how) {
   return { ok: true }
 }
 
-// Join from away: for a computer that has never been at home with its server. It shows a code;
-// someone signed in types it into the server (You, From away, A TV that shows a code), which puts
-// this device on its list. As the Apple and Android apps' Join from away (docs/APP-DESIGN.md).
-let joining = null
-
-async function joinAwayStart() {
-  joinAwayStop()
-  pairing = null
-  await finishForgetting()
-  const program = helperProgram()
-  if (!program) return { error: 'p2p-missing' }
-  let key
-  try { key = await deviceKey(program) } catch (err) {
-    log.noteError('warn', 'p2p', 'No connection key for joining from away', err)
-    return { error: 'p2p-failed' }
-  }
-  const run = new p2p.JoinRun(program, { key: key.key, name: deviceName(), platform: OS_NAME }, { log: (line) => log.info('p2p', line) })
-  joining = run
-  const code = await run.code
-  if (joining !== run) return { error: 'stopped' }
-  if (!code) { joining = null; return { error: 'p2p-failed' } }
-  log.info('p2p', 'Showing a code to join a server from away')
-  return { code }
-}
-
-// Waits for the server to take the code, then connects and signs in as an invite does.
-async function joinAwayWait() {
-  const run = joining
-  if (!run) return { error: 'stopped' }
-  const r = await run.result
-  if (joining !== run) return { error: 'stopped' }
-  joining = null
-  if (!r.ok) {
-    if (r.error !== 'stopped') log.warn('p2p', `Joining from away didn't work: ${r.error || r.reason || 'refused'}`)
-    return { error: r.error === 'expired' ? 'expired' : r.error === 'p2p-failed' || r.error === 'stopped' ? r.error : 'refused' }
-  }
-  const opened = await openTunnel({ id: r.serverId, hints: r.hints })
-  if (opened.error) return opened
-  const mine = tunnel
-  const st = await mine.run.whenConnected(AWAY_CONNECT_MS + 15000)
-  if (tunnel !== mine) return { error: 'p2p-failed' }
-  if (!p2p.connected(st)) { closeTunnel(); return { error: 'p2p-failed' } }
-  return finishJoining(mine, { id: r.serverId, hints: r.hints }, r, '', 'joining from away')
-}
-
-function joinAwayStop() {
-  if (joining) joining.stop()
-  joining = null
-}
-
 // What the From away screen says for the server in use: how it is reached now, whether this
 // device is on its list, and the end of the name the list shows for it.
 async function awayInfo() {
@@ -933,6 +885,87 @@ async function redeem(url, code) {
     return { message: guards.cleanMessage(data.error), reason: guards.cleanMessage(data.reason) }
   }
   return keepSignIn(found, data.token)
+}
+
+// Enter a code: the code a server showed under Connect a device, typed here (code.js says how it is
+// asked about without being given away). Every server this app can reach directly is asked: the ones
+// found on the network, the ones remembered by an address, and the one chosen, if any. The first that
+// proves it made the code signs this device in. Nothing about it is believed before the server has
+// proved, with the identity key it signed for here, that it holds the code.
+let codeTurn = 0
+async function enterCode(typed, only) {
+  pairing = null
+  await finishForgetting()
+  const clean = connectCode.cleanCode(typed)
+  if (!clean) return { error: 'code-format' }
+  const turn = ++codeTurn
+  const keys = connectCode.derive(clean)
+  const urls = []
+  const add = (u) => {
+    const r = typeof u === 'string' && !p2p.isP2POrigin(u) ? normalizeAddress(u) : { error: 'skip' }
+    if (!r.error && !urls.includes(r.url)) urls.push(r.url)
+  }
+  if (only) add(only)
+  else {
+    // Typed the moment the screen opened: what the network answers in the first ten seconds (two rounds of
+    // asking, discover.js) counts too.
+    for (let i = 0; i < 100 && !foundNow.length && stopDiscovery; i++) await new Promise((resolve) => setTimeout(resolve, 100))
+    for (const f of foundNow) add(f.url)
+    for (const s of saved.recent || []) add(s.url)
+  }
+  if (!urls.length) {
+    log.info('network', `No server to ask about a code: discovery ${stopDiscovery ? 'running' : 'stopped'}, ${foundNow.length} found`)
+    return { error: 'code-none' }
+  }
+  log.info('network', `Asking ${urls.length === 1 ? 'one server' : `${urls.length} servers`} about a code`)
+  let refused = null
+  let changed = false
+  const tries = urls.map(async (url) => {
+    // The server chosen on screen is held to the key the person was shown there, as a typed code
+    // always was (admitted); any other is asked who it is now, and one that isn't who this app
+    // remembers is skipped.
+    let identity, at = url, name = ''
+    if (url === only) {
+      const found = await admitted(url, false)
+      if (found.error === 'changed') changed = true
+      if (found.error) return null
+      identity = found.identity
+      at = found.at
+      name = found.name
+    } else identity = await identify(url)
+    if (!identity.publicKey || identity.state === 'bad' || identity.state === 'different') return null
+    const post = async (path, body) => {
+      const res = await postJson(at + API + path, body)
+      return { status: res.status, data: await guards.readJson(res).catch(() => null) }
+    }
+    let answer
+    try {
+      answer = await connectCode.askServer({ post, identityKey: identity.publicKey, keys, device: deviceName(), platform: OS_NAME })
+    } catch (err) {
+      log.noteError('info', 'network', 'A server could not be asked about a code', err, { where: url })
+      return null
+    }
+    if (answer.error === 'liar') log.warn('network', 'A server answered about a code without proving it made it, and was told nothing', { where: url })
+    if (answer.error === 'refused') refused = answer
+    if (!answer.ok) return null
+    if (!guards.validToken(answer.token)) return null
+    return { url, at, identity, token: answer.token, name: name || guards.cleanName(answer.name) }
+  })
+  // The first to sign this device in; the rest are left to finish on their own.
+  const won = await new Promise((resolve) => {
+    let left = tries.length
+    for (const t of tries) {
+      t.then((r) => { if (r) resolve(r); else if (--left === 0) resolve(null) }, () => { if (--left === 0) resolve(null) })
+    }
+  })
+  if (turn !== codeTurn) return { error: 'stopped' }
+  if (!won) {
+    if (changed) return { error: 'changed' }
+    if (refused) return { error: 'code-refused', message: guards.cleanMessage(refused.message), reason: guards.cleanMessage(refused.reason) }
+    return { error: 'code-not-found' }
+  }
+  log.info('network', 'A code signed this device in', { where: won.url })
+  return keepSignIn({ url: won.url, at: won.at, name: won.name, identity: won.identity }, won.token)
 }
 
 async function keepSignIn(found, token) {
@@ -1368,15 +1401,14 @@ ipcMain.on('server-menu', (e, url, at) => {
   ]).popup({ window: win, ...(point.x === undefined ? {} : { x: point.x, y: point.y + (bar.getVisible() ? TITLE_BAR : 0) }) })
 })
 ipcMain.handle('redeem', (e, url, code) => (fromConnect(e) ? redeem(String(url), String(code)) : { error: 'invalid' }))
+ipcMain.handle('enter-code', (e, code, only) => (fromConnect(e) ? enterCode(String(code).slice(0, 40), only ? String(only).slice(0, 2048) : '') : { error: 'invalid' }))
+ipcMain.on('enter-code-stop', (e) => { if (fromConnect(e)) codeTurn++ })
 ipcMain.handle('open-server', (e, request) => (fromConnect(e) ? openServer(request) : { error: 'invalid' }))
 ipcMain.handle('pair-start', (e, url) => (fromConnect(e) ? pairStart(String(url)) : { error: 'invalid' }))
 ipcMain.handle('pair-poll', (e) => (fromConnect(e) ? pairPoll() : { status: 'expired' }))
 ipcMain.handle('pair-pin', (e) => (fromConnect(e) ? pairPin() : { error: 'expired' }))
 ipcMain.on('pair-stop', (e) => { if (fromConnect(e)) pairing = null })
 ipcMain.handle('p2p-invite', (e, link) => (fromConnect(e) ? joinByInvite(String(link).slice(0, 4096)) : { error: 'invite' }))
-ipcMain.handle('p2p-join-start', (e) => (fromConnect(e) ? joinAwayStart() : { error: 'invalid' }))
-ipcMain.handle('p2p-join-wait', (e) => (fromConnect(e) ? joinAwayWait() : { error: 'invalid' }))
-ipcMain.on('p2p-join-stop', (e) => { if (fromConnect(e)) joinAwayStop() })
 ipcMain.handle('away-info', (e) => (fromConnect(e) ? awayInfo() : { available: false, server: false }))
 ipcMain.on('away-choice', (e, stop) => { if (fromConnect(e)) awayChoice(stop === true) })
 // Giving up on a server being reached from away: whatever comes of it isn't wanted now.
@@ -1386,7 +1418,10 @@ ipcMain.on('discover-start', (e) => {
   if (!fromConnect(e)) return
   endDiscovery()
   const page = e.sender
-  stopDiscovery = startDiscovery((servers) => { if (!page.isDestroyed()) page.send('servers', servers) })
+  stopDiscovery = startDiscovery((servers) => {
+    foundNow = servers
+    if (!page.isDestroyed()) page.send('servers', servers)
+  })
 })
 
 ipcMain.on('open-logs', (e) => { if (fromConnect(e)) openLogs() })
