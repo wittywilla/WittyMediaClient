@@ -6,6 +6,23 @@ Newest first. Each section is one pass that needs a Mac: Xcode, the iPhone and A
 app. Work through the newest first, tick each box here as you go, commit the ticks, and say in the PR what ran and what
 didn't. The GitHub issues labelled `mac` point at these sections.
 
+## WittyMediaClient 0.6.0: what's left for the owner (2026-11-23)
+
+0.6.0 was tagged from the Windows PC with `tag.yml`, and `release.yml` built and published every package: Windows,
+macOS, Linux, Flatpak, Snap, FreeBSD, the Android sideload APKs and the unsigned iPhone/iPad and Apple TV IPAs. Nothing
+is signed with a real certificate (as in every release so far; see `docs/OWNER-STEPS.md`). The release notes say the
+Apple builds weren't tested on Apple devices yet. Before the next update, on the MacBook:
+
+- [ ] **1.** Download `wittymediaclient-0.6.0-ios.ipa` and the Apple TV IPA from the GitHub release, sign and install
+  them with AltStore, SideStore or Sideloadly, and check that they start and connect to a 0.8.1-alpha server.
+- [ ] **2.** Work through the two sections below in the simulators (the centred computer-settings card, and the 0.8.1 UI
+  changes on Apple), then the older "0.8.1-alpha: what the Mac must do".
+- [ ] **3.** Open the macOS desktop app from the release (unsigned: right-click, Open, the first time), connect to the
+  server, and play a film, a song and live TV.
+- [ ] **4.** Anything else that needs your own accounts (an Apple Developer certificate and notarisation, a Play Store
+  or App Store listing) is optional and listed in `docs/OWNER-STEPS.md`; none of it is needed for this release.
+- [ ] **5.** Tell the next session what you found, so the fixes go into 0.8.2-alpha.
+
 ## 0.8.1-alpha: the centred card for a computer's settings (2026-11-22)
 
 Written 2026-11-22 on the Windows PC. Every screen Apple TV sends to a computer (the server's desktop-only settings,

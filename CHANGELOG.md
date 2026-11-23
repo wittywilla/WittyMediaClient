@@ -5,6 +5,36 @@ What changed in WittyMediaClient, newest first. What changed before it had a rep
 
 ## Unreleased
 
+## 0.6.0
+
+Released 2026-11-23.
+
+Made for WittyMediaServer 0.8.1-alpha.
+
+**About the Apple apps:** the iPhone, iPad, Apple TV and macOS changes in this release were built by CI but have not yet been tested on Apple devices. That testing follows in the next update. The Android and Android TV apps were tested on emulators before release, and the desktop apps pass their automated tests.
+
+**Android TV and Apple TV**
+
+- **The Live TV guide shows whole channel rows** instead of a sliver of one, and a Shortcuts button shows or hides the guide's actions.
+- **Who's watching?** on Android TV is a centred picker that starts on the last profile used, and the pairing screen is centred too.
+- **Album pages fit an Android TV:** every song of a two-disc album, headed Disc 1 and Disc 2, with the cover beside them and Play, Shuffle and More in a row.
+- **A quality menu in the Android TV player.**
+- **Android TV pages scroll to everything on them,** and the remote's number keys no longer switch the on-screen hints to keyboard keys.
+- **Settings that need a computer** show one centred card with a QR code to open them on a phone or computer. Everything else opens on the TV.
+- **The live channel banner** shows for 3 seconds instead of seven.
+
+**Every app**
+
+- **Skip the parts the server knows about,** such as a preview or a part named in a `.wittyinfo` file.
+- **Karaoke's Mix** is Voice, Background Music and Track, as on the website, and karaoke starts with the singer's voice out.
+- **Looks match the website:** the same themes, readable text over pictures, and backdrops that fade into the page with no hard edge.
+- **Through a relay,** the apps say what it allows, such as "4 Mbit/s, 720p".
+- **iPad:** the wide music bar puts Lyrics, Karaoke and the Visualizer in a More menu.
+
+## Developer notes for 0.6.0
+
+The same release in technical detail.
+
 - **Android TV's album page (WittyMediaServer #558).** It started 620 points down the screen whatever the page held,
   with its buttons centred, so a 2-CD album showed two songs above a box of key hints. Now a page with a cover and no
   backdrop starts its songs under the buttons; the buttons line up from the left with **Play**, **Shuffle** and
