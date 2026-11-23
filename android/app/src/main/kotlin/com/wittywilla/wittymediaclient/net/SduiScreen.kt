@@ -356,13 +356,17 @@ class SduiScreen(val document: SduiDocument) {
                 d.role = "button"
                 val parts = ArrayList<String>()
                 val list = parent?.props
+                // A release on more than one disc: which disc, then its place on it.
+                if ((list?.int("discs") ?: 0) > 1) p.int("disc")?.let { parts += "Disc $it" }
                 p.int("number")?.let { if (list == null || list.notOff("showNumbers")) parts += "Track $it" }
                 parts += p.str("title")
                 d.say("title", p.str("title"))
                 d.limit("title", 1)
-                if (list?.isOn("showArtist") == true) {
-                    parts += p.str("artist")
-                    d.say("subtitle", p.str("artist"))
+                // The song's own artist when it isn't the album's (a guest), whatever showArtist says.
+                val who = if (list?.isOn("showArtist") == true) p.str("artist") else p.str("credit")
+                if (who.isNotEmpty()) {
+                    parts += who
+                    d.say("subtitle", who)
                 }
                 p.int("durationSec")?.let {
                     if (list == null || list.notOff("showDuration")) {

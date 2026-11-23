@@ -5,6 +5,12 @@ What changed in WittyMediaClient, newest first. What changed before it had a rep
 
 ## Unreleased
 
+- **Android TV's album page (WittyMediaServer #558).** It started 620 points down the screen whatever the page held,
+  with its buttons centred, so a 2-CD album showed two songs above a box of key hints. Now a page with a cover and no
+  backdrop starts its songs under the buttons; the buttons line up from the left with **Play**, **Shuffle** and
+  **More** (Add to queue, Go to artist, Share: the server's `menuAfter`); an album with no art shows a tile with its
+  name; each disc's songs are headed **Disc 1**, **Disc 2**; a guest's name shows under its song; the playing song has
+  a playing mark; rows are a little shorter; and a Dock that holds only the key hints is one short line.
 - **Skip parts from a `.wittyinfo` (WittyMediaServer 0.8.1).** Android, iPhone, iPad and Apple TV read the server's list of every part: a preview and a part someone named get a button of their own ("Skip dream sequence"), credits with a scene after them stop at the scene, a part that is only marked has no button, and what the file says to skip by itself is skipped unless **What the video's own file says to skip** is turned off (You → Playing on this device).
 - **Karaoke's Mix is Voice, Background Music and Track**, as on the website (WittyMediaServer #418), on Android and Apple, for every version of a song. On a server that makes the parts, the old on, lower, lowest control no longer shows while they're being made.
 - **TV levels everywhere on the TVs.** Android TV no longer opens an editor the server keeps for a computer just because the app draws that page itself (You → Libraries opened a form with folder paths to type); it shows the card that says where to change it. Apple TV reads the same table and its card says the server's words, with what is set now and a QR code.

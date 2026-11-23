@@ -878,6 +878,30 @@ class Nav(val app: WittyApp, private val s: Map<String, String>) {
         }
     }
 
+    // An album page's Shuffle and Add to queue: every song of the album this one is on, in a new order, or after what is
+    // playing (the page sends the album's first song).
+    fun playAlbumOf(id: String, shuffle: Boolean = false, enqueue: Boolean = false, done: () -> Unit = {}) {
+        val number = id.toLongOrNull() ?: return
+        app.scope.launch {
+            try {
+                val track = app.api.item(number)
+                val books = keepsPlace(libraryType(track.libraryId))
+                val tracks = (if (track.album.isNotEmpty()) app.api.tracks(track.libraryId, track.album, track.albumArtist.ifEmpty { track.artist }).distinctBy { it.id } else emptyList())
+                    .ifEmpty { listOf(track) }
+                when {
+                    enqueue -> app.listening.addToQueue(tracks, books)
+                    shuffle -> startListening(tracks.shuffled(), Start(0), books)
+                    else -> startListening(tracks, Start(0), books)
+                }
+                done()
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                if (!handleExpired(e)) notice = problemWords(e, s["errLost"].orEmpty())
+            }
+        }
+    }
+
     fun openNowPlaying() {
         if (current != Route.NowPlaying) push(Route.NowPlaying)
     }

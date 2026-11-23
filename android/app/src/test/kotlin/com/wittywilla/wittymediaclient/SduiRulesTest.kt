@@ -376,6 +376,11 @@ class SduiRulesTest {
         assertEquals(SduiEffect.Play("101", resume = true), router.effect(action("""{"type":"play","item":"101","params":{"resume":true}}""")))
         assertEquals(SduiEffect.Play("101", resume = false), router.effect(action("""{"type":"play","item":"101","params":{"resume":false}}""")))
         assertEquals(SduiEffect.Play("101", resume = true), router.effect(action("""{"type":"play","item":"101"}""")))
+        // An album page's Shuffle and Add to queue (server 0.8.1-alpha): every song of its album, in a new order or after
+        // what is playing.
+        assertEquals(SduiEffect.Play("101", resume = false, shuffle = true), router.effect(action("""{"type":"play","item":"101","params":{"resume":false,"shuffle":true}}""")))
+        assertEquals(SduiEffect.Queue("101"), router.effect(action("""{"type":"command","op":"queue.add","item":"101"}""")))
+        assertEquals(SduiEffect.Nothing, router.effect(action("""{"type":"command","op":"queue.add"}""")))
         assertEquals(SduiEffect.Open(SduiTarget.Native("share", mapOf("item" to "101"), "")), router.effect(action("""{"type":"native","to":"share","params":{"item":"101"}}""")))
         assertEquals(SduiEffect.Open(SduiTarget.Page("detail", mapOf("item" to "7"), "/item/7")), router.effect(action("""{"type":"navigate","to":"/item/7"}""")))
         assertEquals(SduiEffect.External("https://example.org/a"), router.effect(action("""{"type":"external","url":"https://example.org/a"}""")))

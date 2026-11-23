@@ -26,7 +26,10 @@ sealed interface SduiTarget {
 sealed interface SduiEffect {
     // `layer`: shown over the current screen (a sheet, an overlay), and Back closes it.
     data class Open(val target: SduiTarget, val layer: Boolean = false) : SduiEffect
-    data class Play(val item: String, val resume: Boolean) : SduiEffect
+    // `shuffle`: an album's or an artist's songs, all of them, in a new order (the album page's Shuffle).
+    data class Play(val item: String, val resume: Boolean, val shuffle: Boolean = false) : SduiEffect
+    // Add to queue: the album of this song, after what is playing.
+    data class Queue(val item: String) : SduiEffect
     data class External(val url: String) : SduiEffect
     data object Back : SduiEffect
     data class SelectTab(val tab: String) : SduiEffect
@@ -90,13 +93,14 @@ class SduiRouter(routes: List<SduiRouteSpec> = DEFAULT_ROUTES, commands: List<Sd
             val params = action.params.mapNotNull { (k, v) -> (v as? kotlinx.serialization.json.JsonPrimitive)?.content?.let { k to it } }.toMap()
             if (action.to.isEmpty()) SduiEffect.Nothing else SduiEffect.Open(SduiTarget.Native(action.to, params, ""))
         }
-        "play" -> if (action.item.isEmpty()) SduiEffect.Nothing else SduiEffect.Play(action.item, action.params.notOff("resume"))
+        "play" -> if (action.item.isEmpty()) SduiEffect.Nothing else SduiEffect.Play(action.item, action.params.notOff("resume"), action.params.isOn("shuffle"))
         "external" -> if (action.url.startsWith("http://") || action.url.startsWith("https://")) SduiEffect.External(action.url) else SduiEffect.Nothing
         "back" -> SduiEffect.Back
         "command" -> when (action.op) {
             "control.open" -> SduiEffect.OpenControl(action.params.str("control"), action.params.str("target"))
             "selectTab" -> action.params.str("tab").let { if (it.isEmpty()) SduiEffect.Nothing else SduiEffect.SelectTab(it) }
             "refresh" -> SduiEffect.Refresh
+            "queue.add" -> if (action.item.isEmpty()) SduiEffect.Nothing else SduiEffect.Queue(action.item)
             else -> commands[action.op]?.takeIf { it.path.isNotEmpty() && SduiCommands.request(it, action.item, action.params) != null }
                 ?.let { SduiEffect.Command(it, action.item, action.params, action.confirm) } ?: SduiEffect.Nothing
         }

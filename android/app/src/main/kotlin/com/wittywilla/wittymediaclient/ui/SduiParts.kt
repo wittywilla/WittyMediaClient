@@ -188,6 +188,13 @@ private fun SduiDock(view: SduiView, side: Dp) {
     // On a TV the bar sits on the picture's safe area, not on the screen's edge; with the frame's system dock under it, that
     // dock keeps the edge.
     val foot = if (env.tv && !LocalDockBelow.current) env.pt(env.layout.safeArea.bottom) else 0.dp
+    // Nothing in it but the keys (an album's page): one short line of them at the foot, not a bar's worth of empty box.
+    if (env.tv && keys.isNotEmpty() && view.children.all { it.type == "KeyLegend" }) {
+        Row(Modifier.fillMaxWidth().padding(horizontal = side).padding(bottom = foot, top = env.space("xs")), horizontalArrangement = Arrangement.Center, verticalAlignment = Alignment.CenterVertically) {
+            keys.forEach { SduiNode(it, view) }
+        }
+        return
+    }
     Row(
         Modifier.fillMaxWidth().padding(horizontal = side).padding(bottom = foot).elevated(1, RoundedCornerShape(env.pt(14)), env.pt(14))
             .defaultMinSize(minHeight = if (env.tv) env.pt(DesignTokens.Tv.Dock.height.toFloat()) else 0.dp)
@@ -588,7 +595,8 @@ fun SduiDetailHeader(view: SduiView) {
         val wide = maxWidth
         if (env.tv) {
             // The backdrop across the screen under a shade; the words at the left, the buttons in a row with the main one first and focused.
-            Box(Modifier.fillMaxWidth().heightIn(min = env.pt(620))) {
+            // Tall only over a backdrop: a page with just a cover (an album, an artist) starts its list right under the buttons.
+            Box(Modifier.fillMaxWidth().then(if (backdrop != null) Modifier.heightIn(min = env.pt(620)) else Modifier)) {
                 if (backdrop != null) {
                     SduiPicture(backdrop, wide, 16f / 9f, null, Modifier.matchParentSize(), alignment = Alignment.TopCenter)
                     Box(Modifier.matchParentSize().background(HeroScrim.side(page, HeroScrim.strength, wordsTo = 0.4f, clearAt = 0.85f, least = 0.85f, beyond = 0.2f)))
@@ -596,6 +604,8 @@ fun SduiDetailHeader(view: SduiView) {
                 }
                 Row(Modifier.padding(start = side, end = side, top = env.space("m"), bottom = env.space("s")), horizontalArrangement = Arrangement.spacedBy(env.space("m")), verticalAlignment = Alignment.Bottom) {
                     if (poster == null && p.str("kind") == "person") PersonInitials(view.text["title"].orEmpty(), env.pt(300))
+                    // A square kind without its picture: a tile of the same size with its name on it, so the words keep their place.
+                    if (poster == null && p.str("layout") == "poster" && p.str("kind") in SQUARE_KINDS) TitleTile(view.text["title"].orEmpty(), env.pt(300))
                     if (poster != null && (p.str("layout") == "poster" || backdrop == null)) {
                         val shape = headerShape(poster, p.str("kind"))
                         val posterWide = env.pt(if (shape > 1f) 480 else 300)
@@ -607,14 +617,21 @@ fun SduiDetailHeader(view: SduiView) {
                         view.text["facts"]?.let { SduiFacts(it, lines = 1) }
                         view.text["overview"]?.let { Text(it, color = scheme.onBackground, fontSize = env.size("body"), maxLines = view.line("overview", 4), overflow = TextOverflow.Ellipsis) }
                         view.progress?.let { SduiProgressLine(it, Modifier.padding(top = env.space("xs")).widthIn(max = env.pt(600))) }
-                        // The buttons centred under the words, as on every device, in a row that scrolls when they don't fit.
-                        BoxWithConstraints(Modifier.fillMaxWidth().padding(top = env.space("xs"))) {
-                            Row(Modifier.remoteRow().horizontalScroll(rememberScrollState()).widthIn(min = maxWidth), horizontalArrangement = Arrangement.spacedBy(env.pt(16), Alignment.CenterHorizontally)) {
-                                buttons.forEachIndexed { i, button ->
-                                    val main = button.primary || (i == 0 && buttons.none { it.primary })
-                                    SduiActionButton(button, focusKey = "${view.id}~${button.id}", requestFocus = main && view.id == env.screen.focus.default)
-                                }
+                        // The buttons in a row under the words, from the start, that scrolls when they don't fit. With menuAfter, the
+                        // first few stand on their own and the rest are under More (an album's Add to queue, Go to artist, Share).
+                        val after = p.int("menuAfter")?.takeIf { it in 1 until buttons.size } ?: buttons.size
+                        val inMenu = buttons.drop(after)
+                        var menu by remember { mutableStateOf(false) }
+                        Row(Modifier.padding(top = env.space("xs")).remoteRow().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(env.pt(16))) {
+                            buttons.take(after).forEachIndexed { i, button ->
+                                val main = button.primary || (i == 0 && buttons.none { it.primary })
+                                SduiActionButton(button, focusKey = "${view.id}~${button.id}", requestFocus = main && view.id == env.screen.focus.default)
                             }
+                            if (inMenu.isNotEmpty()) WittyButton("More", { menu = true }, kind = ButtonKind.Secondary, icon = WebIcons.More, pill = true, focusKey = "${view.id}~more")
+                        }
+                        if (menu) SduiChooser(view.text["title"].orEmpty(), inMenu.map { it.label to it.id }, "", { menu = false }) { id ->
+                            menu = false
+                            inMenu.firstOrNull { it.id == id }?.let { env.act(it.action) }
                         }
                     }
                 }
@@ -958,20 +975,33 @@ fun SduiLine(view: SduiView, parent: SduiView) {
     val press = view.node.action != null
     when (view.type) {
         "Track" -> {
-            // What the app is playing now is in the accent's colour.
+            // What the app is playing now is in the accent's colour, with a playing mark in place of its number.
             val playing = env.nav.app.listening.now?.mediaId == p.str("itemId")
             val ink = if (playing) LocalExtraColours.current.accentText else scheme.onBackground
-            Pressable({ env.act(view.node.action) }, Modifier.fillMaxWidth(), shape = RoundedCornerShape(env.pt(10)), fill = Color.Transparent, label = view.label, enabled = press, disabledAlpha = 1f, focusKey = focusKey, requestFocus = start, ring = env.tv, pressScale = 1f) {
-                Column(Modifier.fillMaxWidth().clearAndSetSemantics { }) {
-                    Row(Modifier.fillMaxWidth().heightIn(min = env.pt(if (env.tv) 90 else 56)).padding(horizontal = env.pt(if (env.tv) 24 else 4)), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(env.space("s"))) {
-                        if (parent.props["showNumbers"]?.toString() != "false") Text(p.int("number")?.toString().orEmpty(), color = if (playing) ink else hint, fontSize = env.size("body"), textAlign = TextAlign.End, modifier = Modifier.width(env.pt(if (env.tv) 56 else 28)))
-                        Column(Modifier.weight(1f)) {
-                            Text(view.text["title"].orEmpty(), color = ink, fontSize = env.size("body"), maxLines = view.line("title", 1), overflow = TextOverflow.Ellipsis)
-                            view.text["subtitle"]?.let { Text(it, color = hint, fontSize = env.size("caption"), maxLines = 1, overflow = TextOverflow.Ellipsis) }
-                        }
-                        view.text["duration"]?.let { Text(it, color = hint, fontSize = env.size("caption")) }
+            Column(Modifier.fillMaxWidth()) {
+                // A release on more than one disc: "Disc 2" over the first song of each, whose numbers start at 1 again.
+                if ((parent.props.int("discs") ?: 0) > 1) {
+                    val disc = p.int("disc") ?: 1
+                    val at = parent.children.indexOfFirst { it.id == view.id }
+                    if (at == 0 || (at > 0 && (parent.children[at - 1].props.int("disc") ?: 1) != disc)) {
+                        Text("Disc $disc", color = hint, fontSize = env.size("caption"), fontWeight = FontWeight.Bold, modifier = Modifier.padding(start = env.pt(if (env.tv) 24 else 4), top = env.space(if (at == 0) "xs" else "m"), bottom = env.space("xs")).semantics { heading() })
                     }
-                    view.progress?.takeIf { it in 1..99 }?.let { SduiProgressLine(it) }
+                }
+                Pressable({ env.act(view.node.action) }, Modifier.fillMaxWidth(), shape = RoundedCornerShape(env.pt(10)), fill = Color.Transparent, label = view.label, enabled = press, disabledAlpha = 1f, focusKey = focusKey, requestFocus = start, ring = env.tv, pressScale = 1f) {
+                    Column(Modifier.fillMaxWidth().clearAndSetSemantics { }) {
+                        Row(Modifier.fillMaxWidth().heightIn(min = env.pt(if (env.tv) 72 else 56)).padding(horizontal = env.pt(if (env.tv) 24 else 4)), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(env.space("s"))) {
+                            if (parent.props["showNumbers"]?.toString() != "false") Box(Modifier.width(env.pt(if (env.tv) 56 else 28)), contentAlignment = Alignment.CenterEnd) {
+                                if (playing) Icon(WebIcons.Play, null, tint = ink, modifier = Modifier.size(env.pt(if (env.tv) 28 else 16)))
+                                else Text(p.int("number")?.toString().orEmpty(), color = hint, fontSize = env.size("body"), textAlign = TextAlign.End)
+                            }
+                            Column(Modifier.weight(1f)) {
+                                Text(view.text["title"].orEmpty(), color = ink, fontSize = env.size("body"), maxLines = view.line("title", 1), overflow = TextOverflow.Ellipsis)
+                                view.text["subtitle"]?.let { Text(it, color = hint, fontSize = env.size("caption"), maxLines = 1, overflow = TextOverflow.Ellipsis) }
+                            }
+                            view.text["duration"]?.let { Text(it, color = hint, fontSize = env.size("caption")) }
+                        }
+                        view.progress?.takeIf { it in 1..99 }?.let { SduiProgressLine(it) }
+                    }
                 }
             }
         }
@@ -1445,6 +1475,19 @@ fun SduiCredits(view: SduiView, side: Dp) {
 
 // A person without a photo, on their own page: their initials in a circle on the page's third background, hidden from
 // assistive technology (their name is read as the page's title).
+// What a square header's picture stands for when there is none: an album's, an artist's or a podcast's name on a tile the
+// size of its cover, so the page's words keep their place.
+private val SQUARE_KINDS = setOf("album", "artist", "track", "podcast", "audiobook")
+
+@Composable
+private fun TitleTile(title: String, size: Dp) {
+    val env = LocalSdui.current
+    val scheme = MaterialTheme.colorScheme
+    Box(Modifier.size(size).clip(RoundedCornerShape(env.pt(14))).background(Brush.linearGradient(listOf(scheme.surfaceVariant, scheme.surface))).clearAndSetSemantics { }.padding(env.space("m")), contentAlignment = Alignment.BottomStart) {
+        Text(title, color = scheme.onSurface, fontSize = env.size("title"), fontWeight = FontWeight.Bold, maxLines = 4, overflow = TextOverflow.Ellipsis, lineHeight = env.size("title") * 1.15f)
+    }
+}
+
 @Composable
 private fun PersonInitials(name: String, size: Dp) {
     val env = LocalSdui.current
