@@ -50,9 +50,11 @@ object InputInUse {
     // The key help sheet (held Menu, a pad's Select, or `?`).
     var helpOpen by mutableStateOf(false)
 
-    fun note(code: Int) {
+    // On a TV, a key that only a keyboard has (the digits of a remote's number pad, typing a code) says nothing about
+    // the input: a TV never shows PC shortcuts (Esc, Ctrl+[), so only a pad or a remote's own keys change the legend.
+    fun note(code: Int, tv: Boolean = false) {
         // Moves and OK come from any kind: they change nothing once a kind is known.
-        val seen = KeyMap.kindOf(code)
+        val seen = KeyMap.kindOf(code).let { if (tv && it == InputKind.Keyboard) InputKind.Remote else it }
         if (kind == null || seen != InputKind.Remote || kind == InputKind.Remote) kind = seen
     }
 

@@ -74,7 +74,7 @@ class MainActivity : ComponentActivity() {
         // A game on screen reads controllers first: see games/GameInput.kt.
         if (GameInputHub.key(event)) return true
         if (event.action == KeyEvent.ACTION_DOWN) {
-            com.wittywilla.wittymediaclient.ui.InputInUse.note(event.keyCode)
+            com.wittywilla.wittymediaclient.ui.InputInUse.note(event.keyCode, (application as WittyApp).isTv)
             (application as WittyApp).lastPad = if (event.device?.supportsSource(InputDevice.SOURCE_GAMEPAD) == true) event.deviceId else -1
         }
         if (event.keyCode == KeyEvent.KEYCODE_GUIDE) {

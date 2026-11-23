@@ -450,3 +450,47 @@ fun PanelCard(modifier: Modifier = Modifier, content: @Composable ColumnScope.()
         content = content,
     )
 }
+
+// Who's watching? on a TV: the web's picker scaled for across the room. One centred column on a soft glow: the server's
+// lockup, the big title, the profile faces in a centred row (wrapping into centred rows) with a name under each, the
+// other ways to sign in stacked and centred, then one small line with Change server. Nothing hugs the left edge.
+@OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
+@Composable
+fun TvWhoPage(
+    title: String,
+    top: @Composable () -> Unit,
+    problem: @Composable () -> Unit,
+    profiles: @Composable () -> Unit,
+    actions: @Composable ColumnScope.() -> Unit,
+    foot: @Composable () -> Unit,
+    onBack: (() -> Unit)? = null,
+) {
+    val metrics = LocalMetrics.current
+    BackHandler(enabled = onBack != null) { onBack?.invoke() }
+    val accent = LocalExtraColours.current.accentText
+    TvBackdrop(Modifier.signInGlow(accent), contentAlignment = Alignment.Center) {
+        Column(
+            Modifier
+                .fillMaxSize()
+                .verticalScroll(rememberScrollState())
+                .padding(horizontal = metrics.tvSafeSides, vertical = metrics.tvSafeEnds),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.Center,
+        ) {
+            top()
+            Text(
+                title.replace('\'', '’'), color = MaterialTheme.colorScheme.onBackground, textAlign = TextAlign.Center,
+                style = MaterialTheme.typography.display, modifier = Modifier.padding(top = metrics.u(20), bottom = metrics.u(40)).semantics { heading() },
+            )
+            problem()
+            profiles()
+            Column(
+                Modifier.padding(top = metrics.u(36)).width(metrics.u(560)),
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.spacedBy(metrics.u(14)),
+                content = actions,
+            )
+            Row(Modifier.padding(top = metrics.u(24)), horizontalArrangement = Arrangement.spacedBy(metrics.u(24)), verticalAlignment = Alignment.CenterVertically) { foot() }
+        }
+    }
+}

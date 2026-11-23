@@ -364,7 +364,7 @@ fun SduiNativeView(view: SduiView) {
     val env = LocalSdui.current
     when {
         view.props.str("view") != "guide" -> Column { view.children.forEach { SduiNode(it, view, topLevel = true) } }
-        env.tv -> GuideScreen(env.nav)
+        env.tv -> GuideScreen(env.nav, embedded = true)
         else -> ServerPageScreen(env.nav, env.nav.current, GUIDE_PATH, keptToGames = false, inShell = true)
     }
 }

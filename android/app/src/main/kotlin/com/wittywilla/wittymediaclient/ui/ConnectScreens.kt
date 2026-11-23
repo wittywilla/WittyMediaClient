@@ -862,6 +862,7 @@ fun SignInScreen(nav: Nav, s: Map<String, String>, way: SignInWay) {
                 nav, s, list.profiles, problem, busy,
                 onPick = { p ->
                     problem = ""
+                    nav.app.getSharedPreferences("wms.signin", android.content.Context.MODE_PRIVATE).edit().putLong(lastProfileKey(nav), p.id).apply()
                     if (p.hasPassword) {
                         chosenId = p.id
                         step = Step.Password
@@ -896,6 +897,9 @@ private fun CodeLinks(nav: Nav, s: Map<String, String>, onUseCode: () -> Unit, o
     WittyButton(s["changeServer"].orEmpty(), nav::changeServer, kind = ButtonKind.Quiet, focusKey = "change-server")
 }
 
+// The profile this device last chose on this server, so the remote starts on it.
+private fun lastProfileKey(nav: Nav): String = "last." + (nav.server?.serverId?.ifEmpty { null } ?: nav.app.api.base)
+
 // 4. Who's watching? Profiles as faces, as many across as fit, under this server's lockup.
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
@@ -910,13 +914,40 @@ private fun WhoStep(
     onUseCode: () -> Unit,
 ) {
     val metrics = LocalMetrics.current
+    // A TV with many people draws smaller faces so two centred rows and the buttons below them still fit.
     val size = metrics.u(
         when {
-            metrics.tv -> 200
+            metrics.tv -> if (profiles.size > 4) 150 else 200
             metrics.tablet -> 140
             else -> 104
         },
     )
+    val last = remember { nav.app.getSharedPreferences("wms.signin", android.content.Context.MODE_PRIVATE).getLong(lastProfileKey(nav), -1L) }
+    if (metrics.tv) {
+        // The TV's picker is the web's: one centred column (TvWhoPage).
+        TvWhoPage(
+            s["whoTitle"].orEmpty(),
+            top = { ServerLockup(nav) },
+            problem = { DesignNote(problem, error = true) },
+            profiles = {
+                FlowRow(
+                    Modifier.fillMaxWidth().remoteRow(),
+                    horizontalArrangement = Arrangement.spacedBy(metrics.u(48), Alignment.CenterHorizontally),
+                    verticalArrangement = Arrangement.spacedBy(metrics.u(28)),
+                ) {
+                    profiles.forEachIndexed { i, p ->
+                        key(p.id) { ProfileTile(p, size, { if (!busy) onPick(p) }, requestFocus = if (last in profiles.map { it.id }) p.id == last else i == 0, focusKey = "profile-${p.id}") }
+                    }
+                }
+            },
+            actions = {
+                WittyButton(s["otherAccount"].orEmpty(), onOtherAccount, kind = ButtonKind.Secondary, focusKey = "other-account", modifier = Modifier.fillMaxWidth())
+                WittyButton(s["usePhone"] ?: s["useCode"].orEmpty(), onUseCode, kind = ButtonKind.Secondary, focusKey = "use-code", modifier = Modifier.fillMaxWidth())
+            },
+            foot = { WittyButton(s["changeServer"].orEmpty(), nav::changeServer, kind = ButtonKind.Quiet, focusKey = "change-server") },
+        )
+        return
+    }
     DesignPage(
         s["whoTitle"].orEmpty(), tag = "who", top = { ServerLockup(nav) },
         actions = { CodeLinks(nav, s, onUseCode, onOtherAccount) },

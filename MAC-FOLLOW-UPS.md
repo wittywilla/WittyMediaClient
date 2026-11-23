@@ -131,6 +131,14 @@ Not ported (gaps listed in the parity table): karaoke's Controls menu, Album art
 
 ---
 
+## WittyTV guide and Who's watching? on Apple TV (not done on Windows)
+
+The Android TV changes in this pass have no Apple TV twin yet, and Swift can't be compiled on the Windows PC. For the Mac:
+
+- [ ] `apple/App/TvGuide.swift`: start the preview no wider than 440 (as `GUIDE_PREVIEW_START` in `tv/TvGuideHero.kt`), keep the hero's top padding small when the guide sits under the tab bar, give the grid a whole number of rows, and drop the always-on dock under the grid.
+- [ ] Add a **Shortcuts** button next to the set button in the guide's bar that shows or hides the dock (Look, Day, Channels, Filter, Recordings, Record, More info, Help) under it. Closed by default, remembered per device, Menu opens and focuses it, Back closes it. No keyboard letter badges on tvOS; move the "Up and Down change channel…" hint line into Help.
+- [ ] `apple/App/ConnectViews.swift` (Who's watching, around line 717): it already centres one row; check it against `WhoStep` in Android's `TvWhoPage` (title with ’, "Sign in with your phone" from the new `usePhone` string, Change server as a link, smaller faces above four profiles) at 1080p and 720p with 1, 3 and 8 profiles.
+
 ## 0.8.1-alpha: what the Mac must do
 
 Written 2026-11-19 on the Windows PC, for Claude on the owner's MacBook. WittyMediaServer 0.8.1-alpha added TV mode
