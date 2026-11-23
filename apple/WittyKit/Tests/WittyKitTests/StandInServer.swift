@@ -78,6 +78,16 @@ final class StandInServer: @unchecked Sendable {
             received.append(contentsOf: buffer[0..<count])
         }
         let head = String(decoding: received, as: UTF8.self)
+        // The body too, before answering: closing a socket with a request's body still unread sends a reset, which on
+        // macOS can lose the answer already sent, and the client then waits out its timeout (MediaExtrasTests' POSTs).
+        if let end = received.range(of: Data("\r\n\r\n".utf8))?.upperBound, let length = Self.contentLength(head) {
+            var have = received.count - end
+            while have < length {
+                let count = recv(client, &buffer, min(buffer.count, length - have), 0)
+                guard count > 0 else { break }
+                have += count
+            }
+        }
         let line = head.components(separatedBy: "\r\n").first ?? ""
         let request = Request(line: line, head: head)
         lock.lock()
@@ -98,6 +108,22 @@ final class StandInServer: @unchecked Sendable {
                 sent += wrote
             }
         }
+        // A graceful close: say we're done, then let the client close its side, so the answer is never cut off by a reset.
+        shutdown(client, Int32(SHUT_WR))
+        var patience = timeval(tv_sec: 1, tv_usec: 0)
+        setsockopt(client, SOL_SOCKET, SO_RCVTIMEO, &patience, socklen_t(MemoryLayout<timeval>.size))
+        while recv(client, &buffer, buffer.count, 0) > 0 {}
+    }
+
+    /// A request's Content-Length, when it has one.
+    static func contentLength(_ head: String) -> Int? {
+        for line in head.components(separatedBy: "\r\n") {
+            let parts = line.split(separator: ":", maxSplits: 1)
+            if parts.count == 2, parts[0].trimmingCharacters(in: .whitespaces).lowercased() == "content-length" {
+                return Int(parts[1].trimmingCharacters(in: .whitespaces))
+            }
+        }
+        return nil
     }
 
     func stop() {

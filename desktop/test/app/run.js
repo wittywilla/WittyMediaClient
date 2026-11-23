@@ -138,7 +138,15 @@ const PLAYING_PAGE = `<!doctype html><html><head><title>Playing</title></head><b
 <audio id="a" src="/silence.wav" loop autoplay></audio>
 <script>
 window.ticks = 0
-setInterval(() => { window.ticks++ }, 100)
+window.tickTimes = []
+setInterval(() => { window.ticks++; window.tickTimes.push(performance.now()) }, 100)
+// The typical time between ticks since a moment: about 100 ms running freely, a second or more once a hidden page's
+// timers are slowed. A busy machine misses some ticks, so it's the median gap that tells, not how many there were.
+window.tickGap = (since) => {
+  const t = window.tickTimes.filter((x) => x >= since)
+  const gaps = t.slice(1).map((x, i) => x - t[i]).sort((a, b) => a - b)
+  return gaps.length ? gaps[Math.floor(gaps.length / 2)] : Infinity
+}
 document.addEventListener('visibilitychange', () => { if (document.hidden) document.getElementById('a').pause() })
 </script></body></html>`
 
@@ -223,6 +231,9 @@ const inBar = (code) => views().bar.executeJavaScript(code)
 const heading = () => inPage("(document.querySelector('h1') || {}).textContent")
 const focused = () => inPage('document.activeElement.textContent || document.activeElement.id')
 const pageText = () => inPage('document.body.innerText')
+// Focus moves a moment after a key: a busy machine (CI's macOS runner) hadn't moved it 40 ms later. Wait for it.
+const focusOn = (expected, why = '') => until(`focus on ${JSON.stringify(expected)}${why ? ` (${why})` : ''}`, async () => (await focused()) === expected)
+const focusStarts = (start, why = '') => until(`focus on ${JSON.stringify(start)}…${why ? ` (${why})` : ''}`, async () => String(await focused()).startsWith(start))
 const clickText = (text) => inPage(`Array.from(document.querySelectorAll('button')).find((b) => b.textContent.startsWith(${JSON.stringify(text)})).click()`)
 const onHeading = (text) => until(`the screen "${text}"`, async () => (await heading()) === text)
 
@@ -297,14 +308,15 @@ async function seeded(url) {
       assert.deepStrictEqual(blocks.started, ['prevent-app-suspension'])
       win.hide()
       await wait(500)
-      const before = await audio('({ t: a.currentTime, ticks: window.ticks })')
+      const before = await audio('({ t: a.currentTime, ticks: window.ticks, at: performance.now() })')
       await wait(1500)
-      const after = await audio('({ t: a.currentTime, ticks: window.ticks, seen: document.visibilityState, paused: a.paused })')
+      const after = await audio(`({ t: a.currentTime, ticks: window.ticks, gap: window.tickGap(${before.at}), seen: document.visibilityState, paused: a.paused })`)
       assert.strictEqual(after.seen, 'visible', 'never told it is hidden, so nothing pauses')
       assert.strictEqual(after.paused, false)
       // Looped three seconds: it moved on, whichever way round it went.
       assert.ok(after.t !== before.t, `still playing: ${before.t} then ${after.t}`)
-      assert.ok(after.ticks - before.ticks >= 10, `timers not slowed: ${after.ticks - before.ticks} ticks in 1.5 s`)
+      // Slowed, a hidden page's timer runs once a second at most; a loaded CI machine can still drop a tick or two.
+      assert.ok(after.ticks - before.ticks >= 3 && after.gap < 500, `timers not slowed: ${after.ticks - before.ticks} ticks in 1.5 s, typically ${Math.round(after.gap)} ms apart`)
     })
     await step('with the website\'s setting off, the page is told it is hidden, like a browser tab, and pauses', async () => {
       await inPage("document.documentElement.dataset.backgroundPlay = 'off'; 0")
@@ -418,22 +430,22 @@ async function run() {
     assert.ok(!/Home|Shed/.test(await pageText()), 'not the name it announces, until it is added')
     await shot('list-found')
     await key('Down')
-    assert.ok((await focused()).startsWith('10.0.0.3:9797'), 'down moves to the next')
+    await focusStarts('10.0.0.3:9797', 'down moves to the next')
     await key('Down')
-    assert.strictEqual(await focused(), S.enterAddress)
+    await focusOn(S.enterAddress)
   })
 
   await step('the address screen: labelled, with a way back that needs no keyboard', async () => {
     await clickText(S.enterAddress)
     await onHeading(S.addressTitle)
-    assert.strictEqual(await focused(), 'address')
+    await focusOn('address')
     assert.strictEqual(await inPage("document.querySelector('label').htmlFor"), 'address')
     assert.strictEqual(await inPage("document.getElementById('address-error').getAttribute('role')"), 'alert')
     assert.match(await inPage("document.getElementById('address').getAttribute('aria-describedby')"), /address-error/)
     await shot('address')
     await key('Escape')
     await onHeading(S.findTitle)
-    assert.strictEqual(await focused(), S.enterAddress, 'back puts focus where it was')
+    await focusOn(S.enterAddress, 'back puts focus where it was')
     await clickText(S.enterAddress)
     await onHeading(S.addressTitle)
     await clickText(S.back)
