@@ -565,7 +565,10 @@ async function run() {
   })
 
   await step('a server\'s page only gets Moonlight, and the main process agrees it is that page', async () => {
-    assert.deepStrictEqual(await inPage('Object.keys(window.wittyClient)'), ['moonlight'])
+    assert.deepStrictEqual(await inPage('Object.keys(window.wittyClient)'), ['moonlight', 'settings'])
+    // This app's Settings rows: how many servers it keeps, and whether From away is offered; asked by the server's own page only.
+    const info = await inPage('window.wittyClient.settings.info()')
+    assert.ok(info && typeof info.servers === 'number' && typeof info.away === 'boolean', JSON.stringify(info))
     assert.strictEqual(await inPage('typeof require + typeof process'), 'undefinedundefined')
     const { installed } = await inPage('window.wittyClient.moonlight.status()')
     if (!installed) {

@@ -187,6 +187,21 @@ async function run() {
     await shot('04-home')
   })
 
+  // The server's one settings menu (settingsmenu.json), with this app's own rows in it: a server older than it has none.
+  if (await inPage("fetch('/api/sdui/catalog', { credentials: 'include' }).then((r) => r.json()).then((c) => !!c.settingsMenu).catch(() => false)")) {
+    await step("Settings is the one settings menu, with this app's own rows", async () => {
+      await inPage(`history.pushState(null, '', ${JSON.stringify(TV ? '/you' : '/settings')}); dispatchEvent(new PopStateEvent('popstate'))`)
+      await until('the settings groups', () => inPage("document.querySelectorAll('[data-settings-group]').length > 4"), 30000)
+      await wait(2500)
+      const rows = await inPage("Array.from(document.querySelectorAll('[data-row]')).map((r) => r.dataset.row)")
+      assert.ok(rows.includes('names') && rows.includes('theme'), rows.join())
+      assert.ok(rows.includes('servers') && rows.includes('appLog'), "this app's rows: " + rows.join())
+      await shot(TV ? '04b-you-tv' : '04b-settings')
+      await inPage("history.back()")
+      await wait(1500)
+    })
+  }
+
   await step('the arrows and OK reach a film', async () => {
     // A film's card on screen: the spotlight's More info goes to a film too, but it is the spotlight's
     // button, not a card in a row, and may be scrolled out of sight.
