@@ -42,6 +42,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.itemsIndexed
@@ -82,6 +83,7 @@ import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.TextStyle
@@ -103,6 +105,7 @@ import androidx.media3.ui.CaptionStyleCompat
 import androidx.media3.ui.PlayerView
 import com.wittywilla.wittymediaclient.net.Item
 import com.wittywilla.wittymediaclient.net.Track
+import com.wittywilla.wittymediaclient.net.TrackOrder
 import com.wittywilla.wittymediaclient.player.VideoSession
 import com.wittywilla.wittymediaclient.player.ViewPrefs
 import com.wittywilla.wittymediaclient.player.ViewPrefsStore
@@ -414,7 +417,7 @@ fun VideoPlayerScreen(nav: Nav, route: Route.Player) {
         }
 
         when (open) {
-            Open.Audio, Open.Subtitles -> TrackPicker(session, open == Open.Audio) { open = Open.None }
+            Open.Audio, Open.Subtitles -> TrackPicker(session, open == Open.Audio, nav.app.isTv || nav.app.isFireTv) { open = Open.None }
             Open.Settings -> ViewSettings(session, Modifier.align(Alignment.BottomEnd)) { open = Open.None }
             Open.Info -> InfoSheet(nav, session) { open = Open.None }
             Open.Keys -> KeysSheet { open = Open.None }
@@ -636,51 +639,123 @@ private fun ViewSettings(session: VideoSession, modifier: Modifier, close: () ->
     }
 }
 
+// Choosing a sound track or subtitles. On a phone or tablet: a compact list in a sheet, as the web app has it, with Off
+// first, then this device's languages, the ones picked lately, and the rest by name, and a search box once there are
+// more than a handful (net/TrackOrder.kt). On a TV: large tiles read from across the room, in the same order.
 @Composable
-private fun TrackPicker(session: VideoSession, audio: Boolean, close: () -> Unit) {
+private fun TrackPicker(session: VideoSession, audio: Boolean, tv: Boolean, close: () -> Unit) {
     val stream = session.stream ?: return
-    data class Tile(val title: String, val sub: String, val detail: String, val chosen: Boolean, val pick: () -> Unit)
+    val context = androidx.compose.ui.platform.LocalContext.current
+    val prefs = remember { context.getSharedPreferences("tracks", android.content.Context.MODE_PRIVATE) }
+    val kind = if (audio) "audio" else "subtitle"
+    data class Tile(val title: String, val sub: String, val detail: String, val lang: String, val off: Boolean, val chosen: Boolean, val pick: () -> Unit)
     val tiles = if (audio) {
         stream.audio.map { t ->
-            Tile(language(t), t.title, listOf(t.codec.uppercase(Locale.ROOT), if (t.channels > 0) "${t.channels} ch" else "").filter { it.isNotEmpty() }.joinToString(" · "), t.index == stream.audioIndex) { session.chooseAudio(t.index) }
+            Tile(language(t), t.title, listOf(t.codec.uppercase(Locale.ROOT), if (t.channels > 0) "${t.channels} ch" else "").filter { it.isNotEmpty() }.joinToString(" · "), t.language, false, t.index == stream.audioIndex) { session.chooseAudio(t.index) }
         }
     } else {
         val burned = stream.subtitleDelivery == "burn"
-        listOf(Tile("Off", "", "", stream.subtitleIndex < 0) { session.chooseSubtitle(-1, false) }) + stream.subtitles.flatMap { t ->
+        listOf(Tile("Off", "", "", "", true, stream.subtitleIndex < 0) { session.chooseSubtitle(-1, false) }) + stream.subtitles.flatMap { t ->
             val styled = t.codec.lowercase(Locale.ROOT) in setOf("ass", "ssa")
             listOfNotNull(
-                Tile(language(t), t.title, t.codec.uppercase(Locale.ROOT), t.index == stream.subtitleIndex && !(styled && burned)) { session.chooseSubtitle(t.index, false) },
-                if (styled) Tile(language(t), "With its styling", "Drawn into the picture", t.index == stream.subtitleIndex && burned) { session.chooseSubtitle(t.index, true) } else null,
+                Tile(language(t), t.title, t.codec.uppercase(Locale.ROOT), t.language, false, t.index == stream.subtitleIndex && !(styled && burned)) { session.chooseSubtitle(t.index, false) },
+                if (styled) Tile(language(t), "With its styling", "Drawn into the picture", t.language, false, t.index == stream.subtitleIndex && burned) { session.chooseSubtitle(t.index, true) } else null,
             )
         }
     }
+    val ordered = remember(stream, audio) {
+        val locales = androidx.core.os.LocaleListCompat.getAdjustedDefault()
+        val device = (0 until locales.size()).mapNotNull { locales[it]?.toLanguageTag() }
+        TrackOrder.order(tiles, { it.lang }, { it.title }, { it.off }, device, TrackOrder.recent(prefs.getString(kind, "").orEmpty()))
+    }
+    val choose = { t: Tile ->
+        if (!t.off) prefs.edit().putString(kind, TrackOrder.remember(prefs.getString(kind, "").orEmpty(), t.lang)).apply()
+        t.pick()
+        close()
+    }
+    val name = if (audio) "Audio & language" else "Subtitles"
     val accent = MaterialTheme.colorScheme.primary
-    Box(
-        Modifier.fillMaxSize().background(Color(0xD6000000)).clickable(remember { MutableInteractionSource() }, null, onClick = close).padding(24.dp),
-        contentAlignment = Alignment.Center,
-    ) {
-        BoxWithConstraints(Modifier.widthIn(max = 900.dp)) {
-            val room = maxWidth
-            Column(Modifier.verticalScroll(rememberScrollState()).clickable(remember { MutableInteractionSource() }, null) {}, horizontalAlignment = Alignment.CenterHorizontally) {
-                Text(if (audio) "Audio & language" else "Subtitles", color = Dark.fg, fontSize = 24.sp, fontWeight = FontWeight.SemiBold, letterSpacing = (-0.022).em, modifier = Modifier.padding(bottom = 6.dp))
-                val two = room <= 520.dp
-                val gap = if (two) 10.dp else 16.dp
-                val side = if (two) (room - gap) / 2 else 165.dp
-                FlowRow(Modifier.padding(top = 18.dp, bottom = 22.dp), horizontalArrangement = Arrangement.spacedBy(gap, Alignment.CenterHorizontally), verticalArrangement = Arrangement.spacedBy(gap)) {
-                    tiles.forEach { t ->
-                        Pressable({ t.pick(); close() }, Modifier.size(side), shape = RoundedCornerShape(14.dp), fill = if (t.chosen) accent.copy(alpha = 0.22f) else Color(0x12FFFFFF), label = listOf(t.title, t.sub).filter { it.isNotEmpty() }.joinToString(", "), selected = t.chosen, ring = false) {
-                            Box(Modifier.fillMaxSize().border(2.dp, if (t.chosen) accent else Dark.border, RoundedCornerShape(14.dp)).padding(12.dp)) {
-                                Column(Modifier.align(Alignment.Center), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                                    Text(t.title, color = Dark.fg, fontSize = 17.sp, fontWeight = FontWeight.SemiBold, lineHeight = 20.sp, textAlign = TextAlign.Center)
-                                    if (t.sub.isNotEmpty()) Text(t.sub, color = Dark.fg2, fontSize = 13.sp, textAlign = TextAlign.Center)
-                                    if (t.detail.isNotEmpty()) Text(t.detail, color = Dark.fg3, fontSize = 12.sp, textAlign = TextAlign.Center)
+    if (tv) {
+        Box(
+            Modifier.fillMaxSize().background(Color(0xD6000000)).clickable(remember { MutableInteractionSource() }, null, onClick = close).padding(24.dp),
+            contentAlignment = Alignment.Center,
+        ) {
+            BoxWithConstraints(Modifier.widthIn(max = 900.dp)) {
+                val room = maxWidth
+                Column(Modifier.verticalScroll(rememberScrollState()).clickable(remember { MutableInteractionSource() }, null) {}, horizontalAlignment = Alignment.CenterHorizontally) {
+                    Text(name, color = Dark.fg, fontSize = 24.sp, fontWeight = FontWeight.SemiBold, letterSpacing = (-0.022).em, modifier = Modifier.padding(bottom = 6.dp))
+                    val two = room <= 520.dp
+                    val gap = if (two) 10.dp else 16.dp
+                    val side = if (two) (room - gap) / 2 else 165.dp
+                    FlowRow(Modifier.padding(top = 18.dp, bottom = 22.dp), horizontalArrangement = Arrangement.spacedBy(gap, Alignment.CenterHorizontally), verticalArrangement = Arrangement.spacedBy(gap)) {
+                        ordered.forEach { (t, _) ->
+                            Pressable({ choose(t) }, Modifier.size(side), shape = RoundedCornerShape(14.dp), fill = if (t.chosen) accent.copy(alpha = 0.22f) else Color(0x12FFFFFF), label = listOf(t.title, t.sub).filter { it.isNotEmpty() }.joinToString(", "), selected = t.chosen, ring = false) {
+                                Box(Modifier.fillMaxSize().border(2.dp, if (t.chosen) accent else Dark.border, RoundedCornerShape(14.dp)).padding(12.dp)) {
+                                    Column(Modifier.align(Alignment.Center), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                                        Text(t.title, color = Dark.fg, fontSize = 17.sp, fontWeight = FontWeight.SemiBold, lineHeight = 20.sp, textAlign = TextAlign.Center)
+                                        if (t.sub.isNotEmpty()) Text(t.sub, color = Dark.fg2, fontSize = 13.sp, textAlign = TextAlign.Center)
+                                        if (t.detail.isNotEmpty()) Text(t.detail, color = Dark.fg3, fontSize = 12.sp, textAlign = TextAlign.Center)
+                                    }
+                                    if (t.chosen) Text("✓", color = Color.White, fontWeight = FontWeight.Bold, modifier = Modifier.align(Alignment.TopEnd).offset(y = (-2).dp))
                                 }
-                                if (t.chosen) Text("✓", color = Color.White, fontWeight = FontWeight.Bold, modifier = Modifier.align(Alignment.TopEnd).offset(y = (-2).dp))
+                            }
+                        }
+                    }
+                    SmallButton("Close", null, "Close", close, fill = Color.Transparent, border = Dark.borderStrong, minWidth = 140.dp, size = 14)
+                }
+            }
+        }
+        return
+    }
+    var query by remember { mutableStateOf("") }
+    val shown = ordered.filter { (t, _) -> t.off || TrackOrder.matches(listOf(t.title, t.sub, t.detail, t.lang), query) }
+    val headed = shown.map { it.second }.filter { it != TrackOrder.Group.Off }.distinct().size > 1
+    val words = mapOf(TrackOrder.Group.Device to "Your language", TrackOrder.Group.Recent to "Picked lately", TrackOrder.Group.Other to if (audio) "Other tracks" else "Other languages")
+    Box(
+        Modifier.fillMaxSize().background(Color(0x99000000)).clickable(remember { MutableInteractionSource() }, null, onClick = close),
+        contentAlignment = Alignment.BottomCenter,
+    ) {
+        // A solid sheet (never see-through): the full width on a phone, narrower on a tablet.
+        Column(
+            Modifier.widthIn(max = 420.dp).fillMaxWidth().fillMaxHeight(0.75f).padding(8.dp)
+                .clip(RoundedCornerShape(18.dp)).background(Dark.bg2).border(1.dp, Dark.borderStrong, RoundedCornerShape(18.dp))
+                .clickable(remember { MutableInteractionSource() }, null) {}.padding(horizontal = 8.dp, vertical = 10.dp),
+        ) {
+            Row(Modifier.fillMaxWidth().padding(start = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+                Text(name.uppercase(Locale.getDefault()), color = Dark.fg2, fontSize = 12.sp, fontWeight = FontWeight.SemiBold, letterSpacing = 0.08.em, modifier = Modifier.weight(1f).semantics { heading() })
+                SmallButton("Close", null, "Close", close, fill = Color.Transparent, size = 14)
+            }
+            if (tiles.size >= TrackOrder.SEARCH_FROM) {
+                WittyField(query, { query = it }, if (audio) "Find a track" else "Find a language", Modifier.fillMaxWidth().padding(4.dp))
+            }
+            LazyColumn(Modifier.fillMaxWidth().weight(1f)) {
+                var last: TrackOrder.Group? = null
+                shown.forEachIndexed { i, (t, group) ->
+                    if (headed && group != last && group != TrackOrder.Group.Off) {
+                        val w = words[group].orEmpty()
+                        item(key = "h-$group") {
+                            Text(w.uppercase(Locale.getDefault()), color = Dark.fg2, fontSize = 11.sp, fontWeight = FontWeight.SemiBold, letterSpacing = 0.08.em,
+                                modifier = Modifier.padding(start = 12.dp, top = 12.dp, bottom = 4.dp).semantics { heading() })
+                        }
+                    }
+                    last = group
+                    item(key = "t-$i-${t.title}-${t.sub}") {
+                        Pressable({ choose(t) }, Modifier.fillMaxWidth().heightIn(min = 48.dp), fill = if (t.chosen) Dark.bg3 else Color.Transparent,
+                            label = listOf(t.title, t.sub, t.detail).filter { it.isNotEmpty() }.joinToString(", "), selected = t.chosen, takeFocus = t.chosen) {
+                            Row(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+                                Column(Modifier.weight(1f)) {
+                                    Text(t.title, color = Dark.fg, fontSize = 16.sp, fontWeight = if (t.chosen) FontWeight.Bold else FontWeight.Normal)
+                                    val note = listOf(t.sub, t.detail).filter { it.isNotEmpty() }.joinToString(" · ")
+                                    if (note.isNotEmpty()) Text(note, color = Dark.fg2, fontSize = 12.sp)
+                                }
+                                if (t.chosen) Text("✓", color = Dark.fg, fontWeight = FontWeight.Bold)
                             }
                         }
                     }
                 }
-                SmallButton("Close", null, "Close", close, fill = Color.Transparent, border = Dark.borderStrong, minWidth = 140.dp, size = 14)
+                if (query.isNotBlank() && shown.size <= 1) {
+                    item(key = "none") { Text("No match for “$query”.", color = Dark.fg2, fontSize = 13.sp, modifier = Modifier.padding(12.dp)) }
+                }
             }
         }
     }

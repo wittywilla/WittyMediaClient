@@ -98,6 +98,7 @@ import com.wittywilla.wittymediaclient.net.Playback
 import com.wittywilla.wittymediaclient.net.PlaybackRequest
 import com.wittywilla.wittymediaclient.net.QualityMenu
 import com.wittywilla.wittymediaclient.net.Track
+import com.wittywilla.wittymediaclient.net.TrackOrder
 import com.wittywilla.wittymediaclient.net.problemWords
 import com.wittywilla.wittymediaclient.ui.ActionButton
 import com.wittywilla.wittymediaclient.ui.ErrorText
@@ -874,8 +875,20 @@ private fun TrackList(
         verticalArrangement = Arrangement.spacedBy(Space.S2),
     ) {
         if (allowOff) ActionButton("Off", { onPick(-1) }, Modifier.fillMaxWidth(), selected = selected == -1, takeFocus = selected == -1)
-        tracks.distinctBy { it.index }.forEach { t ->
-            ActionButton(trackName(t), { onPick(t.index) }, Modifier.fillMaxWidth(), selected = t.index == selected, takeFocus = t.index == selected)
+        // This device's languages first, then the ones picked lately, then the rest by name (net/TrackOrder.kt).
+        val context = androidx.compose.ui.platform.LocalContext.current
+        val prefs = remember { context.getSharedPreferences("tracks", android.content.Context.MODE_PRIVATE) }
+        val kind = if (allowOff) "subtitle" else "audio"
+        val ordered = remember(tracks) {
+            val locales = androidx.core.os.LocaleListCompat.getAdjustedDefault()
+            val device = (0 until locales.size()).mapNotNull { locales[it]?.toLanguageTag() }
+            TrackOrder.order(tracks.distinctBy { it.index }, { it.language }, { trackName(it) }, { false }, device, TrackOrder.recent(prefs.getString(kind, "").orEmpty()))
+        }
+        ordered.forEach { (t, _) ->
+            ActionButton(trackName(t), {
+                prefs.edit().putString(kind, TrackOrder.remember(prefs.getString(kind, "").orEmpty(), t.language)).apply()
+                onPick(t.index)
+            }, Modifier.fillMaxWidth(), selected = t.index == selected, takeFocus = t.index == selected)
         }
     }
 }
