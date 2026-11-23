@@ -41,8 +41,10 @@ adb connect 192.168.1.50
 adb install wittymediaclient-<version>-android-universal.apk
 ```
 
-This build is signed with a throwaway key. It's for testing only, and can't be updated to a store version
-without uninstalling first.
+Releases are signed with the one Android release key, so each installs over the last and keeps the sign-in. Releases
+up to 0.6.0 weren't: from one of those, uninstall once. Builds from the `build` workflow and pull requests are signed
+with a throwaway key, for testing only: they can't update a release, or be updated by one, without uninstalling first.
+The release key is a step only you can do once: [Android release key](ANDROID-SIGNING.md#making-the-release-key-once).
 
 **Please check on a real device and report back:** does it start, connect, sign in, and play? Are the
 remote and focus usable? Is it smooth, and is there sound? Those two couldn't be checked on an emulator. A cheap TV stick is the most useful test there is.

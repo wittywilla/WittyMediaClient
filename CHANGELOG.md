@@ -13,6 +13,11 @@ What changed in WittyMediaClient, newest first. What changed before it had a rep
 - **A live channel on Android TV fills the screen** (it could be drawn small in a corner).
 - **The guide's preview** no longer says "Tuning…" over a channel that is already playing.
 
+**Android: updates install over the old version**
+
+- **Every Android release is now signed with one permanent release key**, so a new version installs over the last one and keeps your sign-in and settings. Up to 0.6.0, each release was signed with a different temporary key, and Android refused to install it as an update. **Coming from 0.6.0 or older, uninstall once**, then install this version. You'll sign in again once, and never need to after that ([docs/ANDROID-SIGNING.md](docs/ANDROID-SIGNING.md)).
+- The version code now comes from the version (0.6.1 is 60100), so it always goes up. Before anything is published, a release checks the previous one's APKs: same key, higher version code, same app ID. An emulator then installs the previous release, installs the new one over it, and checks the app's data is kept. A release without the key fails rather than falling back to a temporary one.
+
 **Android phone**
 
 - **The mini player says why a film stopped** ("Can't reach your server") when the network drops, instead of showing only a Play button.
