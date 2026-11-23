@@ -8,7 +8,17 @@ on:
     branches: ['v0.*']
   push:
     branches: ['v0.*']
+  # By hand, to show what the tests make of older versions (each empty: as for a pull request).
   workflow_dispatch:
+    inputs:
+      server_ref:
+        description: WittyMediaServer branch, tag or commit (one with scripts/smoke)
+      wittyplay_ref:
+        description: WittyPlay tag or commit for the catalogue
+      app_release:
+        description: Test this release of the Android app (a tag such as v0.6.0) instead of building it
+      previous_release:
+        description: The release to install first and update over (default the latest)
 
 permissions:
   contents: read
@@ -32,8 +42,10 @@ jobs:
         env:
           HEAD: ${{ github.head_ref || github.ref_name }}
           BASE: ${{ github.base_ref || github.ref_name }}
+          PICK: ${{ inputs.server_ref }}
         run: |
           ref=$BASE
+          if [ -n "$PICK" ]; then echo "ref=$PICK" >>"$GITHUB_OUTPUT"; exit 0; fi
           if [ -n "$HEAD" ] && git ls-remote --exit-code --heads https://github.com/wittywilla/WittyMediaServer "$HEAD" >/dev/null; then ref=$HEAD; fi
           echo "ref=$ref" >>"$GITHUB_OUTPUT"
           echo "::notice title=Server::WittyMediaServer at $ref"
@@ -50,6 +62,8 @@ jobs:
         with:
           node-version: 24
       - name: Build the server, Wittyconnect and a catalogue with WittyPlay and WittyTuner
+        env:
+          SMOKE_REF_WITTYPLAY: ${{ inputs.wittyplay_ref }}
         run: bash scripts/smoke/build.sh "$RUNNER_TEMP/smoke-build"
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
@@ -158,20 +172,32 @@ jobs:
           go-version-file: .server/go.mod
           cache: false
       - name: Android NDK for the peer-to-peer library
+        if: inputs.app_release == ''
         run: yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "ndk;27.2.12479018" >/dev/null
       - name: Build Wittyconnect from the server's source
+        if: inputs.app_release == ''
         env:
           WITTYMEDIASERVER_SRC: .server
         run: bash android/scripts/build-wittyconnect.sh
       # A debug build: the same code, and its web views and data can be looked into when a step fails.
       - name: Build the app
+        if: inputs.app_release == ''
         working-directory: android
-        run: gradle --no-daemon :app:assembleDebug -Pp2p=required
+        run: |
+          gradle --no-daemon :app:assembleDebug -Pp2p=required
+          mkdir -p "$RUNNER_TEMP/app" && cp app/build/outputs/apk/debug/app-${{ matrix.arch }}-debug.apk "$RUNNER_TEMP/app/"
+      - name: The app from a release
+        if: inputs.app_release != ''
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ inputs.app_release }}
+        run: gh release download "$TAG" -R wittywilla/WittyMediaClient --pattern '*-android-${{ matrix.arch }}.apk' -D "$RUNNER_TEMP/app"
       - name: The previous release, to install over
         env:
           GH_TOKEN: ${{ github.token }}
+          TAG: ${{ inputs.previous_release }}
         run: |
-          gh release download -R wittywilla/WittyMediaClient --pattern '*-android-${{ matrix.arch }}.apk' -D "$RUNNER_TEMP/previous"
+          gh release download $TAG -R wittywilla/WittyMediaClient --pattern '*-android-${{ matrix.arch }}.apk' -D "$RUNNER_TEMP/previous"
           ls "$RUNNER_TEMP/previous"
       - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8
         with:
@@ -208,7 +234,7 @@ jobs:
           profile: ${{ matrix.profile }}
           disable-animations: true
           emulator-options: -no-window -gpu swiftshader_indirect -no-snapshot -noaudio -no-boot-anim
-          script: python3 scripts/smoke/android.py android/app/build/outputs/apk/debug/app-${{ matrix.arch }}-debug.apk ${{ matrix.kind == 'tv' && '--tv' || '' }} --previous "$(ls $RUNNER_TEMP/previous/*.apk | head -1)"
+          script: python3 scripts/smoke/android.py "$(ls $RUNNER_TEMP/app/*.apk | head -1)" ${{ matrix.kind == 'tv' && '--tv' || '' }} --previous "$(ls $RUNNER_TEMP/previous/*.apk | head -1)"
       - name: Stop the server
         if: always()
         env:
