@@ -21,8 +21,9 @@ final class SettingsMenuTests: XCTestCase {
         let groups = try menu().visible(facts: admin)
         XCTAssertEqual(groups.map(\.key), ["groupAccount", "groupHousehold", "groupYours", "groupModules", "groupDevice", "groupServer", "groupMaintenance", "groupHelp"])
         XCTAssertEqual(groups[0].rows.map(\.key), ["rowNames", "rowPassword", "rowTwoStep", "rowDevices"])
-        XCTAssertEqual(groups.first { $0.id == "device" }?.rows.map(\.key), ["rowLook", "rowEditLayout", "rowTheme", "rowServers", "rowAway", "rowPlayingHere"])
+        XCTAssertEqual(groups.first { $0.id == "device" }?.rows.map(\.key), ["rowLayout", "rowEditLayout", "rowTheme", "rowServers", "rowAway", "rowPlayingHere"])
         XCTAssertEqual(groups.last?.rows.last?.key, "rowAppLog")
+        XCTAssertEqual(groups.first { $0.id == "modules" }?.rows.map(\.key), ["rowModuleSettings", "rowModuleStore"], "module settings and the store side by side")
     }
 
     func testEveryRowHasAnSFSymbolAndWords() throws {

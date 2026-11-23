@@ -109,7 +109,7 @@ private val ICONS: Map<String, () -> ImageVector> = mapOf(
     "settings_input_antenna" to { Symbols.Globe },
     "cast" to { Symbols.Devices }, "groups" to { Symbols.Group },
     // The settings the web had alone (Video quality, Pages and menu, Network, Data folder), with the symbols the app has.
-    "high_quality" to { Symbols.Tune }, "view_quilt" to { Symbols.TopMenu }, "lan" to { Symbols.Antenna }, "folder" to { Symbols.Server },
+    "high_quality" to { Symbols.Tune }, "view_quilt" to { Symbols.TopMenu }, "lan" to { Symbols.Antenna }, "folder" to { Symbols.Server }, "download" to { Symbols.Download },
 )
 
 private fun youIcon(name: String): ImageVector = ICONS[name]?.invoke() ?: Symbols.Info

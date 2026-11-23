@@ -69,7 +69,7 @@ fun LookScreen(nav: Nav, s: Map<String, String>) {
     val check: @Composable (Boolean) -> Unit = { on ->
         Icon(Symbols.Check, null, tint = LocalExtraColours.current.accentText, modifier = Modifier.padding(0.dp).graphicsLayer { alpha = if (on) 1f else 0f })
     }
-    SettingsPage(nav, s["rowLook"].orEmpty(), s["lookHint"].orEmpty()) {
+    SettingsPage(nav, s["rowLayout"].orEmpty(), s["lookHint"].orEmpty()) {
         if (list == null || list.experiences.isEmpty()) {
             Note(s["lookNone"].orEmpty())
             return@SettingsPage

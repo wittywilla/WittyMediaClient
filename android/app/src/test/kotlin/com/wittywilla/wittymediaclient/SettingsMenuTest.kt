@@ -32,13 +32,15 @@ class SettingsMenuTest {
         assertEquals(listOf("groupAccount", "groupHousehold", "groupYours", "groupModules", "groupDevice", "groupServer", "groupMaintenance", "groupHelp"), groups.map { it.key })
         assertEquals(listOf("rowNames", "rowPassword", "rowTwoStep", "rowDevices"), groups[0].rows.map { it.key })
         assertEquals(
-            listOf("rowLook", "rowEditLayout", "rowTheme", "rowServers", "rowAway", "rowPlayingHere"),
+            listOf("rowLayout", "rowEditLayout", "rowTheme", "rowServers", "rowAway", "rowPlayingHere"),
             groups.single { it.key == "groupDevice" }.rows.map { it.key },
         )
         // The settings the web has had alone are rows here too, in their groups.
         val all = groups.flatMap { it.rows }.map { it.key }
         for (key in listOf("rowQuality", "rowPages", "rowNetwork", "rowDataFolder")) assertTrue(key, key in all)
         assertEquals("rowAppLog", groups.last().rows.last().key)
+        // Module settings and the module store side by side, in their own group.
+        assertEquals(listOf("rowModuleSettings", "rowModuleStore"), groups.single { it.key == "groupModules" }.rows.map { it.key })
     }
 
     @Test
