@@ -14,7 +14,7 @@
     "build:connect": "node scripts/build-wittyconnect.mjs",
     "test:p2p": "npm run sync && echo 'see test/app/p2p-real.js for what to set' && electron test/app/p2p-real.js",
     "start": "npm run sync && electron .",
-    "test": "npm run sync && node --test ../shared/connect/address.test.js ../shared/connect/qr.test.js test/state.test.js test/servers.test.js test/connect.test.js test/guards.test.js test/pages.test.js test/moonlight.test.js test/clientlog.test.js test/tv.test.js test/playback.test.js test/mac.test.js test/freebsd.test.js test/p2p.test.js",
+    "test": "npm run sync && node --test ../shared/connect/address.test.js ../shared/connect/qr.test.js test/state.test.js test/servers.test.js test/connect.test.js test/guards.test.js test/pages.test.js test/moonlight.test.js test/clientlog.test.js test/tv.test.js test/playback.test.js test/mac.test.js test/freebsd.test.js test/p2p.test.js test/code.test.js",
     "test:app": "npm run sync && node test/app/all.js",
     "package:win": "npm run sync && node scripts/build-wittyconnect.mjs win-x64 --if-available && electron-builder --win",
     "package:linux": "npm run sync && node scripts/build-wittyconnect.mjs linux-x64 --if-available && electron-builder --linux",
@@ -49,6 +49,7 @@
       "playback.js",
       "mac.js",
       "p2p.js",
+      "code.js",
       "servers.js",
       "titlebar/**",
       "connect/**"

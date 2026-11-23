@@ -10,6 +10,15 @@ What changed in WittyMediaClient, newest first. What changed before it had a rep
 - **Games start when your server is reached from away.** A game stopped at "Waiting for the first picture" with a message about a hello, and leaving it showed a black page saying the address was for the app only. Both are fixed, and the games list and every server page now open from away too.
 - **Notes about a game are on its start screen**, short and readable, not in a long message over Cancel. Messages over a game are short, sit at the top on a touch screen, and never show the server's technical words.
 
+**Desktop: adding a server (wittywilla/WittyMediaServer#605)**
+
+- **One Add a server screen:** servers found on this network, then **Enter a code**, **Paste a link** and **Type an
+  address**. The code is the one a server shows under **Connect a device**; the app asks the servers it can reach, and
+  only the one that made it can prove so and sign this device in. After choosing a server, one sign-in screen takes
+  its code (or a six-digit **Sign in a TV** code), or the password on the server's own page.
+- **Connect from anywhere's panel and Join from away's code are gone:** pasting the link does the first, and the code
+  the second needed the public address book to find the server, which too often it didn't.
+
 **Android TV and Apple TV**
 
 - **A channel in a bumper or a gap** names the next real programme ("Up next: …, at 8:30") in its banner and in the guide, not "We'll be right back".
@@ -24,6 +33,7 @@ What changed in WittyMediaClient, newest first. What changed before it had a rep
 - **Sign in with a code says it works for phones too**, not only for TVs.
 - **The first-run chooser fills the screen**, so Home no longer shows through above and below it.
 - **The library names along the top of Home** read clearly over a bright picture.
+
 **Android, Android TV and Apple**
 
 - **Choosing a server found on the network:** a server that answers later goes below the ones already shown, so the one highlighted never changes under the remote just as OK is pressed.

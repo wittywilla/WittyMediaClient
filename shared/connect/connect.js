@@ -20,6 +20,8 @@
     identity: S.identityBad, certificate: S.errCertificate,
     // Reaching a server from away, peer to peer (the desktop app; see its p2p.js).
     invite: S.errInvite, 'invite-refused': S.errInviteRefused, 'p2p-missing': S.errAwayMissing, 'p2p-failed': S.errAwayFailed,
+    // A code from a server's Connect a device (the desktop app; see its code.js).
+    'code-format': S.errCodeFormat, 'code-not-found': S.errCodeNotFound, 'code-none': S.errCodeNone,
   }
 
   // Without a native bridge: a plain web page on a smart TV.
@@ -63,6 +65,9 @@
   let screen = 0 // which screen this is, so an answer that arrives late can tell it has been left
   const ENTER_ADDRESS = 'enter-address'
   const JOIN_LINK = 'join-link'
+  const ENTER_CODE = 'enter-code'
+  // What a code from a server's Connect a device looks like, typed loosely: eight of its symbols.
+  const looksLikeCode = (text) => /^\s*[0-9A-HJ-NP-TV-Z]{4}[\s-]?[0-9A-HJ-NP-TV-Z]{4}\s*$/i.test(String(text || ''))
   let toast = null // what was just removed, to say so on the list with a way to take it back
   const canForget = typeof bridge.forget === 'function'
   // The words with their {gaps} filled in.
@@ -419,7 +424,7 @@
     const recentHeading = el('h2', { className: 'section', textContent: S.recentServers })
     const status = el('p', { role: 'status', textContent: S.findSearching })
     const searching = el('div', { className: 'note' }, spinner(), status)
-    const words = [el('h1', { className: 'display', textContent: S.findTitle }), el('p', { className: 'lead', textContent: S.findSubtitle })]
+    const words = [el('h1', { className: 'display', textContent: S.addTitle }), el('p', { className: 'lead', textContent: S.addSubtitle })]
     if (message) words.push(problem(message).node)
     const actions = []
     const current = managed ? recent.find((s) => s.url === managed) : null
@@ -444,11 +449,19 @@
     const savedOnTop = savedFirst() && recent.length > 0
     if (savedOnTop) actions.push(...savedPart, ...foundPart)
     else actions.push(...foundPart, ...savedPart)
-    // The main action until there's a server to choose.
-    const enterAddress = button(S.enterAddress, () => { listFocus = ENTER_ADDRESS; addressScreen() }, { icon: 'link', kind: recent.length ? 'secondary' : 'primary', className: 'enter' })
-    actions.push(enterAddress)
-    // Peer to peer, made obvious: its own panel with the ways in.
-    if (bridge.invite || bridge.joinAway) actions.push(anywherePanel())
+    // The other ways, the same three wherever the app runs: a code from the server, its link, its address.
+    // The first is the main action until there's a server to choose.
+    const ways = []
+    if (bridge.enterCode) ways.push(button(S.wayCode, () => { listFocus = ENTER_CODE; codeEntryScreen() }, { icon: 'keypad', className: 'way-code' }))
+    if (bridge.invite) ways.push(button(S.wayLink, () => { listFocus = JOIN_LINK; addressScreen('', '', true) }, { icon: 'link', className: 'join-link' }))
+    const enterAddress = button(S.wayAddress, () => { listFocus = ENTER_ADDRESS; addressScreen() }, { icon: 'globe', className: 'enter' })
+    ways.push(enterAddress)
+    const markMain = (on) => {
+      for (const w of ways) { w.classList.remove('primary'); w.classList.add('secondary') }
+      if (on) { ways[0].classList.remove('secondary'); ways[0].classList.add('primary') }
+    }
+    markMain(!recent.length)
+    actions.push(el('h2', { className: 'section', textContent: S.addWays }), el('div', { className: 'ways', role: 'group', 'aria-label': S.addWays }, ...ways))
     const foot = []
     if (bridge.openLogs) foot.push(button(S.openLogs, () => bridge.openLogs(), { kind: 'quiet', className: 'small' }))
     foot.push(legal())
@@ -467,7 +480,7 @@
       // Shown before it speaks, or a screen reader may not hear it.
       searching.className = found.length ? 'note gone' : stillLooking ? 'note searching' : 'note'
       status.textContent = found.length ? '' : (stillLooking ? S.findSearching : S.findNone)
-      enterAddress.className = `${found.length || recent.length ? 'secondary' : 'primary'} enter`
+      markMain(!found.length && !recent.length)
       const same = Array.from(foundList.children).find((b) => b.dataset.url === focusedUrl)
       if (same && hadFocus) same.focus()
       else if (hadFocus) {
@@ -482,7 +495,7 @@
     const startedAt = Date.now()
     renderFound()
     // Coming back: to the thing that was chosen, and discovery leaves it there.
-    const cameFrom = listFocus === ENTER_ADDRESS ? enterAddress : listFocus === JOIN_LINK ? app.querySelector('button.join-link') : Array.from(app.querySelectorAll('button:not([hidden])')).find((b) => b.dataset.url === listFocus)
+    const cameFrom = listFocus === ENTER_ADDRESS ? enterAddress : listFocus === JOIN_LINK ? app.querySelector('button.join-link') : listFocus === ENTER_CODE ? app.querySelector('button.way-code') : Array.from(app.querySelectorAll('button:not([hidden])')).find((b) => b.dataset.url === listFocus)
     if (cameFrom) {
       cameFrom.focus()
       userMoved = true
@@ -495,31 +508,6 @@
     if (current) { const back = app.querySelector('.manage-back'); if (back) { back.focus(); userMoved = true } }
     if (bridge.supportsDiscovery) setTimeout(() => { if (renderFound) renderFound() }, NONE_AFTER_MS + 100)
     return undefined
-  }
-
-  // Design 2's "Connect from anywhere" (docs/APP-DESIGN.md): a globe badge, what it is, a small
-  // picture of the connection, the ways in as real buttons, and three promises with ticks. The
-  // same panel as on Android and Apple. Always shown: a copy without the connection helper says
-  // so when a way in is chosen.
-  function anywherePanel() {
-    const node = (name, words) => el('span', { className: 'p2p-node' }, icon(name), el('span', { textContent: words }))
-    const line = () => el('span', { className: 'p2p-line' })
-    const picture = el('div', { className: 'p2p-picture', role: 'img', 'aria-label': S.anywherePicture },
-      node('screen', S.anywhereDevice), line(),
-      el('span', { className: 'p2p-lock' }, icon('lock'), el('span', { textContent: S.anywhereEncrypted })),
-      line(), node('rack', S.anywhereServer))
-    const ways = []
-    if (bridge.invite) ways.push(button(S.anywhereJoinLink, () => { listFocus = JOIN_LINK; addressScreen('', '', true) }, { kind: 'primary', icon: 'link', className: 'join-link' }))
-    // For a device that has never been at home with its server: it shows a code to type in there.
-    if (bridge.joinAway) ways.push(button(S.anywhereShowCode, () => joinAwayScreen(), { kind: 'secondary', icon: 'keypad', className: 'join-away' }))
-    const promise = (words) => el('li', {}, icon('tick'), el('span', { textContent: words }))
-    return el('section', { className: 'anywhere', 'aria-labelledby': 'anywhere-title' },
-      el('div', { className: 'anywhere-head' },
-        el('span', { className: 'anywhere-badge', 'aria-hidden': 'true' }, icon('globe')),
-        el('div', {}, el('h2', { id: 'anywhere-title', textContent: S.anywhereTitle }), el('p', { textContent: S.anywhereHint }))),
-      picture,
-      el('div', { className: 'anywhere-ways' }, ...ways),
-      el('ul', { className: 'promises' }, promise(S.anywherePromiseEncrypted), promise(S.anywherePromiseRouter), promise(S.anywherePromiseInvite)))
   }
 
   // An address, or (invite) an invite link to a server away from home: one field, Connect.
@@ -540,12 +528,97 @@
     show({
       back: listAvailable ? () => listScreen() : null,
       words: invite
-        ? [el('h1', { textContent: S.inviteTitle }), el('p', { id: 'address-hint', className: 'lead', textContent: S.inviteLead })]
-        : [el('h1', { textContent: S.addressTitle }), el('p', { id: 'address-hint', className: 'lead', textContent: S.addressHint })]
-          .concat(bridge.invite ? [el('p', { className: 'lead', textContent: S.inviteHint })] : []),
-      actions: [field(input, invite ? S.inviteLabel : S.addressLabel, 'link'), error.node, go],
+        ? [el('h1', { textContent: S.linkTitle }), el('p', { id: 'address-hint', className: 'lead', textContent: S.linkHint })]
+        : [el('h1', { textContent: S.addressTitle }), el('p', { id: 'address-hint', className: 'lead', textContent: S.addressHint })],
+      actions: [field(input, invite ? S.linkLabel : S.addressLabel, invite ? 'link' : 'globe'), error.node, go],
       foot: [legal()],
     })
+  }
+
+  // A code from a server's Connect a device, sent to the servers this app can reach (or only to `only`).
+  // While it is asked about, the button says so; a server that made it signs this device in and opens.
+  async function sendCode(value, only, input, say, go, label) {
+    if (go.classList.contains('busy')) return
+    // A link pasted here instead: the app that can use one takes it.
+    if (!only && bridge.invite && /^\s*wittymedia:\/\/p2p\//i.test(value)) {
+      const turn = screen
+      setBusy(go, true, S.inviteConnecting)
+      let joined
+      try { joined = await bridge.invite(value) } catch (e) { joined = { error: 'p2p-failed' } }
+      if (turn !== screen || joined.ok) return
+      setBusy(go, false, label)
+      say(joined.message || ERRORS[joined.error] || S.errInvite)
+      input.focus()
+      return
+    }
+    const turn = screen
+    setBusy(go, true, S.codeLooking)
+    say('')
+    let r
+    try { r = await bridge.enterCode(value, only || '') } catch (e) { r = { error: 'code-not-found' } }
+    if (turn !== screen || r.ok || r.error === 'stopped') return
+    setBusy(go, false, label)
+    if (r.error === 'changed') { choose(only, S.identityChanged); return }
+    say(r.message || ERRORS[r.error] || S.errCodeNotFound)
+    input.focus()
+  }
+
+  function codeInput(id, value) {
+    return el('input', {
+      id, type: 'text', value: value || '', autocapitalize: 'characters', spellcheck: false, autocomplete: 'off',
+      placeholder: 'K7QM-2XHD', maxLength: 40, 'aria-describedby': `${id}-hint ${id}-error`,
+    })
+  }
+
+  // Enter a code, from the list: the server isn't known yet, and every one this app can reach is asked.
+  function codeEntryScreen(message, value) {
+    const input = codeInput('code', value)
+    const error = problem(message || '', 'code-error')
+    const say = (text) => { error.say(text); input.setAttribute('aria-invalid', text ? 'true' : 'false') }
+    const go = button(S.connect, () => sendCode(input.value, '', input, say, go, S.connect), { kind: 'primary' })
+    input.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); go.click() } })
+    show({
+      back: listAvailable ? () => listScreen() : null,
+      words: [el('h1', { textContent: S.codeEnterTitle }), el('p', { id: 'code-hint', className: 'lead', textContent: S.codeEnterHint })],
+      actions: [field(input, S.codeEnterLabel, 'keypad'), error.node, go],
+      foot: [legal()],
+    })
+    onLeave = () => { if (bridge.enterCodeStop) bridge.enterCodeStop() }
+  }
+
+  // Signing in to a server just chosen (found, remembered or typed): the code it shows under Connect a
+  // device, a code from its Sign in a TV page (six digits), or the password on its own page.
+  function signInScreen(server, message) {
+    const input = codeInput('code')
+    const error = problem(message || '', 'code-error')
+    const say = (text) => { error.say(text); input.setAttribute('aria-invalid', text ? 'true' : 'false') }
+    const go = button(S.connect, async () => {
+      if (go.classList.contains('busy')) return
+      const digits = input.value.replace(/[\s-]/g, '')
+      if (/^[0-9]{6}$/.test(digits) && bridge.redeem) {
+        const turn = screen
+        setBusy(go, true, S.connecting)
+        let r
+        try { r = await bridge.redeem(server.url, digits) } catch (e) { r = { error: 'unreachable' } }
+        if (turn !== screen || r.ok) return
+        setBusy(go, false, S.connect)
+        if (r.error === 'changed') { choose(server.url, S.identityChanged); return }
+        say(r.message || ERRORS[r.error] || S.errInvalid)
+        input.focus()
+        return
+      }
+      sendCode(input.value, server.url, input, say, go, S.connect)
+    }, { kind: 'primary' })
+    input.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); go.click() } })
+    show({
+      back: () => listScreen(),
+      lockup: false,
+      words: [el('h1', { textContent: S.codeSignInTitle }), serverPill(server), el('p', { id: 'code-hint', className: 'lead', textContent: S.signInHint })],
+      actions: [field(input, S.signInCodeLabel, 'keypad'), error.node, go,
+        el('div', { className: 'links' }, button(S.signInPassword, () => enter({ url: server.url, name: server.name }), { kind: 'quiet', className: 'use-password' }))],
+      foot: [el('p', { className: 'fingerprint caption', textContent: `${S.fingerprintLabel}: ${fingerprintOf(server)}` })],
+    })
+    onLeave = () => { if (bridge.enterCodeStop) bridge.enterCodeStop() }
   }
 
   async function ask(url) {
@@ -554,6 +627,8 @@
 
   async function submit(input, say, go) {
     if (go.classList.contains('busy')) return
+    // A code typed where a link or an address was asked for: it is taken as the code it is.
+    if (bridge.enterCode && looksLikeCode(input.value)) return sendCode(input.value, '', input, say, go, S.connect)
     // An invite link instead of an address: the app that can use one takes it from here.
     if (bridge.invite && /^\s*wittymedia:\/\/p2p\//i.test(input.value)) {
       const turn = screen
@@ -621,7 +696,11 @@
     const state = server.identity ? server.identity.state : 'none'
     if (state === 'different') return identityScreen(server, message)
     if (state === 'bad') return addressScreen(S.identityBad, server.url)
-    if (state === 'new' && bridge.redeem && !server.setupRequired) return codeScreen(server, message)
+    if (state === 'new' && !server.setupRequired) {
+      // A TV keeps its number pad and its code to approve on a phone; everywhere else one screen takes the code.
+      if (bridge.enterCode && !bridge.tv) return signInScreen(server, message)
+      if (bridge.redeem) return codeScreen(server, message)
+    }
     return enter({ url: server.url, name: server.name })
   }
 
@@ -870,52 +949,6 @@
     begin()
   }
 
-  // Arrow keys move to the nearest control in that direction. Inside a text box
-  // left and right belong to the text, so only up and down leave it.
-  // Join from away: the code in a card, as large as a TV's at home, then a spinner until someone
-  // signed in to the server has typed it in there. A code that ran out, or was refused, says so
-  // and offers a new one. docs/APP-DESIGN.md, From away.
-  function joinAwayScreen() {
-    const shown = el('span', { 'aria-hidden': 'true' })
-    const spoken = el('span', { className: 'sr-only' })
-    const code = el('p', { className: 'pair-code' }, shown, spoken)
-    const waiting = el('p', { className: 'waiting', role: 'status' }, spinner(), el('span', { textContent: S.joinAwayWaiting }))
-    const said = problem('')
-    const again = button(S.pairNew, () => begin(), { kind: 'primary' })
-    const leave = () => { bridge.joinAway.stop(); listScreen() }
-    const turn = show({
-      back: leave,
-      words: [el('h1', { textContent: S.joinAwayTitle }), el('p', { className: 'lead', textContent: S.joinAwayHint })],
-      actions: [code, waiting, said.node, again],
-    })
-    onLeave = () => bridge.joinAway.stop()
-    async function begin() {
-      said.say('')
-      again.hidden = true
-      code.hidden = true
-      waiting.hidden = false
-      let r
-      try { r = await bridge.joinAway.start() } catch (e) { r = { error: 'p2p-failed' } }
-      if (turn !== screen) return
-      if (!r.code) { ended(ERRORS[r.error] || S.errAwayFailed); return }
-      shown.textContent = r.code
-      spoken.textContent = r.code.split('').filter((c) => c !== '-').join(' ')
-      code.hidden = false
-      let done
-      try { done = await bridge.joinAway.wait() } catch (e) { done = { error: 'p2p-failed' } }
-      if (turn !== screen || done.ok || done.error === 'stopped') return
-      ended(done.error === 'expired' ? S.joinAwayExpired : done.error === 'refused' ? S.joinAwayRefused : ERRORS[done.error] || S.errAwayFailed)
-    }
-    function ended(words) {
-      code.hidden = true
-      waiting.hidden = true
-      said.say(words)
-      again.hidden = false
-      again.focus()
-    }
-    begin()
-  }
-
   // From away, for the server in use, opened from Help: how it is reached now, whether this device
   // is on its list and what the list calls it, then Stop (which asks first) or Connect again.
   async function fromAwayScreen() {
@@ -942,6 +975,8 @@
     show({ back, words: [el('h1', { textContent: S.rowAway }), el('p', { className: 'lead', textContent: S.awayHint })], actions })
   }
 
+  // Arrow keys move to the nearest control in that direction. Inside a text box
+  // left and right belong to the text, so only up and down leave it.
   function moveFocus(dir) {
     const cur = document.activeElement
     const all = Array.from(app.querySelectorAll('button:not(:disabled):not([hidden]), input')).filter((n) => n.offsetWidth > 0 || n.offsetHeight > 0)

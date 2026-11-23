@@ -405,43 +405,9 @@ h2.section::after { content: ""; flex: 1; height: 1px; margin-left: var(--sp-3);
 .server .where span { overflow: hidden; text-overflow: ellipsis; }
 .pill.peer { background: rgba(121, 85, 255, .18); color: var(--accent-text); font-weight: 700; }
 button.server:hover .pill.peer { background: rgba(121, 85, 255, .26); }
-/* Connect from anywhere: peer to peer in a panel of its own, tinted with the accent. */
-.anywhere {
-  margin: var(--sp-8) 0 0;
-  padding: var(--sp-5);
-  border: 1px solid rgba(121, 85, 255, .35);
-  border-radius: var(--r-lg);
-  background: linear-gradient(135deg, rgba(121, 85, 255, .14), var(--bg-2) 70%);
-}
-.anywhere-head { display: flex; align-items: flex-start; }
-.anywhere-badge {
-  display: flex; flex: none; align-items: center; justify-content: center;
-  width: 2.75rem; height: 2.75rem; margin-right: var(--sp-3);
-  border-radius: var(--r-md); background: rgba(121, 85, 255, .16); color: var(--accent-text);
-}
-.anywhere-badge .icon { width: 1.5rem; height: 1.5rem; }
-.anywhere h2 { margin: 0 0 var(--sp-1); font-size: var(--text-headline); font-weight: 700; }
-.anywhere-head p { margin: 0; color: var(--fg-2); font-size: var(--text-secondary); line-height: var(--leading-body); }
-/* The picture: this device, a dashed line, the lock, a dashed line, the server. */
-.p2p-picture { display: flex; align-items: center; margin: var(--sp-5) 0; }
-.p2p-node { display: flex; flex: none; flex-direction: column; align-items: center; color: var(--fg); font-size: var(--text-caption); font-weight: 600; }
-.p2p-node .icon { width: 1.75rem; height: 1.75rem; margin-bottom: var(--sp-1); }
-.p2p-node span { color: var(--fg-2); white-space: nowrap; }
-.p2p-line { flex: 1; min-width: var(--sp-3); height: 0; margin: 0 var(--sp-2); border-top: 2px dashed var(--fg-3); transform: translateY(-.6rem); }
-.p2p-lock {
-  display: flex; flex: none; align-items: center; transform: translateY(-.6rem);
-  padding: var(--sp-1) var(--sp-3); border-radius: var(--r-pill);
-  background: rgba(58, 210, 159, .16); color: var(--ok); font-size: var(--text-caption); font-weight: 700;
-}
-.p2p-lock .icon { width: 1rem; height: 1rem; margin-right: var(--sp-1); }
-.anywhere-ways > * + * { margin-top: var(--sp-2); }
-.promises { display: flex; flex-wrap: wrap; margin: var(--sp-4) 0 0; padding: 0; list-style: none; }
-.promises li {
-  display: flex; align-items: center; margin: var(--sp-2) var(--sp-2) 0 0;
-  padding: var(--sp-1) var(--sp-3); border-radius: var(--r-pill);
-  background: rgba(128, 128, 128, .14); font-size: var(--text-caption); font-weight: 600;
-}
-.promises .icon { width: 1rem; height: 1rem; margin-right: var(--sp-1); color: var(--ok); }
+/* The other ways to add a server: three buttons, one under the other, the same width. */
+.ways { display: grid; gap: var(--sp-2); }
+.ways > button { margin-top: 0; width: 100%; }
 .facts { margin: 0 0 var(--sp-4); padding: var(--sp-4); border-radius: var(--r-lg); background: var(--bg-2); }
 .facts .where { margin: 0 0 var(--sp-3); font-weight: 500; overflow-wrap: anywhere; }
 /* From away: rows that open nothing, the label over its value. */
@@ -628,3 +594,10 @@ main.compact { padding-top: var(--sp-6); padding-bottom: var(--sp-6); }
 .pair-pin { margin-top: var(--sp-3); }
 .pair-pin .pin-digits { font-variant-numeric: tabular-nums; letter-spacing: .08em; }
 .pair-pin .pin-left { display: block; margin-bottom: var(--sp-2); }
+
+/* Every screen off a TV is one centred column: its heading, words, the server it names and the
+   links under its buttons are centred like the list's, so moving between screens nothing jumps
+   from the middle to the left. A TV keeps its two halves (words left, what to do right). */
+:root:not(.tv) .words { text-align: center; }
+:root:not(.tv) .lockup { justify-content: center; }
+:root:not(.tv) .links { justify-content: center; }
