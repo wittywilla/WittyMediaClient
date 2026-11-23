@@ -138,7 +138,15 @@ const PLAYING_PAGE = `<!doctype html><html><head><title>Playing</title></head><b
 <audio id="a" src="/silence.wav" loop autoplay></audio>
 <script>
 window.ticks = 0
-setInterval(() => { window.ticks++ }, 100)
+window.tickTimes = []
+setInterval(() => { window.ticks++; window.tickTimes.push(performance.now()) }, 100)
+// The typical time between ticks since a moment: about 100 ms running freely, a second or more once a hidden page's
+// timers are slowed. A busy machine misses some ticks, so it's the median gap that tells, not how many there were.
+window.tickGap = (since) => {
+  const t = window.tickTimes.filter((x) => x >= since)
+  const gaps = t.slice(1).map((x, i) => x - t[i]).sort((a, b) => a - b)
+  return gaps.length ? gaps[Math.floor(gaps.length / 2)] : Infinity
+}
 document.addEventListener('visibilitychange', () => { if (document.hidden) document.getElementById('a').pause() })
 </script></body></html>`
 
@@ -297,14 +305,15 @@ async function seeded(url) {
       assert.deepStrictEqual(blocks.started, ['prevent-app-suspension'])
       win.hide()
       await wait(500)
-      const before = await audio('({ t: a.currentTime, ticks: window.ticks })')
+      const before = await audio('({ t: a.currentTime, ticks: window.ticks, at: performance.now() })')
       await wait(1500)
-      const after = await audio('({ t: a.currentTime, ticks: window.ticks, seen: document.visibilityState, paused: a.paused })')
+      const after = await audio(`({ t: a.currentTime, ticks: window.ticks, gap: window.tickGap(${before.at}), seen: document.visibilityState, paused: a.paused })`)
       assert.strictEqual(after.seen, 'visible', 'never told it is hidden, so nothing pauses')
       assert.strictEqual(after.paused, false)
       // Looped three seconds: it moved on, whichever way round it went.
       assert.ok(after.t !== before.t, `still playing: ${before.t} then ${after.t}`)
-      assert.ok(after.ticks - before.ticks >= 10, `timers not slowed: ${after.ticks - before.ticks} ticks in 1.5 s`)
+      // Slowed, a hidden page's timer runs once a second at most; a loaded CI machine can still drop a tick or two.
+      assert.ok(after.ticks - before.ticks >= 3 && after.gap < 500, `timers not slowed: ${after.ticks - before.ticks} ticks in 1.5 s, typically ${Math.round(after.gap)} ms apart`)
     })
     await step('with the website\'s setting off, the page is told it is hidden, like a browser tab, and pauses', async () => {
       await inPage("document.documentElement.dataset.backgroundPlay = 'off'; 0")
