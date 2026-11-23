@@ -184,6 +184,12 @@ jobs:
               status=${PIPESTATUS[0]}
               set -e
               [ "$status" = 0 ] && break
+              # The build container's own apt can stall on the archive (TimeoutExpired after ten
+              # minutes); trying again would run into the job's limit, so the snap is skipped now.
+              if grep -q 'TimeoutExpired' "$RUNNER_TEMP/snap.log"; then
+                echo "::warning::The snap's build container timed out installing its tools: the snap wasn't built"
+                echo "SNAP_OK=0" >> "$GITHUB_ENV"; exit 0
+              fi
               grep -qE 'api\.snapcraft\.io|unable to contact snap store|cannot get nonce from store|store server|Error installing snap' "$RUNNER_TEMP/snap.log" || exit "$status"
               if [ "$try" = 3 ]; then
                 echo "::warning::The Snap Store didn't answer while packaging: the snap wasn't built"
