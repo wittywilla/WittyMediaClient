@@ -24,6 +24,10 @@ What changed in WittyMediaClient, newest first. What changed before it had a rep
 - **Choosing a server found on the network:** a server that answers later goes below the ones already shown, so the one highlighted never changes under the remote just as OK is pressed.
 - **Back from a server's sign-in screen** goes to Choose a server instead of closing the app (Android and Android TV).
 
+**Desktop**
+
+- **Every connect screen is centred the same way:** the logo, title, words and server name sit in the middle on Enter an address and Enter the security code too, not only on Choose a server; on a TV each half is centred in itself (wittywilla/WittyMediaServer#609).
+
 ## 0.6.0
 
 Released 2026-11-23.
