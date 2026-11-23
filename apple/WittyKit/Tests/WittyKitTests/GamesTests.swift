@@ -132,6 +132,13 @@ final class GamesTests: XCTestCase {
 
     // MARK: Words
 
+    func testRefusalsAreNeverShownRaw() {
+        XCTAssertNil(GameWords.refusal(code: "bad-hello", port: nil))
+        XCTAssertNil(GameWords.refusal(code: "busy", port: nil))
+        XCTAssertEqual(GameWords.refusal(code: "seat-taken", port: 1), "Player 2 is being played on another device")
+        XCTAssertEqual(GameWords.refusal(code: "something-new", port: nil), "That didn't work. Try again.")
+    }
+
     func testWords() {
         XCTAssertEqual(GameWords.slotName(0), "Automatic save")
         XCTAssertEqual(GameWords.slotName(100), "Before the last load")

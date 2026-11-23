@@ -239,6 +239,9 @@ final class GamePlayerModel: ObservableObject {
     @Published var menuOpen = false
     @Published var page: MenuPage = .main
     @Published var notice = ""
+    /// What the server says about this game before it plays, such as its processor drawing it: shown
+    /// while it starts, where there's room to read it, never over the game.
+    @Published private(set) var notes: [String] = []
     @Published private(set) var session: GameSession?
     @Published private(set) var saves: [GameSave] = []
     @Published private(set) var settings = GameSettings(values: [:])
@@ -399,7 +402,7 @@ final class GamePlayerModel: ObservableObject {
         devices = (session.devices ?? []).filter { ($0.types ?? []).count > 1 }
         input.playerPorts = GamePorts.players(count: nil, devices: session.devices)
         plugged = Dictionary(devices.compactMap { d in d.current.map { (d.port, $0) } }, uniquingKeysWith: { a, _ in a })
-        for words in session.notices ?? [] where !words.isEmpty { say(words) }
+        notes = Array(Set((session.notices ?? []).map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }).filter { !$0.isEmpty }.sorted().prefix(3))
         updateLayout()
         let console = session.console ?? ""
         let controls = try? await client.gameControls(console: console, device: Self.deviceId, game: id)
@@ -687,8 +690,11 @@ final class GamePlayerModel: ObservableObject {
             if s.ports > 0 { input.playerPorts = GamePorts.players(count: s.ports, devices: session?.devices) }
             for want in s.motionOn { input.setMotion(want) }
             updateLayout()
-        case .refused(let code, let text, _):
-            say(text.isEmpty ? "The game refused that (\(code))." : text)
+        case .refused(let code, let text, let port):
+            // The server's words are for programs: they go to the log, and the person gets plain ones,
+            // or none when the connection is simply tried again (the server closes it after these).
+            ClientLog.shared.warn("game", "The stream refused: \(code): \(text.prefix(200))")
+            if let words = GameWords.refusal(code: code, port: port) { say(words) }
         // A core's lights: libretro has no light bar, so each pad keeps its player's colour.
         case .hello, .seats, .led, .unknown:
             break
@@ -1038,7 +1044,10 @@ struct GamePlayerScreen: View {
                         .foregroundStyle(palette.text)
                         .padding(.horizontal, Tokens.Space.s6)
                         .padding(.vertical, Tokens.Space.s3)
-                        .background(Capsule().fill(palette.panel.opacity(0.94)))
+                        .multilineTextAlignment(.center)
+                        .lineLimit(3)
+                        .frame(maxWidth: 560)
+                        .background(RoundedRectangle(cornerRadius: Tokens.Radius.md).fill(palette.panel.opacity(0.94)))
                         .accessibilityAddTraits(.updatesFrequently)
                     Spacer()
                 }
@@ -1115,11 +1124,11 @@ struct GamePlayerScreen: View {
     @ViewBuilder private var status: some View {
         switch game.phase {
         case .loading, .starting:
-            Waiting(words: game.session == nil ? "Starting the console, and your save…" : "Starting…")
+            Waiting(words: game.session == nil ? "Starting the console, and your save…" : "Starting…", notes: game.notes)
         case .preparing(let fraction):
-            Waiting(words: "Getting the game ready…", fraction: fraction)
+            Waiting(words: "Getting the game ready…", fraction: fraction, notes: game.notes)
         case .connecting:
-            Waiting(words: "Connecting…")
+            Waiting(words: "Connecting…", notes: game.notes)
         case .playing:
             EmptyView()
         case .failed(let words):
@@ -1132,6 +1141,7 @@ private struct Waiting: View {
     @Environment(\.palette) private var palette
     let words: String
     var fraction: Double?
+    var notes: [String] = []
 
     var body: some View {
         VStack(spacing: Tokens.Space.s4) {
@@ -1141,6 +1151,14 @@ private struct Waiting: View {
                 ProgressView()
             }
             Text(words).font(.headline).foregroundStyle(palette.text)
+            ForEach(notes, id: \.self) { note in
+                Label(note, systemImage: "info.circle")
+                    .font(.footnote)
+                    .foregroundStyle(palette.textSecondary)
+                    .multilineTextAlignment(.leading)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .frame(maxWidth: 480, alignment: .leading)
+            }
         }
         .padding(Tokens.Space.s8)
         .background(RoundedRectangle(cornerRadius: Tokens.Radius.xl).fill(palette.panel.opacity(0.9)))

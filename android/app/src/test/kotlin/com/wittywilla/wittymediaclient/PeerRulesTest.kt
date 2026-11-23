@@ -127,4 +127,12 @@ class PeerRulesTest {
         assertTrue(PeerRules.isAwayOnlyUrl(PeerRules.awayOnlyUrl(id)))
         assertEquals(listOf("/ip4/10.0.0.2/tcp/1"), PeerRules.knownAddrs("""["/ip4/10.0.0.2/tcp/1"]"""))
     }
+
+    // A web view loaded from the local address carries the secret as a cookie no script can read.
+    @Test
+    fun theSecretGoesToWebViewsAsACookie() {
+        assertEquals("wittyconnect=abc_DEF-123; Path=/; HttpOnly; SameSite=Strict", PeerRules.secretCookie("abc_DEF-123"))
+        assertNull(PeerRules.secretCookie(""))
+        assertNull("nothing that could add another cookie", PeerRules.secretCookie("a; b=c"))
+    }
 }

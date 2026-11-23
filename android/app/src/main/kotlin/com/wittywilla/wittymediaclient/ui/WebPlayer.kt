@@ -73,6 +73,8 @@ import com.wittywilla.wittymediaclient.net.OFFER_APP_UP
 import com.wittywilla.wittymediaclient.net.Api
 import com.wittywilla.wittymediaclient.net.TV_VIEWPORT
 import com.wittywilla.wittymediaclient.net.isWebLink
+import com.wittywilla.wittymediaclient.net.PeerRoute
+import com.wittywilla.wittymediaclient.net.PeerRules
 import com.wittywilla.wittymediaclient.net.pageAddress
 import com.wittywilla.wittymediaclient.net.pageFillsScreen
 import com.wittywilla.wittymediaclient.net.sameServer
@@ -238,6 +240,15 @@ private fun saveDownload(context: Context, api: Api, url: String, userAgent: Str
     }
 }
 
+// A server reached from away is loaded from this device's own address (PeerRoute), which turns away every request
+// without the connector's secret with "This address is for the WittyMediaServer app on this device only.". The app's
+// own requests carry it as a header; a web view's carry it as this cookie, set for that address only.
+private fun withPeerSecret(cookies: CookieManager, base: String, then: () -> Unit) {
+    val url = base.toHttpUrlOrNull()
+    val secret = if (url != null && PeerRoute.matches(url.host, url.port)) PeerRules.secretCookie(PeerRoute.secret) else null
+    if (secret == null) then() else cookies.setCookie(base, secret) { then() }
+}
+
 // The sign-in reaches the page as the server's own cookie, set only for that server's address,
 // and is gone from the web view's storage when this screen closes. On plain http a browser hides
 // game controllers from a page, and the Gamepad API here has never been tried on a real device.
@@ -348,14 +359,16 @@ fun ServerPageScreen(
         val cookies = CookieManager.getInstance()
         val cookie = sessionCookie(api.token, api.base.startsWith("https:", ignoreCase = true))
         if (public && api.token.isEmpty()) {
-            cookies.removeAllCookies { if (!gone) web.loadUrl(api.mediaUrl(pageAddress(path, nav.app.isTv))) }
+            cookies.removeAllCookies { withPeerSecret(cookies, api.base) { if (!gone) web.loadUrl(api.mediaUrl(pageAddress(path, nav.app.isTv))) } }
         } else if (cookie == null) {
             failed = CANT_OPEN
         } else {
             // One left by a run that crashed could be for another server, so that goes first.
             cookies.removeAllCookies {
                 cookies.setCookie(api.base, cookie) {
-                    if (!gone) web.loadUrl(api.mediaUrl(if (keptToGames) path else pageAddress(path, nav.app.isTv)))
+                    withPeerSecret(cookies, api.base) {
+                        if (!gone) web.loadUrl(api.mediaUrl(if (keptToGames) path else pageAddress(path, nav.app.isTv)))
+                    }
                 }
             }
         }

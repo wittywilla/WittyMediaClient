@@ -425,6 +425,16 @@ fun keyboardCodeName(keyCode: Int): String? = when (keyCode) {
 
 // The server's names for its save slots.
 object GameWords {
+    // The stream's refusals (docs/GAMING-STREAM.md) are for programs: their text is never shown. Null for one about
+    // the connection itself (bad-hello, no-session, busy, no-codec, too-large, failed), which closes it: the player
+    // then tries the next way of connecting, or says plainly that the picture didn't come, with a retry.
+    fun refusal(code: String, port: Int?): String? = when (code) {
+        "seat-taken" -> if (port != null) "Player ${port + 1} is being played on another device" else "That player is being played on another device"
+        "bad-seat" -> "This game doesn't have that player"
+        "bad-hello", "no-session", "busy", "no-codec", "too-large", "failed" -> null
+        else -> "That didn't work. Try again."
+    }
+
     fun slotName(slot: Int): String = when (slot) {
         0 -> "Automatic save"
         100 -> "Before the last load"
