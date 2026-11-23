@@ -699,5 +699,8 @@
   "joinCodeQr": "The same code as a QR code: on a phone signed in to your server, open You, From away, A TV that shows a code, and scan it.",
   "awayCodeScan": "Scan the TV's code",
   "awayCodeScanning": "Point the camera at the QR code on the TV.",
-  "awayCodeNotOurs": "That QR code isn't a join code."
+  "awayCodeNotOurs": "That QR code isn't a join code.",
+  "tvCardLine": "Change this from a computer or phone.",
+  "tvCardOrOpen": "or open",
+  "tvCardApplies": "What you change there applies on this TV too."
 }
