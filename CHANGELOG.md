@@ -5,6 +5,11 @@ What changed in WittyMediaClient, newest first. What changed before it had a rep
 
 ## Unreleased
 
+**Games on a phone or tablet**
+
+- **Games start when your server is reached from away.** A game stopped at "Waiting for the first picture" with a message about a hello, and leaving it showed a black page saying the address was for the app only. Both are fixed, and the games list and every server page now open from away too.
+- **Notes about a game are on its start screen**, short and readable, not in a long message over Cancel. Messages over a game are short, sit at the top on a touch screen, and never show the server's technical words.
+
 **Desktop: adding a server (wittywilla/WittyMediaServer#605)**
 
 - **One Add a server screen:** servers found on this network, then **Enter a code**, **Paste a link** and **Type an
@@ -28,6 +33,7 @@ What changed in WittyMediaClient, newest first. What changed before it had a rep
 - **Sign in with a code says it works for phones too**, not only for TVs.
 - **The first-run chooser fills the screen**, so Home no longer shows through above and below it.
 - **The library names along the top of Home** read clearly over a bright picture.
+
 **Android, Android TV and Apple**
 
 - **Choosing a server found on the network:** a server that answers later goes below the ones already shown, so the one highlighted never changes under the remote just as OK is pressed.
