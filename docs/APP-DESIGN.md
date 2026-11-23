@@ -57,6 +57,21 @@ When the server fixes a shared part (a hero, a row, a header), the apps' part of
 fix is based on: words over a picture sit on a scrim in the page's colour at the theme's `heroScrim` (Android's
 `ui/HeroScrim.kt`); a page starts 16 under the bar; pictures fade into the page; focus is always visible.
 
+### Centring
+
+One rule on every device and in the web UI (the server's `docs/DESIGN.md`, Centring, says the same;
+wittywilla/WittyMediaServer#609):
+
+- **The screen's column is centred in the window**, with no empty band on one side only.
+- **Headings, lead text, single buttons, notices and footers are centred**: the lockup, the title, the lead, the
+  server's pill, a problem for a whole screen, the legal line.
+- **Things side by side are centred as a group**: a code beside its QR code, a row of buttons or links, the six code
+  boxes. On a TV the words and what to do keep their two halves side by side, each centred in its half.
+- **Long reading text, lists and forms read from the start** inside the centred column where centring would make
+  them harder to read: server cards, grouped lists, a field and the problem under it, rows of facts.
+- Two kinds of row keep their ends: a list row (what it is at the start, its value or chevron at the end) and a
+  step's Back and Continue.
+
 ## Foundations
 
 ### Colour roles

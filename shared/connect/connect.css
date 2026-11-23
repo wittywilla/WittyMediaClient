@@ -144,6 +144,9 @@ main {
 main::before { content: ""; flex: 1 1 0; }
 main::after { content: ""; flex: 2 1 0; }
 .words, .actions, .foot { width: 100%; min-width: 0; }
+/* Every screen's words (the lockup, title, lead, server pill) are centred over its column, the same on every screen,
+   on a TV too (docs/APP-DESIGN.md, Centring). Fields, lists and server cards under them read from the start. */
+.words { text-align: center; }
 p { margin: 0; }
 h1 {
   margin: 0 0 var(--sp-2);
@@ -166,7 +169,7 @@ h2 {
 .caption { font-size: var(--text-caption); font-weight: 500; color: var(--fg-2); }
 
 /* The lockup: the mark, then the wordmark with "Media" in the accent. */
-.lockup { display: flex; align-items: center; margin: 0 0 var(--sp-8); }
+.lockup { display: flex; align-items: center; justify-content: center; margin: 0 0 var(--sp-8); }
 .lockup .mark { width: var(--mark); height: var(--mark); margin-right: var(--lockup-gap); }
 .lockup { min-width: 0; }
 .wordmark { font-size: var(--wordmark); font-weight: 700; line-height: 1.1; letter-spacing: var(--tracking-heading); }
@@ -362,10 +365,8 @@ button.server:hover .glyph, button.server:hover .pill { background: var(--bg-3);
 .field input:not(:placeholder-shown) ~ label { top: 0; left: calc(var(--sp-3) + var(--sp-1)); font-size: var(--text-caption); }
 .field .lead { position: absolute; top: 50%; left: var(--sp-4); margin-top: calc(var(--icon) / -2); color: var(--fg-2); pointer-events: none; }
 
-/* This isn't the server you used before. */
-.warning .words, .centred .words { text-align: center; }
-.warning .lockup, .centred .lockup { justify-content: center; }
-.centred .spinner.large { margin-left: auto; margin-right: auto; }
+/* This isn't the server you used before. Its badge, and a screen's big spinner, are centred like the words. */
+.words .spinner.large { margin-left: auto; margin-right: auto; }
 .badge {
   display: flex;
   align-items: center;
@@ -382,8 +383,7 @@ button.server:hover .glyph, button.server:hover .pill { background: var(--bg-3);
    column, small-capital section labels with a hairline to the edge, and round avatars on the cards.
    A TV keeps its own two-sided layout (.tv main), with the same parts. */
 :root:not(.tv) main.choose { max-width: calc(40rem + 2 * var(--gutter)); }
-:root:not(.tv) .choose .words { text-align: center; }
-:root:not(.tv) .choose .lockup { justify-content: center; margin-bottom: var(--sp-5); }
+:root:not(.tv) .choose .lockup { margin-bottom: var(--sp-5); }
 .choose h1.display { font-weight: 800; letter-spacing: -.04em; }
 :root:not(.tv) .choose h1.display { font-size: var(--text-hero); }
 .choose .lead { margin-bottom: var(--sp-4); }
@@ -525,7 +525,8 @@ main.compact { padding-top: var(--sp-6); padding-bottom: var(--sp-6); }
 .qr-card svg { display: block; width: var(--qr); height: var(--qr); }
 .qr-card path { fill: var(--qr-dark); }
 
-/* A TV: the words on the left half, what to do on the right half, both vertically centred. */
+/* A TV: the words on the left half, what to do on the right half, both vertically centred, and what's in each half
+   centred in it (docs/APP-DESIGN.md, Centring). */
 :root.tv body { background: radial-gradient(45% 70% at 25% 0%, var(--glow), transparent 70%) top / 100% 100vh no-repeat; }
 .tv main {
   display: grid;
@@ -537,16 +538,12 @@ main.compact { padding-top: var(--sp-6); padding-bottom: var(--sp-6); }
   padding: var(--sp-10) var(--gutter);
 }
 .tv main::before, .tv main::after, .tv button.back { display: none; }
-.tv .words { grid-area: words; align-self: end; max-width: 46rem; }
-.tv .foot { grid-area: foot; align-self: start; max-width: 46rem; text-align: left; }
+.tv .words { grid-area: words; align-self: end; justify-self: center; max-width: 46rem; }
+.tv .foot { grid-area: foot; align-self: start; justify-self: center; max-width: 46rem; text-align: center; }
 .tv .actions { grid-area: actions; align-self: center; justify-self: center; max-width: var(--column); }
-.tv .legal { text-align: left; }
-.tv .foot button.small { margin-left: calc(-1 * var(--sp-3)); }
-.tv .code { justify-content: flex-start; }
 .tv .box { margin-right: var(--sp-3); }
 .tv .box:last-child { margin-right: 0; }
-.tv .fingerprint.caption { text-align: left; }
-.tv .links { flex-direction: column; align-items: flex-start; margin: var(--sp-3) 0 0 calc(-1 * var(--sp-2)); }
+.tv .links { flex-direction: column; align-items: center; margin: var(--sp-3) 0 0; }
 /* Focusable things sit at least 16 apart, so a focused one's ring never touches a neighbour. */
 .tv .links button.quiet + button.quiet { margin-top: 1rem; }
 .tv .pad { grid-gap: 1rem; }
@@ -559,11 +556,6 @@ main.compact { padding-top: var(--sp-6); padding-bottom: var(--sp-6); }
 /* A focused key has no ring: it fills with text and its digit turns background, as the systems' keyboards do. */
 .tv button.key:focus { outline: none; background: var(--fg); color: var(--bg); }
 .tv .list > * + * { margin-top: var(--sp-3); }
-.tv .waiting { justify-content: flex-start; }
-.tv .qr { align-items: flex-start; }
-.tv .warning .words, .tv .centred .words { text-align: left; }
-.tv .warning .lockup, .tv .centred .lockup { justify-content: flex-start; }
-.tv .badge, .tv .centred .spinner.large { margin-left: 0; }
 /* On a TV, focus also makes the thing a little bigger, and inputs get the ring too. */
 .tv button:focus { transform: scale(var(--focus-scale)); }
 .tv button:focus:active { transform: scale(calc(var(--focus-scale) * .97)); }
