@@ -25,6 +25,27 @@ ported, then again when it has run on a simulator or device.
 
 ---
 
+## 0.8.1-alpha: the centred card for a computer's settings (2026-11-22)
+
+Written 2026-11-22 on the Windows PC. Every screen Apple TV sends to a computer (the server's desktop-only settings,
+and a module's page Apple TV can't show) is now one centred card, as the sign-in screens are: the server's name small
+under the glow, the setting's symbol and name, one line, the QR code large on a white tile with "or open" and the
+address under it, what is set now in a card, **Back** focused, and the server's own words at the foot. One view,
+`OnAComputerCard` in `apple/App/ModulePages.swift`, draws both `EditorOnComputerPage` and `ModuleOnPhonePage`.
+Compiled by CI's macOS runner only. Android TV's twin ran here: compare `docs/mac-081/tv-card-android-1080p.png`.
+
+- [ ] **1.** Apple TV simulator (1080p), against the 0.8.1 server of the section below, signed in as its administrator.
+- [ ] **2.** You → **Libraries**, **Metadata and artwork**, **Live transcoding**, **Remote Access**, **Backup**: each card
+  is centred, the QR code is the largest thing on it and scans with a phone, the address under it is readable from a
+  sofa, the "set now" card shows (Libraries: the count and kinds; Backup: the schedule), and **Back** has focus.
+  Menu and Back both return to You. Nothing on it names a keyboard key.
+- [ ] **3.** A long name and address: rename a library to a long name, open Libraries; and open the card through a
+  long address (a WittyPlay library's settings): the heading wraps to two lines at most, the address wraps between
+  its parts, Back still shows without scrolling.
+- [ ] **4.** A module's page (Statistics, or the Folder browser if installed): the same card, saying to open it on a
+  phone or computer, with no "set now" card.
+- [ ] **5.** Light theme (You → Look and theme → Light): the glow, the white tile and the words still read.
+
 ## 0.8.1-alpha UI changes on Apple: what the Mac must check (2026-11-22)
 
 Written 2026-11-22 on the Windows PC, for Claude on the owner's MacBook. After #67, the server's 0.8.1 UI changes
@@ -128,6 +149,14 @@ Not ported (gaps listed in the parity table): karaoke's Controls menu, Album art
 `tv.heroScrim` on Apple (step 8 below), and Apple TV's album page (waiting for tv-album-081).
 
 ---
+
+## WittyTV guide and Who's watching? on Apple TV (not done on Windows)
+
+The Android TV changes in this pass have no Apple TV twin yet, and Swift can't be compiled on the Windows PC. For the Mac:
+
+- [ ] `apple/App/TvGuide.swift`: start the preview no wider than 440 (as `GUIDE_PREVIEW_START` in `tv/TvGuideHero.kt`), keep the hero's top padding small when the guide sits under the tab bar, give the grid a whole number of rows, and drop the always-on dock under the grid.
+- [ ] Add a **Shortcuts** button next to the set button in the guide's bar that shows or hides the dock (Look, Day, Channels, Filter, Recordings, Record, More info, Help) under it. Closed by default, remembered per device, Menu opens and focuses it, Back closes it. No keyboard letter badges on tvOS; move the "Up and Down change channel…" hint line into Help.
+- [ ] `apple/App/ConnectViews.swift` (Who's watching, around line 717): it already centres one row; check it against `WhoStep` in Android's `TvWhoPage` (title with ’, "Sign in with your phone" from the new `usePhone` string, Change server as a link, smaller faces above four profiles) at 1080p and 720p with 1, 3 and 8 profiles.
 
 ## 0.8.1-alpha: what the Mac must do
 

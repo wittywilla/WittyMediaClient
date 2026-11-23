@@ -43,6 +43,7 @@
   "notKept": "This device couldn't keep your sign-in safely, so you'll be asked to sign in again next time.",
   "usePassword": "Use a password instead",
   "useCode": "Sign in with a code",
+  "usePhone": "Sign in with your phone",
   "showCodeInstead": "Show a code on this screen instead",
   "nextEpisodeIn": "Next episode in",
   "cancel": "Cancel",
@@ -698,5 +699,8 @@
   "joinCodeQr": "The same code as a QR code: on a phone signed in to your server, open You, From away, A TV that shows a code, and scan it.",
   "awayCodeScan": "Scan the TV's code",
   "awayCodeScanning": "Point the camera at the QR code on the TV.",
-  "awayCodeNotOurs": "That QR code isn't a join code."
+  "awayCodeNotOurs": "That QR code isn't a join code.",
+  "tvCardLine": "Change this from a computer or phone.",
+  "tvCardOrOpen": "or open",
+  "tvCardApplies": "What you change there applies on this TV too."
 }

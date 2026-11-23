@@ -128,7 +128,7 @@ fun FirstLookScreen(nav: Nav, s: Map<String, String>) {
     // page kit, as Apple's chooser: eyebrow, title, lead, cards, then the buttons.
     androidx.compose.ui.window.Dialog(
         onDismissRequest = { if (step == 1 && lookRequired == null) step = 0 },
-        properties = androidx.compose.ui.window.DialogProperties(usePlatformDefaultWidth = false, decorFitsSystemWindows = true),
+        properties = androidx.compose.ui.window.DialogProperties(usePlatformDefaultWidth = false, decorFitsSystemWindows = false),
     ) {
         val setBy = lookRequired ?: themeRequired
         val eyebrow = if (who.isEmpty()) s["firstLookWelcome"].orEmpty() else s["firstLookWelcomeName"].orEmpty().replace("{name}", who)
@@ -141,7 +141,7 @@ fun FirstLookScreen(nav: Nav, s: Map<String, String>) {
         // Each step is a page of its own, read from the top.
         androidx.compose.runtime.key(step) {
         DesignPage(
-            title, Modifier.statusBarsPadding().navigationBarsPadding(), eyebrow = eyebrow, lead = lead, tag = "chooselook",
+            title, Modifier, eyebrow = eyebrow, lead = lead, tag = "chooselook",
             actions = {
                 when {
                     both || (step == 0 && themeRequired != null) -> WittyButton(s["continue"].orEmpty(), { finish() }, kind = ButtonKind.Primary, focusKey = "first-continue")

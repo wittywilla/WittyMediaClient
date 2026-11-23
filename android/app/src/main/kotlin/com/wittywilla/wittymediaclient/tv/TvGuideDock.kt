@@ -43,6 +43,8 @@ object DockKeys {
     const val RECORDINGS = 'R'
     const val RECORD = 'E'
     const val INFO = 'I'
+    // Help has no letter: it only opens the guide's help.
+    const val HELP = '?'
     val ORDER = listOf(LOOK, DAY, CHANNELS, FILTER, RECORDINGS, RECORD, INFO)
 
     // The key that opens the dock itself rather than a button of it: the options keys and a pad's Start.
@@ -86,11 +88,6 @@ fun GuideDock(
                 dress, e.action, kind = TvButtonKind.Button, enabled = e.enabled, label = e.label,
                 focusRequester = if (i == 0) first else null,
             ) { ink, style ->
-                // The key it answers to, in a small cap of the theme's own key colour.
-                Box(
-                    Modifier.size(dress.pt(26)).background(p.panel2, RoundedCornerShape(dress.pt(6))),
-                    contentAlignment = Alignment.Center,
-                ) { Text(e.key.toString(), style = dress.font(com.wittywilla.wittymediaclient.ui.DesignTokens.Tv.Dock.hintSize.toFloat() * 0.6f, W.Bold), color = p.text, maxLines = 1) }
                 Text(if (dress.capitals) e.label.uppercase() else e.label, style = style, color = ink, maxLines = 1)
             }
         }
