@@ -200,7 +200,11 @@ private struct TabRoot: View {
                     #else
                     // Phones, tablets and computers open the server's own page for these.
                     case .tvSettings: EmptyView()
+                    #if os(iOS) || os(visionOS)
+                    case .onComputer(let path, _): WebPlayerView(path: path, keptToGames: false).plainNavigation()
+                    #else
                     case .onComputer(let path, _): ElsewhereNote(path: path)
+                    #endif
                     #endif
                     #if os(tvOS)
                     case .topMenu: TopMenuView().plainNavigation()
