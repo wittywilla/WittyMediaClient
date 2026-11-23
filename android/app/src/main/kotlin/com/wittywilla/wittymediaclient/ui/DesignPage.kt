@@ -35,6 +35,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.input.key.onPreviewKeyEvent
+import kotlinx.coroutines.launch
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.testTag
@@ -104,13 +106,14 @@ fun DesignPage(
     content: @Composable ColumnScope.() -> Unit,
 ) {
     val metrics = LocalMetrics.current
+    val pageScroll = rememberScrollState()
     BoxWithConstraints(modifier.fillMaxSize().background(MaterialTheme.colorScheme.background).then(if (tag.isNotEmpty()) Modifier.testTag("design.$tag") else Modifier)) {
         val sizes = DesignSizes.of(metrics, maxWidth.value)
         CompositionLocalProvider(LocalDesignSizes provides sizes) {
             Column(
                 // Clear of the status and navigation bars when nothing around it is (DesignScreen already is, and
                 // what it took is used up, so nothing is padded twice); the background still runs under them.
-                Modifier.fillMaxSize().safeDrawingPadding().verticalScroll(rememberScrollState())
+                Modifier.fillMaxSize().safeDrawingPadding().verticalScroll(pageScroll).tvPageTop(metrics.tv, pageScroll)
                     .padding(horizontal = if (metrics.tv) metrics.u(DesignTokens.Tv.gutter.toInt()) else metrics.gutter, vertical = if (metrics.tv) metrics.u(60) else Space.S6),
                 horizontalAlignment = Alignment.CenterHorizontally,
             ) {
@@ -437,5 +440,28 @@ fun DesignCard(
             if (sub.isNotEmpty()) Text(sub, color = scheme.onSurfaceVariant, fontSize = s.tiny)
             if (on) Text("✓", color = LocalExtraColours.current.accentText, fontSize = s.small, fontWeight = FontWeight.Bold)
         }
+    }
+}
+
+// On a TV a page taller than the screen scrolls to keep the focused thing in view, and that left the heading cut off
+// at the top with Up unable to bring it back. Up from the topmost control now scrolls the page to its top, and the page
+// starts there.
+@androidx.compose.runtime.Composable
+private fun Modifier.tvPageTop(tv: Boolean, scroll: androidx.compose.foundation.ScrollState): Modifier {
+    if (!tv) return this
+    val focus = androidx.compose.ui.platform.LocalFocusManager.current
+    val scope = androidx.compose.runtime.rememberCoroutineScope()
+    androidx.compose.runtime.LaunchedEffect(Unit) {
+        kotlinx.coroutines.delay(400)
+        scroll.scrollTo(0)
+    }
+    return this.onPreviewKeyEvent { e ->
+        if (e.type == androidx.compose.ui.input.key.KeyEventType.KeyDown && e.key == androidx.compose.ui.input.key.Key.DirectionUp) {
+            val moved = focus.moveFocus(androidx.compose.ui.focus.FocusDirection.Up)
+            if (!moved && scroll.value > 0) {
+                scope.launch { scroll.animateScrollTo(0) }
+                true
+            } else moved
+        } else false
     }
 }
