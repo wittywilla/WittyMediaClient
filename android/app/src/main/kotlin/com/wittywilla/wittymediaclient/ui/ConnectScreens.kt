@@ -168,7 +168,7 @@ fun ConnectScreen(nav: Nav, s: Map<String, String>, message: String) {
 
     // Only looks while this screen is open.
     DisposableEffect(Unit) {
-        val finder = ServerFinder(context, onCantSearch = { cantSearch = true }) { found = it }
+        val finder = ServerFinder(context, onCantSearch = { cantSearch = true }) { found = com.wittywilla.wittymediaclient.net.Discovery.keepOrder(found.map { f -> f.id }, it) }
         finder.start()
         onDispose { finder.stop() }
     }

@@ -922,10 +922,13 @@ class Nav(val app: WittyApp, private val s: Map<String, String>) {
     }
 
     // Back from the middle of the app goes up a level, and from a tab goes to Home.
-    val backStaysInApp: Boolean get() = stack.size > 1 || current in TABS_BESIDE_HOME || current is Route.Sdui
+    // A server's sign-in screen the app started on: Back goes to Choose a server, as Change server does, and doesn't
+    // leave the app (#101).
+    private val atFirstSignIn: Boolean get() = stack.size == 1 && current is Route.SignIn
+    val backStaysInApp: Boolean get() = stack.size > 1 || current in TABS_BESIDE_HOME || current is Route.Sdui || atFirstSignIn
 
     fun back() {
-        if (stack.size > 1) pop() else if (backStaysInApp) reset(Route.Home)
+        if (stack.size > 1) pop() else if (atFirstSignIn) changeServer() else if (backStaysInApp) reset(Route.Home)
     }
 
     // The warning, with the safe way out of it underneath.
