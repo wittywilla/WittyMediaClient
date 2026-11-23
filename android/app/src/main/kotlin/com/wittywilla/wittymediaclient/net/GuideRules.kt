@@ -199,6 +199,15 @@ object GuideRules {
         return channel.programmes.sortedBy { it.start }.firstOrNull { it.start >= end && it.kind != "slate" && it.kind != "none" }
     }
 
+    // What a banner or a hero names as next: the channel's next real programme, else what the server said, unless that's
+    // a slate or a gap too (#85).
+    fun upcoming(now: GuideProgramme?, channel: GuideChannel?, told: GuideProgramme? = null): GuideProgramme? =
+        next(now, null, channel) ?: told?.takeIf { it.kind != "slate" && it.kind != "none" }
+
+    // The line a banner or a hero leads with: the programme, or, in a slate (a bumper or a gap), what comes after it.
+    fun headline(now: GuideProgramme?, upcoming: GuideProgramme?, fallback: String): String =
+        if (now?.kind == "slate") upcoming?.let { "Up next: " + it.title } ?: fallback else now?.title ?: fallback
+
     // A value in an address: everything but letters, digits and -._~ written out, as the page and Apple TV write it.
     fun queryValue(text: String): String {
         val out = StringBuilder()

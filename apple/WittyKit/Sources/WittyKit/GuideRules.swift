@@ -197,6 +197,18 @@ public enum GuideRules {
         guard let channel, let end = programme?.end ?? cell?.end else { return nil }
         return (channel.programmes ?? []).sorted { $0.start < $1.start }.first { $0.start >= end && $0.kind != "slate" && $0.kind != "none" }
     }
+
+    /// What a banner or a hero names as next: the channel's next real programme, else what the server said, unless that's
+    /// a slate or a gap too (client #85).
+    public static func upcoming(after now: GuideProgramme?, on channel: GuideChannel?, told: GuideProgramme? = nil) -> GuideProgramme? {
+        next(after: now, cell: nil, on: channel) ?? told.flatMap { $0.kind == "slate" || $0.kind == "none" ? nil : $0 }
+    }
+
+    /// The line a banner or a hero leads with: the programme, or, in a slate (a bumper or a gap), what comes after it.
+    public static func headline(_ now: GuideProgramme?, upcoming: GuideProgramme?, fallback: String) -> String {
+        if now?.kind == "slate" { return upcoming.map { "Up next: " + $0.title } ?? fallback }
+        return now?.title ?? fallback
+    }
 }
 
 // MARK: - Recordings and reminders

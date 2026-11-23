@@ -23,6 +23,40 @@ Apple builds weren't tested on Apple devices yet. Before the next update, on the
   or App Store listing) is optional and listed in `docs/OWNER-STEPS.md`; none of it is needed for this release.
 - [ ] **5.** Tell the next session what you found, so the fixes go into 0.8.2-alpha.
 
+## 0.8.2-alpha: the client issue fixes on Apple (2026-11-23)
+
+Written 2026-11-23 on the Windows PC for client issues #76, #77, #80 and #85, with Android fixed and checked on its
+emulators. Only the parts that apply to Apple were ported. WittyKit's part was compiled and its tests run with Swift
+6.1 on Linux. The apps were only compiled, by CI's macOS runner.
+
+| Where | What changed on Apple |
+|---|---|
+| `apple/WittyKit/Sources/WittyKit/GuideRules.swift` | `GuideRules.upcoming(after:on:told:)` and `GuideRules.headline(_:upcoming:fallback:)`: in a slate (a bumper or a gap) a banner names the next real programme, never another slate (#85). Tested in `GuideRulesTests.testASlateNamesWhatComesAfterIt`. |
+| `apple/App/TvChannel.swift` (`ChannelBanner`) | In a slate: "Up next: <title>", then "At <time>", and no second Next line. |
+| `apple/App/TvGuide.swift` (guide hero, `SlateCard`, preview) | The hero's title in a slate is "Up next: <title>"; neither shows a slate as what's coming up. The preview says "Tuning…" only until the channel first plays, not over a moving picture when it buffers. |
+| `apple/App/ConnectViews.swift` (`CodeView`) | iPhone and iPad read `codeHintPhone` ("It signs in phones too…"); Apple TV keeps `codeHint` (#80). |
+
+Not ported, and why:
+- #76 (no focus after Next on the colours step) came from Android's focus memory. Apple's chooser
+  (`AppearanceViews.swift`) has its own focus; step 4 below checks it.
+- #77 (empty library on a TV): on Android TV an empty library page now shows its title, the server's words and a
+  focused button. On tvOS, focus stays in the top tab bar when a page has nothing focusable. Step 5 checks whether
+  that is enough.
+- #80's see-through chooser and the mini player's message are Android-only code.
+
+- [ ] **1.** Build and run the Apple TV simulator (1080p) against a 0.8.1 server with a library channel. Make one in the
+  web app: Live TV, then New channel, with rules and "Real TV starts on the half hour" on, so the schedule has gaps.
+- [ ] **2.** Tune the channel during a gap (the guide shows its slate cells dimmed). The banner should say "Up next:
+  <a real title>" and "At <time>". Nowhere should "We'll be right back" appear as a programme or as Next. The picture
+  itself still shows the "We'll be right back" card, which is correct.
+- [ ] **3.** In the guide, highlight the same channel during a gap: the hero's title should be "Up next: <title>".
+- [ ] **4.** First run on Apple TV: Choose a layout, then Next. On Choose colours, something should be focused at once
+  (a theme), and the first press of Down shouldn't land on the preview.
+- [ ] **5.** An empty library (an empty Podcasts folder) on Apple TV: the page shouldn't be blank with focus nowhere.
+  If it is, port Android's `SduiTvEmpty` (`android/.../ui/SduiRender.kt`): the title, the words and a focused button.
+- [ ] **6.** iPhone simulator: Sign in with a code. The words should say a phone can be signed in this way, and must
+  not mention a TV only.
+
 ## 0.8.1-alpha: the centred card for a computer's settings (2026-11-22)
 
 Written 2026-11-22 on the Windows PC. Every screen Apple TV sends to a computer (the server's desktop-only settings,

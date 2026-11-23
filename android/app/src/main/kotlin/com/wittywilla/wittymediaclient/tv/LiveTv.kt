@@ -300,10 +300,10 @@ object LiveTv {
 
 // The picture alone, as big as it's given, fitted inside it on black. The remote's arrows are the screen's to use.
 @Composable
-fun LivePicture(modifier: Modifier = Modifier) {
+fun LivePicture(modifier: Modifier = Modifier, fullScreen: Boolean = false) {
     AndroidView(
         factory = { c ->
-            (LayoutInflater.from(c).inflate(R.layout.tv_live_picture, null) as PlayerView).apply {
+            (LayoutInflater.from(c).inflate(if (fullScreen) R.layout.tv_live_picture_full else R.layout.tv_live_picture, null) as PlayerView).apply {
                 LiveTv.use(c)
                 player = LiveTv.player()
                 isFocusable = false

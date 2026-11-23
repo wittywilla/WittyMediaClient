@@ -4,6 +4,7 @@ package com.wittywilla.wittymediaclient
 
 import com.wittywilla.wittymediaclient.net.GuideCell
 import com.wittywilla.wittymediaclient.net.GuideChannel
+import com.wittywilla.wittymediaclient.net.GuideProgramme
 import com.wittywilla.wittymediaclient.net.GuideRules
 import com.wittywilla.wittymediaclient.net.Recording
 import com.wittywilla.wittymediaclient.net.ReminderRules
@@ -106,6 +107,19 @@ class GuideRulesTest {
     fun whatComesNext() {
         val c = channel("""{"key":"lib-1","name":"Films","programmes":[{"start":0,"end":100,"title":"Now"},{"start":100,"end":110,"kind":"slate","title":"Back soon"},{"start":110,"end":300,"kind":"show","title":"Later"}]}""")
         assertEquals("a slate isn't worth naming", "Later", GuideRules.next(c.programmes[0], null, c)?.title)
+    }
+
+    @Test
+    fun aSlateNamesWhatComesAfterIt() {
+        val c = channel("""{"key":"lib-1","name":"Films","programmes":[{"start":0,"end":100,"kind":"slate","title":"We'll be right back"},{"start":100,"end":110,"kind":"slate","title":"We'll be right back"},{"start":110,"end":300,"kind":"show","title":"Later"}]}""")
+        val slate = c.programmes[0]
+        val up = GuideRules.upcoming(slate, c, told = c.programmes[1])
+        assertEquals("the next real programme, not the next slate", "Later", up?.title)
+        assertEquals("Up next: Later", GuideRules.headline(slate, up, "Films"))
+        assertEquals("a programme is its own headline", "Later", GuideRules.headline(c.programmes[2], null, "Films"))
+        val bare = channel("""{"key":"lib-2","name":"Empty","programmes":[{"start":0,"end":100,"kind":"slate","title":"We'll be right back"}]}""")
+        assertEquals("nothing after it: the channel's name", "Empty", GuideRules.headline(bare.programmes[0], GuideRules.upcoming(bare.programmes[0], bare, bare.programmes[0]), "Empty"))
+        assertEquals("what the server said, when the page has no more of the channel", "Told", GuideRules.upcoming(bare.programmes[0], bare, GuideProgramme(start = 100, end = 200, title = "Told", kind = "show"))?.title)
     }
 
     @Test
