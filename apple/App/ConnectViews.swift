@@ -151,9 +151,9 @@ struct ConnectView: View {
     /// The first server found takes focus, until the person has moved themselves. The
     /// row only exists after this update, so the focus has to wait for the next one.
     private func show(_ servers: [FoundServer]) {
-        found = servers
+        found = Discovery.keepOrder(shown: found.map(\.id), now: servers)
         // Saved servers on top keep the focus on the last one used: a server turning up below doesn't take it.
-        guard !moved, !(savedFirst && !model.recent.isEmpty), let first = servers.first else { return }
+        guard !moved, !(savedFirst && !model.recent.isEmpty), let first = found.first else { return }
         let target = Spot.found(first.id)
         offered = target
         DispatchQueue.main.async { spot = target }

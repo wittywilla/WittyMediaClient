@@ -19,6 +19,10 @@ What changed in WittyMediaClient, newest first. What changed before it had a rep
 - **Sign in with a code says it works for phones too**, not only for TVs.
 - **The first-run chooser fills the screen**, so Home no longer shows through above and below it.
 - **The library names along the top of Home** read clearly over a bright picture.
+**Android, Android TV and Apple**
+
+- **Choosing a server found on the network:** a server that answers later goes below the ones already shown, so the one highlighted never changes under the remote just as OK is pressed.
+- **Back from a server's sign-in screen** goes to Choose a server instead of closing the app (Android and Android TV).
 
 ## 0.6.0
 

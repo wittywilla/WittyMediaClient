@@ -22,6 +22,14 @@ public struct FoundServer: Identifiable, Equatable {
 
 public enum Discovery {
     public static let maxServers = 32
+
+    /// The rows a screen already shows stay where they are, and servers heard later go below them: a list that sorted
+    /// itself as servers answered moved another server under the remote's focus just as OK was pressed (client #100).
+    public static func keepOrder(shown: [String], now: [FoundServer]) -> [FoundServer] {
+        let byId = Dictionary(now.map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first })
+        let kept = shown.compactMap { byId[$0] }
+        return kept + now.filter { !shown.contains($0.id) }
+    }
     /// A noisy network can announce any number of names, and each one found costs a connection to
     /// learn its address. These keep what it can make this app do small.
     public static let maxSeen = 64
