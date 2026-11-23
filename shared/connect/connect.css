@@ -594,3 +594,10 @@ main.compact { padding-top: var(--sp-6); padding-bottom: var(--sp-6); }
 .pair-pin { margin-top: var(--sp-3); }
 .pair-pin .pin-digits { font-variant-numeric: tabular-nums; letter-spacing: .08em; }
 .pair-pin .pin-left { display: block; margin-bottom: var(--sp-2); }
+
+/* Every screen off a TV is one centred column: its heading, words, the server it names and the
+   links under its buttons are centred like the list's, so moving between screens nothing jumps
+   from the middle to the left. A TV keeps its two halves (words left, what to do right). */
+:root:not(.tv) .words { text-align: center; }
+:root:not(.tv) .lockup { justify-content: center; }
+:root:not(.tv) .links { justify-content: center; }
