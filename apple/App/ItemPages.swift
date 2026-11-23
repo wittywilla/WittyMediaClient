@@ -84,11 +84,6 @@ private struct TitleBackdrop: View {
     var canvas: Int64?
     @State private var image: CGImage?
 
-    private var fade: [Gradient.Stop] {
-        wide ? [.init(color: .black, location: 0), .init(color: .black, location: 1)]
-            : [.init(color: .black, location: 0.4), .init(color: .clear, location: 1)]
-    }
-
     /// linear-gradient(0deg, bg 0%, bg/.9 24%, bg/.5 62%, bg/.2 100%) wide; bg, .7 at 30%, .35 at 65%, .15 on a phone.
     private var shade: [Gradient.Stop] {
         wide ? [
@@ -119,8 +114,10 @@ private struct TitleBackdrop: View {
         .frame(height: height)
         .overlay { CanvasLayer(item: canvas, active: !model.listening.screenShown) }
         .clipped()
-        .mask(LinearGradient(stops: fade, startPoint: .top, endPoint: .bottom))
+        // The picture and its shade fade out together (#545): the shade under the title only gets more see-through over
+        // the page, and the picture never shows through it more than before.
         .overlay(LinearGradient(stops: shade, startPoint: .bottom, endPoint: .top))
+        .heroFade(from: wide ? HeroFade.title : HeroFade.titleOnPhone, sides: wide)
         .accessibilityHidden(true)
         .task(id: url) { image = await titlePicture(client, url, pixels: Int(screenSize.width * displayScale)) }
     }

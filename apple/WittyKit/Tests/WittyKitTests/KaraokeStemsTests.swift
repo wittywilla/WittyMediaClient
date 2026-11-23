@@ -46,7 +46,7 @@ final class KaraokeStemsTests: XCTestCase {
         XCTAssertEqual(status.pollSec, 3)
         XCTAssertTrue(StemMix.playable(status))
         // A role nobody knows plays as music.
-        XCTAssertEqual(StemMix.gains(status, StemLevels())["piano"], 1)
+        XCTAssertEqual(StemMix.gains(status, StemLevels(sing: false))["piano"], 1)
     }
 
     func testReadsAnAnswerWithNearlyNothingInIt() throws {
@@ -64,7 +64,7 @@ final class KaraokeStemsTests: XCTestCase {
     // MARK: How loud each part is
 
     func testPartsPlayAtVoiceBackgroundMusicAndTrack() {
-        var levels = StemLevels()
+        var levels = StemLevels(sing: false)
         XCTAssertEqual(StemMix.gains(parts(), levels), ["vocals": 1, "drums": 0.9, "bass": 1, "other": 1])
         levels.setVocals(0.25)
         levels.setStem(StemMix.musicId, 0.5)
@@ -75,18 +75,18 @@ final class KaraokeStemsTests: XCTestCase {
         XCTAssertEqual(StemMix.sliders(parts(), levels).map(\.label), ["Voice", "Background Music", "Track"])
         XCTAssertEqual(StemMix.sliders(parts(), levels).map(\.level), [0.25, 0.5, 0.5])
         // A level an older version kept for a part moves nothing now.
-        XCTAssertEqual(StemMix.gains(parts(), StemLevels(stems: ["drums": 0])), ["vocals": 1, "drums": 0.9, "bass": 1, "other": 1])
+        XCTAssertEqual(StemMix.gains(parts(), StemLevels(stems: ["drums": 0], sing: false)), ["vocals": 1, "drums": 0.9, "bass": 1, "other": 1])
     }
 
     func testAWholeSongCopyAmongPartsIsNotPlayed() {
         var status = parts()
         status.stems.append(stem("full", "full"))
-        XCTAssertNil(StemMix.gains(status, StemLevels())["full"])
+        XCTAssertNil(StemMix.gains(status, StemLevels(sing: false))["full"])
         XCTAssertEqual(StemMix.played(status).map(\.id), ["vocals", "drums", "bass", "other"])
     }
 
     func testBlendIsTheWholeSongLessItsMusic() {
-        var levels = StemLevels()
+        var levels = StemLevels(sing: false)
         // The voice starts from the whole song's suggested level: the whole song at t·v, the music at t·(m−v).
         XCTAssertEqual(StemMix.vocalsLevel(blend(), levels), 0.8)
         var gains = StemMix.gains(blend(), levels)
@@ -113,7 +113,7 @@ final class KaraokeStemsTests: XCTestCase {
     }
 
     func testSingTakesTheVoiceOutAndKeepsItsSlider() {
-        var levels = StemLevels()
+        var levels = StemLevels(sing: false)
         levels.setVocals(0.6)
         levels.toggleSing()
         XCTAssertEqual(StemMix.gains(parts(), levels)["vocals"], 0)
@@ -128,14 +128,35 @@ final class KaraokeStemsTests: XCTestCase {
         XCTAssertEqual(StemMix.gains(parts(), levels)["vocals"], 0.3)
     }
 
-    func testResetGoesBackToWhatTheServerSuggests() {
+    func testKaraokeStartsWithTheVoiceOutAndTheGuideVoiceBringsItBack() {
+        var levels = StemLevels()
+        XCTAssertTrue(levels.sing)
+        XCTAssertTrue(StemMix.pristine(parts(), levels))
+        XCTAssertEqual(StemMix.gains(parts(), levels)["vocals"], 0)
+        XCTAssertFalse(StemMix.guide(parts(), levels))
+        XCTAssertEqual(StemMix.voiceParts(parts()), ["vocals"])
+        XCTAssertEqual(StemMix.voiceParts(blend()), ["full"])
+        levels.toggleGuide(parts())
+        XCTAssertTrue(StemMix.guide(parts(), levels))
+        XCTAssertEqual(StemMix.gains(parts(), levels)["vocals"] ?? -1, StemMix.guideLevel, accuracy: 1e-9)
+        XCTAssertFalse(StemMix.pristine(parts(), levels))
+        levels.toggleGuide(parts())
+        XCTAssertFalse(StemMix.guide(parts(), levels))
+        XCTAssertEqual(StemMix.gains(parts(), levels)["vocals"], 0, "out again")
+        // A voice slider at nothing isn't a guide voice.
+        levels.setVocals(0)
+        XCTAssertFalse(StemMix.guide(parts(), levels))
+    }
+
+    func testResetGoesBackToHowKaraokeStarts() {
         var levels = StemLevels()
         levels.setVocals(0.1)
         levels.setStem("drums", 0.2)
         levels.toggleSing()
         levels.reset()
         XCTAssertEqual(levels, StemLevels())
-        XCTAssertEqual(StemMix.gains(parts(), levels), ["vocals": 1, "drums": 0.9, "bass": 1, "other": 1])
+        XCTAssertTrue(levels.sing, "Reset is how karaoke starts: the voice out")
+        XCTAssertEqual(StemMix.gains(parts(), levels), ["vocals": 0, "drums": 0.9, "bass": 1, "other": 1])
     }
 
     func testLevelsStayWithinRangeAndStepByFive() {
@@ -176,7 +197,7 @@ final class KaraokeStemsTests: XCTestCase {
         let back = mine.load()
         XCTAssertEqual(back.vocals, 0.35)
         XCTAssertEqual(back.stems, ["drums": 0.5])
-        XCTAssertFalse(back.sing)
+        XCTAssertTrue(back.sing, "Sing isn't kept: the voice is out each time karaoke starts")
         XCTAssertEqual(theirs.load(), StemLevels())
         XCTAssertEqual(elsewhere.load(), StemLevels())
         levels.reset()

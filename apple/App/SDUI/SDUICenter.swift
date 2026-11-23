@@ -275,8 +275,18 @@ final class SDUICenter: ObservableObject {
         }
     }
 
-    /// The strip along the top of a phone's and a tablet's pages: the pages behind Menu.
-    var stripPlaces: [NavPlace] { navPlaces(moreEntries.filter { $0.kind != "native" }) }
+    /// The strip along the top of a phone's and a tablet's pages: the pages behind Menu. Of those a module or the owner
+    /// placed in More, only the libraries and Collections, which the strip is there to reach; the rest (Server folders,
+    /// say) stay in Menu, as the website's row of sections since WittyMediaServer #538.
+    var stripPlaces: [NavPlace] { navPlaces(moreEntries.filter { $0.kind != "native" && SDUINavRules.inSectionRow($0) }) }
+}
+
+/// The website's navModel.ts rules the bars share.
+enum SDUINavRules {
+    /// What a phone's row of sections lists: everything not placed in More, and of what is, the libraries and Collections.
+    static func inSectionRow(_ entry: SDUINavItem) -> Bool {
+        entry.placement != "more" || entry.id.hasPrefix("lib-") || entry.id.hasPrefix("lib:") || entry.id == "collections"
+    }
 }
 
 /// The catalogue's icon names as the system's symbols. A name this app doesn't know is a plain square.

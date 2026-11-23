@@ -145,8 +145,7 @@ struct TvWordsView: View {
     @ViewBuilder private var controls: some View {
         VStack(spacing: Tokens.Space.s2) {
             if kind == .karaoke, model.has("karaoke-auto") {
-                KaraokeStemsControl(stems: listening.stems, ink: StemInk(text: palette.text, quiet: palette.textSecondary, chip: palette.border,
-                                                                         fill: palette.accent, onFill: palette.onAccent))
+                KaraokeStemsPanels(stems: listening.stems)
             }
             HStack(spacing: Tokens.Space.s2) {
                 Button { listening.seek(by: -10) } label: { Image(systemName: "gobackward.10") }.action(pill: true).accessibilityLabel("Back 10 seconds")

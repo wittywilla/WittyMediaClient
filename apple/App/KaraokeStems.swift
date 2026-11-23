@@ -42,7 +42,13 @@ final class KaraokeStems: ObservableObject {
         self.client = client
         let store = StemLevelsStore(server: client.base, profile: profile)
         self.store = store
-        if !isOpen { levels = store.load() }
+        let fxStore = VoiceFxStore(server: client.base, profile: profile)
+        self.fxStore = fxStore
+        // The voice is out each time karaoke starts (Sing isn't kept), whatever the slider was left at.
+        if !isOpen {
+            levels = store.load()
+            fx = fxStore.load()
+        }
         isOpen = true
         run(machine.open(song: song))
     }
@@ -73,6 +79,42 @@ final class KaraokeStems: ObservableObject {
     }
     func toggleSing() { change { $0.toggleSing() } }
     func reset() { change { $0.reset() } }
+
+    /// The guide voice (V on the website): the singer quietly back, or out again.
+    var guide: Bool { loaded.map { StemMix.guide($0, levels) } ?? false }
+    func toggleGuide() {
+        guard let loaded else { return }
+        change { $0.toggleGuide(loaded) }
+    }
+
+    /// Voice settings' "Hear the voice": the singer back where their slider was, or at full if it was at nothing.
+    func hearVoice() {
+        guard let loaded else { return }
+        change { $0.setVocals(StemMix.vocalsLevel(loaded, $0) > 0 ? StemMix.vocalsLevel(loaded, $0) : 1) }
+    }
+
+    /// The singer's voice is out, so Voice settings change only the music.
+    var voiceOut: Bool { levels.sing || loaded.map { StemMix.vocalsLevel($0, levels) == 0 } ?? true }
+
+    /// Until the parts play, the Mix holds its place, waiting: asked and not answered yet, or being made.
+    var waiting: Bool {
+        guard isOpen, listening?.stemsHeard != true else { return false }
+        if case .unavailable = machine.phase { return false }
+        return true
+    }
+
+    // MARK: Voice settings
+
+    /// Kept for each person on each server, as the Mix is; heard as soon as the parts play.
+    @Published private(set) var fx = VoiceFx.off
+    private var fxStore: VoiceFxStore?
+
+    func setFx(_ next: VoiceFx) {
+        guard next != fx else { return }
+        fx = next
+        fxStore?.save(next)
+        player?.set(fx: next)
+    }
 
     private func change(_ how: (inout StemLevels) -> Void) {
         var next = levels
@@ -135,7 +177,8 @@ final class KaraokeStems: ObservableObject {
                     try? FileManager.default.removeItem(at: into)
                     return
                 }
-                let next = try StemPlayer(files: files)
+                let next = try StemPlayer(files: files, voice: StemMix.voiceParts(status))
+                next.set(fx: self.fx)
                 let old = self.folder
                 self.player?.shutdown()
                 self.player = next
