@@ -318,11 +318,14 @@ fun PlayerScreen(nav: Nav, id: Long, startOver: Boolean) {
         try {
             if (ask.waitMs > 0) delay(ask.waitMs)
             if (item == null) item = api.item(id)
+            // Reading the device's decoders can take seconds the first time, so never on the main thread: a remote's
+            // keys would wait behind it (VideoSession does the same).
+            val capabilities = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Default) { DeviceProfile.capabilities(context) }
             val answer = api.playback(
                 id,
                 PlaybackRequest(
                     PLAYBACK_PROFILE, ask.audio, ask.subtitle, ask.startSec,
-                    capabilities = DeviceProfile.capabilities(context),
+                    capabilities = capabilities,
                     maxBitrateKbps = DeviceProfile.maxBitrateKbps(context),
                     forceTranscode = if (ask.convert) true else null,
                     flatten3d = if (ask.flatten3d) true else null,
