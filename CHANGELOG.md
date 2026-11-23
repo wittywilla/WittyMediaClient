@@ -5,6 +5,12 @@ What changed in WittyMediaClient, newest first. What changed before it had a rep
 
 ## Unreleased
 
+## 0.6.1
+
+Released 2026-11-23.
+
+Made for WittyMediaServer 0.8.3-alpha: **Enter a code** needs its new Connect a device.
+
 **Games on a phone or tablet**
 
 - **Games start when your server is reached from away.** A game stopped at "Waiting for the first picture" with a message about a hello, and leaving it showed a black page saying the address was for the app only. Both are fixed, and the games list and every server page now open from away too.
