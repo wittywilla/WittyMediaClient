@@ -1,0 +1,226 @@
+name: smoke
+# End-to-end smoke tests of the apps against a real server: scripts/smoke/README.md says what each
+# covers. The server is built from WittyMediaServer's branch of the same name as this pull request's
+# branch when there is one (a change made in both repositories is tested together), else from the
+# release branch this one targets.
+on:
+  pull_request:
+    branches: ['v0.*']
+  push:
+    branches: ['v0.*']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event_name == 'pull_request' && format('pr-{0}', github.event.pull_request.number) || github.run_id }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+env:
+  SMOKE_MODULE_REF: ${{ github.base_ref || github.ref_name }}
+
+jobs:
+  server:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    outputs:
+      ref: ${{ steps.ref.outputs.ref }}
+    steps:
+      - name: Which server branch
+        id: ref
+        env:
+          HEAD: ${{ github.head_ref || github.ref_name }}
+          BASE: ${{ github.base_ref || github.ref_name }}
+        run: |
+          ref=$BASE
+          if [ -n "$HEAD" ] && git ls-remote --exit-code --heads https://github.com/wittywilla/WittyMediaServer "$HEAD" >/dev/null; then ref=$HEAD; fi
+          echo "ref=$ref" >>"$GITHUB_OUTPUT"
+          echo "::notice title=Server::WittyMediaServer at $ref"
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+          repository: wittywilla/WittyMediaServer
+          ref: ${{ steps.ref.outputs.ref }}
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7
+        with:
+          go-version: "1.27.x"
+          check-latest: true
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 24
+      - name: Build the server, Wittyconnect and a catalogue with WittyPlay and WittyTuner
+        run: bash scripts/smoke/build.sh "$RUNNER_TEMP/smoke-build"
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: smoke-server
+          path: |
+            ${{ runner.temp }}/smoke-build/bin
+            ${{ runner.temp }}/smoke-build/catalog
+          retention-days: 3
+
+  desktop:
+    needs: server
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+          repository: wittywilla/WittyMediaServer
+          ref: ${{ needs.server.outputs.ref }}
+          path: .server
+          sparse-checkout: scripts
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 22
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8
+        with:
+          name: smoke-server
+          path: ${{ runner.temp }}/smoke-build
+      - name: FFmpeg, socat and a virtual screen
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq ffmpeg socat xvfb >/dev/null
+      - name: The app
+        working-directory: desktop
+        run: |
+          npm ci --ignore-scripts --no-audit --no-fund
+          node node_modules/electron/install.js
+          sudo chown root:root node_modules/electron/dist/chrome-sandbox
+          sudo chmod 4755 node_modules/electron/dist/chrome-sandbox
+          npm run sync
+      - name: Start and set up the server
+        env:
+          SMOKE_OUT: ${{ runner.temp }}/smoke-out
+        run: |
+          chmod +x "$RUNNER_TEMP"/smoke-build/bin/*
+          bash .server/scripts/smoke/media.sh "$RUNNER_TEMP/smoke-media"
+          bash .server/scripts/smoke/server.sh "$RUNNER_TEMP/smoke-build" "$RUNNER_TEMP/smoke-media"
+      - name: Every way of adding a server, a film, TV mode, from away
+        env:
+          SMOKE_OUT: ${{ runner.temp }}/smoke-out
+          SERVER_SRC: .server
+        run: bash scripts/smoke/desktop.sh "$RUNNER_TEMP/smoke-build/bin/wittyconnect"
+      - name: Stop the server
+        if: always()
+        env:
+          SMOKE_OUT: ${{ runner.temp }}/smoke-out
+        run: bash .server/scripts/smoke/stop.sh
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        if: always()
+        with:
+          name: smoke-desktop
+          path: |
+            ${{ runner.temp }}/smoke-out/*.log
+            ${{ runner.temp }}/smoke-out/*.txt
+            ${{ runner.temp }}/smoke-out/desktop-*/*.png
+            ${{ runner.temp }}/smoke-out/data/logs
+          retention-days: 14
+
+  android:
+    needs: server
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - kind: phone
+            image: google_apis
+            arch: x86_64
+            profile: pixel_6
+          - kind: tv
+            image: android-tv
+            arch: x86
+            profile: tv_1080p
+    runs-on: ubuntu-latest
+    timeout-minutes: 50
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+          repository: wittywilla/WittyMediaServer
+          ref: ${{ needs.server.outputs.ref }}
+          path: .server
+      - uses: actions/setup-java@b843ebf9b913146b38da2eaa7aeddf76074ae1ad # v6.1.0
+        with:
+          distribution: temurin
+          java-version: 17
+      - uses: android-actions/setup-android@be39fa834029ff78f1a44aa3bb0819b8fc2bd8fd # v4.0.4
+      - uses: gradle/actions/setup-gradle@8da46b539cd8fe6ab27ca75128919a18d757604c # v6.4.1
+        with:
+          gradle-version: 9.8.2
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7
+        with:
+          go-version-file: .server/go.mod
+          cache: false
+      - name: Android NDK for the peer-to-peer library
+        run: yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "ndk;27.2.12479018" >/dev/null
+      - name: Build Wittyconnect from the server's source
+        env:
+          WITTYMEDIASERVER_SRC: .server
+        run: bash android/scripts/build-wittyconnect.sh
+      # A debug build: the same code, and its web views and data can be looked into when a step fails.
+      - name: Build the app
+        working-directory: android
+        run: gradle --no-daemon :app:assembleDebug -Pp2p=required
+      - name: The previous release, to install over
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release download -R wittywilla/WittyMediaClient --pattern '*-android-${{ matrix.arch }}.apk' -D "$RUNNER_TEMP/previous"
+          ls "$RUNNER_TEMP/previous"
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8
+        with:
+          name: smoke-server
+          path: ${{ runner.temp }}/smoke-build
+      - name: FFmpeg
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq ffmpeg >/dev/null
+      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ${{ runner.temp }}/smoke-cache
+          key: smoke-cache-${{ runner.os }}-${{ github.run_id }}
+          restore-keys: smoke-cache-${{ runner.os }}-
+      - name: Start and set up the server
+        env:
+          SMOKE_OUT: ${{ runner.temp }}/smoke-out
+          SMOKE_CORES: ${{ runner.temp }}/smoke-cache/cores
+        run: |
+          chmod +x "$RUNNER_TEMP"/smoke-build/bin/*
+          bash .server/scripts/smoke/media.sh "$RUNNER_TEMP/smoke-media"
+          bash .server/scripts/smoke/server.sh "$RUNNER_TEMP/smoke-build" "$RUNNER_TEMP/smoke-media"
+      - name: Let the emulator use KVM
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+      - name: The app on an Android ${{ matrix.kind }} emulator
+        uses: ReactiveCircus/android-emulator-runner@a421e43855164a8197daf9d8d40fe71c6996bb0d # v2.38.0
+        env:
+          SMOKE_OUT: ${{ runner.temp }}/smoke-out
+        with:
+          api-level: 34
+          target: ${{ matrix.image }}
+          arch: ${{ matrix.arch }}
+          profile: ${{ matrix.profile }}
+          disable-animations: true
+          emulator-options: -no-window -gpu swiftshader_indirect -no-snapshot -noaudio -no-boot-anim
+          script: python3 scripts/smoke/android.py android/app/build/outputs/apk/debug/app-${{ matrix.arch }}-debug.apk ${{ matrix.kind == 'tv' && '--tv' || '' }} --previous "$(ls $RUNNER_TEMP/previous/*.apk | head -1)"
+      - name: Stop the server
+        if: always()
+        env:
+          SMOKE_OUT: ${{ runner.temp }}/smoke-out
+        run: bash .server/scripts/smoke/stop.sh
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        if: always()
+        with:
+          name: smoke-android-${{ matrix.kind }}
+          path: |
+            ${{ runner.temp }}/smoke-out/*.log
+            ${{ runner.temp }}/smoke-out/*.txt
+            ${{ runner.temp }}/smoke-out/android-*
+            ${{ runner.temp }}/smoke-out/data/logs
+          retention-days: 14

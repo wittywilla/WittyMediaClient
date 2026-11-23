@@ -190,7 +190,7 @@ async function run() {
   await step('the arrows and OK reach a film', async () => {
     // A film's card on screen: the spotlight's More info goes to a film too, but it is the spotlight's
     // button, not a card in a row, and may be scrolled out of sight.
-    await arrowTowards('a film', "Array.from(document.querySelectorAll('a.card[href*=\"/item/\"], a.card[href*=\"/show/\"]')).find((a) => { const r = a.getBoundingClientRect(); return r.bottom > 0 && r.top < innerHeight })")
+    await arrowTowards('a film', "Array.from(document.querySelectorAll('a.card[href*=\"/item/\"], a.card[href*=\"/show/\"], a[href*=\"/item/\"]')).find((a) => { const r = a.getBoundingClientRect(); return r.bottom > 0 && r.top < innerHeight })")
     await shot('05-focus-on-card')
     await press('Enter')
     await until('its page', () => inPage("!!Array.from(document.querySelectorAll('button')).find((b) => /play|resume/i.test(b.innerText))"))
@@ -246,6 +246,8 @@ async function run() {
       // Manage servers sits between them once a server is in use.
       assert.strictEqual(await tvMenu().executeJavaScript('document.activeElement.id'), 'manage')
       await press('Down', tvMenu())
+      // Stop connecting from away is there too, when the server takes peer-to-peer connections.
+      if (await tvMenu().executeJavaScript('document.activeElement.id') === 'away') await press('Down', tvMenu())
       assert.strictEqual(await tvMenu().executeJavaScript('document.activeElement.id'), 'quit')
       await press('Escape', tvMenu())
       await wait(300)
