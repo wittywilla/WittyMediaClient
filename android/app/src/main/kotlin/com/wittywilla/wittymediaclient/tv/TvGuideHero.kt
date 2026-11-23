@@ -133,8 +133,8 @@ fun GuideHero(
         Row(
             Modifier
                 .fillMaxWidth()
-                .padding(top = dress.pt(dress.top + 16 + if (shape == TvShape.Teletext) 44 else 0), start = dress.pt(dress.edge), end = dress.pt(dress.edge))
-                .padding(bottom = dress.pt(if (shape == TvShape.Compact) 8 else 16)),
+                .padding(top = dress.pt((if (LocalGuideEmbedded.current) 4f else dress.top + 16) + if (shape == TvShape.Teletext) 44 else 0), start = dress.pt(dress.edge), end = dress.pt(dress.edge))
+                .padding(bottom = dress.pt(if (shape == TvShape.Compact || LocalGuideEmbedded.current) 8 else 16)),
             verticalAlignment = if (shape == TvShape.Cinema) Alignment.CenterVertically else Alignment.Top,
             horizontalArrangement = Arrangement.spacedBy(dress.pt(if (shape == TvShape.Cinema) 24 else 16)),
         ) {
@@ -485,6 +485,12 @@ private fun HeroClock(dress: TvDress, now: Long) {
 
 // The little TV on the guide, with its own bar: smaller, larger, sound, full screen and hide. A column of the top of the
 // page, not a layer over it, so it covers nothing.
+// Set where the guide sits under the app's top bar, which already keeps clear of the screen's edge.
+val LocalGuideEmbedded = androidx.compose.runtime.compositionLocalOf { false }
+
+// The widest the preview starts on its own, in the guide's 1920-wide units.
+private const val GUIDE_PREVIEW_START = 440.0
+
 @Composable
 fun GuidePreview(nav: Nav, dress: TvDress, channel: String, name: String, onWatch: (String) -> Unit) {
     val p = dress.paint
@@ -492,7 +498,8 @@ fun GuidePreview(nav: Nav, dress: TvDress, channel: String, name: String, onWatc
     val api = nav.app.api
     val most = TvLook.previewLimit(1920.0, 1080.0)
     val least = minOf(TvLook.PREVIEW_MIN, most)
-    val width = maxOf(least, minOf(most, dress.look.previewW ?: TvLook.previewAuto(shape, 1920.0, 1080.0)))
+    // Started smaller than the shared default so the grid keeps room for five or more channels; a size chosen with + stays.
+    val width = maxOf(least, minOf(most, dress.look.previewW ?: minOf(TvLook.previewAuto(shape, 1920.0, 1080.0), GUIDE_PREVIEW_START)))
     val radius = when (shape) {
         TvShape.Modern, TvShape.Outline -> 14f
         TvShape.Cinema -> 10f

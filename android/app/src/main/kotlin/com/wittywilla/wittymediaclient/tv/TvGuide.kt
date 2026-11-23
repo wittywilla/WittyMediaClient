@@ -40,6 +40,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.layout.layout
 import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.graphics.Brush
@@ -138,7 +139,7 @@ fun Nav.watchChannel(key: String) {
 }
 
 @Composable
-fun GuideScreen(nav: Nav) {
+fun GuideScreen(nav: Nav, embedded: Boolean = false) {
     val api = nav.app.api
     val context = LocalContext.current
     val view = LocalView.current
@@ -157,6 +158,11 @@ fun GuideScreen(nav: Nav) {
     var lookOpen by remember { mutableStateOf(false) }
     var searchOpen by remember { mutableStateOf(false) }
     var dayOpen by remember { mutableStateOf(false) }
+    // The shortcuts row under the guide's top bar: closed until asked for, and kept for this device.
+    var shortcuts by remember { mutableStateOf(GuidePrefs.shortcuts(context)) }
+    var wantDockFocus by remember { mutableStateOf(false) }
+    var helpOpen by remember { mutableStateOf(false) }
+    fun showShortcuts(on: Boolean) { shortcuts = on; GuidePrefs.setShortcuts(context, on) }
     // The Dock under the grid, and which of its menus is open (docs/plans/DESIGN-2.md, section 4: WittyTV's four places).
     val dockFocus = remember { FocusRequester() }
     var dockMenu by remember { mutableStateOf<DockMenu?>(null) }
@@ -626,7 +632,16 @@ fun GuideScreen(nav: Nav) {
         DockEntry(DockKeys.RECORD, "Record", enabled = recordable != null) { dockMenu = DockMenu.Record },
         // More info (i): the programme in full, over the guide.
         DockEntry(DockKeys.INFO, "More info", enabled = current != null && currentCell?.programme != null) { moreInfo = true },
+        DockEntry(DockKeys.HELP, "Help") { helpOpen = true },
     )
+    LaunchedEffect(shortcuts, wantDockFocus) {
+        if (shortcuts && wantDockFocus) {
+            delay(60)
+            runCatching { dockFocus.requestFocus() }
+            wantDockFocus = false
+        }
+    }
+    BackHandler(enabled = shortcuts && dialogsClosed(ask, lookOpen, setPanel, findOpen, recording, menu, moreInfo, dockMenu, dayOpen, helpOpen)) { showShortcuts(false) }
     fun dockPress(key: Char) {
         dockEntries.firstOrNull { it.key == key && it.enabled }?.action?.invoke()
     }
@@ -637,7 +652,7 @@ fun GuideScreen(nav: Nav) {
     }
     val previewName = current?.takeIf { it.key == previewWanted }?.let { "${it.number} ${it.name}" } ?: previewFound
 
-    CompositionLocalProvider(LocalTvApi provides api) {
+    CompositionLocalProvider(LocalTvApi provides api, LocalGuideEmbedded provides embedded) {
         BoxWithConstraints(Modifier.fillMaxSize().background(dress.paint.bg)) {
             width = maxWidth.value / TV_UNIT
             when {
@@ -668,7 +683,7 @@ fun GuideScreen(nav: Nav) {
                                 code == KeyEvent.KEYCODE_PROG_GREEN -> { shift(86400); true }
                                 code == KeyEvent.KEYCODE_PROG_YELLOW -> { cycleSet(1); true }
                                 code == KeyEvent.KEYCODE_PROG_BLUE -> { findOpen = true; true }
-                                DockKeys.opensDock(code) -> { runCatching { dockFocus.requestFocus() }; true }
+                                DockKeys.opensDock(code) -> { if (!shortcuts) showShortcuts(true); wantDockFocus = true; true }
                                 DockKeys.forKeyCode(code) != null -> { dockPress(DockKeys.forKeyCode(code)!!); true }
                                 code == KeyEvent.KEYCODE_PAGE_DOWN -> page(1)
                                 code == KeyEvent.KEYCODE_PAGE_UP -> page(-1)
@@ -693,7 +708,10 @@ fun GuideScreen(nav: Nav) {
                         },
                     )
                     GuideBar(nav, dress, store, from, now, today, onShift = { shift(it) }, onNow = ::goNow, onJump = { goAt(it) },
-                        onSets = { setPanel = SetPanel.Picker }, onCycle = ::cycleSet)
+                        onSets = { setPanel = SetPanel.Picker }, onCycle = ::cycleSet, shortcutsOpen = shortcuts, onShortcuts = { showShortcuts(!shortcuts) })
+                    if (shortcuts) {
+                        GuideDock(dress, dockEntries, dockFocus, onUp = { false })
+                    }
                     if (store.paged || store.search.isNotEmpty()) {
                         GuidePager(dress, store, onPage = { page(it) }, onClear = { narrow("") })
                     }
@@ -707,11 +725,6 @@ fun GuideScreen(nav: Nav) {
                         dress, store, listState, from, to, now, slots, trackWidth, perSecond, spot, actions,
                         Modifier.weight(1f),
                     )
-                    GuideDock(dress, dockEntries, dockFocus, onUp = {
-                        val start = currentCell?.start
-                        val req = if (start != null) requesters[spot.row to start] else null
-                        if (req == null) false else runCatching { req.requestFocus() }.isSuccess
-                    })
                     if (dress.shape in listOf(TvShape.Box, TvShape.Receiver, TvShape.Teletext, TvShape.Listings)) {
                         GuideFooter(dress, store.currentSet?.name ?: "All", onShift = { shift(it) }, onSet = { cycleSet(1) })
                     }
@@ -816,6 +829,18 @@ fun GuideScreen(nav: Nav) {
             BackHandler(onBack = close)
             TvDialog(when (m) { DockMenu.Channels -> "Channels"; DockMenu.Filter -> "Filter and favourites"; DockMenu.Record -> recordable?.second?.title ?: "Record" }, null, items, close, stacked = true)
         }
+        if (helpOpen) {
+            val close = { helpOpen = false }
+            BackHandler(onBack = close)
+            TvDialog(
+                "Using the guide",
+                "Up and Down change channel. Left and Right move in time. Select watches the channel; hold Select for more about it. " +
+                    "Number keys, if your remote has them, go to a channel. Play/Pause watches the channel.\n\n" +
+                    listOfNotNull(notices["tv"], if (dress.look.logos && hasLogos(store.lineup)) notices["logos"] else null).joinToString(" "),
+                listOf(TvDialogButton("Close", preferred = true, cancel = true, action = close)),
+                close,
+            )
+        }
         if (dayOpen) {
             DayPicker(today, onDay = { dayOpen = false; goDay(it) }, onClose = { dayOpen = false })
         }
@@ -823,6 +848,16 @@ fun GuideScreen(nav: Nav) {
 }
 
 private const val FOCUS_TRIES = 8
+
+// The list takes a whole number of rows of the room it is given, so a channel is never shown cut in half.
+private fun Modifier.snapToRows(rowPx: Int): Modifier = this.layout { measurable, constraints ->
+    val h = if (rowPx > 0 && constraints.hasBoundedHeight) maxOf(rowPx, constraints.maxHeight / rowPx * rowPx).coerceAtMost(constraints.maxHeight.coerceAtLeast(rowPx)) else constraints.maxHeight
+    val placeable = measurable.measure(constraints.copy(minHeight = if (constraints.hasBoundedHeight) h else constraints.minHeight, maxHeight = if (constraints.hasBoundedHeight) h else constraints.maxHeight))
+    layout(placeable.width, if (constraints.hasBoundedHeight) h else placeable.height) { placeable.place(0, 0) }
+}
+
+// Whether nothing is open over the guide, so Back can fold the shortcuts row away.
+private fun dialogsClosed(vararg open: Any?): Boolean = open.none { it != null && it != false }
 
 // The channels as the guide last had them, for the remote to go through while one plays.
 object TvChannels {
@@ -844,6 +879,8 @@ private fun GuideBar(
     onJump: (Long) -> Unit,
     onSets: () -> Unit,
     onCycle: (Int) -> Unit = {},
+    shortcutsOpen: Boolean = false,
+    onShortcuts: () -> Unit = {},
 ) {
     val p = dress.paint
     val shape = dress.shape
@@ -896,7 +933,7 @@ private fun GuideBar(
             Modifier
                 .weight(1f)
                 .horizontalScroll(rememberScrollState())
-                .padding(vertical = dress.pt(10), horizontal = dress.pt(8)),
+                .padding(vertical = dress.pt(5), horizontal = dress.pt(8)),
             horizontalArrangement = Arrangement.spacedBy(dress.pt(16)),
         ) {
             // One control, which opens every set to choose from.
@@ -905,8 +942,10 @@ private fun GuideBar(
             if (cycles) TvIconButton(dress, TvSymbols.ChevronLeft, "The set before", { onCycle(-1) })
             TvButton(dress, (store.currentSet?.name ?: "All channels") + " ▾", onSets, kind = TvButtonKind.Chip, on = true, onBar = true, icon = Symbols.LiveTv)
             if (cycles) TvIconButton(dress, Symbols.Next, "The set after", { onCycle(1) })
+            // One press shows or hides the guide's shortcuts (Look, Day, Channels, Filter, Recordings, Record, More info, Help).
+            TvButton(dress, if (shortcutsOpen) "Shortcuts ▴" else "Shortcuts ▾", onShortcuts, kind = TvButtonKind.Chip, on = shortcutsOpen, onBar = true, selected = shortcutsOpen)
         }
-        Row(Modifier.padding(vertical = dress.pt(10)), horizontalArrangement = Arrangement.spacedBy(dress.pt(16)), verticalAlignment = Alignment.CenterVertically) {
+        Row(Modifier.padding(vertical = dress.pt(5)), horizontalArrangement = Arrangement.spacedBy(dress.pt(16)), verticalAlignment = Alignment.CenterVertically) {
             TvIconButton(dress, TvSymbols.ChevronLeft, "Half an hour earlier", { onShift(-GuideRules.SLOT) }, onBar = true)
             TvButton(dress, "Now", onNow, on = GuideRules.floorSlot(now) == from, onBar = true)
             TvIconButton(dress, Symbols.Next, "Half an hour later", { onShift(GuideRules.SLOT) }, onBar = true)
@@ -975,7 +1014,7 @@ private fun GuideGrid(
     Box(modifier.fillMaxWidth().padding(horizontal = dress.pt(dress.edge)).heightIn(min = dress.pt(260))) {
         Column(Modifier.fillMaxSize()) {
             GuideTimes(dress, from, now, slots)
-            LazyColumn(Modifier.weight(1f).fillMaxWidth().clipToBounds().focusGroup(), state = listState) {
+            LazyColumn(Modifier.weight(1f).snapToRows(with(androidx.compose.ui.platform.LocalDensity.current) { dress.pt(dress.rowHeight).roundToPx() }).fillMaxWidth().clipToBounds().focusGroup(), state = listState) {
                 items(store.rowCount, key = { first + it }) { i ->
                     val r = first + i
                     LaunchedEffect(r, store.view) { store.ensure(r) }
@@ -1026,10 +1065,6 @@ private fun GuideFooter(dress: TvDress, set: String, onShift: (Long) -> Unit, on
         Key(dress, "B", "Day +", p.keyB) { onShift(86400) }
         Key(dress, "C", set, p.keyC, onSet)
         Spacer(Modifier.weight(1f).width(dress.pt(16)))
-        Text(
-            "▲▼ Channel · ◄► Time · 0–9 Go to a channel · Select Watch · Hold Select for more · Play/Pause Watch the channel",
-            style = dress.font(17.5f, italic = shape == TvShape.Listings), color = p.soft, maxLines = 1, overflow = TextOverflow.Ellipsis,
-        )
     }
 }
 
@@ -1063,10 +1098,10 @@ private fun GuideLegal(dress: TvDress, notices: Map<String, String>, lineup: Lis
     )
     if (shown.isEmpty()) return
     Column(
-        Modifier.fillMaxWidth().padding(horizontal = dress.pt(dress.edge), vertical = dress.pt(8)).semantics(mergeDescendants = true) { },
-        verticalArrangement = Arrangement.spacedBy(dress.pt(4)),
+        Modifier.fillMaxWidth().padding(horizontal = dress.pt(dress.edge), vertical = dress.pt(4)).semantics(mergeDescendants = true) { },
+        verticalArrangement = Arrangement.spacedBy(dress.pt(2)),
     ) {
-        for (n in shown) Text(n, style = dress.font(13.75f).copy(fontFamily = null), color = dress.paint.soft, maxLines = 2, overflow = TextOverflow.Ellipsis)
+        for (n in shown) Text(n, style = dress.font(15f).copy(fontFamily = null), color = dress.paint.soft, maxLines = 1, overflow = TextOverflow.Ellipsis)
     }
 }
 
