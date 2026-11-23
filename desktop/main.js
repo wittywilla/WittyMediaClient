@@ -350,6 +350,7 @@ const sayPath = (words) => { if (bar && !bar.webContents.isDestroyed()) bar.webC
 // This device's key, made the first time it is wanted.
 async function deviceKey(program) {
   let key = p2p.loadKey(keyFile(), safeStorage)
+  if (!key && p2p.keyLocked(keyFile(), safeStorage)) throw new Error("the system's store for secrets can't be opened right now")
   if (!key) {
     key = await p2p.makeKey(program)
     p2p.saveKey(keyFile(), safeStorage, key)

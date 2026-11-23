@@ -67,8 +67,13 @@ function parseInvite(text) {
   const id = u.pathname.replace(/^\/+|\/+$/g, '')
   const secret = u.searchParams.get('s') || ''
   if (!validId(id) || !SECRET.test(secret)) return null
-  return { serverId: id, secret, name: (u.searchParams.get('n') || '').slice(0, 80), hints: cleanHints(u.searchParams.getAll('a')) }
+  return { serverId: id, secret, name: shownName(u.searchParams.get('n') || '', 80), hints: cleanHints(u.searchParams.getAll('a')) }
 }
+
+// A name that came in a link, fit to show: no control characters, and none of the invisible ones
+// that turn text around, so a name can't be made to read as something else beside it.
+const INVISIBLE = /[\p{Cc}\u061c\u200e\u200f\u202a-\u202e\u2066-\u2069\ufeff]/gu
+const shownName = (text, max) => Array.from(String(text).replace(INVISIBLE, '').trim()).slice(0, max).join('').trim()
 
 const looksLikeInvite = (text) => /^\s*wittymedia:\/\/p2p\//i.test(String(text))
 
@@ -93,12 +98,30 @@ function helperPath({ resourcesPath, packaged, env = process.env, platform = pro
 function loadKey(file, safe) {
   try {
     const saved = JSON.parse(fs.readFileSync(file, 'utf8'))
-    const key = saved.sealed && safe && safe.isEncryptionAvailable()
+    const protectedNow = !!(safe && safe.isEncryptionAvailable())
+    const key = saved.sealed && protectedNow
       ? safe.decryptString(Buffer.from(saved.sealed, 'base64'))
       : saved.key
-    if (typeof key === 'string' && KEY.test(key) && validId(saved.deviceId)) return { key, deviceId: saved.deviceId }
+    if (typeof key === 'string' && KEY.test(key) && validId(saved.deviceId)) {
+      // Kept in the clear because the system had no protection for secrets then, and has now:
+      // sealed from here on.
+      if (!saved.sealed && protectedNow) {
+        try { saveKey(file, safe, { key, deviceId: saved.deviceId }) } catch { /* tried again next time */ }
+      }
+      return { key, deviceId: saved.deviceId }
+    }
   } catch { /* none yet, or unreadable: a new one is made */ }
   return null
+}
+
+// A key sealed by the system that the system can't open right now (a keyring that is locked, or
+// not running yet): it is still this device's key, and must not be replaced by a new one, which
+// would also have to be kept in the clear.
+function keyLocked(file, safe) {
+  try {
+    const saved = JSON.parse(fs.readFileSync(file, 'utf8'))
+    return typeof saved.sealed === 'string' && saved.sealed !== '' && !(safe && safe.isEncryptionAvailable())
+  } catch { return false }
 }
 
 function saveKey(file, safe, { key, deviceId }) {
@@ -390,6 +413,6 @@ function pathWords(s) {
 }
 
 module.exports = {
-  Tunnel, JoinRun, cleanJoined, parseInvite, looksLikeInvite, originFor, isP2POrigin, cleanInfo, cleanHints, cleanState, connected, validId,
-  helperPath, loadKey, saveKey, forgetKey, makeKey, pathWords, COOKIE, HEADER,
+  Tunnel, JoinRun, cleanJoined, parseInvite, shownName, looksLikeInvite, originFor, isP2POrigin, cleanInfo, cleanHints, cleanState, connected, validId,
+  helperPath, loadKey, keyLocked, saveKey, forgetKey, makeKey, pathWords, COOKIE, HEADER,
 }
