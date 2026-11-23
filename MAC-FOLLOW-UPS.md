@@ -6,6 +6,25 @@ Newest first. Each section is one pass that needs a Mac: Xcode, the iPhone and A
 app. Work through the newest first, tick each box here as you go, commit the ticks, and say in the PR what ran and what
 didn't. The GitHub issues labelled `mac` point at these sections.
 
+## 0.8.2-alpha: security checks that need Apple devices (2026-11-23)
+
+Written on the Windows PC during the 0.8.2 security pass. The code was read there; these need a Mac, a simulator or a
+device to confirm at run time. Report what each showed in the PR that ticks them.
+
+- [ ] **1.** Sign in on the iPhone simulator, then look at the keychain item the app keeps (Xcode's debugger, or
+  `security dump-keychain` for the simulator's keychain): it is accessible after first unlock, this device only, and
+  nothing else of the sign-in is in `UserDefaults` (`defaults read` on the app's container plist).
+- [ ] **2.** With the app in the background on Apple TV, open `wittymedia://item/1`, `wittymedia://show/1`,
+  `wittymedia://route/%2Fwatch%2F1` and a few malformed ones (too long, a query, another scheme's address): the first
+  three open only once signed in, the others do nothing, and nothing crashes.
+- [ ] **3.** Point the iPhone app at a server by its `https://` address with a self-signed certificate: it refuses,
+  says why, and doesn't offer to carry on. At a plain `http://` address on the home network it connects; at a plain
+  `http://` public address it refuses (App Transport Security allows local networking only).
+- [ ] **4.** Pair the Apple TV with a phone by QR code and PIN, then check Console.app for the app's process: no
+  sign-in token, PIN or pairing secret appears in the logs.
+- [ ] **5.** In the macOS desktop app (Electron), open the developer tools shortcut (Cmd-Alt-I) in the released
+  build: nothing opens. Drag a web address onto the window: the app doesn't navigate to it.
+
 ## WittyMediaClient 0.6.0: what's left for the owner (2026-11-23)
 
 0.6.0 was tagged from the Windows PC with `tag.yml`, and `release.yml` built and published every package: Windows,
