@@ -19,11 +19,10 @@ The real Electron app under a virtual screen, with the harnesses in `desktop/tes
 
 ## Android phone and TV (`android`)
 
-`android.py` drives a debug build on an API 34 emulator (Google APIs for the phone, Android TV for the TV) with `uiautomator` and `adb`, against the server on the runner (`10.0.2.2` from the emulator):
+`android.py` drives a debug build on an API 34 emulator (Google APIs for the phone, Android TV for the TV) with `uiautomator` and `adb`, against the server on the runner (`10.0.2.2` from the emulator). Installing over the last release is `ci.yml`'s `android-update` job (`android/scripts/check-upgrade.sh` and `upgrade-test.sh`), which every pull request runs already, so it isn't repeated here.
 
 | Step | What it checks | Would have caught |
 |---|---|---|
-| upgrade | The latest release installed and opened, then this build installed over it | An update Android refuses (a different signing key, a lower version) |
 | address | Enter an address, then a security code from the server: signed in | Sign-in by address and code |
 | settings | Settings opens with its sections | A settings page that crashes |
 | film | The film plays: the server sees this device streaming | The player |
@@ -39,7 +38,7 @@ With a server from the server repository's `scripts/smoke/server.sh` running and
 
 ```bash
 SERVER_SRC=../WittyMediaServer SMOKE_OUT=/tmp/smoke-out scripts/smoke/desktop.sh /tmp/smoke-build/bin/wittyconnect
-SMOKE_OUT=/tmp/smoke-out python3 scripts/smoke/android.py android/app/build/outputs/apk/debug/app-x86_64-debug.apk [--tv] [--previous old.apk] [step ...]
+SMOKE_OUT=/tmp/smoke-out python3 scripts/smoke/android.py android/app/build/outputs/apk/debug/app-x86_64-debug.apk [--tv] [step ...]
 ```
 
 The Android script needs one emulator running (`adb devices`), and `adb root` to work on it (a Google APIs image). It turns peer to peer on in the server.

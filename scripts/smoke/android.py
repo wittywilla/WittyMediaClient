@@ -5,10 +5,12 @@
 repository's scripts/smoke/server.sh set up on this machine (the emulator reaches it as 10.0.2.2).
 Every step leaves a screenshot and a log in $SMOKE_OUT/android-<kind>/.
 
-  SMOKE_OUT=... python3 scripts/smoke/android.py <app.apk> [--tv] [--previous previous.apk] [step ...]
+  SMOKE_OUT=... python3 scripts/smoke/android.py <app.apk> [--tv] [step ...]
+
+Installing over the previous release is ci.yml's android-update job (android/scripts/check-upgrade.sh and
+upgrade-test.sh), not repeated here.
 
 Steps, in order (name some to run only those):
-  upgrade    the previous release installed and opened, then this build installed over it
   address    Enter an address, then a security code from the server: signed in
   settings   Settings opens
   film       the film plays: the server sees this device streaming
@@ -25,8 +27,7 @@ PKG = 'com.wittywilla.wittymediaclient'
 args = sys.argv[1:]
 apk = args.pop(0)
 TV = '--tv' in args
-prev = args[args.index('--previous') + 1] if '--previous' in args else ''
-only = [a for a in args if not a.startswith('--') and a != prev]
+only = [a for a in args if not a.startswith('--')]
 kind = 'tv' if TV else 'phone'
 OUT = os.path.join(os.environ.get('SMOKE_OUT', 'smoke-out'), 'android-' + kind)
 os.makedirs(OUT, exist_ok=True)
@@ -116,7 +117,11 @@ def tap(pattern, secs=30):
 
 
 def type_text(s):
-    sh("input text '" + s.replace(' ', '%s').replace("'", '') + "'")
+    # In short pieces: a long input text can lose characters on a busy emulator.
+    s = s.replace("'", '')
+    for i in range(0, len(s), 40):
+        sh("input text '" + s[i:i + 40].replace(' ', '%s') + "'")
+        time.sleep(0.2)
 
 
 def type_into(pattern, s):
@@ -133,6 +138,10 @@ def type_into(pattern, s):
     for _ in range(len(f['text']) + 2):
         sh('input keyevent KEYCODE_DEL', check=False)
     type_text(s)
+    now = next((x['text'] for x in nodes() if 'EditText' in x['cls'] and x['b'] == b), '')
+    log('typed', len(s), 'characters; the field holds', len(now), ':', now[:60], '…', now[-60:])
+    if now and now != s and len(s) > 20:
+        log('NOT THE SAME as what was typed:', s[:60], '…', s[-60:])
 
 
 def launch(clear=False):
@@ -221,21 +230,6 @@ def step(name, fn):
 
 # ---------------------------------------------------------------- the steps
 
-def upgrade():
-    if not prev:
-        raise RuntimeError('no previous release given')
-    adb('uninstall', PKG, check=False)
-    log(adb('install', prev).strip())
-    launch()
-    wait('Choose a server|Enter an address|server', 60, "the previous release's first screen")
-    out = adb('install', '-r', apk, check=False)
-    log(out.strip())
-    if 'Success' not in out:
-        raise RuntimeError('this build does not install over the previous release: ' + out.strip()[-200:])
-    launch()
-    wait('Choose a server|Enter an address|server', 60, 'the new build opening')
-
-
 def address():
     # This build, over whatever is there; a build signed with another key replaces it.
     if 'Success' not in adb('install', '-r', apk, check=False):
@@ -249,10 +243,14 @@ def address():
     if find('^Connect$'):
         tap('^Connect$')
     wait('Enter the security code|Security code|Sign in with a code', 60, 'the code screen')
-    if not find('Security code|Enter the security code') and find('Enter the security code|Use a security code|security code'):
-        tap('security code')
-    type_into('Security code|code', security_code())
-    sh('input keyevent KEYCODE_ENTER', check=False)
+    code = security_code()
+    if any('EditText' in x['cls'] for x in nodes()):
+        type_into('Security code|code', code)
+        sh('input keyevent KEYCODE_ENTER', check=False)
+    else:
+        # The app's own number pad, as on a TV.
+        for d in code:
+            tap(f'^{d}$', 10)
     if find('^Sign in$'):
         tap('^Sign in$')
     wait('Smoke Films|Smoke Film|Home', 90, 'the signed-in app')
@@ -327,7 +325,6 @@ def link():
 # Peer to peer on, straight to this machine: the emulator reaches it, and nothing else is needed.
 api('PUT', '/api/p2p/settings', {'accept': True, 'enabled': True, 'port': int(PORT) + 2, 'devicesOnly': True,
                                  'layers': {'dht': False, 'relay': False, 'holePunch': False, 'portMap': False, 'ipv6': False}})
-step('upgrade: install over the previous release', upgrade)
 step('address: Enter an address and a security code', address)
 step('settings: Settings opens', settings)
 step('film: the film plays', film)

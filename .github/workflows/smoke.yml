@@ -17,8 +17,6 @@ on:
         description: WittyPlay tag or commit for the catalogue
       app_release:
         description: Test this release of the Android app (a tag such as v0.6.0) instead of building it
-      previous_release:
-        description: The release to install first and update over (default the latest)
 
 permissions:
   contents: read
@@ -108,6 +106,8 @@ jobs:
       - name: Start and set up the server
         env:
           SMOKE_OUT: ${{ runner.temp }}/smoke-out
+          # On this machine's network too, so the app finds it there.
+          SMOKE_LISTEN: 0.0.0.0
         run: |
           chmod +x "$RUNNER_TEMP"/smoke-build/bin/*
           bash .server/scripts/smoke/media.sh "$RUNNER_TEMP/smoke-media"
@@ -192,13 +192,6 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           TAG: ${{ inputs.app_release }}
         run: gh release download "$TAG" -R wittywilla/WittyMediaClient --pattern '*-android-${{ matrix.arch }}.apk' -D "$RUNNER_TEMP/app"
-      - name: The previous release, to install over
-        env:
-          GH_TOKEN: ${{ github.token }}
-          TAG: ${{ inputs.previous_release }}
-        run: |
-          gh release download $TAG -R wittywilla/WittyMediaClient --pattern '*-android-${{ matrix.arch }}.apk' -D "$RUNNER_TEMP/previous"
-          ls "$RUNNER_TEMP/previous"
       - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8
         with:
           name: smoke-server
@@ -234,7 +227,7 @@ jobs:
           profile: ${{ matrix.profile }}
           disable-animations: true
           emulator-options: -no-window -gpu swiftshader_indirect -no-snapshot -noaudio -no-boot-anim
-          script: python3 scripts/smoke/android.py "$(ls $RUNNER_TEMP/app/*.apk | head -1)" ${{ matrix.kind == 'tv' && '--tv' || '' }} --previous "$(ls $RUNNER_TEMP/previous/*.apk | head -1)"
+          script: python3 scripts/smoke/android.py "$(ls $RUNNER_TEMP/app/*.apk | head -1)" ${{ matrix.kind == 'tv' && '--tv' || '' }}
       - name: Stop the server
         if: always()
         env:
