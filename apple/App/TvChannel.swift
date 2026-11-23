@@ -128,7 +128,7 @@ struct ChannelPlayer: View {
         // What's on says itself for a moment on every change, then gets out of the way.
         .task(id: bannerShown) {
             guard banner else { return }
-            try? await Task.sleep(nanoseconds: 7_000_000_000)
+            try? await Task.sleep(nanoseconds: 3_000_000_000) // the banner shows for three seconds
             if !Task.isCancelled { withAnimation { banner = false } }
         }
         // When a programme ends the banner moves on to the next.
