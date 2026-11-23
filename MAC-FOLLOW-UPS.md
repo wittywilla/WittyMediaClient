@@ -6,6 +6,27 @@ Newest first. Each section is one pass that needs a Mac: Xcode, the iPhone and A
 app. Work through the newest first, tick each box here as you go, commit the ticks, and say in the PR what ran and what
 didn't. The GitHub issues labelled `mac` point at these sections.
 
+## 0.8.1-alpha: the centred card for a computer's settings (2026-11-22)
+
+Written 2026-11-22 on the Windows PC. Every screen Apple TV sends to a computer (the server's desktop-only settings,
+and a module's page Apple TV can't show) is now one centred card, as the sign-in screens are: the server's name small
+under the glow, the setting's symbol and name, one line, the QR code large on a white tile with "or open" and the
+address under it, what is set now in a card, **Back** focused, and the server's own words at the foot. One view,
+`OnAComputerCard` in `apple/App/ModulePages.swift`, draws both `EditorOnComputerPage` and `ModuleOnPhonePage`.
+Compiled by CI's macOS runner only. Android TV's twin ran here: compare `docs/mac-081/tv-card-android-1080p.png`.
+
+- [ ] **1.** Apple TV simulator (1080p), against the 0.8.1 server of the section below, signed in as its administrator.
+- [ ] **2.** You → **Libraries**, **Metadata and artwork**, **Live transcoding**, **Remote Access**, **Backup**: each card
+  is centred, the QR code is the largest thing on it and scans with a phone, the address under it is readable from a
+  sofa, the "set now" card shows (Libraries: the count and kinds; Backup: the schedule), and **Back** has focus.
+  Menu and Back both return to You. Nothing on it names a keyboard key.
+- [ ] **3.** A long name and address: rename a library to a long name, open Libraries; and open the card through a
+  long address (a WittyPlay library's settings): the heading wraps to two lines at most, the address wraps between
+  its parts, Back still shows without scrolling.
+- [ ] **4.** A module's page (Statistics, or the Folder browser if installed): the same card, saying to open it on a
+  phone or computer, with no "set now" card.
+- [ ] **5.** Light theme (You → Look and theme → Light): the glow, the white tile and the words still read.
+
 ## WittyTV guide and Who's watching? on Apple TV (not done on Windows)
 
 The Android TV changes in this pass have no Apple TV twin yet, and Swift can't be compiled on the Windows PC. For the Mac:
