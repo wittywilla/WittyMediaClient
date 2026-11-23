@@ -2,6 +2,11 @@
 <!-- Copyright (C) 2026 WittyWilla and contributors -->
 # Mac follow-ups
 
+**Start with WittyMediaServer's [MAC-START-HERE.md](https://github.com/wittywilla/WittyMediaServer/blob/v0.8.1-alpha/MAC-START-HERE.md)**: what the Mac needs, how to clone every repository,
+and the order to do everything in. Its parts 4 to 6 are this repository's (the desktop app, iPhone and iPad, Apple
+TV), and each item names the section below that has its long steps. Add new Mac work in both: an item there, the
+steps here.
+
 Newest first. Each section is one pass that needs a Mac: Xcode, the iPhone and Apple TV simulators, the macOS desktop
 app. Work through the newest first, tick each box here as you go, commit the ticks, and say in the PR what ran and what
 didn't. The GitHub issues labelled `mac` point at these sections.
