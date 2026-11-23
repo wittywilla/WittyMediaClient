@@ -68,6 +68,8 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.core.graphics.toColorInt
 import androidx.core.net.toUri
+import com.wittywilla.wittymediaclient.net.levelOf
+import com.wittywilla.wittymediaclient.net.summaryOf
 import com.wittywilla.wittymediaclient.net.ApiError
 import com.wittywilla.wittymediaclient.net.DeviceSession
 import com.wittywilla.wittymediaclient.net.PairInfo
@@ -106,6 +108,8 @@ private val ICONS: Map<String, () -> ImageVector> = mapOf(
     // From away: the globe the app already has, for reaching the server from anywhere.
     "settings_input_antenna" to { Symbols.Globe },
     "cast" to { Symbols.Devices }, "groups" to { Symbols.Group },
+    // The settings the web had alone (Video quality, Pages and menu, Network, Data folder), with the symbols the app has.
+    "high_quality" to { Symbols.Tune }, "view_quilt" to { Symbols.TopMenu }, "lan" to { Symbols.Antenna }, "folder" to { Symbols.Server },
 )
 
 private fun youIcon(name: String): ImageVector = ICONS[name]?.invoke() ?: Symbols.Info
@@ -168,8 +172,17 @@ fun YouScreen(nav: Nav, s: Map<String, String>) {
         layoutEditor = nav.has("sdui-experiences"),
         off = com.wittywilla.wittymediaclient.player.ScreenTimeWatch.limits?.features?.filterValues { !it }?.keys.orEmpty(),
     )
+    // The settings menu every client draws (the server's, else this app's copy), and on a TV what is set on each row
+    // it can't change there (the server's TV summaries), so those rows still say something.
+    val bundledMenu = remember { Assets.settingsMenu(context) }
+    val menu = nav.settingsMenu ?: bundledMenu
+    var summaries by remember { mutableStateOf(emptyMap<String, String>()) }
+    fun elsewhere(row: YouRow): Boolean = metrics.tv && row.opens !is YouOpens.Native &&
+        nav.tvLevels.levelOf(com.wittywilla.wittymediaclient.net.SettingsMenuRow(path = row.path, part = row.part)) == com.wittywilla.wittymediaclient.net.TV_DESKTOP_ONLY
     fun open(row: YouRow) {
         val title = s[row.key].orEmpty()
+        // A page a TV doesn't change: the card with that setting's address and its QR code, in the row's place.
+        if (elsewhere(row)) { nav.push(Route.OnPhone(title, row.path)); return }
         (row.opens as? YouOpens.Sdui)?.let { nav.go(nav.sduiRouter.resolve(it.path)); return }
         nav.push(
             when (val opens = row.opens) {
@@ -190,20 +203,28 @@ fun YouScreen(nav: Nav, s: Map<String, String>) {
         )
     }
     val danger = MaterialTheme.colorScheme.error
-    val groups = youGroups(who).map { group ->
+    val visible = youGroups(who, menu)
+    val summaryIds = visible.flatMap { it.rows }.filter { elsewhere(it) }
+        .map { nav.tvLevels.summaryOf(com.wittywilla.wittymediaclient.net.SettingsMenuRow(path = it.path, summary = it.summary)) }.filter { it.isNotEmpty() }.distinct()
+    LaunchedEffect(summaryIds) {
+        for (id in summaryIds) runCatching { api.tvSummary(id) }.getOrNull()?.lines?.firstOrNull()?.let { line -> summaries = summaries + (id to line) }
+    }
+    val groups = visible.map { group ->
         group.key to group.rows.map { row ->
             GroupRow(
                 title = s[row.key].orEmpty(),
                 onClick = { open(row) },
                 icon = youIcon(row.icon),
                 tint = tint(row.tint),
-                value = when (row.key) {
-                    "rowNames" -> me?.let { avatarName(it.displayName, it.name) }.orEmpty()
-                    "rowTwoStep" -> twoStep?.let { s[if (it.on) "on" else "off"] }.orEmpty()
-                    "rowDevices" -> deviceCount?.toString().orEmpty()
-                    "rowTheme" -> themeName(nav, themes, nav.themeChoice, s)
-                    "rowTopMenu" -> if (nav.topMenu.isEmpty()) "" else nav.topMenu.size.toString()
-                    "rowAboutServer" -> version
+                value = if (elsewhere(row)) {
+                    summaries[nav.tvLevels.summaryOf(com.wittywilla.wittymediaclient.net.SettingsMenuRow(path = row.path, summary = row.summary))] ?: s["onAComputer"].orEmpty()
+                } else when (row.value) {
+                    "name" -> me?.let { avatarName(it.displayName, it.name) }.orEmpty()
+                    "twoStep" -> twoStep?.let { s[if (it.on) "on" else "off"] }.orEmpty()
+                    "devices" -> deviceCount?.toString().orEmpty()
+                    "theme" -> themeName(nav, themes, nav.themeChoice, s)
+                    "topMenu" -> if (nav.topMenu.isEmpty()) "" else nav.topMenu.size.toString()
+                    "version" -> version
                     else -> ""
                 },
                 destructive = row.tint == "danger",

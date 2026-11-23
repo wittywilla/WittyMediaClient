@@ -390,6 +390,9 @@ class Nav(val app: WittyApp, private val s: Map<String, String>) {
         private set
     // How much of each screen a TV offers, from the server's catalogue (net/TvLevels.kt).
     var tvLevels by mutableStateOf<com.wittywilla.wittymediaclient.net.TvLevelTable?>(null)
+
+    // The server's settings menu (net/SettingsMenu.kt), or null until read and from a server older than it.
+    var settingsMenu by mutableStateOf<com.wittywilla.wittymediaclient.net.SettingsMenu?>(null)
         private set
 
     // The card in place of a server page a TV doesn't offer, or null when it opens. Only with the server's table.
@@ -446,8 +449,8 @@ class Nav(val app: WittyApp, private val s: Map<String, String>) {
         val io = kotlinx.coroutines.Dispatchers.IO
         if (sduiNav == null) kotlinx.coroutines.withContext(io) { client.keptNavigation() }?.let { sduiNav = it }
         kotlinx.coroutines.withContext(io) { runCatching { client.navigation() } }.onSuccess { if (sdui === client) sduiNav = it.value }.onFailure { handleExpired(it) }
-        kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Default) { runCatching { client.catalog().let { SduiCardStyles.use(it.cardStyles); SduiRouter(it.routes, it.commands) to it.tvLevels } } }
-            .onSuccess { if (sdui === client) { sduiRouter = it.first; tvLevels = it.second } }
+        kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Default) { runCatching { client.catalog().let { SduiCardStyles.use(it.cardStyles); Triple(SduiRouter(it.routes, it.commands), it.tvLevels, it.settingsMenu) } } }
+            .onSuccess { if (sdui === client) { sduiRouter = it.first; tvLevels = it.second; it.third?.takeIf { m -> m.groups.isNotEmpty() }?.let { m -> settingsMenu = m } } }
         loadExperiences()
     }
 

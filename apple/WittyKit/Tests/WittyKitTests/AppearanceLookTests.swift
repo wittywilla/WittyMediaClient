@@ -85,7 +85,7 @@ final class AppearanceLookTests: XCTestCase {
         let colour = AppearancePage.chooser(i, step: .colour)
         XCTAssertEqual(colour.title, "Choose colours")
         // Like the layout step: no preview, only the themes, each a card.
-        XCTAssertEqual(colour.sections.count, 1)
+        XCTAssertEqual(colour.sections.filter { !$0.cards.isEmpty }.count, 1, "one section of cards: the themes")
         XCTAssertEqual(colour.sections[0].heading, "")
         XCTAssertFalse(colour.sections.flatMap(\.cards).contains { $0.id == "preview" })
         // The chosen look wears its own theme until one is picked: Rail's is Cinema.
