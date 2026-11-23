@@ -56,6 +56,9 @@ Not ported, and why:
   If it is, port Android's `SduiTvEmpty` (`android/.../ui/SduiRender.kt`): the title, the words and a focused button.
 - [ ] **6.** iPhone simulator: Sign in with a code. The words should say a phone can be signed in this way, and must
   not mention a TV only.
+- [ ] **7.** (With #102 merged.) Apple TV simulator, two servers on the network, one named so it sorts first and
+  started a few seconds after the other: on Choose a server, the row that took focus first must stay where it is when
+  the second answers, and OK must open the highlighted server (`Discovery.keepOrder`, `ConnectViews.swift` `show`).
 
 ## 0.8.1-alpha: the centred card for a computer's settings (2026-11-22)
 
