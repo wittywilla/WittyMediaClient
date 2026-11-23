@@ -21,6 +21,10 @@ What changed in WittyMediaClient, newest first. What changed before it had a rep
 
 **Android TV and Apple TV**
 
+- **The video player on Android TV has a new bar:** the title, the seek bar with the time gone and left, Play and 10 s back and on, then round buttons for Audio, Subtitles, Quality, Speed, Scenes, Info and More that show their names when focused. Watch party, Play on, 3D and Leave are under More. The bar sits well inside a TV's edge (#78).
+- **Audio, Subtitles, Quality and Speed menus on every native player** (Android TV, Android phones, Apple TV, iPhone and iPad): fully usable with a remote, Back closes them, and the choice in use is ticked. Tracks are named by language with the track's own name under it ("English · Commentary with …", "SDH", "Forced") and what kind they are ("AC3 · 5.1", "Pictures"); one with no language is "Track 2", never "Unknown" (#78).
+- **Scenes as a grid of pictures**, with each scene's name and time, on Android TV, Apple TV and phones. The film pauses while it's open and plays on when it closes.
+- **Subtitle size** (small to extra large) on Android TV and phones, kept for every video.
 - **A channel in a bumper or a gap** names the next real programme ("Up next: …, at 8:30") in its banner and in the guide, not "We'll be right back".
 - **An empty library on Android TV** shows its name, why it's empty and a button to focus, not a line at the top edge with nothing to select.
 - **First-time setup on Android TV:** the colours step starts with a theme focused, and the preview no longer takes the first press. Import a theme is hidden on a TV.

@@ -29,16 +29,10 @@ data class VideoFacts(
 )
 
 // The tracks as a controller lists them: the playback answer's index as the id, and a name a person reads.
-fun remoteTracks(tracks: List<Track>): List<RemoteTrack> = tracks.distinctBy { it.index }.take(RemoteState.MAX_TRACKS).map { t ->
-    val language = t.languageName.ifEmpty { t.language.ifEmpty { "Unknown" } }
-    val channels = when (t.channels) {
-        0 -> ""
-        1 -> "Mono"
-        2 -> "Stereo"
-        6 -> "5.1"
-        8 -> "7.1"
-        else -> "${t.channels} channels"
-    }
+// The language as the players name it (player/TrackWords.kt); a track with no language and no name is "Track 2".
+fun remoteTracks(tracks: List<Track>): List<RemoteTrack> = tracks.distinctBy { it.index }.take(RemoteState.MAX_TRACKS).mapIndexed { i, t ->
+    val language = com.wittywilla.wittymediaclient.player.TrackWords.language(t).ifEmpty { if (t.title.isBlank()) "Track ${i + 1}" else "" }
+    val channels = com.wittywilla.wittymediaclient.player.TrackWords.channels(t.channels)
     RemoteTrack(trackId(t.index), listOf(language, t.title, channels).filter { it.isNotEmpty() }.distinct().joinToString(" · "), t.language)
 }
 

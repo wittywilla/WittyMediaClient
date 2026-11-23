@@ -71,4 +71,10 @@ object ViewPrefsStore {
     // auto (the server's choice), standard or robust.
     fun streaming(context: Context): String = prefs(context).getString(STREAMING, "auto") ?: "auto"
     fun setStreaming(context: Context, value: String) = prefs(context).edit().putString(STREAMING, value).apply()
+
+    // How big subtitles are drawn on this device, for every video: 0.8 small to 1.5 extra large, as the website's sizes.
+    val SUBTITLE_SIZES = listOf(0.8 to "Small", 1.0 to "Medium", 1.25 to "Large", 1.5 to "Extra large")
+    fun subtitleSize(context: Context): Double = prefs(context).getFloat(SUBTITLE_SIZE, 1f).toDouble().coerceIn(0.5, 2.0)
+    fun setSubtitleSize(context: Context, value: Double) = prefs(context).edit().putFloat(SUBTITLE_SIZE, value.toFloat()).apply()
+    private const val SUBTITLE_SIZE = "subtitleSize"
 }

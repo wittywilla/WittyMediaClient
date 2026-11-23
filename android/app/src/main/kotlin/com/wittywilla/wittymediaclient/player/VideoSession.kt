@@ -59,6 +59,8 @@ private data class VideoAsk(
     val burn: Boolean = false,
     val video: Int? = null,
     val flatten3d: Boolean = false,
+    // The viewer's choice of size and rate for this video: null leaves it to the server (Auto).
+    val quality: String? = null,
     val startSec: Double? = null,
     val convert: Boolean = false,
     val reload: Boolean = false,
@@ -123,6 +125,9 @@ class VideoSession(private val nav: Nav, val id: Long, private val startAt: Doub
     var prefs by mutableStateOf(ViewPrefsStore.load(app, id))
         private set
     var mini by mutableStateOf(false)
+    // How big subtitles are drawn, on this device for every video (ViewPrefsStore.SUBTITLE_SIZES).
+    var subtitleSize by mutableDoubleStateOf(ViewPrefsStore.subtitleSize(app))
+        private set
 
     // Watch next: the next episode or in the list, else the server's recommendation.
     var next by mutableStateOf<Item?>(null)
@@ -304,6 +309,7 @@ class VideoSession(private val nav: Nav, val id: Long, private val startAt: Doub
                     video = want.video,
                     streaming = streaming.takeIf { it != "auto" },
                     measuredKbps = robustKbps(streaming),
+                    quality = want.quality,
                 ),
             )
             val before = stream
@@ -462,6 +468,19 @@ class VideoSession(private val nav: Nav, val id: Long, private val startAt: Doub
     fun chooseSubtitle(index: Int, burn: Boolean) {
         ask = ask.copy(subtitle = index, burn = burn, startSec = filmSec, reload = burn || ask.burn, waitMs = 0)
     }
+
+    // "" for Auto, "original", or a preset's choice: the stream is asked for again from the same place.
+    fun chooseQuality(choice: String) {
+        ask = ask.copy(quality = choice, startSec = filmSec, reload = true, waitMs = 0)
+    }
+
+    fun changeSubtitleSize(value: Double) {
+        subtitleSize = value
+        ViewPrefsStore.setSubtitleSize(app, value)
+    }
+
+    // The picture for a scene in the scenes panel.
+    fun scenePicture(i: Int): String = api.sceneUrl(id, SceneRules.pictureSec(stream?.chapters.orEmpty(), i, durationSec))
 
     fun chooseVideo(index: Int) {
         ask = ask.copy(video = index, startSec = filmSec, reload = true, waitMs = 0)

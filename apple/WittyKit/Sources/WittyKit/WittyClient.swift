@@ -1102,6 +1102,8 @@ public final class WittyClient: @unchecked Sendable {
 
     public func posterURL(_ item: Item) -> URL? { URL(string: "\(root)\(apiPath)/items/\(item.id)/poster?v=\(item.updatedAt ?? 0)") }
     /// An album's or an artist's cover: the poster of the track the server chose for it.
+    /// A small picture of a video at a whole second, for the scenes panel (GET /items/{id}/scene/{sec}).
+    public func sceneURL(_ item: Int64, sec: Int) -> URL? { URL(string: "\(root)\(apiPath)/items/\(item)/scene/\(sec)") }
     public func coverURL(_ item: Int64) -> URL? { URL(string: "\(root)\(apiPath)/items/\(item)/poster") }
     public func posterURL(_ show: Show) -> URL? { URL(string: "\(root)\(apiPath)/shows/\(show.id)/art/poster?v=\(show.updatedAt ?? 0)") }
     public func backdropURL(_ item: Item) -> URL? { URL(string: "\(root)\(apiPath)/items/\(item.id)/backdrop?v=\(item.updatedAt ?? 0)") }

@@ -393,6 +393,12 @@ data class Track(
     val delivery: String = "",
     val url: String = "",
     val text: Boolean = false,
+    // What the file marks the track as: the one to play by default, only the foreign lines (forced), for the deaf and
+    // hard of hearing (sdh), or someone talking over the film (commentary). See docs/CLIENT-API.md, Playback.
+    @SerialName("default") val isDefault: Boolean = false,
+    val forced: Boolean = false,
+    val sdh: Boolean = false,
+    val commentary: Boolean = false,
 )
 
 @Serializable

@@ -30,8 +30,10 @@ import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.safeDrawingPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
@@ -44,11 +46,19 @@ import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableDoubleStateOf
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
+import com.wittywilla.wittymediaclient.ui.remoteRow
+import com.wittywilla.wittymediaclient.ui.WebIcons
+import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
@@ -66,11 +76,14 @@ import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.ProgressBarRangeInfo
 import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.heading
+import androidx.compose.ui.semantics.paneTitle
 import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.progressBarRangeInfo
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.setProgress
 import androidx.compose.ui.semantics.stateDescription
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.core.view.WindowCompat
@@ -97,10 +110,10 @@ import com.wittywilla.wittymediaclient.net.Item
 import com.wittywilla.wittymediaclient.net.Playback
 import com.wittywilla.wittymediaclient.net.PlaybackRequest
 import com.wittywilla.wittymediaclient.net.QualityMenu
-import com.wittywilla.wittymediaclient.net.Track
 import com.wittywilla.wittymediaclient.net.problemWords
 import com.wittywilla.wittymediaclient.ui.ActionButton
 import com.wittywilla.wittymediaclient.ui.ErrorText
+import com.wittywilla.wittymediaclient.ui.FocusBox
 import com.wittywilla.wittymediaclient.ui.LocalFocusMemory
 import com.wittywilla.wittymediaclient.ui.LocalMetrics
 import com.wittywilla.wittymediaclient.ui.Nav
@@ -121,15 +134,13 @@ private const val NEXT_COUNTDOWN_SEC = 8
 const val PLAYBACK_PROFILE = "androidtv"
 private const val LOST = "Lost contact with your server. Check that it is running, then try again."
 
-private fun trackName(t: Track): String {
-    val language = t.languageName.ifEmpty { if (t.language.isEmpty() || t.language == "und") "Unlabelled" else Locale.forLanguageTag(t.language).displayLanguage.ifEmpty { t.language } }
-    // A text subtitle's format means nothing to anyone. A picture-based one's does: it may have to be burned in.
-    val codec = if (t.text) "" else t.codec.uppercase(Locale.ROOT)
-    return listOf(language, t.title, codec, if (t.channels > 0) "${t.channels}ch" else "")
-        .filter { it.isNotEmpty() }.joinToString(" · ")
-}
+// The menus over the picture. Each is a list down the right-hand side that a remote walks with Up and Down, opens
+// on the choice in use, and closes with Back.
+private enum class Picker { None, Audio, Subtitles, Quality, Speed, Scenes, More }
 
-private enum class Picker { None, Audio, Subtitles, Quality }
+// The speeds the website offers (web/src/player/speed.ts), up to the server's limit.
+private val SPEEDS = listOf(0.5, 0.75, 1.0, 1.25, 1.5, 1.75, 2.0, 2.5, 3.0, 3.5, 4.0, 5.0, 6.0, 8.0, 10.0, 12.0, 16.0)
+internal fun speedWords(s: Double): String = if (s == 1.0) "Normal" else "${if (s == s.toLong().toDouble()) s.toLong().toString() else s.toString()}×"
 
 // What to ask the server for. A new value of this opens or changes the stream. Reload means the
 // address may well be the same and the player has given up on it, so it has to open it again.
@@ -199,6 +210,10 @@ fun PlayerScreen(nav: Nav, id: Long, startOver: Boolean) {
     // This player as another device and a watch party see it. What it does is filled in below, once it's defined.
     val remoteTarget = remember(player) { ScreenVideoTarget(id, player) }
     var partyOpen by remember { mutableStateOf(false) }
+    var speed by remember { mutableFloatStateOf(1f) }
+    var maxSpeed by remember { mutableDoubleStateOf(4.0) }
+    var subtitleSize by remember { mutableDoubleStateOf(ViewPrefsStore.subtitleSize(context)) }
+    LaunchedEffect(Unit) { runCatching { maxSpeed = api.playerPrefs().maxSpeed.takeIf { it > 0 } ?: 4.0 } }
 
     fun currentFilmSec() = player.currentPosition / 1000.0 + (stream?.timeOffsetSec ?: 0.0)
 
@@ -247,6 +262,8 @@ fun PlayerScreen(nav: Nav, id: Long, startOver: Boolean) {
 
     DisposableEffect(player) {
         val listener = object : Player.Listener {
+            // A watch party or another device may change the speed too: the menu shows what plays.
+            override fun onPlaybackParametersChanged(p: androidx.media3.common.PlaybackParameters) { speed = p.speed }
             override fun onIsPlayingChanged(isPlaying: Boolean) {
                 playing = isPlaying
                 // Saving on pause means a phone that dies during a pause loses nothing.
@@ -407,6 +424,16 @@ fun PlayerScreen(nav: Nav, id: Long, startOver: Boolean) {
         }
     }
 
+    var resumeAfterScenes by remember { mutableStateOf(false) }
+    LaunchedEffect(picker) {
+        if (picker == Picker.Scenes) {
+            if (player.playWhenReady && remoteTarget.steering == null) { player.pause(); resumeAfterScenes = true }
+        } else if (resumeAfterScenes) {
+            resumeAfterScenes = false
+            player.play()
+        }
+    }
+
     LaunchedEffect(controls, interactions, playing, picker) {
         if (controls && playing && picker == Picker.None) {
             delay(CONTROLS_HIDE_MS)
@@ -421,7 +448,11 @@ fun PlayerScreen(nav: Nav, id: Long, startOver: Boolean) {
     // they hid starts from Play again, where OK does what people expect.
     val focusMemory = LocalFocusMemory.current
     LaunchedEffect(controls) { if (!controls) focusMemory.last = null }
-    DisposableEffect(Unit) { onDispose { focusMemory.last = null } }
+    DisposableEffect(Unit) {
+        // What had focus on the page before (its Play button) isn't on this bar: start from Play.
+        focusMemory.last = null
+        onDispose { focusMemory.last = null }
+    }
 
     // How far can be reached depends on the stream: a growing one has to be
     // reopened to go past what exists so far (see `seek` in docs/CLIENT-API.md).
@@ -529,8 +560,12 @@ fun PlayerScreen(nav: Nav, id: Long, startOver: Boolean) {
     ) {
         AndroidView(
             factory = { PlayerView(it).apply { useController = false; this.player = player } },
-            // The picture doesn't count as using the phone, and a TV would put up its screensaver.
-            update = { it.keepScreenOn = playing },
+            // The picture doesn't count as using the phone, and a TV would put up its screensaver. Subtitles keep the
+            // system's caption style and take the size chosen in the Subtitles menu.
+            update = {
+                it.keepScreenOn = playing
+                it.subtitleView?.setFractionalTextSize(androidx.media3.ui.SubtitleView.DEFAULT_TEXT_SIZE_FRACTION * subtitleSize.toFloat())
+            },
             modifier = Modifier.fillMaxSize(),
         )
         // Sound has no picture of its own.
@@ -540,6 +575,9 @@ fun PlayerScreen(nav: Nav, id: Long, startOver: Boolean) {
             }
         }
         val left = countdown
+        // What the More menu offers besides 3D and leaving, where the server and this profile have them (player/RemoteHub.kt).
+        val partyAction: (() -> Unit)? = if (nav.has(SYNCPLAY_FEATURE) && (item?.kind ?: "video") == "video") ({ if (nav.app.remote.party.room != null) partyOpen = true else nav.push(com.wittywilla.wittymediaclient.ui.RemoteRoute.Party(id)) }) else null
+        val playOnAction: (() -> Unit)? = if (nav.app.remote.canControl) ({ nav.app.remote.sourcePlayingVideo()?.let { nav.push(com.wittywilla.wittymediaclient.ui.RemoteRoute.PlayOn(it)) } }) else null
         if (problem.isNotEmpty()) {
             Column(Modifier.align(Alignment.Center).safeDrawingPadding().padding(Space.S8), verticalArrangement = Arrangement.spacedBy(Space.S3)) {
                 ErrorText(problem)
@@ -569,24 +607,67 @@ fun PlayerScreen(nav: Nav, id: Long, startOver: Boolean) {
                     ask = ask.copy(quality = choice, startSec = clock.lastPlace() ?: currentFilmSec(), reload = true, waitMs = 0, attempt = ask.attempt + 1)
                     picker = Picker.None
                 },
-                modifier = Modifier.align(Alignment.Center).safeDrawingPadding(),
+                modifier = Modifier.align(Alignment.CenterEnd),
             )
-        } else if (picker != Picker.None && picker != Picker.Quality && current != null) {
-            TrackList(
-                tracks = if (picker == Picker.Audio) current.audio else current.subtitles,
-                selected = if (picker == Picker.Audio) current.audioIndex else current.subtitleIndex,
-                allowOff = picker == Picker.Subtitles,
-                onPick = { index ->
-                    val at = clock.lastPlace() ?: currentFilmSec()
-                    ask = if (picker == Picker.Audio) {
-                        ask.copy(audio = index, startSec = at, reload = false, waitMs = 0, attempt = ask.attempt + 1)
-                    } else {
-                        ask.copy(subtitle = index, startSec = at, reload = false, waitMs = 0, attempt = ask.attempt + 1)
+        } else if (picker == Picker.Audio && current != null) {
+            PlayerMenu("Audio & language", Modifier.align(Alignment.CenterEnd)) {
+                TrackWords.audioList(current.audio).forEach { (t, name) ->
+                    MenuChoice(name.title, name.sub, name.detail, t.index == current.audioIndex) {
+                        ask = ask.copy(audio = t.index, startSec = clock.lastPlace() ?: currentFilmSec(), reload = false, waitMs = 0, attempt = ask.attempt + 1)
+                        picker = Picker.None
                     }
+                }
+            }
+        } else if (picker == Picker.Subtitles && current != null) {
+            fun pick(index: Int) {
+                ask = ask.copy(subtitle = index, startSec = clock.lastPlace() ?: currentFilmSec(), reload = false, waitMs = 0, attempt = ask.attempt + 1)
+                picker = Picker.None
+            }
+            PlayerMenu("Subtitles", Modifier.align(Alignment.CenterEnd)) {
+                MenuChoice("Off", "", "", current.subtitleIndex < 0) { pick(-1) }
+                TrackWords.subtitleList(current.subtitles).forEach { (t, name) ->
+                    MenuChoice(name.title, name.sub, name.detail, t.index == current.subtitleIndex) { pick(t.index) }
+                }
+                MenuHeading("Text size")
+                ViewPrefsStore.SUBTITLE_SIZES.forEach { (size, words) ->
+                    // Changing the size leaves the menu open, so the difference can be seen and changed again.
+                    MenuChoice(words, "", "", subtitleSize == size, takeFocus = false) {
+                        subtitleSize = size
+                        ViewPrefsStore.setSubtitleSize(context, size)
+                    }
+                }
+            }
+        } else if (picker == Picker.Speed) {
+            PlayerMenu("Playback speed", Modifier.align(Alignment.CenterEnd)) {
+                SPEEDS.filter { it <= maxSpeed }.forEach { s ->
+                    MenuChoice(speedWords(s), if (s > 4.0) "May be muted" else "", "", speed.toDouble() == s) {
+                        remoteTarget.askSpeed(s.toFloat())
+                        picker = Picker.None
+                    }
+                }
+            }
+        } else if (picker == Picker.Scenes && current != null) {
+            ScenesGrid(
+                chapters = current.chapters,
+                current = SceneRules.current(current.chapters, filmSec),
+                picture = { i -> api.sceneUrl(id, SceneRules.pictureSec(current.chapters, i, duration)) },
+                onPick = { start ->
+                    seekFilm(start)
                     picker = Picker.None
                 },
-                modifier = Modifier.align(Alignment.Center).safeDrawingPadding(),
             )
+        } else if (picker == Picker.More) {
+            PlayerMenu("More", Modifier.align(Alignment.CenterEnd)) {
+                partyAction?.let { MenuChoice("Watch party", "Watch together with others, in step", "", false, takeFocus = true) { picker = Picker.None; it() } }
+                playOnAction?.let { MenuChoice("Play on…", "Send this to another screen", "", false, takeFocus = partyAction == null) { picker = Picker.None; it() } }
+                if (current?.stereo.orEmpty().isNotEmpty()) {
+                    MenuChoice(if (ask.flatten3d) "Show as stored" else "Show in 2D", "This is a 3D film", "", false, takeFocus = partyAction == null && playOnAction == null) {
+                        ask = ask.copy(flatten3d = !ask.flatten3d, startSec = clock.lastPlace() ?: currentFilmSec(), reload = false, waitMs = 0, attempt = ask.attempt + 1)
+                        picker = Picker.None
+                    }
+                }
+                MenuChoice("Stop and leave", "", "", false, takeFocus = partyAction == null && playOnAction == null && current?.stereo.isNullOrEmpty()) { nav.pop() }
+            }
         } else if (controls) {
             Controls(
                 title = item?.showTitle?.ifEmpty { null } ?: item?.title.orEmpty(),
@@ -599,16 +680,16 @@ fun PlayerScreen(nav: Nav, id: Long, startOver: Boolean) {
                 skipLabel = skipping.label,
                 nextDue = nextDue,
                 hasNext = current?.nextId != null,
-                hasAudioChoice = (current?.audio?.size ?: 0) > 1,
+                // One sound track still says which language and how many speakers.
+                hasAudioChoice = (current?.audio?.size ?: 0) > 0,
                 hasSubtitles = (current?.subtitles?.size ?: 0) > 0,
                 hasQuality = (current?.quality?.presets?.size ?: 0) > 0,
                 hasInfo = current?.explain != null,
-                stereo = current?.stereo.orEmpty().isNotEmpty(),
-                flattened = ask.flatten3d,
+                speedWords = "Speed ${if (speed == 1f) "1×" else speedWords(speed.toDouble())}",
+                hasScenes = (current?.chapters?.size ?: 0) > 1,
+                onSpeed = { picker = Picker.Speed },
+                onScenes = { picker = Picker.Scenes },
                 onInfo = { showInfo = true },
-                onFlatten = {
-                    ask = ask.copy(flatten3d = !ask.flatten3d, startSec = clock.lastPlace() ?: currentFilmSec(), reload = false, waitMs = 0, attempt = ask.attempt + 1)
-                },
                 onTouched = { interactions++ },
                 onPlayPause = { interactions++; playPause() },
                 onSeekBack = { interactions++; seekFilm(currentFilmSec() - seekStepSec(0)) },
@@ -618,9 +699,7 @@ fun PlayerScreen(nav: Nav, id: Long, startOver: Boolean) {
                 onAudio = { picker = Picker.Audio },
                 onSubtitles = { picker = Picker.Subtitles },
                 onQuality = { picker = Picker.Quality },
-                onBack = nav::pop,
-                onPlayOn = if (nav.app.remote.canControl) ({ nav.app.remote.sourcePlayingVideo()?.let { nav.push(com.wittywilla.wittymediaclient.ui.RemoteRoute.PlayOn(it)) } }) else null,
-                onParty = if (nav.has(SYNCPLAY_FEATURE) && (item?.kind ?: "video") == "video") ({ if (nav.app.remote.party.room != null) partyOpen = true else nav.push(com.wittywilla.wittymediaclient.ui.RemoteRoute.Party(id)) }) else null,
+                onMore = { picker = Picker.More },
                 modifier = Modifier.align(Alignment.BottomCenter),
             )
         } else {
@@ -757,7 +836,9 @@ fun SeekBar(
     }
 }
 
-@OptIn(ExperimentalLayoutApi::class)
+// The bar over the film on a TV: a soft shade from the foot rather than a box, the title over the seek bar, the times at
+// its two ends, then one row: playing on the left, the choices on the right with their names, and More for what's
+// seldom wanted. A focused button turns white, as on the TV's own players, so it can be seen from the couch.
 @Composable
 private fun Controls(
     title: String,
@@ -774,10 +855,11 @@ private fun Controls(
     hasSubtitles: Boolean,
     hasQuality: Boolean,
     hasInfo: Boolean,
-    stereo: Boolean,
-    flattened: Boolean,
+    speedWords: String,
+    hasScenes: Boolean,
+    onSpeed: () -> Unit,
+    onScenes: () -> Unit,
     onInfo: () -> Unit,
-    onFlatten: () -> Unit,
     onTouched: () -> Unit,
     onPlayPause: () -> Unit,
     onSeekBack: () -> Unit,
@@ -787,47 +869,139 @@ private fun Controls(
     onAudio: () -> Unit,
     onSubtitles: () -> Unit,
     onQuality: () -> Unit,
-    onBack: () -> Unit,
-    onPlayOn: (() -> Unit)? = null,
-    onParty: (() -> Unit)? = null,
+    onMore: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val metrics = LocalMetrics.current
-    // The player is always dark, whatever the theme.
+    val first = !nextDue && introEndSec == null
     Column(
         modifier
             .fillMaxWidth()
-            .background(Color(0xCC000000))
+            .background(Brush.verticalGradient(0f to Color.Transparent, 0.35f to Color(0x99000000), 1f to Color(0xE6000000)))
             .safeDrawingPadding()
-            .padding(horizontal = metrics.gutter, vertical = Space.S4),
+            // A TV may crop up to 5% of each edge (overscan): on one, the row stays well inside it.
+            .padding(start = metrics.gutter, end = metrics.gutter, top = Space.S16, bottom = if (metrics.tv) Space.S12 else Space.S4),
         verticalArrangement = Arrangement.spacedBy(Space.S2),
     ) {
-        Text(title, color = Color.White, style = MaterialTheme.typography.titleLarge)
-        if (subtitle.isNotEmpty()) Text(subtitle, color = Color(0xFFD0D0D8), style = MaterialTheme.typography.bodyMedium)
-        if (introEndSec != null) ActionButton(skipLabel, { onSeekTo(introEndSec) }, primary = true, requestFocus = true, focusKey = "c-skip")
-        if (nextDue) ActionButton("Next episode", onNext, primary = true, requestFocus = introEndSec == null, focusKey = "c-next-due")
-        if (canSeek) SeekBar(filmSec, durationSec, onTouched, onSeekTo)
-        FlowRow(horizontalArrangement = Arrangement.spacedBy(Space.S2), verticalArrangement = Arrangement.spacedBy(Space.S2), itemVerticalAlignment = Alignment.CenterVertically) {
-            ActionButton(if (playing) "Pause" else "Play", onPlayPause, primary = !nextDue && introEndSec == null, requestFocus = !nextDue && introEndSec == null, focusKey = "c-play")
-            if (canSeek) {
-                ActionButton("Back 10 s", onSeekBack, focusKey = "c-back")
-                ActionButton("Forward 10 s", onSeekForward, focusKey = "c-forward")
+        Text(title, color = Color.White, style = MaterialTheme.typography.headlineSmall, maxLines = 1, overflow = TextOverflow.Ellipsis)
+        if (subtitle.isNotEmpty()) Text(subtitle, color = Color(0xFFD0D0D8), style = MaterialTheme.typography.bodyLarge, maxLines = 1, overflow = TextOverflow.Ellipsis)
+        if (introEndSec != null || nextDue) {
+            Row(horizontalArrangement = Arrangement.spacedBy(Space.S3), modifier = Modifier.padding(top = Space.S2)) {
+                if (introEndSec != null) BarButton(null, skipLabel, { onSeekTo(introEndSec) }, focusKey = "c-skip", requestFocus = true, accent = true)
+                if (nextDue) BarButton(WebIcons.Next, "Next episode", onNext, focusKey = "c-next-due", requestFocus = introEndSec == null, accent = true)
             }
-            if (hasAudioChoice) ActionButton("Audio", onAudio, focusKey = "c-audio")
-            if (hasSubtitles) ActionButton("Subtitles", onSubtitles, focusKey = "c-subtitles")
-            if (hasQuality) ActionButton("Quality", onQuality, focusKey = "c-quality")
-            if (stereo) ActionButton(if (flattened) "Show as stored" else "Show in 2D", onFlatten, focusKey = "c-flatten")
-            if (hasInfo) ActionButton("Info", onInfo, focusKey = "c-info")
-            if (hasNext && !nextDue) ActionButton("Next episode", onNext, focusKey = "c-next")
-            if (onParty != null) ActionButton("Watch party", onParty, focusKey = "c-party")
-            if (onPlayOn != null) ActionButton("Play on…", onPlayOn, focusKey = "c-play-on")
-            // On a remote or a phone Back does this too; this is for those who look for it.
-            ActionButton("Leave", onBack, focusKey = "c-leave")
-            if (durationSec > 0) {
-                Text(
-                    "${clock(filmSec)} / ${clock(durationSec)}", color = Color.White, style = MaterialTheme.typography.bodyMedium,
-                    modifier = Modifier.semantics { contentDescription = "${spokenClock(filmSec)} of ${spokenClock(durationSec)}" },
-                )
+        }
+        if (canSeek) {
+            SeekBar(filmSec, durationSec, onTouched, onSeekTo)
+            Row(Modifier.fillMaxWidth()) {
+                Text(clock(filmSec), color = Color.White, style = MaterialTheme.typography.bodyMedium, modifier = Modifier.weight(1f).semantics { contentDescription = "${spokenClock(filmSec)} of ${spokenClock(durationSec)}" })
+                Text("−" + clock((durationSec - filmSec).coerceAtLeast(0.0)), color = Color(0xFFD0D0D8), style = MaterialTheme.typography.bodyMedium, modifier = Modifier.semantics { contentDescription = "${spokenClock((durationSec - filmSec).coerceAtLeast(0.0))} left" })
+            }
+        }
+        Row(Modifier.fillMaxWidth().padding(top = Space.S1).remoteRow(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Space.S2)) {
+            BarButton(if (playing) WebIcons.Pause else WebIcons.Play, null, onPlayPause, focusKey = "c-play", requestFocus = first, spoken = if (playing) "Pause" else "Play", big = true)
+            if (canSeek) {
+                BarButton(null, "−10", onSeekBack, focusKey = "c-back", spoken = "Back 10 seconds")
+                BarButton(null, "+10", onSeekForward, focusKey = "c-forward", spoken = "Forward 10 seconds")
+            }
+            if (hasNext && !nextDue) BarButton(WebIcons.Next, null, onNext, focusKey = "c-next", spoken = "Next episode")
+            Spacer(Modifier.weight(1f))
+            // Round icons that open into their name while focused: all of them fit, and the one in hand says what it is.
+            if (hasAudioChoice) BarButton(WebIcons.Audio, null, onAudio, focusKey = "c-audio", focusWords = "Audio")
+            if (hasSubtitles) BarButton(WebIcons.Subs, null, onSubtitles, focusKey = "c-subtitles", focusWords = "Subtitles")
+            if (hasQuality) BarButton(WebIcons.Tune, null, onQuality, focusKey = "c-quality", focusWords = "Quality")
+            BarButton(null, speedWords.removePrefix("Speed "), onSpeed, focusKey = "c-speed", spoken = "Playback speed, ${speedWords.removePrefix("Speed ")}", focusWords = speedWords)
+            if (hasScenes) BarButton(WebIcons.Chapters, null, onScenes, focusKey = "c-scenes", focusWords = "Scenes")
+            if (hasInfo) BarButton(WebIcons.Info, null, onInfo, focusKey = "c-info", spoken = "How this is playing", focusWords = "Info")
+            BarButton(WebIcons.More, null, onMore, focusKey = "c-more", spoken = "More", focusWords = "More")
+        }
+    }
+}
+
+// One of the bar's buttons: round with an icon alone, or a pill with words. Translucent at rest, white with dark ink
+// when focused, a little larger; the accent for Skip intro and Next episode. It remembers being focused, so coming back
+// from a menu lands on the button that opened it.
+@Composable
+private fun BarButton(
+    icon: androidx.compose.ui.graphics.vector.ImageVector?, words: String?, onClick: () -> Unit,
+    focusKey: String, requestFocus: Boolean = false, spoken: String? = null, big: Boolean = false, accent: Boolean = false,
+    focusWords: String? = null,
+) {
+    val interaction = remember { MutableInteractionSource() }
+    val focused by interaction.collectIsFocusedAsState()
+    val requester = remember { FocusRequester() }
+    val memory = LocalFocusMemory.current
+    if (memory.last == focusKey || (requestFocus && memory.last == null)) LaunchedEffect(focusKey) { runCatching { requester.requestFocus() } }
+    val scheme = MaterialTheme.colorScheme
+    val fill = when {
+        focused -> Color.White
+        accent -> scheme.primary
+        else -> Color(0x26FFFFFF)
+    }
+    val ink = when {
+        focused -> Color(0xFF101114)
+        accent -> scheme.onPrimary
+        else -> Color.White
+    }
+    val height = if (big) 60.dp else 48.dp
+    val shown = if (focused && focusWords != null) focusWords else words
+    val shape = Radius.FULL
+    Box(
+        Modifier
+            .graphicsLayer { val g = if (focused) 1.08f else 1f; scaleX = g; scaleY = g }
+            .focusRequester(requester)
+            .onFocusChanged { if (it.isFocused) memory.last = focusKey }
+            .height(height)
+            .then(if (shown == null) Modifier.width(height) else Modifier.widthIn(min = height))
+            .clip(shape)
+            .background(fill)
+            .clickable(interactionSource = interaction, indication = null, role = androidx.compose.ui.semantics.Role.Button, onClick = onClick)
+            .semantics { contentDescription = spoken ?: words ?: focusWords.orEmpty() }
+            .padding(horizontal = if (shown == null) 0.dp else Space.S4),
+        contentAlignment = Alignment.Center,
+    ) {
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Space.S2)) {
+            if (icon != null) androidx.compose.material3.Icon(icon, contentDescription = null, tint = ink, modifier = Modifier.size(if (big) 30.dp else 24.dp))
+            if (shown != null) Text(shown, color = ink, style = MaterialTheme.typography.labelLarge, fontWeight = androidx.compose.ui.text.font.FontWeight.SemiBold, maxLines = 1)
+        }
+    }
+}
+
+// The scenes as the website shows them: a grid of pictures from the film, each with its number, name and time, the
+// one playing marked. The film waits while it's open (see above). Up, Down, Left and Right move; OK plays from there.
+@Composable
+private fun ScenesGrid(chapters: List<com.wittywilla.wittymediaclient.net.Chapter>, current: Int, picture: (Int) -> String, onPick: (Double) -> Unit) {
+    val metrics = LocalMetrics.current
+    val grid = androidx.compose.foundation.lazy.grid.rememberLazyGridState()
+    LaunchedEffect(Unit) { grid.scrollToItem(current) }
+    Column(
+        Modifier.fillMaxSize().background(Color(0xF00B0C0F)).safeDrawingPadding()
+            .padding(start = metrics.gutter, end = metrics.gutter, top = Space.S10)
+            .semantics { paneTitle = "Scenes" },
+    ) {
+        Row(verticalAlignment = Alignment.Bottom, horizontalArrangement = Arrangement.spacedBy(Space.S3), modifier = Modifier.padding(bottom = Space.S4)) {
+            Text("Scenes", color = Color.White, style = MaterialTheme.typography.headlineSmall, modifier = Modifier.semantics { heading() })
+            Text("${chapters.size} scenes · the film waits while you choose", color = Color(0xFFB4B9C6), style = MaterialTheme.typography.bodyLarge)
+        }
+        androidx.compose.foundation.lazy.grid.LazyVerticalGrid(
+            androidx.compose.foundation.lazy.grid.GridCells.Fixed(4), state = grid,
+            horizontalArrangement = Arrangement.spacedBy(Space.S6), verticalArrangement = Arrangement.spacedBy(Space.S6),
+            contentPadding = androidx.compose.foundation.layout.PaddingValues(top = Space.S2, bottom = Space.S12, start = Space.S2, end = Space.S2),
+        ) {
+            items(chapters.size) { i ->
+                val c = chapters[i]
+                val name = SceneRules.name(chapters, i)
+                val now = i == current
+                Column {
+                    FocusBox({ onPick(c.start) }, Modifier.fillMaxWidth().aspectRatio(16f / 9f), label = "${i + 1}. $name, from ${spokenClock(c.start)}", state = if (now) "Playing now" else null, selected = now, takeFocus = now, shape = Radius.MD) {
+                        Box(Modifier.fillMaxSize()) {
+                            ServerImage(picture(i), 320.dp, 16f / 9f, Modifier.fillMaxSize(), placeholder = "${i + 1}")
+                            Text(clock(c.start), color = Color.White, style = MaterialTheme.typography.labelMedium, modifier = Modifier.align(Alignment.BottomEnd).padding(Space.S2).background(Color(0xB3000000), Radius.SM).padding(horizontal = Space.S2, vertical = 2.dp))
+                            if (now) Text("Playing now", color = MaterialTheme.colorScheme.onPrimary, style = MaterialTheme.typography.labelMedium, modifier = Modifier.align(Alignment.TopStart).padding(Space.S2).background(MaterialTheme.colorScheme.primary, Radius.SM).padding(horizontal = Space.S2, vertical = 2.dp))
+                        }
+                    }
+                    Text("${i + 1}. $name", color = if (now) Color.White else Color(0xFFD0D0D8), style = MaterialTheme.typography.titleSmall, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = Space.S2, start = Space.S1))
+                }
             }
         }
     }
@@ -839,43 +1013,54 @@ private fun QualityList(menu: QualityMenu, onPick: (String) -> Unit, modifier: M
     fun rate(kbps: Int) = if (kbps >= 1000) "${if (kbps % 1000 == 0) kbps / 1000 else "%.1f".format(Locale.ROOT, kbps / 1000.0)} Mbit/s" else "$kbps kbit/s"
     val now = menu.choice
     val auto = now.isEmpty() || now == "auto"
+    PlayerMenu("Quality", modifier) {
+        MenuChoice("Auto", "The server picks for this connection", "", auto) { onPick("") }
+        MenuChoice("Original", "As the file is", if (menu.sourceHeight > 0) "${menu.sourceHeight}p" else "", now == "original") { onPick("original") }
+        menu.presets.forEach { p -> MenuChoice(p.name, "", rate(p.kbps), now == p.choice) { onPick(p.choice) } }
+    }
+}
+
+// A menu over the picture, down the right-hand side: dark whatever the theme, as tall as the screen allows, and
+// scrolled to the choice in use, which takes focus.
+@Composable
+private fun PlayerMenu(heading: String, modifier: Modifier = Modifier, content: @Composable () -> Unit) {
     Column(
         modifier
-            .widthIn(max = 520.dp)
-            .background(Color(0xEE101114), Radius.LG)
+            .safeDrawingPadding()
+            .padding(end = LocalMetrics.current.gutter, top = Space.S8, bottom = Space.S8)
+            .width(440.dp)
+            .background(Color(0xF2101114), Radius.LG)
             .verticalScroll(rememberScrollState())
-            .padding(Space.S4),
-        verticalArrangement = Arrangement.spacedBy(Space.S2),
+            .padding(Space.S4)
+            .semantics { paneTitle = heading },
+        verticalArrangement = Arrangement.spacedBy(Space.S1),
     ) {
-        Text("Quality", color = Color.White, style = MaterialTheme.typography.titleMedium)
-        ActionButton("Auto", { onPick("") }, Modifier.fillMaxWidth(), selected = auto, takeFocus = auto)
-        ActionButton("Original" + if (menu.sourceHeight > 0) " · ${menu.sourceHeight}p" else "", { onPick("original") }, Modifier.fillMaxWidth(), selected = now == "original", takeFocus = now == "original")
-        menu.presets.forEach { p ->
-            val on = now == p.choice
-            ActionButton("${p.name} · ${rate(p.kbps)}", { onPick(p.choice) }, Modifier.fillMaxWidth(), selected = on, takeFocus = on)
-        }
+        Text(heading, color = Color.White, style = MaterialTheme.typography.titleLarge, modifier = Modifier.padding(start = Space.S2, bottom = Space.S2).semantics { heading() })
+        content()
     }
 }
 
 @Composable
-private fun TrackList(
-    tracks: List<Track>,
-    selected: Int,
-    allowOff: Boolean,
-    onPick: (Int) -> Unit,
-    modifier: Modifier = Modifier,
-) {
-    Column(
-        modifier
-            .widthIn(max = 520.dp)
-            .background(Color(0xEE101114), Radius.LG)
-            .verticalScroll(rememberScrollState())
-            .padding(Space.S4),
-        verticalArrangement = Arrangement.spacedBy(Space.S2),
+private fun MenuHeading(words: String) {
+    Text(words, color = Color(0xFFB4B9C6), style = MaterialTheme.typography.labelLarge, modifier = Modifier.padding(start = Space.S2, top = Space.S4, bottom = Space.S1).semantics { heading() })
+}
+
+// One choice: its name, a second line, a detail at the end, and a tick on the one in use. Focus starts on that one.
+@Composable
+private fun MenuChoice(title: String, sub: String, detail: String, chosen: Boolean, takeFocus: Boolean = chosen, onPick: () -> Unit) {
+    val accent = MaterialTheme.colorScheme.primary
+    FocusBox(
+        onPick, Modifier.fillMaxWidth(), label = listOf(title, sub, detail).filter { it.isNotEmpty() }.joinToString(", "),
+        state = if (chosen) "In use" else null, selected = chosen, takeFocus = takeFocus,
+        filled = if (chosen) accent.copy(alpha = 0.28f) else Color(0x14FFFFFF),
     ) {
-        if (allowOff) ActionButton("Off", { onPick(-1) }, Modifier.fillMaxWidth(), selected = selected == -1, takeFocus = selected == -1)
-        tracks.distinctBy { it.index }.forEach { t ->
-            ActionButton(trackName(t), { onPick(t.index) }, Modifier.fillMaxWidth(), selected = t.index == selected, takeFocus = t.index == selected)
+        Row(Modifier.fillMaxWidth().heightIn(min = LocalMetrics.current.minTarget).padding(horizontal = Space.S3, vertical = Space.S2), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Space.S3)) {
+            Text(if (chosen) "✓" else "", color = Color.White, style = MaterialTheme.typography.titleMedium, modifier = Modifier.width(20.dp))
+            Column(Modifier.weight(1f)) {
+                Text(title, color = Color.White, style = MaterialTheme.typography.titleMedium, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                if (sub.isNotEmpty()) Text(sub, color = Color(0xFFD0D0D8), style = MaterialTheme.typography.bodyMedium, maxLines = 2, overflow = TextOverflow.Ellipsis)
+            }
+            if (detail.isNotEmpty()) Text(detail, color = Color(0xFFB4B9C6), style = MaterialTheme.typography.bodyMedium, maxLines = 1)
         }
     }
 }
