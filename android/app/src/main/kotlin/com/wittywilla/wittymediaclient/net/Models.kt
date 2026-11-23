@@ -423,6 +423,8 @@ data class Playback(
     // A 3D picture stored in the frame: sbs or tab. Asking with `flatten3d` shows one eye.
     val stereo: String = "",
     val flattened: Boolean = false,
+    // The quality menu, for a video the server can offer one for.
+    val quality: QualityMenu? = null,
     // Named points in the film, for the scenes panel and the marks on the seek bar.
     val chapters: List<Chapter> = emptyList(),
     // A file with several pictures lists them; videoIndex is the one playing.
@@ -488,6 +490,25 @@ data class PlaybackRequest(
     val video: Int? = null,
     val streaming: String? = null,
     val measuredKbps: Int? = null,
+    // The viewer's choice of size and rate ("", "original", "h720-b4000"): docs/CLIENT-API.md, Quality.
+    val quality: String? = null,
+)
+
+// The quality menu's easy sizes, from a video's /playback answer: the sizes at or below the picture's own and within
+// the profile's limits.
+@Serializable
+data class QualityPreset(val name: String = "", val height: Int = 0, val kbps: Int = 0) {
+    // What a request asks for to get this size: at most this many lines and this rate.
+    val choice: String get() = "h$height-b$kbps"
+}
+
+@Serializable
+data class QualityMenu(
+    // What streams are made to now, in the form of a request's quality.
+    val choice: String = "",
+    val presets: List<QualityPreset> = emptyList(),
+    val sourceHeight: Int = 0,
+    val sourceKbps: Int = 0,
 )
 
 @Serializable
