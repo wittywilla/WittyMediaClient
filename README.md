@@ -146,7 +146,7 @@ A device refuses an APK it can't run when installing it, and nothing changes. Al
 
 ## Building and testing
 
-**Working on a Mac?** Start with [MAC-FOLLOW-UPS.md](MAC-FOLLOW-UPS.md), newest section first, and WittyMediaServer's [MAC-FOLLOW-UPS.md](https://github.com/wittywilla/WittyMediaServer/blob/v0.8.1-alpha/MAC-FOLLOW-UPS.md) for the server's own Mac items. What each app has of the server's 0.8.1 features is in [docs/PARITY-0.8.1.md](docs/PARITY-0.8.1.md).
+**Working on a Mac?** Start with WittyMediaServer's [MAC-START-HERE.md](https://github.com/wittywilla/WittyMediaServer/blob/v0.8.1-alpha/MAC-START-HERE.md): what to install, what to clone, and every Mac task in order. The apps' are parts 4 to 6, with the long steps in [MAC-FOLLOW-UPS.md](MAC-FOLLOW-UPS.md). What each app has of the server's 0.8.1 features is in [docs/PARITY-0.8.1.md](docs/PARITY-0.8.1.md).
 
 **Desktop.** You need [Node.js](https://nodejs.org) 22.12 or newer.
 
