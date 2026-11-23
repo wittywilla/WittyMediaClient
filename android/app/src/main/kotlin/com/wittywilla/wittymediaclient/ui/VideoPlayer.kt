@@ -474,7 +474,9 @@ private fun BottomBar(session: VideoSession, fit: Fit, open: Open, toggle: (Open
                     fill = if (remote) MaterialTheme.colorScheme.primary else Dark.bg3, ink = if (remote) MaterialTheme.colorScheme.onPrimary else Dark.fg,
                 )
                 PlayerIcon(WebIcons.Settings, "Viewing settings", icon, 24.dp, { toggle(Open.Settings) })
-                if (fit == Fit.Wide) {
+                // The keyboard's shortcuts, where there is a keyboard: a tablet held without one has no use for the list.
+                val keyboard = androidx.compose.ui.platform.LocalConfiguration.current.keyboard == android.content.res.Configuration.KEYBOARD_QWERTY
+                if (fit == Fit.Wide && keyboard) {
                     Pressable({ toggle(Open.Keys) }, Modifier.size(44.dp), shape = CircleShape, fill = Color.Transparent, label = "Keyboard shortcuts", ring = false) {
                         Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { Text("?", color = Color.White, fontSize = 15.sp, fontWeight = FontWeight.Bold) }
                     }
