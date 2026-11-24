@@ -69,7 +69,7 @@ fun LookScreen(nav: Nav, s: Map<String, String>) {
     val check: @Composable (Boolean) -> Unit = { on ->
         Icon(Symbols.Check, null, tint = LocalExtraColours.current.accentText, modifier = Modifier.padding(0.dp).graphicsLayer { alpha = if (on) 1f else 0f })
     }
-    SettingsPage(nav, s["rowLook"].orEmpty(), s["lookHint"].orEmpty()) {
+    SettingsPage(nav, s["rowLayout"].orEmpty(), s["lookHint"].orEmpty()) {
         if (list == null || list.experiences.isEmpty()) {
             Note(s["lookNone"].orEmpty())
             return@SettingsPage
@@ -186,21 +186,11 @@ fun FirstLookScreen(nav: Nav, s: Map<String, String>) {
                     }
                 }
             } else {
-                // The chosen layout, large, in the theme picked.
-                val theme = themeOf(shownTheme)
-                DesignSection(s["firstThemePreview"].orEmpty()) {
-                    // Only a picture: it takes no focus, so the first Down from the heading reaches the themes (#76).
-                    PreviewPanel(listOfNotNull(look?.name, theme?.shownName).factsLine(), theme?.let { if (it.scheme == "light") s["themeLight"].orEmpty() else s["themeDark"].orEmpty() }.orEmpty()) {
-                        Box(Modifier.fillMaxWidth(), contentAlignment = androidx.compose.ui.Alignment.Center) {
-                            // At most 320 tall (460 on a TV), as Apple's, so the one preview never fills the screen.
-                            ThemedThumb(wire, look?.name.orEmpty(), theme, if (portrait) Modifier.width(178.dp) else Modifier.widthIn(max = if (LocalMetrics.current.tv) LocalMetrics.current.u(736) else 512.dp), false, portrait)
-                        }
-                    }
-                }
                 // The theme shown as chosen takes the focus; when it isn't one of these (a web-only theme), the first does.
                 val focusTheme = themes.firstOrNull { it.id == shownTheme }?.id ?: themes.firstOrNull()?.id
                 if (themeRequired == null) {
-                    DesignSection(s["firstThemeThemes"].orEmpty()) {
+                    // Only the themes, as the layout step has only the layouts: each card is the chosen layout in that theme.
+                    DesignSection("") {
                         DesignCards(themes.size) { i ->
                             val t = themes[i]
                             DesignCard(
@@ -234,19 +224,3 @@ private fun ThemedThumb(wire: com.wittywilla.wittymediaclient.net.SduiWire, name
     LayoutThumb(wire, name, modifier, selected, bg = bg, panel = panel, card = androidx.compose.ui.graphics.lerp(panel, ink, 0.12f), accent = accent, ink = ink, portrait = portrait)
 }
 
-// A card's look without being a control: what the theme page previews. A TV's remote passes over it.
-@Composable
-private fun PreviewPanel(title: String, sub: String, picture: @Composable () -> Unit) {
-    val ds = LocalDesignSizes.current
-    val metrics = LocalMetrics.current
-    val scheme = MaterialTheme.colorScheme
-    Column(
-        Modifier.fillMaxWidth().background(scheme.surface, metrics.corner(10)).padding(ds.gap * 0.8f)
-            .semantics(mergeDescendants = true) { contentDescription = listOf(title, sub).filter { it.isNotEmpty() }.joinToString(", ") },
-    ) {
-        Box(Modifier.fillMaxWidth().clip(metrics.corner(6))) { picture() }
-        Spacer(Modifier.height(6.dp))
-        Text(title, color = scheme.onSurface, fontSize = ds.small, fontWeight = androidx.compose.ui.text.font.FontWeight.ExtraBold)
-        if (sub.isNotEmpty()) Text(sub, color = scheme.onSurfaceVariant, fontSize = ds.tiny)
-    }
-}

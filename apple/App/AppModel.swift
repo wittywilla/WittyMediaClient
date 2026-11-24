@@ -13,6 +13,10 @@ enum SharedData {
 
     static let strings: [String: String] = load("strings.en").flatMap { try? JSONDecoder().decode([String: String].self, from: $0) } ?? [:]
 
+    /// The settings menu as this app was built with it (shared/data/settingsmenu.json): the server's own in its
+    /// catalogue comes first (SDUICatalog.settingsMenu).
+    static let settingsMenu: SettingsMenu? = SettingsMenu.bundled(load("settingsmenu"))
+
     struct ThemeColours: Decodable {
         let background, panel, card, border, text, textSecondary, accent, onAccent, danger: String
         let textHint, accentText, ok: String?

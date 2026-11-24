@@ -122,14 +122,11 @@ fun SideMenu(nav: Nav, closed: Dp, labels: Boolean, top: Dp, bottom: Dp, modifie
         verticalArrangement = Arrangement.spacedBy(4.dp),
         horizontalAlignment = if (showLabels) Alignment.Start else Alignment.CenterHorizontally,
     ) {
-        // The rail's mark is a square badge with its letter centred; open, the name follows it in its colours. A sidebar
+        // The rail's mark is the server's logo (its mark until it has one); open, the name follows it in its colours. A sidebar
         // has the name alone. Both are drawn from `brandParts`.
         val brand = LocalExtraColours.current.brandAccent
-        val name = com.wittywilla.wittymediaclient.net.BrandName.plain(nav.brandName, nav.brandParts)
         Row(Modifier.padding(start = if (showLabels) 8.dp else 0.dp, top = 6.dp, bottom = 12.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-            if (rail) Box(Modifier.size(40.dp).background(scheme.primary.copy(alpha = 0.16f), RoundedCornerShape(10.dp)), contentAlignment = Alignment.Center) {
-                Text(name.firstOrNull()?.uppercase() ?: "W", color = brand, fontSize = 20.sp, fontWeight = FontWeight.Bold)
-            }
+            if (rail) ServerMark(40.dp, nav.brandLogo)
             if (showLabels) Text(
                 brandAnnotated(nav.brandName, nav.brandParts, scheme.onBackground, brand), fontSize = 17.sp, fontWeight = FontWeight.Bold,
                 maxLines = 1, overflow = TextOverflow.Ellipsis,
@@ -299,13 +296,10 @@ fun TvSideMenu(nav: Nav, closed: Dp, open: Dp, modifier: Modifier = Modifier) {
             .padding(vertical = metrics.u(48), horizontal = metrics.u(16)).semantics { role = Role.Tab },
         verticalArrangement = Arrangement.spacedBy(metrics.u(12), Alignment.CenterVertically),
     ) {
-        // The server's name in its colours: a centred mark badge closed, the whole name open (never left out of a frame).
+        // The server's name in its colours: the server's logo closed, the logo and the whole name open (never left out of a frame).
         val brand = LocalExtraColours.current.brandAccent
-        val name = com.wittywilla.wittymediaclient.net.BrandName.plain(nav.brandName, nav.brandParts)
         Row(Modifier.padding(start = metrics.u(8), bottom = metrics.u(16)), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(metrics.u(16))) {
-            Box(Modifier.size(metrics.u(56)).background(scheme.primary.copy(alpha = 0.16f), RoundedCornerShape(metrics.u(14))), contentAlignment = Alignment.Center) {
-                Text(name.firstOrNull()?.uppercase() ?: "W", color = brand, fontSize = metrics.u(30).value.sp, fontWeight = FontWeight.Bold)
-            }
+            ServerMark(metrics.u(56), nav.brandLogo)
             if (inside) Text(brandAnnotated(nav.brandName, nav.brandParts, scheme.onBackground, brand), fontSize = metrics.u(29).value.sp, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis)
         }
         nav.sduiMenuAll.forEach { (entry, route) ->

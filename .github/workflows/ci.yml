@@ -87,11 +87,17 @@ jobs:
           # The server's branch of the same name as this release branch (v0.8.0-alpha), else its default.
           ref: ${{ startsWith(github.base_ref, 'v0.') && github.base_ref || (github.ref_type == 'branch' && startsWith(github.ref_name, 'v0.') && github.ref_name) || '' }}
           path: .server
-          sparse-checkout: themes
+          sparse-checkout: |
+            themes
+            pkg/sdui/data
       - name: Theme data is up to date
         env:
           WMS_THEMES: .server/themes
         run: node shared/scripts/build-themes.mjs --check
+      - name: Settings menu is the server's
+        env:
+          WMS_SDUI_DATA: .server/pkg/sdui/data
+        run: node shared/scripts/sync-settings-menu.mjs --check
       - name: Install
         working-directory: desktop
         run: npm ci --ignore-scripts --no-audit --no-fund

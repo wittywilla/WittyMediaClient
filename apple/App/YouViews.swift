@@ -38,6 +38,7 @@ struct YouView: View {
     @State private var hasGames = false
     @State private var serverVersion = ""
     @State private var confirmSignOut = false
+    @State private var summaries: [String: String] = [:]
     @Namespace private var scope
 
     private var user: User? { model.user }
@@ -59,137 +60,130 @@ struct YouView: View {
 
     // MARK: Rows
 
-    private func row(_ route: Route, _ icon: String, _ tint: String, _ title: String, value: String = "") -> some View {
-        NavigationLink(value: route) {
-            RowLabel(icon: icon, tint: tint, title: say(title), value: value)
-        }
-        .rowStyle()
+    /// The settings menu every client draws (the server's, else this app's copy): Android's You page, so the
+    /// groups, rows, order and words are the same here, on Android, the web and its TV mode.
+    private var menu: SettingsMenu {
+        center.catalog.settingsMenu ?? SharedData.settingsMenu ?? SettingsMenu()
     }
 
-    /// One of the server's own pages, by the path the web gives it.
-    private func page(_ path: String, _ icon: String, _ tint: String = RowTint.quiet, title: String, value: String = "") -> some View {
-        row(.page(path), icon, tint, title, value: value)
+    private var facts: Set<String> {
+        var f: Set<String> = ["app", "servers"]
+        if isAdmin { f.insert("admin") }
+        if isAdult { f.insert("adult") }
+        if metrics.tv { f.insert("tv") }
+        if twoStep?.available != false { f.insert("twoStep") }
+        if hasGames { f.insert("games") }
+        if PeerLibrary.available { f.insert("fromAway") }
+        if model.has("sdui-experiences") { f.formUnion(["looks", "layoutEditor"]) }
+        if model.has("module-settings") { f.insert("moduleSettings") }
+        if model.remote.hasRemote { f.insert("remote") }
+        if model.remote.hasParties { f.insert("parties") }
+        return f
     }
+
+    /// What this profile's limits turn off: rows for those aren't offered.
+    private var off: Set<String> {
+        model.household.allows(ProfileFeature.sharing) ? [] : ["sharing"]
+    }
+
+    /// Where a row goes here: this app's own screen, else the server's SDUI page, else the server's page (on Apple TV
+    /// the card with its address and QR code).
+    private func route(_ row: SettingsMenu.Row) -> Route? {
+        switch row.native ?? "" {
+        case "names": return .names
+        case "password": return .password
+        case "twoStep": return .twoStep
+        case "devices": return .devices
+        case "signInTv": return .signInTv
+        case "profiles": if model.has("parental-controls") { return .family(.profiles) }
+        case "modules": return .modules
+        case "look", "theme": return .theme
+        case "editLayout": return .layoutEditor
+        case "nameAndLogo": return .brandEditor
+        case "playingHere": return .mediaExtras
+        case "servers": return .servers
+        case "away": return .away
+        case "licences": return .notices
+        case "appLog": return .logs
+        #if os(tvOS)
+        case "topMenu": return .topMenu
+        #endif
+        default: break
+        }
+        guard let path = row.path, !path.isEmpty else { return nil }
+        if row.sdui == true, path == "/manage/libraries" { return .sdui(SDUIPlace(page: "manage-libraries", params: [:], route: path)) }
+        return .page(path)
+    }
+
+    /// A row Apple TV can't change: it stays in its place and opens the card with that setting's address.
+    private func elsewhere(_ row: SettingsMenu.Row) -> Bool {
+        guard metrics.tv, row.native == nil || ["editLayout", "nameAndLogo"].contains(row.native ?? "") else { return false }
+        return SettingsMenu.level(of: row, in: center.catalog.tvLevels) == TvLevel.desktopOnly
+    }
+
+    private func value(_ row: SettingsMenu.Row) -> String {
+        if elsewhere(row) { return summaries[SettingsMenu.summary(of: row, in: center.catalog.tvLevels)] ?? say("onAComputer") }
+        switch row.value ?? "" {
+        case "name": return user?.shownName ?? ""
+        case "twoStep": return twoStep.map { say($0.on ? "on" : "off") } ?? ""
+        case "devices": return deviceCount.map(String.init) ?? ""
+        case "theme": return ThemeView.name(of: model.themeChoice, server: model.themeId, list: model.themeList)
+        case "topMenu": return model.topMenu.isEmpty ? "" : "\(model.topMenu.count)"
+        case "servers": return "\(model.recent.count)"
+        case "away": return model.awayRowValue
+        case "version": return serverVersion
+        default: return ""
+        }
+    }
+
+    private func label(_ row: SettingsMenu.Row) -> RowLabel {
+        RowLabel(icon: row.icon.apple, tint: row.tint == "danger" ? RowTint.quiet : row.tint, title: say(row.key), value: value(row), destructive: row.tint == "danger")
+    }
+
+    @ViewBuilder private func rowView(_ row: SettingsMenu.Row, first: Bool) -> some View {
+        if elsewhere(row), let path = row.path {
+            NavigationLink(value: Route.page(path)) { label(row) }
+                .rowStyle()
+                .accessibilityIdentifier("row." + row.id)
+        } else if let to = route(row) {
+            if first {
+                NavigationLink(value: to) { label(row) }
+                    .rowStyle()
+                    .accessibilityIdentifier("row." + row.id)
+                    .firstFocus(in: scope)
+            } else {
+                NavigationLink(value: to) { label(row) }
+                    .rowStyle()
+                    .accessibilityIdentifier("row." + row.id)
+            }
+        }
+    }
+
+    private static let together = ["remoteControl", "watchParty"]
 
     @ViewBuilder private var groups: some View {
-        ListGroup(title: say("groupAccount")) {
-            row(.names, "person.text.rectangle", RowTint.account, "rowNames", value: user?.shownName ?? "")
-                .firstFocus(in: scope)
-            if isAdult {
-                row(.password, "key", RowTint.password, "rowPassword")
-                if twoStep?.available != false {
-                    row(.twoStep, "lock.shield", RowTint.twoStep, "rowTwoStep",
-                        value: twoStep.map { say($0.on ? "on" : "off") } ?? "")
-                }
-            }
-            row(.devices, "ipad.and.iphone", RowTint.devices, "rowDevices", value: deviceCount.map(String.init) ?? "")
-            if model.has("profile-avatars"), model.household.allows(ProfileFeature.editProfile) {
-                NavigationLink(value: Route.family(.myPicture)) {
-                    RowLabel(icon: "face.smiling", tint: RowTint.family, title: "Your picture")
-                }
-                .rowStyle()
-            }
-        }
-        if isAdult {
-            ListGroup(title: say("groupHousehold")) {
-                // Every device signed in can let another one in: a TV approves a phone's or another TV's code
-                // and PIN typed with the remote, as a phone does (the camera is the phone's extra way).
-                row(.signInTv, "tv", RowTint.tv, "rowSignInTv")
-                if model.has("parental-controls") {
-                    // The app's own pages where the server has them: see ProfileSettings.swift.
-                    row(.family(.profiles), "figure.2.and.child.holdinghands", RowTint.family, "rowProfiles")
-                } else {
-                    page("/settings/users", "figure.2.and.child.holdinghands", RowTint.family, title: "rowProfiles")
+        let shown = menu.visible(facts: facts, off: off) { route($0) != nil || Self.together.contains($0.native ?? "") }
+        // Remote control and Watch party are the app's own rows for them (TogetherRows), where the first of the two is.
+        let togetherAt = shown.flatMap(\.rows).first { Self.together.contains($0.native ?? "") }?.id
+        ForEach(Array(shown.enumerated()), id: \.element.id) { gi, g in
+            ListGroup(title: say(g.key)) {
+                ForEach(Array(g.rows.enumerated()), id: \.element.id) { ri, row in
+                    if Self.together.contains(row.native ?? "") {
+                        if row.id == togetherAt { TogetherRows() }
+                    } else {
+                        rowView(row, first: gi == 0 && ri == 0)
+                    }
                 }
             }
         }
-        ListGroup(title: say("groupYours")) {
-            page("/review", "sparkles", RowTint.year, title: "rowYourYear")
-            page("/collections", "square.stack", RowTint.teal, title: "rowCollections")
-            if model.household.allows(ProfileFeature.sharing) {
-                page("/settings/sharing", "link", RowTint.account, title: "rowShareLinks")
-            }
-            page("/settings/activity", "waveform.path.ecg", RowTint.gold, title: "rowActivity")
-            page("/settings/notifications", "bell", RowTint.gold, title: "rowNotifications")
-            if hasGames {
-                page("/settings/games", "gamecontroller", RowTint.devices, title: "rowGameSettings")
-                page("/controllers", "dpad", RowTint.password, title: "rowControllers")
-            }
-        }
-        ListGroup(title: say("groupDevice")) {
-            row(.theme, "paintpalette", RowTint.teal, "rowLookAndTheme", value: ThemeView.name(of: model.themeChoice, server: model.themeId, list: model.themeList))
-            if model.has("theme-personal") {
-                NavigationLink(value: Route.personalColours) {
-                    RowLabel(icon: "paintbrush", tint: RowTint.teal, title: "Your colours")
-                }
-                .rowStyle()
-                .accessibilityIdentifier("row.personalColours")
-            }
-            if model.has("sdui-personal") {
-                NavigationLink(value: Route.layoutEditor) {
-                    RowLabel(icon: "rectangle.3.group", tint: RowTint.teal, title: "Edit layout")
-                }
-                .rowStyle()
-                .accessibilityIdentifier("row.layoutEditor")
-            }
-            if model.has("module-settings") {
-                NavigationLink(value: Route.modules) {
-                    RowLabel(icon: "puzzlepiece.extension", tint: RowTint.quiet, title: "Modules")
-                }
-                .rowStyle()
-                .accessibilityIdentifier("row.modules")
-            }
-            NavigationLink(value: Route.mediaExtras) {
-                RowLabel(icon: "forward.end", tint: RowTint.gold, title: "Skipping and moving pictures")
-            }
-            .rowStyle()
-            #if os(tvOS)
-            row(.topMenu, "menubar.rectangle", RowTint.tv, "rowTopMenu", value: model.topMenu.isEmpty ? "" : "\(model.topMenu.count)")
-            #endif
-            if PeerLibrary.available {
-                row(.away, "dot.radiowaves.left.and.right", RowTint.account, "rowAway", value: model.awayRowValue)
-            }
-            row(.servers, "server.rack", RowTint.quiet, "rowServers", value: "\(model.recent.count)")
-            TogetherRows()
-        }
-        if isAdmin {
-            ListGroup(title: say("groupServer")) {
-                // The server's own page (manage-libraries): each library opens its scan page as a layer, the same on every app.
-                row(.sdui(SDUIPlace(page: "manage-libraries", params: [:], route: "/manage/libraries")), "books.vertical", RowTint.quiet, "rowLibraries")
-                page("/settings/metadata", "photo.on.rectangle", title: "rowMetadata")
-                page("/fix-matches", "wand.and.stars", title: "rowFixMatches")
-                page("/settings/playback", "play.rectangle", title: "rowPlayback")
-                page("/settings/channels", "antenna.radiowaves.left.and.right", title: "rowLiveTv")
-                page("/settings/gaming", "gamecontroller", title: "rowGaming")
-                page("/settings/couch", "desktopcomputer", title: "rowGamePcs")
-                page("/settings/transcoding", "bolt", title: "rowTranscoding")
-                page("/settings/library-transcoding", "arrow.triangle.2.circlepath", title: "rowLibraryTranscoding")
-                page("/settings/remote", "globe", title: "rowRemote")
-                NavigationLink(value: Route.brandEditor) {
-                    RowLabel(icon: "textformat", tint: RowTint.teal, title: "Server name and logo")
-                }
-                .rowStyle()
-                .accessibilityIdentifier("row.brandEditor")
-                page("/settings/wittyrigs", "server.rack", title: "rowWittyRigs")
-            }
-            ListGroup(title: say("groupMaintenance")) {
-                page("/settings/logs", "doc.text.magnifyingglass", title: "rowLogs")
-                page("/settings/diagnoser", "stethoscope", title: "rowDiagnoser")
-                page("/settings/modules", "puzzlepiece.extension", title: "rowModules")
-                page("/settings/backup", "externaldrive", title: "rowBackup")
-                page("/settings/repair", "wrench.and.screwdriver", title: "rowRepair")
-                NavigationLink(value: Route.page("/settings/reset")) {
-                    RowLabel(icon: "arrow.counterclockwise", tint: RowTint.quiet, title: say("rowReset"), destructive: true)
-                }
-                .rowStyle()
-            }
-        }
-        ListGroup(title: say("groupHelp")) {
-            page("/help", "questionmark.circle", RowTint.gold, title: "rowHelp")
-            page("/settings/about", "info.circle", title: "rowAboutServer", value: serverVersion)
-            page("/legal", "doc.plaintext", title: "rowLegal")
-            row(.notices, "text.book.closed", RowTint.quiet, "rowLicences")
-            row(.logs, "list.bullet.rectangle", RowTint.quiet, "rowAppLog")
+    }
+
+    /// What Apple TV says is set on the rows it can't change: the first line of each setting's summary.
+    private func loadSummaries() async {
+        guard metrics.tv else { return }
+        let ids = Set(menu.groups.flatMap(\.rows).filter(elsewhere).map { SettingsMenu.summary(of: $0, in: center.catalog.tvLevels) }.filter { !$0.isEmpty })
+        for id in ids {
+            if let line = (try? await client.tvSummary(id))?.lines.first { summaries[id] = line }
         }
     }
 
@@ -300,6 +294,7 @@ struct YouView: View {
         .focusRoot(scope)
         .pageBackground(palette)
         .task { await load() }
+        .task { await loadSummaries() }
         .confirmationDialog(say("signOut"), isPresented: $confirmSignOut, titleVisibility: .hidden) {
             Button(say("signOut"), role: .destructive) { model.requestSignOut() }
         }
@@ -354,6 +349,15 @@ struct NamesView: View {
             AvatarTile(name: previewName, size: 64, picture: model.user?.avatar)
                 .frame(maxWidth: .infinity)
                 .animation(.easeOut(duration: Tokens.Motion.appear), value: AvatarLook.colour(for: previewName))
+            // The picture is changed from here, as on Android (You's own row for it is gone: the settings menu is one list).
+            if model.has("profile-avatars"), model.household.allows(ProfileFeature.editProfile) {
+                ListGroup(title: "") {
+                    NavigationLink(value: Route.family(.myPicture)) {
+                        RowLabel(icon: "face.smiling", tint: "#0a6fb8", title: say("changePicture"))
+                    }
+                    .rowStyle()
+                }
+            }
             VStack(alignment: .leading, spacing: Tokens.Space.s1) {
                 OutlinedField(label: say("profileNameLabel"), text: $profileName, icon: "person.text.rectangle")
                 Secondary(profileName.trimmingCharacters(in: .whitespaces).isEmpty && adult ? say("profileNameEmptyHint") : say("profileNameHint"))

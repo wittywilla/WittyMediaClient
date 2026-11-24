@@ -97,8 +97,10 @@ public struct SDUICatalog: Codable, Equatable, Sendable {
     public var typeRoles: [String: SDUITypeRole] = [:]
     /// How much of each screen a TV offers (WittyMediaServer 0.8.1, TvLevels.swift). Nil from an older server.
     public var tvLevels: TvLevelTable?
+    /// The settings menu every client draws (WittyMediaServer 0.8.3, SettingsMenu.swift). Nil from an older server.
+    public var settingsMenu: SettingsMenu?
 
-    enum CodingKeys: String, CodingKey { case revision, cardStyles, routes, commands, icons, components, theme, tvLevels }
+    enum CodingKeys: String, CodingKey { case revision, cardStyles, routes, commands, icons, components, theme, tvLevels, settingsMenu }
 
     private struct Component: Codable { let type: String; let tokens: SDUIStyleTokens? }
     private struct ThemeVocabulary: Codable { let typeRoles: [String: SDUITypeRole]? }
@@ -113,6 +115,7 @@ public struct SDUICatalog: Codable, Equatable, Sendable {
         try box.encode(componentTokens.map { Component(type: $0.key, tokens: $0.value) }.sorted { $0.type < $1.type }, forKey: .components)
         try box.encode(ThemeVocabulary(typeRoles: typeRoles), forKey: .theme)
         try box.encodeIfPresent(tvLevels, forKey: .tvLevels)
+        try box.encodeIfPresent(settingsMenu, forKey: .settingsMenu)
     }
 
     public init(from decoder: Decoder) throws {
@@ -130,6 +133,7 @@ public struct SDUICatalog: Codable, Equatable, Sendable {
         componentTokens = Dictionary(parts.compactMap { part in part.tokens.map { (part.type, $0) } }, uniquingKeysWith: { first, _ in first })
         typeRoles = (try? box.decodeIfPresent(ThemeVocabulary.self, forKey: .theme))?.typeRoles ?? [:]
         tvLevels = try? box.decodeIfPresent(TvLevelTable.self, forKey: .tvLevels)
+        settingsMenu = try? box.decodeIfPresent(SettingsMenu.self, forKey: .settingsMenu)
     }
 
     public init(cardStyles: [SDUICardStyle], routes: [SDUIRouteRule], commands: [SDUICommand]) {

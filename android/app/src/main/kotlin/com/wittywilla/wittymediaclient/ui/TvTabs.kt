@@ -228,12 +228,14 @@ private fun TvTopBar(nav: Nav, bar: TvBar, libraries: List<Library>) {
             .focusGroup(),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        // The server's name, in its coloured parts, at the start of the bar in every theme and layout.
+        // The server's logo and name, in its coloured parts, at the start of the bar in every theme and layout, as the
+        // web's TV mode and Apple TV draw them.
         val extra = LocalExtraColours.current
+        ServerMark(metrics.u(44), nav.brandLogo, Modifier.padding(start = metrics.gutter, end = metrics.u(14)))
         Text(
             brandAnnotated(nav.brandName, nav.brandParts, MaterialTheme.colorScheme.onBackground, extra.brandAccent),
             style = MaterialTheme.typography.label.copy(fontWeight = FontWeight.Bold), maxLines = 1, overflow = TextOverflow.Ellipsis,
-            modifier = Modifier.padding(start = metrics.gutter).widthIn(max = metrics.u(320)).semantics { heading() },
+            modifier = Modifier.widthIn(max = metrics.u(320)).semantics { heading() },
         )
         Box(Modifier.weight(1f).onSizeChanged { viewport = it.width }.fadeEnd(metrics.u(FADE))) {
             Row(

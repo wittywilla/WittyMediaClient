@@ -68,6 +68,9 @@ object Assets {
 
     fun themes(context: Context): ThemeFile = json.decodeFromString(read(context, "themes.json"))
 
+    // The settings menu as this app was built with it (shared/data/settingsmenu.json), for a server that doesn't send its own.
+    fun settingsMenu(context: Context): com.wittywilla.wittymediaclient.net.SettingsMenu = json.decodeFromString(read(context, "settingsmenu.json"))
+
     fun strings(context: Context): Map<String, String> =
         json.decodeFromString<JsonObject>(read(context, "strings.en.json")).mapValues { it.value.jsonPrimitive.content }
 

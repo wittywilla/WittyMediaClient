@@ -416,20 +416,21 @@ public enum AppearancePage {
                                   lead: "Each look is a layout of its own: the menu, Home and the cards, drawn as they are on this device. Colours are the next step, and you can change both any time in Settings.",
                                   sections: [.secC("", lookCards(i), 2)] + foot, actions: [.A1(next)])
         case .colour:
+            // Only the themes, as the layout step has only the layouts: each card is the chosen layout in that theme.
             let shown = colourTheme(i)
-            let theme = i.themes.first { $0.id == shown }
-            let preview = DesignPageSpec.Card(id: "preview", title: [look?.name, theme?.name].compactMap { $0 }.factsLine(),
-                                              subtitle: theme.map { $0.dark ? "Dark" : "Light" } ?? "", on: false,
-                                              swatches: swatches(for: shown, in: i.themes), wire: wire, portrait: portrait)
-            var sections: [DesignPageSpec.Section] = [.secC("Preview", [preview], 1)]
+            var sections: [DesignPageSpec.Section] = []
             if i.requiredTheme != nil {
+                let theme = i.themes.first { $0.id == shown }
+                let card = DesignPageSpec.Card(id: "theme-" + shown, title: theme?.name ?? shown, subtitle: theme.map { $0.dark ? "Dark" : "Light" } ?? "",
+                                               on: true, swatches: swatches(for: shown, in: i.themes), wire: wire, portrait: portrait)
+                sections.append(.secC("", [card], 2))
                 sections.append(.secN("", setBy))
             } else {
                 let cards = i.themes.map { t in
                     DesignPageSpec.Card(id: "theme-" + t.id, title: t.name, subtitle: t.imported ? "Imported · yours" : (t.dark ? "Dark" : "Light"),
                                         on: t.id == shown, swatches: t.swatches.isEmpty ? fallbackSwatches : t.swatches, wire: wire, portrait: portrait)
                 }
-                sections.append(.secC("Themes", cards, 2))
+                sections.append(.secC("", cards, 2))
                 if i.canPickFile { sections.append(.secP("", [.Cc("Import a theme…")])) }
             }
             let back: [DesignPageSpec.Action] = i.requiredExperience == nil ? [.A2("Back")] : []

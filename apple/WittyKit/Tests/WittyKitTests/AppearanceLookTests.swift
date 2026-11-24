@@ -84,19 +84,20 @@ final class AppearanceLookTests: XCTestCase {
         i.pendingExperience = "rail"
         let colour = AppearancePage.chooser(i, step: .colour)
         XCTAssertEqual(colour.title, "Choose colours")
-        XCTAssertEqual(colour.sections[0].heading, "Preview")
-        XCTAssertEqual(colour.sections[0].cards.map(\.id), ["preview"])
+        // Like the layout step: no preview, only the themes, each a card.
+        XCTAssertEqual(colour.sections.filter { !$0.cards.isEmpty }.count, 1, "one section of cards: the themes")
+        XCTAssertEqual(colour.sections[0].heading, "")
+        XCTAssertFalse(colour.sections.flatMap(\.cards).contains { $0.id == "preview" })
         // The chosen look wears its own theme until one is picked: Rail's is Cinema.
-        XCTAssertTrue(colour.sections[1].cards.first { $0.id == "theme-cinema" }?.on == true)
-        XCTAssertEqual(colour.sections[0].cards[0].swatches, AppearancePage.swatches(for: "cinema", in: i.themes))
+        XCTAssertTrue(colour.sections[0].cards.first { $0.id == "theme-cinema" }?.on == true)
         // Every colour card draws the chosen layout in its own colours.
         let wire = colour.sections[0].cards[0].wire
-        XCTAssertTrue(colour.sections[1].cards.allSatisfy { $0.wire == wire && $0.portrait })
+        XCTAssertTrue(colour.sections[0].cards.allSatisfy { $0.wire == wire && $0.portrait })
         XCTAssertEqual(colour.actions.map(\.title), ["Use this", "Back"])
 
         i.pendingTheme = "aeroDay"
         let picked = AppearancePage.chooser(i, step: .colour)
-        XCTAssertEqual(picked.sections[0].cards[0].swatches, AppearancePage.swatches(for: "aeroDay", in: i.themes))
+        XCTAssertTrue(picked.sections[0].cards.first { $0.id == "theme-aeroDay" }?.on == true)
     }
 
     func testARequiredLookOpensOnColoursAndARequiredThemeFinishesFromTheLayout() {
