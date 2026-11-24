@@ -217,7 +217,7 @@ def signed_in(secs, what, since=None):
     while not find('Smoke Film'):
         past_welcome()
         s = new_session(since) or p2p_connected(since)
-        if s and in_front() and not find('Choose a layout|Choose colours|digits entered|Choose a server'):
+        if s and in_front() and not on_welcome() and not find('digits entered|Choose a server'):
             log('signed in, says the server:', s)
             return
         if time.time() > end:
@@ -225,12 +225,18 @@ def signed_in(secs, what, since=None):
         time.sleep(1)
 
 
+def on_welcome():
+    """The first-run look: its title, or (once that has scrolled away) its grid of two or more "… layout" tiles,
+    which the colours page has too and Home never does."""
+    tiles = sum(1 for x in nodes() if re.match(r'^[\w ]+ layout$', x['text'] or x['desc']))
+    return tiles >= 2 or bool(find('Choose a layout|Choose colours|Your look is set'))
+
+
 def past_welcome():
-    """A new sign-in first asks for a layout, then colours: the first of each is fine."""
-    for _ in range(16):
-        # Its title, or (once the title has scrolled away) its grid: two or more "… layout" tiles, which Home never has.
-        tiles = sum(1 for x in nodes() if re.match(r'^[\w ]+ layout$', x['text'] or x['desc']))
-        if tiles < 2 and not find('Choose a layout|Choose colours|Your look is set'):
+    """A new sign-in first asks for a layout, then colours: the first of each is fine. The colours page is a long
+    list with its button at the end, so the phone flings."""
+    for _ in range(40):
+        if not on_welcome():
             return
         btn = find('^(Use this|Continue|Next|Done)$')
         if btn:
@@ -240,8 +246,8 @@ def past_welcome():
         elif TV:
             sh('input keyevent KEYCODE_DPAD_DOWN')
         else:
-            sh('input swipe 540 1800 540 600 300')
-        time.sleep(1.5)
+            sh('input swipe 540 2000 540 300 120')
+        time.sleep(1)
 
 
 def streaming(via=None):
