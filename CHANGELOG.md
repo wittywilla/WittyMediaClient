@@ -5,6 +5,12 @@ What changed in WittyMediaClient, newest first. What changed before it had a rep
 
 ## Unreleased
 
+**Parental controls (wittywilla/WittyMediaServer#649)**
+
+- **Leaving a kids' profile kept on its device takes the parents' PIN.** On Android, iPhone, iPad and Apple TV, Who's
+  watching asks for it when switching away from such a profile to one without a password, and when signing out. A
+  wrong PIN says so; the server counts the tries. The desktop app gets the same from the server's own pages.
+
 **Arabic and Hebrew**
 
 - **Latin titles keep their order on a phone set to Arabic or Hebrew.** Lines made of parts (a title's year and running

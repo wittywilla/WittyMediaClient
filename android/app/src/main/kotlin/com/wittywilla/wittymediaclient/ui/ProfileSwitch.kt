@@ -28,6 +28,10 @@ import com.wittywilla.wittymediaclient.net.ApiError
 import com.wittywilla.wittymediaclient.net.HouseholdProfile
 import com.wittywilla.wittymediaclient.net.Profile
 import com.wittywilla.wittymediaclient.net.household
+import com.wittywilla.wittymediaclient.net.logoutWithPin
+import com.wittywilla.wittymediaclient.net.myLimits
+import com.wittywilla.wittymediaclient.net.needsParentPin
+import com.wittywilla.wittymediaclient.net.wrongParentPin
 import com.wittywilla.wittymediaclient.net.problemWords
 import com.wittywilla.wittymediaclient.net.switchProfile
 import kotlinx.coroutines.CancellationException
@@ -72,23 +76,58 @@ fun WhoIsWatchingScreen(nav: Nav, s: Map<String, String>) {
     var waits by remember { mutableIntStateOf(0) }
     var waitSec by remember { mutableIntStateOf(0) }
     val waiting = rememberWait(waitSec, waits)
+    // The parents' PIN, when leaving a kids' profile kept on this device takes it: for switching to `pinTo` (with
+    // what was typed for it), or for signing out when `pinTo` is null.
+    var askingPin by remember { mutableStateOf(false) }
+    var pinTo by remember { mutableStateOf<Triple<HouseholdProfile, String, String>?>(null) }
+    var parentPin by remember { mutableStateOf("") }
+
+    // Signing out, from here: a kids' profile kept on this device asks for the parents' PIN first, and the server
+    // checks it. The rest of signing out (what was playing, other devices' lists) follows as before.
+    fun leave(pin: String = "") {
+        if (busy) return
+        busy = true
+        scope.launch {
+            try {
+                if (pin.isEmpty()) {
+                    if (runCatching { nav.app.api.myLimits().pinToLeave }.getOrDefault(false)) { pinTo = null; askingPin = true; return@launch }
+                } else {
+                    nav.app.api.logoutWithPin(pin)
+                }
+                nav.signOut()
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: ApiError) {
+                when {
+                    needsParentPin(e) -> { pinTo = null; askingPin = true }
+                    wrongParentPin(e) -> { wrong++; problem = s["errWrongParentPin"].orEmpty(); parentPin = "" }
+                    e.status == 429 -> { waitSec = e.retryAfterSec; waits++; problem = problemWords(e, s["errLost"].orEmpty()); parentPin = "" }
+                    else -> nav.signOut()
+                }
+            } catch (e: Exception) {
+                nav.signOut()
+            } finally {
+                busy = false
+            }
+        }
+    }
 
     LaunchedEffect(Unit) {
         try {
             val list = nav.app.api.household().profiles
-            if (switchingSignsOut(list)) nav.signOut() else profiles = list
+            if (switchingSignsOut(list)) leave() else profiles = list
         } catch (e: CancellationException) {
             throw e
         } catch (e: ApiError) {
             // A server without the list at all: signing out is what switching was.
-            if (e.status == 404) nav.signOut() else if (!nav.handleExpired(e)) { profiles = emptyList(); problem = problemWords(e, s["errLost"].orEmpty()) }
+            if (e.status == 404) leave() else if (!nav.handleExpired(e)) { profiles = emptyList(); problem = problemWords(e, s["errLost"].orEmpty()) }
         } catch (e: Exception) {
             profiles = emptyList()
             problem = problemWords(e, s["errLost"].orEmpty())
         }
     }
 
-    fun go(to: HouseholdProfile, secret: String, typedCode: String) {
+    fun go(to: HouseholdProfile, secret: String, typedCode: String, pin: String = "") {
         if (busy || waiting > 0) return
         busy = true
         problem = ""
@@ -100,7 +139,7 @@ fun WhoIsWatchingScreen(nav: Nav, s: Map<String, String>) {
                     problem = stopped
                     return@launch
                 }
-                val result = nav.app.api.switchProfile(to.name, secret, typedCode, nav.app.deviceName)
+                val result = nav.app.api.switchProfile(to.name, secret, typedCode, nav.app.deviceName, pin)
                 if (result.token.isEmpty()) {
                     problem = s["errInvalid"].orEmpty()
                     return@launch
@@ -112,6 +151,9 @@ fun WhoIsWatchingScreen(nav: Nav, s: Map<String, String>) {
             } catch (e: CancellationException) {
                 throw e
             } catch (e: ApiError) {
+                // Leaving a kids' profile kept on this device: the parents' PIN, then the same switch again.
+                if (needsParentPin(e)) { pinTo = Triple(to, secret, typedCode); askingPin = true; parentPin = ""; return@launch }
+                if (wrongParentPin(e)) { wrong++; problem = s["errWrongParentPin"].orEmpty(); parentPin = ""; return@launch }
                 when (switchOutcome(e.status, e.twoFactor, typedCode.isNotEmpty())) {
                     SwitchOutcome.AskCode -> { needCode = true; code = "" }
                     SwitchOutcome.WrongCode -> { needCode = true; code = ""; wrong++; problem = s["errWrongCode"].orEmpty() }
@@ -150,9 +192,34 @@ fun WhoIsWatchingScreen(nav: Nav, s: Map<String, String>) {
 
     val list = profiles
     val picked = chosen
-    val memory = nav.focusFor("who-" + if (picked == null) "list" else if (needCode) "code" else "password")
+    val memory = nav.focusFor("who-" + if (askingPin) "parent-pin" else if (picked == null) "list" else if (needCode) "code" else "password")
     androidx.compose.runtime.CompositionLocalProvider(LocalFocusMemory provides memory) {
         when {
+            askingPin -> {
+                val field = remember { FocusRequester() }
+                LaunchedEffect(wrong) { runCatching { field.requestFocus() } }
+                val back = { askingPin = false; pinTo = null; parentPin = ""; problem = "" }
+                val submit = {
+                    if (parentPin.length >= 4) {
+                        val to = pinTo
+                        if (to != null) go(to.first, to.second, to.third, parentPin) else leave(parentPin)
+                    }
+                }
+                // The same page as typing a profile's PIN: what this is, the PIN, then on.
+                DesignScreen(
+                    s["parentPinTitle"].orEmpty(), back, eyebrow = s["whoTitle"].orEmpty(), lead = s["parentPinLead"].orEmpty(),
+                    actions = { WittyButton(s["switchGo"].orEmpty(), submit, kind = ButtonKind.Primary, busy = busy, enabled = waiting == 0 && parentPin.length >= 4, focusKey = "parent-pin-go") },
+                ) {
+                    DesignSection("") {
+                        WittyField(
+                            parentPin, { v -> parentPin = v.filter { it.isDigit() }.take(12); problem = "" }, s["parentPinLabel"].orEmpty(),
+                            kind = FieldKind.Password, icon = Symbols.Password, imeAction = ImeAction.Go, onAction = submit, focusRequester = field,
+                            isError = problem.isNotEmpty(), shake = wrong,
+                        )
+                        DesignNote(listOf(problem, waitWords(s, waiting)).filter { it.isNotEmpty() }.joinToString(" "), error = true)
+                    }
+                }
+            }
             list == null -> Screen { Loading() }
             picked != null -> {
                 val field = remember { FocusRequester() }
@@ -225,7 +292,7 @@ fun WhoIsWatchingScreen(nav: Nav, s: Map<String, String>) {
                                 }
                             }
                         },
-                        actions = { WittyButton(s["otherAccount"].orEmpty(), nav::signOut, kind = ButtonKind.Secondary, focusKey = "other-account", modifier = Modifier.fillMaxWidth()) },
+                        actions = { WittyButton(s["otherAccount"].orEmpty(), { leave() }, kind = ButtonKind.Secondary, focusKey = "other-account", modifier = Modifier.fillMaxWidth()) },
                         foot = {},
                         onBack = nav::pop,
                     )
@@ -234,7 +301,7 @@ fun WhoIsWatchingScreen(nav: Nav, s: Map<String, String>) {
                 // Design 2's page head and actions around W4's profile tiles.
                 DesignScreen(
                     s["whoTitle"].orEmpty(), nav::pop,
-                    actions = { WittyButton(s["otherAccount"].orEmpty(), nav::signOut, kind = ButtonKind.Secondary, focusKey = "other-account") },
+                    actions = { WittyButton(s["otherAccount"].orEmpty(), { leave() }, kind = ButtonKind.Secondary, focusKey = "other-account") },
                 ) {
                     DesignNote(problem, Modifier.padding(top = LocalDesignSizes.current.gap), error = true)
                     FlowRow(

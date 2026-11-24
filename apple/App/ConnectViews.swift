@@ -676,6 +676,9 @@ struct SignInView: View {
                 wantPassword = true
             case .failed(let words):
                 error = words
+            case .needsParentPin(let words):
+                // A kids' profile is kept on this device: leaving it takes the parents' PIN, asked on Who's watching.
+                error = words.isEmpty ? say("parentPinLead") : words
             }
             busy = false
         }

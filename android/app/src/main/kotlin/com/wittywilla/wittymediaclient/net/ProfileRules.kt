@@ -76,6 +76,8 @@ data class MyLimits(
     val time: TimeRules? = null,
     val screenTime: ScreenTime = ScreenTime(),
     val parentPin: Boolean = false,
+    // Leaving this profile on this device (switching away, signing out) takes the parents' PIN.
+    val pinToLeave: Boolean = false,
 ) {
     fun can(feature: String): Boolean = features[feature] ?: true
     val timed: Boolean get() = time != null && !time.empty
@@ -344,7 +346,10 @@ fun accessBody(change: JsonObject, clearPassword: Boolean = false): String = bui
 }.toString()
 
 @Serializable
-private data class SwitchAsk(val name: String, val password: String, val code: String, val device: String)
+private data class SwitchAsk(val name: String, val password: String, val code: String, val device: String, val parentPin: String = "")
+
+@Serializable
+private data class LeaveAsk(val pin: String)
 
 @Serializable
 private data class ExtraAsk(val minutes: Int, val pin: String? = null, val name: String? = null, val password: String? = null)
@@ -362,8 +367,19 @@ suspend fun Api.household(): Household = json.decodeFromString(call("GET", "/pro
 
 // Signing in as another profile and out of this one, in one step. Refusals: 401 with twoFactor asks for the code
 // (or says it was wrong), 403 is a wrong password with this device still signed in as before, 429 says how long to wait.
-suspend fun Api.switchProfile(name: String, password: String, code: String, device: String): LoginResult =
-    json.decodeFromString(call("POST", "/profiles/switch", json.encodeToString(SwitchAsk(name, password, code, device))))
+// parentPin: leaving a kids' profile kept on this device (403 with code "parent-pin" asks for it, "wrong-pin" says it
+// was wrong, 429 says how long to wait).
+suspend fun Api.switchProfile(name: String, password: String, code: String, device: String, parentPin: String = ""): LoginResult =
+    json.decodeFromString(call("POST", "/profiles/switch", json.encodeToString(SwitchAsk(name, password, code, device, parentPin))))
+
+// Signing out of a kids' profile kept on this device, with the parents' PIN. The session ends when the PIN is right.
+suspend fun Api.logoutWithPin(pin: String) {
+    call("POST", "/logout", json.encodeToString(LeaveAsk(pin)))
+}
+
+// What a refusal says about the parents' PIN when leaving a profile.
+fun needsParentPin(e: ApiError) = e.status == 403 && e.code == "parent-pin"
+fun wrongParentPin(e: ApiError) = e.status == 403 && e.code == "wrong-pin"
 
 suspend fun Api.myLimits(): MyLimits = json.decodeFromString(call("GET", "/me/limits"))
 suspend fun Api.myScreenTime(): ScreenTime = json.decodeFromString(call("GET", "/me/screen-time"))
