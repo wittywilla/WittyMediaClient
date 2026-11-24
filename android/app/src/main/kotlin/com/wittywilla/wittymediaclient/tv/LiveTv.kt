@@ -343,6 +343,7 @@ object LiveTv {
                 val length = p?.duration ?: C.TIME_UNSET
                 if (shiftFrom == null) {
                     behind = if (p == null || length == C.TIME_UNSET || !p.isCurrentMediaItemDynamic) 0.0 else maxOf(0L, length - p.currentPosition) / 1000.0
+                    inBreak = null
                 } else {
                     val s = schedNow()
                     sched = s
@@ -356,8 +357,6 @@ object LiveTv {
                         val k = key
                         runCatching { api.timeline(k, s.toLong()) }.getOrNull()?.let { if (k == key && shiftFrom != null) timeline = it }
                     }
-                } else {
-                    inBreak = null
                 }
                 delay(1000)
             }

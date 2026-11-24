@@ -68,6 +68,7 @@ import com.wittywilla.wittymediaclient.net.DialRules
 import com.wittywilla.wittymediaclient.net.GuideChannel
 import com.wittywilla.wittymediaclient.net.GuideProgramme
 import com.wittywilla.wittymediaclient.net.GuideRules
+import com.wittywilla.wittymediaclient.net.TimeShiftRules
 import com.wittywilla.wittymediaclient.net.TvShape
 import com.wittywilla.wittymediaclient.net.Tuned
 import com.wittywilla.wittymediaclient.net.guidePage
