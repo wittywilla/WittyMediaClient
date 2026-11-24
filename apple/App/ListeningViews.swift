@@ -352,7 +352,7 @@ private struct SongList: View {
                 LazyVStack(alignment: .leading, spacing: Tokens.Space.s1) {
                     if !error.isEmpty { ProblemLine(error) }
                     ForEach(Array(songs.enumerated()), id: \.element.id) { index, song in
-                        TrackRow(track: song, number: index + 1, subtitle: [song.artist ?? "", song.album ?? ""].filter { !$0.isEmpty }.joined(separator: " · "),
+                        TrackRow(track: song, number: index + 1, subtitle: [song.artist ?? "", song.album ?? ""].filter { !$0.isEmpty }.factsLine(),
                                  showArt: true, books: false) {
                             model.startListening(songs, start: ListeningStart(index), keepsPlace: false)
                         }
@@ -432,7 +432,7 @@ struct TrackRow: View {
                     }
                     VStack(alignment: .leading, spacing: 2) {
                         Text(track.title).foregroundStyle(palette.text).lineLimit(2).multilineTextAlignment(.leading)
-                        if !under.isEmpty { Secondary(under.joined(separator: " · "), lines: 1) }
+                        if !under.isEmpty { Secondary(under.factsLine(), lines: 1) }
                     }
                     Spacer(minLength: 0)
                     if let length = track.runtimeSec, length > 0 { Secondary(ListeningRules.clock(length)) }
@@ -507,7 +507,7 @@ struct AlbumScreen: View {
         VStack(alignment: .leading, spacing: Tokens.Space.s3) {
             Heading(album.isEmpty ? "No album" : album)
             if !artist.isEmpty, artist != album { Secondary(artist) }
-            Secondary(facts.joined(separator: " · "))
+            Secondary(facts.factsLine())
             if !error.isEmpty { ProblemLine(error) }
             // The buttons wrap on a narrow phone.
             FlowLayout(spacing: Tokens.Space.s2) {

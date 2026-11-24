@@ -500,7 +500,7 @@ public enum LimitWords {
         }
         if !access.liveTv { parts.append("no Live TV") }
         if !access.off.isEmpty { parts.append(access.off.count == 1 ? "1 thing turned off" : "\(access.off.count) things turned off") }
-        return parts.isEmpty ? "No limits" : parts.joined(separator: " · ")
+        return parts.isEmpty ? "No limits" : parts.factsLine()
     }
 }
 

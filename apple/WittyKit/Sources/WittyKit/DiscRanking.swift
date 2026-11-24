@@ -438,7 +438,7 @@ public enum DiscRanking {
 
     /// "Title 2 · 1:42:05 · feature".
     public static func candidateLabel(_ c: DiscCandidate, _ a: DiscAnalysis) -> String {
-        [name(c.ttn, a), TitleLook.clock(c.durationSec), c.class].filter { !$0.isEmpty }.joined(separator: " · ")
+        [name(c.ttn, a), TitleLook.clock(c.durationSec), c.class].filter { !$0.isEmpty }.factsLine()
     }
 
     /// What VoiceOver says for a candidate's button.

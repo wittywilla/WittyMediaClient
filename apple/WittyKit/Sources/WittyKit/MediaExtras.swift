@@ -106,7 +106,7 @@ public enum WhereToWatchLook {
         return versions.map { version in
             let size = (version.sizeBytes ?? 0) > 0 ? ActivityWords.bytes(version.sizeBytes ?? 0) : ""
             let label = (version.label ?? "").isEmpty ? "This copy" : PlainWords.clean(version.label ?? "", limit: 60)
-            return [label, version.quality ?? "", (version.container ?? "").uppercased(), size].filter { !$0.isEmpty }.joined(separator: " · ")
+            return [label, version.quality ?? "", (version.container ?? "").uppercased(), size].filter { !$0.isEmpty }.factsLine()
         }
     }
 
@@ -194,7 +194,7 @@ public enum MediaJobState: Equatable {
         switch self {
         case .waiting: return "\(doing): waiting its turn…"
         case .running(let percent, let phase):
-            let detail = [phase, percent.map { "\(Int($0.rounded()))%" } ?? ""].filter { !$0.isEmpty }.joined(separator: " · ")
+            let detail = [phase, percent.map { "\(Int($0.rounded()))%" } ?? ""].filter { !$0.isEmpty }.factsLine()
             return detail.isEmpty ? "\(doing)…" : "\(doing)… \(detail)"
         case .unknown: return "\(doing)…"
         case .done, .failed, .stopped: return ""

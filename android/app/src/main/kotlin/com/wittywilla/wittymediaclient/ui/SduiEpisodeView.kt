@@ -116,7 +116,7 @@ internal fun SduiEpisodeLine(view: SduiView, parent: SduiView) {
             verticalArrangement = Arrangement.spacedBy(2.dp),
         ) {
             view.text["title"]?.let { Text(it, color = scheme.onBackground, fontSize = env.size("body"), fontWeight = FontWeight.Medium, maxLines = 1, overflow = TextOverflow.Ellipsis) }
-            val sub = listOfNotNull(view.text["subtitle"], "watched".takeIf { watched }).joinToString(" · ")
+            val sub = listOfNotNull(view.text["subtitle"], "watched".takeIf { watched }).factsLine()
             if (sub.isNotEmpty()) Text(sub, color = hint, fontSize = env.size("caption"), maxLines = 1, overflow = TextOverflow.Ellipsis)
             if (parent.props["showSynopsis"]?.toString() != "false") view.text["synopsis"]?.let {
                 Text(it, color = scheme.onSurfaceVariant, fontSize = env.size("caption"), maxLines = view.line("synopsis", 2), overflow = TextOverflow.Ellipsis)

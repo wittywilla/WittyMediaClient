@@ -4,6 +4,7 @@ package com.wittywilla.wittymediaclient.net
 
 import kotlinx.serialization.Serializable
 import java.util.Locale
+import com.wittywilla.wittymediaclient.ui.factsLine
 
 // Which channels the guide shows, in which order (channel sets), how the guide is paged, finding a channel by its
 // number, watching a programme from its start and a recording's options: the rules alone, so GuideSetsTest holds them without a device. The screens are in tv/.
@@ -310,6 +311,6 @@ object DvrRules {
         if (rule.newOnly) parts.add("new episodes only")
         if (rule.keep > 0) parts.add(keepWords(rule.keep).lowercase(Locale.ROOT))
         if (rule.padBefore > 0 || rule.padAfter > 0) parts.add("starts ${rule.padBefore} min early, ends ${rule.padAfter} min late")
-        return parts.joinToString(" · ")
+        return parts.factsLine()
     }
 }

@@ -5,6 +5,7 @@ package com.wittywilla.wittymediaclient.net.remote
 import android.view.KeyEvent
 import com.wittywilla.wittymediaclient.net.Track
 import kotlinx.serialization.json.JsonObject
+import com.wittywilla.wittymediaclient.ui.factsLine
 
 // The rest of the Remote Protocol's decisions that need no screen: what this app reports while it plays, which key a
 // `navigate` presses, and how a controller hands what plays here over to another device.
@@ -39,7 +40,7 @@ fun remoteTracks(tracks: List<Track>): List<RemoteTrack> = tracks.distinctBy { i
         8 -> "7.1"
         else -> "${t.channels} channels"
     }
-    RemoteTrack(trackId(t.index), listOf(language, t.title, channels).filter { it.isNotEmpty() }.distinct().joinToString(" · "), t.language)
+    RemoteTrack(trackId(t.index), listOf(language, t.title, channels).filter { it.isNotEmpty() }.distinct().factsLine(), t.language)
 }
 
 fun videoState(f: VideoFacts): RemoteState {

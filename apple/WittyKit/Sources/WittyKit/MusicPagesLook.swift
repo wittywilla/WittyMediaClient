@@ -170,7 +170,7 @@ public enum MusicWords {
         let noun = pods ? "episodes" : books ? "chapters" : tracks.count == 1 ? "track" : "tracks"
         let parts: [String] = ["\(tracks.count) \(noun)", pods ? "" : runtime(total), pods ? "" : tracks.first?.year.map(String.init) ?? "",
                                pods ? "" : tracks.first?.genres?.first ?? ""]
-        return parts.filter { !$0.isEmpty }.joined(separator: " · ")
+        return parts.filter { !$0.isEmpty }.factsLine()
     }
 
     /// The same album in other versions ("Deluxe", "Remastered"): its name without those words.

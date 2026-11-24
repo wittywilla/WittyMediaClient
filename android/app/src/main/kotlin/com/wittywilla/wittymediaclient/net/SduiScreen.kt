@@ -9,6 +9,7 @@ import kotlinx.serialization.json.buildJsonArray
 import kotlinx.serialization.json.booleanOrNull
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
+import com.wittywilla.wittymediaclient.ui.factsLine
 
 // A page as this app lays it out: what the composables in ui/Sdui*.kt draw from. Every component of a document
 // becomes one SduiView holding what is shown of it and how: its role and label for TalkBack, each part of its text
@@ -284,7 +285,7 @@ class SduiScreen(val document: SduiDocument) {
                 d.say("placement", p.str("placement"))
             }
             "KeyLegend" -> {
-                d.say("keys", p.objects("entries").joinToString(" · ") { it.str("label") })
+                d.say("keys", p.objects("entries").factsLine { it.str("label") })
                 d.textSize = layout.dock.hintSize
             }
             "Tabs", "CrossBar" -> { d.role = "tablist"; d.cards = node.children.size }
@@ -343,7 +344,7 @@ class SduiScreen(val document: SduiDocument) {
                 d.say("title", p.str("title"))
                 d.limit("title", 1)
                 d.textSize = layout.textSize("heading")
-                d.say("groups", p.objects("groups").joinToString(" · ") { g ->
+                d.say("groups", p.objects("groups").factsLine { g ->
                     val shown = g.int("shown") ?: 0
                     val total = g.int("total") ?: 0
                     g.str("label") + " " + shown + if (total > shown) " of $total" else ""

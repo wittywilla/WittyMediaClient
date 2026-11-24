@@ -1596,7 +1596,7 @@ private struct GuideCellBody: View {
         let d = style.dress
         let cell = style.cell
         let p = cell.programme
-        let details = [cell.kind == .none || small ? "" : tvClock(cell.start), p?.year.map(String.init) ?? "", p?.genre ?? ""].filter { !$0.isEmpty }.joined(separator: " · ")
+        let details = [cell.kind == .none || small ? "" : tvClock(cell.start), p?.year.map(String.init) ?? "", p?.genre ?? ""].filter { !$0.isEmpty }.factsLine()
         let under = d.look.subtitles ? (d.shape.details ? details : p?.sub ?? "") : ""
         let lock = style.channel.canTune ? "" : "🔒 "
         let reminder = style.reminded ? " ⏰" : ""

@@ -43,7 +43,7 @@ fun DesignSelectRow(
 ) {
     val shown = options.firstOrNull { it.value == value }?.let { it.label.ifEmpty { it.value } } ?: value
     Column(modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(LocalDesignSizes.current.gap * 0.6f)) {
-        DesignRow(title, value = shown, sub = listOf(sub, if (!enabled) why else "").filter { it.isNotEmpty() }.joinToString(" · "), on = true)
+        DesignRow(title, value = shown, sub = listOf(sub, if (!enabled) why else "").filter { it.isNotEmpty() }.factsLine(), on = true)
         DesignChips {
             options.forEachIndexed { i, o ->
                 DesignChip(
@@ -96,7 +96,7 @@ fun DesignSliderRow(
     }
     val words = (if (shown == Math.floor(shown)) shown.toLong().toString() else "%.1f".format(shown)) + unit
     Column(modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(LocalDesignSizes.current.gap * 0.6f)) {
-        DesignRow(title, value = words, sub = listOf(sub, if (!enabled) why else "").filter { it.isNotEmpty() }.joinToString(" · "), on = true)
+        DesignRow(title, value = words, sub = listOf(sub, if (!enabled) why else "").filter { it.isNotEmpty() }.factsLine(), on = true)
         if (!metrics.tv) {
             NpSlider(
                 shown, min, maxOf(min, max), stepBy, title, words, enabled, Modifier.fillMaxWidth().padding(horizontal = LocalDesignSizes.current.gap),
@@ -148,7 +148,7 @@ fun DesignFieldRow(
 fun DesignControlRow(row: DesignPageSpec.Row, control: DesignPageSpec.Control, value: JsonElement?, onValue: (JsonElement) -> Unit, requestFocus: Boolean = false) {
     val c = control.copy(value = value ?: control.value)
     val enabled = !c.disabled
-    val sub = listOf(row.detail, if (!enabled) c.why else "").filter { it.isNotEmpty() }.joinToString(" · ")
+    val sub = listOf(row.detail, if (!enabled) c.why else "").filter { it.isNotEmpty() }.factsLine()
     when (c.kind) {
         DesignPageSpec.Control.SWITCH -> DesignSwitchRow(row.title, c.on, { onValue(JsonPrimitive(it)) }, sub = sub, enabled = enabled, requestFocus = requestFocus)
         DesignPageSpec.Control.SELECT -> DesignSelectRow(row.title, c.text, c.options, { onValue(JsonPrimitive(it)) }, sub = row.detail, enabled = enabled, why = c.why, requestFocus = requestFocus)
