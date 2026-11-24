@@ -29,10 +29,6 @@ This is alpha software. WittyMediaClient 0.5.x goes with WittyMediaServer 0.8.0-
 
 <sub>The same app on an Android phone, with [Wing It!](https://commons.wikimedia.org/wiki/File:WING_IT!_-_Blender_Open_Movie-full_movie.webm), Blender Studio, [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/). From a test server filled only with openly licensed media; the server's [credits list](https://github.com/wittywilla/WittyMediaServer/blob/master/docs/images/CREDITS.md) names everything shown.</sub>
 
-![The TV guide on an Android phone](docs/images/app-phone-guide.webp)
-
-<sub>The guide on a phone, playing [Plan 9 from Outer Space](https://commons.wikimedia.org/wiki/File:Plan_9_from_Outer_Space_(1959_film).webm), Ed Wood, 1959, public domain.</sub>
-
 ![Music on an Android phone: albums and artists](docs/images/app-phone-music.webp)
 
 <sub>Music on a phone. From a test server filled only with openly licensed media; the server's [credits list](https://github.com/wittywilla/WittyMediaServer/blob/master/docs/images/CREDITS.md) names everything shown.</sub>
