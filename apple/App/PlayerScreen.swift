@@ -222,8 +222,8 @@ final class PlaybackModel: ObservableObject {
     }
 
     func choose(audio: Int? = nil, subtitle: Int? = nil) {
-        if let audio { self.audio = audio }
-        if let subtitle { self.subtitle = subtitle }
+        if let audio { self.audio = audio; rememberTrack(stream?.audio?.first { $0.index == audio }, "audio") }
+        if let subtitle { self.subtitle = subtitle; rememberTrack(stream?.subtitles?.first { $0.index == subtitle }, "subtitle") }
         playWhenReady = player.timeControlStatus != .paused
         let at = clock.saveable ?? clock.filmSeconds
         Task { await open(startSec: at) }
@@ -776,14 +776,14 @@ private struct PlayerHost: UIViewControllerRepresentable {
         var menus: [UIMenuElement] = []
         // One sound track still says which language and how many speakers.
         if let audio = stream?.audio, !audio.isEmpty {
-            menus.append(UIMenu(title: "Audio", image: UIImage(systemName: "speaker.wave.2"), children: TrackWords.audioList(audio).map { track, name in
+            menus.append(UIMenu(title: "Audio", image: UIImage(systemName: "speaker.wave.2"), children: inOrder(TrackWords.audioList(audio), "audio").map { track, name in
                 UIAction(title: name.title, subtitle: [name.sub, name.detail].filter { !$0.isEmpty }.joined(separator: " · "),
                          state: track.index == stream?.audioIndex ? .on : .off) { _ in playback.choose(audio: track.index) }
             }))
         }
         if let subtitles = stream?.subtitles, !subtitles.isEmpty {
             let off = UIAction(title: "Off", state: (stream?.subtitleIndex ?? -1) < 0 ? .on : .off) { _ in playback.choose(subtitle: -1) }
-            menus.append(UIMenu(title: "Subtitles", image: UIImage(systemName: "captions.bubble"), children: [off] + TrackWords.subtitleList(subtitles).map { track, name in
+            menus.append(UIMenu(title: "Subtitles", image: UIImage(systemName: "captions.bubble"), children: [off] + inOrder(TrackWords.subtitleList(subtitles), "subtitle").map { track, name in
                 UIAction(title: name.title, subtitle: [name.sub, name.detail].filter { !$0.isEmpty }.joined(separator: " · "),
                          state: track.index == stream?.subtitleIndex ? .on : .off) { _ in playback.choose(subtitle: track.index) }
             }))
@@ -855,7 +855,7 @@ private struct SystemPlayerScreen: View {
             }
             if let audio = playback.stream?.audio, audio.count > 1 {
                 Menu("Audio") {
-                    ForEach(uniqued(audio)) { track in
+                    ForEach(ordered(audio, "audio")) { track in
                         Button { playback.choose(audio: track.index) } label: {
                             if track.index == playback.stream?.audioIndex { Label(track.label, systemImage: "checkmark") } else { Text(track.label) }
                         }
@@ -868,7 +868,7 @@ private struct SystemPlayerScreen: View {
                     Button { playback.choose(subtitle: -1) } label: {
                         if playback.stream?.subtitleIndex == -1 { Label("Off", systemImage: "checkmark") } else { Text("Off") }
                     }
-                    ForEach(uniqued(subtitles)) { track in
+                    ForEach(ordered(subtitles, "subtitle")) { track in
                         Button { playback.choose(subtitle: track.index) } label: {
                             if track.index == playback.stream?.subtitleIndex { Label(track.label, systemImage: "checkmark") } else { Text(track.label) }
                         }
@@ -1007,3 +1007,21 @@ private struct TvScenesGrid: View {
     }
 }
 #endif
+/// The sound track and subtitle menus list this device's languages first, then the ones picked lately, then the rest
+/// by name, as the web app and the Android app do (WittyKit TrackOrder).
+private func ordered(_ tracks: [Track], _ kind: String) -> [Track] {
+    TrackOrder.order(uniqued(tracks), language: { $0.language }, title: { $0.label }, device: Locale.preferredLanguages,
+                     recent: UserDefaults.standard.stringArray(forKey: "tracks.recent." + kind) ?? [])
+}
+
+/// Named tracks in the same order: the names count tracks as the file lists them, the menu shows them in this order.
+private func inOrder(_ named: [(Track, TrackName)], _ kind: String) -> [(Track, TrackName)] {
+    let names = Dictionary(named.map { ($0.0.index, $0.1) }, uniquingKeysWith: { first, _ in first })
+    return ordered(named.map { $0.0 }, kind).compactMap { track in names[track.index].map { (track, $0) } }
+}
+
+private func rememberTrack(_ track: Track?, _ kind: String) {
+    guard let track else { return }
+    let key = "tracks.recent." + kind
+    UserDefaults.standard.set(TrackOrder.remember(UserDefaults.standard.stringArray(forKey: key) ?? [], track.language), forKey: key)
+}

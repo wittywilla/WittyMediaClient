@@ -110,6 +110,8 @@ import com.wittywilla.wittymediaclient.net.Item
 import com.wittywilla.wittymediaclient.net.Playback
 import com.wittywilla.wittymediaclient.net.PlaybackRequest
 import com.wittywilla.wittymediaclient.net.QualityMenu
+import com.wittywilla.wittymediaclient.net.Track
+import com.wittywilla.wittymediaclient.net.TrackOrder
 import com.wittywilla.wittymediaclient.net.problemWords
 import com.wittywilla.wittymediaclient.ui.ActionButton
 import com.wittywilla.wittymediaclient.ui.ErrorText
@@ -613,9 +615,11 @@ fun PlayerScreen(nav: Nav, id: Long, startOver: Boolean) {
                 modifier = Modifier.align(Alignment.CenterEnd),
             )
         } else if (picker == Picker.Audio && current != null) {
+            val (ordered, picked) = rememberTrackOrder("audio", TrackWords.audioList(current.audio))
             PlayerMenu("Audio & language", Modifier.align(Alignment.CenterEnd)) {
-                TrackWords.audioList(current.audio).forEach { (t, name) ->
+                ordered.forEach { (t, name) ->
                     MenuChoice(name.title, name.sub, name.detail, t.index == current.audioIndex) {
+                        picked(t)
                         ask = ask.copy(audio = t.index, startSec = clock.lastPlace() ?: currentFilmSec(), reload = false, waitMs = 0, attempt = ask.attempt + 1)
                         picker = Picker.None
                     }
@@ -626,10 +630,11 @@ fun PlayerScreen(nav: Nav, id: Long, startOver: Boolean) {
                 ask = ask.copy(subtitle = index, startSec = clock.lastPlace() ?: currentFilmSec(), reload = false, waitMs = 0, attempt = ask.attempt + 1)
                 picker = Picker.None
             }
+            val (ordered, picked) = rememberTrackOrder("subtitle", TrackWords.subtitleList(current.subtitles))
             PlayerMenu("Subtitles", Modifier.align(Alignment.CenterEnd)) {
                 MenuChoice("Off", "", "", current.subtitleIndex < 0) { pick(-1) }
-                TrackWords.subtitleList(current.subtitles).forEach { (t, name) ->
-                    MenuChoice(name.title, name.sub, name.detail, t.index == current.subtitleIndex) { pick(t.index) }
+                ordered.forEach { (t, name) ->
+                    MenuChoice(name.title, name.sub, name.detail, t.index == current.subtitleIndex) { picked(t); pick(t.index) }
                 }
                 MenuHeading("Text size")
                 ViewPrefsStore.SUBTITLE_SIZES.forEach { (size, words) ->
@@ -1041,6 +1046,20 @@ private fun PlayerMenu(heading: String, modifier: Modifier = Modifier, content: 
         Text(heading, color = Color.White, style = MaterialTheme.typography.titleLarge, modifier = Modifier.padding(start = Space.S2, bottom = Space.S2).semantics { heading() })
         content()
     }
+}
+
+// The tracks in the order the phone's picker and the website use (net/TrackOrder.kt): this device's languages first,
+// then the ones picked lately, then the rest by name. The second value remembers a pick for next time.
+@Composable
+private fun rememberTrackOrder(kind: String, named: List<Pair<Track, TrackName>>): Pair<List<Pair<Track, TrackName>>, (Track) -> Unit> {
+    val context = LocalContext.current
+    val prefs = remember { context.getSharedPreferences("tracks", Context.MODE_PRIVATE) }
+    val ordered = remember(named) {
+        val locales = androidx.core.os.LocaleListCompat.getAdjustedDefault()
+        val device = (0 until locales.size()).mapNotNull { locales[it]?.toLanguageTag() }
+        TrackOrder.order(named, { it.first.language }, { it.second.title }, { false }, device, TrackOrder.recent(prefs.getString(kind, "").orEmpty())).map { it.first }
+    }
+    return ordered to { t -> prefs.edit().putString(kind, TrackOrder.remember(prefs.getString(kind, "").orEmpty(), t.language)).apply() }
 }
 
 @Composable

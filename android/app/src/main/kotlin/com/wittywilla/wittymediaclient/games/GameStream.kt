@@ -169,6 +169,9 @@ object GameModes {
 
     // Move on to the next mode when no picture has come in this long.
     const val FIRST_PICTURE_MS = 12_000L
+
+    // Once a connection is through, how long its first picture may take before the next way is tried.
+    const val PICTURE_AFTER_CONNECTING_MS = 45_000L
 }
 
 // Asking the server for things on the WebSocket's timing channel: here only "send a keyframe", for a decoder

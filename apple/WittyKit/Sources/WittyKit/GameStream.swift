@@ -310,8 +310,12 @@ public enum GameModes {
     }
 
     /// How long to wait for a first picture before trying the next way: 8 seconds for WebRTC, as
-    /// the second stream's design says, and 12 for a WebSocket.
-    public static func firstPictureWait(_ mode: String) -> TimeInterval { mode == streamWebRTC ? 8 : 12 }
+    /// the second stream's design says, and 12 for a WebSocket. Once the stream has described
+    /// itself the connection is through, and a slow server (a big game, no graphics card, an
+    /// encoder starting) gets 45: another way wouldn't make its first frame come sooner.
+    public static func firstPictureWait(_ mode: String, connected: Bool = false) -> TimeInterval {
+        connected ? 45 : (mode == streamWebRTC ? 8 : 12)
+    }
 
 }
 

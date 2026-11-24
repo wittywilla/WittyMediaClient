@@ -32,6 +32,9 @@ jobs:
             [ "${info%% *}" = 100755 ] || echo "$f"
           done)
           [ -z "$bad" ] || { echo "Not executable in git. Run git update-index --chmod=+x on:"; echo "$bad"; exit 1; }
+      # A button that is only an icon needs a name TalkBack and VoiceOver can say.
+      - name: Every button has a name a screen reader can say
+        run: python3 scripts/check-button-names.py
 
   desktop:
     strategy:

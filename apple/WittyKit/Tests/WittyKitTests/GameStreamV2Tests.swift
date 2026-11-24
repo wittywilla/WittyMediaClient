@@ -200,6 +200,7 @@ final class GameStreamV2Tests: XCTestCase {
         XCTAssertEqual(GameModes.order(modes, webRTC: false), [GameModes.streamWebSocket])
         XCTAssertEqual(GameModes.firstPictureWait(GameModes.streamWebRTC), 8)
         XCTAssertEqual(GameModes.firstPictureWait(GameModes.streamWebSocket), 12)
+        XCTAssertEqual(GameModes.firstPictureWait(GameModes.streamWebSocket, connected: true), 45, "a stream that is through waits for a slow first frame")
     }
 
     func testTheOfferAndItsAnswer() throws {
