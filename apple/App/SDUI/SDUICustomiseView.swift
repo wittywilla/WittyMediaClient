@@ -100,7 +100,7 @@ struct SDUICustomiseView: View {
         if row.pinned { words.append("Pinned") }
         if row.hidden { words.append("Hidden") }
         if row.empty, !row.hidden { words.append("Nothing in it now") }
-        return words.joined(separator: " · ")
+        return words.factsLine()
     }
 
     #if !os(tvOS)

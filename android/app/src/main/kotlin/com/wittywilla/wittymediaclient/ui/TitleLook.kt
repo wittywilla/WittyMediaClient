@@ -269,7 +269,7 @@ object TitleLook {
         listOf(chosen, show, server).firstOrNull { !it.isNullOrEmpty() } ?: "cards"
 
     // "Aired · runtime" under an episode's title.
-    fun episodeLine(episode: Item): String = listOf(episode.aired, runtime(episode.runtimeSec)).filter { it.isNotEmpty() }.joinToString(" · ")
+    fun episodeLine(episode: Item): String = listOf(episode.aired, runtime(episode.runtimeSec)).filter { it.isNotEmpty() }.factsLine()
 
     // MARK: sizes
 

@@ -326,7 +326,7 @@ public enum AppearancePage {
         return i.offered.map { info in
             let themeName = i.themes.first { $0.id == info.theme }?.name ?? info.theme.capitalized
             return DesignPageSpec.Card(id: "look-" + info.id, title: info.name,
-                                       subtitle: [info.tagline, themeName].filter { !$0.isEmpty }.joined(separator: " · "),
+                                       subtitle: [info.tagline, themeName].filter { !$0.isEmpty }.factsLine(),
                                        on: info.id == shown, swatches: swatches(for: info.theme, in: i.themes),
                                        wire: LayoutWire.of(info, form: i.form), portrait: i.form == "phone")
         }
@@ -402,7 +402,7 @@ public enum AppearancePage {
 
         if i.requiredExperience != nil, i.requiredTheme != nil {
             let theme = i.themes.first { $0.id == i.shownTheme }
-            let card = DesignPageSpec.Card(id: "preview", title: [look?.name, theme?.name].compactMap { $0 }.joined(separator: " · "),
+            let card = DesignPageSpec.Card(id: "preview", title: [look?.name, theme?.name].compactMap { $0 }.factsLine(),
                                            subtitle: "Required", on: true, swatches: swatches(for: i.shownTheme, in: i.themes),
                                            wire: wire, portrait: portrait)
             return DesignPageSpec(eyebrow: eyebrow, title: "Your look is set", lead: setBy,
@@ -418,7 +418,7 @@ public enum AppearancePage {
         case .colour:
             let shown = colourTheme(i)
             let theme = i.themes.first { $0.id == shown }
-            let preview = DesignPageSpec.Card(id: "preview", title: [look?.name, theme?.name].compactMap { $0 }.joined(separator: " · "),
+            let preview = DesignPageSpec.Card(id: "preview", title: [look?.name, theme?.name].compactMap { $0 }.factsLine(),
                                               subtitle: theme.map { $0.dark ? "Dark" : "Light" } ?? "", on: false,
                                               swatches: swatches(for: shown, in: i.themes), wire: wire, portrait: portrait)
             var sections: [DesignPageSpec.Section] = [.secC("Preview", [preview], 1)]

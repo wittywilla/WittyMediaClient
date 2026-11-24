@@ -205,7 +205,7 @@ private struct ActivitySheet: View {
             HStack(alignment: .top) {
                 VStack(alignment: .leading, spacing: 2) {
                     Text(task.title ?? "").font(.wm(size: 14, weight: .semibold)).foregroundStyle(palette.text)
-                    Text([task.by.map { "started by \($0)" }].compactMap { $0 }.joined(separator: " · ")).font(.wm(size: 12)).foregroundStyle(palette.textSecondary)
+                    Text([task.by.map { "started by \($0)" }].compactMap { $0 }.factsLine()).font(.wm(size: 12)).foregroundStyle(palette.textSecondary)
                 }
                 Spacer(minLength: 0)
                 Text(task.stateWords).font(.wm(size: 12, weight: .semibold)).foregroundStyle(palette.textSecondary)

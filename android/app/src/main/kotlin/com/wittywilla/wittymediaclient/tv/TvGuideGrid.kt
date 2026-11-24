@@ -54,6 +54,7 @@ import com.wittywilla.wittymediaclient.net.GuideRules
 import com.wittywilla.wittymediaclient.net.TvLook
 import com.wittywilla.wittymediaclient.net.TvShape
 import com.wittywilla.wittymediaclient.ui.Symbols
+import com.wittywilla.wittymediaclient.ui.factsLine
 
 // The guide's grid, as GuidePage.tsx draws it and Apple TV's GuideTimes, GuideNowLine, GuideRow and GuideCellStyle do:
 // the times over the grid, the line at the current time, and each channel's row of cells, in the theme's shape.
@@ -496,7 +497,7 @@ private fun CellWords(dress: TvDress, channel: GuideChannel, cell: GuideCell, in
         if (cell.kind == GuideCell.Kind.None || small) "" else tvClock(cell.start),
         p?.year?.toString() ?: "",
         p?.genre ?: "",
-    ).filter { it.isNotEmpty() }.joinToString(" · ")
+    ).filter { it.isNotEmpty() }.factsLine()
     val under = if (dress.look.subtitles) (if (shape.details) details else p?.sub ?: "") else ""
     val lock = if (channel.canTune) "" else "🔒 "
     val reminder = if (reminded) " ⏰" else ""

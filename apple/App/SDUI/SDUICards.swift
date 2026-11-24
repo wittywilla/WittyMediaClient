@@ -202,7 +202,7 @@ struct SDUICardView: View {
         }
         let under = [shows("subtitle") ? card.shown("subtitle") : "", shows("remaining") ? card.shown("remaining") : ""].filter { !$0.isEmpty }
         if !under.isEmpty {
-            Text(under.joined(separator: " · "))
+            Text(under.factsLine())
                 .sduiFont("caption")
                 .foregroundStyle(palette.textSecondary)
                 .sduiLines(card.lineLimit("subtitle") ?? 1)

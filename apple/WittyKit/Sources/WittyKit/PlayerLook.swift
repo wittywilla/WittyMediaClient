@@ -239,7 +239,7 @@ public struct TrackTile: Equatable, Identifiable {
     public static func audio(_ tracks: [Track], chosen: Int?) -> [TrackTile] {
         tracks.map { track in
             TrackTile(id: track.index, title: languageName(track), sub: track.title ?? "",
-                      detail: [track.codec?.uppercased(), track.channels.flatMap { $0 > 0 ? "\($0) ch" : nil }].compactMap { $0 }.filter { !$0.isEmpty }.joined(separator: " · "),
+                      detail: [track.codec?.uppercased(), track.channels.flatMap { $0 > 0 ? "\($0) ch" : nil }].compactMap { $0 }.filter { !$0.isEmpty }.factsLine(),
                       active: track.index == chosen)
         }
     }

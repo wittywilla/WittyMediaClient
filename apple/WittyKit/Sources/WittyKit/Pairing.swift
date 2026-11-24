@@ -354,7 +354,7 @@ public struct PairRequest: Decodable, Equatable {
 
     /// "tvOS · 192.168.1.20", cleaned: the device wrote the first and the network the second.
     public var facts: String {
-        [PlainWords.clean(platform ?? "", limit: 40), PlainWords.clean(ip ?? "", limit: 64)].filter { !$0.isEmpty }.joined(separator: " · ")
+        [PlainWords.clean(platform ?? "", limit: 40), PlainWords.clean(ip ?? "", limit: 64)].filter { !$0.isEmpty }.factsLine()
     }
 }
 

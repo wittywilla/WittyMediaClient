@@ -165,7 +165,7 @@ object MusicLook {
             if (pods) "" else runtimeWords(tracks.sumOf { it.runtimeSec }),
             if (pods) "" else first?.year?.takeIf { it != 0 }?.toString().orEmpty(),
             if (pods) "" else first?.genres?.firstOrNull().orEmpty(),
-        ).filter { it.isNotEmpty() }.joinToString(" · ")
+        ).filter { it.isNotEmpty() }.factsLine()
     }
 
     // The facts under an artist's name: "4 albums · 52 songs · 3 h 41 min · Jazz, Soul".
@@ -174,7 +174,7 @@ object MusicLook {
         count(info.tracks.size, "song", "songs"),
         runtimeWords(info.tracks.sumOf { it.runtimeSec }),
         info.genres.take(3).joinToString(", "),
-    ).filter { it.isNotEmpty() }.joinToString(" · ")
+    ).filter { it.isNotEmpty() }.factsLine()
 
     // What the album page's Play button says.
     fun playWords(libraryType: String, tracks: List<Item>): String = when {
@@ -200,7 +200,7 @@ object MusicLook {
     }
 
     // A podcast episode's line under its title: when it aired and what it's about, 160 letters at most.
-    fun episodeLine(track: Item): String = listOf(track.aired, track.overview).filter { it.isNotEmpty() }.joinToString(" · ").take(160)
+    fun episodeLine(track: Item): String = listOf(track.aired, track.overview).filter { it.isNotEmpty() }.factsLine().take(160)
 
     // The same album in other versions ("Deluxe", "[2011 Remaster]"): its name without what marks a version.
     fun baseTitle(title: String): String = title.lowercase(Locale.ROOT)

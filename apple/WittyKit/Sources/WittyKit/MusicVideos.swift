@@ -126,7 +126,7 @@ public struct MusicVideoCard: Decodable, Equatable, Identifiable {
     /// "1.2K views · 3 weeks ago", as under a video tile.
     public func facts(now: Date = Date()) -> String {
         [allViews > 0 ? "\(MusicVideos.shortCount(allViews)) views" : "", MusicVideos.ago(uploadDate, now: now)]
-            .filter { !$0.isEmpty }.joined(separator: " · ")
+            .filter { !$0.isEmpty }.factsLine()
     }
 
     /// The words on the song under the tile: "On Its Album", or "In your music" for a song with no album.

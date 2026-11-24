@@ -779,7 +779,7 @@ public enum TitleLook {
 
     /// "Aired · runtime" under an episode's title.
     public static func episodeLine(_ episode: Item) -> String {
-        [episode.aired ?? "", runtime(episode.runtimeSec)].filter { !$0.isEmpty }.joined(separator: " · ")
+        [episode.aired ?? "", runtime(episode.runtimeSec)].filter { !$0.isEmpty }.factsLine()
     }
 
     // MARK: Sizes

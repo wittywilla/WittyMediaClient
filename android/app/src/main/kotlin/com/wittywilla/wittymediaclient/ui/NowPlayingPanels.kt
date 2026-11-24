@@ -515,7 +515,7 @@ private fun FixLyrics(nav: Nav, trackId: Long, title: String, artist: String, ru
                     ) {
                         Column(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 8.dp)) {
                             Text(f.title, color = Np.fg, fontSize = 14.sp, fontWeight = FontWeight.Bold)
-                            val who = listOf(f.artist, f.album).filter { it.isNotEmpty() }.joinToString(" · ")
+                            val who = listOf(f.artist, f.album).filter { it.isNotEmpty() }.factsLine()
                             if (who.isNotEmpty()) Text(who, color = Np.fg2, fontSize = 12.sp)
                             Text(f.facts(runtimeSec), color = Np.fg2, fontSize = 12.sp)
                         }

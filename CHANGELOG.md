@@ -5,6 +5,12 @@ What changed in WittyMediaClient, newest first. What changed before it had a rep
 
 ## Unreleased
 
+**Arabic and Hebrew**
+
+- **Latin titles keep their order on a phone set to Arabic or Hebrew.** Lines made of parts (a title's year and running
+  time, artist and album) keep each part's digits and dashes in place, and a Hebrew title among Latin ones keeps its
+  place too (wittywilla/WittyMediaServer#498).
+
 **Connect and sign-in screens: one centred card (wittywilla/WittyMediaServer#624)**
 
 - **Every connect screen is one card, centred both ways**, with the app's logo and name, or the server's once one is
