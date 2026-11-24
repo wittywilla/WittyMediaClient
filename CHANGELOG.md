@@ -5,6 +5,12 @@ What changed in WittyMediaClient, newest first. What changed before it had a rep
 
 ## Unreleased
 
+## 0.6.2
+
+Released 2026-11-24.
+
+Made for WittyMediaServer 0.8.4-alpha: the settings menu, notifications, parental PIN, time-shift and search need it.
+
 **Settings, the same everywhere (#111, wittywilla/WittyMediaServer#612)**
 
 - **You is the server's one settings menu** on Android phone and TV, iPhone, iPad and Apple TV, as on the web: the
