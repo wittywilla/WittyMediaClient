@@ -28,6 +28,12 @@ import com.wittywilla.wittymediaclient.net.ApiError
 import com.wittywilla.wittymediaclient.net.GuidePaging
 import com.wittywilla.wittymediaclient.net.GuideProgramme
 import com.wittywilla.wittymediaclient.net.SetRules
+import com.wittywilla.wittymediaclient.net.Span
+import com.wittywilla.wittymediaclient.net.TimeShiftRules
+import com.wittywilla.wittymediaclient.net.TimeShiftRules.Seek
+import com.wittywilla.wittymediaclient.net.Timeline
+import com.wittywilla.wittymediaclient.net.startOver
+import com.wittywilla.wittymediaclient.net.timeline
 import com.wittywilla.wittymediaclient.net.catchup
 import com.wittywilla.wittymediaclient.net.Tuned
 import com.wittywilla.wittymediaclient.net.leaveChannel
@@ -76,6 +82,21 @@ object LiveTv {
     // The programme being watched from its start (catch-up), or null for the channel as it is now.
     var fromStart by mutableStateOf<GuideProgramme?>(null)
         private set
+
+    // On a library channel started over (server #648): the moment of the schedule this viewer's own stream started
+    // from, the programme and breaks it is in, the moment the picture is at, and the break it is in, if any.
+    var shiftFrom by mutableStateOf<Long?>(null)
+        private set
+    var timeline by mutableStateOf<Timeline?>(null)
+        private set
+    var sched by mutableStateOf<Double?>(null)
+        private set
+    var inBreak by mutableStateOf<Span?>(null)
+        private set
+    private var heardAt = 0L
+    private var askedEnd = 0L
+    private var pausedAt: Pair<Long, Double?>? = null
+    private val window = androidx.media3.common.Timeline.Window()
 
     private var api = Api("", "")
 
@@ -135,20 +156,28 @@ object LiveTv {
     }
 
     // Plays a programme from its start, on a channel whose source keeps it (`tv-catchup`).
-    fun watchFromStart(key: String, programme: GuideProgramme, api: Api) {
+    // On a library channel it is the viewer's own stream of the channel from `from` (the programme's start if null).
+    fun watchFromStart(key: String, programme: GuideProgramme, api: Api, from: Long? = null) {
         this.api = api
-        if (key == this.key && fromStart == programme && state != State.Idle && !isFailed) return
-        begin(key, programme)
+        val shift = if (TimeShiftRules.isLibrary(key)) from ?: programme.start else null
+        if (key == this.key && fromStart == programme && shiftFrom == shift && state != State.Idle && !isFailed) return
+        begin(key, programme, shift)
     }
 
-    private fun begin(key: String, programme: GuideProgramme?) {
+    private fun begin(key: String, programme: GuideProgramme?, shift: Long? = null) {
         // The same channel another way (live after catch-up, or the other way round) is left first, and waited for,
         // so the server can't stop the new stream for the old one.
-        val leaving = this.key.takeIf { it.isNotEmpty() && (it != key || fromStart != programme) }
+        val leaving = this.key.takeIf { it.isNotEmpty() && (it != key || fromStart != programme || shiftFrom != shift) }
         val sameKey = leaving == key
-        if (leaving != null && !sameKey) leave(leaving)
+        val wasShift = shiftFrom != null
+        if (leaving != null && !sameKey) leave(leaving, wasShift)
         this.key = key
         fromStart = programme
+        shiftFrom = shift
+        timeline = null
+        inBreak = null
+        sched = null
+        pausedAt = null
         info = null
         why = ""
         state = State.Tuning
@@ -159,7 +188,8 @@ object LiveTv {
         }
         val using = api
         tuning = tvScope.launch {
-            if (sameKey) runCatching { using.leaveChannel(key, viewer) }
+            // A start-over stream replaced by one from a new moment is replaced by the server itself.
+            if (sameKey && !(wasShift && shift != null)) runCatching { using.leaveChannel(key, viewer, wasShift) }
             tune(key, programme)
         }
         measure()
@@ -169,10 +199,12 @@ object LiveTv {
     fun retry() {
         val was = key
         val programme = fromStart
+        val from = shiftFrom
         key = ""
         fromStart = null
+        shiftFrom = null
         state = State.Idle
-        if (programme != null) watchFromStart(was, programme, api) else watch(was, api)
+        if (programme != null) watchFromStart(was, programme, api, from) else watch(was, api)
     }
 
     // Nothing to show: the stream is left, and the server can stop it.
@@ -185,9 +217,12 @@ object LiveTv {
             it.stop()
             it.clearMediaItems()
         }
-        if (key.isNotEmpty()) leave(key)
+        if (key.isNotEmpty()) leave(key, shiftFrom != null)
         key = ""
         fromStart = null
+        shiftFrom = null
+        timeline = null
+        inBreak = null
         info = null
         why = ""
         state = State.Idle
@@ -195,20 +230,92 @@ object LiveTv {
     }
 
     fun pause() {
+        if (canShift && exo?.isPlaying == true) pausedAt = System.currentTimeMillis() to schedNow()
         exo?.pause()
     }
 
     fun resume() {
         val p = exo ?: return
+        // Back after longer than the server keeps: from where it paused, not whatever is left.
+        val paused = pausedAt
+        pausedAt = null
+        val at = paused?.second
+        if (paused != null && at != null && TimeShiftRules.restartAfterPause(paused.first, System.currentTimeMillis(), info?.bufferSec ?: 300.0)) {
+            restartAt(at.toLong())
+            return
+        }
         if (key.isNotEmpty() && p.mediaItemCount > 0) p.play()
     }
 
-    // Back or on within what the server keeps of the channel.
+    // A library channel can go further back than its window, by starting over from there.
+    private val canShift: Boolean get() = TimeShiftRules.isLibrary(key) && (shiftFrom != null || info?.startOver == true)
+
+    // Back or on within what the server keeps of the channel; on a library channel, further back by starting over.
     fun seek(by: Double) {
         val p = exo ?: return
         val length = p.duration
+        if (canShift) {
+            val s = schedNow()
+            if (s != null && (shiftFrom != null || p.currentPosition + by * 1000 < 0) && goTo(s + by)) return
+        }
         if (length == C.TIME_UNSET) return
         p.seekTo((p.currentPosition + (by * 1000).toLong()).coerceIn(0, length))
+    }
+
+    // The moment of the schedule the picture is at, from the stream's program date-times.
+    fun schedNow(): Double? {
+        val p = exo ?: return null
+        val t = p.currentTimeline
+        if (t.isEmpty || p.currentMediaItemIndex >= t.windowCount) return null
+        t.getWindow(p.currentMediaItemIndex, window)
+        if (window.windowStartTimeMs == C.TIME_UNSET) return null
+        return (window.windowStartTimeMs + p.currentPosition) / 1000.0
+    }
+
+    // Where live is now, by the server's clock.
+    private fun liveNow(): Double {
+        val i = info ?: return System.currentTimeMillis() / 1000.0
+        if (i.serverTime <= 0) return System.currentTimeMillis() / 1000.0
+        return i.serverTime + (android.os.SystemClock.elapsedRealtime() - heardAt) / 1000.0
+    }
+
+    // A moment of the schedule: within what's loaded, a seek; further back, this viewer's stream from there; at live,
+    // the channel everyone shares.
+    // False when there's nothing to do but stay within the window: live, on the channel everyone shares.
+    fun goTo(target: Double): Boolean {
+        val p = exo ?: return false
+        val s = schedNow() ?: return false
+        val cur = p.currentPosition / 1000.0
+        val end = if (p.duration == C.TIME_UNSET) cur else p.duration / 1000.0
+        val live = liveNow()
+        when (val plan = TimeShiftRules.plan(target, s, cur, 0.0, end, live, (timeline?.earliest ?: (live - 6 * 3600).toLong()).toDouble())) {
+            Seek.Live -> if (shiftFrom == null) return false else goLive()
+            is Seek.Within -> p.seekTo((plan.to * 1000).toLong())
+            is Seek.Restart -> restartAt(plan.at)
+        }
+        return true
+    }
+
+    private fun restartAt(at: Long) {
+        val programme = fromStart ?: info?.now ?: return
+        if (key.isEmpty()) return
+        begin(key, programme, at)
+    }
+
+    // The programme on now from its beginning: this viewer's own stream on a library channel, the archive on a tuner.
+    fun startOver() {
+        val p = info?.now ?: return
+        if (!TimeShiftRules.canStartOver(info, liveNow().toLong())) return
+        if (TimeShiftRules.isLibrary(key)) begin(key, p, p.start) else begin(key, p)
+    }
+
+    // Whether Start over is offered now.
+    val canStartOver: Boolean get() = fromStart == null && TimeShiftRules.canStartOver(info, liveNow().toLong())
+
+    // Past the whole break the picture is in, in one press. Only on a start-over stream: live keeps its breaks.
+    fun skipBreak() {
+        val b = inBreak ?: return
+        goTo(b.end + 0.5)
     }
 
     fun goLive() {
@@ -221,10 +328,10 @@ object LiveTv {
         p.play()
     }
 
-    private fun leave(key: String) {
+    private fun leave(key: String, shift: Boolean = false) {
         val leaving = api
         val name = viewer
-        tvScope.launch { runCatching { leaving.leaveChannel(key, name) } }
+        tvScope.launch { runCatching { leaving.leaveChannel(key, name, shift) } }
     }
 
     // How far behind the live edge it is, once a second while a channel is on.
@@ -235,6 +342,21 @@ object LiveTv {
                 val p = exo
                 val length = p?.duration ?: C.TIME_UNSET
                 behind = if (p == null || length == C.TIME_UNSET || !p.isCurrentMediaItemDynamic) 0.0 else maxOf(0L, length - p.currentPosition) / 1000.0
+                if (shiftFrom != null) {
+                    val s = schedNow()
+                    sched = s
+                    if (s != null) behind = maxOf(0.0, liveNow() - s)
+                    inBreak = TimeShiftRules.breakAt(timeline?.breaks, s)
+                    // Past the programme the timeline told of: what's on from there, and its breaks.
+                    val t = timeline
+                    if (s != null && t != null && s >= t.programme.end && askedEnd != t.programme.end) {
+                        askedEnd = t.programme.end
+                        val k = key
+                        runCatching { api.timeline(k, s.toLong()) }.getOrNull()?.let { if (k == key && shiftFrom != null) timeline = it }
+                    }
+                } else {
+                    inBreak = null
+                }
                 delay(1000)
             }
         }
@@ -243,8 +365,13 @@ object LiveTv {
     private suspend fun tune(key: String, programme: GuideProgramme?) {
         repeat(TUNE_TRIES) {
             try {
-                val tuned = if (programme != null) api.catchup(key, programme, viewer) else api.tune(key, viewer)
-                if (key != this.key || programme != fromStart) return
+                val shift = shiftFrom
+                val tuned = when {
+                    programme != null && shift != null -> api.startOver(key, shift, viewer)
+                    programme != null -> api.catchup(key, programme, viewer)
+                    else -> api.tune(key, viewer)
+                }
+                if (key != this.key || programme != fromStart || shift != shiftFrom) return
                 val address = tuned.streamUrl ?: tuned.url
                 val url = address?.let { runCatching { api.mediaUrl(it) }.getOrNull() }
                 if (url == null) {
@@ -253,6 +380,8 @@ object LiveTv {
                     return
                 }
                 info = tuned
+                heardAt = android.os.SystemClock.elapsedRealtime()
+                timeline = tuned.timeline
                 val media = MediaItem.Builder().setUri(url)
                 if (url.substringBefore('?').endsWith(".m3u8")) media.setMimeType(MimeTypes.APPLICATION_M3U8)
                 player()?.let {
@@ -268,6 +397,10 @@ object LiveTv {
                     // Still starting: the server says to wait and ask again.
                     delay(1000)
                     if (key != this.key) return
+                } else if (e.status == 409 && shiftFrom != null) {
+                    // That moment is live now: the channel everyone shares.
+                    if (key == this.key) begin(key, null)
+                    return
                 } else {
                     if (key != this.key) return
                     why = when {

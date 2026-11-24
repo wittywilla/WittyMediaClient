@@ -251,4 +251,10 @@ public struct Tuned: Decodable, Equatable {
     public let positionSec: Double?
     public let serverTime: Double?
     public let countProgress: Bool?
+    /// How much of the stream the server keeps for pausing and rewinding.
+    public let bufferSec: Double?
+    /// Time-shift (server #648): whether the programme on now can be started over, and on a start-over answer,
+    /// where its programme and breaks are (`TimeShiftRules`).
+    public let startOver: Bool?
+    public let timeline: Timeline?
 }

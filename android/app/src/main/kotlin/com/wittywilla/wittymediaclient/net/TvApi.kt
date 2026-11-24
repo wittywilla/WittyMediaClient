@@ -24,10 +24,18 @@ private suspend inline fun <reified T> Api.readList(path: String): List<T> = jso
 suspend fun Api.tune(key: String, viewer: String): Tuned =
     read("/tv/${GuideRules.pathPart(key)}/tune?streamToken=1&viewer=${GuideRules.pathPart(viewer)}")
 
-// This player has left the channel, so the server can stop a stream nobody watches.
-suspend fun Api.leaveChannel(key: String, viewer: String) {
-    call("POST", "/tv/${GuideRules.pathPart(key)}/leave?viewer=${GuideRules.pathPart(viewer)}", "{}")
+// This player has left the channel, so the server can stop a stream nobody watches. A start-over stream (shift) is
+// this viewer's alone, so it stops at once.
+suspend fun Api.leaveChannel(key: String, viewer: String, shift: Boolean = false) {
+    call("POST", TimeShiftRules.leavePath(key, viewer, shift), "{}")
 }
+
+// A library channel from a moment (from, Unix seconds; null for the start of the programme on now), on a stream of
+// this viewer's own; a tuner channel from its archive. 409: that moment is live.
+suspend fun Api.startOver(key: String, from: Long?, viewer: String): Tuned = read(TimeShiftRules.path(key, from, viewer))
+
+// A library channel's programme and breaks at a moment. Starts nothing.
+suspend fun Api.timeline(key: String, at: Long): Timeline = read("/tv/${GuideRules.pathPart(key)}/timeline?at=$at")
 
 // A page of the guide's channels with their schedule: see GuidePaging.query.
 suspend fun Api.guidePage(query: String): Guide = read(query)

@@ -262,6 +262,18 @@ fun ChannelScreen(nav: Nav, start: String) {
                         KeyEvent.KEYCODE_DPAD_RIGHT, KeyEvent.KEYCODE_MENU, KeyEvent.KEYCODE_BUTTON_X, KeyEvent.KEYCODE_BUTTON_START -> { dock = true; true }
                         KeyEvent.KEYCODE_MEDIA_REWIND -> { LiveTv.seek(-10.0); showBanner(); true }
                         KeyEvent.KEYCODE_MEDIA_FAST_FORWARD -> { LiveTv.seek(30.0); showBanner(); true }
+                        // Next skips a whole break on a programme started over; otherwise it goes on 30 seconds.
+                        KeyEvent.KEYCODE_MEDIA_NEXT, KeyEvent.KEYCODE_MEDIA_SKIP_FORWARD -> {
+                            if (LiveTv.inBreak != null) LiveTv.skipBreak() else LiveTv.seek(30.0)
+                            showBanner()
+                            true
+                        }
+                        // Previous starts the programme on now over, where it can be; otherwise it goes back 10 seconds.
+                        KeyEvent.KEYCODE_MEDIA_PREVIOUS, KeyEvent.KEYCODE_MEDIA_SKIP_BACKWARD -> {
+                            if (LiveTv.canStartOver) LiveTv.startOver() else LiveTv.seek(-10.0)
+                            showBanner()
+                            true
+                        }
                         KeyEvent.KEYCODE_DPAD_CENTER, KeyEvent.KEYCODE_ENTER, KeyEvent.KEYCODE_NUMPAD_ENTER -> { showBanner(); true }
                         KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE, KeyEvent.KEYCODE_MEDIA_PLAY, KeyEvent.KEYCODE_MEDIA_PAUSE -> {
                             // From the start, Play/Pause only pauses: live is a choice of its own, under Select.
@@ -287,7 +299,12 @@ fun ChannelScreen(nav: Nav, start: String) {
             }
             Box(Modifier.fillMaxSize().padding(start = dress.pt(SIDE), end = dress.pt(SIDE), bottom = dress.pt(BOTTOM)), contentAlignment = Alignment.BottomCenter) {
                 if (dock) {
-                    PlayerDock(dress, onLook = { lookOpen = true }, onMenu = { dockMenu = it }, onClose = ::closeDock)
+                    PlayerDock(
+                        dress, onLook = { lookOpen = true }, onMenu = { dockMenu = it }, onClose = ::closeDock,
+                        onStartOver = if (LiveTv.canStartOver && LiveTv.key == key) ({ closeDock(); LiveTv.startOver(); showBanner() }) else null,
+                        onSkipBreak = if (LiveTv.inBreak != null && LiveTv.key == key) ({ closeDock(); LiveTv.skipBreak() }) else null,
+                        onLive = if (fromStart != null) ({ closeDock(); LiveTv.goLive(); showBanner() }) else null,
+                    )
                 } else if (mini) {
                     MiniGuide(dress, key, onTune = ::tune, onClose = ::closeMini, onFull = ::toGuide, fromStart = fromStart != null, onLive = { closeMini(); LiveTv.goLive(); showBanner() })
                 } else {
@@ -312,10 +329,21 @@ fun ChannelScreen(nav: Nav, start: String) {
                 )
             }
             if (lookOpen) TvLookPanel(nav, onClose = { lookOpen = false })
+            if (LiveTv.inBreak != null && LiveTv.key == key && !mini && !dock) {
+                // Remote words only: Next skips the break, or Right opens the Dock with Skip break first.
+                Box(Modifier.fillMaxSize().padding(end = dress.pt(SIDE), bottom = dress.pt(BOTTOM)), contentAlignment = Alignment.BottomEnd) {
+                    Text(
+                        "Ad break · Next ⏭ to skip it, or Right, then Skip break",
+                        style = MaterialTheme.typography.label, color = Color.White,
+                        modifier = Modifier.background(Color.Black.copy(alpha = 0.6f), CircleShape).padding(horizontal = dress.pt(16), vertical = dress.pt(8)),
+                    )
+                }
+            }
             if (fromStart != null && !mini) {
                 Box(Modifier.fillMaxSize().padding(top = dress.pt(60)), contentAlignment = Alignment.TopCenter) {
                     Text(
-                        "From the start of ${fromStart.title} · Left, then Live, for the channel as it is now",
+                        if (LiveTv.shiftFrom != null && LiveTv.behind >= 60) "${fromStart.title} · ${(LiveTv.behind / 60).roundToInt()} min behind live · Right, then Back to live"
+                        else "From the start of ${fromStart.title} · Left, then Live, for the channel as it is now",
                         style = MaterialTheme.typography.label, color = Color.White,
                         modifier = Modifier.background(Color.Black.copy(alpha = 0.6f), CircleShape).padding(horizontal = dress.pt(16), vertical = dress.pt(8)),
                     )
@@ -339,7 +367,11 @@ private enum class PlayerMenu { Audio, Subtitles, Quality }
 // The banner's Dock: Audio, Subtitles, Quality and Look in one row, drawn in the account's WittyTV look. A choice that
 // the channel doesn't have is dimmed, not left out, so the row never changes. Back closes it.
 @Composable
-private fun PlayerDock(dress: TvDress, onLook: () -> Unit, onMenu: (PlayerMenu) -> Unit, onClose: () -> Unit) {
+private fun PlayerDock(
+    dress: TvDress, onLook: () -> Unit, onMenu: (PlayerMenu) -> Unit, onClose: () -> Unit,
+    // Time-shift (server #648): each is shown only when it can be done now.
+    onStartOver: (() -> Unit)? = null, onSkipBreak: (() -> Unit)? = null, onLive: (() -> Unit)? = null,
+) {
     val first = remember { FocusRequester() }
     LaunchedEffect(Unit) { repeat(4) { withFrameNanos { }; runCatching { first.requestFocus() } } }
     val audio = LiveTvTracks.audio().size > 1
@@ -352,7 +384,12 @@ private fun PlayerDock(dress: TvDress, onLook: () -> Unit, onMenu: (PlayerMenu) 
             .focusGroup(),
         horizontalArrangement = Arrangement.spacedBy(dress.pt(16)),
     ) {
-        TvButton(dress, "Audio", { onMenu(PlayerMenu.Audio) }, enabled = audio, focusRequester = first)
+        // The first that's there takes focus: Skip break in a break, then Back to live, then Start over.
+        val lead = onSkipBreak ?: onLive ?: onStartOver
+        onSkipBreak?.let { TvButton(dress, "Skip break", it, on = true, focusRequester = first) }
+        onLive?.let { TvButton(dress, "Back to live", it, on = onSkipBreak == null, focusRequester = if (lead === it) first else null) }
+        onStartOver?.let { TvButton(dress, "Start over", it, focusRequester = if (lead === it) first else null) }
+        TvButton(dress, "Audio", { onMenu(PlayerMenu.Audio) }, enabled = audio, focusRequester = if (lead == null) first else null)
         TvButton(dress, "Subtitles", { onMenu(PlayerMenu.Subtitles) }, enabled = subs)
         TvButton(dress, "Quality", { onMenu(PlayerMenu.Quality) }, enabled = quality)
         TvButton(dress, "Look", onLook)

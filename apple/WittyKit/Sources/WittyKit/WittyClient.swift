@@ -793,8 +793,20 @@ public final class WittyClient: @unchecked Sendable {
         try await get("/tv/\(WittyClient.pathPart(key))/tune?streamToken=1&viewer=\(WittyClient.pathPart(viewer))")
     }
 
-    public func leaveChannel(_ key: String, viewer: String) async throws {
-        _ = try await call("POST", "/tv/\(WittyClient.pathPart(key))/leave?viewer=\(WittyClient.pathPart(viewer))", body: Data("{}".utf8))
+    /// A start-over stream (`shift`) is this viewer's alone, so leaving stops it at once.
+    public func leaveChannel(_ key: String, viewer: String, shift: Bool = false) async throws {
+        _ = try await call("POST", TimeShiftRules.leaveQuery(key: key, viewer: viewer, shift: shift), body: Data("{}".utf8))
+    }
+
+    /// A library channel from a moment (nil: the start of the programme on now), on a stream of this viewer's own;
+    /// a tuner channel from its archive. 409: that moment is live.
+    public func startOver(_ key: String, from: Int64?, viewer: String) async throws -> Tuned {
+        try await get(TimeShiftRules.query(key: key, from: from, viewer: viewer))
+    }
+
+    /// A library channel's programme and breaks at a moment. Starts nothing.
+    public func timeline(_ key: String, at: Int64) async throws -> Timeline {
+        try await get("/tv/\(WittyClient.pathPart(key))/timeline?at=\(at)")
     }
 
     // MARK: WittyTV: the guide, recordings and reminders

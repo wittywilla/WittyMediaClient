@@ -359,6 +359,13 @@ data class Tuned(
     val notices: List<String>? = null,
     val alternative: GuideAlternative? = null,
     val security: GuideSecurity? = null,
+    // The server's clock when it answered, and how much of the stream it keeps for pausing and rewinding.
+    val serverTime: Long = 0,
+    val bufferSec: Double = 0.0,
+    // Time-shift (server #648): whether the programme on now can be started over, and on a start-over answer, where
+    // its programme and breaks are (TimeShiftRules).
+    val startOver: Boolean? = null,
+    val timeline: Timeline? = null,
 )
 
 // What GET /update says, for administrators: only what Home's notice of a newer server uses.
