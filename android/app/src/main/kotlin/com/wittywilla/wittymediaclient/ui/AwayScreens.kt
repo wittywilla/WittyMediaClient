@@ -147,6 +147,16 @@ private fun JoinWithCodeOrLinkScreen(nav: Nav, s: Map<String, String>) {
     var asking by remember { mutableStateOf(false) }
     fun askCode() {
         if (asking || code.isBlank()) return
+        // A link pasted where the code goes: joined as the link it is.
+        PeerRules.invite(code.trim())?.let { invite ->
+            asking = true
+            codeProblem = ""
+            scope.launch {
+                nav.joinInvite(invite)?.let { codeProblem = it }
+                asking = false
+            }
+            return
+        }
         if (WebJoin.clean(code).isEmpty()) {
             codeProblem = s["errCodeFormat"].orEmpty()
             return
@@ -190,7 +200,8 @@ private fun JoinWithCodeOrLinkScreen(nav: Nav, s: Map<String, String>) {
     ) {
         DesignSection(s["codeEnterTitle"].orEmpty()) {
             DesignNote(s["codeEnterHint"].orEmpty())
-            WittyField(code, { code = it.take(12); codeProblem = "" }, s["codeEnterLabel"].orEmpty(), imeAction = ImeAction.Go, onAction = ::askCode, isError = codeProblem.isNotEmpty(), maxLength = 12)
+            // Long enough for a link pasted here instead (askCode takes it as one).
+            WittyField(code, { code = it.take(4096); codeProblem = "" }, s["codeEnterLabel"].orEmpty(), imeAction = ImeAction.Go, onAction = ::askCode, isError = codeProblem.isNotEmpty())
             // Said aloud as it changes: looking, or what went wrong, naming the step.
             DesignNote(if (asking) s["codeLooking"].orEmpty() else codeProblem, busy = asking, error = !asking && codeProblem.isNotEmpty())
             DesignActions {
