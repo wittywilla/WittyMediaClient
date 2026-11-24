@@ -237,26 +237,122 @@ public struct TrackTile: Equatable, Identifiable {
 
     /// Sound tracks, as the website's picker shows them.
     public static func audio(_ tracks: [Track], chosen: Int?) -> [TrackTile] {
-        tracks.map { track in
-            TrackTile(id: track.index, title: languageName(track), sub: track.title ?? "",
-                      detail: [track.codec?.uppercased(), track.channels.flatMap { $0 > 0 ? "\($0) ch" : nil }].compactMap { $0 }.filter { !$0.isEmpty }.joined(separator: " · "),
-                      active: track.index == chosen)
+        TrackWords.audioList(tracks).map { track, name in
+            TrackTile(id: track.index, title: name.title, sub: name.sub, detail: name.detail, active: track.index == chosen)
         }
     }
 
     /// Off first, then every subtitle track.
     public static func subtitles(_ tracks: [Track], chosen: Int?) -> [TrackTile] {
         [TrackTile(id: -1, title: "Off", sub: "", detail: "", active: chosen == nil || (chosen ?? -1) < 0)]
-            + tracks.map { track in
-                TrackTile(id: track.index, title: languageName(track), sub: track.title ?? "", detail: track.codec?.uppercased() ?? "",
-                          active: track.index == chosen)
+            + TrackWords.subtitleList(tracks).map { track, name in
+                TrackTile(id: track.index, title: name.title, sub: name.sub, detail: name.detail, active: track.index == chosen)
             }
     }
+}
 
-    static func languageName(_ track: Track) -> String {
-        if let name = track.languageName, !name.isEmpty { return name }
-        guard let code = track.language, !code.isEmpty, code != "und" else { return "Unknown" }
-        return Locale(identifier: "en").localizedString(forLanguageCode: code) ?? code
+/// A track's name in three parts: the language, the track's own name and marks, and what kind it is.
+public struct TrackName: Equatable {
+    public let title: String
+    public let sub: String
+    public let detail: String
+
+    public var line: String { [title, sub, detail].filter { !$0.isEmpty }.factsLine() }
+}
+
+/// How a video's sound tracks and subtitles are named in every native player: the same rule as Android's
+/// (player/TrackWords.kt) and the website's picker. The language first, then the track's own name, then what kind it
+/// is. A track nobody labelled is "Track 2" or "Subtitles 2", never "Unknown".
+public enum TrackWords {
+    /// The older three-letter codes files carry, and the newer ones, as two letters Locale knows.
+    private static let twoLetter: [String: String] = [
+        "alb": "sq", "sqi": "sq", "ara": "ar", "arm": "hy", "hye": "hy", "baq": "eu", "eus": "eu", "bul": "bg", "bur": "my", "mya": "my",
+        "cat": "ca", "ces": "cs", "cze": "cs", "chi": "zh", "zho": "zh", "dan": "da", "deu": "de", "ger": "de", "dut": "nl", "nld": "nl",
+        "ell": "el", "gre": "el", "eng": "en", "est": "et", "fas": "fa", "per": "fa", "fin": "fi", "fra": "fr", "fre": "fr", "geo": "ka",
+        "kat": "ka", "heb": "he", "hin": "hi", "hrv": "hr", "hun": "hu", "ice": "is", "isl": "is", "ind": "id", "ita": "it", "jpn": "ja",
+        "kor": "ko", "lav": "lv", "lit": "lt", "mac": "mk", "mkd": "mk", "may": "ms", "msa": "ms", "nob": "nb", "nno": "nn", "nor": "no",
+        "pol": "pl", "por": "pt", "ron": "ro", "rum": "ro", "rus": "ru", "slk": "sk", "slo": "sk", "slv": "sl", "spa": "es", "srp": "sr",
+        "swe": "sv", "tam": "ta", "tel": "te", "tha": "th", "tur": "tr", "ukr": "uk", "urd": "ur", "vie": "vi", "wel": "cy", "cym": "cy",
+    ]
+
+    /// "English" for eng, en, en-US, or the server's own name for it; "" when there's no language to name.
+    public static func language(_ track: Track) -> String {
+        if let name = track.languageName?.trimmingCharacters(in: .whitespaces), !name.isEmpty { return name }
+        return languageOf(track.language ?? "")
+    }
+
+    public static func languageOf(_ code: String) -> String {
+        let raw = code.trimmingCharacters(in: .whitespaces).lowercased().split(whereSeparator: { $0 == "-" || $0 == "_" }).first.map(String.init) ?? ""
+        if raw.isEmpty || ["und", "unknown", "zxx", "mul"].contains(raw) { return "" }
+        let two = twoLetter[raw] ?? raw
+        let name = Locale(identifier: "en").localizedString(forLanguageCode: two) ?? ""
+        return name.isEmpty || name.lowercased() == two ? code.trimmingCharacters(in: .whitespaces) : name
+    }
+
+    public static func channels(_ n: Int?) -> String {
+        switch n ?? 0 {
+        case 0: return ""
+        case 1: return "Mono"
+        case 2: return "Stereo"
+        case 6: return "5.1"
+        case 8: return "7.1"
+        case let other: return "\(other) channels"
+        }
+    }
+
+    /// Subtitles' formats in words: nobody knows what SUBRIP or HDMV_PGS_SUBTITLE means.
+    public static func subtitleKind(_ codec: String?) -> String {
+        let c = (codec ?? "").lowercased()
+        if c == "ass" || c == "ssa" { return "Styled text" }
+        if ["pgs", "dvd_sub", "dvdsub", "dvb_sub", "dvbsub", "vobsub", "xsub"].contains(where: { c.contains($0) }) { return "Pictures" }
+        return c.isEmpty ? "" : "Text"
+    }
+
+    private static func own(_ track: Track, language: String) -> String {
+        let title = (track.title ?? "").trimmingCharacters(in: .whitespaces)
+        let l = title.lowercased()
+        if title.isEmpty || l == language.lowercased() || l == (track.language ?? "").lowercased() { return "" }
+        return title
+    }
+
+    private static func marks(_ track: Track, title: String) -> [String] {
+        let t = title.lowercased()
+        var marks: [String] = []
+        if track.forced == true && !t.contains("forced") { marks.append("Forced") }
+        if track.sdh == true && !t.contains("sdh") && !t.contains("hearing") { marks.append("SDH") }
+        if track.commentary == true && !t.contains("comment") { marks.append("Commentary") }
+        return marks
+    }
+
+    private static func name(_ track: Track, number: Int, fallback: String, detail: String) -> TrackName {
+        let lang = Self.language(track)
+        let ownName = Self.own(track, language: lang)
+        let title = !lang.isEmpty ? lang : !ownName.isEmpty ? ownName : "\(fallback) \(number)"
+        let sub = ([lang.isEmpty ? "" : ownName] + marks(track, title: ownName)).filter { !$0.isEmpty }.factsLine()
+        return TrackName(title: title, sub: sub, detail: detail)
+    }
+
+    /// `number` counts from 1 in the list as shown.
+    public static func audio(_ track: Track, number: Int) -> TrackName {
+        name(track, number: number, fallback: "Track", detail: [(track.codec ?? "").uppercased(), channels(track.channels)].filter { !$0.isEmpty }.factsLine())
+    }
+
+    public static func subtitle(_ track: Track, number: Int) -> TrackName {
+        name(track, number: number, fallback: "Subtitles", detail: subtitleKind(track.codec))
+    }
+
+    /// Lists as shown: one row per track, numbered from 1.
+    public static func audioList(_ tracks: [Track]) -> [(Track, TrackName)] {
+        unique(tracks).enumerated().map { ($1, audio($1, number: $0 + 1)) }
+    }
+
+    public static func subtitleList(_ tracks: [Track]) -> [(Track, TrackName)] {
+        unique(tracks).enumerated().map { ($1, subtitle($1, number: $0 + 1)) }
+    }
+
+    private static func unique(_ tracks: [Track]) -> [Track] {
+        var seen = Set<Int>()
+        return tracks.filter { seen.insert($0.index).inserted }
     }
 }
 
@@ -264,6 +360,15 @@ public enum Scenes {
     /// Which chapter the film is in: the last one that has started, half a second's grace.
     public static func current(_ starts: [Double], at time: Double) -> Int {
         max(0, starts.filter { $0 <= time + 0.5 }.count - 1)
+    }
+
+    /// When a scene's picture is taken, as the website and Android take it: a quarter of the way in, between 2 and 20
+    /// seconds, past a fade from black or a studio's logo and still in the scene.
+    public static func pictureSec(_ chapters: [Chapter], _ index: Int, duration: Double) -> Int {
+        guard chapters.indices.contains(index) else { return 0 }
+        let from = chapters[index].start
+        let to = chapters.indices.contains(index + 1) ? chapters[index + 1].start : (duration > from ? duration : from + 8)
+        return Int((from + min(20, max(2, (to - from) / 4))).rounded(.down))
     }
 
     /// A chapter's name, or "Scene 3" when it has none.

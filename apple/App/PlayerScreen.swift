@@ -53,6 +53,22 @@ final class PlaybackModel: ObservableObject {
     #endif
     /// Skip recap, intro, adverts and credits, and skipping by itself: see MediaSkips.swift.
     let skips = SkipDriver()
+    /// The speeds offered, up to the server's limit (GET /prefs).
+    @Published var speeds = PlayerSpeeds.offered(max: nil)
+    /// Apple TV's scenes grid is open over the film, which waits meanwhile.
+    @Published var scenesOpen = false
+    private var resumeAfterScenes = false
+
+    func openScenes() {
+        if player.timeControlStatus != .paused && steering == nil { player.pause(); resumeAfterScenes = true }
+        scenesOpen = true
+    }
+
+    func closeScenes(playFrom start: Double? = nil) {
+        scenesOpen = false
+        if let start { seek(toFilm: start) }
+        if resumeAfterScenes { resumeAfterScenes = false; player.play() }
+    }
 
     private var clock = PlaybackClock()
     private var retry = RetryBudget()
@@ -68,6 +84,8 @@ final class PlaybackModel: ObservableObject {
     private(set) var id: Int64 = 0
     private var audio: Int?
     private var subtitle: Int?
+    /// The viewer's choice of size and rate: nil leaves it to the server (Auto).
+    private var quality: String?
 
     private var timeObserver: Any?
     private var fastObserver: Any?
@@ -149,6 +167,8 @@ final class PlaybackModel: ObservableObject {
             show(error)
             return
         }
+        // The speeds the bar offers stop at the server's limit.
+        if let prefs = try? await client.prefs(), run == generation { speeds = PlayerSpeeds.offered(max: prefs.maxSpeed) }
         // Left out, startSec lets the server resume where the viewer stopped.
         await open(startSec: given?.startSec ?? (beginning ? 0 : nil))
     }
@@ -202,11 +222,19 @@ final class PlaybackModel: ObservableObject {
     }
 
     func choose(audio: Int? = nil, subtitle: Int? = nil) {
-        if let audio { self.audio = audio }
-        if let subtitle { self.subtitle = subtitle }
+        if let audio { self.audio = audio; rememberTrack(stream?.audio?.first { $0.index == audio }, "audio") }
+        if let subtitle { self.subtitle = subtitle; rememberTrack(stream?.subtitles?.first { $0.index == subtitle }, "subtitle") }
         playWhenReady = player.timeControlStatus != .paused
         let at = clock.saveable ?? clock.filmSeconds
         Task { await open(startSec: at) }
+    }
+
+    /// The quality menu's choice ("" for Auto, "original", or a size): the stream is asked for again at the same place.
+    func choose(quality: String) {
+        self.quality = quality
+        playWhenReady = player.timeControlStatus != .paused
+        let at = clock.saveable ?? clock.filmSeconds
+        Task { await open(startSec: at, replace: true) }
     }
 
     /// After a failure: from the last good place, or wherever the server says if there wasn't one.
@@ -237,7 +265,7 @@ final class PlaybackModel: ObservableObject {
         let (streaming, kbps): (String?, Double?) = (nil, nil)
         #endif
         let request = PlaybackRequest(profile: device.profile, capabilities: device.capabilities, audio: audio, subtitle: subtitle, startSec: startSec,
-                                      streaming: streaming, measuredKbps: kbps)
+                                      streaming: streaming, measuredKbps: kbps, quality: quality)
         do {
             let answer = try await client.playback(id, request)
             guard run == generation else {
@@ -728,28 +756,54 @@ private struct PlayerHost: UIViewControllerRepresentable {
         #if os(tvOS)
         // On Apple TV the choices belong in the system player's own bar, where the remote reaches them.
         let stream = playback.stream
-        let shape = "\(stream?.url ?? "")|\(stream?.audioIndex ?? -2)|\(stream?.subtitleIndex ?? -2)|\(skips.shape)|\(playback.offerNext)"
+        let rate = playback.player.defaultRate
+        let shape = "\(stream?.url ?? "")|\(stream?.audioIndex ?? -2)|\(stream?.subtitleIndex ?? -2)|\(stream?.quality?.choice ?? "-")|\(rate)|\(playback.speeds.count)|\(skips.shape)|\(playback.offerNext)"
         guard shape != context.coordinator.builtFrom else { return }
         context.coordinator.builtFrom = shape
-        var menus: [UIMenuElement] = []
-        if let audio = stream?.audio, audio.count > 1 {
-            menus.append(UIMenu(title: "Audio", image: UIImage(systemName: "speaker.wave.2"), children: audio.map { track in
-                UIAction(title: track.label, state: track.index == stream?.audioIndex ? .on : .off) { _ in playback.choose(audio: track.index) }
-            }))
-        }
-        if let subtitles = stream?.subtitles, !subtitles.isEmpty {
-            let off = UIAction(title: "Off", state: stream?.subtitleIndex == -1 ? .on : .off) { _ in playback.choose(subtitle: -1) }
-            menus.append(UIMenu(title: "Subtitles", image: UIImage(systemName: "captions.bubble"), children: [off] + subtitles.map { track in
-                UIAction(title: track.label, state: track.index == stream?.subtitleIndex ? .on : .off) { _ in playback.choose(subtitle: track.index) }
-            }))
-        }
-        controller.transportBarCustomMenuItems = menus + playback.extraMenus
+        controller.transportBarCustomMenuItems = Self.menus(playback) + playback.extraMenus
         var actions: [UIAction] = []
         actions += skips.actions(playback)
         if playback.offerNext { actions.append(UIAction(title: "Next episode") { _ in playback.playNext() }) }
         controller.contextualActions = actions
         #endif
     }
+
+    #if os(tvOS)
+    /// The bar's own menus, as Android TV's player has them: Audio, Subtitles, Quality, Speed and Scenes. Each is the
+    /// system's, so the remote reaches it, the choice in use has its tick, and Back closes it.
+    @MainActor static func menus(_ playback: PlaybackModel) -> [UIMenuElement] {
+        let stream = playback.stream
+        var menus: [UIMenuElement] = []
+        // One sound track still says which language and how many speakers.
+        if let audio = stream?.audio, !audio.isEmpty {
+            menus.append(UIMenu(title: "Audio", image: UIImage(systemName: "speaker.wave.2"), children: inOrder(TrackWords.audioList(audio), "audio").map { track, name in
+                UIAction(title: name.title, subtitle: [name.sub, name.detail].filter { !$0.isEmpty }.joined(separator: " · "),
+                         state: track.index == stream?.audioIndex ? .on : .off) { _ in playback.choose(audio: track.index) }
+            }))
+        }
+        if let subtitles = stream?.subtitles, !subtitles.isEmpty {
+            let off = UIAction(title: "Off", state: (stream?.subtitleIndex ?? -1) < 0 ? .on : .off) { _ in playback.choose(subtitle: -1) }
+            menus.append(UIMenu(title: "Subtitles", image: UIImage(systemName: "captions.bubble"), children: [off] + inOrder(TrackWords.subtitleList(subtitles), "subtitle").map { track, name in
+                UIAction(title: name.title, subtitle: [name.sub, name.detail].filter { !$0.isEmpty }.joined(separator: " · "),
+                         state: track.index == stream?.subtitleIndex ? .on : .off) { _ in playback.choose(subtitle: track.index) }
+            }))
+        }
+        if let quality = stream?.quality {
+            menus.append(UIMenu(title: "Quality", image: UIImage(systemName: "slider.horizontal.3"), children: quality.rows.map { row in
+                UIAction(title: row.name, subtitle: row.detail.isEmpty ? nil : row.detail, state: row.active ? .on : .off) { _ in playback.choose(quality: row.choice) }
+            }))
+        }
+        let rate = Double(playback.player.defaultRate)
+        menus.append(UIMenu(title: "Speed", image: UIImage(systemName: "speedometer"), children: playback.speeds.map { speed in
+            UIAction(title: PlayerSpeeds.words(speed), subtitle: speed > 4 ? "May be muted" : nil, state: abs(speed - rate) < 0.001 ? .on : .off) { _ in playback.setSpeed(Float(speed)) }
+        }))
+        if let chapters = stream?.chapters, chapters.count > 1 {
+            // A grid of pictures, as on the website and Android TV, rather than a list of names.
+            menus.append(UIAction(title: "Scenes", image: UIImage(systemName: "rectangle.grid.2x2")) { _ in playback.openScenes() })
+        }
+        return menus
+    }
+    #endif
 }
 #endif
 
@@ -801,7 +855,7 @@ private struct SystemPlayerScreen: View {
             }
             if let audio = playback.stream?.audio, audio.count > 1 {
                 Menu("Audio") {
-                    ForEach(uniqued(audio)) { track in
+                    ForEach(ordered(audio, "audio")) { track in
                         Button { playback.choose(audio: track.index) } label: {
                             if track.index == playback.stream?.audioIndex { Label(track.label, systemImage: "checkmark") } else { Text(track.label) }
                         }
@@ -814,7 +868,7 @@ private struct SystemPlayerScreen: View {
                     Button { playback.choose(subtitle: -1) } label: {
                         if playback.stream?.subtitleIndex == -1 { Label("Off", systemImage: "checkmark") } else { Text("Off") }
                     }
-                    ForEach(uniqued(subtitles)) { track in
+                    ForEach(ordered(subtitles, "subtitle")) { track in
                         Button { playback.choose(subtitle: track.index) } label: {
                             if track.index == playback.stream?.subtitleIndex { Label(track.label, systemImage: "checkmark") } else { Text(track.label) }
                         }
@@ -855,6 +909,13 @@ private struct SystemPlayerScreen: View {
             #if !os(tvOS)
             choices
             #endif
+            #if os(tvOS)
+            if playback.scenesOpen, let chapters = playback.stream?.chapters {
+                TvScenesGrid(chapters: chapters, current: Scenes.current(chapters.map(\.start), at: playback.clockface.time),
+                             picture: { index in client.sceneURL(id, sec: Scenes.pictureSec(chapters, index, duration: playback.stream?.durationSec ?? 0)) },
+                             pick: { start in playback.closeScenes(playFrom: start) }, close: { playback.closeScenes() })
+            }
+            #endif
         }
         #if os(tvOS)
         .toolbar(.hidden, for: .tabBar)
@@ -882,4 +943,85 @@ private struct SystemPlayerScreen: View {
         }
         .onDisappear { playback.stop() }
     }
+}
+
+#if os(tvOS)
+/// The scenes over the film on Apple TV: a grid of pictures, each with its number, name and time, the one playing
+/// marked and focused first. Menu closes it and the film plays on; choosing one plays from there.
+private struct TvScenesGrid: View {
+    @Environment(\.palette) private var palette
+    let chapters: [Chapter]
+    let current: Int
+    let picture: (Int) -> URL?
+    let pick: (Double) -> Void
+    let close: () -> Void
+    @FocusState private var focused: Int?
+
+    var body: some View {
+        ZStack(alignment: .topLeading) {
+            Color.black.opacity(0.92).ignoresSafeArea()
+            VStack(alignment: .leading, spacing: 30) {
+                HStack(alignment: .firstTextBaseline, spacing: 20) {
+                    Text("Scenes").font(.title2.weight(.semibold)).foregroundStyle(.white).accessibilityAddTraits(.isHeader)
+                    Text("\(chapters.count) scenes · the film waits while you choose").foregroundStyle(.white.opacity(0.7))
+                }
+                ScrollViewReader { proxy in
+                    ScrollView {
+                        LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 48), count: 4), spacing: 48) {
+                            ForEach(Array(chapters.enumerated()), id: \.offset) { index, chapter in
+                                Button { pick(chapter.start) } label: {
+                                    VStack(alignment: .leading, spacing: 10) {
+                                        ArtImage(url: picture(index), width: 400, placeholder: "\(index + 1)")
+                                            .aspectRatio(16 / 9, contentMode: .fit)
+                                            .overlay(alignment: .bottomTrailing) {
+                                                Text(PlayerTime.format(chapter.start)).font(.caption.monospacedDigit().weight(.bold)).foregroundStyle(.white)
+                                                    .padding(.horizontal, 8).background(Color.black.opacity(0.7), in: RoundedRectangle(cornerRadius: 6)).padding(8)
+                                            }
+                                            .overlay(alignment: .topLeading) {
+                                                if index == current {
+                                                    Text("Playing now").font(.caption.weight(.bold)).foregroundStyle(palette.onAccent)
+                                                        .padding(.horizontal, 8).background(palette.accent, in: RoundedRectangle(cornerRadius: 6)).padding(8)
+                                                }
+                                            }
+                                        Text("\(index + 1). \(Scenes.name(chapters, index))").font(.callout).lineLimit(1)
+                                    }
+                                }
+                                .buttonStyle(.card)
+                                .focused($focused, equals: index)
+                                .id(index)
+                                .accessibilityLabel("Play \(Scenes.name(chapters, index)), from \(PlayerTime.format(chapter.start))")
+                            }
+                        }
+                        .padding(.vertical, 20)
+                    }
+                    .onAppear {
+                        proxy.scrollTo(current, anchor: .center)
+                        focused = current
+                    }
+                }
+            }
+            .padding(.horizontal, 80).padding(.top, 60)
+        }
+        .onExitCommand(perform: close)
+        .environment(\.colorScheme, .dark)
+    }
+}
+#endif
+/// The sound track and subtitle menus list this device's languages first, then the ones picked lately, then the rest
+/// by name, as the web app and the Android app do (WittyKit TrackOrder).
+private func ordered(_ tracks: [Track], _ kind: String) -> [Track] {
+    TrackOrder.order(uniqued(tracks), language: { $0.language }, title: { $0.label }, device: Locale.preferredLanguages,
+                     recent: UserDefaults.standard.stringArray(forKey: "tracks.recent." + kind) ?? [])
+}
+
+/// Named tracks in the same order: the names count tracks as the file lists them, the menu shows them in this order.
+private func inOrder(_ named: [(Track, TrackName)], _ kind: String) -> [(Track, TrackName)] {
+    let names = Dictionary(named.map { ($0.0.index, $0.1) }, uniquingKeysWith: { first, _ in first })
+    return ordered(named.map { $0.0 }, kind).compactMap { track in names[track.index].map { (track, $0) } }
+}
+
+private func rememberTrack(_ track: Track?, _ kind: String) {
+    guard let track else { return }
+    let key = "tracks.recent." + kind
+    UserDefaults.standard.set(TrackOrder.remember(UserDefaults.standard.stringArray(forKey: key) ?? [], track.language), forKey: key)
 }

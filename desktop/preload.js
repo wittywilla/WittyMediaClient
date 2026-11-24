@@ -74,6 +74,9 @@ if (location.protocol === 'wittymedia-app:') {
     },
     open: (server) => ipcRenderer.invoke('open-server', server),
     redeem: (url, code) => ipcRenderer.invoke('redeem', url, code),
+    // Enter a code: one from a server's Connect a device, asked of the servers this app can reach (code.js).
+    enterCode: (code, only) => ipcRenderer.invoke('enter-code', code, only),
+    enterCodeStop: () => ipcRenderer.send('enter-code-stop'),
     // A code shown here for a phone to approve. The secret that collects the sign-in stays in the app.
     pairStart: (url) => ipcRenderer.invoke('pair-start', url),
     pairPoll: () => ipcRenderer.invoke('pair-poll'),
@@ -82,12 +85,7 @@ if (location.protocol === 'wittymedia-app:') {
     // An invite link to a server away from home, and giving up on reaching one.
     invite: (link) => ipcRenderer.invoke('p2p-invite', link),
     awayStop: () => ipcRenderer.send('p2p-stop'),
-    // Join from away by a code this computer shows, and the From away screen.
-    joinAway: {
-      start: () => ipcRenderer.invoke('p2p-join-start'),
-      wait: () => ipcRenderer.invoke('p2p-join-wait'),
-      stop: () => ipcRenderer.send('p2p-join-stop'),
-    },
+    // The From away screen.
     awayInfo: () => ipcRenderer.invoke('away-info'),
     awayChoice: (stop) => ipcRenderer.send('away-choice', stop === true),
     openLogs: () => ipcRenderer.send('open-logs'),
@@ -99,6 +97,11 @@ if (location.protocol === 'wittymedia-app:') {
     moonlight: {
       status: () => ipcRenderer.invoke('moonlight-status'),
       launch: (args) => ipcRenderer.invoke('moonlight-launch', args),
+    },
+    // This app's own rows in the server's Settings: Servers on this device, From away, This app's log.
+    settings: {
+      info: () => ipcRenderer.invoke('settings-info'),
+      open: (id) => ipcRenderer.send('settings-open', String(id)),
     },
   })
   const report = () => {

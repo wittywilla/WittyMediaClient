@@ -13,6 +13,10 @@ enum SharedData {
 
     static let strings: [String: String] = load("strings.en").flatMap { try? JSONDecoder().decode([String: String].self, from: $0) } ?? [:]
 
+    /// The settings menu as this app was built with it (shared/data/settingsmenu.json): the server's own in its
+    /// catalogue comes first (SDUICatalog.settingsMenu).
+    static let settingsMenu: SettingsMenu? = SettingsMenu.bundled(load("settingsmenu"))
+
     struct ThemeColours: Decodable {
         let background, panel, card, border, text, textSecondary, accent, onAccent, danger: String
         let textHint, accentText, ok: String?
@@ -855,6 +859,8 @@ final class AppModel: ObservableObject {
         /// The name and password didn't match. The screen words it, since it knows which was asked for.
         case wrong
         case failed(String)
+        /// Leaving this kids' profile takes the parents' PIN. The words say why when the one typed was wrong.
+        case needsParentPin(String)
     }
 
     /// A name and password, and the authenticator's code when the account has asked for one.
@@ -878,17 +884,19 @@ final class AppModel: ObservableObject {
     /// came from in one step, so the new token is kept exactly as a sign-in's is, with the key the server proved.
     /// Everything of the profile being left goes, as signing out does it. What was playing stops first, so its
     /// place is saved while its sign-in still counts.
-    func switchProfile(name: String, password: String, code: String = "") async -> SignInOutcome {
+    func switchProfile(name: String, password: String, code: String = "", parentPin: String = "") async -> SignInOutcome {
         if let current, let refused = await refuseToSend(to: current) { return .failed(refused) }
         video?.stop()
         video = nil
         await listening.forget()?.value
         do {
-            let result = try await client.switchProfile(name: name, password: password, code: code, device: deviceName)
+            let result = try await client.switchProfile(name: name, password: password, code: code, device: deviceName, parentPin: parentPin)
             forgetSignIn()
             signedIn(token: result.token, user: result.user)
             return .signedIn
         } catch let error as APIError {
+            if error.needsParentPin { return .needsParentPin("") }
+            if error.wrongParentPin || (error.status == 429 && !parentPin.isEmpty) { return .needsParentPin(error.message) }
             switch SwitchRules.refusal(error, sentCode: !code.isEmpty) {
             case .needsCode(let wrong): return .needsCode(wrong ? error.message : "")
             // A wrong password is a 403 here, and the device stays signed in as it was. The server's words say
@@ -939,6 +947,28 @@ final class AppModel: ObservableObject {
         forgetSignIn()
         client = connection(to: client.base)
         stage = .signIn(.usual)
+    }
+
+    /// Signing out from a button: a kids' profile kept on this device asks for the parents' PIN first, on the
+    /// Who's watching page (ProfileSwitch.swift). Every other profile signs out as before.
+    func requestSignOut() {
+        guard household.limits?.pinToLeave == true else { signOut(); return }
+        household.leavingWithPin = true
+        if path.last != .family(.switchProfile) { path.append(.family(.switchProfile)) }
+    }
+
+    /// Signs out with the parents' PIN. Nil when it worked; otherwise the words to show.
+    func signOut(parentPin: String) async -> String? {
+        do {
+            try await client.logout(pin: parentPin)
+        } catch let error as APIError {
+            if error.needsParentPin || error.wrongParentPin || error.status == 429 { return error.message }
+        } catch {
+            // Not reached: signed out here all the same, as signing out always is.
+        }
+        household.leavingWithPin = false
+        signOut()
+        return nil
     }
 
     func changeServer() {

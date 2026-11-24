@@ -8,6 +8,8 @@
 //   --phase=away     the same data folder, with that address no longer answering: the app
 //                    has to find the server peer to peer by itself, still signed in
 //   --phase=invite   a fresh data folder: an invite link pasted on the connect screen
+//   --phase=revoked  after "away": the server takes this device off its list first; from away the
+//                    app gets nothing, and the sign-in it carried there no longer works anywhere
 //
 //   WMC_SERVER=http://127.0.0.1:19799 WMC_USER=owner WMC_PASSWORD=... WITTYCONNECT=/path/to/wittyconnect \
 //     WMC_TEST_DIR=/tmp/wmc-p2p electron test/app/p2p-real.js --phase=home
@@ -26,12 +28,12 @@ const DIRECT = process.env.WMC_DIRECT || SERVER
 const USER = process.env.WMC_USER
 const PASSWORD = process.env.WMC_PASSWORD
 const DIR = process.env.WMC_TEST_DIR
-if (!['home', 'away', 'invite'].includes(phase) || !SERVER || !USER || !PASSWORD || !DIR || !process.env.WITTYCONNECT) {
-  console.error('Set WMC_SERVER, WMC_USER, WMC_PASSWORD, WMC_TEST_DIR and WITTYCONNECT, and give --phase=home|away|invite.')
+if (!['home', 'away', 'invite', 'revoked'].includes(phase) || !SERVER || !USER || !PASSWORD || !DIR || !process.env.WITTYCONNECT) {
+  console.error('Set WMC_SERVER, WMC_USER, WMC_PASSWORD, WMC_TEST_DIR and WITTYCONNECT, and give --phase=home|away|invite|revoked.')
   process.exit(2)
 }
 const dataDir = path.join(DIR, phase === 'invite' ? 'invite' : 'paired')
-if (phase !== 'away') fs.rmSync(dataDir, { recursive: true, force: true })
+if (phase !== 'away' && phase !== 'revoked') fs.rmSync(dataDir, { recursive: true, force: true })
 fs.mkdirSync(dataDir, { recursive: true })
 app.setPath('userData', dataDir)
 
@@ -75,11 +77,13 @@ async function signedIn() {
 }
 const savedState = () => { try { return JSON.parse(fs.readFileSync(path.join(dataDir, 'state.json'), 'utf8')) } catch { return {} } }
 
-// way is the button that opens the box: Enter an address, or Connect from anywhere's Join with a link or code.
-async function typeIntoAddress(text, way = 'Enter an address') {
+// way is the button that opens the box: Type an address, or Paste a link (Enter an address and Join with a link or
+// code in TV mode, and before the Add a server screen).
+async function typeIntoAddress(text, way = ['Type an address', 'Enter an address']) {
+  const ways = JSON.stringify([].concat(way))
   await until('the connect page', () => page() && page().getURL().includes('connect'))
   await until('its heading', () => inPage("!!document.querySelector('h1')"))
-  for (let i = 0; i < 30 && !(await inPage(`document.activeElement.tagName === 'BUTTON' && document.activeElement.textContent.startsWith(${JSON.stringify(way)})`)); i++) await press('Down')
+  for (let i = 0; i < 30 && !(await inPage(`document.activeElement.tagName === 'BUTTON' && ${ways}.some((w) => document.activeElement.textContent.trim().startsWith(w))`)); i++) await press('Down')
   await press('Enter')
   await until('the address box', () => inPage("document.activeElement.id === 'address'"))
   await inPage(`document.getElementById('address').value = ${JSON.stringify(text)}`)
@@ -155,6 +159,39 @@ async function run() {
       assert.strictEqual(s.server, SERVER)
       assert.ok(s.recent[0].p2p.port > 1023, 'with the port the helper used, for next time')
     })
+  } else if (phase === 'revoked') {
+    let token
+    await step('the server takes this device off its list', async () => {
+      const key = JSON.parse(fs.readFileSync(path.join(dataDir, 'p2p-key.json'), 'utf8'))
+      const me = await signedIn()
+      const devices = await (await fetch(`${DIRECT}/api/v1/p2p/devices`, { headers: me.headers })).json()
+      const mine = devices.find((d) => d.id === key.deviceId)
+      assert.ok(mine, `this device is on the list to begin with: ${JSON.stringify(devices)}`)
+      // The sign-in the app made at home and then used from away, read from its cookie jar
+      // (the app isn't showing anything yet).
+      const origin = (savedState().recent || [])[0].url
+      ;[{ value: token } = {}] = await session.defaultSession.cookies.get({ url: origin, name: 'wms_token' })
+      assert.ok(token, 'the app kept its sign-in')
+      const gone = await fetch(`${DIRECT}/api/v1/p2p/devices/${mine.id}`, { method: 'DELETE', headers: me.headers })
+      assert.ok(gone.ok, `removing it: ${gone.status}`)
+    })
+    await step('from away, the app gets nothing from the server', async () => {
+      await assert.rejects(fetch(`${SERVER}/api/status`, { signal: AbortSignal.timeout(3000) }), 'the test needs the home address to be gone')
+      // Whatever the app shows, no page of the server answers it signed in, for a good while.
+      const end = Date.now() + 45000
+      while (Date.now() < end) {
+        const p = page()
+        if (p && P2P_PAGE.test(p.getURL())) {
+          const status = await p.executeJavaScript("fetch('/api/v1/me').then((r) => r.status, () => 0)").catch(() => 0)
+          assert.notStrictEqual(status, 200, 'a revoked device was answered signed in')
+        }
+        await wait(1000)
+      }
+    })
+    await step('and the sign-in it carried is over, at home too', async () => {
+      const at = await fetch(`${DIRECT}/api/v1/me`, { headers: { Authorization: `Bearer ${token}` } })
+      assert.strictEqual(at.status, 401, "the revoked device's sign-in still works")
+    })
   } else {
     let link
     await step('an invite link pasted on the connect screen is accepted', async () => {
@@ -164,7 +201,7 @@ async function run() {
       const made = await fetch(`${DIRECT}/api/v1/p2p/invite`, { method: 'POST', headers: me.headers, body: JSON.stringify({ password: PASSWORD, otp: process.env.WMC_OTP || '' }) })
       assert.ok(made.ok, `no invite: ${made.status}`)
       link = (await made.json()).link
-      await typeIntoAddress(link, 'Join with a link or code')
+      await typeIntoAddress(link, ['Paste a link', 'Join with a link or code'])
     })
     await step('the app joins, signs in with the code that comes back, and shows the server', async () => {
       const got = await reachedPeerToPeer()

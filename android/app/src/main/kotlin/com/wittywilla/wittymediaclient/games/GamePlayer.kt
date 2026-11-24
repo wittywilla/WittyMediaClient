@@ -81,6 +81,7 @@ import androidx.compose.ui.semantics.hideFromAccessibility
 import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.semantics
 import kotlin.math.roundToInt
+import com.wittywilla.wittymediaclient.ui.factsLine
 
 // A game on screen: the server's stream, full screen, with nothing in the way. Back, Start and Select together,
 // Escape or the corner button open the game menu, as on the website's player; the picture owns the controls
@@ -181,17 +182,21 @@ fun GamePlayerScreen(app: WittyApp, gameId: Long, start: GameStart, direct: Dire
             BatteryChips(it, look.small, Modifier.align(Alignment.TopCenter).windowInsetsPadding(WindowInsets.safeDrawing).padding(top = 12.dp))
         }
         Box(Modifier.size(1.dp).semantics { liveRegion = LiveRegionMode.Polite; if (batteryNote.isEmpty()) hideFromAccessibility() else contentDescription = batteryNote })
+        // A short word over the game. On a touch screen it sits at the top, clear of the touch controls and the start
+        // screen's buttons; a rounded box, not a pill, so a second line isn't cut off at the ends.
         if (play.toast.isNotEmpty()) {
             Text(
                 play.toast,
                 Modifier
-                    .align(Alignment.BottomCenter)
+                    .align(if (look.tv) Alignment.BottomCenter else Alignment.TopCenter)
                     .windowInsetsPadding(WindowInsets.safeDrawing)
-                    .padding(bottom = if (look.tv) 40.dp else 24.dp, start = 24.dp, end = 24.dp)
-                    .clip(RoundedCornerShape(999.dp))
+                    .padding(top = if (look.tv) 0.dp else 12.dp, bottom = if (look.tv) 40.dp else 0.dp, start = 24.dp, end = 24.dp)
+                    .widthIn(max = 560.dp)
+                    .clip(RoundedCornerShape(12.dp))
                     .background(Color(0xE614161E))
                     .padding(horizontal = 16.dp, vertical = 10.dp),
-                color = Color.White, fontSize = look.body, textAlign = TextAlign.Center,
+                color = Color.White, fontSize = if (look.tv) look.body else look.small, textAlign = TextAlign.Center,
+                maxLines = 3, overflow = TextOverflow.Ellipsis,
             )
         }
     }
@@ -319,6 +324,7 @@ private fun Loading(play: GamePlay, touchScreen: Boolean, onCancel: () -> Unit) 
                     else -> ""
                 }
                 if (slow.isNotEmpty()) Text(slow, color = GameColours.secondary, fontSize = look.small)
+                for (note in play.notes) Text(note, color = GameColours.secondary, fontSize = look.small)
                 Row(Modifier.padding(top = look.gap), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(16.dp)) {
                     GameButton("Cancel", onCancel, focusRequester = cancel)
                     Text(
@@ -438,7 +444,7 @@ private fun GameMenuSheet(play: GamePlay, page: GameMenu, touchScreen: Boolean, 
         ) {
             val game = play.item
             val (title, sub) = when (page) {
-                GameMenu.Main -> (game?.title.orEmpty()) to listOf(play.consoleName, play.session?.core.orEmpty()).filter { it.isNotEmpty() }.joinToString(" · ")
+                GameMenu.Main -> (game?.title.orEmpty()) to listOf(play.consoleName, play.session?.core.orEmpty()).filter { it.isNotEmpty() }.factsLine()
                 GameMenu.Save -> "Save" to "Choose a slot"
                 GameMenu.Load -> "Load" to "Choose a save"
                 GameMenu.Controllers -> "Controllers" to (game?.title.orEmpty())

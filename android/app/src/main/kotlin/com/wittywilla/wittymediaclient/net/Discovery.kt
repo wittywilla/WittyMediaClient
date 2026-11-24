@@ -15,6 +15,14 @@ object Discovery {
     private val IPV4 = Regex("^\\d{1,3}(\\.\\d{1,3}){3}$")
     private val CONTROL = Regex("[\\u0000-\\u001f\\u007f]")
 
+    // The rows a screen already shows stay where they are, and servers heard later go below them: a list that sorted
+    // itself as servers answered moved another server under the remote's focus just as OK was pressed (#100).
+    fun keepOrder(shown: List<String>, now: List<FoundServer>): List<FoundServer> {
+        val byId = now.associateBy { it.id }
+        val kept = shown.mapNotNull { byId[it] }
+        return kept + now.filter { it.id !in shown }
+    }
+
     fun cleanName(name: String): String = name.replace(CONTROL, "").trim().take(MAX_NAME).ifEmpty { "WittyMediaServer" }
 
     // A server as the connect screen may show it, or null if any part is unusable.

@@ -25,6 +25,7 @@ import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.Icon
+import androidx.compose.ui.unit.sp
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -135,6 +136,7 @@ val LocalTvBar = compositionLocalOf<TvBar?> { null }
 @Composable
 fun TvShell(nav: Nav, content: @Composable () -> Unit) {
     val bar = remember { TvBar(nav) }
+    NoteWatcher(nav)
     var libraries by remember { mutableStateOf(nav.remembered<List<Library>>("libraries").orEmpty()) }
     LaunchedEffect(nav.me?.name) {
         nav.loadTopMenu()
@@ -226,12 +228,14 @@ private fun TvTopBar(nav: Nav, bar: TvBar, libraries: List<Library>) {
             .focusGroup(),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        // The server's name, in its coloured parts, at the start of the bar in every theme and layout.
+        // The server's logo and name, in its coloured parts, at the start of the bar in every theme and layout, as the
+        // web's TV mode and Apple TV draw them.
         val extra = LocalExtraColours.current
+        ServerMark(metrics.u(44), nav.brandLogo, Modifier.padding(start = metrics.gutter, end = metrics.u(14)))
         Text(
             brandAnnotated(nav.brandName, nav.brandParts, MaterialTheme.colorScheme.onBackground, extra.brandAccent),
             style = MaterialTheme.typography.label.copy(fontWeight = FontWeight.Bold), maxLines = 1, overflow = TextOverflow.Ellipsis,
-            modifier = Modifier.padding(start = metrics.gutter).widthIn(max = metrics.u(320)).semantics { heading() },
+            modifier = Modifier.widthIn(max = metrics.u(320)).semantics { heading() },
         )
         Box(Modifier.weight(1f).onSizeChanged { viewport = it.width }.fadeEnd(metrics.u(FADE))) {
             Row(
@@ -258,11 +262,12 @@ private fun TvTopBar(nav: Nav, bar: TvBar, libraries: List<Library>) {
                 }
             }
         }
-        // Space, not a line, keeps You apart from the rest: 32 from the edge of the pills on the left.
+        // Space, not a line, keeps the bell and You apart from the rest: 32 from the edge of the pills on the left.
+        TvBellPill(nav, Modifier.padding(vertical = ring).padding(start = metrics.u(32) - ring))
         val you = TvTab(Route.Profile, words["youTab"].orEmpty(), null)
         TvTabPill(
             nav, you, bar.requester(you.route),
-            Modifier.padding(vertical = ring).padding(start = metrics.u(32) - ring, end = metrics.gutter - ring),
+            Modifier.padding(vertical = ring).padding(start = metrics.u(16) - ring * 2, end = metrics.gutter - ring),
         )
     }
 }
@@ -350,6 +355,25 @@ private fun TvTabPill(nav: Nav, tab: TvTab, requester: FocusRequester, modifier:
                 ProfileFace(person.ifEmpty { "?" }, nav.me?.avatar, metrics.u(28))
                 Text(person.ifEmpty { tab.title }, color = shown, style = MaterialTheme.typography.label, maxLines = 1)
             }
+        }
+    }
+}
+
+// The bell (Notes.kt): a round pill with the unread count, opening the list over the tab.
+@Composable
+private fun TvBellPill(nav: Nav, modifier: Modifier = Modifier) {
+    val metrics = LocalMetrics.current
+    val scheme = MaterialTheme.colorScheme
+    val n = NoteWatch.unread
+    Pressable(
+        { nav.push(Route.Notes) }, modifier, shape = Radius.FULL, fill = Color.Transparent,
+        label = if (n > 0) "Notifications, $n unread" else "Notifications",
+        focusKey = "tab-notes", focusStyle = FocusStyle.Fill,
+    ) { active ->
+        val ink = if (active && metrics.focusFill) scheme.background else scheme.onSurfaceVariant
+        Box(Modifier.size(metrics.u(PILL_HEIGHT)), contentAlignment = Alignment.Center) {
+            Icon(Symbols.Bell, contentDescription = null, tint = ink, modifier = Modifier.size(metrics.u(BAR_ICON)))
+            if (n > 0) CountDot(n, Modifier.align(Alignment.TopEnd), metrics.u(30), (metrics.u(18).value).sp)
         }
     }
 }

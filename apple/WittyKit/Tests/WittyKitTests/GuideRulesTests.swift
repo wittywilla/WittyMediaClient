@@ -99,6 +99,18 @@ final class GuideRulesTests: XCTestCase {
         XCTAssertEqual(GuideRules.next(after: now, cell: nil, on: c)?.title, "Later", "a slate isn't worth naming")
     }
 
+    func testASlateNamesWhatComesAfterIt() throws {
+        let c = try channel(#"{"key":"lib-1","name":"Films","programmes":[{"start":0,"end":100,"kind":"slate","title":"We'll be right back"},{"start":100,"end":110,"kind":"slate","title":"We'll be right back"},{"start":110,"end":300,"kind":"show","title":"Later"}]}"#)
+        let slate = c.programmes![0]
+        let up = GuideRules.upcoming(after: slate, on: c, told: c.programmes![1])
+        XCTAssertEqual(up?.title, "Later", "the next real programme, not the next slate")
+        XCTAssertEqual(GuideRules.headline(slate, upcoming: up, fallback: "Films"), "Up next: Later")
+        XCTAssertEqual(GuideRules.headline(c.programmes![2], upcoming: nil, fallback: "Films"), "Later", "a programme is its own headline")
+        let bare = try channel(#"{"key":"lib-2","name":"Empty","programmes":[{"start":0,"end":100,"kind":"slate","title":"We'll be right back"}]}"#)
+        let alone = bare.programmes![0]
+        XCTAssertEqual(GuideRules.headline(alone, upcoming: GuideRules.upcoming(after: alone, on: bare, told: alone), fallback: "Empty"), "Empty", "nothing after it: the channel's name")
+    }
+
     func testTheWholeChannelFromTheServer() throws {
         let json = ##"{"key":"tun-1","kind":"tuner","id":1,"number":"201","name":"News","group":"Test","canRecord":true,"hd":true,"accent":"#ff8800","favourite":true,"brand":{"kind":"network","name":"News"},"security":{"state":"unknown","label":"Not checked yet","detail":"Checked when you tune in."},"alternative":{"key":"tun-2","number":"202","name":"News HD"},"notices":["No sound"],"programmes":[{"start":1,"end":2,"kind":"broadcast","title":"Bulletin","genre":"News","itemId":5,"showId":6,"season":1,"episode":2}]}"##
         let c = try channel(json)

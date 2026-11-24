@@ -37,6 +37,34 @@ tasks.register<Exec>("wittyconnect") {
     commandLine("bash", "scripts/build-wittyconnect.sh")
 }
 
+// Android installs an update over the app only when it is signed with the same key and has a higher versionCode, and
+// releases up to 0.6.0 broke the first rule: each was signed with the debug key of the machine that built it, a new one
+// every time (docs/ANDROID-SIGNING.md). So:
+//
+// The versionCode is worked out from the versionName, (major * 10000 + minor * 100 + patch) * 100, and so goes up with
+// every version without anyone remembering to raise it: 0.6.1 is 60100. The last two digits are spare, for a rebuild of
+// the same version. All five APKs of a release share it, so any one of them can replace another.
+fun versionCodeOf(name: String): Int {
+    val m = Regex("""(\d+)\.(\d+)\.(\d+)""").matchEntire(name)
+        ?: throw GradleException("versionName \"$name\" isn't x.y.z: the Android versionCode is worked out from it")
+    val (major, minor, patch) = m.destructured.toList().map { it.toInt() }
+    if (minor > 99 || patch > 99 || major > 2099) throw GradleException("versionName \"$name\" is out of range for a versionCode")
+    return (major * 10000 + minor * 100 + patch) * 100
+}
+
+// The release key is the one permanent key every published APK is signed with. It is never in this repository: the
+// release workflow writes it from the android-release environment's secrets and names it with these variables. Without
+// them a release build comes out unsigned, which is all build.yml wants; -PreleaseSigning=required (release.yml) makes
+// a missing key a failure, so a release can never fall back to a debug key or a new one.
+val releaseKeystore: File? = System.getenv("WMC_ANDROID_KEYSTORE")?.takeIf { it.isNotBlank() }?.let { file(it) }
+if (findProperty("releaseSigning") == "required") {
+    val missing = listOf("WMC_ANDROID_KEYSTORE", "WMC_ANDROID_KEYSTORE_PASSWORD", "WMC_ANDROID_KEY_ALIAS")
+        .filter { System.getenv(it).isNullOrBlank() }
+    if (missing.isNotEmpty() || releaseKeystore?.isFile != true) {
+        throw GradleException("The release key is required (-PreleaseSigning=required) but isn't there: ${missing.ifEmpty { listOf("the keystore file") }.joinToString()}. See docs/ANDROID-SIGNING.md.")
+    }
+}
+
 android {
     namespace = "com.wittywilla.wittymediaclient"
     compileSdk = 37
@@ -48,8 +76,8 @@ android {
         minSdk = 23
         // Target 37 adds a local-network permission: raise this with discovery tested on a device.
         targetSdk = 36
-        versionCode = 12
-        versionName = "0.6.0"
+        versionName = "0.6.3"
+        versionCode = versionCodeOf(versionName!!)
         // The screens' accessibility checks (src/androidTest), run by hand against a signed-in debug build.
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
@@ -75,14 +103,33 @@ android {
     sourceSets.getByName("main").kotlin.directories.add(if (wittyconnect != null) "src/p2p/kotlin" else "src/nop2p/kotlin")
     if (wittyconnect != null) sourceSets.getByName("main").assets.directories.add("libs/wittyconnect-notices")
 
+    signingConfigs {
+        if (releaseKeystore != null) {
+            create("release") {
+                storeFile = releaseKeystore
+                storePassword = System.getenv("WMC_ANDROID_KEYSTORE_PASSWORD")
+                keyAlias = System.getenv("WMC_ANDROID_KEY_ALIAS")
+                // A PKCS12 keystore, as docs/ANDROID-SIGNING.md makes, has one password for the store and the key.
+                keyPassword = System.getenv("WMC_ANDROID_KEY_PASSWORD")?.takeIf { it.isNotBlank() } ?: storePassword
+                // v1 for Android 6, v2 for 7 and later, and v3 so the key can be rotated one day without an uninstall.
+                enableV1Signing = true
+                enableV2Signing = true
+                enableV3Signing = true
+            }
+        }
+    }
+
     buildTypes {
         getByName("release") {
+            // The APKs that are published. Unsigned when the release key isn't given (see above).
+            signingConfigs.findByName("release")?.let { signingConfig = it }
             isMinifyEnabled = true
             isShrinkResources = true
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
         }
-        // Release speed, signed with the throwaway debug key. For trying the app
-        // on a device without a signing key. Debug builds run far slower on a TV stick.
+        // Release speed, signed with the throwaway debug key. For trying the app on a device without the release key,
+        // and for pull requests' builds. Never published: each machine's debug key is different, so one of these can't
+        // update another, or a release. Debug builds run far slower on a TV stick.
         create("sideload") {
             initWith(getByName("release"))
             signingConfig = signingConfigs.getByName("debug")

@@ -851,8 +851,8 @@ struct GuideHero: View {
             title
             meta
             if real, let programme { when(programme) }
-            if let next {
-                (Text("Next ") + Text(tvClock(next.start)).bold().foregroundColor(p.text) + Text(" " + next.title))
+            if let next, next.kind != "slate" {
+                (Text(programme?.kind == "slate" ? "At " : "Next ") + Text(tvClock(next.start)).bold().foregroundColor(p.text) + Text(programme?.kind == "slate" ? "" : " " + next.title))
                     .font(dress.font(dress.heroFacts)).foregroundStyle(p.soft).lineLimit(1)
                     .padding(.top, shape == .modern ? 6 : shape == .cinema || shape == .outline ? 8 : 3)
             }
@@ -904,7 +904,8 @@ struct GuideHero: View {
     private var title: some View {
         let p = dress.paint
         let t = dress.heroTitle
-        let words = programme?.title ?? channel?.name ?? " "
+        // A slate (a bumper or a gap) isn't a programme: the hero names what comes after it (#85).
+        let words = GuideRules.headline(programme, upcoming: next, fallback: channel?.name ?? " ")
         return Group {
             if shape == .teletext {
                 Text(words).font(dress.font(t.size, t.weight)).textCase(.uppercase).foregroundStyle(p.accent).lineLimit(1)
@@ -1132,7 +1133,9 @@ struct GuidePreview: View {
             if live.key != channel { return name }
             switch live.state {
             case .failed(let why): return why.count > 90 ? "Not available" : why
-            case .tuning, .playing, .idle: return live.playing ? nil : "Tuning…"
+            // Only before the channel first plays: a moment of buffering later left "Tuning…" over a moving picture.
+            case .tuning: return live.playing ? nil : "Tuning…"
+            case .playing, .idle: return nil
             }
         }()
         if let words {
@@ -1593,7 +1596,7 @@ private struct GuideCellBody: View {
         let d = style.dress
         let cell = style.cell
         let p = cell.programme
-        let details = [cell.kind == .none || small ? "" : tvClock(cell.start), p?.year.map(String.init) ?? "", p?.genre ?? ""].filter { !$0.isEmpty }.joined(separator: " · ")
+        let details = [cell.kind == .none || small ? "" : tvClock(cell.start), p?.year.map(String.init) ?? "", p?.genre ?? ""].filter { !$0.isEmpty }.factsLine()
         let under = d.look.subtitles ? (d.shape.details ? details : p?.sub ?? "") : ""
         let lock = style.channel.canTune ? "" : "🔒 "
         let reminder = style.reminded ? " ⏰" : ""
@@ -1688,7 +1691,8 @@ struct SlateCard: View {
         VStack(spacing: 6 * s) {
             Text(name).font(.system(size: max(10, 25 * s), weight: .bold)).opacity(0.85)
             Text("We'll be right back").font(.system(size: max(14, 47.5 * s), weight: .bold)).shadow(color: .black.opacity(0.6), radius: 0, x: 2, y: 2)
-            if let next {
+            // Another slate after this one isn't worth naming (#85).
+            if let next, next.kind != "slate", next.kind != "none" {
                 Text("Coming up at \(tvClock(next.start)): \(next.title)").font(.system(size: max(9, 21.25 * s))).opacity(0.85)
             }
         }

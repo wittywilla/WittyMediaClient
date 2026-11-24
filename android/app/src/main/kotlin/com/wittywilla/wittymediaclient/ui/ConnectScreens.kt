@@ -168,7 +168,7 @@ fun ConnectScreen(nav: Nav, s: Map<String, String>, message: String) {
 
     // Only looks while this screen is open.
     DisposableEffect(Unit) {
-        val finder = ServerFinder(context, onCantSearch = { cantSearch = true }) { found = it }
+        val finder = ServerFinder(context, onCantSearch = { cantSearch = true }) { found = com.wittywilla.wittymediaclient.net.Discovery.keepOrder(found.map { f -> f.id }, it) }
         finder.start()
         onDispose { finder.stop() }
     }
@@ -611,7 +611,7 @@ fun CodeScreen(nav: Nav, s: Map<String, String>, server: SavedServer) {
     val fingerprint = if (server.fingerprint.isEmpty()) "" else "${s["fingerprintLabel"]}: ${server.fingerprint}"
     Box(Modifier.digitKeys(::press, ::erase)) {
         DesignScreen(
-            s["codeTitle"].orEmpty(), nav::pop, eyebrow = server.name.ifEmpty { "WittyMediaServer" }, lead = s["codeHint"].orEmpty(), foot = fingerprint, tag = "code",
+            s["codeTitle"].orEmpty(), nav::pop, eyebrow = server.name.ifEmpty { "WittyMediaServer" }, lead = s[if (LocalMetrics.current.tv) "codeHint" else "codeHintPhone"].orEmpty(), foot = fingerprint, tag = "code",
             actions = {
                 WittyButton(s["usePassword"].orEmpty(), { nav.signInTo(server, SignInWay.Password) }, kind = ButtonKind.Secondary)
                 WittyButton(s["showCodeInstead"].orEmpty(), { nav.signInTo(server, SignInWay.ShownCode) }, kind = ButtonKind.Secondary)

@@ -793,8 +793,20 @@ public final class WittyClient: @unchecked Sendable {
         try await get("/tv/\(WittyClient.pathPart(key))/tune?streamToken=1&viewer=\(WittyClient.pathPart(viewer))")
     }
 
-    public func leaveChannel(_ key: String, viewer: String) async throws {
-        _ = try await call("POST", "/tv/\(WittyClient.pathPart(key))/leave?viewer=\(WittyClient.pathPart(viewer))", body: Data("{}".utf8))
+    /// A start-over stream (`shift`) is this viewer's alone, so leaving stops it at once.
+    public func leaveChannel(_ key: String, viewer: String, shift: Bool = false) async throws {
+        _ = try await call("POST", TimeShiftRules.leaveQuery(key: key, viewer: viewer, shift: shift), body: Data("{}".utf8))
+    }
+
+    /// A library channel from a moment (nil: the start of the programme on now), on a stream of this viewer's own;
+    /// a tuner channel from its archive. 409: that moment is live.
+    public func startOver(_ key: String, from: Int64?, viewer: String) async throws -> Tuned {
+        try await get(TimeShiftRules.query(key: key, from: from, viewer: viewer))
+    }
+
+    /// A library channel's programme and breaks at a moment. Starts nothing.
+    public func timeline(_ key: String, at: Int64) async throws -> Timeline {
+        try await get("/tv/\(WittyClient.pathPart(key))/timeline?at=\(at)")
     }
 
     // MARK: WittyTV: the guide, recordings and reminders
@@ -1102,6 +1114,8 @@ public final class WittyClient: @unchecked Sendable {
 
     public func posterURL(_ item: Item) -> URL? { URL(string: "\(root)\(apiPath)/items/\(item.id)/poster?v=\(item.updatedAt ?? 0)") }
     /// An album's or an artist's cover: the poster of the track the server chose for it.
+    /// A small picture of a video at a whole second, for the scenes panel (GET /items/{id}/scene/{sec}).
+    public func sceneURL(_ item: Int64, sec: Int) -> URL? { URL(string: "\(root)\(apiPath)/items/\(item)/scene/\(sec)") }
     public func coverURL(_ item: Int64) -> URL? { URL(string: "\(root)\(apiPath)/items/\(item)/poster") }
     public func posterURL(_ show: Show) -> URL? { URL(string: "\(root)\(apiPath)/shows/\(show.id)/art/poster?v=\(show.updatedAt ?? 0)") }
     public func backdropURL(_ item: Item) -> URL? { URL(string: "\(root)\(apiPath)/items/\(item.id)/backdrop?v=\(item.updatedAt ?? 0)") }

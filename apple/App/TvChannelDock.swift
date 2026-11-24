@@ -67,6 +67,18 @@ struct ChannelDock: View {
                 .focusSection()
             }
             HStack(spacing: 16) {
+                // Time-shift (server #648): each only when it can be done now.
+                if live.inBreak != nil {
+                    Button { live.skipBreak(); onClose() } label: { Label("Skip break", systemImage: "forward.end") }
+                        .buttonStyle(TvButtonStyle(dress: dress, on: true, onBar: true)).accessibilityIdentifier("tv.player.skipBreak")
+                }
+                if live.fromStart != nil {
+                    Button { live.backToLive(); onClose() } label: { Label("Back to live", systemImage: "dot.radiowaves.left.and.right") }
+                        .buttonStyle(TvButtonStyle(dress: dress, onBar: true)).accessibilityIdentifier("tv.player.live")
+                } else if live.canStartOver {
+                    Button { live.startOver(); onClose() } label: { Label("Start over", systemImage: "backward.end") }
+                        .buttonStyle(TvButtonStyle(dress: dress, onBar: true)).accessibilityIdentifier("tv.player.startOver")
+                }
                 Button { live.seek(by: -10) } label: { Label("Back 10", systemImage: "gobackward.10") }
                     .buttonStyle(TvButtonStyle(dress: dress, onBar: true)).focused($focused, equals: "back")
                 Button { live.seek(by: 10) } label: { Label("On 10", systemImage: "goforward.10") }

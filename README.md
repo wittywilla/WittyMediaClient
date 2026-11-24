@@ -108,7 +108,9 @@ With Android's `adb` tool, this lists what a device runs, best first, and the fi
 adb shell getprop ro.product.cpu.abilist
 ```
 
-A device refuses an APK it can't run when installing it, and nothing changes. All five have the same version, so any one can replace another. They're signed with a throwaway key and are for testing, so they can't update to a store version without uninstalling first. There's no store listing yet.
+A device refuses an APK it can't run when installing it, and nothing changes. All five have the same version, so any one can replace another. A new version installs over the one you have and keeps your sign-in and settings: every release is signed with the same release key.
+
+**Updating from 0.6.0 or older: uninstall once.** Versions up to 0.6.0 were each signed with a different temporary key, so Android refuses to install a newer version over them ("App not installed" or "package conflicts with an existing package"). Uninstall WittyMediaClient once, install the new version, and sign in again. From then on, every update installs over the last one. [Why](docs/ANDROID-SIGNING.md). There's no store listing yet.
 
 **iPhone and iPad.** Each release has `wittymediaclient-<version>-ios.ipa`, one file for both. It's unsigned, for [AltStore](https://altstore.io), [SideStore](https://sidestore.io) or Sideloadly, which sign it with your own Apple ID as they install it. The release's `apps.json` is a source for AltStore and SideStore: add its address there and the app is listed, with its updates. With a free Apple ID an app has to be refreshed every 7 days, which those stores do for you. The app has run in the iOS simulator, and never on a real iPhone or iPad.
 
@@ -146,7 +148,7 @@ A device refuses an APK it can't run when installing it, and nothing changes. Al
 
 ## Building and testing
 
-**Working on a Mac?** Start with [MAC-FOLLOW-UPS.md](MAC-FOLLOW-UPS.md), newest section first, and WittyMediaServer's [MAC-FOLLOW-UPS.md](https://github.com/wittywilla/WittyMediaServer/blob/v0.8.1-alpha/MAC-FOLLOW-UPS.md) for the server's own Mac items. What each app has of the server's 0.8.1 features is in [docs/PARITY-0.8.1.md](docs/PARITY-0.8.1.md).
+**Working on a Mac?** Start with WittyMediaServer's [MAC-START-HERE.md](https://github.com/wittywilla/WittyMediaServer/blob/v0.8.1-alpha/MAC-START-HERE.md): what to install, what to clone, and every Mac task in order. The apps' are parts 4 to 6, with the long steps in [MAC-FOLLOW-UPS.md](MAC-FOLLOW-UPS.md). What each app has of the server's 0.8.1 features is in [docs/PARITY-0.8.1.md](docs/PARITY-0.8.1.md).
 
 **Desktop.** You need [Node.js](https://nodejs.org) 22.12 or newer.
 

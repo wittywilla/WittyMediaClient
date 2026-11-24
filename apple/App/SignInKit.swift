@@ -203,8 +203,9 @@ struct SignInGlow: View {
     }
 }
 
-/// A sign-in screen: the glow, and one column in the middle, no wider than reads well, a third of the
-/// way down when it's short and scrolling when it isn't.
+/// A sign-in screen: the glow, and one card in the middle, no wider than reads well, centred both ways when it
+/// fits and scrolling when it doesn't (WittyMediaServer's docs/DESIGN.md, "Standalone pages"; the desktop's
+/// connect screen and Android's are the same card).
 struct SignInPage<Content: View>: View {
     @Environment(\.palette) private var palette
     /// Somewhere to go back to, shown as the back button at the top left.
@@ -220,12 +221,14 @@ struct SignInPage<Content: View>: View {
                     VStack(spacing: 0) {
                         Spacer(minLength: Tokens.Space.s8)
                         VStack(alignment: .center, spacing: Tokens.Space.s4) { content }
-                            .frame(maxWidth: 440)
-                            .padding(.horizontal, Tokens.Space.s6)
+                            .padding(Tokens.Space.s6)
+                            .background(RoundedRectangle(cornerRadius: Tokens.Radius.xl, style: .continuous).fill(palette.panel))
+                            .overlay(RoundedRectangle(cornerRadius: Tokens.Radius.xl, style: .continuous).stroke(palette.border, lineWidth: 1))
+                            .frame(maxWidth: 488)
+                            .padding(.horizontal, Tokens.Space.s4)
                             // Clear of the back button.
                             .padding(.top, back == nil ? 0 : 52)
                         Spacer(minLength: Tokens.Space.s8)
-                        Spacer(minLength: 0)
                     }
                     .frame(maxWidth: .infinity, minHeight: geo.size.height)
                 }

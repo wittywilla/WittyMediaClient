@@ -151,9 +151,9 @@ struct ConnectView: View {
     /// The first server found takes focus, until the person has moved themselves. The
     /// row only exists after this update, so the focus has to wait for the next one.
     private func show(_ servers: [FoundServer]) {
-        found = servers
+        found = Discovery.keepOrder(shown: found.map(\.id), now: servers)
         // Saved servers on top keep the focus on the last one used: a server turning up below doesn't take it.
-        guard !moved, !(savedFirst && !model.recent.isEmpty), let first = servers.first else { return }
+        guard !moved, !(savedFirst && !model.recent.isEmpty), let first = found.first else { return }
         let target = Spot.found(first.id)
         offered = target
         DispatchQueue.main.async { spot = target }
@@ -472,9 +472,18 @@ struct CodeView: View {
         Button(say("showCodeInstead")) { model.signIn(to: server, way: .shownCode) }.action(.quiet).fixedSize()
     }
 
+    // A TV reads the TV words; a phone or iPad is told it can be signed in the same way (client #80).
+    private var codeHintKey: String {
+        #if os(tvOS)
+        "codeHint"
+        #else
+        "codeHintPhone"
+        #endif
+    }
+
     var body: some View {
         SignInLayout(back: back) {
-            SignInHeading(title: say("codeTitle"), detail: say("codeHint"))
+            SignInHeading(title: say("codeTitle"), detail: say(codeHintKey))
             ServerPill(name: server.name)
             CodeBoxes(digits: entry.digits, checking: entry.busy, wrongTries: wrongTries)
             // Room is kept for the message, or the keys would move under a finger as it comes and goes.
@@ -667,6 +676,9 @@ struct SignInView: View {
                 wantPassword = true
             case .failed(let words):
                 error = words
+            case .needsParentPin(let words):
+                // A kids' profile is kept on this device: leaving it takes the parents' PIN, asked on Who's watching.
+                error = words.isEmpty ? say("parentPinLead") : words
             }
             busy = false
         }

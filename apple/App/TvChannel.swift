@@ -64,8 +64,17 @@ struct ChannelPlayer: View {
                             onInfo: { info = MoreInfoAsk(channel: key, start: live.info?.now?.start ?? Int64(Date().timeIntervalSince1970)) })
                     .frame(maxHeight: .infinity, alignment: .bottom)
             }
+            if live.inBreak != nil, live.key == key, !mini, !dockOpen {
+                // Remote words only: Right opens the Dock, where Skip break is first.
+                Text("Ad break · Right, then Skip break")
+                    .font(.wmLabel).foregroundStyle(.white).padding(.horizontal, 16).padding(.vertical, 8)
+                    .background(Capsule().fill(.black.opacity(0.6)))
+                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomTrailing).padding(.bottom, 152).padding(.trailing, 157)
+            }
             if let programme = live.fromStart, !mini, !dockOpen {
-                Text("From the start of \(programme.title) · Select, then Back to live")
+                Text(live.shiftFrom != nil && live.behind >= 60
+                     ? "\(programme.title) · \(Int((live.behind / 60).rounded())) min behind live · Right, then Back to live"
+                     : "From the start of \(programme.title) · Right, then Back to live")
                     .font(.wmLabel).foregroundStyle(.white).padding(.horizontal, 16).padding(.vertical, 8)
                     .background(Capsule().fill(.black.opacity(0.6)))
                     .frame(maxHeight: .infinity, alignment: .top).padding(.top, 60)
@@ -244,6 +253,11 @@ struct ChannelBanner: View {
         let p = dress.paint
         let shape = dress.shape
         let programme = info?.now
+        // In a bumper or a gap the channel's "programme" is its slate: the banner names what comes next instead, and Next is
+        // the next real programme, never another slate (#85).
+        let slate = programme?.kind == "slate"
+        let upcoming = GuideRules.upcoming(after: programme, on: channel, told: info?.next)
+        let headline = GuideRules.headline(programme, upcoming: upcoming, fallback: info?.name ?? channel?.name ?? "")
         let radius: CGFloat = [.receiver, .teletext, .listings].contains(shape) ? 0 : shape == .outline ? 14 : 6
         HStack(alignment: .center, spacing: 14) {
             VStack(spacing: 2) {
@@ -256,13 +270,13 @@ struct ChannelBanner: View {
             .overlay(alignment: .trailing) { p.line.frame(width: shape == .receiver || shape == .listings ? 1 : 2) }
             VStack(alignment: .leading, spacing: 3) {
                 HStack(spacing: 8) {
-                    Text(programme?.title ?? info?.name ?? channel?.name ?? "").font(dress.font(25, .bold)).lineLimit(1)
+                    Text(headline).font(dress.font(25, .bold)).lineLimit(1)
                         .textCase(shape == .teletext ? .uppercase : nil)
                     if let rating = programme?.rating {
                         Text(rating).font(dress.font(15)).padding(.horizontal, 5).overlay(RoundedRectangle(cornerRadius: dress.radius).strokeBorder(p.soft, lineWidth: 1))
                     }
                 }
-                Text(programme?.sub ?? (info == nil ? "Tuning…" : programme == nil ? "No guide data" : ""))
+                Text(slate ? upcoming.map { "At \(tvClock($0.start))" } ?? "Back soon" : programme?.sub ?? (info == nil ? "Tuning…" : programme == nil ? "No guide data" : ""))
                     .font(dress.font(18.75, .bold)).foregroundStyle(p.accent).lineLimit(1)
                 if let programme {
                     HStack(spacing: 8) {
@@ -279,7 +293,7 @@ struct ChannelBanner: View {
                     .font(dress.font(16.25)).foregroundStyle(p.soft)
                     .padding(.top, 4)
                 }
-                if let next = info?.next {
+                if !slate, let next = upcoming {
                     Text("Next: \(next.title) · \(GuideRules.span(next.start, next.end))").font(dress.font(16.25)).foregroundStyle(p.soft).lineLimit(1)
                 }
                 if let playing = info?.playing {

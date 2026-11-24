@@ -326,6 +326,8 @@ data class SduiCatalog(
     val cardStyles: List<SduiCardStyleSpec> = emptyList(),
     // How much of each screen a TV offers (TvLevels.kt). Null from a server older than it.
     val tvLevels: TvLevelTable? = null,
+    // The settings menu every client draws (SettingsMenu.kt). Null from a server older than it: the app's copy then.
+    val settingsMenu: SettingsMenu? = null,
 )
 
 @Serializable

@@ -192,7 +192,7 @@ private fun TrackRow(
                 }
                 Column(Modifier.weight(1f)) {
                     Text(track.title, color = scheme.onBackground, style = MaterialTheme.typography.bodyLarge, maxLines = 2, overflow = TextOverflow.Ellipsis)
-                    val under = listOfNotNull(subtitle.ifEmpty { null }, if (done) "Finished" else null, if (place > 0) "${clock(place)} in" else null).joinToString(" · ")
+                    val under = listOfNotNull(subtitle.ifEmpty { null }, if (done) "Finished" else null, if (place > 0) "${clock(place)} in" else null).factsLine()
                     if (under.isNotEmpty()) Secondary(under, maxLines = 1)
                 }
                 if (track.runtimeSec > 0) Secondary(clock(track.runtimeSec))

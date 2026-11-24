@@ -69,8 +69,9 @@ import androidx.compose.ui.unit.dp
 private val COLUMN_MOST = 440.dp
 private val COLUMN_ROOM = 32.dp
 
-// One column in the middle, no wider than reads well, with the glow behind it. A third of the way down
-// when it's short, and scrolling when it isn't. Back, where there's somewhere to go back to, is an arrow
+// One card in the middle, no wider than reads well, with the glow behind it: centred both ways when it fits,
+// scrolling when it doesn't (WittyMediaServer's docs/DESIGN.md, "Standalone pages"; the desktop's connect screen
+// is the same card). Back, where there's somewhere to go back to, is an arrow
 // top left as well as the system's gesture. `wide` lets the column use the room, as a tablet's
 // profile grid does.
 @Composable
@@ -86,7 +87,12 @@ fun SignInPage(onBack: (() -> Unit)? = null, wide: Boolean = false, content: @Co
             val side = with(LocalDensity.current) { metrics.gutter.roundToPx() }
             Layout(
                 content = {
-                    Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(Space.S4), content = content)
+                    Column(
+                        Modifier.clip(metrics.corner(20)).background(MaterialTheme.colorScheme.surface).padding(Space.S6),
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.spacedBy(Space.S4),
+                        content = content,
+                    )
                 },
                 modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState()),
             ) { measurables, constraints ->
@@ -94,7 +100,7 @@ fun SignInPage(onBack: (() -> Unit)? = null, wide: Boolean = false, content: @Co
                 val column = measurables.first().measure(Constraints(minWidth = width, maxWidth = width))
                 val free = (view - column.height - 2 * room).coerceAtLeast(0)
                 val height = maxOf(view, column.height + 2 * room)
-                layout(constraints.maxWidth, height) { column.place((constraints.maxWidth - width) / 2, room + free / 3) }
+                layout(constraints.maxWidth, height) { column.place((constraints.maxWidth - width) / 2, room + free / 2) }
             }
         }
         if (onBack != null) BackArrow(onBack, Modifier.safeDrawingPadding().padding(Space.S1))
@@ -265,7 +271,7 @@ fun ServerCard(
                     if (lineIcon != null) Icon(lineIcon, contentDescription = null, tint = scheme.onSurfaceVariant, modifier = Modifier.padding(end = 5.dp).size(s.tiny.value.dp * 1.15f))
                     Text(detail, color = scheme.onSurfaceVariant, fontSize = s.tiny, lineHeight = s.tiny * 1.35f, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 }
-                val seen = listOfNotNull(reached.ifEmpty { null }, if (stale) words["staleServer"] else null).joinToString(" · ")
+                val seen = listOfNotNull(reached.ifEmpty { null }, if (stale) words["staleServer"] else null).factsLine()
                 if (seen.isNotEmpty()) {
                     Text(seen, color = extra.hint, fontSize = s.tiny, lineHeight = s.tiny * 1.35f, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 }

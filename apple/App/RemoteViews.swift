@@ -390,7 +390,7 @@ struct RemoteView: View {
             default: break
             }
         }
-        return parts.joined(separator: " · ")
+        return parts.factsLine()
     }
 
     @ViewBuilder private func scrubber(_ device: RemoteDevice) -> some View {
@@ -933,7 +933,7 @@ struct TogetherRows: View {
                 .accessibilityIdentifier("let-others-control")
                 #endif
                 Button { devices = true } label: {
-                    RowLabel(icon: "tv.and.mediabox", tint: "#7f46b8", title: "Play on another device")
+                    RowLabel(icon: "airplayvideo", tint: "#3e5bd0", title: say("rowRemoteControl"))
                 }
                 .rowStyle()
                 .accessibilityIdentifier("row-devices")
@@ -945,7 +945,7 @@ struct TogetherRows: View {
             }
             if hub.hasParties {
                 Button { sheet = .party } label: {
-                    RowLabel(icon: "person.2", tint: "#bd2f85", title: "Watch party", value: party.room?.name ?? "")
+                    RowLabel(icon: "person.3", tint: "#bd2f85", title: say("rowWatchParty"), value: party.room?.name ?? "")
                 }
                 .rowStyle()
                 .accessibilityIdentifier("row-watch-party")

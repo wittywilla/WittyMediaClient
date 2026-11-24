@@ -91,6 +91,19 @@ class DiscoveryTest {
     }
 
     @Test
+    fun aShownRowStaysPutWhenAnotherServerAnswers() {
+        val mine = FoundServer("b".repeat(32), "WittyMediaServer", "http://10.0.0.2:9797")
+        val other = FoundServer("a".repeat(32), "Attic", "http://10.0.0.3:9797")
+        val first = Discovery.keepOrder(emptyList(), listOf(mine))
+        // The list sorts Attic first, but the row on screen (and the remote's focus on it) stays first.
+        val later = Discovery.keepOrder(first.map { it.id }, listOf(other, mine))
+        assertEquals(listOf(mine, other), later)
+        // One that goes away goes; one that comes back comes in at the bottom.
+        assertEquals(listOf(other), Discovery.keepOrder(later.map { it.id }, listOf(other)))
+        assertEquals(listOf(other, mine), Discovery.keepOrder(listOf(other.id), listOf(other, mine)))
+    }
+
+    @Test
     fun theListIsSortedAndCanNotGrowWithoutLimit() {
         val list = ServerList()
         list.add(FoundServer("2", "beta", "http://10.0.0.2"))

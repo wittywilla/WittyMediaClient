@@ -103,13 +103,13 @@ struct GameDetailView: View {
 
     /// "{console} · {era}".
     private var kicker: String {
-        [console?.shortName, GameShelves.era(console).flatMap { GameShelves.eraNames[$0] }].compactMap { $0 }.joined(separator: " · ")
+        [console?.shortName, GameShelves.era(console).flatMap { GameShelves.eraNames[$0] }].compactMap { $0 }.factsLine()
     }
 
     /// maker · genre · 1–n players.
     private func facts(_ game: GameItem) -> String {
         [game.studio, (game.genres ?? []).first, players.map { $0 > 1 ? "1–\($0) players" : "1 player" }]
-            .compactMap { $0 }.filter { !$0.isEmpty }.joined(separator: " · ")
+            .compactMap { $0 }.filter { !$0.isEmpty }.factsLine()
     }
 
     @ViewBuilder private func backdrop(_ game: GameItem) -> some View {
@@ -427,7 +427,7 @@ struct GameDetailView: View {
         if let credits = details?.credits, !credits.isEmpty {
             VStack(alignment: .leading, spacing: Tokens.Space.s1) {
                 ForEach(credits, id: \.self) { credit in
-                    Secondary([credit.text ?? credit.name, credit.site, credit.license].compactMap { $0 }.filter { !$0.isEmpty }.joined(separator: " · "))
+                    Secondary([credit.text ?? credit.name, credit.site, credit.license].compactMap { $0 }.filter { !$0.isEmpty }.factsLine())
                 }
             }
             .readableOnTv()

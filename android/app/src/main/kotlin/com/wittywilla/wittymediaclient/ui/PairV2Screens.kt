@@ -536,7 +536,7 @@ fun ApproveDeviceScreen(nav: Nav, s: Map<String, String>) {
             found != null -> {
                 DesignSection("") {
                     DesignRow(
-                        found.device, sub = listOf(found.platform, found.ip).filter { it.isNotEmpty() }.joinToString(" · "),
+                        found.device, sub = listOf(found.platform, found.ip).filter { it.isNotEmpty() }.factsLine(),
                         leading = { IconTile(Symbols.Tv, LocalExtraColours.current.accentText) },
                     )
                     DesignNote(s["approveCheck"].orEmpty())

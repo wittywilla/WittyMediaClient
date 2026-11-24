@@ -4,14 +4,16 @@
 #   Flatpak, Snap                                                                    desktop-sandboxed
 #   FreeBSD                                                                          desktop-freebsd
 #   Plasma Bigscreen                    the Linux packages, which open as a TV app there
-#   Android phones and Android TV       android: the same sideload APKs serve both, one for each
-#                                       processor and a universal one
+#   Android phones and Android TV       android: the same APKs serve both, one for each processor and
+#                                       a universal one, signed with the one permanent release key
 #   iPhone and iPad, Apple TV           apple: unsigned IPAs for AltStore, SideStore and Sideloadly,
 #                                       and apps.json, the source AltStore and SideStore read
 #
-# The apps aren't installed through a server, so this holds no module key, and it reads no secrets:
-# nothing is signed with a real certificate. Signing for each platform is a step for its owner:
-# docs/OWNER-STEPS.md.
+# The apps aren't installed through a server, so this holds no module key. The one secret it reads is Android's
+# release key, in the android-release environment, only in the android job: an update installs over the last only
+# when it is signed with the same key (docs/ANDROID-SIGNING.md). Without it the release fails; it never falls back to
+# a debug key. android-update then checks the APKs against the previous release, on an emulator too, before anything
+# is published. Nothing else is signed with a real certificate: docs/OWNER-STEPS.md.
 name: release
 on:
   push:
@@ -184,6 +186,12 @@ jobs:
               status=${PIPESTATUS[0]}
               set -e
               [ "$status" = 0 ] && break
+              # The build container's own apt can stall on the archive (TimeoutExpired after ten
+              # minutes); trying again would run into the job's limit, so the snap is skipped now.
+              if grep -q 'TimeoutExpired' "$RUNNER_TEMP/snap.log"; then
+                echo "::warning::The snap's build container timed out installing its tools: the snap wasn't built"
+                echo "SNAP_OK=0" >> "$GITHUB_ENV"; exit 0
+              fi
               grep -qE 'api\.snapcraft\.io|unable to contact snap store|cannot get nonce from store|store server|Error installing snap' "$RUNNER_TEMP/snap.log" || exit "$status"
               if [ "$try" = 3 ]; then
                 echo "::warning::The Snap Store didn't answer while packaging: the snap wasn't built"
@@ -252,6 +260,8 @@ jobs:
 
   android:
     runs-on: ubuntu-latest
+    # Holds ANDROID_RELEASE_KEYSTORE and ANDROID_RELEASE_KEYSTORE_PASSWORD, for version tags only.
+    environment: android-release
     permissions:
       contents: read
     steps:
@@ -283,23 +293,107 @@ jobs:
         env:
           WITTYMEDIASERVER_SRC: .server
         run: bash android/scripts/build-wittyconnect.sh
+      # The release key, from the android-release environment (docs/ANDROID-SIGNING.md). Without it the release stops
+      # here: a release signed with any other key would refuse to install over the last one.
+      - name: The release key
+        env:
+          KEYSTORE: ${{ secrets.ANDROID_RELEASE_KEYSTORE }}
+          PASSWORD: ${{ secrets.ANDROID_RELEASE_KEYSTORE_PASSWORD }}
+        run: |
+          if [ -z "$KEYSTORE" ] || [ -z "$PASSWORD" ]; then
+            echo "::error::The android-release environment has no ANDROID_RELEASE_KEYSTORE or ANDROID_RELEASE_KEYSTORE_PASSWORD. Android releases are signed only with the release key: docs/ANDROID-SIGNING.md"
+            exit 1
+          fi
+          umask 077
+          printf '%s' "$KEYSTORE" | base64 -d > "$RUNNER_TEMP/release.p12"
+          echo "WMC_ANDROID_KEYSTORE=$RUNNER_TEMP/release.p12" >> "$GITHUB_ENV"
       - name: Test and build
         working-directory: android
-        run: gradle --no-daemon testDebugUnitTest lintSideload assembleSideload -Pp2p=required
+        env:
+          WMC_ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_RELEASE_KEYSTORE_PASSWORD }}
+          WMC_ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_RELEASE_KEY_ALIAS || 'wittymediaclient' }}
+        run: gradle --no-daemon testDebugUnitTest lintRelease assembleRelease -Pp2p=required -PreleaseSigning=required
+      - name: Forget the release key
+        if: always()
+        run: rm -f "$RUNNER_TEMP/release.p12"
       - name: Native code for all four processors
         working-directory: android
-        run: sh scripts/check-abis.sh app/build/outputs/apk/sideload
+        run: sh scripts/check-abis.sh app/build/outputs/apk/release
       - name: Name each APK as the release's other files are
-        working-directory: android/app/build/outputs/apk/sideload
+        working-directory: android/app/build/outputs/apk/release
         run: |
           for abi in universal arm64-v8a armeabi-v7a x86_64 x86; do
-            mv "app-$abi-sideload.apk" "wittymediaclient-${GITHUB_REF_NAME#v}-android-$abi.apk"
+            mv "app-$abi-release.apk" "wittymediaclient-${GITHUB_REF_NAME#v}-android-$abi.apk"
           done
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
         with:
           name: android
-          path: android/app/build/outputs/apk/sideload/wittymediaclient-*.apk
+          path: android/app/build/outputs/apk/release/wittymediaclient-*.apk
           if-no-files-found: error
+
+  # Before anything is published: the new APKs must install over the previous release's as an update. Same app ID,
+  # same certificate, higher versionCode (android/scripts/check-upgrade.sh), then an emulator installs the previous
+  # release, keeps some state, installs this one over it with adb install -r, and checks the state is kept and it opens
+  # (android/scripts/upgrade-test.sh). Releases up to 0.6.0 were signed with throwaway debug keys, which nothing can
+  # update: the first release with the release key is let through once, and its notes say to uninstall once.
+  android-update:
+    needs: android
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8
+        with:
+          name: android
+          path: new
+      - name: Against the previous release
+        id: check
+        env:
+          GH_TOKEN: ${{ github.token }}
+          UPGRADE_NOTE: ${{ runner.temp }}/notes/android.md
+        run: |
+          mkdir -p "$RUNNER_TEMP/notes"
+          prev=$(bash android/scripts/previous-release.sh previous "$GITHUB_REF_NAME")
+          echo "previous=$prev" >> "$GITHUB_OUTPUT"
+          bash android/scripts/check-upgrade.sh new ${prev:+previous}
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
+        with:
+          name: release-notes-android
+          path: ${{ runner.temp }}/notes
+          if-no-files-found: ignore
+      - name: Let the emulator use KVM
+        if: steps.check.outputs.same_key == 'true'
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules && sudo udevadm trigger --name-match=kvm
+      - name: Update the previous release in place on an emulator
+        if: steps.check.outputs.same_key == 'true'
+        uses: reactivecircus/android-emulator-runner@a421e43855164a8197daf9d8d40fe71c6996bb0d # v2.38.0
+        env:
+          OUT: ${{ runner.temp }}/upgrade-test
+        with:
+          api-level: 34
+          target: default
+          arch: x86_64
+          disable-animations: true
+          emulator-options: -no-window -no-audio -no-boot-anim -gpu swiftshader_indirect -no-snapshot
+          script: bash android/scripts/upgrade-test.sh previous/*-android-x86_64.apk new/*-android-x86_64.apk
+      - name: No emulator test this once
+        if: steps.check.outputs.same_key != 'true'
+        env:
+          PREVIOUS: ${{ steps.check.outputs.previous }}
+        run: echo "::notice::The previous release (${PREVIOUS:-none}) isn't signed with the release key, so nothing can be updated from it; from the next release on, the emulator updates this one in place"
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
+        if: always()
+        with:
+          name: android-update-test
+          path: ${{ runner.temp }}/upgrade-test
+          if-no-files-found: ignore
+          retention-days: 30
 
   # iPhone and iPad in one IPA, Apple TV in another, both unsigned: AltStore, SideStore or Sideloadly signs
   # on install with the user's own Apple ID. apps.json is the AltStore source for the iOS one, written from
@@ -380,7 +474,7 @@ jobs:
 
   # Publishing runs no project code at all.
   publish:
-    needs: [desktop, desktop-sandboxed, desktop-freebsd, android, apple]
+    needs: [desktop, desktop-sandboxed, desktop-freebsd, android, android-update, apple]
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -389,6 +483,13 @@ jobs:
         with:
           path: release
           merge-multiple: true
+      # android-update's note and pictures aren't release files. Its note (the one release that changes Android's key
+      # says to uninstall once) goes at the top of the release notes.
+      - name: Set aside what isn't a release file
+        run: |
+          touch notes.md
+          if [ -f release/android.md ]; then cat release/android.md > notes.md; rm release/android.md; fi
+          rm -f release/*-opened.png release/failed.png release/archive-*.log
       - name: Write the checksum list
         run: cd release && sha256sum -- * > "../WittyMediaClient-${GITHUB_REF_NAME#v}-SHA256SUMS.txt" && mv "../WittyMediaClient-${GITHUB_REF_NAME#v}-SHA256SUMS.txt" .
       - uses: softprops/action-gh-release@efb35369e0ad2afab669f228072c1b0d510eae64 # v3
@@ -396,4 +497,28 @@ jobs:
           files: release/*
           fail_on_unmatched_files: true
           prerelease: ${{ contains(github.ref_name, '-') }}
+          body_path: notes.md
           generate_release_notes: true
+
+  # The website lists releases, but its own schedule can run hours late, so a published release
+  # starts its build. That needs SITE_BUILD_TOKEN: a fine-grained token for
+  # wittywilla/WittyMediaServer.com only, with Actions read and write and nothing else
+  # (docs/OWNER-STEPS.md, "The website, after a release"). Without it this only says so; a failure here never fails the release.
+  website:
+    needs: publish
+    if: startsWith(github.ref, 'refs/tags/')
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions: {}
+    steps:
+      - name: Rebuild wittymediaserver.com
+        env:
+          GH_TOKEN: ${{ secrets.SITE_BUILD_TOKEN }}
+        run: |
+          if [ -z "$GH_TOKEN" ]; then
+            echo "::notice::No SITE_BUILD_TOKEN: the website picks this release up on its own schedule"
+            exit 0
+          fi
+          gh workflow run publish.yml -R wittywilla/WittyMediaServer.com --ref main \
+            && echo "Started the website's build" \
+            || echo "::warning::Couldn't start the website's build; it picks this release up on its own schedule"

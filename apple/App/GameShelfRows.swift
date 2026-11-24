@@ -35,7 +35,7 @@ struct ShelfContext {
 /// "console · maker · genre · players", the facts under a game's name.
 func gameFacts(_ item: GameItem, _ console: GameConsole?, players: Int? = nil) -> String {
     [console?.shortName, item.studio, item.genres?.first, players.flatMap { $0 > 1 ? "1–\($0) players" : nil }]
-        .compactMap { $0 }.filter { !$0.isEmpty }.joined(separator: " · ")
+        .compactMap { $0 }.filter { !$0.isEmpty }.factsLine()
 }
 
 /// Saying a WittyPlay word with its blank filled: "Yours on {console}".
@@ -291,7 +291,7 @@ struct ResumeCard: View {
         let tablet = metrics.gutter > Tokens.Space.s4
         let played = item.playedSeconds
         let facts = [c?.shortName, played > 60 ? GameWords.played(played) : nil, entry.lastPlayed.map { GameWords.ago($0) }]
-            .compactMap { $0 }.joined(separator: " · ")
+            .compactMap { $0 }.factsLine()
         NavigationLink(value: context.play(item)) {
             ZStack(alignment: .bottomLeading) {
                 Drifting { picture(item, c) }
@@ -387,7 +387,7 @@ struct OnTheGoRow: View {
                 .overlay(alignment: .topTrailing) { if entry.save != nil { ShelfRibbon().padding(.trailing, Tokens.Space.s3).offset(y: -4) } }
                 .padding(.bottom, Tokens.Space.s1)
                 Text(item.title).font(.wm(size: tv ? 24 : 14, weight: .semibold)).foregroundStyle(palette.text).lineLimit(1)
-                Text([played > 60 ? GameWords.played(played) : nil, entry.lastPlayed.map { GameWords.ago($0) }].compactMap { $0 }.joined(separator: " · "))
+                Text([played > 60 ? GameWords.played(played) : nil, entry.lastPlayed.map { GameWords.ago($0) }].compactMap { $0 }.factsLine())
                     .font(.wm(size: tv ? 20 : 12)).foregroundStyle(palette.textHint).lineLimit(1)
             }
             .frame(width: size.width, alignment: .leading)
@@ -421,13 +421,13 @@ struct CollectionBand: View {
             fill
             EraGrain(cell: grain * (tv ? 1.7 : 1), dot: palette.isLight ? 0.35 : 0.22).opacity(palette.isLight ? 0.5 : 1)
             VStack(alignment: .leading, spacing: tv ? Tokens.Space.s2 : Tokens.Space.s1) {
-                Text([era.flatMap { GameShelves.eraNames[$0] }, say("wpCollection")].compactMap { $0 }.joined(separator: " · "))
+                Text([era.flatMap { GameShelves.eraNames[$0] }, say("wpCollection")].compactMap { $0 }.factsLine())
                     .font(tv ? .system(size: 22, weight: .semibold) : .caption.weight(.semibold))
                     .foregroundStyle(ink.opacity(0.8))
                 EraName(name: console.shortName, era: era, size: tv ? 76 : 48, colour: ink)
                     .accessibilityAddTraits(.isHeader)
                 let facts = [console.name != console.shortName ? console.name : nil,
-                             count.map { "\($0.formatted()) \($0 == 1 ? "game" : "games")" }].compactMap { $0 }.joined(separator: " · ")
+                             count.map { "\($0.formatted()) \($0 == 1 ? "game" : "games")" }].compactMap { $0 }.factsLine()
                 if !facts.isEmpty { Text(facts).font(.wm(size: tv ? 24 : 15)).foregroundStyle(ink.opacity(0.85)) }
             }
             .padding(.horizontal, metrics.gutter)
@@ -506,7 +506,7 @@ struct GameGridCell: View {
                     .frame(width: width, height: min(176 * s.scale, width * 1.45), alignment: .bottom)
                     .padding(.bottom, Tokens.Space.s2)
                 Text(item.title).font(.wm(size: tv ? 22 : 14, weight: .semibold)).foregroundStyle(palette.text).lineLimit(1)
-                Text([c?.shortName, item.year.map(String.init)].compactMap { $0 }.joined(separator: " · "))
+                Text([c?.shortName, item.year.map(String.init)].compactMap { $0 }.factsLine())
                     .font(.wm(size: tv ? 18 : 12)).foregroundStyle(palette.textHint).lineLimit(1)
             }
             .frame(width: width, alignment: .leading)
@@ -564,11 +564,11 @@ struct TvGamePreview: View {
         let entry = context.progress[item.id]
         HStack(alignment: .center, spacing: Tokens.Space.s12) {
             VStack(alignment: .leading, spacing: Tokens.Space.s3) {
-                Text([c?.shortName, GameShelves.era(c).flatMap { GameShelves.eraNames[$0] }].compactMap { $0 }.joined(separator: " · "))
+                Text([c?.shortName, GameShelves.era(c).flatMap { GameShelves.eraNames[$0] }].compactMap { $0 }.factsLine())
                     .font(.wm(size: 20, weight: .semibold)).foregroundStyle(palette.textSecondary)
                 Text(item.title).font(.wm(size: 64, weight: .bold)).tracking(-1.4).foregroundStyle(palette.text)
                     .lineLimit(2).minimumScaleFactor(0.6)
-                let facts = [item.year.map(String.init), item.studio, item.genres?.first].compactMap { $0 }.filter { !$0.isEmpty }.joined(separator: " · ")
+                let facts = [item.year.map(String.init), item.studio, item.genres?.first].compactMap { $0 }.filter { !$0.isEmpty }.factsLine()
                 if !facts.isEmpty { Text(facts).font(.wm(size: 24)).foregroundStyle(palette.textSecondary).lineLimit(1) }
                 if let entry, entry.save != nil, let when = entry.lastPlayed {
                     HStack(spacing: Tokens.Space.s2) {

@@ -341,18 +341,23 @@ public struct Track: Decodable, Identifiable, Equatable {
     public let channels: Int?
     public let delivery: String?
     public let url: String?
+    /// What the file marks the track as: the one to play by default, only the foreign lines (forced), for the deaf
+    /// and hard of hearing (sdh), or someone talking over the film (commentary). See docs/CLIENT-API.md, Playback.
+    public var isDefault: Bool? = nil
+    public var forced: Bool? = nil
+    public var sdh: Bool? = nil
+    public var commentary: Bool? = nil
+
+    private enum CodingKeys: String, CodingKey {
+        case index, language, languageName, title, codec, channels, delivery, url, forced, sdh, commentary
+        case isDefault = "default"
+    }
 
     public var id: Int { index }
 
+    /// One line for a list with no room for more: the language, the track's own name and marks, then the format.
     public var label: String {
-        var parts: [String] = []
-        let code = language ?? ""
-        let name = languageName ?? ""
-        parts.append(!name.isEmpty ? name : code.isEmpty ? "Unknown" : (Locale.current.localizedString(forLanguageCode: code) ?? code))
-        if let title, !title.isEmpty { parts.append(title) }
-        if let codec, !codec.isEmpty { parts.append(codec.uppercased()) }
-        if let channels, channels > 0 { parts.append("\(channels)ch") }
-        return parts.joined(separator: " · ")
+        (channels ?? 0) > 0 ? TrackWords.audio(self, number: index + 1).line : TrackWords.subtitle(self, number: index + 1).line
     }
 }
 
@@ -403,16 +408,72 @@ public struct Playback: Decodable, Equatable {
     public let stereo: String?
     /// The film's chapters, for the marks on the seek bar and the Scenes panel.
     public let chapters: [Chapter]?
+    /// The quality menu, for a video the server can offer one for: docs/CLIENT-API.md, Quality.
+    public var quality: QualityMenu? = nil
 
     private enum CodingKeys: String, CodingKey {
         case decision, url, streamId, durationSec, seek, startAtSec, timeOffsetSec, audio, subtitles
-        case audioIndex, subtitleIndex, subtitleDelivery, intro, nextId, explain, stereo, chapters
+        case audioIndex, subtitleIndex, subtitleDelivery, intro, nextId, explain, stereo, chapters, quality
         case protocolName = "protocol"
     }
 
     public var offset: Double { timeOffsetSec ?? 0 }
     /// A growing stream has to be reopened to go past what exists so far.
     public var mustReopenToSeekFar: Bool { seek == "restart" }
+}
+
+/// The quality menu's easy sizes, from a video's /playback answer: at or below the picture's own, within the
+/// profile's limits.
+public struct QualityPreset: Decodable, Equatable {
+    public let name: String
+    public let height: Int
+    public let kbps: Int
+
+    /// What a request asks for to get this size: at most this many lines and this rate.
+    public var choice: String { "h\(height)-b\(kbps)" }
+}
+
+public struct QualityMenu: Decodable, Equatable {
+    /// What streams are made to now, in the form of a request's quality: "" or "auto", "original", "h720-b4000".
+    public let choice: String?
+    public let presets: [QualityPreset]?
+    public let sourceHeight: Int?
+    public let sourceKbps: Int?
+
+    public struct Row: Equatable, Identifiable {
+        public let choice: String
+        public let name: String
+        public let detail: String
+        public let active: Bool
+        public var id: String { choice }
+    }
+
+    /// The menu's rows: Auto, Original, then each size, with the one in use marked.
+    public var rows: [Row] {
+        let now = choice ?? ""
+        let auto = now.isEmpty || now == "auto"
+        var rows = [
+            Row(choice: "", name: "Auto", detail: "", active: auto),
+            Row(choice: "original", name: "Original", detail: (sourceHeight ?? 0) > 0 ? "\(sourceHeight ?? 0)p" : "", active: now == "original"),
+        ]
+        for preset in presets ?? [] where !rows.contains(where: { $0.choice == preset.choice }) {
+            rows.append(Row(choice: preset.choice, name: preset.name, detail: Self.rate(preset.kbps), active: now == preset.choice))
+        }
+        return rows
+    }
+
+    /// The button's words: what the viewer chose, or Auto.
+    public var shortName: String {
+        let now = choice ?? ""
+        if now.isEmpty || now == "auto" { return "Auto" }
+        if now == "original" { return "Original" }
+        return presets?.first { $0.choice == now }?.name ?? "Quality"
+    }
+
+    public static func rate(_ kbps: Int) -> String {
+        guard kbps >= 1000 else { return "\(kbps) kbit/s" }
+        return kbps % 1000 == 0 ? "\(kbps / 1000) Mbit/s" : String(format: "%.1f Mbit/s", Double(kbps) / 1000)
+    }
 }
 
 /// Left out, a field lets the server decide: which tracks, and where to resume.
@@ -427,9 +488,12 @@ public struct PlaybackRequest: Encodable {
     /// This device's streaming choice ("standard", "robust"), and what its connection carries, for robust streams.
     public var streaming: String?
     public var measuredKbps: Double?
+    /// The viewer's choice of size and rate ("", "original", "h720-b4000"): docs/CLIENT-API.md, Quality.
+    public var quality: String?
 
     public init(profile: String, capabilities: DeviceCapabilities? = nil, audio: Int? = nil, subtitle: Int? = nil, startSec: Double? = nil,
-                forceTranscode: Bool? = nil, streaming: String? = nil, measuredKbps: Double? = nil) {
+                forceTranscode: Bool? = nil, streaming: String? = nil, measuredKbps: Double? = nil, quality: String? = nil) {
+        self.quality = quality
         self.profile = profile
         self.capabilities = capabilities
         self.audio = audio

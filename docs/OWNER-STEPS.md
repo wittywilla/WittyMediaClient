@@ -41,8 +41,10 @@ adb connect 192.168.1.50
 adb install wittymediaclient-<version>-android-universal.apk
 ```
 
-This build is signed with a throwaway key. It's for testing only, and can't be updated to a store version
-without uninstalling first.
+Releases are signed with the one Android release key, so each installs over the last and keeps the sign-in. Releases
+up to 0.6.0 weren't: from one of those, uninstall once. Builds from the `build` workflow and pull requests are signed
+with a throwaway key, for testing only: they can't update a release, or be updated by one, without uninstalling first.
+The release key is a step only you can do once: [Android release key](ANDROID-SIGNING.md#making-the-release-key-once).
 
 **Please check on a real device and report back:** does it start, connect, sign in, and play? Are the
 remote and focus usable? Is it smooth, and is there sound? Those two couldn't be checked on an emulator. A cheap TV stick is the most useful test there is.
@@ -174,6 +176,17 @@ local network and needs local network access. The reason is that home media serv
 
 **Consoles.** PlayStation, Xbox and Nintendo all need you to apply to and be accepted by a developer
 programme, usually as a company. Nothing can be built until then.
+
+### The website, after a release
+
+wittymediaserver.com lists the newest server and client. Its build runs on a schedule, but GitHub can start scheduled builds hours late, so a published release of the server or the client starts the site's build itself. For that, both repositories need one secret, made once:
+
+1. On github.com, click your picture, then **Settings**, **Developer settings**, **Personal access tokens** and **Fine-grained tokens**. Click **Generate new token**.
+2. Name it `Website rebuild`. Under **Repository access**, choose **Only select repositories** and pick **wittywilla/WittyMediaServer.com**. Under **Permissions**, set **Actions** to **Read and write**, and leave everything else as it is. Click **Generate token** and copy it.
+3. In **wittywilla/WittyMediaServer**, open **Settings**, **Secrets and variables**, **Actions**, and click **New repository secret**. Name it `SITE_BUILD_TOKEN`, paste the token, and click **Add secret**.
+4. Do the same in **wittywilla/WittyMediaClient**.
+
+The token can only start the website's builds, nothing else. Without it, or once it has expired, a release still publishes: its **website** job says so, and the site catches up on its own schedule. To rebuild the site now, open **Actions** in wittywilla/WittyMediaServer.com, then **Build and publish**, **Run workflow**.
 
 ## Check the desktop installers
 

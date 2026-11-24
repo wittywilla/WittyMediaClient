@@ -100,7 +100,7 @@ struct SDUIEpisodeLine: View {
         Button { actor.perform(card.action) } label: {
             VStack(alignment: .leading, spacing: 2) {
                 Text(card.shown("title")).sduiFont("body", weight: .medium).foregroundStyle(palette.text).lineLimit(1)
-                let sub = [card.shown("subtitle"), card.shows.contains("watched") ? "watched" : ""].filter { !$0.isEmpty }.joined(separator: " · ")
+                let sub = [card.shown("subtitle"), card.shows.contains("watched") ? "watched" : ""].filter { !$0.isEmpty }.factsLine()
                 if !sub.isEmpty { Text(sub).sduiFont("caption").foregroundStyle(palette.textSecondary).lineLimit(1) }
                 if synopsis, !card.shown("synopsis").isEmpty {
                     Text(card.shown("synopsis")).sduiFont("caption").foregroundStyle(palette.textSecondary)

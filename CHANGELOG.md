@@ -5,6 +5,101 @@ What changed in WittyMediaClient, newest first. What changed before it had a rep
 
 ## Unreleased
 
+## 0.6.2
+
+Released 2026-11-24.
+
+Made for WittyMediaServer 0.8.4-alpha: the settings menu, notifications, parental PIN, time-shift and search need it.
+
+**Settings, the same everywhere (#111, wittywilla/WittyMediaServer#612)**
+
+- **You is the server's one settings menu** on Android phone and TV, iPhone, iPad and Apple TV, as on the web: the
+  same groups, rows, order and words. New rows everywhere: Video quality, Pages and menu, Network, Data folder and
+  Connect a device. Apple's rows now match Android's.
+- **On a TV, every row is shown.** One the TV can't change stays in its place, says what is set, and opens the card
+  with that setting's address and QR code.
+- **Module settings and Module store sit side by side,** and Look is Layout.
+- **The desktop app's own rows** (Servers on this device, From away, This app's log) are in the server's Settings.
+- **Choose colours has no preview**, only the theme cards, like Choose a layout.
+- **The TV bar shows the server's logo** beside its name (Android TV and Apple TV).
+**Parental controls (wittywilla/WittyMediaServer#649)**
+
+- **Leaving a kids' profile kept on its device takes the parents' PIN.** On Android, iPhone, iPad and Apple TV, Who's
+  watching asks for it when switching away from such a profile to one without a password, and when signing out. A
+  wrong PIN says so; the server counts the tries. The desktop app gets the same from the server's own pages.
+
+**Arabic and Hebrew**
+
+- **Latin titles keep their order on a phone set to Arabic or Hebrew.** Lines made of parts (a title's year and running
+  time, artist and album) keep each part's digits and dashes in place, and a Hebrew title among Latin ones keeps its
+  place too (wittywilla/WittyMediaServer#498).
+
+**Connect and sign-in screens: one centred card (wittywilla/WittyMediaServer#624)**
+
+- **Every connect screen is one card, centred both ways**, with the app's logo and name, or the server's once one is
+  chosen, at its top. On the sign-in and security-code screens the server's name now comes before the heading. It
+  fits a 1280×720 window without scrolling, and the same goes for the desktop app, a TV, Android and Apple.
+
+**Players, TV and games**
+
+- **A slow first picture is waited for.** Once a game's connection is through, its first picture gets 45 seconds (a big game, or a server with no graphics card, can take a while) before the app tries another way, instead of giving up after 12.
+- **The video player on Android TV has a new bar:** the title, the seek bar with the time gone and left, Play and 10 s back and on, then round buttons for Audio, Subtitles, Quality, Speed, Scenes, Info and More that show their names when focused. Watch party, Play on, 3D and Leave are under More. The bar sits well inside a TV's edge (#78).
+- **Audio, Subtitles, Quality and Speed menus on every native player** (Android TV, Android phones, Apple TV, iPhone and iPad): fully usable with a remote, Back closes them, and the choice in use is ticked. Tracks are named by language with the track's own name under it ("English · Commentary with …", "SDH", "Forced") and what kind they are ("AC3 · 5.1", "Pictures"); one with no language is "Track 2", never "Unknown" (#78).
+- **Scenes as a grid of pictures**, with each scene's name and time, on Android TV, Apple TV and phones. The film pauses while it's open and plays on when it closes.
+- **Subtitle size** (small to extra large) on Android TV and phones, kept for every video.
+- **Film and show names under posters on Android TV** are smaller and take up to two lines, so the whole name can be read ("Bullet Train Explosion", not "Bullet Train …").
+
+## 0.6.1
+
+Released 2026-11-24.
+
+Made for WittyMediaServer 0.8.3-alpha: **Enter a code** needs its new Connect a device.
+
+**Games on a phone or tablet**
+
+- **Games start when your server is reached from away.** A game stopped at "Waiting for the first picture" with a message about a hello, and leaving it showed a black page saying the address was for the app only. Both are fixed, and the games list and every server page now open from away too.
+- **Notes about a game are on its start screen**, short and readable, not in a long message over Cancel. Messages over a game are short, sit at the top on a touch screen, and never show the server's technical words.
+
+**Desktop: adding a server (wittywilla/WittyMediaServer#605)**
+
+- **One Add a server screen:** servers found on this network, then **Enter a code**, **Paste a link** and **Type an
+  address**. The code is the one a server shows under **Connect a device**; the app asks the servers it can reach, and
+  only the one that made it can prove so and sign this device in. After choosing a server, one sign-in screen takes
+  its code (or a six-digit **Sign in a TV** code), or the password on the server's own page.
+- **Connect from anywhere's panel and Join from away's code are gone:** pasting the link does the first, and the code
+  the second needed the public address book to find the server, which too often it didn't.
+
+**Android TV and Apple TV**
+
+- **A channel in a bumper or a gap** names the next real programme ("Up next: …, at 8:30") in its banner and in the guide, not "We'll be right back".
+- **An empty library on Android TV** shows its name, why it's empty and a button to focus, not a line at the top edge with nothing to select.
+- **First-time setup on Android TV:** the colours step starts with a theme focused, and the preview no longer takes the first press. Import a theme is hidden on a TV.
+- **A live channel on Android TV fills the screen** (it could be drawn small in a corner).
+- **The guide's preview** no longer says "Tuning…" over a channel that is already playing.
+
+**Android: updates install over the old version**
+
+- **Every Android release is now signed with one permanent release key**, so a new version installs over the last one and keeps your sign-in and settings. Up to 0.6.0, each release was signed with a different temporary key, and Android refused to install it as an update. **Coming from 0.6.0 or older, uninstall once**, then install this version. You'll sign in again once, and never need to after that ([docs/ANDROID-SIGNING.md](docs/ANDROID-SIGNING.md)).
+- The version code now comes from the version (0.6.1 is 60100), so it always goes up. Before anything is published, a release checks the previous one's APKs: same key, higher version code, same app ID. An emulator then installs the previous release, installs the new one over it, and checks the app's data is kept. A release without the key fails rather than falling back to a temporary one.
+
+**Android phone**
+
+- **The mini player says why a film stopped** ("Can't reach your server") when the network drops, instead of showing only a Play button.
+- **Sign in with a code says it works for phones too**, not only for TVs.
+- **The first-run chooser fills the screen**, so Home no longer shows through above and below it.
+- **The library names along the top of Home** read clearly over a bright picture.
+
+**Android, Android TV and Apple**
+
+- **Choosing a server found on the network:** a server that answers later goes below the ones already shown, so the one highlighted never changes under the remote just as OK is pressed.
+- **Back from a server's sign-in screen** goes to Choose a server instead of closing the app (Android and Android TV).
+- **Karaoke on Android TV** has no "Fill the screen" button (a TV is already full screen), and a song with no words says where to add them in words a remote can read.
+- **The keyboard shortcuts button** in the Android video player shows only when a keyboard is attached.
+
+**Desktop**
+
+- **Every connect screen is centred the same way:** the logo, title, words and server name sit in the middle on Enter an address and Enter the security code too, not only on Choose a server; on a TV each half is centred in itself (wittywilla/WittyMediaServer#609).
+
 ## 0.6.0
 
 Released 2026-11-23.

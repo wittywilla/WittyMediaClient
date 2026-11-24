@@ -98,7 +98,7 @@ object PeerRules {
         }
         val secret = items.firstOrNull { it.first == "s" }?.second.orEmpty()
         if (!isId(id) || secret.length !in 16..64 || !secret.all { it in SECRET_CHARS }) return null
-        val name = items.firstOrNull { it.first == "n" }?.second.orEmpty().take(80)
+        val name = shownName(items.firstOrNull { it.first == "n" }?.second.orEmpty(), 80)
         return PeerInvite(id, secret, name, hints(items.filter { it.first == "a" }.map { it.second }))
     }
 
@@ -110,6 +110,12 @@ object PeerRules {
 
     // The local address the library listens on.
     fun localBase(port: Int): String = "http://127.0.0.1:$port"
+
+    // The secret as a web view's cookie: a page loaded from the local address carries it on every request, its
+    // WebSockets included, and no script on the page can read it. Null for a secret that can't be one.
+    fun secretCookie(secret: String): String? =
+        if (secret.isEmpty() || !secret.all { it in SECRET_CHARS }) null
+        else "$SECRET_COOKIE=$secret; Path=/; HttpOnly; SameSite=Strict"
 
     fun state(text: String): PeerState {
         val o = runCatching { json.parseToJsonElement(text).jsonObject }.getOrNull() ?: return PeerState()
@@ -149,6 +155,24 @@ object PeerRules {
         hints(runCatching { json.parseToJsonElement(text).jsonArray.mapNotNull { it.jsonPrimitive.content } }.getOrNull().orEmpty())
 
     // Text from the other end, shown as text: one line, no control characters, cut to a length.
+    // A name that came in a link, fit to show: no control characters, and none of the invisible ones that turn text
+    // around, so a name can't be made to read as something else beside it. Cut between characters.
+    fun shownName(text: String, limit: Int): String {
+        val kept = text.filter { !it.isISOControl() && it !in INVISIBLE }.trim()
+        val cut = StringBuilder()
+        var i = 0
+        var n = 0
+        while (i < kept.length && n < limit) {
+            val end = kept.offsetByCodePoints(i, 1)
+            cut.append(kept, i, end)
+            i = end
+            n++
+        }
+        return cut.toString().trim()
+    }
+
+    private val INVISIBLE = setOf('\u061c', '\u200e', '\u200f', '\u202a', '\u202b', '\u202c', '\u202d', '\u202e', '\u2066', '\u2067', '\u2068', '\u2069', '\ufeff')
+
     private fun plain(text: String, limit: Int): String =
         text.filter { !it.isISOControl() }.trim().take(limit)
 }

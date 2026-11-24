@@ -2,9 +2,12 @@
 // Copyright (C) 2026 WittyWilla and contributors
 package com.wittywilla.wittymediaclient.ui
 
-// docs/APP-DESIGN.md, "You and settings": which rows the You tab has, for whom, and what each opens.
-// Apart from the screen, so it can be tested without one. Rows the server would refuse are left out,
-// not greyed.
+import com.wittywilla.wittymediaclient.net.SettingsMenu
+import com.wittywilla.wittymediaclient.net.SettingsMenuRow
+import com.wittywilla.wittymediaclient.net.visible
+
+// docs/APP-DESIGN.md, "You and settings": which rows the You tab has, for whom, and what each opens, from the
+// server's settings menu (net/SettingsMenu.kt). Apart from the screen, so it can be tested without one.
 
 enum class YouNative { Names, Password, TwoStep, Devices, SignInTv, Theme, TopMenu, Licences, Log, Servers, Away, Profiles, PlayingHere, Look, Modules, RemoteControl, WatchParty, EditLayout, NameAndLogo }
 
@@ -16,8 +19,19 @@ sealed interface YouOpens {
     data class Sdui(val path: String) : YouOpens
 }
 
-// `icon` is a Material Symbols name, `tint` the icon tile's colour (null: the quiet grey, danger: "danger").
-data class YouRow(val key: String, val icon: String, val tint: String?, val opens: YouOpens)
+// `icon` is a Material Symbols name, `tint` the icon tile's colour (QUIET for the owner's tools, "danger" for Reset).
+// `path` is the server's page for it (the address a TV's card gives), `part` its editor in the TV table, `value` what
+// it shows on its right and `summary` what a TV shows on a row it can't change (the server's settingsmenu.json).
+data class YouRow(
+    val key: String,
+    val icon: String,
+    val tint: String?,
+    val opens: YouOpens,
+    val path: String = "",
+    val part: String = "",
+    val value: String = "",
+    val summary: String = "",
+)
 
 data class YouGroup(val key: String, val rows: List<YouRow>)
 
@@ -46,107 +60,57 @@ data class YouWho(
     val parties: Boolean = false,
     // The server has placements (`sdui-experiences`): Edit layout is offered.
     val layoutEditor: Boolean = false,
-)
+) {
+    // The menu's conditions that hold (settingsmenu.json, `conditions`).
+    val facts: Set<String>
+        get() = buildSet {
+            if (admin) add("admin")
+            if (adult) add("adult")
+            if (onTv) add("tv")
+            if (twoStepAvailable) add("twoStep")
+            if (hasGames) add("games")
+            add("app")
+            add("servers")
+            if (fromAway) add("fromAway")
+            if (looks) add("looks")
+            if (layoutEditor) add("layoutEditor")
+            if (moduleSettings) add("moduleSettings")
+            if (remote) add("remote")
+            if (parties) add("parties")
+        }
+}
 
 private const val QUIET = "#5d6474"
 
-private fun native(key: String, icon: String, tint: String?, screen: YouNative) = YouRow(key, icon, tint, YouOpens.Native(screen))
-private fun page(key: String, icon: String, tint: String?, path: String) = YouRow(key, icon, tint, YouOpens.Page(path))
+// This app's own screens, by the menu's `native` names.
+private val NATIVE = mapOf(
+    "names" to YouNative.Names, "password" to YouNative.Password, "twoStep" to YouNative.TwoStep, "devices" to YouNative.Devices,
+    "signInTv" to YouNative.SignInTv, "profiles" to YouNative.Profiles, "remoteControl" to YouNative.RemoteControl,
+    "watchParty" to YouNative.WatchParty, "modules" to YouNative.Modules, "look" to YouNative.Look, "editLayout" to YouNative.EditLayout,
+    "theme" to YouNative.Theme, "topMenu" to YouNative.TopMenu, "servers" to YouNative.Servers, "away" to YouNative.Away,
+    "playingHere" to YouNative.PlayingHere, "nameAndLogo" to YouNative.NameAndLogo, "licences" to YouNative.Licences, "appLog" to YouNative.Log,
+)
 
-fun youGroups(who: YouWho): List<YouGroup> {
-    val groups = mutableListOf<YouGroup>()
-    groups += YouGroup(
-        "groupAccount",
-        listOfNotNull(
-            native("rowNames", "badge", "#0a6fb8", YouNative.Names),
-            if (who.adult) native("rowPassword", "key", "#3e5bd0", YouNative.Password) else null,
-            if (who.adult && who.twoStepAvailable) native("rowTwoStep", "shield_lock", "#2e7d3c", YouNative.TwoStep) else null,
-            native("rowDevices", "devices", "#7f46b8", YouNative.Devices),
-        ),
-    )
-    // A TV is what gets signed in, so it doesn't sign in TVs.
-    val household = listOfNotNull(
-        if (who.adult && !who.onTv) native("rowSignInTv", "tv", "#bd2f85", YouNative.SignInTv) else null,
-        if (who.adult && who.nativeProfiles) native("rowProfiles", "family_restroom", "#b8500d", YouNative.Profiles) else null,
-        if (who.adult && !who.nativeProfiles) page("rowProfiles", "family_restroom", "#b8500d", "/settings/users") else null,
-    )
-    if (household.isNotEmpty()) groups += YouGroup("groupHousehold", household)
-    groups += YouGroup(
-        "groupYours",
-        listOfNotNull(
-            page("rowYourYear", "auto_awesome", "#c9302f", "/review"),
-            page("rowCollections", "library_books", "#0e7c6f", "/collections"),
-            if ("sharing" !in who.off) page("rowShareLinks", "link", "#0a6fb8", "/settings/sharing") else null,
-            page("rowActivity", "monitoring", "#99690a", "/settings/activity"),
-            if (who.hasGames && "games" !in who.off) page("rowGameSettings", "sports_esports", "#7f46b8", "/settings/games") else null,
-            if (who.hasGames && "games" !in who.off) page("rowControllers", "gamepad", "#3e5bd0", "/controllers") else null,
-            // Playing on and steering other devices, and watching together: the app's own screens.
-            if (who.remote && "remoteControl" !in who.off) native("rowRemoteControl", "cast", "#3e5bd0", YouNative.RemoteControl) else null,
-            if (who.parties && "syncplay" !in who.off) native("rowWatchParty", "groups", "#bd2f85", YouNative.WatchParty) else null,
-        ),
-    )
-    // What the server's modules let this profile set (Settings, Modules, in the app's own style).
-    if (who.moduleSettings) groups += YouGroup("groupModules", listOf(native("rowModuleSettings", "extension", "#7f46b8", YouNative.Modules)))
-    groups += YouGroup(
-        "groupDevice",
-        listOfNotNull(
-            if (who.looks) native("rowLook", "toolbar", "#0e7c6f", YouNative.Look) else null,
-            // Where the shell's parts and the page's sections are, for this device or for everyone (the layout editor).
-            if (who.layoutEditor) native("rowEditLayout", "toolbar", "#7f46b8", YouNative.EditLayout) else null,
-            native("rowTheme", "palette", "#0e7c6f", YouNative.Theme),
-            // Which libraries join the bar along the top: a TV's alone.
-            if (who.onTv) native("rowTopMenu", "toolbar", "#bd2f85", YouNative.TopMenu) else null,
-            // The servers this device remembers, to remove the ones no longer wanted.
-            native("rowServers", "dns", QUIET, YouNative.Servers),
-            // How this device reaches the server when it isn't at home: peer to peer.
-            if (who.fromAway) native("rowAway", "settings_input_antenna", "#0a6fb8", YouNative.Away) else null,
-            // Skipping intros and credits by itself, and artwork that moves: this device's own (YouPlaying.kt).
-            native("rowPlayingHere", "smart_display", "#3e5bd0", YouNative.PlayingHere),
-        ),
-    )
-    if (who.admin) {
-        groups += YouGroup(
-            "groupServer",
-            listOf(
-                YouRow("rowLibraries", "video_library", QUIET, YouOpens.Sdui("/manage/libraries")),
-                page("rowMetadata", "image_search", QUIET, "/settings/metadata"),
-                page("rowFixMatches", "auto_fix_high", QUIET, "/fix-matches"),
-                page("rowPlayback", "smart_display", QUIET, "/settings/playback"),
-                page("rowLiveTv", "live_tv", QUIET, "/settings/channels"),
-                page("rowGaming", "sports_esports", QUIET, "/settings/gaming"),
-                page("rowGamePcs", "computer", QUIET, "/settings/couch"),
-                page("rowTranscoding", "bolt", QUIET, "/settings/transcoding"),
-                page("rowLibraryTranscoding", "autorenew", QUIET, "/settings/library-transcoding"),
-                page("rowRemote", "public", QUIET, "/settings/remote"),
-                native("rowNameAndLogo", "badge", "#7f46b8", YouNative.NameAndLogo),
-                page("rowAppearance", "brush", QUIET, "/settings/appearance"),
-                page("rowWittyRigs", "dns", QUIET, "/settings/wittyrigs"),
-            ),
-        )
-        groups += YouGroup(
-            "groupMaintenance",
-            listOf(
-                page("rowLogs", "article", QUIET, "/settings/logs"),
-                page("rowDiagnoser", "stethoscope", QUIET, "/settings/diagnoser"),
-                page("rowModules", "extension", QUIET, "/settings/modules"),
-                page("rowBackup", "backup", QUIET, "/settings/backup"),
-                page("rowRepair", "build", QUIET, "/settings/repair"),
-                page("rowReset", "restart_alt", "danger", "/settings/reset"),
-            ),
-        )
+// How this app opens a row: its own screen, else the server's SDUI page, else the server's page. Profiles is the
+// app's own screen only where the server has parental controls this app draws itself.
+fun youOpens(row: SettingsMenuRow, who: YouWho): YouOpens? {
+    val native = NATIVE[row.native]?.takeIf { it != YouNative.Profiles || who.nativeProfiles }
+    return when {
+        native != null -> YouOpens.Native(native)
+        row.path.isEmpty() -> null
+        row.sdui -> YouOpens.Sdui(row.path)
+        else -> YouOpens.Page(row.path)
     }
-    groups += YouGroup(
-        "groupHelp",
-        listOf(
-            page("rowHelp", "help", "#99690a", "/help"),
-            page("rowAboutServer", "info", QUIET, "/settings/about"),
-            page("rowLegal", "gavel", QUIET, "/legal"),
-            native("rowLicences", "menu_book", QUIET, YouNative.Licences),
-            native("rowAppLog", "receipt_long", QUIET, YouNative.Log),
-        ),
-    )
-    return groups
 }
+
+// The You page's groups for this person, from the settings menu every client draws (docs/APP-DESIGN.md, "You and
+// settings"; the server's settingsmenu.json). Rows the server would refuse are left out, not greyed.
+fun youGroups(who: YouWho, menu: SettingsMenu): List<YouGroup> =
+    menu.visible(who.facts, who.off) { youOpens(it, who) != null }.map { g ->
+        YouGroup(g.key, g.rows.map { r ->
+            YouRow(r.key, r.icon.android, r.tint.takeIf { it != QUIET }, youOpens(r, who)!!, r.path, r.part, r.value, r.summary)
+        })
+    }
 
 // The role under the name in You's header.
 fun roleKey(admin: Boolean, kind: String): String = when {

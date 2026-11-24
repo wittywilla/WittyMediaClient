@@ -95,12 +95,20 @@ struct TvTopBar: View {
         // sit 24 from the top and are 16 apart.
         let ring = metrics.focusRoom
         HStack(spacing: 0) {
+            // The server's logo and name at the start of the bar, as Android TV and the web's TV mode draw them.
+            HStack(spacing: Tokens.Space.s3) {
+                BrandMark(size: 44, logo: model.client.brandLogoURL(version: model.brandLogo))
+                Wordmark(name: model.brandName, brand: model.themeStyle?.brand, colors: model.themeStyle?.colors ?? [:], size: 30)
+            }
+            .padding(.leading, metrics.gutter)
+            .accessibilityElement(children: .combine)
+            .accessibilityAddTraits(.isHeader)
             ScrollViewReader { scroller in
                 ScrollView(.horizontal, showsIndicators: false) {
                     HStack(spacing: Tokens.Space.s4 - ring * 2) {
                         ForEach(row, id: \.tab) { pill($0.tab, $0.name, $0.symbol).id($0.tab) }
                     }
-                    .padding(.leading, metrics.gutter - ring)
+                    .padding(.leading, Tokens.Space.s6 - ring)
                     // Room for the last pill to come clear of the fade.
                     .padding(.trailing, TvTopBar.fade + ring)
                     .padding(.vertical, ring)
@@ -135,10 +143,13 @@ struct TvTopBar: View {
                     }
                 }
             }
-            // Space, not a line, keeps You apart from the rest: 32 from the edge of the pills on the left.
-            pill(.profile, AppTab.profile.title, AppTab.profile.icon)
+            // Space, not a line, keeps the bell and You apart from the rest: 32 from the edge of the pills on the left.
+            TvNotesPill(height: TvTabPill.height)
                 .padding(.vertical, ring)
                 .padding(.leading, Tokens.Space.s8 - ring)
+            pill(.profile, AppTab.profile.title, AppTab.profile.icon)
+                .padding(.vertical, ring)
+                .padding(.leading, Tokens.Space.s4 - ring * 2)
                 .padding(.trailing, metrics.gutter - ring)
         }
         .padding(.top, Tokens.Space.s6 - ring * 2)

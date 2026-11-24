@@ -133,7 +133,11 @@ struct LibraryStrip: View {
                 }
             }
             #if !os(tvOS)
-            ActivityButton().padding(.trailing, metrics.gutter - 2)
+            HStack(spacing: 0) {
+                ActivityButton()
+                NotesButton()
+            }
+            .padding(.trailing, metrics.gutter - 2)
             #endif
         }
         .frame(height: Self.height)
@@ -210,6 +214,7 @@ private struct BackBar: ViewModifier {
             Spacer(minLength: 0)
             #if !os(tvOS)
             ActivityButton()
+            NotesButton()
             #endif
         }
             .padding(.horizontal, metrics.gutter - 2)

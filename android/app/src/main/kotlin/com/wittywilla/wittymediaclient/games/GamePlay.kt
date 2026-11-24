@@ -116,6 +116,11 @@ class GamePlay(
         private set
     var toast by mutableStateOf("")
         private set
+
+    // What the server says about this game before it plays, such as its processor drawing it: shown on the start
+    // screen, where there's room to read it, never over the game.
+    var notes by mutableStateOf(listOf<String>())
+        private set
     var saving by mutableStateOf(false)
         private set
 
@@ -247,7 +252,7 @@ class GamePlay(
             turns = started.turns
             disc = started.disc
             discs = started.discs
-            for (notice in started.notices) say(notice)
+            notes = started.notices.map { it.trim() }.filter { it.isNotEmpty() }.distinct().take(3)
             offered = started.modes.mapNotNull(GameModeInfo::from)
             if (GameRoute.needsUpdate(offered)) {
                 problem = GameProblem("Update this app", "This server sends games in a newer way than this app knows. Update WittyMediaClient to play.", retry = false)
@@ -343,9 +348,14 @@ class GamePlay(
         }
         if (route.video == "webrtc") made.attachSurface(webrtcSurface)
         made.setVolume(settings.number("audio.volume", 1.0), settings.flag("audio.mute", false))
+        waitForPicture(serial, if (route.video == "webrtc") WEBRTC_PICTURE_MS else GameModes.FIRST_PICTURE_MS)
+    }
+
+    // A connection that hasn't shown a picture in time gives way to the next way of sending it.
+    private fun waitForPicture(serial: Int, ms: Long) {
         pictureTimer?.cancel()
         pictureTimer = scope.launch {
-            delay(if (route.video == "webrtc") WEBRTC_PICTURE_MS else GameModes.FIRST_PICTURE_MS)
+            delay(ms)
             if (serial == transportSerial && !gotPicture && !stopped) nextMode()
         }
     }
@@ -391,7 +401,12 @@ class GamePlay(
 
         override fun opened() {
             main.post {
-                if (current() && !gotPicture) stage = GameStage.Picture
+                if (current() && !gotPicture) {
+                    stage = GameStage.Picture
+                    // It's through: a slow server (a big game, no graphics card, an encoder starting) can take a while
+                    // for its first frame, and another way of connecting wouldn't make it come any sooner.
+                    waitForPicture(serial, GameModes.PICTURE_AFTER_CONNECTING_MS)
+                }
                 if (current()) input.setEnabled(menu == null && !away)
             }
         }
@@ -432,9 +447,12 @@ class GamePlay(
                 seats = event.seats
             }
             is GameEvent.Seats -> seats = event.seats
-            is GameEvent.Refused -> say(
-                if (event.code == "seat-taken" && event.port != null) "Player ${event.port + 1} is being played on another device" else event.text,
-            )
+            is GameEvent.Refused -> {
+                // The server's words are for the log; the person gets plain ones, or none when the connection is
+                // simply tried again (the server closes it, and lost() moves on).
+                ClientLog.warn("game", "The stream refused: ${event.code}: ${event.text.take(200)}")
+                GameWords.refusal(event.code, event.port)?.let(::say)
+            }
             is GameEvent.Message -> say(event.text)
             is GameEvent.Geometry -> {
                 event.aspect?.takeIf { it > 0 }?.let { aspect = it }

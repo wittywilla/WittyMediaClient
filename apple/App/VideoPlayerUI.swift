@@ -93,7 +93,7 @@ private struct VideoSurface: UIViewControllerRepresentable {
 
 /// What opens over the player.
 private enum PlayerPanel: Equatable {
-    case speed, scenes, settings, info
+    case speed, quality, scenes, settings, info
     case picker(audio: Bool)
 }
 
@@ -116,6 +116,8 @@ struct VideoPlayerView: View {
     @State private var shortcuts = false
     @State private var lastTap = Date.distantPast
     @State private var streaming = DeviceStreaming.load()
+    /// The film was paused for the scenes panel, and plays on when it closes.
+    @State private var resumeAfterScenes = false
 
     private var stream: Playback? { playback.stream }
     private var item: Item? { playback.item }
@@ -144,14 +146,14 @@ struct VideoPlayerView: View {
 
     private var subtitle: String {
         guard let item else { return "" }
-        let show = [item.showTitle, item.episodeLabel.isEmpty ? nil : item.episodeLabel].compactMap { $0 }.filter { !$0.isEmpty }.joined(separator: " · ")
+        let show = [item.showTitle, item.episodeLabel.isEmpty ? nil : item.episodeLabel].compactMap { $0 }.filter { !$0.isEmpty }.factsLine()
         let mode: String? = switch stream?.decision {
         case "direct": "Direct play"
         case "remux": "Rewrapped"
         case "transcode": "Transcoding"
         default: nil
         }
-        return [show.isEmpty ? item.year.map(String.init) : show, mode].compactMap { $0 }.filter { !$0.isEmpty }.joined(separator: " · ")
+        return [show.isEmpty ? item.year.map(String.init) : show, mode].compactMap { $0 }.filter { !$0.isEmpty }.factsLine()
     }
 
     var body: some View {
@@ -385,10 +387,18 @@ struct VideoPlayerView: View {
                 }
                 .buttonStyle(PlayerSpeedButtonStyle())
                 .accessibilityLabel("Playback speed \(PlayerSpeeds.button(Double(clock.rate)))")
+                if let quality = stream?.quality {
+                    Button { touched(); panel = panel == .quality ? nil : .quality } label: {
+                        Text(quality.shortName).font(.system(size: 13, weight: .semibold))
+                    }
+                    .buttonStyle(PlayerSpeedButtonStyle())
+                    .accessibilityLabel("Quality, \(quality.shortName)")
+                }
                 if chapters.count > 1 {
                     PlayerIconButton(symbol: "rectangle.grid.1x2.fill", label: "Scenes", on: panel == .scenes) { touched(); panel = panel == .scenes ? nil : .scenes }
                 }
-                if (stream?.audio?.count ?? 0) > 1 {
+                // One sound track still says which language and how many speakers, as on Android.
+                if !(stream?.audio ?? []).isEmpty {
                     PlayerIconButton(symbol: "music.note", label: "Audio & language") { touched(); panel = .picker(audio: true) }
                 }
                 if !(stream?.subtitles ?? []).isEmpty {
@@ -467,6 +477,20 @@ struct VideoPlayerView: View {
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomTrailing)
             .padding(.trailing, Tokens.Space.s5)
             .padding(.bottom, 64)
+        case .quality?:
+            if let quality = stream?.quality {
+                PlayerPopover(title: "Quality") {
+                    ForEach(quality.rows) { row in
+                        PopoverRow(words: row.name, active: row.active, note: row.detail) {
+                            playback.choose(quality: row.choice)
+                            panel = nil
+                        }
+                    }
+                }
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomTrailing)
+                .padding(.trailing, Tokens.Space.s5)
+                .padding(.bottom, 64)
+            }
         case .picker(let audio)?:
             if let stream {
                 TrackPickerView(heading: audio ? "Audio & language" : "Subtitles",
@@ -477,6 +501,13 @@ struct VideoPlayerView: View {
             }
         case .scenes?:
             ScenePanel(chapters: chapters, current: Scenes.current(chapters.map(\.start), at: clock.time),
+                       picture: { index in client.sceneURL(playback.id, sec: Scenes.pictureSec(chapters, index, duration: duration)) },
+                       opened: {
+                           // The film waits while the scenes are open, as on Android; not in a watch party, where one
+                           // person looking doesn't stop the room.
+                           if playback.player.timeControlStatus != .paused && playback.steering == nil { playback.player.pause(); resumeAfterScenes = true }
+                       },
+                       closed: { if resumeAfterScenes { resumeAfterScenes = false; playback.player.play() } },
                        pick: { start in playback.seek(toFilm: start); panel = nil }, close: { panel = nil })
         case .settings?:
             ViewSettingsPanel(prefs: $view, scope: $scope, item: playback.id, streaming: streaming, maxHeight: size.height - 120,
@@ -744,10 +775,17 @@ private struct ScenePanel: View {
     @Environment(\.palette) private var palette
     let chapters: [Chapter]
     let current: Int
+    let picture: (Int) -> URL?
+    let opened: () -> Void
+    let closed: () -> Void
     let pick: (Double) -> Void
     let close: () -> Void
 
     var body: some View {
+        panel.onAppear(perform: opened).onDisappear(perform: closed)
+    }
+
+    private var panel: some View {
         VStack(spacing: 0) {
             Spacer(minLength: 0)
             VStack(alignment: .leading, spacing: Tokens.Space.s3) {
@@ -780,10 +818,11 @@ private struct ScenePanel: View {
 
     private func scene(_ index: Int, _ chapter: Chapter) -> some View {
         VStack(alignment: .leading, spacing: 6) {
-            RoundedRectangle(cornerRadius: Tokens.Radius.md, style: .continuous)
-                .fill(Color.white.opacity(0.07))
+            // A picture from the scene, as on the website; its number until it comes.
+            Color.white.opacity(0.07)
                 .aspectRatio(16 / 9, contentMode: .fit)
-                .overlay { Text("\(index + 1)").font(.system(size: 24, weight: .semibold)).foregroundStyle(PlayerInk.quiet) }
+                .overlay { ArtImage(url: picture(index), width: 200, placeholder: "\(index + 1)") }
+                .clipShape(RoundedRectangle(cornerRadius: Tokens.Radius.md, style: .continuous))
                 .overlay(alignment: .bottomTrailing) {
                     Text(PlayerTime.format(chapter.start)).font(.system(size: 11, weight: .bold).monospacedDigit()).foregroundStyle(.white)
                         .padding(.horizontal, 6).frame(minHeight: 20)
@@ -1000,7 +1039,7 @@ private struct WatchNextCard: View {
                         .clipShape(RoundedRectangle(cornerRadius: Tokens.Radius.sm, style: .continuous))
                     VStack(alignment: .leading, spacing: 2) {
                         Text(next.show?.title ?? next.item.showTitle ?? next.item.title).font(.system(size: 15, weight: .semibold)).foregroundStyle(PlayerInk.text).lineLimit(2)
-                        Text(episode ? [next.item.episodeLabel, next.item.title].filter { !$0.isEmpty }.joined(separator: " · ") : (next.item.year.map(String.init) ?? ""))
+                        Text(episode ? [next.item.episodeLabel, next.item.title].filter { !$0.isEmpty }.factsLine() : (next.item.year.map(String.init) ?? ""))
                             .font(.system(size: 12)).foregroundStyle(PlayerInk.hint).lineLimit(2)
                     }
                     Spacer(minLength: 0)
@@ -1032,7 +1071,7 @@ struct VideoDock: View {
 
     private var sub: String {
         guard let item = playback.item else { return "" }
-        if item.showTitle != nil { return [item.episodeLabel, item.title].filter { !$0.isEmpty }.joined(separator: " · ") }
+        if item.showTitle != nil { return [item.episodeLabel, item.title].filter { !$0.isEmpty }.factsLine() }
         return item.year.map(String.init) ?? ""
     }
 

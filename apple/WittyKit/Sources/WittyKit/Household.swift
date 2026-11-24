@@ -215,15 +215,18 @@ public struct MyLimits: Decodable, Equatable {
     public let screenTime: ScreenTime?
     /// Whether the parents' PIN is set: "Ask a parent" offers it only then.
     public let parentPin: Bool?
+    /// Leaving this profile on this device (switching away, signing out) takes the parents' PIN.
+    public let pinToLeave: Bool?
 
     public init(limited: Bool? = nil, kind: String? = nil, features: [String: Bool]? = nil, time: TimeRules? = nil,
-                screenTime: ScreenTime? = nil, parentPin: Bool? = nil) {
+                screenTime: ScreenTime? = nil, parentPin: Bool? = nil, pinToLeave: Bool? = nil) {
         self.limited = limited
         self.kind = kind
         self.features = features
         self.time = time
         self.screenTime = screenTime
         self.parentPin = parentPin
+        self.pinToLeave = pinToLeave
     }
 
     /// Whether a part of the app is offered. Anything the server didn't mention is, so a
@@ -500,7 +503,7 @@ public enum LimitWords {
         }
         if !access.liveTv { parts.append("no Live TV") }
         if !access.off.isEmpty { parts.append(access.off.count == 1 ? "1 thing turned off" : "\(access.off.count) things turned off") }
-        return parts.isEmpty ? "No limits" : parts.joined(separator: " · ")
+        return parts.isEmpty ? "No limits" : parts.factsLine()
     }
 }
 
@@ -795,10 +798,19 @@ extension WittyClient {
 
     /// Signs this device in as another profile and out of this one, in one step. A wrong password is a 403 and
     /// the device stays as it was; an account with two-step sign-in answers with `twoFactor` until `code` is right.
-    public func switchProfile(name: String, password: String, code: String = "", device: String) async throws -> LoginResult {
+    /// `parentPin`: leaving a kids' profile kept on this device. Without it the server answers 403 with the code
+    /// "parent-pin"; a wrong one is "wrong-pin", and 429 after too many.
+    public func switchProfile(name: String, password: String, code: String = "", device: String, parentPin: String = "") async throws -> LoginResult {
         var fields = ["name": name, "password": password, "device": device]
         if !code.isEmpty { fields["code"] = code }
+        if !parentPin.isEmpty { fields["parentPin"] = parentPin }
         return try await ask("POST", "/profiles/switch", fields)
+    }
+
+    /// Signs out of a kids' profile kept on this device, with the parents' PIN. The sign-in ends when it is right.
+    public func logout(pin: String) async throws {
+        struct Leave: Encodable { let pin: String }
+        _ = try await call("POST", "/logout", body: try JSONEncoder().encode(Leave(pin: pin)))
     }
 
     public func myLimits() async throws -> MyLimits { try await get("/me/limits") }
@@ -897,4 +909,13 @@ extension WittyClient {
         let more = (try? await shows) ?? []
         return Array(Set(both + more)).sorted { $0.localizedCaseInsensitiveCompare($1) == .orderedAscending }
     }
+}
+
+// MARK: - Leaving a kids' profile
+
+extension APIError {
+    /// The server wants the parents' PIN before this profile is left on this device.
+    public var needsParentPin: Bool { status == 403 && code == "parent-pin" }
+    /// The parents' PIN typed was wrong.
+    public var wrongParentPin: Bool { status == 403 && code == "wrong-pin" }
 }

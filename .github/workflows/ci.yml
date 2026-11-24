@@ -32,6 +32,31 @@ jobs:
             [ "${info%% *}" = 100755 ] || echo "$f"
           done)
           [ -z "$bad" ] || { echo "Not executable in git. Run git update-index --chmod=+x on:"; echo "$bad"; exit 1; }
+      # A button that is only an icon needs a name TalkBack and VoiceOver can say.
+      - name: Every button has a name a screen reader can say
+        run: python3 scripts/check-button-names.py
+
+  # The connect screen every app shows first, in Chromium at the sizes people use, desktop and TV: one card, centred
+  # both ways, a logo and a name at its top, and no scrolling at 720 pixels tall or more (WittyMediaServer's
+  # docs/DESIGN.md, "Standalone pages").
+  connect-screens:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 22
+      - name: Install
+        working-directory: shared/connect/e2e
+        run: |
+          npm ci --no-audit --no-fund
+          npx playwright install --with-deps chromium
+      - name: One centred card with a logo and a name, no scrolling
+        working-directory: shared/connect/e2e
+        run: npx playwright test
 
   desktop:
     strategy:
@@ -62,11 +87,17 @@ jobs:
           # The server's branch of the same name as this release branch (v0.8.0-alpha), else its default.
           ref: ${{ startsWith(github.base_ref, 'v0.') && github.base_ref || (github.ref_type == 'branch' && startsWith(github.ref_name, 'v0.') && github.ref_name) || '' }}
           path: .server
-          sparse-checkout: themes
+          sparse-checkout: |
+            themes
+            pkg/sdui/data
       - name: Theme data is up to date
         env:
           WMS_THEMES: .server/themes
         run: node shared/scripts/build-themes.mjs --check
+      - name: Settings menu is the server's
+        env:
+          WMS_SDUI_DATA: .server/pkg/sdui/data
+        run: node shared/scripts/sync-settings-menu.mjs --check
       - name: Install
         working-directory: desktop
         run: npm ci --ignore-scripts --no-audit --no-fund
@@ -206,6 +237,51 @@ jobs:
         with:
           name: wittymedia-android-sideload
           path: android/app/build/outputs/apk/sideload/*.apk
+          retention-days: 7
+
+  # Updates must install over the last release (docs/ANDROID-SIGNING.md). A pull request's build has no release key, so
+  # here the versionCode and app ID are checked against the newest release, and an emulator installs the build over
+  # itself with adb install -r and checks the app's data is kept and it opens. release.yml does the full check with the key.
+  android-update:
+    needs: android
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8
+        with:
+          name: wittymedia-android-sideload
+          path: new
+      - name: Against the newest release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          prev=$(bash android/scripts/previous-release.sh previous)
+          bash android/scripts/check-upgrade.sh --allow-debug-key new ${prev:+previous}
+      - name: Let the emulator use KVM
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules && sudo udevadm trigger --name-match=kvm
+      - name: Reinstall over itself on an emulator
+        uses: reactivecircus/android-emulator-runner@a421e43855164a8197daf9d8d40fe71c6996bb0d # v2.38.0
+        env:
+          SAME_VERSION_OK: 1
+          OUT: ${{ runner.temp }}/upgrade-test
+        with:
+          api-level: 34
+          target: default
+          arch: x86_64
+          disable-animations: true
+          emulator-options: -no-window -no-audio -no-boot-anim -gpu swiftshader_indirect -no-snapshot
+          script: bash android/scripts/upgrade-test.sh new/app-x86_64-sideload.apk new/app-x86_64-sideload.apk
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        if: always()
+        with:
+          name: android-update-test
+          path: ${{ runner.temp }}/upgrade-test
+          if-no-files-found: ignore
           retention-days: 7
 
   apple:

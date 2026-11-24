@@ -20,7 +20,7 @@ func factLine(_ item: Item) -> String {
     if let year = item.year { facts.append(String(year)) }
     if let runtime = runtimeText(item.runtimeSec) { facts.append(runtime) }
     if let rating = item.contentRating, !rating.isEmpty { facts.append(rating) }
-    return facts.joined(separator: " · ")
+    return facts.factsLine()
 }
 
 func displayTitle(_ item: Item) -> String {
@@ -373,7 +373,7 @@ private struct WideHero: View {
                 .lineLimit(metrics.tv ? 3 : 2)
                 .minimumScaleFactor(metrics.tv ? 0.75 : 1)
                 .accessibilityAddTraits(.isHeader)
-            Secondary([item.year.map(String.init), item.genres?.first, item.contentRating].compactMap { $0 }.filter { !$0.isEmpty }.joined(separator: " · "))
+            Secondary([item.year.map(String.init), item.genres?.first, item.contentRating].compactMap { $0 }.filter { !$0.isEmpty }.factsLine())
             if let overview = item.overview, !overview.isEmpty { Secondary(overview, lines: 2) }
             HStack(spacing: Tokens.Space.s3) {
                 PlayOrOpen(item: item, route: playRoute(for: item)) {

@@ -75,6 +75,7 @@ import kotlinx.coroutines.launch
 import kotlin.math.abs
 import kotlin.math.min
 import kotlin.math.sign
+import com.wittywilla.wittymediaclient.ui.factsLine
 
 // The game library in couch mode, as the website's (the server's web/src/pages/games/Couch.tsx and Library.tsx):
 // covers at the top, one at the front and the rest turned away; what's being played; the consoles; shelves; then
@@ -345,7 +346,7 @@ fun GameCard(nav: GamesNav, api: GamesApi, game: GameItem, console: GameConsole?
             }
         }
         Text(game.title, color = GameColours.text, fontSize = if (look.tv) look.small else 14.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
-        val facts = listOfNotNull(console?.shortName?.takeIf { it.isNotEmpty() }, game.year?.toString()).joinToString(" · ")
+        val facts = listOfNotNull(console?.shortName?.takeIf { it.isNotEmpty() }, game.year?.toString()).factsLine()
         val rating = game.rating?.let { "★ %.1f  ".format(it) }.orEmpty()
         if (facts.isNotEmpty() || rating.isNotEmpty()) Text(rating + facts, color = GameColours.hint, fontSize = if (look.tv) look.small else 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
     }
@@ -377,7 +378,7 @@ private fun ContinueCard(nav: GamesNav, api: GamesApi, e: GameContinue, console:
         Text(game.title, color = GameColours.text, fontSize = if (look.tv) look.body else 14.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
         val played = game.playedSeconds
         Text(
-            listOfNotNull(console?.shortName, if (played > 60) GameWords.played(played) else null, GameWords.ago(e.lastPlayed)).joinToString(" · "),
+            listOfNotNull(console?.shortName, if (played > 60) GameWords.played(played) else null, GameWords.ago(e.lastPlayed)).factsLine(),
             color = GameColours.secondary, fontSize = if (look.tv) look.small else 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis,
         )
     }

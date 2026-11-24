@@ -324,7 +324,7 @@ struct LookPolicyView: View {
         var parts: [String] = []
         if !r.experience.isEmpty { parts.append(name(look: r.experience)) }
         if !r.theme.isEmpty { parts.append(name(theme: r.theme)) }
-        return parts.joined(separator: " · ") + " (required)"
+        return parts.factsLine() + " (required)"
     }
 
     private var spec: DesignPageSpec {

@@ -47,6 +47,7 @@ import androidx.compose.ui.focus.focusProperties
 import androidx.compose.ui.focus.focusRestorer
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.graphics.compositeOver
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.graphics.vector.addPathNodes
 import androidx.compose.ui.platform.LocalConfiguration
@@ -112,7 +113,9 @@ fun MiniPlayer(nav: Nav, modifier: Modifier = Modifier) {
     val about = now.mediaMetadata
     val place = rememberPlace(listening)
     val duration = listening.durationSec()
-    Column(modifier.fillMaxWidth().background(scheme.surface)) {
+    // Solid whatever the theme: a panel colour that lets light through still gets the page's colour under it, so the
+    // page's words never read through the song's (WittyMediaServer #551).
+    Column(modifier.fillMaxWidth().background(scheme.surface.compositeOver(scheme.background))) {
         Box(Modifier.fillMaxWidth().height(2.dp).background(scheme.outline)) {
             val part = if (duration > 0) (place / duration).toFloat().coerceIn(0f, 1f) else 0f
             Box(Modifier.fillMaxWidth(part).fillMaxHeight().background(scheme.primary))
@@ -285,7 +288,7 @@ fun NowPlayingScreen(nav: Nav) {
         val align = if (center) TextAlign.Center else TextAlign.Start
         Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(Space.S1)) {
             Text(about?.title?.toString().orEmpty(), color = MaterialTheme.colorScheme.onBackground, style = MaterialTheme.typography.headlineSmall, textAlign = align, maxLines = 3, overflow = TextOverflow.Ellipsis, modifier = Modifier.fillMaxWidth())
-            val under = listOf(about?.artist?.toString().orEmpty(), about?.albumTitle?.toString().orEmpty()).filter { it.isNotEmpty() }.distinct().joinToString(" · ")
+            val under = listOf(about?.artist?.toString().orEmpty(), about?.albumTitle?.toString().orEmpty()).filter { it.isNotEmpty() }.distinct().factsLine()
             if (under.isNotEmpty()) Text(under, color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodyLarge, textAlign = align, modifier = Modifier.fillMaxWidth())
             if (listening.isLoading) Text("Loading…", color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodyMedium, textAlign = align, modifier = Modifier.fillMaxWidth().semantics { liveRegion = LiveRegionMode.Polite })
             ErrorText(listening.problem)

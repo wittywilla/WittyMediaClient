@@ -158,6 +158,7 @@ fun PhoneShell(nav: Nav, content: @Composable () -> Unit) {
     val over = remember { OverShell() }
     var drawer by remember { mutableStateOf(false) }
     LaunchedEffect(nav.app.api.token) { nav.loadMenu() }
+    NoteWatcher(nav)
     // The server's own menu, where it has one: the bar and the strip are made from it.
     val pages = nav.sdui
     LaunchedEffect(pages) { nav.loadSdui() }
@@ -260,7 +261,10 @@ private fun TopBar(nav: Nav, scroll: ShellScroll, status: Dp, top: Boolean) {
                 // Back as the system's: a server page goes back inside itself first, as the website's history does.
                 val dispatcher = androidx.activity.compose.LocalOnBackPressedDispatcherOwner.current?.onBackPressedDispatcher
                 RoundBack { dispatcher?.onBackPressed() ?: nav.back() }
+                Spacer(Modifier.weight(1f))
             }
+            if (nav.current != Route.Notes) NoteBell(nav)
+            Spacer(Modifier.width(8.dp))
         }
     }
 }
@@ -328,8 +332,10 @@ private fun LibraryStrip(nav: Nav, modifier: Modifier, overPicture: Boolean) {
                 contentAlignment = Alignment.Center,
             ) {
                 Text(
-                    entry.label, color = if (on) scheme.onBackground else scheme.onSurfaceVariant, fontSize = 15.sp, fontWeight = FontWeight.Bold, maxLines = 1,
-                    style = if (overPicture) MaterialTheme.typography.body.copy(shadow = androidx.compose.ui.graphics.Shadow(scheme.background.copy(alpha = 0.5f), Offset(0f, 1f), 0f)) else MaterialTheme.typography.body,
+                    // Over a picture the muted grey was lost on a light photo (#80): every name in the text colour, the current
+                    // one told by its underline, with a soft glow of the page colour around the letters.
+                    entry.label, color = if (on || overPicture) scheme.onBackground else scheme.onSurfaceVariant, fontSize = 15.sp, fontWeight = FontWeight.Bold, maxLines = 1,
+                    style = if (overPicture) MaterialTheme.typography.body.copy(shadow = androidx.compose.ui.graphics.Shadow(scheme.background.copy(alpha = 0.85f), Offset(0f, 1f), 8f)) else MaterialTheme.typography.body,
                 )
             }
         }

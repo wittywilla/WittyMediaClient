@@ -47,6 +47,11 @@ struct SwitchProfileView: View {
     @State private var wantPassword = false
     @State private var wantCode = false
     @State private var wrongTries = 0
+    /// The parents' PIN, when leaving this kids' profile takes it: for switching to `pinFor`, or for signing out.
+    @State private var askingPin = false
+    @State private var pinFor: HouseholdProfile?
+    @State private var parentPin = ""
+    @State private var wantPin = false
     @Namespace private var scope
 
     private var people: [HouseholdProfile] { model.household.people }
@@ -56,9 +61,16 @@ struct SwitchProfileView: View {
         busy = true
         problem = ""
         Task {
-            switch await model.switchProfile(name: profile.name, password: password, code: code) {
+            switch await model.switchProfile(name: profile.name, password: password, code: code, parentPin: askingPin ? parentPin : "") {
             case .signedIn:
                 break // the whole app is drawn again for the new profile
+            case .needsParentPin(let words):
+                pinFor = profile
+                askingPin = true
+                parentPin = ""
+                problem = words
+                if !words.isEmpty { wrongTries += 1 }
+                wantPin = true
             case .needsCode(let words):
                 needsCode = true
                 code = ""
@@ -100,7 +112,34 @@ struct SwitchProfileView: View {
         }
     }
 
+    /// Signing out with the parents' PIN.
+    private func leave() {
+        guard !busy else { return }
+        busy = true
+        problem = ""
+        Task {
+            if let words = await model.signOut(parentPin: parentPin) {
+                problem = words
+                parentPin = ""
+                wrongTries += 1
+                wantPin = true
+            }
+            busy = false
+        }
+    }
+
     private func back() {
+        if askingPin || model.household.leavingWithPin {
+            askingPin = false
+            pinFor = nil
+            parentPin = ""
+            problem = ""
+            if model.household.leavingWithPin {
+                model.household.leavingWithPin = false
+                dismiss()
+            }
+            return
+        }
         if chosen != nil {
             chosen = nil
             problem = ""
@@ -135,7 +174,7 @@ struct SwitchProfileView: View {
                 }
             }
             .remoteSection()
-            Button("Sign in with another account") { model.signOut() }
+            Button("Sign in with another account") { model.requestSignOut() }
                 .action(.quiet)
                 .remoteSection()
         }
@@ -174,14 +213,41 @@ struct SwitchProfileView: View {
         .padding(.bottom, barRoom(metrics))
     }
 
+    /// The parents' PIN, for leaving a kids' profile kept on this device: the same page as a profile's own PIN.
+    @ViewBuilder private var parentPinPage: some View {
+        let submit = { if parentPin.count >= 4 { if let to = pinFor { go(to) } else { leave() } } }
+        VStack(spacing: Tokens.Space.s4) {
+            Text(say("parentPinTitle")).font(.wmHero).foregroundStyle(palette.text).lineLimit(1)
+                .accessibilityAddTraits(.isHeader)
+            Text(say("parentPinLead")).font(.body).foregroundStyle(palette.textSecondary).multilineTextAlignment(.center)
+            VStack(spacing: Tokens.Space.s4) {
+                OutlinedField(label: say("parentPinLabel"), text: $parentPin, kind: .password, icon: "lock",
+                              request: $wantPin, invalid: !problem.isEmpty) { submit() }
+                    .shake(wrongTries)
+                    .accessibilityIdentifier("parent-pin")
+                if !problem.isEmpty { ProblemLine(problem) }
+                Button { submit() } label: { BusyText("OK", busy: busy) }
+                    .action(.primary, wide: true, tall: true)
+                    .disabled(busy || parentPin.count < 4)
+                Button(say("back")) { back() }.action(.quiet)
+            }
+            .frame(maxWidth: metrics.tv ? 640 : 440)
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.horizontal, metrics.gutter)
+        .padding(.top, metrics.tv ? Tokens.Space.s10 : Tokens.Space.s8)
+        .padding(.bottom, barRoom(metrics))
+        .onAppear { wantPin = true }
+    }
+
     var body: some View {
         ScrollView {
-            if let chosen { secret(chosen) } else { who }
+            if askingPin || model.household.leavingWithPin { parentPinPage } else if let chosen { secret(chosen) } else { who }
         }
         .scrollDismissesKeyboardIfAvailable()
         .focusRoot(scope)
         .pageBackground(palette)
-        .onRemoteBack(chosen == nil ? nil : back)
+        .onRemoteBack(chosen == nil && !askingPin && !model.household.leavingWithPin ? nil : back)
     }
 }
 

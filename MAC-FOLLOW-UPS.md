@@ -2,9 +2,33 @@
 <!-- Copyright (C) 2026 WittyWilla and contributors -->
 # Mac follow-ups
 
+**Start with WittyMediaServer's [MAC-START-HERE.md](https://github.com/wittywilla/WittyMediaServer/blob/v0.8.1-alpha/MAC-START-HERE.md)**: what the Mac needs, how to clone every repository,
+and the order to do everything in. Its parts 4 to 6 are this repository's (the desktop app, iPhone and iPad, Apple
+TV), and each item names the section below that has its long steps. Add new Mac work in both: an item there, the
+steps here.
+
 Newest first. Each section is one pass that needs a Mac: Xcode, the iPhone and Apple TV simulators, the macOS desktop
 app. Work through the newest first, tick each box here as you go, commit the ticks, and say in the PR what ran and what
 didn't. The GitHub issues labelled `mac` point at these sections.
+
+## 0.8.2-alpha: security checks that need Apple devices (2026-11-23)
+
+Written on the Windows PC during the 0.8.2 security pass. The code was read there; these need a Mac, a simulator or a
+device to confirm at run time. Report what each showed in the PR that ticks them.
+
+- [ ] **1.** Sign in on the iPhone simulator, then look at the keychain item the app keeps (Xcode's debugger, or
+  `security dump-keychain` for the simulator's keychain): it is accessible after first unlock, this device only, and
+  nothing else of the sign-in is in `UserDefaults` (`defaults read` on the app's container plist).
+- [ ] **2.** With the app in the background on Apple TV, open `wittymedia://item/1`, `wittymedia://show/1`,
+  `wittymedia://route/%2Fwatch%2F1` and a few malformed ones (too long, a query, another scheme's address): the first
+  three open only once signed in, the others do nothing, and nothing crashes.
+- [ ] **3.** Point the iPhone app at a server by its `https://` address with a self-signed certificate: it refuses,
+  says why, and doesn't offer to carry on. At a plain `http://` address on the home network it connects; at a plain
+  `http://` public address it refuses (App Transport Security allows local networking only).
+- [ ] **4.** Pair the Apple TV with a phone by QR code and PIN, then check Console.app for the app's process: no
+  sign-in token, PIN or pairing secret appears in the logs.
+- [ ] **5.** In the macOS desktop app (Electron), open the developer tools shortcut (Cmd-Alt-I) in the released
+  build: nothing opens. Drag a web address onto the window: the app doesn't navigate to it.
 
 ## Pictures the Windows PC couldn't take (2026-11-23)
 
@@ -36,6 +60,43 @@ Apple builds weren't tested on Apple devices yet. Before the next update, on the
 - [ ] **4.** Anything else that needs your own accounts (an Apple Developer certificate and notarisation, a Play Store
   or App Store listing) is optional and listed in `docs/OWNER-STEPS.md`; none of it is needed for this release.
 - [ ] **5.** Tell the next session what you found, so the fixes go into 0.8.2-alpha.
+
+## 0.8.2-alpha: the client issue fixes on Apple (2026-11-23)
+
+Written 2026-11-23 on the Windows PC for client issues #76, #77, #80 and #85, with Android fixed and checked on its
+emulators. Only the parts that apply to Apple were ported. WittyKit's part was compiled and its tests run with Swift
+6.1 on Linux. The apps were only compiled, by CI's macOS runner.
+
+| Where | What changed on Apple |
+|---|---|
+| `apple/WittyKit/Sources/WittyKit/GuideRules.swift` | `GuideRules.upcoming(after:on:told:)` and `GuideRules.headline(_:upcoming:fallback:)`: in a slate (a bumper or a gap) a banner names the next real programme, never another slate (#85). Tested in `GuideRulesTests.testASlateNamesWhatComesAfterIt`. |
+| `apple/App/TvChannel.swift` (`ChannelBanner`) | In a slate: "Up next: <title>", then "At <time>", and no second Next line. |
+| `apple/App/TvGuide.swift` (guide hero, `SlateCard`, preview) | The hero's title in a slate is "Up next: <title>"; neither shows a slate as what's coming up. The preview says "Tuning…" only until the channel first plays, not over a moving picture when it buffers. |
+| `apple/App/ConnectViews.swift` (`CodeView`) | iPhone and iPad read `codeHintPhone` ("It signs in phones too…"); Apple TV keeps `codeHint` (#80). |
+
+Not ported, and why:
+- #76 (no focus after Next on the colours step) came from Android's focus memory. Apple's chooser
+  (`AppearanceViews.swift`) has its own focus; step 4 below checks it.
+- #77 (empty library on a TV): on Android TV an empty library page now shows its title, the server's words and a
+  focused button. On tvOS, focus stays in the top tab bar when a page has nothing focusable. Step 5 checks whether
+  that is enough.
+- #80's see-through chooser and the mini player's message are Android-only code.
+
+- [ ] **1.** Build and run the Apple TV simulator (1080p) against a 0.8.1 server with a library channel. Make one in the
+  web app: Live TV, then New channel, with rules and "Real TV starts on the half hour" on, so the schedule has gaps.
+- [ ] **2.** Tune the channel during a gap (the guide shows its slate cells dimmed). The banner should say "Up next:
+  <a real title>" and "At <time>". Nowhere should "We'll be right back" appear as a programme or as Next. The picture
+  itself still shows the "We'll be right back" card, which is correct.
+- [ ] **3.** In the guide, highlight the same channel during a gap: the hero's title should be "Up next: <title>".
+- [ ] **4.** First run on Apple TV: Choose a layout, then Next. On Choose colours, something should be focused at once
+  (a theme), and the first press of Down shouldn't land on the preview.
+- [ ] **5.** An empty library (an empty Podcasts folder) on Apple TV: the page shouldn't be blank with focus nowhere.
+  If it is, port Android's `SduiTvEmpty` (`android/.../ui/SduiRender.kt`): the title, the words and a focused button.
+- [ ] **6.** iPhone simulator: Sign in with a code. The words should say a phone can be signed in this way, and must
+  not mention a TV only.
+- [ ] **7.** (With #102 merged.) Apple TV simulator, two servers on the network, one named so it sorts first and
+  started a few seconds after the other: on Choose a server, the row that took focus first must stay where it is when
+  the second answers, and OK must open the highlighted server (`Discovery.keepOrder`, `ConnectViews.swift` `show`).
 
 ## 0.8.1-alpha: the centred card for a computer's settings (2026-11-22)
 
@@ -609,3 +670,37 @@ on a real device.
 - [ ] `swift test --filter PeerConnectTests` passes in `apple/WittyKit` with Xcode
 - [ ] With the server and a WittyRelay from the server's `docs/REMOTE.md`, "Try it yourself", an iPhone or Apple TV
       simulator on a network that blocks direct connections shows the line with the limits
+
+## Peer to peer, hardened (0.8.2)
+
+Written 2026-11-23 on the Windows PC. An invite link's server name is shown without control characters or the
+invisible ones that turn text around (`PeerConnect.shownName`, the same on Android and the desktop). The server now
+also ends a device's sign-ins when it is taken off the list.
+
+Checked on the PC: WittyKit built and its `Peer` tests (30) run with Swift 6.1 on Linux; the desktop's
+`test/p2p.test.js`; the desktop's real peer-to-peer harness (`test/app/p2p-real.js`, home, away, invite and the new
+`revoked` phase) under xvfb on Linux against a local server. **Not checked:** anything in Xcode or on a device.
+
+- [ ] `swift test --filter PeerInviteTests` passes in `apple/WittyKit` with Xcode
+- [ ] On an iPhone and an Apple TV simulator, an invite whose name has a right-to-left override (`n=Home%E2%80%AEtxt.exe`)
+      shows "Hometxt.exe" before connecting
+- [ ] On an iPhone reaching the server from away: take the iPhone off the list in Settings, Remote Access on the server.
+      The app stops getting answers at once, and after "Change server" and back it asks for a sign-in again (the old
+      one was ended with the device)
+- [ ] `./desktop/test/app/p2p-real.js --phase=revoked` passes on macOS after `--phase=home` and `--phase=away` (see the
+      file for what to set)
+
+## Centring, the same everywhere (WittyMediaServer #609)
+
+`docs/APP-DESIGN.md`, Centring, is the rule: the column centred in the window; headings, lead text, the lockup, the
+server's pill, single buttons and notices centred; things side by side (code boxes, a code beside its QR code, a row of
+buttons or links) centred as a group; lists, server cards and forms read from the start. On a TV the words and what to
+do keep their two halves, each centred in its half. The desktop app follows it (`shared/connect/connect.css`); the
+phone and TV apps were not built or checked on the PC.
+
+- [ ] Android phone and Android TV: Add a server, Enter a code, Paste a link, sign-in and the settings screens centre
+      their lockup, title and lead like the desktop app (no left-aligned title inside a centred column)
+- [ ] Android TV and Apple TV: on the two-sided connect screens, the words half is centred in its half, and the links
+      under the number pad are centred under it
+- [ ] iPhone, iPad, Apple TV and Mac: the same screens in WittyKit and the App target follow the rule
+- [ ] Pictures before and after for each, next to the desktop ones in the pull request

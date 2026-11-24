@@ -265,7 +265,7 @@ public struct SDUIScreen: Equatable, Sendable {
                 text("title", p.text("title"))
                 text("tagline", p.text("tagline"))
                 e.facts = Builder.facts(p)
-                text("facts", e.facts.joined(separator: " · "))
+                text("facts", e.facts.factsLine())
                 text("overview", p.text("overview"))
                 lines("title", 2)
                 lines("overview", 4)
@@ -371,7 +371,7 @@ public struct SDUIScreen: Equatable, Sendable {
             case "KeyLegend":
                 e.role = "none"
                 let keys = p.items("entries").compactMap { $0.object?.text("label") }
-                text("keys", keys.joined(separator: " · "))
+                text("keys", keys.factsLine())
                 e.textSize = layout.dock?.hintSize ?? 0
             case "Button":
                 e.role = "button"
@@ -420,7 +420,7 @@ public struct SDUIScreen: Equatable, Sendable {
                     let shown = group.whole("shown") ?? 0, total = group.whole("total") ?? 0
                     return group.text("label") + " \(shown)" + (total > shown ? " of \(total)" : "")
                 }
-                text("groups", parts.joined(separator: " · "))
+                text("groups", parts.factsLine())
                 if let card = p.fields("card") {
                     e.cardStyle = "person"
                     e.cardWidth = card.whole("width") ?? 0
@@ -453,7 +453,7 @@ public struct SDUIScreen: Equatable, Sendable {
                 e.facts = Builder.facts(p)
                 e.label = SDUIWords.join([p.text("title")] + (e.facts.isEmpty ? [] : [e.facts.joined(separator: ", ")]))
                 e.text = ["title": p.text("title")]
-                if !e.facts.isEmpty { e.text["facts"] = e.facts.joined(separator: " · ") }
+                if !e.facts.isEmpty { e.text["facts"] = e.facts.factsLine() }
                 if !p.text("synopsis").isEmpty { e.text["synopsis"] = p.text("synopsis") }
                 e.lines = ["title": 2, "synopsis": 3]
                 e.buttons = Builder.buttons(p)

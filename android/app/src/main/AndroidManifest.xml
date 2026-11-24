@@ -10,6 +10,8 @@
     <uses-permission android:name="android.permission.WAKE_LOCK" />
     <!-- A game's rumble, on the controller that plays it. -->
     <uses-permission android:name="android.permission.VIBRATE" />
+    <!-- New notifications from the server, in the phone's own list while the app is open: off until turned on (Notes.kt). -->
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <!-- An Android TV's home screen: the app's own channel and its entries in Watch Next (data/TvHome.kt). -->
     <uses-permission android:name="com.android.providers.tv.permission.WRITE_EPG_DATA" />
     <!-- Scanning the QR code a TV shows, to sign it in. Asked for at that moment only; typing the code works without it. -->
@@ -31,6 +33,10 @@
          other apps unless they're named here. -->
     <queries>
         <package android:name="com.limelight" />
+        <!-- The device's speech recogniser, for searching by voice. -->
+        <intent>
+            <action android:name="android.speech.action.RECOGNIZE_SPEECH" />
+        </intent>
         <!-- The TV's home screen, which is lent the pictures of what the app puts on it. -->
         <intent>
             <action android:name="android.intent.action.MAIN" />

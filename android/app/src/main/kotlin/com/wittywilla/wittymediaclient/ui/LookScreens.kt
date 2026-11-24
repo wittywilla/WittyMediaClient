@@ -36,7 +36,10 @@ import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.semantics.heading
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import kotlinx.coroutines.launch
 
@@ -66,7 +69,7 @@ fun LookScreen(nav: Nav, s: Map<String, String>) {
     val check: @Composable (Boolean) -> Unit = { on ->
         Icon(Symbols.Check, null, tint = LocalExtraColours.current.accentText, modifier = Modifier.padding(0.dp).graphicsLayer { alpha = if (on) 1f else 0f })
     }
-    SettingsPage(nav, s["rowLook"].orEmpty(), s["lookHint"].orEmpty()) {
+    SettingsPage(nav, s["rowLayout"].orEmpty(), s["lookHint"].orEmpty()) {
         if (list == null || list.experiences.isEmpty()) {
             Note(s["lookNone"].orEmpty())
             return@SettingsPage
@@ -130,6 +133,15 @@ fun FirstLookScreen(nav: Nav, s: Map<String, String>) {
         onDismissRequest = { if (step == 1 && lookRequired == null) step = 0 },
         properties = androidx.compose.ui.window.DialogProperties(usePlatformDefaultWidth = false, decorFitsSystemWindows = false),
     ) {
+        // The dialog's window wraps its content and stops at the system bars by default, so Home showed through above
+        // and below the chooser on a phone (#80). It fills the screen, opaque, in the page's colour.
+        val window = (androidx.compose.ui.platform.LocalView.current.parent as? androidx.compose.ui.window.DialogWindowProvider)?.window
+        val page = MaterialTheme.colorScheme.background
+        androidx.compose.runtime.LaunchedEffect(window, page) {
+            window?.setLayout(android.view.ViewGroup.LayoutParams.MATCH_PARENT, android.view.ViewGroup.LayoutParams.MATCH_PARENT)
+            window?.setBackgroundDrawable(android.graphics.drawable.ColorDrawable(page.toArgb()))
+            window?.setDimAmount(0f)
+        }
         val setBy = lookRequired ?: themeRequired
         val eyebrow = if (who.isEmpty()) s["firstLookWelcome"].orEmpty() else s["firstLookWelcomeName"].orEmpty().replace("{name}", who)
         val title = s[when { both -> "firstLookSetTitle"; step == 0 -> "firstLookTitle"; else -> "firstThemeTitle" }].orEmpty()
@@ -144,10 +156,10 @@ fun FirstLookScreen(nav: Nav, s: Map<String, String>) {
             title, Modifier, eyebrow = eyebrow, lead = lead, tag = "chooselook",
             actions = {
                 when {
-                    both || (step == 0 && themeRequired != null) -> WittyButton(s["continue"].orEmpty(), { finish() }, kind = ButtonKind.Primary, focusKey = "first-continue")
-                    step == 0 -> WittyButton(s["next"].orEmpty(), { step = 1 }, kind = ButtonKind.Primary, focusKey = "first-next")
+                    both || (step == 0 && themeRequired != null) -> WittyButton(s["continue"].orEmpty(), { finish() }, kind = ButtonKind.Primary, focusKey = "first-continue", takeFocus = both || looks.isEmpty())
+                    step == 0 -> WittyButton(s["next"].orEmpty(), { step = 1 }, kind = ButtonKind.Primary, focusKey = "first-next", takeFocus = looks.isEmpty())
                     else -> {
-                        WittyButton(s["firstLookUseThis"].orEmpty(), { finish() }, kind = ButtonKind.Primary, focusKey = "first-done")
+                        WittyButton(s["firstLookUseThis"].orEmpty(), { finish() }, kind = ButtonKind.Primary, focusKey = "first-done", takeFocus = themeRequired != null || themes.isEmpty())
                         if (lookRequired == null) WittyButton(s["back"].orEmpty(), { step = 0 }, kind = ButtonKind.Secondary, focusKey = "first-back")
                     }
                 }
@@ -167,39 +179,29 @@ fun FirstLookScreen(nav: Nav, s: Map<String, String>) {
                                     scope.launch { nav.chooseExperience(e.id); busy = false }
                                 }
                             },
-                            sub = listOfNotNull(e.tagline.ifEmpty { null }, wears?.shownName).joinToString(" · "), on = on,
-                            requestFocus = on, focusKey = "first-" + e.id,
+                            sub = listOfNotNull(e.tagline.ifEmpty { null }, wears?.shownName).factsLine(), on = on,
+                            takeFocus = on, focusKey = "first-" + e.id,
                             preview = { ThemedThumb(com.wittywilla.wittymediaclient.net.Wire.of(e.wire, form), e.name, wears, Modifier.fillMaxWidth(), false, portrait) },
                         )
                     }
                 }
             } else {
-                // The chosen layout, large, in the theme picked.
-                val theme = themeOf(shownTheme)
-                DesignSection(s["firstThemePreview"].orEmpty()) {
-                    DesignCard(
-                        listOfNotNull(look?.name, theme?.shownName).joinToString(" · "), {},
-                        sub = theme?.let { if (it.scheme == "light") s["themeLight"].orEmpty() else s["themeDark"].orEmpty() }.orEmpty(),
-                        preview = {
-                            Box(Modifier.fillMaxWidth(), contentAlignment = androidx.compose.ui.Alignment.Center) {
-                                // At most 320 tall (460 on a TV), as Apple's, so the one preview never fills the screen.
-                                ThemedThumb(wire, look?.name.orEmpty(), theme, if (portrait) Modifier.width(178.dp) else Modifier.widthIn(max = if (LocalMetrics.current.tv) LocalMetrics.current.u(736) else 512.dp), false, portrait)
-                            }
-                        },
-                    )
-                }
+                // The theme shown as chosen takes the focus; when it isn't one of these (a web-only theme), the first does.
+                val focusTheme = themes.firstOrNull { it.id == shownTheme }?.id ?: themes.firstOrNull()?.id
                 if (themeRequired == null) {
-                    DesignSection(s["firstThemeThemes"].orEmpty()) {
+                    // Only the themes, as the layout step has only the layouts: each card is the chosen layout in that theme.
+                    DesignSection("") {
                         DesignCards(themes.size) { i ->
                             val t = themes[i]
                             DesignCard(
                                 t.shownName, { nav.chooseTheme(t.id) }, sub = if (t.scheme == "light") s["themeLight"].orEmpty() else s["themeDark"].orEmpty(),
-                                on = t.id == shownTheme, requestFocus = t.id == shownTheme, focusKey = "first-theme-" + t.id,
+                                on = t.id == shownTheme, takeFocus = t.id == focusTheme, focusKey = "first-theme-" + t.id,
                                 preview = { ThemedThumb(wire, t.shownName, t, Modifier.fillMaxWidth(), false, portrait) },
                             )
                         }
                     }
-                    DesignSection("") {
+                    // A TV has no files to pick from, nor a way through a file picker with a remote.
+                    if (!LocalMetrics.current.tv) DesignSection("") {
                         WittyButton(s["themeImport"].orEmpty(), { picker.launch("*/*") }, kind = ButtonKind.Secondary, focusKey = "first-import")
                         if (said.isNotEmpty()) Note(said)
                     }
@@ -221,3 +223,4 @@ private fun ThemedThumb(wire: com.wittywilla.wittymediaclient.net.SduiWire, name
     val accent = c(p?.accent, MaterialTheme.colorScheme.primary)
     LayoutThumb(wire, name, modifier, selected, bg = bg, panel = panel, card = androidx.compose.ui.graphics.lerp(panel, ink, 0.12f), accent = accent, ink = ink, portrait = portrait)
 }
+

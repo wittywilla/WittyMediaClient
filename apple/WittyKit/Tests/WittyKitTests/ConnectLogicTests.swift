@@ -95,4 +95,15 @@ final class ConnectLogicTests: XCTestCase {
         for i in 0..<(Discovery.maxServers + 10) { list.add(FoundServer(id: "n\(i)", name: "n\(i)", url: "http://10.0.0.2")) }
         XCTAssertEqual(list.list.count, Discovery.maxServers)
     }
+
+    func testAShownRowStaysPutWhenAnotherServerAnswers() {
+        let mine = FoundServer(id: String(repeating: "b", count: 32), name: "WittyMediaServer", url: "http://10.0.0.2:9797")
+        let other = FoundServer(id: String(repeating: "a", count: 32), name: "Attic", url: "http://10.0.0.3:9797")
+        let first = Discovery.keepOrder(shown: [], now: [mine])
+        // The list sorts Attic first, but the row on screen (and the remote's focus on it) stays first.
+        let later = Discovery.keepOrder(shown: first.map(\.id), now: [other, mine])
+        XCTAssertEqual(later, [mine, other])
+        XCTAssertEqual(Discovery.keepOrder(shown: later.map(\.id), now: [other]), [other], "one that goes away goes")
+        XCTAssertEqual(Discovery.keepOrder(shown: [other.id], now: [other, mine]), [other, mine], "one that comes back comes in at the bottom")
+    }
 }

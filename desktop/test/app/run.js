@@ -37,7 +37,10 @@ if (shots) app.commandLine.appendSwitch('disable-features', 'CalculateNativeWinO
 // Which run this is: the whole first-time journey, a code approved on a phone, the TV's
 // look, or starting with something already remembered.
 const scenario = process.argv[2] || 'journey'
-if (scenario === 'tv') {
+// tv-full: a TV's real window, full screen, as Plasma Bigscreen or --tv opens it. Only its start and its menu are
+// checked, so the screen is taken over for a few seconds at most.
+if (scenario === 'tv-full') process.argv.push('--tv')
+if (scenario === 'tv' || scenario === 'pair') {
   process.argv.push('--tv')
   // A TV's window fills the screen, which on a desktop would take it over while the test runs.
   // The same window, only not full screen, shows the same pages.
@@ -138,11 +141,22 @@ const PLAYING_PAGE = `<!doctype html><html><head><title>Playing</title></head><b
 <audio id="a" src="/silence.wav" loop autoplay></audio>
 <script>
 window.ticks = 0
-setInterval(() => { window.ticks++ }, 100)
+window.tickTimes = []
+setInterval(() => { window.ticks++; window.tickTimes.push(performance.now()) }, 100)
+// The typical time between ticks since a moment: about 100 ms running freely, a second or more once a hidden page's
+// timers are slowed. A busy machine misses some ticks, so it's the median gap that tells, not how many there were.
+window.tickGap = (since) => {
+  const t = window.tickTimes.filter((x) => x >= since)
+  const gaps = t.slice(1).map((x, i) => x - t[i]).sort((a, b) => a - b)
+  return gaps.length ? gaps[Math.floor(gaps.length / 2)] : Infinity
+}
 document.addEventListener('visibilitychange', () => { if (document.hidden) document.getElementById('a').pause() })
 </script></body></html>`
 
-const stand = { keys: newKeys(), redeemed: [], loggedOut: [], cookies: [], asked: 0, polled: [], pairAnswers: [] }
+const stand = { keys: newKeys(), redeemed: [], loggedOut: [], cookies: [], asked: 0, polled: [], pairAnswers: [], codeAsks: [] }
+const STAND_CODE = 'K7QM-2XHD'
+const codeKit = require('../../code.js')
+let standCode = null // its keys, made when first asked: Argon2 takes a moment
 
 function answerRequest(req, res) {
   const send = (status, body, type = 'application/json', extra = {}) => {
@@ -172,6 +186,20 @@ function answerRequest(req, res) {
       const { code } = JSON.parse(body)
       stand.redeemed.push(code)
       return code === '123456' ? send(200, { token: TOKEN }) : send(403, { error: 'That code is not right.', reason: 'bad-code' })
+    }
+    if (route === '/api/v1/connect/hello' || route === '/api/v1/connect/answer') {
+      stand.codeAsks.push(body)
+      const b = JSON.parse(body)
+      standCode = standCode || codeKit.derive(codeKit.cleanCode(STAND_CODE))
+      const key = rawKey(stand.keys)
+      if (b.find !== Buffer.from(standCode.find).toString('hex')) return send(404, { error: "This server didn't make that code.", reason: 'not-here' })
+      if (route === '/api/v1/connect/hello') {
+        stand.serverNonce = crypto.randomBytes(16)
+        const proof = codeKit.webProof(standCode.proof, 'server', Buffer.from(b.nonce, 'base64'), stand.serverNonce, key)
+        return send(200, { nonce: stand.serverNonce.toString('base64'), publicKey: key, proof: proof.toString('base64') })
+      }
+      const want = codeKit.webProof(standCode.proof, 'device', Buffer.from(b.nonce, 'base64'), Buffer.from(b.serverNonce, 'base64'), key).toString('base64')
+      return b.proof === want ? send(200, { status: 'approved', token: TOKEN, serverName: 'Test home' }) : send(401, { error: 'That code is not right.', reason: 'wrong-code' })
     }
     if (route === '/api/v1/pair/start') {
       return send(200, { code: PAIR_CODE, deviceSecret: DEVICE_SECRET, expiresInSec: 600, intervalSec: 1, approvePath: '/pair', approveUrl: `/pair?code=${PAIR_CODE}` })
@@ -223,6 +251,9 @@ const inBar = (code) => views().bar.executeJavaScript(code)
 const heading = () => inPage("(document.querySelector('h1') || {}).textContent")
 const focused = () => inPage('document.activeElement.textContent || document.activeElement.id')
 const pageText = () => inPage('document.body.innerText')
+// Focus moves a moment after a key: a busy machine (CI's macOS runner) hadn't moved it 40 ms later. Wait for it.
+const focusOn = (expected, why = '') => until(`focus on ${JSON.stringify(expected)}${why ? ` (${why})` : ''}`, async () => (await focused()) === expected)
+const focusStarts = (start, why = '') => until(`focus on ${JSON.stringify(start)}…${why ? ` (${why})` : ''}`, async () => String(await focused()).startsWith(start))
 const clickText = (text) => inPage(`Array.from(document.querySelectorAll('button')).find((b) => b.textContent.startsWith(${JSON.stringify(text)})).click()`)
 const onHeading = (text) => until(`the screen "${text}"`, async () => (await heading()) === text)
 
@@ -297,14 +328,15 @@ async function seeded(url) {
       assert.deepStrictEqual(blocks.started, ['prevent-app-suspension'])
       win.hide()
       await wait(500)
-      const before = await audio('({ t: a.currentTime, ticks: window.ticks })')
+      const before = await audio('({ t: a.currentTime, ticks: window.ticks, at: performance.now() })')
       await wait(1500)
-      const after = await audio('({ t: a.currentTime, ticks: window.ticks, seen: document.visibilityState, paused: a.paused })')
+      const after = await audio(`({ t: a.currentTime, ticks: window.ticks, gap: window.tickGap(${before.at}), seen: document.visibilityState, paused: a.paused })`)
       assert.strictEqual(after.seen, 'visible', 'never told it is hidden, so nothing pauses')
       assert.strictEqual(after.paused, false)
       // Looped three seconds: it moved on, whichever way round it went.
       assert.ok(after.t !== before.t, `still playing: ${before.t} then ${after.t}`)
-      assert.ok(after.ticks - before.ticks >= 10, `timers not slowed: ${after.ticks - before.ticks} ticks in 1.5 s`)
+      // Slowed, a hidden page's timer runs once a second at most; a loaded CI machine can still drop a tick or two.
+      assert.ok(after.ticks - before.ticks >= 3 && after.gap < 500, `timers not slowed: ${after.ticks - before.ticks} ticks in 1.5 s, typically ${Math.round(after.gap)} ms apart`)
     })
     await step('with the website\'s setting off, the page is told it is hidden, like a browser tab, and pauses', async () => {
       await inPage("document.documentElement.dataset.backgroundPlay = 'off'; 0")
@@ -345,7 +377,7 @@ async function seeded(url) {
   if (scenario === 'lost') {
     await step('a server that has gone says so, and the list is still there', async () => {
       await onConnect()
-      await onHeading(S.findTitle)
+      await onHeading(S.addTitle)
       assert.ok((await pageText()).includes(S.errLost))
       assert.ok((await pageText()).includes('Remembered'))
       assert.strictEqual(stateFile().server, url, 'it is still the one to try next time')
@@ -354,7 +386,7 @@ async function seeded(url) {
   if (scenario === 'damaged') {
     await step('a state file full of nonsense doesn\'t stop the app starting', async () => {
       await onConnect()
-      await onHeading(S.findTitle)
+      await onHeading(S.addTitle)
       assert.ok(!(await pageText()).toLowerCase().includes(S.recentServers.toLowerCase()))
     })
   }
@@ -366,7 +398,7 @@ async function seeded(url) {
       assert.strictEqual(stand.asked, 0, 'nothing got as far as being asked')
     })
     await step('typing that address says the same', async () => {
-      await clickText(S.enterAddress)
+      await clickText(S.wayAddress)
       await onHeading(S.addressTitle)
       await inPage(`document.getElementById('address').value = ${JSON.stringify(https)}`)
       await clickText(S.connect)
@@ -403,9 +435,13 @@ async function run() {
   })
 
   await step('the connect screen opens, with no server yet', async () => {
-    await onHeading(S.findTitle)
-    assert.strictEqual(await inPage("document.getElementById('announce').textContent"), S.findTitle, 'a screen reader hears which screen this is')
-    assert.strictEqual(await inPage('document.title'), `${S.findTitle} - ${S.appName}`)
+    await onHeading(S.addTitle)
+    assert.strictEqual(await inPage("document.getElementById('announce').textContent"), S.addTitle, 'a screen reader hears which screen this is')
+    assert.strictEqual(await inPage('document.title'), `${S.addTitle} - ${S.appName}`)
+    // The three other ways, in this order, the first the main one while there's nothing to choose.
+    assert.deepStrictEqual(await inPage("Array.from(document.querySelectorAll('.ways button')).map((b) => b.textContent)"), [S.wayCode, S.wayLink, S.wayAddress])
+    assert.strictEqual(await inPage("document.querySelector('.ways button').classList.contains('primary')"), true)
+    assert.strictEqual(await inPage("!!document.querySelector('.anywhere')"), false, 'no second panel of ways')
     assert.strictEqual(await inBar("document.getElementById('change').hidden"), true)
     assert.strictEqual(await inPage("document.querySelector('main').hasAttribute('aria-live')"), false, 'the whole page is not read out on every change')
     assert.strictEqual(await inPage("document.querySelector('.lockup').textContent"), S.appName, 'the app is WittyMediaClient until a server is added')
@@ -418,27 +454,28 @@ async function run() {
     assert.ok(!/Home|Shed/.test(await pageText()), 'not the name it announces, until it is added')
     await shot('list-found')
     await key('Down')
-    assert.ok((await focused()).startsWith('10.0.0.3:9797'), 'down moves to the next')
+    await focusStarts('10.0.0.3:9797', 'down moves to the next')
     await key('Down')
-    assert.strictEqual(await focused(), S.enterAddress)
+    await focusOn(S.wayCode)
+    assert.strictEqual(await inPage("document.querySelector('.ways button').classList.contains('primary')"), false, 'with servers found, none of the other ways is the main one')
   })
 
   await step('the address screen: labelled, with a way back that needs no keyboard', async () => {
-    await clickText(S.enterAddress)
+    await clickText(S.wayAddress)
     await onHeading(S.addressTitle)
-    assert.strictEqual(await focused(), 'address')
+    await focusOn('address')
     assert.strictEqual(await inPage("document.querySelector('label').htmlFor"), 'address')
     assert.strictEqual(await inPage("document.getElementById('address-error').getAttribute('role')"), 'alert')
     assert.match(await inPage("document.getElementById('address').getAttribute('aria-describedby')"), /address-error/)
     await shot('address')
     await key('Escape')
-    await onHeading(S.findTitle)
-    assert.strictEqual(await focused(), S.enterAddress, 'back puts focus where it was')
-    await clickText(S.enterAddress)
+    await onHeading(S.addTitle)
+    await focusOn(S.wayAddress, 'back puts focus where it was')
+    await clickText(S.wayAddress)
     await onHeading(S.addressTitle)
     await clickText(S.back)
-    await onHeading(S.findTitle)
-    await clickText(S.enterAddress)
+    await onHeading(S.addTitle)
+    await clickText(S.wayAddress)
     await onHeading(S.addressTitle)
   })
 
@@ -453,11 +490,12 @@ async function run() {
   await step('a new server asks for a code and shows the key it worked out', async () => {
     await inPage(`document.getElementById('address').value = ${JSON.stringify(url)}`)
     await clickText(S.connect)
-    await onHeading(S.codeTitle)
+    await onHeading(S.codeSignInTitle)
     assert.match(await pageText(), new RegExp(fingerprint(firstKeys)))
-    assert.strictEqual(await inPage("document.querySelector('.pad').getAttribute('role')"), 'group')
-    assert.strictEqual(await inPage("document.querySelector('.code').getAttribute('aria-hidden')"), 'true')
-    assert.strictEqual(await inPage("document.querySelector('.code-status').textContent"), `0 ${S.codeEntered}`)
+    await focusOn('code')
+    assert.strictEqual(await inPage("document.querySelector('label').htmlFor"), 'code')
+    assert.strictEqual(await inPage("document.getElementById('code-error').getAttribute('role')"), 'alert')
+    assert.ok((await pageText()).includes(S.signInPassword), 'with the password as the other way')
     // Proved, it's added: its own name and logo, which the app fetched, as the page loads no pictures itself.
     assert.strictEqual(await inPage("document.querySelector('.server-pill').textContent"), 'Test home')
     assert.match(await inPage("document.querySelector('.server-pill img.logo').src"), /^data:image\/svg\+xml;base64,/)
@@ -480,59 +518,44 @@ async function run() {
     await wait(200)
   })
 
-  await step('the keys type a code; Ctrl with a digit does not', async () => {
-    await key('1', ['control'])
-    assert.strictEqual(await inPage("document.querySelector('.code-status').textContent"), `0 ${S.codeEntered}`)
-    await key('9')
-    assert.strictEqual(await inPage("document.querySelector('.code-status').textContent"), `1 ${S.codeEntered}`)
-    await key('Backspace')
-    assert.strictEqual(await inPage("document.querySelector('.code-status').textContent"), `0 ${S.codeEntered}`)
-  })
-
+  const typeCode = async (text) => {
+    await inPage(`document.getElementById('code').value = ${JSON.stringify(text)}`)
+    await clickText(S.connect)
+  }
   await step('a wrong code is refused and can be tried again', async () => {
-    for (const d of '000000') await key(d)
-    await until('the refusal', async () => (await inPage("document.querySelector('.error').textContent")) === 'That code is not right.')
+    await typeCode('000000') // six digits: a code from the server's Sign in a TV page
+    await until('the refusal', async () => (await inPage("document.getElementById('code-error').textContent")) === 'That code is not right.')
     assert.deepStrictEqual(stand.redeemed, ['000000'])
-    assert.strictEqual(await inPage("document.querySelector('.code-status').textContent"), `0 ${S.codeEntered}`)
+    await typeCode('hello')
+    await until('the refusal', async () => (await inPage("document.getElementById('code-error').textContent")) === S.errCodeFormat)
+    await typeCode('ABCD-1234') // a code this server didn't make
+    await until('the refusal', async () => (await inPage("document.getElementById('code-error').textContent")) === S.errCodeNotFound)
+    assert.strictEqual(await inPage("document.getElementById('code').getAttribute('aria-invalid')"), 'true')
     await shot('code-refused')
   })
 
-  await step('a code can be shown here instead, and the secret that collects it stays in the app', async () => {
-    stand.pairAnswers = ['pending', 'denied']
-    await clickText(S.showCodeInstead)
-    await onHeading(S.pairTitle)
-    await until('the code', async () => (await pageText()).includes(PAIR_CODE))
-    assert.ok((await pageText()).includes(`${url}/pair`), 'the address to open it at')
-    assert.strictEqual(await inPage("document.querySelector('.qr svg').getAttribute('aria-label')"), S.pairScan)
-    assert.ok(!(await inPage('document.documentElement.outerHTML')).includes(DEVICE_SECRET), 'the page never sees the secret')
-    await shot('pair')
-    await until('the refusal', async () => (await pageText()).includes(S.pairDenied))
-    assert.ok(stand.polled.length >= 2 && stand.polled.every((secret) => secret === DEVICE_SECRET))
-    assert.strictEqual(await focused(), S.pairNew, 'the way on has focus')
-    assert.ok(!(await pageText()).includes(PAIR_CODE), 'a code that is no use is not left on screen')
-    await shot('pair-denied')
-    await clickText(S.codeTitle)
-    await onHeading(S.codeTitle)
-  })
-
   await step('a key that changes on the code screen gets no code, and the new one is shown', async () => {
+    const asked = stand.codeAsks.length
     stand.keys = newKeys()
-    for (const d of '123456') await key(d)
+    await typeCode(STAND_CODE)
     await until('the warning', async () => (await pageText()).includes(S.identityChanged))
-    assert.deepStrictEqual(stand.redeemed, ['000000'], 'the code never left this computer')
+    assert.strictEqual(stand.codeAsks.length, asked, 'nothing about the code left this computer')
     assert.match(await pageText(), new RegExp(fingerprint(stand.keys)))
     assert.strictEqual((await signInCookies(url)).length, 0)
     await shot('code-changed')
   })
 
-  await step('the right code signs in, as a cookie no page can read', async () => {
-    for (const d of '123456') await key(d)
+  await step('the right code signs in, as a cookie no page can read, and the code itself never left', async () => {
+    // The sign-in screen now names the new key, and it is that one the code goes to.
+    await onHeading(S.codeSignInTitle)
+    await typeCode(' k7qm 2xhd ')
     await until('the server page', () => views().page.getURL().startsWith(url))
     const [cookie] = await signInCookies(url)
     assert.strictEqual(cookie.value, TOKEN)
     assert.strictEqual(cookie.httpOnly, true)
     await until('the page to load', async () => (await heading()) === 'Stand-in server')
     assert.strictEqual(await inPage('document.cookie'), '')
+    assert.ok(!stand.codeAsks.some((b) => /K7QM|2XHD/i.test(b)), 'the code was sent')
     const [entry] = stateFile().recent
     assert.strictEqual(entry.publicKey, rawKey(stand.keys))
     assert.strictEqual(entry.name, 'Test home', 'a control character in the name was taken out')
@@ -542,7 +565,10 @@ async function run() {
   })
 
   await step('a server\'s page only gets Moonlight, and the main process agrees it is that page', async () => {
-    assert.deepStrictEqual(await inPage('Object.keys(window.wittyClient)'), ['moonlight'])
+    assert.deepStrictEqual(await inPage('Object.keys(window.wittyClient)'), ['moonlight', 'settings'])
+    // This app's Settings rows: how many servers it keeps, and whether From away is offered; asked by the server's own page only.
+    const info = await inPage('window.wittyClient.settings.info()')
+    assert.ok(info && typeof info.servers === 'number' && typeof info.away === 'boolean', JSON.stringify(info))
     assert.strictEqual(await inPage('typeof require + typeof process'), 'undefinedundefined')
     const { installed } = await inPage('window.wittyClient.moonlight.status()')
     if (!installed) {
@@ -674,7 +700,7 @@ async function run() {
   await step('Change server ends the session here and on the server', async () => {
     assert.strictEqual((await signInCookies(url)).length, 1)
     await inBar("document.getElementById('change').click()")
-    await onHeading(S.findTitle)
+    await onHeading(S.addTitle)
     assert.strictEqual((await signInCookies(url)).length, 0)
     await until('the sign-out', () => stand.loggedOut.length === 1)
     assert.strictEqual(stand.loggedOut[0], `Bearer ${TOKEN}`)
@@ -712,7 +738,7 @@ async function run() {
     assert.strictEqual(stand.logos, logos, 'a kept logo is only fetched again when its version changes')
     await until('the page to load', async () => (await heading()) === 'Stand-in server')
     await inBar("document.getElementById('change').click()")
-    await onHeading(S.findTitle)
+    await onHeading(S.addTitle)
   })
 
   if (MAC) {
@@ -722,7 +748,7 @@ async function run() {
       await until('the page to load', async () => (await heading()) === 'Stand-in server')
       const cookies = (await signInCookies(url)).length
       Menu.getApplicationMenu().getMenuItemById('manage-servers').click()
-      await onHeading(S.findTitle)
+      await onHeading(S.addTitle)
       assert.ok((await pageText()).includes(S.inUse), 'the one in use says so')
       assert.strictEqual(await focused(), S.backToServer.replace('{name}', 'Test home'), 'the way back has focus')
       assert.strictEqual((await signInCookies(url)).length, cookies, 'still signed in')
@@ -730,7 +756,7 @@ async function run() {
       await key('Escape')
       await until('the server page again', () => views().page.getURL().startsWith(url))
       await inBar("document.getElementById('change').click()")
-      await onHeading(S.findTitle)
+      await onHeading(S.addTitle)
     })
   }
 
@@ -781,7 +807,7 @@ async function run() {
 async function forgetting(url) {
   await app.whenReady()
   await onConnect()
-  await onHeading(S.findTitle)
+  await onHeading(S.addTitle)
   const names = () => inPage(`Array.from(document.querySelectorAll('.server .name')).map((n) => n.textContent)`)
   const cookieAt = (at, value) => session.defaultSession.cookies.set({ url: at, name: 'wms_token', value, httpOnly: true })
   const kept = async (at) => (await signInCookies(at)).map((c) => c.value)
@@ -840,7 +866,7 @@ async function forgetting(url) {
     assert.strictEqual(await focused(), S.cancel, 'the safe answer has focus')
     await shot('remove-old')
     await key('Escape')
-    await onHeading(S.findTitle)
+    await onHeading(S.addTitle)
     assert.strictEqual((await names()).length, 2)
   })
 
@@ -863,9 +889,9 @@ async function forgetting(url) {
     assert.strictEqual(await focused(), S.cancel)
     await shot('remove-all')
     await inPage(`document.querySelector('button.destructive').click()`)
-    await onHeading(S.findTitle)
+    await onHeading(S.addTitle)
     await until('an empty list', async () => (await names()).length === 0)
-    assert.strictEqual(await focused(), S.enterAddress, 'focus is somewhere a key can move from')
+    assert.strictEqual(await focused(), S.wayAddress, 'focus is somewhere a key can move from')
     await inPage('window.wittyClient.forgetFinish()')
     await until('the sign-out', () => stand.loggedOut.length === 2)
     assert.deepStrictEqual(await kept(url), [])
@@ -882,7 +908,7 @@ async function standIn() {
 }
 
 async function typeAddress(url) {
-  await clickText(S.enterAddress)
+  await clickText(S.wayAddress)
   await onHeading(S.addressTitle)
   await inPage(`document.getElementById('address').value = ${JSON.stringify(url)}`)
   await clickText(S.connect)
@@ -894,13 +920,40 @@ const noCrash = () => {
   return log
 }
 
-// A code shown on this computer and approved on a phone.
+// Enter a code, from the list: every server found or remembered is asked, and the one that made it signs in.
+async function byCode() {
+  const url = await standIn()
+  await app.whenReady()
+  await onConnect()
+  await step('Enter a code asks the servers found, and the one that made it signs this device in', async () => {
+    await onHeading(S.addTitle)
+    announce([{ id: 'cd'.repeat(16), name: 'Shed', url: 'http://10.0.0.3:9797' }, { id: SERVER_ID, name: 'Home', url }])
+    await clickText(S.wayCode)
+    await onHeading(S.codeEnterTitle)
+    await focusOn('code')
+    await shot('enter-code')
+    await inPage("document.getElementById('code').value = 'ABCD-1234'")
+    await clickText(S.connect)
+    await until('the refusal', async () => (await inPage("document.getElementById('code-error').textContent")) === S.errCodeNotFound)
+    await shot('enter-code-not-found')
+    await inPage(`document.getElementById('code').value = ${JSON.stringify(STAND_CODE.toLowerCase())}`)
+    await clickText(S.connect)
+    await until('the server page', () => views().page.getURL().startsWith(url), 20000)
+    const [cookie] = await signInCookies(url)
+    assert.strictEqual(cookie.value, TOKEN)
+    assert.ok(!stand.codeAsks.some((b) => /K7QM|2XHD/i.test(b)), 'the code was sent')
+    assert.strictEqual(stateFile().recent[0].publicKey, rawKey(stand.keys))
+    noCrash()
+  })
+}
+
+// A code shown on a TV and approved on a phone.
 async function approved() {
   const url = await standIn()
   await app.whenReady()
   await onConnect()
   await step('leaving a code on show stops asking about it', async () => {
-    await onHeading(S.findTitle)
+    await onHeading(S.addTitle)
     await typeAddress(url)
     await onHeading(S.codeTitle)
     await clickText(S.showCodeInstead)
@@ -942,7 +995,7 @@ async function onTv() {
     return l.right <= innerWidth / 2 && r.left >= innerWidth / 2
   })()`)
   await step('on a TV, the words are on the left and the servers on the right, and focus is plain to see', async () => {
-    await onHeading(S.findTitle)
+    await onHeading(S.addTitle)
     assert.strictEqual(await inPage("document.documentElement.classList.contains('tv')"), true)
     announce([{ id: SERVER_ID, name: 'Home', url: 'http://10.0.0.2:9797' }, { id: 'cd'.repeat(16), name: 'Shed', url: 'http://10.0.0.3:9797' }])
     await until('a found server', async () => (await focused()).startsWith('10.0.0.2:9797'))
@@ -959,7 +1012,7 @@ async function onTv() {
     await shot('tv-list')
   })
   await step('on a TV, Back leaves the address screen for the list', async () => {
-    await clickText(S.enterAddress)
+    await clickText(S.wayAddress)
     await onHeading(S.addressTitle)
     // Every button on a TV is a pill, and a focused field shows the ring and not a second, accent outline.
     const connect = await inPage(`(() => { const b = Array.from(document.querySelectorAll('button')).find((x) => x.textContent === ${JSON.stringify(S.connect)}); return { radius: parseFloat(getComputedStyle(b).borderTopLeftRadius), height: b.getBoundingClientRect().height } })()`)
@@ -969,7 +1022,7 @@ async function onTv() {
     assert.ok(border.w > 0 && border.w <= 1 && Math.round(border.px) === 1, JSON.stringify(border))
     await shot('tv-address')
     await key('Escape')
-    await onHeading(S.findTitle)
+    await onHeading(S.addTitle)
   })
   await step('on a TV, the code boxes are on the left and the number pad on the right', async () => {
     // :focus only matches while the window has the system's focus, which another app in front or a
@@ -1007,6 +1060,30 @@ async function onTv() {
   })
 }
 
+// A full-screen TV window starts on the connect page, Back with nowhere to go opens the TV menu, and Back closes it.
+// Both used to wait for a page loading in a view that wasn't shown, which never finished: a blank TV, then no menu.
+async function tvFullScreen() {
+  await app.whenReady()
+  const connect = () => webContents.getAllWebContents().find((w) => w.getURL().startsWith('wittymedia-app://connect'))
+  const menu = () => webContents.getAllWebContents().find((w) => w.getURL().includes('tvmenu'))
+  await step('a full-screen TV window opens on the connect page', async () => {
+    await until('the connect page', () => connect() && !connect().isLoading(), 20000)
+    await until('its heading', () => connect().executeJavaScript("(document.querySelector('h1') || {}).textContent"), 8000)
+    assert.strictEqual(await connect().executeJavaScript("document.documentElement.classList.contains('tv')"), true)
+  })
+  await step('Back with nowhere to go opens the TV menu, and Back closes it', async () => {
+    const press = async (to, keyCode) => {
+      to.sendInputEvent({ type: 'keyDown', keyCode })
+      to.sendInputEvent({ type: 'keyUp', keyCode })
+      await wait(100)
+    }
+    await press(connect(), 'Escape')
+    await until('the TV menu', () => menu() && !menu().isLoading() && menu().isFocused(), 8000)
+    await press(menu(), 'Escape')
+    await until('the page to have the keys again', () => connect().isFocused(), 8000)
+  })
+}
+
 // Started in this order because Electron must have the app's file before it is ready, and
 // a remembered server has to be answering by the time the app asks it who it is.
 function start() {
@@ -1014,9 +1091,13 @@ function start() {
     require('../../main.js')
     return run()
   }
-  if (scenario === 'pair' || scenario === 'tv') {
+  if (scenario === 'tv-full') {
     require('../../main.js')
-    return scenario === 'pair' ? approved() : onTv()
+    return tvFullScreen()
+  }
+  if (scenario === 'pair' || scenario === 'tv' || scenario === 'code') {
+    require('../../main.js')
+    return scenario === 'pair' ? approved() : scenario === 'code' ? byCode() : onTv()
   }
   const url = `http://127.0.0.1:${PORT}`
   fs.writeFileSync(path.join(dataDir, 'state.json'), JSON.stringify(SEEDS[scenario](url, rawKey(stand.keys))))

@@ -123,6 +123,8 @@ sealed interface Route {
     // A library added to a TV's top menu, as a tab of its own.
     data class Pinned(val library: com.wittywilla.wittymediaclient.net.Library) : Route { override val key = "pinned-${library.id}" }
     data object Notices : Route { override val key = "notices" }
+    // The bell's list (Notes.kt).
+    data object Notes : Route { override val key = "notes" }
     // A device that has never been at home with its server shows a code for it (ui/AwayScreens.kt).
     data object JoinAway : Route { override val key = "join-away" }
     // One module's settings, at the address the server gave (ui/ModuleSettingsScreens.kt).
@@ -162,7 +164,7 @@ sealed interface Route {
     // The app's own screens leave room for the mini player. A film, a server's page and signing in don't have it.
     val hasMiniPlayer: Boolean
         get() = when (this) {
-            Home, Search, Profile, Libraries, Games, Notices, Logs, is Library, is Pinned, is Show, is Item, is Album, is Artist, is You, is Sdui, is OwnItem -> true
+            Home, Search, Profile, Libraries, Games, Notices, Notes, Logs, is Library, is Pinned, is Show, is Item, is Album, is Artist, is You, is Sdui, is OwnItem -> true
             else -> false
         }
 }
@@ -388,6 +390,9 @@ class Nav(val app: WittyApp, private val s: Map<String, String>) {
         private set
     // How much of each screen a TV offers, from the server's catalogue (net/TvLevels.kt).
     var tvLevels by mutableStateOf<com.wittywilla.wittymediaclient.net.TvLevelTable?>(null)
+
+    // The server's settings menu (net/SettingsMenu.kt), or null until read and from a server older than it.
+    var settingsMenu by mutableStateOf<com.wittywilla.wittymediaclient.net.SettingsMenu?>(null)
         private set
 
     // The card in place of a server page a TV doesn't offer, or null when it opens. Only with the server's table.
@@ -444,8 +449,8 @@ class Nav(val app: WittyApp, private val s: Map<String, String>) {
         val io = kotlinx.coroutines.Dispatchers.IO
         if (sduiNav == null) kotlinx.coroutines.withContext(io) { client.keptNavigation() }?.let { sduiNav = it }
         kotlinx.coroutines.withContext(io) { runCatching { client.navigation() } }.onSuccess { if (sdui === client) sduiNav = it.value }.onFailure { handleExpired(it) }
-        kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Default) { runCatching { client.catalog().let { SduiCardStyles.use(it.cardStyles); SduiRouter(it.routes, it.commands) to it.tvLevels } } }
-            .onSuccess { if (sdui === client) { sduiRouter = it.first; tvLevels = it.second } }
+        kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Default) { runCatching { client.catalog().let { SduiCardStyles.use(it.cardStyles); Triple(SduiRouter(it.routes, it.commands), it.tvLevels, it.settingsMenu) } } }
+            .onSuccess { if (sdui === client) { sduiRouter = it.first; tvLevels = it.second; it.third?.takeIf { m -> m.groups.isNotEmpty() }?.let { m -> settingsMenu = m } } }
         loadExperiences()
     }
 
@@ -922,10 +927,13 @@ class Nav(val app: WittyApp, private val s: Map<String, String>) {
     }
 
     // Back from the middle of the app goes up a level, and from a tab goes to Home.
-    val backStaysInApp: Boolean get() = stack.size > 1 || current in TABS_BESIDE_HOME || current is Route.Sdui
+    // A server's sign-in screen the app started on: Back goes to Choose a server, as Change server does, and doesn't
+    // leave the app (#101).
+    private val atFirstSignIn: Boolean get() = stack.size == 1 && current is Route.SignIn
+    val backStaysInApp: Boolean get() = stack.size > 1 || current in TABS_BESIDE_HOME || current is Route.Sdui || atFirstSignIn
 
     fun back() {
-        if (stack.size > 1) pop() else if (backStaysInApp) reset(Route.Home)
+        if (stack.size > 1) pop() else if (atFirstSignIn) changeServer() else if (backStaysInApp) reset(Route.Home)
     }
 
     // The warning, with the safe way out of it underneath.
@@ -1449,6 +1457,7 @@ fun AppRoot(app: WittyApp) {
                             else PageShell(nav) { SduiPageScreen(nav, route.page, route.params, title = route.title) }
                         is Route.OwnItem -> PageShell(nav) { if (LocalMetrics.current.tv) ItemScreen(nav, strings, route.id) else PhoneItem(nav, strings, route.id) }
                         Route.Notices -> NoticesScreen(nav)
+                        Route.Notes -> NotesScreen(nav)
                         Route.JoinAway -> JoinAwayScreen(nav, strings)
                         is Route.ModuleSettings -> ModuleSettingsScreen(nav, strings, route.url, route.title, route.page)
                         Route.Logs -> LogsScreen(nav)

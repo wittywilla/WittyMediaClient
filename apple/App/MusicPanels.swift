@@ -536,7 +536,7 @@ struct FixLyricsView: View {
                     } label: {
                         VStack(alignment: .leading, spacing: 2) {
                             Text(version.title).font(.system(size: 14, weight: .bold))
-                            Text([version.artist, version.album ?? ""].filter { !$0.isEmpty }.joined(separator: " · ")).font(.system(size: 12)).foregroundStyle(NPInk.fg2)
+                            Text([version.artist, version.album ?? ""].filter { !$0.isEmpty }.factsLine()).font(.system(size: 12)).foregroundStyle(NPInk.fg2)
                             Text(version.facts(songSeconds: item.runtimeSec)).font(.system(size: 12)).foregroundStyle(NPInk.fg2)
                         }
                         .foregroundStyle(NPInk.fg)
