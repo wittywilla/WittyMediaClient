@@ -16,6 +16,8 @@ mkdirSync(out, { recursive: true })
 cpSync(join(shared, 'connect'), out, { recursive: true, filter: (p) => !p.endsWith('.test.js') })
 const strings = readFileSync(join(shared, 'data', 'strings.en.json'), 'utf8')
 writeFileSync(join(out, 'strings.js'), `self.WittyStrings = ${strings.trim()}\n`)
+// The steps of connecting from away (the server's pkg/connectsteps/steps.json), for the main process's connection check.
+cpSync(join(shared, 'data', 'connect-steps.json'), join(out, 'connect-steps.json'))
 // The family's marks (shared/brand, drawn by scripts/sync-brand.sh), as pictures the page may
 // show: its policy allows images only as data: addresses.
 const mark = (name) => `data:image/svg+xml;base64,${readFileSync(join(shared, 'brand', `mark-${name}.svg`)).toString('base64')}`

@@ -127,6 +127,8 @@ sealed interface Route {
     data object Notes : Route { override val key = "notes" }
     // A device that has never been at home with its server shows a code for it (ui/AwayScreens.kt).
     data object JoinAway : Route { override val key = "join-away" }
+    // A connection from away that didn't work: each step, and what to do (ConnectCheckScreen.kt).
+    class ConnectCheck(val run: com.wittywilla.wittymediaclient.net.ConnectRun, val retry: (() -> Unit)? = null) : Route { override val key = "connect-check-${System.identityHashCode(run)}" }
     // One module's settings, at the address the server gave (ui/ModuleSettingsScreens.kt).
     // `page` is the one page of the module's settings to show; empty shows them all.
     data class ModuleSettings(val url: String, val title: String, val page: String = "") : Route { override val key = "module-settings:$url:$page" }
@@ -978,25 +980,51 @@ class Nav(val app: WittyApp, private val s: Map<String, String>) {
         reset(Route.Connect(s["errLost"].orEmpty()))
     }
 
+    // MARK: the connection check: a failed connection from away shows each step and what to do (ConnectCheckScreen).
+
+    private val connectSteps by lazy { ConnectStepsData.get(app) }
+
+    // Why the connector didn't connect, at the step it was on.
+    fun peerFailure(step: String) = connectSteps.classify(app.peers.lastReason, app.peers.lastError, step)
+
+    // Shows the steps for a run that failed, and answers `words` for the screen underneath.
+    fun checkFailed(run: com.wittywilla.wittymediaclient.net.ConnectRun, failure: com.wittywilla.wittymediaclient.net.ConnectFailure, words: String?, retry: (() -> Unit)? = null): String? {
+        run.fail(failure)
+        ClientLog.warn("p2p", "Connecting from away failed at ${run.failure?.step}: ${run.failure?.code}")
+        push(Route.ConnectCheck(run, retry))
+        return words
+    }
+
     // An invite link typed or pasted where an address goes. Answers words to show on failure.
     suspend fun joinInvite(invite: PeerInvite): String? {
-        if (!app.peers.available) return s["errAwayMissing"]
-        val answer = app.peers.join(invite) ?: return s["errAwayFailed"]
+        val run = com.wittywilla.wittymediaclient.net.ConnectRun("invite", invite.serverId)
+        com.wittywilla.wittymediaclient.diag.Redact.addSecret(invite.secret)
+        val retry = { app.scope.launch { joinInvite(invite) }; Unit }
+        if (!app.peers.available) return checkFailed(run, connectSteps.of("p2p-missing", "read"), s["errAwayMissing"])
+        run.pass("read")
+        run.note("looking for the server, with ${invite.hints.size} addresses from the invite")
+        val answer = app.peers.join(invite) ?: return checkFailed(run, peerFailure("found"), s["errAwayFailed"], retry)
+        run.pass("found")
+        run.pass("secure")
         if (!answer.ok) {
             app.peers.leave()
-            return s["errInviteRefused"]
+            return checkFailed(run, connectSteps.classify(answer.reason, answer.error, "signin"), s["errInviteRefused"], retry)
         }
-        return joinedFromAway(answer)
+        run.note("the server took the invite")
+        return joinedFromAway(answer, run)
     }
 
     // The connector has reached a server that took this device's invite or code: it proves its key, goes in the list
     // of servers (under its own address if this device knows it, else one for away only), and the sign-in code that
     // came back is redeemed over the connection. Answers words to show on failure.
-    suspend fun joinedFromAway(answer: PeerAnswer): String? {
+    suspend fun joinedFromAway(answer: PeerAnswer, run: com.wittywilla.wittymediaclient.net.ConnectRun = com.wittywilla.wittymediaclient.net.ConnectRun("code", answer.serverId).apply { pass("read"); pass("found"); pass("secure") }): String? {
         val proof = identify(PeerRoute.base, app.store.recent)
         if (proof.state != IdentityState.New && proof.state != IdentityState.Same) {
+            val trouble = (app.peers.way as? com.wittywilla.wittymediaclient.p2p.PeerWay.Away)?.state
+            run.note("the server didn't prove itself over the connection: ${proof.state}" + (trouble?.let { ", path ${it.path}" + if (it.community) " (community relay)" else "" } ?: ""))
             app.peers.leave()
-            return s[if (proof.state == IdentityState.Unreachable) "errAwayFailed" else "identityBad"]
+            val failure = if (proof.state == IdentityState.Unreachable) connectSteps.classify("slow-path", trouble?.error.orEmpty(), "secure") else connectSteps.of("identity-bad", "signin")
+            return checkFailed(run, failure, s[if (proof.state == IdentityState.Unreachable) "errAwayFailed" else "identityBad"])
         }
         val known = app.store.recent.firstOrNull { it.publicKey.isNotEmpty() && it.publicKey == proof.publicKey }
         val url = known?.url ?: PeerRules.awayOnlyUrl(answer.serverId)
@@ -1012,13 +1040,13 @@ class Nav(val app: WittyApp, private val s: Map<String, String>) {
         }
         return try {
             val result = app.api.pairRedeem(answer.code, app.deviceName, app.platformName)
-            if (result.token.isEmpty()) return s["joinAwayRefused"]
+            if (result.token.isEmpty()) return checkFailed(run, connectSteps.of("signin-refused", "signin"), s["joinAwayRefused"])
             signedIn(result.token, result.user)
             null
         } catch (e: ApiError) {
-            e.message
-        } catch (_: IOException) {
-            s["errAwayFailed"]
+            checkFailed(run, connectSteps.classify("", e.message.orEmpty(), "signin"), e.message)
+        } catch (e: IOException) {
+            checkFailed(run, connectSteps.classify("", e.message ?: "timeout", "signin"), s["errAwayFailed"])
         } catch (_: SerializationException) {
             s["errInvalid"]
         }
@@ -1459,6 +1487,7 @@ fun AppRoot(app: WittyApp) {
                         Route.Notices -> NoticesScreen(nav)
                         Route.Notes -> NotesScreen(nav)
                         Route.JoinAway -> JoinAwayScreen(nav, strings)
+                        is Route.ConnectCheck -> ConnectCheckScreen(nav, strings, route.run, route.retry)
                         is Route.ModuleSettings -> ModuleSettingsScreen(nav, strings, route.url, route.title, route.page)
                         Route.Logs -> LogsScreen(nav)
                         is Route.Library -> {

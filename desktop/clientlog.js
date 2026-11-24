@@ -392,6 +392,8 @@ function createClientLog(options) {
     drainSync,
     idle,
     diagnostics,
+    // Text with every secret this log knows of taken out, for showing or copying (the connection check's details).
+    clean: (text) => clean(text, 20000),
   }
 }
 
