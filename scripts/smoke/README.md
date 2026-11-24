@@ -29,7 +29,7 @@ The real Electron app under a virtual screen, with the harnesses in `desktop/tes
 | settings | Settings opens with its sections | A settings page that crashes |
 | film | The film plays: the app's media session says it is playing | The player |
 | away | This machine's firewall refuses the server's web port to every program but root's, so the emulator can reach it neither at 10.0.2.2 nor at the address it found on the network (Android TV images don't allow `adb root`, so not the emulator's own firewall); the app comes back peer to peer, still signed in, plays the film, and the server sees it come peer to peer | Remote access from a phone |
-| game | From away, Adjustris in WittyPlay starts and the server sends this device frames (WittyPlay's own stats for the session) | WittyPlay on a phone from away: the games page refused, or the stream refused before the hello |
+| game | From away, Adjustris in WittyPlay starts and the server streams it to this device: a viewer connected, the video encoded, and the app's own reports of the network coming back, which only a player receiving pictures sends | WittyPlay on a phone from away: the games page refused, or the stream refused before the hello |
 | link (phone) | A fresh app, still away: Join with a link or code, the invite link pasted: signed in | Adding a server by link from away |
 
 ## Running them yourself

@@ -70,14 +70,14 @@ def api(method, path, body=None, token=None):
 
 
 def nodes():
-    for _ in range(4):
+    for _ in range(10):
         # The old picture goes first: a dump that fails (a screen still moving) must not leave it to be read.
         xml = sh('rm -f /sdcard/u.xml; uiautomator dump /sdcard/u.xml >/dev/null && cat /sdcard/u.xml', check=False)
         try:
             root = ET.fromstring(xml[xml.index('<'):])
             break
         except (ValueError, ET.ParseError):
-            time.sleep(1)
+            time.sleep(0.5)
     else:
         return []
     out = []
@@ -186,7 +186,7 @@ def signed_in(secs, what):
 def past_welcome():
     """A new sign-in first asks for a layout, then colours: the first of each is fine."""
     for _ in range(16):
-        if not find('Choose a layout|Choose colours|Your look is set| layout$|Themes$'):
+        if not find('Choose a layout|Choose colours|Your look is set|^Lumen layout$'):
             return
         btn = find('^(Use this|Continue|Next|Done)$')
         if btn:
@@ -246,20 +246,31 @@ def security_code():
 
 
 def game_frames(since):
-    """The newest game session started after since, and frames the server has sent from it (its stats)."""
+    """The newest game session started after since, and the server streaming it to this device: a viewer connected,
+    the video being encoded, and the app's own reports of the network coming back (which only a player receiving
+    the pictures sends). WittyPlay's stats for the session too, where it gives them."""
     logs = os.path.join(os.environ.get('SMOKE_OUT', 'smoke-out'), 'data', 'logs')
+    lines = []
+    for name in sorted(os.listdir(logs)):
+        lines += [l for l in open(os.path.join(logs, name), errors='replace') if 'cat=games' in l and l[5:24] >= since]
     sid = None
-    for f in sorted(os.listdir(logs)):
-        for line in open(os.path.join(logs, f), errors='replace'):
-            if 'wittyplay: game started' in line and line[5:24] >= since:
-                m = re.search(r'session=(\S+)', line)
-                sid = m.group(1) if m else sid
+    for l in lines:
+        if 'msg="game session started"' in l or 'wittyplay: game started' in l:
+            m = re.search(r'session=(\S+)', l)
+            sid = m.group(1) if m else sid
     if not sid:
         return None
-    st = api('GET', f'/api/v1/modules/wittyplay/play/{sid}/stats')
-    log('stats', sid, json.dumps(st)[:400])
-    return st if (st.get('sentFps') or 0) > 0 and (st.get('width') or 0) > 0 else None
-
+    mine = [l for l in lines if f'session={sid}' in l]
+    seen = {k: any(k in l for l in mine) for k in ('viewer connected', 'encoding video', 'matching the video to the network')}
+    try:
+        st = api('GET', f'/api/v1/modules/wittyplay/play/{sid}/stats')
+        log('stats', sid, json.dumps(st)[:300])
+        if (st.get('sentFps') or 0) > 0:
+            return st
+    except Exception as e:  # noqa: BLE001: the log is enough
+        log('no stats:', e)
+    log('game', sid, seen)
+    return seen if all(seen.values()) else None
 
 def step(name, fn):
     global n, log_file
@@ -329,7 +340,11 @@ def found():
     install()
     launch(clear=True)
     # The server announces itself on this machine's network, which the emulator's network reaches.
-    tap('Found on your network', 60)
+    for _ in range(3):
+        tap('Found on your network', 60)
+        if find('Enter the security code|Security code|Sign in with a code|digits entered'):
+            break
+        time.sleep(2)
     enter_code()
 
 
