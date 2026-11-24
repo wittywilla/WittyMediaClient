@@ -1016,6 +1016,7 @@ class Nav(val app: WittyApp, private val s: Map<String, String>) {
             when (val tried = tryCode(invite.home, WebJoin.derive(invite.code))) {
                 CodeTry.Done -> return null
                 CodeTry.NotHere -> return s["errCodeUsed"]
+                is CodeTry.Restarted -> return tried.words.ifEmpty { s["errCodeUsed"].orEmpty() }
                 CodeTry.Liar -> return s["errCodeLiar"]
                 is CodeTry.Words -> return tried.words
                 CodeTry.NotReached -> run.note("the address at home in the QR code didn't answer: away, so peer to peer")
@@ -1089,6 +1090,7 @@ class Nav(val app: WittyApp, private val s: Map<String, String>) {
         data object Done : CodeTry // the server made it, proved it, and this device is signed in to it
         data object NotReached : CodeTry // nothing answered there
         data object NotHere : CodeTry // a server answered, but doesn't know the code
+        data class Restarted(val words: String) : CodeTry // the server made it but restarted since, which ends codes
         data object Liar : CodeTry // something answered that couldn't prove it made the code: it got nothing more
         data class Words(val words: String) : CodeTry // the server that made it refused: its words, or this app's
     }
@@ -1112,6 +1114,7 @@ class Nav(val app: WittyApp, private val s: Map<String, String>) {
         }
         return when (answer) {
             WebJoin.Answer.NotHere -> CodeTry.NotHere
+            is WebJoin.Answer.Restarted -> CodeTry.Restarted(answer.words)
             WebJoin.Answer.Liar -> CodeTry.Liar
             is WebJoin.Answer.Refused -> CodeTry.Words(answer.words.ifEmpty { s["errInviteRefused"].orEmpty() })
             is WebJoin.Answer.SignedIn -> {
@@ -1137,14 +1140,18 @@ class Nav(val app: WittyApp, private val s: Map<String, String>) {
         if (urls.isEmpty()) return s["errCodeNone"]
         val keys = WebJoin.derive(clean)
         var liar = false
+        var restarted = ""
         for (url in urls) {
             when (val tried = tryCode(url, keys)) {
                 CodeTry.Done -> return null
                 CodeTry.Liar -> liar = true
+                // Said only if no other server takes the code: a restart there doesn't end another server's code.
+                is CodeTry.Restarted -> restarted = tried.words.ifEmpty { s["errCodeUsed"].orEmpty() }
                 is CodeTry.Words -> return tried.words
                 CodeTry.NotHere, CodeTry.NotReached -> Unit
             }
         }
+        if (restarted.isNotEmpty()) return restarted
         return s[if (liar) "errCodeLiar" else "errCodeNotFound"]
     }
 

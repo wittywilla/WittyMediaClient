@@ -39,6 +39,15 @@ class WebJoinTest {
         assertEquals("K7QM-2XHD", WebJoin.show("K7QM2XHD"))
     }
 
+    // A 0.8.5 server that restarted since it made the code says so (404, reason "restarted"); anything else is a
+    // server that doesn't know the code.
+    @Test
+    fun aRestartIsReadFromTheRefusal() {
+        assertEquals("restarted", WebJoin.reasonOf("""{"reason":"restarted","error":"This code expired because the server restarted."}"""))
+        assertEquals("", WebJoin.reasonOf("""{"error":"not found"}"""))
+        assertEquals("", WebJoin.reasonOf("not json"))
+    }
+
     // Typed where an address goes: a code as shown is a code, a computer's name stays an address.
     @Test
     fun aCodeOrAnAddress() {

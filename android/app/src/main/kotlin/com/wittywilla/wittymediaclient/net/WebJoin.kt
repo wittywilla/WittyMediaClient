@@ -82,12 +82,19 @@ object WebJoin {
         // It doesn't know the code: another server's, or used, run out, or replaced by a newer one.
         data object NotHere : Answer
 
+        // It made the code, but restarted since, which ends codes (0.8.5): its words, which say to show a new one.
+        data class Restarted(val words: String) : Answer
+
         // Something answered but couldn't prove it made the code: nothing more was sent to it.
         data object Liar : Answer
 
         // It made the code but signed nobody in (too many tries, a wrong proof): its own words.
         data class Refused(val words: String) : Answer
     }
+
+    // A refusal's machine-readable reason ("restarted"), from its JSON body.
+    internal fun reasonOf(body: String): String =
+        runCatching { (json.parseToJsonElement(body) as? JsonObject)?.get("reason")?.let { (it as? JsonPrimitive)?.content } }.getOrNull().orEmpty()
 
     @Serializable
     private data class Hello(val nonce: String = "", val proof: String = "", val publicKey: String = "")
@@ -104,6 +111,7 @@ object WebJoin {
         val hello = try {
             json.decodeFromString(Hello.serializer(), api.call("POST", "/connect/hello", helloBody.toString()))
         } catch (e: ApiError) {
+            if (e.status == 404 && reasonOf(e.body) == "restarted") return Answer.Restarted(e.message.orEmpty())
             return if (e.status == 404 || e.status == 405) Answer.NotHere else Answer.Refused(e.message.orEmpty())
         }
         val serverNonce = runCatching { Base64.decode(hello.nonce) }.getOrDefault(ByteArray(0))

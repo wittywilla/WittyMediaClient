@@ -621,7 +621,7 @@ async function codeAtHome(home, code) {
     log.noteError('info', 'network', 'The address in a QR code could not be asked about its code', err, { where: r.url })
     return null
   }
-  if (answer.here === false) return { error: 'code-used' }
+  if (answer.here === false) return answer.restarted !== undefined ? { error: 'code-used', message: guards.cleanMessage(answer.restarted) } : { error: 'code-used' }
   if (answer.error === 'liar') {
     log.warn('network', 'A server answered about a code without proving it made it, and was told nothing', { where: r.url })
     return { error: 'code-liar' }
@@ -1012,6 +1012,7 @@ async function enterCode(typed, only) {
   }
   log.info('network', `Asking ${urls.length === 1 ? 'one server' : `${urls.length} servers`} about a code`)
   let refused = null
+  let restarted = null
   let changed = false
   const tries = urls.map(async (url) => {
     // The server chosen on screen is held to the key the person was shown there, as a typed code
@@ -1040,6 +1041,8 @@ async function enterCode(typed, only) {
     }
     if (answer.error === 'liar') log.warn('network', 'A server answered about a code without proving it made it, and was told nothing', { where: url })
     if (answer.error === 'refused') refused = answer
+    // Said only if no other server takes the code: one server's restart doesn't end another's code.
+    if (answer.here === false && answer.restarted !== undefined) restarted = answer.restarted
     if (!answer.ok) return null
     if (!guards.validToken(answer.token)) return null
     return { url, at, identity, token: answer.token, name: name || guards.cleanName(answer.name) }
@@ -1055,6 +1058,7 @@ async function enterCode(typed, only) {
   if (!won) {
     if (changed) return { error: 'changed' }
     if (refused) return { error: 'code-refused', message: guards.cleanMessage(refused.message), reason: guards.cleanMessage(refused.reason) }
+    if (restarted !== null) return { error: 'code-used', message: guards.cleanMessage(restarted) }
     return { error: 'code-not-found' }
   }
   log.info('network', 'A code signed this device in', { where: won.url })
