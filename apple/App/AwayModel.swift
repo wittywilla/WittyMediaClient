@@ -195,10 +195,15 @@ extension AppModel {
     /// way to it, if this device has one. Nil if it hasn't; otherwise as `arrive` answers.
     func arriveFromAway(_ url: String) async -> String?? {
         guard let saved = recent.first(where: { $0.url == url }), PeerLibrary.available, awayInfo(for: saved) != nil else { return nil }
-        guard await reachFromAway(saved) else { return .some(say("errAwayFailed")) }
+        let run = ConnectRun(kind: "saved server", server: awayInfo(for: saved)?.serverID ?? "")
+        run.pass("read")
+        run.note("the server's own address didn't answer, so it was looked for from away")
+        let problem = peers.problem
+        guard await reachFromAway(saved) else { return .some(checkFailed(run, peerFailure("found", problem: peers.problem.isEmpty ? problem : peers.problem), say("errAwayFailed"), retry: url)) }
+        run.pass("found")
         guard let status = try? await connection(to: saved.url, quick: true).status() else {
             peers.close()
-            return .some(say("errAwayFailed"))
+            return .some(checkFailed(run, connectSteps?.of("slow-path", step: "secure"), say("errAwayFailed"), retry: url))
         }
         return .some(await arrive(url: saved.url, status: status))
     }
@@ -325,20 +330,52 @@ extension AppModel {
         await learnAway()
     }
 
+    // MARK: The connection check
+
+    private var connectSteps: ConnectSteps? { SharedData.connectSteps }
+
+    /// Why the connector didn't connect, at the step it was on.
+    func peerFailure(_ step: String, problem: String) -> ConnectFailure? {
+        connectSteps?.classify(reason: problem.isEmpty ? "timeout" : "", text: problem, step: step)
+    }
+
+    /// Shows the steps for a run that failed (ConnectCheckView), and answers `words` for the
+    /// screen underneath. `retry` is a server's address to try again, if there is one.
+    func checkFailed(_ run: ConnectRun, _ failure: ConnectFailure?, _ words: String, retry: String? = nil) -> String {
+        guard let failure else { return words }
+        let f = run.fail(failure)
+        ClientLog.shared.warn("p2p", "Connecting from away failed at \(f.step): \(f.code)", session: awayLogSession)
+        connectCheck = run
+        checkRetry = retry
+        return words
+    }
+
     // MARK: An invite
 
     /// An invite link, typed or pasted on the connect screen: finds the server, shows it the
     /// invite, which puts this device on its list, and signs in with the code that comes back.
     /// Answers words to show if it didn't work.
     func join(_ invite: PeerConnect.Invite) async -> String? {
-        guard PeerLibrary.available else { return say("awayNotHere") }
-        guard let key = deviceKey() else { return say("notKept") }
-        if let problem = await openAway(serverID: invite.serverID, hints: invite.hints, key: key) { return problem }
-        guard let answer = await peers.enrol(secret: invite.secret, name: deviceName, platform: platformName), answer.ok else {
+        let run = ConnectRun(kind: "invite", server: invite.serverID)
+        Redact.addSecret(invite.secret)
+        guard PeerLibrary.available else { return checkFailed(run, connectSteps?.of("p2p-missing", step: "read"), say("awayNotHere")) }
+        guard let key = deviceKey() else { return checkFailed(run, connectSteps?.of("no-key", step: "read"), say("notKept")) }
+        run.pass("read")
+        run.note("looking for the server, with \(invite.hints.count) addresses from the invite")
+        if let problem = await openAway(serverID: invite.serverID, hints: invite.hints, key: key, run: run) { return problem }
+        let answer = await peers.enrol(secret: invite.secret, name: deviceName, platform: platformName)
+        guard let answer, answer.ok else {
             peers.close()
-            return say("errInviteRefused")
+            // A reason is the server's own answer; without one the invite never got to it.
+            let reason = answer?.reason ?? ""
+            if !reason.isEmpty { run.pass("found"); run.pass("secure") }
+            let failure = connectSteps?.classify(reason: reason, text: answer?.error ?? peers.problem, step: reason.isEmpty ? "secure" : "signin")
+            return checkFailed(run, failure, say("errInviteRefused"))
         }
-        return await finishJoining(serverID: invite.serverID, hints: invite.hints, answer: answer, name: invite.name)
+        run.pass("found")
+        run.pass("secure")
+        run.note("the server took the invite")
+        return await finishJoining(serverID: invite.serverID, hints: invite.hints, answer: answer, name: invite.name, run: run)
     }
 
     /// A device with no keyboard, away from home, can't take an invite in. It shows a code
@@ -351,10 +388,16 @@ extension AppModel {
 
     /// The server took the code this device showed, and has put it on its list.
     func joined(_ answer: PeerConnect.Enrolment) async -> String? {
-        guard answer.ok, !answer.serverID.isEmpty else { return say("joinAwayRefused") }
-        guard let key = deviceKey() else { return say("notKept") }
-        if let problem = await openAway(serverID: answer.serverID, hints: answer.addresses, key: key) { return problem }
-        return await finishJoining(serverID: answer.serverID, hints: answer.addresses, answer: answer, name: "")
+        let run = ConnectRun(kind: "code", server: answer.serverID)
+        run.pass("read")
+        guard answer.ok, !answer.serverID.isEmpty else {
+            return checkFailed(run, connectSteps?.classify(reason: answer.reason, text: answer.error, step: "signin"), say("joinAwayRefused"))
+        }
+        guard let key = deviceKey() else { return checkFailed(run, connectSteps?.of("no-key", step: "read"), say("notKept")) }
+        run.pass("found") // the server took the code
+        if let problem = await openAway(serverID: answer.serverID, hints: answer.addresses, key: key, run: run, step: "secure") { return problem }
+        run.pass("secure")
+        return await finishJoining(serverID: answer.serverID, hints: answer.addresses, answer: answer, name: "", run: run)
     }
 
     private func knownAway(_ serverID: String) -> SavedServer? {
@@ -362,7 +405,7 @@ extension AppModel {
     }
 
     /// Starts the connection to a server known only by its ID. Words if it can't be reached.
-    private func openAway(serverID: String, hints: [String], key: String) async -> String? {
+    private func openAway(serverID: String, hints: [String], key: String, run: ConnectRun? = nil, step: String = "found") async -> String? {
         let known = knownAway(serverID)
         let home = known?.url ?? PeerInfo.placeholderAddress(serverID: serverID)
         let info = PeerInfo(serverID: serverID, hints: hints, port: known.flatMap(awayInfo(for:))?.port ?? 0)
@@ -372,20 +415,27 @@ extension AppModel {
         defer { peers.awayWait = 25 }
         if case .away(let state) = await peers.settle(), state.connected { return nil }
         let atHome = peers.way == .home
+        let problem = peers.problem
         peers.close()
-        return atHome ? say("awayAtHome") : say("errAwayFailed")
+        if atHome { return say("awayAtHome") }
+        guard let run else { return say("errAwayFailed") }
+        return checkFailed(run, peerFailure(step, problem: problem), say("errAwayFailed"))
     }
 
     /// On the server's list and connected: who it is is proved and remembered, and the sign-in
     /// code that came back is redeemed over the connection.
-    private func finishJoining(serverID: String, hints: [String], answer: PeerConnect.Enrolment, name: String) async -> String? {
+    private func finishJoining(serverID: String, hints: [String], answer: PeerConnect.Enrolment, name: String, run: ConnectRun = ConnectRun(kind: "invite")) async -> String? {
         let known = knownAway(serverID)
         let home = known?.url ?? PeerInfo.placeholderAddress(serverID: serverID)
         // Who it is, proved: the key it shows now is the one remembered from here on.
         let proof = await WittyClient.identify(home, saved: known.map { [$0] } ?? [], route: peers.route)
         guard proof.state == .new || proof.state == .same else {
+            run.note("the server didn't prove itself over the connection: \(proof.state)")
             peers.close()
-            return say("identityBad")
+            // Not answered at all is a connection that couldn't carry a request yet; answered wrongly is another server.
+            let unreachable = proof.state == .unreachable
+            return checkFailed(run, unreachable ? connectSteps?.of("slow-path", step: "secure") : connectSteps?.of("identity-bad", step: "signin"),
+                               unreachable ? say("errAwayFailed") : say("identityBad"))
         }
         let shown = PlainWords.clean(answer.serverName.isEmpty ? name : answer.serverName, limit: 80)
         let server = proof.saved(url: home, name: shown.isEmpty ? (known?.name ?? "WittyMediaServer") : shown, brandLogo: known?.brandLogo ?? "")

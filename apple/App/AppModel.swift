@@ -17,6 +17,9 @@ enum SharedData {
     /// catalogue comes first (SDUICatalog.settingsMenu).
     static let settingsMenu: SettingsMenu? = SettingsMenu.bundled(load("settingsmenu"))
 
+    /// The steps of connecting from away (shared/data/connect-steps.json, the server's own): ConnectCheckView.
+    static let connectSteps: ConnectSteps? = load("connect-steps").flatMap { try? ConnectSteps(json: $0) }
+
     struct ThemeColours: Decodable {
         let background, panel, card, border, text, textSecondary, accent, onAccent, danger: String
         let textHint, accentText, ok: String?
@@ -177,6 +180,10 @@ final class AppModel: ObservableObject {
         case browsing
     }
 
+    /// A connection from away that didn't work, shown step by step (ConnectCheckView) until dismissed.
+    @Published var connectCheck: ConnectRun?
+    /// The address Try again connects to, when there is one (a server used before).
+    var checkRetry: String?
     @Published var stage: Stage = .starting {
         didSet { if stage == .browsing { openWaitingLink() } }
     }
