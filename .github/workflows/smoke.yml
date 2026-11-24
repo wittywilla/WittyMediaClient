@@ -145,11 +145,14 @@ jobs:
             profile: pixel_6
             # Off, a never-ending animation redraws every frame, and uiautomator never sees the phone's Home settle.
             animations: true
+            # The host's software GPU took the whole emulator down when the games page (a web view) opened.
+            gpu: guest
           - kind: tv
             image: android-tv
             arch: x86
             profile: tv_1080p
             animations: false
+            gpu: swiftshader_indirect
     runs-on: ubuntu-latest
     timeout-minutes: 50
     steps:
@@ -233,7 +236,7 @@ jobs:
           cores: 2
           ram-size: 4096M
           disable-animations: ${{ !matrix.animations }}
-          emulator-options: -no-window -gpu swiftshader_indirect -no-snapshot -noaudio -no-boot-anim
+          emulator-options: -no-window -gpu ${{ matrix.gpu }} -no-snapshot -noaudio -no-boot-anim
           script: python3 scripts/smoke/android.py "$(ls $RUNNER_TEMP/app/*.apk | head -1)" ${{ matrix.kind == 'tv' && '--tv' || '' }}
       - name: Stop the server
         if: always()
