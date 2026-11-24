@@ -452,7 +452,9 @@ def away():
     # aimed at the emulator alone: its process goes in a cgroup of its own, and only that cgroup is refused. The
     # server, its modules' helpers (WittyPlay's restarts after a quiet spell, and talks to the server on that port)
     # and this test are left alone, as is the peer-to-peer port.
-    pids = subprocess.run(['pgrep', '-f', 'qemu-system'], capture_output=True, text=True).stdout.split()
+    # Every emulator process: qemu, and netsimd, which carries a newer emulator's network.
+    pids = subprocess.run(['pgrep', '-f', 'qemu-system|netsimd|emulator/emulator'], capture_output=True, text=True).stdout.split()
+    pids = [p for p in pids if p != str(os.getpid())]
     if not pids:
         raise RuntimeError('no emulator process to send away')
     cg = '/sys/fs/cgroup/smoke-emulator'
@@ -463,7 +465,13 @@ def away():
                         '-j', 'REJECT'], capture_output=True, text=True)
     if r.returncode:
         raise RuntimeError('could not shut the address: ' + r.stderr)
-    log('away: port', PORT, 'refused to the emulator (processes', ' '.join(pids) + ')')
+    names = subprocess.run(['ps', '-o', 'pid=,comm=', '-p', ','.join(pids)], capture_output=True, text=True).stdout.split()
+    log('away: port', PORT, 'refused to the emulator:', ' '.join(names))
+    # From inside the emulator, the server's web port must not answer any more.
+    probe = sh(f'nc -w 3 10.0.2.2 {PORT} </dev/null && echo REACHED || echo REFUSED', check=False)
+    log('from the emulator:', probe.strip())
+    if 'REACHED' in probe:
+        raise RuntimeError("the emulator still reaches the server's web port: it isn't away")
     if subprocess.run(['curl', '-s', '-m', '3', '-o', '/dev/null', f'http://127.0.0.1:{PORT}/api/health']).returncode != 0:
         raise RuntimeError('the server stopped answering this machine too: the firewall caught more than the emulator')
     launch()
