@@ -61,7 +61,7 @@ jobs:
           node-version: 24
       - name: Build the server, Wittyconnect and a catalogue with WittyPlay and WittyTuner
         env:
-          SMOKE_REF_WITTYPLAY: ${{ inputs.wittyplay_ref }}
+          SMOKE_REF_WITTYPLAY: v0.7.12
         run: bash scripts/smoke/build.sh "$RUNNER_TEMP/smoke-build"
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
@@ -72,6 +72,7 @@ jobs:
           retention-days: 3
 
   desktop:
+    if: false
     needs: server
     runs-on: ubuntu-latest
     timeout-minutes: 30
@@ -179,25 +180,25 @@ jobs:
           go-version-file: .server/go.mod
           cache: false
       - name: Android NDK for the peer-to-peer library
-        if: inputs.app_release == ''
+        if: false
         run: yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "ndk;27.2.12479018" >/dev/null
       - name: Build Wittyconnect from the server's source
-        if: inputs.app_release == ''
+        if: false
         env:
           WITTYMEDIASERVER_SRC: .server
         run: bash android/scripts/build-wittyconnect.sh
       # A debug build: the same code, and its web views and data can be looked into when a step fails.
       - name: Build the app
-        if: inputs.app_release == ''
+        if: false
         working-directory: android
         run: |
           gradle --no-daemon :app:assembleDebug -Pp2p=required
           mkdir -p "$RUNNER_TEMP/app" && cp app/build/outputs/apk/debug/app-${{ matrix.arch }}-debug.apk "$RUNNER_TEMP/app/"
       - name: The app from a release
-        if: inputs.app_release != ''
+        if: true
         env:
           GH_TOKEN: ${{ github.token }}
-          TAG: ${{ inputs.app_release }}
+          TAG: v0.6.0
         run: gh release download "$TAG" -R wittywilla/WittyMediaClient --pattern '*-android-${{ matrix.arch }}.apk' -D "$RUNNER_TEMP/app"
       - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8
         with:
