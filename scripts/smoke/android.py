@@ -356,9 +356,10 @@ def settings():
     if not find('^Settings$'):
         # The phone's You tab; on a TV, the profile at the end of the top bar.
         tap('^You$' if not TV else '^smoke$', 30)
-    tap('^Settings$', 30)
-    wait('Settings', 20)
-    wait('Server|Playback|Libraries|About|Account', 30, "settings' sections")
+    # A TV's profile page is its settings (Account, Playback, Your devices…); a phone's You tab leads to them.
+    if not (TV and find('^ACCOUNT$|^Account$')):
+        tap('^Settings$', 30)
+    wait('Server|Playback|Libraries|About|Account|ACCOUNT', 30, "settings' sections")
     launch()
 
 
@@ -374,16 +375,22 @@ def away():
     global URL
     # The device takes itself onto the server's list by itself while at home; wait for that.
     until("this device on the server's peer-to-peer list", lambda: api('GET', '/api/p2p/devices'), 90)
-    # The emulator's 10.0.2.2 is this machine's 127.0.0.1: the server's web port there stops answering
-    # (this machine's firewall, as Android TV images don't allow adb root), and the test itself uses the
-    # machine's own address from now on. The peer-to-peer port is left alone.
-    lan = subprocess.run(['hostname', '-I'], capture_output=True, text=True).stdout.split()[0]
-    r = subprocess.run(['sudo', '-n', 'iptables', '-I', 'INPUT', '-i', 'lo', '-d', '127.0.0.1', '-p', 'tcp', '--dport', PORT, '-j', 'REJECT'],
-                       capture_output=True, text=True)
+    # Away: the server's web port stops answering every program on this machine but root's, at every address
+    # (the emulator's 10.0.2.2, and the address it found the server at on the network). That's this machine's
+    # firewall, as Android TV images don't allow adb root. The test itself goes on through a forwarder run as
+    # root. The peer-to-peer port is left alone.
+    side = str(int(PORT) + 7)
+    subprocess.Popen(['sudo', '-n', 'socat', f'TCP-LISTEN:{side},bind=127.0.0.1,fork,reuseaddr', f'TCP:127.0.0.1:{PORT}'],
+                     stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    time.sleep(1)
+    r = subprocess.run(['sudo', '-n', 'iptables', '-I', 'OUTPUT', '-p', 'tcp', '--dport', PORT, '-m', 'owner', '!', '--uid-owner', '0',
+                        '-j', 'REJECT'], capture_output=True, text=True)
     if r.returncode:
         raise RuntimeError('could not shut the address: ' + r.stderr)
-    URL = f'http://{lan}:{PORT}'
-    log('away: 127.0.0.1:' + PORT, 'refused; the test now asks', URL)
+    URL = f'http://127.0.0.1:{side}'
+    log('away: port', PORT, 'refused to everyone but root; the test now asks', URL)
+    if subprocess.run(['curl', '-s', '-m', '3', '-o', '/dev/null', f'http://127.0.0.1:{PORT}/api/health']).returncode == 0:
+        raise RuntimeError('the server still answers at home')
     launch()
     signed_in(120, 'the app signed in from away')
     play_film()

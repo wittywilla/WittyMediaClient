@@ -196,8 +196,8 @@ jobs:
         with:
           name: smoke-server
           path: ${{ runner.temp }}/smoke-build
-      - name: FFmpeg
-        run: sudo apt-get update -qq && sudo apt-get install -y -qq ffmpeg >/dev/null
+      - name: FFmpeg and socat
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq ffmpeg socat >/dev/null
       - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: ${{ runner.temp }}/smoke-cache
@@ -227,7 +227,7 @@ jobs:
           target: ${{ matrix.image }}
           arch: ${{ matrix.arch }}
           profile: ${{ matrix.profile }}
-          cores: 4
+          cores: 2
           ram-size: 4096M
           disable-animations: true
           emulator-options: -no-window -gpu swiftshader_indirect -no-snapshot -noaudio -no-boot-anim

@@ -28,7 +28,7 @@ The real Electron app under a virtual screen, with the harnesses in `desktop/tes
 | address | Enter an address, then a security code from the server: signed in | Sign-in by address and code |
 | settings | Settings opens with its sections | A settings page that crashes |
 | film | The film plays: the app's media session says it is playing | The player |
-| away | This machine's firewall shuts the server's web port on 127.0.0.1, which is the emulator's 10.0.2.2 (Android TV images don't allow `adb root`, so not the emulator's own); the app comes back peer to peer, still signed in, and streams the film through it | Remote access from a phone |
+| away | This machine's firewall refuses the server's web port to every program but root's, so the emulator can reach it neither at 10.0.2.2 nor at the address it found on the network (Android TV images don't allow `adb root`, so not the emulator's own firewall); the app comes back peer to peer, still signed in, plays the film, and the server sees it come peer to peer | Remote access from a phone |
 | game | From away, Adjustris in WittyPlay starts and the server sends this device frames (WittyPlay's own stats for the session) | WittyPlay on a phone from away: the games page refused, or the stream refused before the hello |
 | link (phone) | A fresh app, still away: Join with a link or code, the invite link pasted: signed in | Adding a server by link from away |
 
@@ -41,4 +41,4 @@ SERVER_SRC=../WittyMediaServer SMOKE_OUT=/tmp/smoke-out scripts/smoke/desktop.sh
 SMOKE_OUT=/tmp/smoke-out python3 scripts/smoke/android.py android/app/build/outputs/apk/debug/app-x86_64-debug.apk [--tv] [step ...]
 ```
 
-The Android script needs one emulator running (`adb devices`), and `sudo iptables` without a password for the away step. It turns peer to peer on in the server, which must also listen on the machine's own address (`SMOKE_LISTEN=0.0.0.0`).
+The Android script needs one emulator running (`adb devices`), and `sudo` without a password for the away step (`iptables`, and `socat` for the test's own way in). It turns peer to peer on in the server, which must also listen on the machine's own address (`SMOKE_LISTEN=0.0.0.0`).
