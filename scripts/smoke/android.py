@@ -186,7 +186,9 @@ def signed_in(secs, what):
 def past_welcome():
     """A new sign-in first asks for a layout, then colours: the first of each is fine."""
     for _ in range(16):
-        if not find('Choose a layout|Choose colours|Your look is set|^Lumen layout$'):
+        # Its title, or (once the title has scrolled away) its grid: two or more "… layout" tiles, which Home never has.
+        tiles = sum(1 for x in nodes() if re.match(r'^[\w ]+ layout$', x['text'] or x['desc']))
+        if tiles < 2 and not find('Choose a layout|Choose colours|Your look is set'):
             return
         btn = find('^(Use this|Continue|Next|Done)$')
         if btn:
