@@ -5,6 +5,17 @@ What changed in WittyMediaClient, newest first. What changed before it had a rep
 
 ## Unreleased
 
+**Settings, the same everywhere (#111, wittywilla/WittyMediaServer#612)**
+
+- **You is the server's one settings menu** on Android phone and TV, iPhone, iPad and Apple TV, as on the web: the
+  same groups, rows, order and words. New rows everywhere: Video quality, Pages and menu, Network, Data folder and
+  Connect a device. Apple's rows now match Android's.
+- **On a TV, every row is shown.** One the TV can't change stays in its place, says what is set, and opens the card
+  with that setting's address and QR code.
+- **Module settings and Module store sit side by side,** and Look is Layout.
+- **The desktop app's own rows** (Servers on this device, From away, This app's log) are in the server's Settings.
+- **Choose colours has no preview**, only the theme cards, like Choose a layout.
+- **The TV bar shows the server's logo** beside its name (Android TV and Apple TV).
 **Parental controls (wittywilla/WittyMediaServer#649)**
 
 - **Leaving a kids' profile kept on its device takes the parents' PIN.** On Android, iPhone, iPad and Apple TV, Who's

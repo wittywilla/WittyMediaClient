@@ -63,7 +63,7 @@ struct YouView: View {
     /// The settings menu every client draws (the server's, else this app's copy): Android's You page, so the
     /// groups, rows, order and words are the same here, on Android, the web and its TV mode.
     private var menu: SettingsMenu {
-        center.catalog.settingsMenu ?? SharedData.settingsMenu ?? SettingsMenu(conditions: [], values: [], groups: [])
+        center.catalog.settingsMenu ?? SharedData.settingsMenu ?? SettingsMenu()
     }
 
     private var facts: Set<String> {

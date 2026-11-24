@@ -12,6 +12,12 @@ public struct SettingsMenu: Codable, Equatable, Sendable {
     public var values: [String]
     public var groups: [Group]
 
+    public init(conditions: [String] = [], values: [String] = [], groups: [Group] = []) {
+        self.conditions = conditions
+        self.values = values
+        self.groups = groups
+    }
+
     public struct Icon: Codable, Equatable, Sendable {
         public var android: String
         public var apple: String
