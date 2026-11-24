@@ -2,12 +2,19 @@
 // Copyright (C) 2026 WittyWilla and contributors
 package com.wittywilla.wittymediaclient.ui
 
+import android.app.Activity
+import android.content.Context
+import android.content.Intent
+import android.speech.RecognizerIntent
 import android.view.KeyEvent
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.focusGroup
 import androidx.compose.foundation.gestures.LocalBringIntoViewSpec
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyRow
@@ -22,6 +29,7 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
@@ -42,6 +50,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusProperties
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.geometry.Offset
@@ -51,18 +60,16 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.key.KeyEventType
 import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.key.nativeKeyCode
-import androidx.compose.ui.focus.focusProperties
 import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.input.key.type
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.clearAndSetSemantics
-import androidx.compose.ui.semantics.customActions
-import androidx.compose.ui.input.pointer.pointerInput
-import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.customActions
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.semantics
@@ -87,15 +94,15 @@ import com.wittywilla.wittymediaclient.net.SduiAction
 import com.wittywilla.wittymediaclient.net.SduiButton
 import com.wittywilla.wittymediaclient.net.SduiControlSpec
 import com.wittywilla.wittymediaclient.net.SduiItemActions
-import com.wittywilla.wittymediaclient.net.isForm
 import com.wittywilla.wittymediaclient.net.SduiMarkdown
 import com.wittywilla.wittymediaclient.net.SduiView
+import com.wittywilla.wittymediaclient.net.ShelfRules
 import com.wittywilla.wittymediaclient.net.aspectOf
 import com.wittywilla.wittymediaclient.net.child
 import com.wittywilla.wittymediaclient.net.image
 import com.wittywilla.wittymediaclient.net.int
+import com.wittywilla.wittymediaclient.net.isForm
 import com.wittywilla.wittymediaclient.net.isOn
-import com.wittywilla.wittymediaclient.net.ShelfRules
 import com.wittywilla.wittymediaclient.net.objects
 import com.wittywilla.wittymediaclient.net.str
 import com.wittywilla.wittymediaclient.tv.TvLayer
@@ -1342,6 +1349,13 @@ fun SduiSearchBox(view: SduiView, modifier: Modifier = Modifier) {
     }
     var text by rememberSaveable { mutableStateOf(p.str("query")) }
     val requester = remember { FocusRequester() }
+    // Voice, where the device has a speech recogniser (Google TV and most phones do): what is heard becomes the search.
+    val context = LocalContext.current
+    val voice = remember(prompt) { SearchVoice.intent(prompt) }
+    val canSpeak = remember { SearchVoice.available(context, voice) }
+    val listen = rememberLauncherForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
+        SearchVoice.heard(result.resultCode, result.data)?.let { text = it }
+    }
     LaunchedEffect(text) {
         val wanted = text.trim()
         if (wanted == env.params["q"].orEmpty()) return@LaunchedEffect
@@ -1354,9 +1368,29 @@ fun SduiSearchBox(view: SduiView, modifier: Modifier = Modifier) {
     OutlinedTextField(
         value = text, onValueChange = { text = it }, label = { Text(prompt, maxLines = 1, overflow = TextOverflow.Ellipsis) }, singleLine = true,
         leadingIcon = { Icon(WebIcons.Search, null, modifier = Modifier.size(20.dp)) },
+        trailingIcon = if (!canSpeak) null else {
+            { IconButton(onClick = { runCatching { listen.launch(voice) } }) { Icon(WebIcons.Mic, "Search by voice", modifier = Modifier.size(if (env.tv) env.pt(32) else 22.dp)) } }
+        },
         keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search, autoCorrectEnabled = false),
         modifier = modifier.fillMaxWidth().widthIn(max = if (env.tv) env.pt(1200) else 560.dp).focusRequester(requester).tvLeavable().semantics { contentDescription = view.label },
     )
+}
+
+// What the device's own speech recogniser hears, for the search box. The app never hears the voice: the recogniser
+// gives back text.
+object SearchVoice {
+    fun intent(prompt: String): Intent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH)
+        .putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
+        .putExtra(RecognizerIntent.EXTRA_PROMPT, prompt)
+        .putExtra(RecognizerIntent.EXTRA_MAX_RESULTS, 1)
+
+    fun available(context: Context, intent: Intent): Boolean =
+        runCatching { intent.resolveActivity(context.packageManager) != null }.getOrDefault(false)
+
+    fun heard(resultCode: Int, data: Intent?): String? {
+        if (resultCode != Activity.RESULT_OK) return null
+        return data?.getStringArrayListExtra(RecognizerIntent.EXTRA_RESULTS)?.firstOrNull()?.trim()?.takeIf { it.isNotEmpty() }?.take(100)
+    }
 }
 
 // MARK: Credits
