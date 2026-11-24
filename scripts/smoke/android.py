@@ -98,10 +98,10 @@ def dismiss(ns):
     """A system "isn't responding" dialog over everything (the emulator's launcher, on a busy runner): closed,
     and logged. One about this app is waited out instead, and logged, as it would be a fault of ours."""
     hint = next((x for x in ns if x['text'] == 'Got it'), None)
-    if hint and any('Viewing full screen' in x['text'] for x in ns):
+    if hint and any('Viewing full screen' in x['text'] or 'Getting back to the app' in x['text'] for x in ns):
         b = hint['b']
         sh(f'input tap {(b[0] + b[2]) // 2} {(b[1] + b[3]) // 2}')
-        log('system hint closed: Viewing full screen')
+        log('hint closed:', next((x['text'] for x in ns if 'Viewing full screen' in x['text'] or 'Getting back' in x['text']), ''))
         time.sleep(1)
         return True
     msg = next((x['text'] for x in ns if "isn't responding" in x['text']), None)
@@ -123,6 +123,8 @@ def find(pattern):
     if dismiss(ns):
         ns = nodes()
     hits = [x for x in ns if re_.search(x['text']) or re_.search(x['desc'])]
+    # A web page often has the same words twice (a label and its button): the one that can be pressed, on screen.
+    hits.sort(key=lambda x: (not x['clickable'], (x['b'][2] - x['b'][0]) * (x['b'][3] - x['b'][1]) <= 0))
     return hits[0] if hits else None
 
 
