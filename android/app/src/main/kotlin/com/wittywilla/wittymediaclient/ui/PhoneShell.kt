@@ -158,6 +158,7 @@ fun PhoneShell(nav: Nav, content: @Composable () -> Unit) {
     val over = remember { OverShell() }
     var drawer by remember { mutableStateOf(false) }
     LaunchedEffect(nav.app.api.token) { nav.loadMenu() }
+    NoteWatcher(nav)
     // The server's own menu, where it has one: the bar and the strip are made from it.
     val pages = nav.sdui
     LaunchedEffect(pages) { nav.loadSdui() }
@@ -260,7 +261,10 @@ private fun TopBar(nav: Nav, scroll: ShellScroll, status: Dp, top: Boolean) {
                 // Back as the system's: a server page goes back inside itself first, as the website's history does.
                 val dispatcher = androidx.activity.compose.LocalOnBackPressedDispatcherOwner.current?.onBackPressedDispatcher
                 RoundBack { dispatcher?.onBackPressed() ?: nav.back() }
+                Spacer(Modifier.weight(1f))
             }
+            if (nav.current != Route.Notes) NoteBell(nav)
+            Spacer(Modifier.width(8.dp))
         }
     }
 }
