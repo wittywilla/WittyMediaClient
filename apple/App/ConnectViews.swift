@@ -368,6 +368,11 @@ struct ConnectView: View {
             }
         }
         .serverUndo()
+        // A connection from away that didn't work: each step and what to do, instead of only a line of words.
+        .sheet(item: $model.connectCheck) { run in
+            ConnectCheckView(run: run, retry: model.checkRetry.map { url in { Task { await connect(url) } } })
+                .environmentObject(model)
+        }
         #if os(iOS)
         .sheet(isPresented: $scanning) {
             ScannerSheet(looking: "an invite", hint: "Point the camera at the invite’s QR code on the other screen.",

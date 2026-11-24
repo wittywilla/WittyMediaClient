@@ -641,3 +641,22 @@ main.with-back { padding-top: calc(var(--sp-8) + var(--sp-4)); }
 /* A TV: the same card, as wide as its two halves need, inside the safe gutter. */
 :root.tv body { padding: var(--sp-6) var(--sp-10); }
 .tv main { max-width: 100rem; padding: var(--sp-8) var(--sp-10); }
+
+/* The connection check (checkScreen): each step of connecting from away, the one that failed, and what to do. */
+.check-steps { list-style: none; margin: 0 0 var(--sp-4); padding: 0; display: grid; gap: var(--sp-2); text-align: start; }
+.check-step { display: grid; grid-template-columns: 1.5em 1fr auto; column-gap: var(--sp-2); align-items: baseline; padding: var(--sp-2) var(--sp-3); border-radius: var(--r-sm); background: var(--bg-3); }
+.check-mark { font-weight: 700; color: var(--fg-3); }
+.check-step.ok .check-mark { color: var(--ok); }
+.check-step.fail .check-mark { color: var(--danger); }
+.check-step.fail { box-shadow: inset 3px 0 0 var(--danger); }
+.check-title { font-weight: 600; min-width: 0; overflow-wrap: anywhere; }
+.check-word { font-size: var(--text-secondary); color: var(--fg-2); white-space: nowrap; }
+.check-step.skip .check-title { color: var(--fg-2); font-weight: 400; }
+.check-say { grid-column: 2 / -1; color: var(--fg); margin-top: var(--sp-1); }
+.check-next { margin: 0 0 var(--sp-2); font-weight: 600; text-align: start; }
+.check-status { text-align: start; margin: 0 0 var(--sp-2); }
+.check-status:empty { display: none; }
+.check-details { margin-top: var(--sp-6); text-align: start; }
+.check-details summary { cursor: pointer; color: var(--fg-2); }
+.check-details .hint { color: var(--fg-2); font-size: var(--text-secondary); margin: var(--sp-2) 0; }
+.check-details pre { white-space: pre-wrap; overflow-wrap: anywhere; max-height: 16em; overflow: auto; margin: 0; padding: var(--sp-3); border-radius: var(--r-sm); background: var(--bg-2); color: var(--fg-2); font-size: var(--text-secondary); }
