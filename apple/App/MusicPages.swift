@@ -142,7 +142,7 @@ struct AlbumCard: View {
                 .shadow(color: .black.opacity(0.18), radius: 2, y: 1)
                 Text(album.title ?? "Unknown album").font(.system(size: 14, weight: .semibold)).foregroundStyle(palette.text)
                     .lineLimit(2).multilineTextAlignment(.leading).padding(.top, Tokens.Space.s2)
-                let sub = [noArtist ? nil : album.artist, album.year.map(String.init)].compactMap { $0 }.filter { !$0.isEmpty }.joined(separator: " · ")
+                let sub = [noArtist ? nil : album.artist, album.year.map(String.init)].compactMap { $0 }.filter { !$0.isEmpty }.factsLine()
                 Text(sub.isEmpty ? " " : sub).font(.system(size: 12)).foregroundStyle(palette.textSecondary).lineLimit(1)
             }
         }
@@ -248,7 +248,7 @@ private struct SongCard: View {
                     .clipShape(RoundedRectangle(cornerRadius: Tokens.Radius.sm, style: .continuous))
                     VStack(alignment: .leading, spacing: 0) {
                         Text(song.title).font(.system(size: 14, weight: .semibold)).foregroundStyle(palette.text)
-                        Text([song.artist ?? song.albumArtist, song.album].compactMap { $0 }.filter { !$0.isEmpty }.joined(separator: " · "))
+                        Text([song.artist ?? song.albumArtist, song.album].compactMap { $0 }.filter { !$0.isEmpty }.factsLine())
                             .font(.system(size: 12)).foregroundStyle(palette.textSecondary)
                     }
                     .lineLimit(1)
@@ -407,11 +407,11 @@ struct TrackListView: View {
                     VStack(alignment: .leading, spacing: 0) {
                         Text(track.title).font(.system(size: 14, weight: .medium)).foregroundStyle(on ? palette.accentText : palette.text)
                         if showAlbum {
-                            Text([track.artist, track.album].compactMap { $0 }.filter { !$0.isEmpty }.joined(separator: " · "))
+                            Text([track.artist, track.album].compactMap { $0 }.filter { !$0.isEmpty }.factsLine())
                                 .font(.system(size: 12)).foregroundStyle(palette.textSecondary)
                         }
                         if episodes {
-                            Text([track.aired, track.overview].compactMap { $0 }.filter { !$0.isEmpty }.joined(separator: " · ").prefix(160))
+                            Text([track.aired, track.overview].compactMap { $0 }.filter { !$0.isEmpty }.factsLine().prefix(160))
                                 .font(.system(size: 12)).foregroundStyle(palette.textSecondary)
                         }
                     }
@@ -659,7 +659,7 @@ private struct MusicHomeTab: View {
                         }
                         let rest = [current.year.map(String.init), current.genre].compactMap { $0 }.filter { !$0.isEmpty }
                         if !rest.isEmpty {
-                            Text(((current.artist ?? "").isEmpty || pods ? "" : " · ") + rest.joined(separator: " · "))
+                            Text(((current.artist ?? "").isEmpty || pods ? "" : " · ") + rest.factsLine())
                                 .font(.system(size: 15)).foregroundStyle(palette.textSecondary)
                         }
                     }
@@ -1669,7 +1669,7 @@ struct MusicArtistPage: View {
         let split = info.discography(newestFirst: newestFirst, books: books)
         let facts = [MusicWords.count(info.albums.count, books ? ("book", "books") : ("album", "albums")),
                      MusicWords.count(info.tracks.count, ("song", "songs")), MusicWords.runtime(total), info.genres.prefix(3).joined(separator: ", ")]
-            .filter { !$0.isEmpty }.joined(separator: " · ")
+            .filter { !$0.isEmpty }.factsLine()
         return VStack(alignment: .leading, spacing: 0) {
             VStack(spacing: Tokens.Space.s1) {
                 ArtistPhoto(library: library, name: name, big: true)

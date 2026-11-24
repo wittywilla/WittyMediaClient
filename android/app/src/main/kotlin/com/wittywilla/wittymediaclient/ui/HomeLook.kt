@@ -181,10 +181,10 @@ data class CardLook(val title: String, val subtitle: String, val shape: CardShap
                 if (p?.watched == true) add(CardBadge.Seen)
             }
             val subtitle = when {
-                item.showId != null -> listOf(episodeLabel(item), if (wide) item.title else runtimeWords(item.runtimeSec)).filter { it.isNotEmpty() }.joinToString(" · ")
+                item.showId != null -> listOf(episodeLabel(item), if (wide) item.title else runtimeWords(item.runtimeSec)).filter { it.isNotEmpty() }.factsLine()
                 audio -> item.albumArtist.ifEmpty { item.artist }
                 item.kind == "book" -> item.artist.ifEmpty { year }
-                else -> listOf(year, length).filter { it.isNotEmpty() }.joinToString(" · ")
+                else -> listOf(year, length).filter { it.isNotEmpty() }.factsLine()
             }
             val title = if (!item.showTitle.isNullOrEmpty() && wide) item.showTitle else item.title
             return CardLook(title, subtitle, if (audio) CardShape.Square else if (wide) CardShape.Wide else CardShape.Poster, badges, progress)
@@ -193,7 +193,7 @@ data class CardLook(val title: String, val subtitle: String, val shape: CardShap
         // "2019 · 3 seasons", with how many episodes are left, or a tick once they're all watched.
         fun show(show: Show): CardLook {
             val seasons = "${show.seasonCount} ${if (show.seasonCount == 1) "season" else "seasons"}"
-            val subtitle = listOfNotNull(show.year?.takeIf { it != 0 }?.toString(), seasons).joinToString(" · ")
+            val subtitle = listOfNotNull(show.year?.takeIf { it != 0 }?.toString(), seasons).factsLine()
             val badges = buildList {
                 if (show.unwatched > 0 && show.unwatched < show.episodeCount) add(CardBadge.Unwatched(show.unwatched))
                 if (show.unwatched == 0) add(CardBadge.Seen)
@@ -264,7 +264,7 @@ object ShuffleLook {
     // The year, how long it is, and two genres.
     fun facts(item: Item): String =
         listOf(item.year?.takeIf { it != 0 }?.toString().orEmpty(), runtimeWords(item.runtimeSec), item.genres.take(2).joinToString(", "))
-            .filter { it.isNotEmpty() }.joinToString(" · ")
+            .filter { it.isNotEmpty() }.factsLine()
 }
 
 // MARK: a newer server

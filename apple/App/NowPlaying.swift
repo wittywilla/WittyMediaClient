@@ -463,7 +463,7 @@ struct NowPlayingView: View {
     private func words(centre: Bool) -> some View {
         let now = listening.now
         let under = [now?.artist ?? "", now?.album ?? ""].filter { !$0.isEmpty }
-        let line = (under.count == 2 && under[0] == under[1] ? [under[0]] : under).joined(separator: " · ")
+        let line = (under.count == 2 && under[0] == under[1] ? [under[0]] : under).factsLine()
         let align: TextAlignment = centre ? .center : .leading
         return VStack(alignment: centre ? .center : .leading, spacing: Tokens.Space.s1) {
             Text(now?.title ?? "").font(.wmHero).foregroundStyle(palette.text).lineLimit(3).multilineTextAlignment(align)

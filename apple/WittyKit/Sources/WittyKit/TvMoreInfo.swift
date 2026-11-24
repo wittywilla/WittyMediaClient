@@ -273,7 +273,7 @@ public enum MoreInfo {
 
         var facts: [DesignPageSpec.Row] = []
         func fact(_ title: String, _ value: String) { if !value.isEmpty { facts.append(DesignPageSpec.Row(title: title, value: value, pressable: false)) } }
-        fact("Genres", p.genres.joined(separator: " · "))
+        fact("Genres", p.genres.factsLine())
         fact("Rating", p.rating)
         fact("Year", p.year.map(String.init) ?? "")
         if let s = p.season, let e = p.episode { fact("Episode", "Season \(s) · Episode \(e)") }
@@ -282,13 +282,13 @@ public enum MoreInfo {
         fact("Language", p.language)
         fact("Country", p.country)
         fact("Sound", p.audio)
-        fact("Score", p.scores.map { "\($0.system) \(trim($0.value))" }.joined(separator: " · "))
+        fact("Score", p.scores.map { "\($0.system) \(trim($0.value))" }.factsLine())
         var flags: [String] = []
         if p.new { flags.append("New") }
         if p.premiere { flags.append("Premiere") }
         if p.repeated { flags.append("Repeat") }
         if p.hd { flags.append("HD") }
-        fact("This airing", flags.joined(separator: " · "))
+        fact("This airing", flags.factsLine())
         if !p.desc.isEmpty { sections.append(.secN("", p.desc)) }
         if !facts.isEmpty { sections.append(.secR("About", facts)) }
 
@@ -315,7 +315,7 @@ public enum MoreInfo {
         }
         let number = info.channel.number.isEmpty ? "" : "Ch \(info.channel.number) · "
         let eyebrow = "WittyTV · \(number)\(info.channel.name)"
-        let lead = [when(p.start, now: now, zone: zone) + (p.end > p.start ? " – " + clock(p.end, zone: zone) : ""), p.sub].filter { !$0.isEmpty }.joined(separator: " · ")
+        let lead = [when(p.start, now: now, zone: zone) + (p.end > p.start ? " – " + clock(p.end, zone: zone) : ""), p.sub].filter { !$0.isEmpty }.factsLine()
         return DesignPageSpec(eyebrow: eyebrow, title: p.title, lead: lead, sections: sections, actions: actions, layer: true)
     }
 

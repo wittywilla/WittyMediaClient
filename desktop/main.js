@@ -534,16 +534,20 @@ async function joinByInvite(link) {
   const opened = await openTunnel({ id: invite.serverId, hints: invite.hints })
   if (opened.error) return opened
   const mine = tunnel
-  const st = await mine.run.whenConnected(AWAY_CONNECT_MS + 15000)
-  if (tunnel !== mine) return { error: 'p2p-failed' }
-  if (!p2p.connected(st)) { closeTunnel(); return { error: 'p2p-failed' } }
+  // Shown at once: the helper waits for this device's own connection, and when that can't get through
+  // (the server's only way in is its own WittyRelay, which admits only listed devices), shows the invite
+  // with the invite's own key instead, which the server lists with its relay while the invite is open.
   const answer = await mine.run.enrol(invite.secret, deviceName(), OS_NAME)
   if (tunnel !== mine) return { error: 'p2p-failed' }
   if (!answer.ok) {
     log.warn('p2p', `The invite was refused: ${answer.reason || answer.error}`)
     closeTunnel()
-    return { error: 'invite-refused', message: guards.cleanMessage(answer.error) }
+    return answer.reason ? { error: 'invite-refused', message: guards.cleanMessage(answer.error) } : { error: 'p2p-failed' }
   }
+  // Listed now: this device's own key gets through, the relay having been told.
+  const st = await mine.run.whenConnected(AWAY_CONNECT_MS + 15000)
+  if (tunnel !== mine) return { error: 'p2p-failed' }
+  if (!p2p.connected(st)) { closeTunnel(); return { error: 'p2p-failed' } }
   return finishJoining(mine, { id: invite.serverId, hints: invite.hints }, answer, invite.name, 'the invite')
 }
 

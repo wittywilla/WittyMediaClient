@@ -288,7 +288,7 @@ fun NowPlayingScreen(nav: Nav) {
         val align = if (center) TextAlign.Center else TextAlign.Start
         Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(Space.S1)) {
             Text(about?.title?.toString().orEmpty(), color = MaterialTheme.colorScheme.onBackground, style = MaterialTheme.typography.headlineSmall, textAlign = align, maxLines = 3, overflow = TextOverflow.Ellipsis, modifier = Modifier.fillMaxWidth())
-            val under = listOf(about?.artist?.toString().orEmpty(), about?.albumTitle?.toString().orEmpty()).filter { it.isNotEmpty() }.distinct().joinToString(" · ")
+            val under = listOf(about?.artist?.toString().orEmpty(), about?.albumTitle?.toString().orEmpty()).filter { it.isNotEmpty() }.distinct().factsLine()
             if (under.isNotEmpty()) Text(under, color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodyLarge, textAlign = align, modifier = Modifier.fillMaxWidth())
             if (listening.isLoading) Text("Loading…", color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodyMedium, textAlign = align, modifier = Modifier.fillMaxWidth().semantics { liveRegion = LiveRegionMode.Polite })
             ErrorText(listening.problem)

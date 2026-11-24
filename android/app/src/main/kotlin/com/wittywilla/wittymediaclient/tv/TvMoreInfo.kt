@@ -28,6 +28,7 @@ import com.wittywilla.wittymediaclient.net.programmeInfo
 import com.wittywilla.wittymediaclient.ui.Nav
 import java.text.DateFormat
 import java.util.Date
+import com.wittywilla.wittymediaclient.ui.factsLine
 
 // WittyTV's More info (docs/plans/DESIGN-2.md section 9): a pop-up over the guide or the banner, without leaving it. The
 // programme's logo, title, times and description, then Watch now, Record, Remind me, Watchlist and Open item page where the
@@ -61,7 +62,7 @@ fun MoreInfoSheet(nav: Nav, key: String, start: Long, actions: MoreInfoActions, 
                         color = scheme.onSurfaceVariant, style = MaterialTheme.typography.bodyMedium,
                     )
                     if (i.sub.isNotEmpty()) Text(i.sub, color = scheme.onBackground, style = MaterialTheme.typography.titleMedium, maxLines = 2)
-                    if (i.facts.isNotEmpty()) Text(i.facts.joinToString(" · "), color = scheme.onSurfaceVariant, style = MaterialTheme.typography.bodyMedium)
+                    if (i.facts.isNotEmpty()) Text(i.facts.factsLine(), color = scheme.onSurfaceVariant, style = MaterialTheme.typography.bodyMedium)
                     if (i.desc.isNotEmpty()) Text(i.desc, color = scheme.onBackground, style = MaterialTheme.typography.bodyLarge, maxLines = 6, overflow = TextOverflow.Ellipsis)
                     Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                         if (i.actions.watch) SheetButton("Watch now", { onClose(); actions.watch() }, kind = SheetKind.Primary, takeFocus = true)
@@ -72,7 +73,7 @@ fun MoreInfoSheet(nav: Nav, key: String, start: Long, actions: MoreInfoActions, 
                     if (i.people.isNotEmpty()) {
                         Text("Cast and crew", color = scheme.onBackground, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold, modifier = Modifier.semantics { heading() })
                         // A person only the guide knows has no page: plain words, nothing to focus.
-                        Text(i.people.take(12).joinToString(" · ") { p -> p.name + if (p.role.isNotEmpty()) " (${p.role})" else "" }, color = scheme.onSurfaceVariant, style = MaterialTheme.typography.bodyMedium, maxLines = 4, overflow = TextOverflow.Ellipsis)
+                        Text(i.people.take(12).factsLine { p -> p.name + if (p.role.isNotEmpty()) " (${p.role})" else "" }, color = scheme.onSurfaceVariant, style = MaterialTheme.typography.bodyMedium, maxLines = 4, overflow = TextOverflow.Ellipsis)
                     }
                     if (i.schedule.size > 1) {
                         Text("Also on", color = scheme.onBackground, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold, modifier = Modifier.semantics { heading() })

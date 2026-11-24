@@ -236,7 +236,7 @@ fun ItemScreen(nav: Nav, s: Map<String, String>, id: Long) {
                 Column((if (upright) Modifier.fillMaxWidth() else Modifier.widthIn(min = 280.dp, max = 640.dp).weight(1f, fill = false)), verticalArrangement = Arrangement.spacedBy(Space.S3)) {
                     if (!it.showTitle.isNullOrEmpty()) Secondary("${it.showTitle} · ${episodeLabel(it)}")
                     Heading(it.title)
-                    Secondary(listOfNotNull(it.year?.toString(), runtimeText(it.runtimeSec).ifEmpty { null }, it.contentRating.ifEmpty { null }).joinToString(" · "))
+                    Secondary(listOfNotNull(it.year?.toString(), runtimeText(it.runtimeSec).ifEmpty { null }, it.contentRating.ifEmpty { null }).factsLine())
                     if (it.genres.isNotEmpty()) Secondary(it.genres.joinToString(", "))
                     ErrorText(error)
                     if (it.isRigGame) {

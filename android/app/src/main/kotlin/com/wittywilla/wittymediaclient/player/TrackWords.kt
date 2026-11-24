@@ -3,6 +3,7 @@
 package com.wittywilla.wittymediaclient.player
 
 import com.wittywilla.wittymediaclient.net.Track
+import com.wittywilla.wittymediaclient.ui.factsLine
 import java.util.Locale
 
 // How a video's sound tracks and subtitles are named in every native player: the TV's lists, the phone's tiles and
@@ -10,7 +11,7 @@ import java.util.Locale
 // follows the website's picker (web/src/player/VideoPlayer.tsx): the language first, then the track's own name,
 // then what kind it is. A track nobody labelled is "Track 2" or "Subtitles 2", never "Unknown".
 data class TrackName(val title: String, val sub: String, val detail: String) {
-    val line: String get() = listOf(title, sub, detail).filter { it.isNotEmpty() }.joinToString(" · ")
+    val line: String get() = listOf(title, sub, detail).filter { it.isNotEmpty() }.factsLine()
 }
 
 object TrackWords {
@@ -77,13 +78,13 @@ object TrackWords {
         val language = language(t)
         val own = own(t, language)
         val title = language.ifEmpty { own.ifEmpty { "$fallback $number" } }
-        val sub = (listOf(if (language.isEmpty()) "" else own) + marks(t, own)).filter { it.isNotEmpty() }.joinToString(" · ")
+        val sub = (listOf(if (language.isEmpty()) "" else own) + marks(t, own)).filter { it.isNotEmpty() }.factsLine()
         return TrackName(title, sub, detail)
     }
 
     // `number` counts from 1 in the list as shown.
     fun audio(t: Track, number: Int): TrackName =
-        name(t, number, "Track", listOf(t.codec.uppercase(Locale.ROOT), channels(t.channels)).filter { it.isNotEmpty() }.joinToString(" · "))
+        name(t, number, "Track", listOf(t.codec.uppercase(Locale.ROOT), channels(t.channels)).filter { it.isNotEmpty() }.factsLine())
 
     fun subtitle(t: Track, number: Int): TrackName = name(t, number, "Subtitles", subtitleKind(t.codec))
 

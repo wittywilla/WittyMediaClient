@@ -179,7 +179,7 @@ fun FirstLookScreen(nav: Nav, s: Map<String, String>) {
                                     scope.launch { nav.chooseExperience(e.id); busy = false }
                                 }
                             },
-                            sub = listOfNotNull(e.tagline.ifEmpty { null }, wears?.shownName).joinToString(" · "), on = on,
+                            sub = listOfNotNull(e.tagline.ifEmpty { null }, wears?.shownName).factsLine(), on = on,
                             takeFocus = on, focusKey = "first-" + e.id,
                             preview = { ThemedThumb(com.wittywilla.wittymediaclient.net.Wire.of(e.wire, form), e.name, wears, Modifier.fillMaxWidth(), false, portrait) },
                         )
@@ -190,7 +190,7 @@ fun FirstLookScreen(nav: Nav, s: Map<String, String>) {
                 val theme = themeOf(shownTheme)
                 DesignSection(s["firstThemePreview"].orEmpty()) {
                     // Only a picture: it takes no focus, so the first Down from the heading reaches the themes (#76).
-                    PreviewPanel(listOfNotNull(look?.name, theme?.shownName).joinToString(" · "), theme?.let { if (it.scheme == "light") s["themeLight"].orEmpty() else s["themeDark"].orEmpty() }.orEmpty()) {
+                    PreviewPanel(listOfNotNull(look?.name, theme?.shownName).factsLine(), theme?.let { if (it.scheme == "light") s["themeLight"].orEmpty() else s["themeDark"].orEmpty() }.orEmpty()) {
                         Box(Modifier.fillMaxWidth(), contentAlignment = androidx.compose.ui.Alignment.Center) {
                             // At most 320 tall (460 on a TV), as Apple's, so the one preview never fills the screen.
                             ThemedThumb(wire, look?.name.orEmpty(), theme, if (portrait) Modifier.width(178.dp) else Modifier.widthIn(max = if (LocalMetrics.current.tv) LocalMetrics.current.u(736) else 512.dp), false, portrait)

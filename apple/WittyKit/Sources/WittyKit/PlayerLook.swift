@@ -257,7 +257,7 @@ public struct TrackName: Equatable {
     public let sub: String
     public let detail: String
 
-    public var line: String { [title, sub, detail].filter { !$0.isEmpty }.joined(separator: " · ") }
+    public var line: String { [title, sub, detail].filter { !$0.isEmpty }.factsLine() }
 }
 
 /// How a video's sound tracks and subtitles are named in every native player: the same rule as Android's
@@ -328,13 +328,13 @@ public enum TrackWords {
         let lang = Self.language(track)
         let ownName = Self.own(track, language: lang)
         let title = !lang.isEmpty ? lang : !ownName.isEmpty ? ownName : "\(fallback) \(number)"
-        let sub = ([lang.isEmpty ? "" : ownName] + marks(track, title: ownName)).filter { !$0.isEmpty }.joined(separator: " · ")
+        let sub = ([lang.isEmpty ? "" : ownName] + marks(track, title: ownName)).filter { !$0.isEmpty }.factsLine()
         return TrackName(title: title, sub: sub, detail: detail)
     }
 
     /// `number` counts from 1 in the list as shown.
     public static func audio(_ track: Track, number: Int) -> TrackName {
-        name(track, number: number, fallback: "Track", detail: [(track.codec ?? "").uppercased(), channels(track.channels)].filter { !$0.isEmpty }.joined(separator: " · "))
+        name(track, number: number, fallback: "Track", detail: [(track.codec ?? "").uppercased(), channels(track.channels)].filter { !$0.isEmpty }.factsLine())
     }
 
     public static func subtitle(_ track: Track, number: Int) -> TrackName {
