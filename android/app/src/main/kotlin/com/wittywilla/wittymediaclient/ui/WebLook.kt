@@ -60,6 +60,8 @@ object WebIcons {
     val Tv: ImageVector by lazy { webIcon("tv", "M21 3H3a2 2 0 00-2 2v12a2 2 0 002 2h5v2h8v-2h5a2 2 0 002-2V5a2 2 0 00-2-2zm0 14H3V5h18z") }
     val Search: ImageVector by lazy { webIcon("search", "M15.5 14h-.8l-.3-.3a6.5 6.5 0 10-.7.7l.3.3v.8l5 5 1.5-1.5zm-6 0a4.5 4.5 0 110-9 4.5 4.5 0 010 9z") }
     val Menu: ImageVector by lazy { webIcon("menu", "M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z") }
+    // Notifications, as the website's bell.
+    val Bell: ImageVector by lazy { webIcon("bell", "M12 22c1.1 0 2-.9 2-2h-4a2 2 0 002 2zm6-6v-5c0-3.07-1.64-5.64-4.5-6.32V4a1.5 1.5 0 00-3 0v.68C7.63 5.36 6 7.92 6 11v5l-2 2v1h16v-1z") }
     val Left: ImageVector by lazy { webIcon("left", "M15.4 7.4L10.8 12l4.6 4.6L14 18l-6-6 6-6z") }
     val Right: ImageVector by lazy { webIcon("right", "M8.6 7.4L13.2 12l-4.6 4.6L10 18l6-6-6-6z") }
     val Star: ImageVector by lazy { webIcon("star", "M12 3l2.7 5.8 6.3.8-4.6 4.4 1.2 6.3L12 17.2 6.4 20.3l1.2-6.3L3 9.6l6.3-.8z") }

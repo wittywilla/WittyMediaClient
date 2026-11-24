@@ -135,10 +135,13 @@ struct TvTopBar: View {
                     }
                 }
             }
-            // Space, not a line, keeps You apart from the rest: 32 from the edge of the pills on the left.
-            pill(.profile, AppTab.profile.title, AppTab.profile.icon)
+            // Space, not a line, keeps the bell and You apart from the rest: 32 from the edge of the pills on the left.
+            TvNotesPill(height: TvTabPill.height)
                 .padding(.vertical, ring)
                 .padding(.leading, Tokens.Space.s8 - ring)
+            pill(.profile, AppTab.profile.title, AppTab.profile.icon)
+                .padding(.vertical, ring)
+                .padding(.leading, Tokens.Space.s4 - ring * 2)
                 .padding(.trailing, metrics.gutter - ring)
         }
         .padding(.top, Tokens.Space.s6 - ring * 2)

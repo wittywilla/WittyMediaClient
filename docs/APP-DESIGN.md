@@ -593,6 +593,7 @@ A single column, gutter 16, at most 640 wide and centred on a tablet; it scrolls
 | | `rowCollections` Collections and playlists | `square.stack` / `library_books`, `#0e7c6f` | | `/collections` | everyone |
 | | `rowShareLinks` Share links | `link` / `link`, `#0a6fb8` | | `/settings/sharing` | everyone |
 | | `rowActivity` Activity | `waveform.path.ecg` / `monitoring`, `#99690a` | | `/settings/activity` | everyone |
+| | `rowNotifications` Notifications | `bell` / `notifications`, `#99690a` | | `/settings/notifications` | everyone |
 | | `rowGameSettings` Game settings | `gamecontroller` / `sports_esports`, `#7f46b8` | | `/settings/games` | with a games library |
 | | `rowControllers` Controllers | `dpad` / `gamepad`, `#3e5bd0` | | `/controllers` | with a games library |
 | `groupDevice` | `rowTheme` Theme | `paintpalette` / `palette`, `#0e7c6f` | the theme's name | Theme (native) | everyone |

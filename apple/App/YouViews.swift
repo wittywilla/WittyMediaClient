@@ -110,6 +110,7 @@ struct YouView: View {
                 page("/settings/sharing", "link", RowTint.account, title: "rowShareLinks")
             }
             page("/settings/activity", "waveform.path.ecg", RowTint.gold, title: "rowActivity")
+            page("/settings/notifications", "bell", RowTint.gold, title: "rowNotifications")
             if hasGames {
                 page("/settings/games", "gamecontroller", RowTint.devices, title: "rowGameSettings")
                 page("/controllers", "dpad", RowTint.password, title: "rowControllers")

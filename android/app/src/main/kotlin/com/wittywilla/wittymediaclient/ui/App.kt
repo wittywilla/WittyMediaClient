@@ -123,6 +123,8 @@ sealed interface Route {
     // A library added to a TV's top menu, as a tab of its own.
     data class Pinned(val library: com.wittywilla.wittymediaclient.net.Library) : Route { override val key = "pinned-${library.id}" }
     data object Notices : Route { override val key = "notices" }
+    // The bell's list (Notes.kt).
+    data object Notes : Route { override val key = "notes" }
     // A device that has never been at home with its server shows a code for it (ui/AwayScreens.kt).
     data object JoinAway : Route { override val key = "join-away" }
     // One module's settings, at the address the server gave (ui/ModuleSettingsScreens.kt).
@@ -162,7 +164,7 @@ sealed interface Route {
     // The app's own screens leave room for the mini player. A film, a server's page and signing in don't have it.
     val hasMiniPlayer: Boolean
         get() = when (this) {
-            Home, Search, Profile, Libraries, Games, Notices, Logs, is Library, is Pinned, is Show, is Item, is Album, is Artist, is You, is Sdui, is OwnItem -> true
+            Home, Search, Profile, Libraries, Games, Notices, Notes, Logs, is Library, is Pinned, is Show, is Item, is Album, is Artist, is You, is Sdui, is OwnItem -> true
             else -> false
         }
 }
@@ -1452,6 +1454,7 @@ fun AppRoot(app: WittyApp) {
                             else PageShell(nav) { SduiPageScreen(nav, route.page, route.params, title = route.title) }
                         is Route.OwnItem -> PageShell(nav) { if (LocalMetrics.current.tv) ItemScreen(nav, strings, route.id) else PhoneItem(nav, strings, route.id) }
                         Route.Notices -> NoticesScreen(nav)
+                        Route.Notes -> NotesScreen(nav)
                         Route.JoinAway -> JoinAwayScreen(nav, strings)
                         is Route.ModuleSettings -> ModuleSettingsScreen(nav, strings, route.url, route.title, route.page)
                         Route.Logs -> LogsScreen(nav)
