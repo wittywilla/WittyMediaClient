@@ -72,7 +72,9 @@ def api(method, path, body=None, token=None):
 def nodes():
     for _ in range(10):
         # The old picture goes first: a dump that fails (a screen still moving) must not leave it to be read.
-        xml = sh('rm -f /sdcard/u.xml; uiautomator dump /sdcard/u.xml >/dev/null && cat /sdcard/u.xml', check=False)
+        xml = sh('rm -f /sdcard/u.xml; uiautomator dump /sdcard/u.xml 2>&1 | grep -v "dumped to" ; cat /sdcard/u.xml 2>/dev/null', check=False)
+        if '<' not in xml:
+            log('no screen dump:', xml.strip()[:120])
         try:
             root = ET.fromstring(xml[xml.index('<'):])
             break
@@ -95,6 +97,13 @@ def texts():
 def dismiss(ns):
     """A system "isn't responding" dialog over everything (the emulator's launcher, on a busy runner): closed,
     and logged. One about this app is waited out instead, and logged, as it would be a fault of ours."""
+    hint = next((x for x in ns if x['text'] == 'Got it'), None)
+    if hint and any('Viewing full screen' in x['text'] for x in ns):
+        b = hint['b']
+        sh(f'input tap {(b[0] + b[2]) // 2} {(b[1] + b[3]) // 2}')
+        log('system hint closed: Viewing full screen')
+        time.sleep(1)
+        return True
     msg = next((x['text'] for x in ns if "isn't responding" in x['text']), None)
     if not msg:
         return False
@@ -173,11 +182,28 @@ def launch(clear=False):
     past_welcome()
 
 
-def signed_in(secs, what):
-    """Waits for the server's home (its film shows), going through the welcome on the way."""
+def in_front():
+    """This app's window has the focus (not the launcher, not a system dialog)."""
+    return PKG in sh('dumpsys window | grep -E "mCurrentFocus|mFocusedApp"', check=False)
+
+
+def new_session(since):
+    """A sign-in made on the server since then, by a device other than the test's own."""
+    return next((x for x in api('GET', '/api/sessions') if (x.get('createdAt') or 0) >= since - 5 and x.get('device') != 'smoke'), None)
+
+
+def signed_in(secs, what, since=None):
+    """Waits for the server's home (its film shows), going through the welcome on the way. A phone's Home keeps
+    moving, so uiautomator can go long without a picture of it: then the server's word that this device signed in,
+    with the app in front and the welcome gone, is enough."""
     end = time.time() + secs
+    since = since or (time.time() - secs)
     while not find('Smoke Film'):
         past_welcome()
+        s = new_session(since)
+        if s and in_front() and not find('Choose a layout|Choose colours|digits entered|Choose a server'):
+            log('signed in, says the server:', s.get('device'), s.get('via'))
+            return
         if time.time() > end:
             raise RuntimeError(f'waited {secs}s for {what}; on screen: {texts()[:30]}')
         time.sleep(1)
@@ -374,7 +400,7 @@ def settings():
         # The phone's You tab; on a TV, the profile at the end of the top bar.
         tap('^(You|smoke|S)$', 30)
     # A TV's profile page is its settings (Account, Playback, Your devices…); a phone's You tab leads to them.
-    if not (TV and find('^ACCOUNT$|^Account$')):
+    if not find('^ACCOUNT$|^Account$'):
         tap('^Settings$', 30)
     wait('Server|Playback|Libraries|About|Account|ACCOUNT', 30, "settings' sections")
     launch()
