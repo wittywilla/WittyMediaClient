@@ -34,9 +34,23 @@ What changed in WittyMediaClient, newest first. What changed before it had a rep
   chosen, at its top. On the sign-in and security-code screens the server's name now comes before the heading. It
   fits a 1280×720 window without scrolling, and the same goes for the desktop app, a TV, Android and Apple.
 
-**Games on a phone or tablet**
+**Players, TV and games**
 
 - **A slow first picture is waited for.** Once a game's connection is through, its first picture gets 45 seconds (a big game, or a server with no graphics card, can take a while) before the app tries another way, instead of giving up after 12.
+- **The video player on Android TV has a new bar:** the title, the seek bar with the time gone and left, Play and 10 s back and on, then round buttons for Audio, Subtitles, Quality, Speed, Scenes, Info and More that show their names when focused. Watch party, Play on, 3D and Leave are under More. The bar sits well inside a TV's edge (#78).
+- **Audio, Subtitles, Quality and Speed menus on every native player** (Android TV, Android phones, Apple TV, iPhone and iPad): fully usable with a remote, Back closes them, and the choice in use is ticked. Tracks are named by language with the track's own name under it ("English · Commentary with …", "SDH", "Forced") and what kind they are ("AC3 · 5.1", "Pictures"); one with no language is "Track 2", never "Unknown" (#78).
+- **Scenes as a grid of pictures**, with each scene's name and time, on Android TV, Apple TV and phones. The film pauses while it's open and plays on when it closes.
+- **Subtitle size** (small to extra large) on Android TV and phones, kept for every video.
+- **Film and show names under posters on Android TV** are smaller and take up to two lines, so the whole name can be read ("Bullet Train Explosion", not "Bullet Train …").
+
+## 0.6.1
+
+Released 2026-11-24.
+
+Made for WittyMediaServer 0.8.3-alpha: **Enter a code** needs its new Connect a device.
+
+**Games on a phone or tablet**
+
 - **Games start when your server is reached from away.** A game stopped at "Waiting for the first picture" with a message about a hello, and leaving it showed a black page saying the address was for the app only. Both are fixed, and the games list and every server page now open from away too.
 - **Notes about a game are on its start screen**, short and readable, not in a long message over Cancel. Messages over a game are short, sit at the top on a touch screen, and never show the server's technical words.
 
@@ -51,11 +65,6 @@ What changed in WittyMediaClient, newest first. What changed before it had a rep
 
 **Android TV and Apple TV**
 
-- **The video player on Android TV has a new bar:** the title, the seek bar with the time gone and left, Play and 10 s back and on, then round buttons for Audio, Subtitles, Quality, Speed, Scenes, Info and More that show their names when focused. Watch party, Play on, 3D and Leave are under More. The bar sits well inside a TV's edge (#78).
-- **Audio, Subtitles, Quality and Speed menus on every native player** (Android TV, Android phones, Apple TV, iPhone and iPad): fully usable with a remote, Back closes them, and the choice in use is ticked. Tracks are named by language with the track's own name under it ("English · Commentary with …", "SDH", "Forced") and what kind they are ("AC3 · 5.1", "Pictures"); one with no language is "Track 2", never "Unknown" (#78).
-- **Scenes as a grid of pictures**, with each scene's name and time, on Android TV, Apple TV and phones. The film pauses while it's open and plays on when it closes.
-- **Subtitle size** (small to extra large) on Android TV and phones, kept for every video.
-- **Film and show names under posters on Android TV** are smaller and take up to two lines, so the whole name can be read ("Bullet Train Explosion", not "Bullet Train …").
 - **A channel in a bumper or a gap** names the next real programme ("Up next: …, at 8:30") in its banner and in the guide, not "We'll be right back".
 - **An empty library on Android TV** shows its name, why it's empty and a button to focus, not a line at the top edge with nothing to select.
 - **First-time setup on Android TV:** the colours step starts with a theme focused, and the preview no longer takes the first press. Import a theme is hidden on a TV.
