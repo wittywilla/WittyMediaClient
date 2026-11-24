@@ -104,8 +104,8 @@ import androidx.media3.ui.AspectRatioFrameLayout
 import androidx.media3.ui.CaptionStyleCompat
 import androidx.media3.ui.PlayerView
 import com.wittywilla.wittymediaclient.net.Item
-import com.wittywilla.wittymediaclient.net.Track
 import com.wittywilla.wittymediaclient.net.TrackOrder
+import com.wittywilla.wittymediaclient.player.TrackWords
 import com.wittywilla.wittymediaclient.player.VideoSession
 import com.wittywilla.wittymediaclient.player.ViewPrefs
 import com.wittywilla.wittymediaclient.player.ViewPrefsStore
@@ -140,7 +140,7 @@ private const val DOUBLE_TAP_MS = 300L
 // The widths the website's player changes at: ≤560 compact, ≤700 no volume or labels, wider the full layout.
 private enum class Fit { Compact, Narrow, Wide }
 
-private enum class Open { None, Speed, Scenes, Settings, Audio, Subtitles, Info, Keys }
+private enum class Open { None, Speed, Quality, Scenes, Settings, Audio, Subtitles, Info, Keys }
 
 private fun Item.episodeWords(): String =
     if (season != null && episode != null) "S$season · E$episode${episodeEnd?.let { "–$it" } ?: ""}" else ""
@@ -156,8 +156,14 @@ private fun speedWords(s: Double): String = if (s == 1.0) "Normal" else "${trimm
 private fun trimmed(s: Double): String = if (s == s.toLong().toDouble()) s.toLong().toString() else s.toString()
 private val SPEEDS = listOf(0.5, 0.75, 1.0, 1.25, 1.5, 1.75, 2.0, 2.5, 3.0, 3.5, 4.0, 5.0, 6.0, 8.0, 10.0, 12.0, 16.0)
 
-private fun language(t: Track): String =
-    t.languageName.ifEmpty { if (t.language.isEmpty()) "Unknown" else Locale.forLanguageTag(t.language).displayLanguage.ifEmpty { t.language } }
+// The quality button's words: what the viewer chose, or Auto.
+private fun qualityWords(menu: com.wittywilla.wittymediaclient.net.QualityMenu): String = when (val c = menu.choice) {
+    "", "auto" -> "Auto"
+    "original" -> "Original"
+    else -> menu.presets.firstOrNull { it.choice == c }?.name ?: "Quality"
+}
+
+private fun rate(kbps: Int) = if (kbps >= 1000) "${if (kbps % 1000 == 0) kbps / 1000 else "%.1f".format(Locale.ROOT, kbps / 1000.0)} Mbit/s" else "$kbps kbit/s"
 
 private fun fullScreen(view: android.view.View, on: Boolean) {
     val window = (view.context as? Activity)?.window ?: return
@@ -192,7 +198,7 @@ fun VideoSurface(session: VideoSession, modifier: Modifier = Modifier, cover: Bo
             view.subtitleView?.visibility = if (subtitles) android.view.View.VISIBLE else android.view.View.GONE
             val heightDp = with(density) { view.height.toDp().value }
             if (heightDp > 0) {
-                val size = (heightDp * 0.032f).coerceIn(16f, 36f)
+                val size = (heightDp * 0.032f).coerceIn(16f, 36f) * session.subtitleSize.toFloat()
                 view.subtitleView?.setFixedTextSize(TypedValue.COMPLEX_UNIT_DIP, size)
                 view.subtitleView?.setBottomPaddingFraction((size * 1.2f * 3f / heightDp).coerceAtMost(0.3f))
             }
@@ -312,6 +318,17 @@ fun VideoPlayerScreen(nav: Nav, route: Route.Player) {
     // The watch party's panel, down the side (PartyScreens.kt). It has its own Back.
     var partyOpen by remember { mutableStateOf(false) }
     BackHandler { if (open != Open.None) open = Open.None else nav.minimizeVideo() }
+    // The film waits while the scenes are open, and carries on after, on a phone as on a TV. Not in a watch party: one
+    // person looking at the scenes doesn't stop the room.
+    var resumeAfterScenes by remember { mutableStateOf(false) }
+    LaunchedEffect(open) {
+        if (open == Open.Scenes) {
+            if (session.player.playWhenReady && session.steering == null) { session.player.pause(); resumeAfterScenes = true }
+        } else if (resumeAfterScenes) {
+            resumeAfterScenes = false
+            session.player.play()
+        }
+    }
 
     BoxWithConstraints(
         Modifier
@@ -468,7 +485,9 @@ private fun BottomBar(session: VideoSession, fit: Fit, open: Open, toggle: (Open
                 Spacer(Modifier.weight(1f))
                 SmallButton("${trimmed(session.speed.toDouble())}×", null, "Playback speed", { toggle(Open.Speed) }, fill = Color(0x1AFFFFFF), padding = if (compact) 8.dp else 12.dp, minWidth = if (compact) 0.dp else 46.dp)
                 if ((stream?.chapters?.size ?: 0) > 1) PlayerIcon(WebIcons.Chapters, "Scenes", icon, 24.dp, { toggle(Open.Scenes) }, on = open == Open.Scenes)
-                if ((stream?.audio?.size ?: 0) > 1) PlayerIcon(WebIcons.Audio, "Audio & language", icon, 24.dp, { toggle(Open.Audio) })
+                stream?.quality?.let { q -> SmallButton(qualityWords(q), null, "Quality, ${qualityWords(q)}", { toggle(Open.Quality) }, fill = Color(0x1AFFFFFF), padding = if (compact) 8.dp else 12.dp) }
+                // One sound track still says which language and how many speakers, as on the TV.
+                if ((stream?.audio?.size ?: 0) > 0) PlayerIcon(WebIcons.Audio, "Audio & language", icon, 24.dp, { toggle(Open.Audio) })
                 if ((stream?.subtitles?.size ?: 0) > 0) PlayerIcon(WebIcons.Subs, "Subtitles", icon, 24.dp, { toggle(Open.Subtitles) })
                 val remote = session.prefs.remote
                 SmallButton(
@@ -493,6 +512,7 @@ private fun BottomBar(session: VideoSession, fit: Fit, open: Open, toggle: (Open
             modifier = Modifier.padding(start = 14.dp).height(18.dp).align(Alignment.TopStart), maxLines = 1, lineHeight = 18.sp,
         )
         if (open == Open.Speed) SpeedList(session, Modifier.align(Alignment.BottomEnd).padding(end = 20.dp, bottom = 64.dp)) { toggle(Open.Speed) }
+        if (open == Open.Quality) QualityList(session, Modifier.align(Alignment.BottomEnd).padding(end = 20.dp, bottom = 64.dp)) { toggle(Open.Quality) }
         if (open == Open.Scenes) ScenesPanel(session, fit, Modifier.align(Alignment.BottomCenter)) { toggle(Open.Scenes) }
     }
 }
@@ -523,6 +543,28 @@ private fun SpeedList(session: VideoSession, modifier: Modifier, close: () -> Un
     }
 }
 
+// The quality menu, as the website's: Auto, Original, then each size the server offers, the one in use marked.
+@Composable
+private fun QualityList(session: VideoSession, modifier: Modifier, close: () -> Unit) {
+    val menu = session.stream?.quality ?: return
+    val now = menu.choice
+    val rows = listOf(Triple("", "Auto", ""), Triple("original", "Original", if (menu.sourceHeight > 0) "${menu.sourceHeight}p" else "")) +
+        menu.presets.map { Triple(it.choice, it.name, rate(it.kbps)) }
+    Column(modifier.widthIn(min = 220.dp).heightIn(max = 420.dp).playerPanel().verticalScroll(rememberScrollState()).padding(8.dp)) {
+        PanelHead("Quality")
+        rows.forEach { (choice, words, note) ->
+            val chosen = if (choice.isEmpty()) now.isEmpty() || now == "auto" else now == choice
+            Pressable({ session.chooseQuality(choice); close() }, Modifier.fillMaxWidth().heightIn(min = 36.dp), shape = RoundedCornerShape(6.dp), fill = Color.Transparent, label = listOf(words, note).filter { it.isNotEmpty() }.joinToString(", "), selected = chosen, ring = false) {
+                Row(Modifier.fillMaxWidth().padding(horizontal = 10.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Text(if (chosen) "✓" else "", color = Color.White, fontSize = 14.sp, modifier = Modifier.width(18.dp))
+                    Text(words, color = if (chosen) Color.White else Dark.fg2, fontSize = 14.sp, fontWeight = if (chosen) FontWeight.SemiBold else FontWeight.Normal, modifier = Modifier.weight(1f))
+                    if (note.isNotEmpty()) Text(note, color = Dark.fg3, fontSize = 11.sp)
+                }
+            }
+        }
+    }
+}
+
 @Composable
 private fun ScenesPanel(session: VideoSession, fit: Fit, modifier: Modifier, close: () -> Unit) {
     val chapters = session.stream?.chapters.orEmpty()
@@ -536,7 +578,7 @@ private fun ScenesPanel(session: VideoSession, fit: Fit, modifier: Modifier, clo
     ) {
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
             Text("Scenes", color = Color.White, fontSize = 17.sp, fontWeight = FontWeight.SemiBold)
-            Text("${chapters.size} scenes", color = Dark.fg2, fontSize = 13.sp, modifier = Modifier.weight(1f))
+            Text(if (session.playing) "${chapters.size} scenes" else "${chapters.size} scenes · paused", color = Dark.fg2, fontSize = 13.sp, modifier = Modifier.weight(1f))
             PlayerIcon(WebIcons.Close, "Close", 44.dp, 24.dp, close)
         }
         LazyVerticalGrid(
@@ -551,7 +593,8 @@ private fun ScenesPanel(session: VideoSession, fit: Fit, modifier: Modifier, clo
                             Modifier.fillMaxSize().border(1.dp, Color(0x14FFFFFF), RoundedCornerShape(10.dp))
                                 .then(if (now) Modifier.ringOutside(RoundedCornerShape(10.dp), Color.White, 2.dp, 2.dp) else Modifier),
                         ) {
-                            Text("${i + 1}", color = Color(0x59FFFFFF), fontSize = 30.sp, fontWeight = FontWeight.Bold, modifier = Modifier.align(Alignment.Center))
+                            // A picture from the scene, as on the website; its number until it comes.
+                            ServerImage(session.scenePicture(i), 200.dp, 16f / 9f, Modifier.fillMaxSize().clip(RoundedCornerShape(10.dp)), placeholder = "${i + 1}")
                             Text(clock(c.start), color = Color.White, fontSize = 11.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.align(Alignment.BottomEnd).padding(6.dp).clip(RoundedCornerShape(4.dp)).background(Dark.scrim).padding(horizontal = 6.dp, vertical = 1.dp))
                             if (now) Text("Now playing", color = MaterialTheme.colorScheme.onPrimary, fontSize = 11.sp, fontWeight = FontWeight.Bold, modifier = Modifier.align(Alignment.TopStart).padding(6.dp).clip(RoundedCornerShape(4.dp)).background(MaterialTheme.colorScheme.primary).padding(horizontal = 6.dp, vertical = 1.dp))
                         }
@@ -625,6 +668,7 @@ private fun ViewSettings(session: VideoSession, modifier: Modifier, close: () ->
             SettingRow("Remote") { WebSwitch(p.remote, "Remote") { save(p.copy(remote = it)) } }
             SettingRow("Remote style") { Segmented(listOf("floating" to "Floating", "bar" to "In control bar"), p.remoteStyle) { save(p.copy(remoteStyle = it)) } }
             SettingRow("Hide controls after") { Segmented(listOf(2.0 to "2 s", 3.5 to "3.5 s", 6.0 to "6 s", 0.0 to "Never"), p.hideAfter) { save(p.copy(hideAfter = it)) } }
+            SettingRow("Subtitle size") { Segmented(listOf(0.8 to "S", 1.0 to "M", 1.25 to "L", 1.5 to "XL"), session.subtitleSize) { session.changeSubtitleSize(it) } }
             SettingRow("Picture") { Segmented(listOf("contain" to "Fit", "cover" to "Fill screen"), p.fit) { save(p.copy(fit = it)) } }
             SettingRow("3D video") { Segmented(listOf("off" to "Off", "sbs" to "Side by side", "tab" to "Over-under"), p.stereo) { save(p.copy(stereo = it)) } }
             if (p.stereo != "off") SettingRow("Show 3D as") { Segmented(listOf("2d" to "2D (one eye)", "anaglyph" to "Red/cyan glasses"), p.stereoView) { save(p.copy(stereoView = it)) } }
@@ -650,16 +694,16 @@ private fun TrackPicker(session: VideoSession, audio: Boolean, tv: Boolean, clos
     val kind = if (audio) "audio" else "subtitle"
     data class Tile(val title: String, val sub: String, val detail: String, val lang: String, val off: Boolean, val chosen: Boolean, val pick: () -> Unit)
     val tiles = if (audio) {
-        stream.audio.map { t ->
-            Tile(language(t), t.title, listOf(t.codec.uppercase(Locale.ROOT), if (t.channels > 0) "${t.channels} ch" else "").filter { it.isNotEmpty() }.factsLine(), t.language, false, t.index == stream.audioIndex) { session.chooseAudio(t.index) }
+        TrackWords.audioList(stream.audio).map { (t, n) ->
+            Tile(n.title, n.sub, n.detail, t.language, false, t.index == stream.audioIndex) { session.chooseAudio(t.index) }
         }
     } else {
         val burned = stream.subtitleDelivery == "burn"
-        listOf(Tile("Off", "", "", "", true, stream.subtitleIndex < 0) { session.chooseSubtitle(-1, false) }) + stream.subtitles.flatMap { t ->
+        listOf(Tile("Off", "", "", "", true, stream.subtitleIndex < 0) { session.chooseSubtitle(-1, false) }) + TrackWords.subtitleList(stream.subtitles).flatMap { (t, n) ->
             val styled = t.codec.lowercase(Locale.ROOT) in setOf("ass", "ssa")
             listOfNotNull(
-                Tile(language(t), t.title, t.codec.uppercase(Locale.ROOT), t.language, false, t.index == stream.subtitleIndex && !(styled && burned)) { session.chooseSubtitle(t.index, false) },
-                if (styled) Tile(language(t), "With its styling", "Drawn into the picture", t.language, false, t.index == stream.subtitleIndex && burned) { session.chooseSubtitle(t.index, true) } else null,
+                Tile(n.title, n.sub, n.detail, t.language, false, t.index == stream.subtitleIndex && !(styled && burned)) { session.chooseSubtitle(t.index, false) },
+                if (styled) Tile(n.title, "With its styling", "Drawn into the picture", t.language, false, t.index == stream.subtitleIndex && burned) { session.chooseSubtitle(t.index, true) } else null,
             )
         }
     }

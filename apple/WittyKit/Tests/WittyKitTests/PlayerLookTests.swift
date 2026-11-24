@@ -53,13 +53,49 @@ final class PlayerLookTests: XCTestCase {
          {"index":3,"language":"und"}]
         """#.utf8))
         let audio = TrackTile.audio(tracks, chosen: 2)
-        XCTAssertEqual(audio.map(\.title), ["English", "French", "Unknown"])
+        XCTAssertEqual(audio.map(\.title), ["English", "French", "Track 3"], "never Unknown")
         XCTAssertEqual(audio[0].sub, "Commentary")
-        XCTAssertEqual(audio[0].detail, "AAC · 2 ch")
+        XCTAssertEqual(audio[0].detail, "AAC · Stereo")
         XCTAssertEqual(audio.map(\.active), [false, true, false])
         let subtitles = TrackTile.subtitles(Array(tracks.prefix(1)), chosen: -1)
         XCTAssertEqual(subtitles.map(\.title), ["Off", "English"])
         XCTAssertTrue(subtitles[0].active)
+    }
+
+    // The same cases as Android's TrackWordsTest, so all three players name tracks alike.
+    func testTracksAreNamedAsOnAndroid() throws {
+        func track(_ json: String) throws -> Track { try JSONDecoder().decode(Track.self, from: Data(json.utf8)) }
+        let english = TrackWords.audio(try track(#"{"index":1,"language":"eng","languageName":"English","codec":"ac3","channels":6}"#), number: 1)
+        XCTAssertEqual(english, TrackName(title: "English", sub: "", detail: "AC3 · 5.1"))
+        XCTAssertEqual(TrackWords.languageOf("ger"), "German")
+        XCTAssertEqual(TrackWords.languageOf("deu"), "German")
+        XCTAssertEqual(TrackWords.languageOf("fre"), "French")
+        XCTAssertEqual(TrackWords.languageOf("jpn"), "Japanese")
+        XCTAssertEqual(TrackWords.languageOf("und"), "")
+        XCTAssertEqual(TrackWords.audio(try track(#"{"index":4,"codec":"aac","channels":2}"#), number: 2).title, "Track 2")
+        XCTAssertEqual(TrackWords.subtitle(try track(#"{"index":7,"language":"und","codec":"subrip"}"#), number: 3).title, "Subtitles 3")
+        let sdh = TrackWords.subtitle(try track(#"{"index":3,"language":"eng","languageName":"English","codec":"subrip","sdh":true}"#), number: 2)
+        XCTAssertEqual(sdh, TrackName(title: "English", sub: "SDH", detail: "Text"))
+        let forced = TrackWords.subtitle(try track(#"{"index":4,"language":"eng","title":"Signs","codec":"hdmv_pgs_subtitle","forced":true}"#), number: 3)
+        XCTAssertEqual(forced, TrackName(title: "English", sub: "Signs · Forced", detail: "Pictures"))
+        XCTAssertEqual(TrackWords.subtitle(try track(#"{"index":6,"language":"eng","title":"English SDH","sdh":true}"#), number: 1).sub, "English SDH")
+        XCTAssertEqual(TrackWords.audio(try track(#"{"index":2,"language":"eng","commentary":true,"channels":2}"#), number: 2).sub, "Commentary")
+    }
+
+    func testTheQualityMenuMarksWhatIsInUse() throws {
+        let menu = try JSONDecoder().decode(QualityMenu.self, from: Data(#"{"choice":"h720-b4000","sourceHeight":1080,"presets":[{"name":"720p","height":720,"kbps":4000},{"name":"480p","height":480,"kbps":1500}]}"#.utf8))
+        XCTAssertEqual(menu.rows.map(\.name), ["Auto", "Original", "720p", "480p"])
+        XCTAssertEqual(menu.rows.map(\.active), [false, false, true, false])
+        XCTAssertEqual(menu.rows[1].detail, "1080p")
+        XCTAssertEqual(menu.rows[3].detail, "1.5 Mbit/s")
+        XCTAssertEqual(menu.shortName, "720p")
+    }
+
+    func testAScenesPictureIsAQuarterInBetweenTwoAndTwentySeconds() throws {
+        let chapters = try JSONDecoder().decode([Chapter].self, from: Data(#"[{"start":0,"title":"Start"},{"start":60},{"start":300}]"#.utf8))
+        XCTAssertEqual(Scenes.pictureSec(chapters, 0, duration: 400), 15)
+        XCTAssertEqual(Scenes.pictureSec(chapters, 1, duration: 400), 80)
+        XCTAssertEqual(Scenes.pictureSec(chapters, 2, duration: 400), 320)
     }
 
     func testTheSceneIsTheLastOneStarted() throws {

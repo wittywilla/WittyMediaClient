@@ -474,6 +474,8 @@ class Api(val base: String, val token: String, private val quick: Boolean = fals
 
     fun posterUrl(it: Item) = "$base$API/items/${it.id}/poster?v=${it.updatedAt}"
     fun coverUrl(item: Long) = "$base$API/items/$item/poster"
+    // A small picture of a video at a whole second, for the scenes panel (GET /items/{id}/scene/{sec}).
+    fun sceneUrl(item: Long, sec: Int) = "$base$API/items/$item/scene/$sec"
     fun artistPhotoUrl(library: Long, name: String) = "$base$API/music/artist-photo?library=$library&name=${query(name)}"
     fun backdropUrl(it: Item) = "$base$API/items/${it.id}/backdrop?v=${it.updatedAt}"
     fun itemBackdropUrl(id: Long) = "$base$API/items/$id/backdrop"
