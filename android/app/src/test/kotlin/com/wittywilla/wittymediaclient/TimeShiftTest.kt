@@ -26,6 +26,12 @@ class TimeShiftTest {
         assertNull(TimeShiftRules.breakAt(breaks, null))
     }
 
+    @Test fun shiftedHintAlwaysPointsBackToLive() {
+        assertEquals("News · 7 min behind live · Right, then Back to live", TimeShiftRules.behindHint("News", 420.0))
+        // Mid-seek, before the picture's schedule time is known: no minutes, and never the catch-up wording.
+        assertEquals("News · Right, then Back to live", TimeShiftRules.behindHint("News", 0.0))
+    }
+
     @Test fun seeksWithinTheWindowMoveThePicture() {
         assertEquals(Seek.Within(70.0), TimeShiftRules.plan(970.0, 1000.0, 100.0, 40.0, 130.0, 5000.0))
     }

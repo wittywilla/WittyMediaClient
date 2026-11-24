@@ -74,6 +74,7 @@ struct ChannelPlayer: View {
             if let programme = live.fromStart, !mini, !dockOpen {
                 Text(live.shiftFrom != nil && live.behind >= 60
                      ? "\(programme.title) · \(Int((live.behind / 60).rounded())) min behind live · Right, then Back to live"
+                     : live.shiftFrom != nil ? "\(programme.title) · Right, then Back to live"
                      : "From the start of \(programme.title) · Right, then Back to live")
                     .font(.wmLabel).foregroundStyle(.white).padding(.horizontal, 16).padding(.vertical, 8)
                     .background(Capsule().fill(.black.opacity(0.6)))
