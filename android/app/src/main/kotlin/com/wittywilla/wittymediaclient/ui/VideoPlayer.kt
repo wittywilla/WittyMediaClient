@@ -745,7 +745,7 @@ private fun TrackPicker(session: VideoSession, audio: Boolean, tv: Boolean, clos
                             Row(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
                                 Column(Modifier.weight(1f)) {
                                     Text(t.title, color = Dark.fg, fontSize = 16.sp, fontWeight = if (t.chosen) FontWeight.Bold else FontWeight.Normal)
-                                    val note = listOf(t.sub, t.detail).filter { it.isNotEmpty() }.joinToString(" · ")
+                                    val note = listOf(t.sub, t.detail).filter { it.isNotEmpty() }.factsLine()
                                     if (note.isNotEmpty()) Text(note, color = Dark.fg2, fontSize = 12.sp)
                                 }
                                 if (t.chosen) Text("✓", color = Dark.fg, fontWeight = FontWeight.Bold)
