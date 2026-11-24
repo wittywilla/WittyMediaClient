@@ -78,6 +78,7 @@ fun youGroups(who: YouWho): List<YouGroup> {
             page("rowCollections", "library_books", "#0e7c6f", "/collections"),
             if ("sharing" !in who.off) page("rowShareLinks", "link", "#0a6fb8", "/settings/sharing") else null,
             page("rowActivity", "monitoring", "#99690a", "/settings/activity"),
+            page("rowNotifications", "notifications", "#99690a", "/settings/notifications"),
             if (who.hasGames && "games" !in who.off) page("rowGameSettings", "sports_esports", "#7f46b8", "/settings/games") else null,
             if (who.hasGames && "games" !in who.off) page("rowControllers", "gamepad", "#3e5bd0", "/controllers") else null,
             // Playing on and steering other devices, and watching together: the app's own screens.

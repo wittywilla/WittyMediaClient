@@ -95,7 +95,7 @@ private val ICONS: Map<String, () -> ImageVector> = mapOf(
     "badge" to { Symbols.Badge }, "key" to { Symbols.Key }, "shield_lock" to { Symbols.ShieldLock },
     "devices" to { Symbols.Devices }, "tv" to { Symbols.Tv }, "family_restroom" to { Symbols.Family },
     "auto_awesome" to { Symbols.Sparkles }, "library_books" to { Symbols.Collections }, "link" to { Symbols.Address },
-    "monitoring" to { Symbols.Activity }, "sports_esports" to { Symbols.Games }, "gamepad" to { Symbols.Gamepad },
+    "monitoring" to { Symbols.Activity }, "notifications" to { Symbols.Bell }, "sports_esports" to { Symbols.Games }, "gamepad" to { Symbols.Gamepad },
     "palette" to { Symbols.Palette }, "toolbar" to { Symbols.TopMenu }, "video_library" to { Symbols.Libraries }, "image_search" to { Symbols.ImageSearch },
     "auto_fix_high" to { Symbols.FixMatches }, "smart_display" to { Symbols.Playback }, "live_tv" to { Symbols.LiveTv },
     "computer" to { Symbols.Computer }, "bolt" to { Symbols.Bolt }, "autorenew" to { Symbols.Autorenew },
