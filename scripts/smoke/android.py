@@ -11,9 +11,10 @@ Installing over the previous release is ci.yml's android-update job (android/scr
 upgrade-test.sh), not repeated here.
 
 Steps, in order (name some to run only those):
+  found      the server found on the network, chosen, then a security code: signed in
   address    Enter an address, then a security code from the server: signed in
   settings   Settings opens
-  film       the film plays: the server sees this device streaming
+  film       the film plays: the app's media session says so
   away       the server's address stops answering (the emulator's firewall): the app comes back
              peer to peer, still signed in
   game       from away, WittyPlay's Adjustris starts and the server sends this device its frames
@@ -206,6 +207,22 @@ def streaming(via=None):
     return None
 
 
+def playing():
+    """The app's player says it is playing (its media session), or the server sees it streaming."""
+    out = sh('dumpsys media_session', check=False)
+    if re.search(r'state=(PLAYING|3)\b', out):
+        return 'media session playing'
+    return streaming()
+
+
+def play_film():
+    tap('Smoke Film', 60)
+    tap('^(Play|Resume)', 30)
+    # A tap moves the focus on a TV; OK presses what has it.
+    if TV and not until('playing', playing, 8):
+        sh('input keyevent KEYCODE_DPAD_CENTER')
+
+
 def until(what, fn, secs=60):
     end = time.time() + secs
     last = None
@@ -217,6 +234,8 @@ def until(what, fn, secs=60):
         except Exception as e:  # noqa: BLE001: tried again until the time is up
             last = e
         time.sleep(2)
+    if what == 'playing':
+        return None
     raise RuntimeError(f'waited {secs}s for {what}; last: {last}')
 
 
@@ -277,26 +296,21 @@ def step(name, fn):
 
 # ---------------------------------------------------------------- the steps
 
-def address():
+def install():
     # This build, over whatever is there; a build signed with another key replaces it.
     if 'Success' not in adb('install', '-r', apk, check=False):
         adb('uninstall', PKG, check=False)
         adb('install', apk)
-    launch(clear=True)
-    tap('^Enter an address$', 60)
-    wait("Enter your server's address|Server address", 20)
-    type_into('address', EMU_URL.replace('http://', ''))
-    sh('input keyevent KEYCODE_ENTER', check=False)
-    if find('^Connect$'):
-        tap('^Connect$')
+
+
+def enter_code():
     wait('Enter the security code|Security code|Sign in with a code', 60, 'the code screen')
     code = security_code()
     if any('EditText' in x['cls'] for x in nodes()):
         type_into('Security code|code', code)
         sh('input keyevent KEYCODE_ENTER', check=False)
     else:
-        # The app's own number pad, as on a TV.
-        # The digits typed so far show above the pad with the same text: press the pad's own key.
+        # The app's own number pad. The digits typed so far show above it with the same text: press the pad's key.
         for d in code:
             keys = [x for x in nodes() if x['text'] == d or x['desc'] == d]
             key = next((x for x in keys if x['clickable']), keys[-1] if keys else None)
@@ -311,13 +325,38 @@ def address():
     signed_in(90, 'the signed-in app')
 
 
+def found():
+    install()
+    launch(clear=True)
+    # The server announces itself on this machine's network, which the emulator's network reaches.
+    tap('Found on your network', 60)
+    enter_code()
+
+
+def address():
+    install()
+    launch(clear=True)
+    # The list moves when a server is found: if the tap landed on something else, try again.
+    for _ in range(3):
+        tap('^Enter an address$', 60)
+        if find("Enter your server's address|Server address"):
+            break
+        sh('input keyevent KEYCODE_BACK', check=False)
+        time.sleep(2)
+    wait("Enter your server's address|Server address", 20)
+    type_into('address', EMU_URL.replace('http://', ''))
+    sh('input keyevent KEYCODE_ENTER', check=False)
+    if find('^Connect$'):
+        tap('^Connect$')
+    enter_code()
+
+
 def settings():
+    launch()
     if not find('^Settings$'):
-        if TV:
-            sh('input keyevent KEYCODE_MENU', check=False)
-        else:
-            tap('^You$', 20)
-    tap('^Settings$', 20)
+        # The phone's You tab; on a TV, the profile at the end of the top bar.
+        tap('^You$' if not TV else '^smoke$', 30)
+    tap('^Settings$', 30)
     wait('Settings', 20)
     wait('Server|Playback|Libraries|About|Account', 30, "settings' sections")
     launch()
@@ -325,10 +364,8 @@ def settings():
 
 def film():
     launch()
-    tap('Smoke Film', 60)
-    tap('^(Play|Resume)', 30)
-    s = until('the server seeing this device stream the film', lambda: streaming(), 60)
-    log('session:', s)
+    play_film()
+    log('playing:', until('the film playing', playing, 60))
     time.sleep(3)
     sh('input keyevent KEYCODE_BACK', check=False)
 
@@ -349,10 +386,11 @@ def away():
     log('away: 127.0.0.1:' + PORT, 'refused; the test now asks', URL)
     launch()
     signed_in(120, 'the app signed in from away')
-    tap('Smoke Film', 30)
-    tap('^(Play|Resume)', 30)
-    s = until('the server seeing this device stream from away (peer to peer)', lambda: streaming('p2p'), 90)
-    log('session:', s)
+    play_film()
+    log('playing:', until('the film playing from away', playing, 90))
+    p2p = until('the server seeing this device come peer to peer',
+                lambda: next((x for x in api('GET', '/api/sessions') if x.get('via', '').startswith('p2p')), None), 30)
+    log('session:', p2p)
     sh('input keyevent KEYCODE_BACK', check=False)
 
 
@@ -364,6 +402,9 @@ def game():
     tap('adjustris', 60)
     since = time.strftime('%Y-%m-%dT%H:%M:%S', time.localtime(time.time() - 5))
     tap('^(Play|Resume)', 30)
+    if TV and not game_frames(since):
+        time.sleep(3)
+        sh('input keyevent KEYCODE_DPAD_CENTER')
     until('the server sending this device frames of the game', lambda: game_frames(since), 120)
     time.sleep(3)  # for the picture
 
@@ -386,6 +427,7 @@ def link():
 # Peer to peer on, straight to this machine: the emulator reaches it, and nothing else is needed.
 api('PUT', '/api/p2p/settings', {'accept': True, 'enabled': True, 'port': int(PORT) + 2, 'devicesOnly': True,
                                  'layers': {'dht': False, 'relay': False, 'holePunch': False, 'portMap': False, 'ipv6': False}})
+step('found: the server found on the network, and its security code', found)
 step('address: Enter an address and a security code', address)
 step('settings: Settings opens', settings)
 step('film: the film plays', film)

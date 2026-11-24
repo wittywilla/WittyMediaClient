@@ -24,14 +24,13 @@ The real Electron app under a virtual screen, with the harnesses in `desktop/tes
 
 | Step | What it checks | Would have caught |
 |---|---|---|
+| found | The server found on the network (the emulator's network reaches the runner's, where the server announces itself), chosen, then a security code on the number pad: signed in | Finding a server on the network |
 | address | Enter an address, then a security code from the server: signed in | Sign-in by address and code |
 | settings | Settings opens with its sections | A settings page that crashes |
-| film | The film plays: the server sees this device streaming | The player |
+| film | The film plays: the app's media session says it is playing | The player |
 | away | This machine's firewall shuts the server's web port on 127.0.0.1, which is the emulator's 10.0.2.2 (Android TV images don't allow `adb root`, so not the emulator's own); the app comes back peer to peer, still signed in, and streams the film through it | Remote access from a phone |
 | game | From away, Adjustris in WittyPlay starts and the server sends this device frames (WittyPlay's own stats for the session) | WittyPlay on a phone from away: the games page refused, or the stream refused before the hello |
 | link (phone) | A fresh app, still away: Join with a link or code, the invite link pasted: signed in | Adding a server by link from away |
-
-Finding a server on the network isn't checked on Android: the emulator's network doesn't pass the server's announcements through. The desktop app's `found` run covers the server's side of it, and `DiscoveryTest` the app's.
 
 ## Running them yourself
 
