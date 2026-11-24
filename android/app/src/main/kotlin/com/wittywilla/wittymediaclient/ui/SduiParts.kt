@@ -1369,7 +1369,7 @@ fun SduiSearchBox(view: SduiView, modifier: Modifier = Modifier) {
         value = text, onValueChange = { text = it }, label = { Text(prompt, maxLines = 1, overflow = TextOverflow.Ellipsis) }, singleLine = true,
         leadingIcon = { Icon(WebIcons.Search, null, modifier = Modifier.size(20.dp)) },
         trailingIcon = if (!canSpeak) null else {
-            { IconButton(onClick = { runCatching { listen.launch(voice) } }) { Icon(WebIcons.Mic, "Search by voice", modifier = Modifier.size(if (env.tv) env.pt(32) else 22.dp)) } }
+            { IconButton(onClick = { runCatching { listen.launch(voice) } }) { Icon(WebIcons.Mic, contentDescription = "Search by voice", modifier = Modifier.size(if (env.tv) env.pt(32) else 22.dp)) } }
         },
         keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search, autoCorrectEnabled = false),
         modifier = modifier.fillMaxWidth().widthIn(max = if (env.tv) env.pt(1200) else 560.dp).focusRequester(requester).tvLeavable().semantics { contentDescription = view.label },
