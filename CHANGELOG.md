@@ -5,6 +5,13 @@ What changed in WittyMediaClient, newest first. What changed before it had a rep
 
 ## Unreleased
 
+**No skipping ahead on live TV (wittywilla/WittyMediaServer#688)**
+
+- Android TV: Fast forward and Next (outside an ad break) no longer move a live channel on.
+- Apple TV: the Dock no longer has On 10.
+- Both TVs refuse forward seeks on live, a phone steering the TV included, and both Docks offer Back to live whenever the
+  picture is behind, not only after Start over. The Android phone uses the server's web player, changed there.
+
 ## 0.6.2
 
 Released 2026-11-24.
