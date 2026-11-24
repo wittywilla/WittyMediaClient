@@ -291,7 +291,7 @@ async function identify(url, at = url) {
       if (p2p.isP2POrigin(at) && res.headers.get('x-witty-connect-error')) {
         const said = await guards.readJson(res).catch(() => null)
         log.warn('network', `The connection from away couldn't carry the identity check: ${res.status}`, { where: url })
-        return { state: 'unreachable', why: guards.cleanMessage((said && said.error) || '') }
+        return { state: 'unreachable', why: guards.cleanMessage((said && said.error) || ''), reason: said && said.reason === 'public-relay-only' ? said.reason : '' }
       }
       log.warn('network', `The identity check was answered with ${res.status}`, { where: url })
       return { state: 'bad' }
@@ -646,7 +646,7 @@ async function finishJoining(mine, where, answer, offeredName, how, run) {
     if (!run) return result
     run.note(`the server didn't prove itself over the connection: ${identity.state}`)
     return checkFailed(result, run,
-      identity.state === 'unreachable' ? connectSteps.classify('slow-path', identity.why || '', 'secure', cleanText) : connectSteps.of('identity-bad', 'signin'))
+      identity.state === 'unreachable' ? connectSteps.classify(identity.reason || 'slow-path', identity.why || '', 'secure', cleanText) : connectSteps.of('identity-bad', 'signin'))
   }
   const info = { id: where.id, hints: where.hints, port: mine.port }
   const pinned = identity.publicKey && (saved.recent || []).find((s) => s.publicKey === identity.publicKey)

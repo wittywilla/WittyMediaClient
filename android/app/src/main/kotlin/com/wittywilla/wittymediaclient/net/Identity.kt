@@ -40,6 +40,8 @@ data class ServerProof(
     val publicKey: String = "",
     val fingerprint: String = "",
     val why: String = "",
+    // Its reason, when the connection gave one ("public-relay-only": found only through a relay that carries no requests).
+    val reason: String = "",
 ) {
     fun savedAs(url: String, name: String) = SavedServer(url, name, serverId, publicKey, fingerprint)
 }

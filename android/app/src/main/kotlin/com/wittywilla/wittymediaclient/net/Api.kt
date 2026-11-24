@@ -592,7 +592,7 @@ suspend fun identify(url: String, saved: List<SavedServer>): ServerProof {
     } catch (e: ApiError) {
         when {
             // The connection's own refusal (no usable path): unreachable, in its words, not a server that lied.
-            e.connector -> ServerProof(IdentityState.Unreachable, why = e.message.orEmpty())
+            e.connector -> ServerProof(IdentityState.Unreachable, why = e.message.orEmpty(), reason = WebJoin.reasonOf(e.body))
             e.status == 404 -> ServerProof(Identity.unanswered(url, saved))
             else -> ServerProof(IdentityState.Bad)
         }

@@ -1055,7 +1055,7 @@ class Nav(val app: WittyApp, private val s: Map<String, String>) {
             val problem = proof.why.ifEmpty { trouble?.error.orEmpty() }
             app.peers.leave()
             return if (proof.state == IdentityState.Unreachable) {
-                checkFailed(run, connectSteps.classify("slow-path", problem, "secure"), fill(s["joinStepConnect"], "why" to problem.ifEmpty { s["joinNoPath"].orEmpty() }))
+                checkFailed(run, connectSteps.classify(proof.reason.ifEmpty { "slow-path" }, problem, "secure"), fill(s["joinStepConnect"], "why" to problem.ifEmpty { s["joinNoPath"].orEmpty() }))
             } else checkFailed(run, connectSteps.of("identity-bad", "signin"), s["identityBad"])
         }
         val known = app.store.recent.firstOrNull { it.publicKey.isNotEmpty() && it.publicKey == proof.publicKey }
@@ -1076,7 +1076,7 @@ class Nav(val app: WittyApp, private val s: Map<String, String>) {
             signedIn(result.token, result.user)
             null
         } catch (e: ApiError) {
-            if (e.connector) checkFailed(run, connectSteps.classify("slow-path", e.message.orEmpty(), "secure"), fill(s["joinStepConnect"], "why" to e.message.orEmpty()))
+            if (e.connector) checkFailed(run, connectSteps.classify(WebJoin.reasonOf(e.body).ifEmpty { "slow-path" }, e.message.orEmpty(), "secure"), fill(s["joinStepConnect"], "why" to e.message.orEmpty()))
             else checkFailed(run, connectSteps.classify("", e.message.orEmpty(), "signin"), fill(s["joinStepSignIn"], "why" to e.message.orEmpty()))
         } catch (e: IOException) {
             checkFailed(run, connectSteps.classify("", e.message ?: "timeout", "signin"), fill(s["joinStepConnect"], "why" to app.peers.lastError.ifEmpty { s["joinNoPath"].orEmpty() }))
