@@ -372,7 +372,7 @@ def settings():
     launch()
     if not find('^Settings$'):
         # The phone's You tab; on a TV, the profile at the end of the top bar.
-        tap('^You$' if not TV else '^smoke$', 30)
+        tap('^(You|smoke|S)$', 30)
     # A TV's profile page is its settings (Account, Playback, Your devices…); a phone's You tab leads to them.
     if not (TV and find('^ACCOUNT$|^Account$')):
         tap('^Settings$', 30)
