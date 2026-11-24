@@ -77,11 +77,13 @@ async function signedIn() {
 }
 const savedState = () => { try { return JSON.parse(fs.readFileSync(path.join(dataDir, 'state.json'), 'utf8')) } catch { return {} } }
 
-// way is the button that opens the box: Enter an address, or Connect from anywhere's Join with a link or code.
-async function typeIntoAddress(text, way = 'Enter an address') {
+// way is the button that opens the box: Type an address, or Paste a link (Enter an address and Join with a link or
+// code in TV mode, and before the Add a server screen).
+async function typeIntoAddress(text, way = ['Type an address', 'Enter an address']) {
+  const ways = JSON.stringify([].concat(way))
   await until('the connect page', () => page() && page().getURL().includes('connect'))
   await until('its heading', () => inPage("!!document.querySelector('h1')"))
-  for (let i = 0; i < 30 && !(await inPage(`document.activeElement.tagName === 'BUTTON' && document.activeElement.textContent.startsWith(${JSON.stringify(way)})`)); i++) await press('Down')
+  for (let i = 0; i < 30 && !(await inPage(`document.activeElement.tagName === 'BUTTON' && ${ways}.some((w) => document.activeElement.textContent.trim().startsWith(w))`)); i++) await press('Down')
   await press('Enter')
   await until('the address box', () => inPage("document.activeElement.id === 'address'"))
   await inPage(`document.getElementById('address').value = ${JSON.stringify(text)}`)
@@ -199,7 +201,7 @@ async function run() {
       const made = await fetch(`${DIRECT}/api/v1/p2p/invite`, { method: 'POST', headers: me.headers, body: JSON.stringify({ password: PASSWORD, otp: process.env.WMC_OTP || '' }) })
       assert.ok(made.ok, `no invite: ${made.status}`)
       link = (await made.json()).link
-      await typeIntoAddress(link, 'Join with a link or code')
+      await typeIntoAddress(link, ['Paste a link', 'Join with a link or code'])
     })
     await step('the app joins, signs in with the code that comes back, and shows the server', async () => {
       const got = await reachedPeerToPeer()
