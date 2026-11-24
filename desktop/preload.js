@@ -84,6 +84,10 @@ if (location.protocol === 'wittymedia-app:') {
     pairStop: () => ipcRenderer.send('pair-stop'),
     // An invite link to a server away from home, and giving up on reaching one.
     invite: (link) => ipcRenderer.invoke('p2p-invite', link),
+    // The connection check: the last failed connection from away, and its details copied or saved.
+    connectCheck: () => ipcRenderer.invoke('connect-check'),
+    connectCheckCopy: () => ipcRenderer.invoke('connect-check-copy'),
+    connectCheckSave: () => ipcRenderer.invoke('connect-check-save'),
     awayStop: () => ipcRenderer.send('p2p-stop'),
     // The From away screen.
     awayInfo: () => ipcRenderer.invoke('away-info'),
