@@ -146,11 +146,11 @@ def tap(pattern, secs=30):
 
 
 def type_text(s):
-    # In short pieces: a long input text can lose characters on a busy emulator.
+    # In short pieces with pauses: a busy emulator's text field loses characters typed faster than it redraws.
     s = s.replace("'", '')
-    for i in range(0, len(s), 40):
-        sh("input text '" + s[i:i + 40].replace(' ', '%s') + "'")
-        time.sleep(0.2)
+    for i in range(0, len(s), 8):
+        sh("input text '" + s[i:i + 8].replace(' ', '%s') + "'")
+        time.sleep(0.4)
 
 
 def type_into(pattern, s):
@@ -164,13 +164,18 @@ def type_into(pattern, s):
     sh(f'input tap {(b[0] + b[2]) // 2} {(b[1] + b[3]) // 2}')
     time.sleep(0.5)
     sh('input keyevent KEYCODE_MOVE_END')
-    for _ in range(len(f['text']) + 2):
-        sh('input keyevent KEYCODE_DEL', check=False)
-    type_text(s)
-    now = next((x['text'] for x in nodes() if 'EditText' in x['cls'] and x['b'] == b), '')
-    log('typed', len(s), 'characters; the field holds', len(now), ':', now[:60], '…', now[-60:])
-    if now and now != s and len(s) > 20:
-        log('NOT THE SAME as what was typed:', s[:60], '…', s[-60:])
+    old = len(f['text'])
+    for attempt in range(3):
+        # Empty the field (one keyevent command can carry many presses), then type.
+        sh('input keyevent KEYCODE_MOVE_END')
+        sh('input keyevent ' + ' '.join(['KEYCODE_DEL'] * (old + 2)), check=False)
+        type_text(s)
+        old = len(s) + 20
+        now = next((x['text'] for x in nodes() if 'EditText' in x['cls'] and abs(x['b'][1] - b[1]) < 40), '')
+        log('typed', len(s), 'characters; the field holds', len(now))
+        if len(s) <= 20 or now == s or not now:
+            return
+        log('NOT THE SAME as what was typed, again:', now[:80])
 
 
 def launch(clear=False):
@@ -187,6 +192,17 @@ def in_front():
     return PKG in sh('dumpsys window | grep -E "mCurrentFocus|mFocusedApp"', check=False)
 
 
+def p2p_connected(since):
+    """The server's log: a device connected peer to peer since then."""
+    logs = os.path.join(os.environ.get('SMOKE_OUT', 'smoke-out'), 'data', 'logs')
+    stamp = time.strftime('%Y-%m-%dT%H:%M:%S', time.gmtime(since))
+    for name in sorted(os.listdir(logs)):
+        for l in open(os.path.join(logs, name), errors='replace'):
+            if 'peer-to-peer: device connected' in l and l[5:24] >= stamp:
+                return l.strip()[:200]
+    return None
+
+
 def new_session(since):
     """A sign-in made on the server since then, by a device other than the test's own."""
     return next((x for x in api('GET', '/api/sessions') if (x.get('createdAt') or 0) >= since - 5 and x.get('device') != 'smoke'), None)
@@ -200,9 +216,9 @@ def signed_in(secs, what, since=None):
     since = since or (time.time() - 20)
     while not find('Smoke Film'):
         past_welcome()
-        s = new_session(since)
+        s = new_session(since) or p2p_connected(since)
         if s and in_front() and not find('Choose a layout|Choose colours|digits entered|Choose a server'):
-            log('signed in, says the server:', s.get('device'), s.get('via'))
+            log('signed in, says the server:', s)
             return
         if time.time() > end:
             raise RuntimeError(f'waited {secs}s for {what}; on screen: {texts()[:30]}')
@@ -271,6 +287,12 @@ def security_code():
     me = api('POST', '/api/login', {'name': env['WMS_NAME'], 'password': env['WMS_PASS']})
     r = api('POST', '/api/pair/invite', {'userId': me['user']['id'], 'password': env['WMS_PASS']}, token=me['token'])
     return re.sub(r'\D', '', str(r['code']))
+
+
+def game_started(since):
+    logs = os.path.join(os.environ.get('SMOKE_OUT', 'smoke-out'), 'data', 'logs')
+    return any('msg="game session started"' in l and l[5:24] >= since
+               for name in os.listdir(logs) for l in open(os.path.join(logs, name), errors='replace'))
 
 
 def game_frames(since):
@@ -452,9 +474,14 @@ def game():
     tap('adjustris', 60)
     since = time.strftime('%Y-%m-%dT%H:%M:%S', time.localtime(time.time() - 5))
     tap('^(Play|Resume)', 30)
-    if TV and not game_frames(since):
-        time.sleep(3)
-        sh('input keyevent KEYCODE_DPAD_CENTER')
+    for again in ('tap', 'enter'):
+        if until('playing', lambda: game_started(since), 15):
+            break
+        log('the game has not started; pressing Play again by', again)
+        if again == 'tap' and find('^(Play|Resume)'):
+            tap('^(Play|Resume)', 5)
+        else:
+            sh('input keyevent KEYCODE_DPAD_CENTER' if TV else 'input keyevent KEYCODE_ENTER')
     until('the server sending this device frames of the game', lambda: game_frames(since), 120)
     time.sleep(3)  # for the picture
 
