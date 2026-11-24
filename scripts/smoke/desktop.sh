@@ -9,7 +9,7 @@
 #   TV mode         real-server.js --tv: an address and a security code with a remote's number pad, a
 #                   film plays (its clock moves and frames decode), Back, the TV menu, Change server
 #   pairing         the same with WMC_PAIR=1: a code and PIN on screen, approved as from a phone
-#   from away       p2p-real.js --tv: at home, then the address stops answering and the app finds the
+#   from away       p2p-real.js: at home (TV mode), then the address stops answering and the app finds the
 #                   server peer to peer, still signed in; then the device is removed and shut out
 #   invite link     p2p-real.js --phase=invite: Paste a link, from a fresh app
 #
@@ -26,11 +26,19 @@ here=$(cd "$(dirname "$0")/../.." && pwd)
 set -a; . "$SMOKE_OUT/server.env"; set +a
 desk=$here/desktop
 export SMOKE_KEEP_GOING=${SMOKE_KEEP_GOING:-1}
-electron() {
+electron_once() {
   local shots=$SMOKE_OUT/desktop-$1; shift
   mkdir -p "$shots"
   ( cd "$desk" && env WMC_SHOTS="$shots" WMC_USER="$WMS_NAME" WMC_PASSWORD="$WMS_PASS" WMC_TEST_DIR="$SMOKE_OUT/desktop-data" \
       WITTYCONNECT="$connect" ${XVFB:-xvfb-run -a -s "-screen 0 1280x860x24"} node_modules/.bin/electron "$@" )
+}
+# A run that fails is tried once more, and summary.txt says so: Electron's GPU process
+# sometimes dies under a virtual screen (UnknownVizError) before the app has done anything.
+electron() {
+  electron_once "$@" && return 0
+  echo "--- $1 failed; trying it once more"
+  echo "retried: $1" >>"$SMOKE_OUT/summary.txt"
+  electron_once "$@"
 }
 mkdir -p "$SMOKE_OUT/desktop-data"
 
@@ -60,7 +68,7 @@ fwd=$!
 sleep 1
 WMC_SERVER=http://127.0.0.1:$fport WMC_DIRECT=$WMS_URL electron p2p-home test/app/p2p-real.js --phase=home --tv >>"$LOG" 2>&1 || fail "at home: see the log"
 kill $fwd; wait $fwd 2>/dev/null
-WMC_SERVER=http://127.0.0.1:$fport WMC_DIRECT=$WMS_URL electron p2p-away test/app/p2p-real.js --phase=away --tv >>"$LOG" 2>&1 || fail "from away: see the log"
+WMC_SERVER=http://127.0.0.1:$fport WMC_DIRECT=$WMS_URL electron p2p-away test/app/p2p-real.js --phase=away >>"$LOG" 2>&1 || fail "from away: see the log"
 
 step "Desktop: a removed device is shut out"
 WMC_SERVER=http://127.0.0.1:$fport WMC_DIRECT=$WMS_URL electron p2p-revoked test/app/p2p-real.js --phase=revoked --tv >>"$LOG" 2>&1 || fail "see the log"

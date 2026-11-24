@@ -91,9 +91,28 @@ def texts():
     return [x['text'] or x['desc'] for x in nodes() if x['text'] or x['desc']]
 
 
+def dismiss(ns):
+    """A system "isn't responding" dialog over everything (the emulator's launcher, on a busy runner): closed,
+    and logged. One about this app is waited out instead, and logged, as it would be a fault of ours."""
+    msg = next((x['text'] for x in ns if "isn't responding" in x['text']), None)
+    if not msg:
+        return False
+    ours = 'WittyMediaClient' in msg or 'Witty' in msg
+    log('system dialog:', msg, '(waiting)' if ours else '(closing it)')
+    btn = next((x for x in ns if x['text'] == ('Wait' if ours else 'Close app')), None)
+    if btn:
+        b = btn['b']
+        sh(f'input tap {(b[0] + b[2]) // 2} {(b[1] + b[3]) // 2}')
+        time.sleep(1)
+    return True
+
+
 def find(pattern):
     re_ = re.compile(pattern, re.I)
-    hits = [x for x in nodes() if re_.search(x['text']) or re_.search(x['desc'])]
+    ns = nodes()
+    if dismiss(ns):
+        ns = nodes()
+    hits = [x for x in ns if re_.search(x['text']) or re_.search(x['desc'])]
     return hits[0] if hits else None
 
 
@@ -249,8 +268,16 @@ def address():
         sh('input keyevent KEYCODE_ENTER', check=False)
     else:
         # The app's own number pad, as on a TV.
+        # The digits typed so far show above the pad with the same text: press the pad's own key.
         for d in code:
-            tap(f'^{d}$', 10)
+            keys = [x for x in nodes() if x['text'] == d or x['desc'] == d]
+            key = next((x for x in keys if x['clickable']), keys[-1] if keys else None)
+            if not key:
+                raise RuntimeError(f'no key {d} on the pad; on screen: {texts()[:30]}')
+            b = key['b']
+            sh(f'input tap {(b[0] + b[2]) // 2} {(b[1] + b[3]) // 2}')
+            time.sleep(0.6)
+        log('entered:', [t for t in texts() if 'digits entered' in t])
     if find('^Sign in$'):
         tap('^Sign in$')
     wait('Smoke Films|Smoke Film|Home', 90, 'the signed-in app')

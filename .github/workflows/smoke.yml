@@ -225,6 +225,8 @@ jobs:
           target: ${{ matrix.image }}
           arch: ${{ matrix.arch }}
           profile: ${{ matrix.profile }}
+          cores: 4
+          ram-size: 4096M
           disable-animations: true
           emulator-options: -no-window -gpu swiftshader_indirect -no-snapshot -noaudio -no-boot-anim
           script: python3 scripts/smoke/android.py "$(ls $RUNNER_TEMP/app/*.apk | head -1)" ${{ matrix.kind == 'tv' && '--tv' || '' }}

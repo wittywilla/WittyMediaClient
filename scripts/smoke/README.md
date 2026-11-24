@@ -10,12 +10,13 @@ The real Electron app under a virtual screen, with the harnesses in `desktop/tes
 
 | Run | What it checks | Would have caught |
 |---|---|---|
-| `real-server.js` | Type an address, a security code from the server signs in, the arrows reach a film, it plays (its clock moves, frames decode, a frame has a picture), Back works, Change server | Sign-in by address and code, the player |
-| `real-server.js`, `WMC_PAIR=1` | The same, signed in by pairing: a code and PIN on screen, approved as from a phone | Pairing |
-| `real-server.js --tv` | The same with a remote's keys alone, in TV mode, and the TV menu | TV mode |
-| `p2p-real.js` home, away, revoked | Signed in at home; the address stops answering and the app finds the server peer to peer, still signed in; a device taken off the list gets nothing | Remote access that only works at home; a removed device still getting in |
-| `p2p-real.js` invite | A fresh app, an invite link pasted on the connect screen | Adding a server by link |
-| `add-server-real.js` (once in this branch) | Found on the network, Enter a code, Type an address, Sign in with a password | Each way of adding a server |
+| `add-server-real.js` found, code, address, password | Add a server: the server found on the network (it listens on the runner's network for this), Enter a code from the server's Connect a device, Type an address and its code, Sign in with a password on the server's own page | Each way of adding a server on the desktop |
+| `real-server.js --tv` | TV mode with a remote's keys alone: an address and a security code on the number pad, a film plays (its clock moves, frames decode, a frame has a picture), Back, the TV menu, Change server | TV mode, the player |
+| `real-server.js --tv`, `WMC_PAIR=1` | The same, signed in by pairing: a code and PIN on screen, approved as from a phone | Pairing |
+| `p2p-real.js --tv` home, away, revoked | Signed in at home; the address stops answering and the app finds the server peer to peer, still signed in; a device taken off the list gets nothing | Remote access that only works at home; a removed device still getting in |
+| `p2p-real.js` invite | A fresh app: Paste a link with an invite from the server | Adding a server by link |
+
+`real-server.js` and `p2p-real.js` sign in with the number pad, which only TV mode kept when the desktop got its Add a server screen, so they run in TV mode.
 
 ## Android phone and TV (`android`)
 
