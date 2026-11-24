@@ -67,6 +67,18 @@ final class HouseholdTests: XCTestCase {
         XCTAssertFalse(MyLimits(time: TimeRules()).isTimed)
     }
 
+    /// A kids' profile kept on its device: the server says so, and its refusals say whether the parents' PIN is
+    /// wanted or was wrong, apart from every other 403.
+    func testLeavingAKidsProfileKeptOnItsDeviceAsksForTheParentsPIN() throws {
+        let kept = try decode(MyLimits.self, #"{"limited":true,"kind":"kids","parentPin":true,"pinToLeave":true}"#)
+        XCTAssertEqual(kept.pinToLeave, true)
+        XCTAssertNil(try decode(MyLimits.self, #"{"limited":true,"kind":"kids"}"#).pinToLeave)
+        XCTAssertTrue(APIError(status: 403, message: "A parent's PIN is needed to leave this profile.", code: "parent-pin").needsParentPin)
+        XCTAssertTrue(APIError(status: 403, message: "That isn't the parents' PIN.", code: "wrong-pin").wrongParentPin)
+        XCTAssertFalse(APIError(status: 403, message: "That password isn't right.").needsParentPin)
+        XCTAssertFalse(APIError(status: 403, message: "Games are off.", code: "feature-off").needsParentPin)
+    }
+
     func testTheTimeIsAskedAfterEachMinuteAndRightAfterItRunsOut() {
         XCTAssertEqual(ScreenTimeRules.nextAsk(after: nil, now: 1000), 60)
         XCTAssertEqual(ScreenTimeRules.nextAsk(after: ScreenTime(allowed: true, remainingSec: 3000, until: 4000), now: 1000), 60)

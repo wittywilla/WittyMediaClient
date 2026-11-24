@@ -300,7 +300,7 @@ struct YouView: View {
         .pageBackground(palette)
         .task { await load() }
         .confirmationDialog(say("signOut"), isPresented: $confirmSignOut, titleVisibility: .hidden) {
-            Button(say("signOut"), role: .destructive) { model.signOut() }
+            Button(say("signOut"), role: .destructive) { model.requestSignOut() }
         }
     }
 }

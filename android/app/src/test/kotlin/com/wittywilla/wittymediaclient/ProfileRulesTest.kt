@@ -21,6 +21,8 @@ import com.wittywilla.wittymediaclient.net.User
 import com.wittywilla.wittymediaclient.net.accessBody
 import com.wittywilla.wittymediaclient.net.accessDiff
 import com.wittywilla.wittymediaclient.net.json
+import com.wittywilla.wittymediaclient.net.needsParentPin
+import com.wittywilla.wittymediaclient.net.wrongParentPin
 import com.wittywilla.wittymediaclient.ui.AVATAR_COLOURS
 import com.wittywilla.wittymediaclient.ui.AVATAR_SHAPES
 import com.wittywilla.wittymediaclient.ui.GamesRoute
@@ -69,6 +71,20 @@ class ProfileRulesTest {
         assertTrue(limits.timed)
         assertTrue(limits.parentPin)
         assertEquals(60, limits.screenTime.remainingSec)
+    }
+
+    // A kids' profile kept on its device: the server says so, and its refusals say whether the PIN is wanted or was
+    // wrong, apart from every other 403 (a wrong password, a feature that is off).
+    @Test
+    fun leavingAKidsProfileKeptOnItsDeviceAsksForTheParentsPin() {
+        val kept = json.decodeFromString<MyLimits>(kidsLimits.replace("\"parentPin\":true", "\"parentPin\":true,\"pinToLeave\":true"))
+        assertTrue(kept.pinToLeave)
+        assertFalse(json.decodeFromString<MyLimits>(kidsLimits).pinToLeave)
+        assertTrue(needsParentPin(ApiError(403, "A parent's PIN is needed to leave this profile.", code = "parent-pin")))
+        assertTrue(wrongParentPin(ApiError(403, "That isn't the parents' PIN.", code = "wrong-pin")))
+        assertFalse(needsParentPin(ApiError(403, "That password isn't right.")))
+        assertFalse(needsParentPin(ApiError(403, "Games are turned off for this profile.", code = "feature-off")))
+        assertFalse(wrongParentPin(ApiError(401, "wrong", code = "wrong-pin")))
     }
 
     @Test

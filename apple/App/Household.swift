@@ -40,6 +40,8 @@ final class Household: ObservableObject {
     @Published private(set) var notice = ""
     /// The profiles to switch to, as asked for last.
     @Published var people: [HouseholdProfile] = []
+    /// Signing out of a kids' profile kept on this device: Who's watching asks for the parents' PIN.
+    @Published var leavingWithPin = false
 
     private var client = WittyClient(base: "")
     private var warner = ScreenTimeWarner()
@@ -197,7 +199,7 @@ final class Household: ObservableObject {
     /// it doesn't (the Classic sign-in screen, or away from home).
     func startSwitch(_ model: AppModel) {
         guard model.has("profile-switching") else {
-            model.signOut()
+            model.requestSignOut()
             return
         }
         let asking = model.client
@@ -208,7 +210,7 @@ final class Household: ObservableObject {
                 people = list
                 if model.path.last != .family(.switchProfile) { model.path.append(.family(.switchProfile)) }
             } else {
-                model.signOut()
+                model.requestSignOut()
             }
         }
     }
