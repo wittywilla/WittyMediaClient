@@ -37,6 +37,7 @@ import androidx.compose.ui.graphics.vector.PathParser
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
@@ -139,7 +140,7 @@ fun ServerAvatar(name: String, logo: Any?, size: Dp, peer: Boolean) {
 fun PeerChip(text: String) {
     val s = LocalDesignSizes.current
     Text(
-        text, color = LocalExtraColours.current.accentText, fontSize = s.tiny, fontWeight = FontWeight.Bold, maxLines = 1,
+        text, color = LocalExtraColours.current.accentText, fontSize = s.tiny, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis,
         modifier = Modifier.background(MaterialTheme.colorScheme.primary.copy(alpha = 0.18f), RoundedCornerShape(50))
             .padding(horizontal = s.gap * 0.9f, vertical = 4.dp),
     )
@@ -206,7 +207,7 @@ private fun ConnectionPicture(words: Map<String, String>) {
     fun node(icon: ImageVector, label: String) {
         Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(4.dp)) {
             Icon(icon, contentDescription = null, tint = scheme.onSurface, modifier = Modifier.size(s.body.value.dp * 1.6f))
-            Text(label, color = scheme.onSurfaceVariant, fontSize = s.tiny, fontWeight = FontWeight.SemiBold, maxLines = 1)
+            Text(label, color = scheme.onSurfaceVariant, fontSize = s.tiny, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
         }
     }
     @Composable
@@ -226,7 +227,7 @@ private fun ConnectionPicture(words: Map<String, String>) {
             verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp),
         ) {
             Icon(LineIcons.Lock, contentDescription = null, tint = extra.ok, modifier = Modifier.size(s.tiny.value.dp * 1.2f))
-            Text(words["anywhereEncrypted"].orEmpty(), color = extra.ok, fontSize = s.tiny, fontWeight = FontWeight.Bold, maxLines = 1)
+            Text(words["anywhereEncrypted"].orEmpty(), color = extra.ok, fontSize = s.tiny, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis)
         }
         dashes(Modifier.weight(1f))
         node(Symbols.Server, words["anywhereServer"].orEmpty())

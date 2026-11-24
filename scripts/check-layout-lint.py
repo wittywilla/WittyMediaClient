@@ -27,7 +27,6 @@ SKIP_DIRS = {'build', '.gradle'}
 # out at 0. Every other file has none.
 KNOWN = {
     'ui/BrandEditorParts.kt': 2,
-    'ui/ConnectAnywhere.kt': 3,
     'ui/Controls.kt': 1,  # GroupRowView, a settings row
 }
 KNOWN_BASE = 'android/app/src/main/kotlin/com/wittywilla/wittymediaclient/'
