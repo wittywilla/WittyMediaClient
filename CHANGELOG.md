@@ -7,7 +7,7 @@ What changed in WittyMediaClient, newest first. What changed before it had a rep
 
 ## 0.6.1
 
-Released 2026-11-23.
+Released 2026-11-24.
 
 Made for WittyMediaServer 0.8.3-alpha: **Enter a code** needs its new Connect a device.
 
