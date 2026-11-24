@@ -197,7 +197,7 @@ def signed_in(secs, what, since=None):
     moving, so uiautomator can go long without a picture of it: then the server's word that this device signed in,
     with the app in front and the welcome gone, is enough."""
     end = time.time() + secs
-    since = since or (time.time() - secs)
+    since = since or (time.time() - 20)
     while not find('Smoke Film'):
         past_welcome()
         s = new_session(since)
