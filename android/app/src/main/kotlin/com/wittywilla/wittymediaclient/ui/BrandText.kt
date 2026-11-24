@@ -36,6 +36,7 @@ import com.wittywilla.wittymediaclient.net.BrandKinds
 import com.wittywilla.wittymediaclient.net.BrandMarkChoice
 import com.wittywilla.wittymediaclient.net.BrandPart
 import com.wittywilla.wittymediaclient.net.ThemeColour
+import androidx.compose.ui.text.style.TextOverflow
 
 // The server's name as every frame draws it (docs/plans/DESIGN-2.md 7.6): each part in the colour it carries. `fg` is
 // the text colour, `accent` the theme's brand accent, `token` a colour of the theme in force, `static` a fixed colour,
@@ -89,7 +90,7 @@ fun BrandMarkBadge(name: String, parts: List<BrandPart>, mark: BrandMarkChoice, 
     ) {
         if (!(wantsLogo && loaded)) {
             val fontSize = (size.value * if (shown.length > 1) 0.4f else 0.52f).sp
-            Text(ink, fontSize = fontSize, fontWeight = FontWeight.ExtraBold, maxLines = 1)
+            Text(ink, fontSize = fontSize, fontWeight = FontWeight.ExtraBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
         }
         if (wantsLogo) {
             AsyncImage(

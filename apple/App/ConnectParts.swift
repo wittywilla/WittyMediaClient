@@ -8,7 +8,9 @@ import WittyKit
 // Mac and a TV, with a TV's room.
 
 /// The page around it: the app's wordmark centred, "Choose a server" and its line, then the sections, one column on
-/// a phone and no wider than reads well elsewhere. Drawn on DesignPage's sizes and colours.
+/// a phone and no wider than reads well elsewhere. Drawn on DesignPage's sizes and colours. A standalone page, so it is
+/// centred throughout on every device (`designCentred`): section labels, notes and the foot follow the head, while
+/// the cards and rows fill the width.
 struct ConnectFrame<Content: View>: View {
     @Environment(\.palette) private var palette
     @Environment(\.metrics) private var metrics
@@ -18,16 +20,16 @@ struct ConnectFrame<Content: View>: View {
         GeometryReader { geo in
             let sizes = DesignSizes.of(metrics, width: geo.size.width)
             ScrollView {
-                VStack(alignment: .leading, spacing: 0) {
+                VStack(alignment: .center, spacing: 0) {
                     VStack(spacing: sizes.gap) {
                         BrandLockup(app: true)
-                        Text("Choose a server")
+                        Text(say("findTitle"))
                             .font(.system(size: sizes.title, weight: .heavy, design: .rounded))
                             .kerning(-sizes.title * 0.04)
                             .foregroundStyle(palette.text)
                             .accessibilityAddTraits(.isHeader)
                             .accessibilityIdentifier("connect-title")
-                        Text("Pick one you’ve used, one on this network, or connect from anywhere.")
+                        Text(say("findSubtitle").replacingOccurrences(of: "'", with: "’"))
                             .font(.system(size: sizes.body))
                             .foregroundStyle(palette.textSecondary)
                             .multilineTextAlignment(.center)
@@ -37,13 +39,14 @@ struct ConnectFrame<Content: View>: View {
                     .padding(.bottom, sizes.gap)
                     content
                 }
-                .frame(maxWidth: metrics.tv ? 1200 : 680, alignment: .leading)
+                .frame(maxWidth: metrics.tv ? 1200 : 680, alignment: .center)
                 .padding(.horizontal, metrics.tv ? Tokens.gutter : metrics.gutter)
                 .padding(.vertical, metrics.tv ? Tokens.edge : Tokens.Space.s8)
                 .frame(maxWidth: .infinity)
             }
             .scrollDismissesKeyboardIfAvailable()
             .environment(\.designSizes, sizes)
+            .environment(\.designCentred, true)
         }
         .background(palette.background.ignoresSafeArea())
         .accessibilityElement(children: .contain)
@@ -51,15 +54,18 @@ struct ConnectFrame<Content: View>: View {
     }
 }
 
-/// "YOUR SERVERS", "ON THIS NETWORK": small capitals, then a hairline to the edge.
+/// "YOUR SERVERS", "ON THIS NETWORK": small capitals, then a hairline to the edge. On a centred page (Choose a server)
+/// the label sits in the middle with a hairline on both sides.
 struct ConnectSectionLabel: View {
     @Environment(\.palette) private var palette
     @Environment(\.designSizes) private var sizes
+    @Environment(\.designCentred) private var centred
     let title: String
     var trailing: AnyView? = nil
 
     var body: some View {
         HStack(spacing: sizes.gap) {
+            if centred { Rectangle().fill(palette.border).frame(height: 1).accessibilityHidden(true) }
             Text(title)
                 .textCase(.uppercase)
                 .font(.system(size: sizes.tiny, weight: .bold))

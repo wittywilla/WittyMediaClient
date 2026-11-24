@@ -67,12 +67,17 @@ object LineIcons {
     val House by lazy { line("house", "M4 10.5L12 4l8 6.5", "M6 9v10a1 1 0 0 0 1 1h3.5v-5.5h3V20H17a1 1 0 0 0 1-1V9") }
 }
 
-/** "YOUR SERVERS", "ON THIS NETWORK": small capitals, then a hairline to the edge. */
+/**
+ * "YOUR SERVERS", "ON THIS NETWORK": small capitals, then a hairline to the edge. On a centred page (Choose a server)
+ * the label sits in the middle with a hairline on both sides, so it lines up with the centred head above it.
+ */
 @Composable
 fun ConnectSectionLabel(title: String, modifier: Modifier = Modifier) {
     val s = LocalDesignSizes.current
     val scheme = MaterialTheme.colorScheme
+    val centred = LocalDesignCentred.current
     Row(modifier.fillMaxWidth().padding(top = s.gap2, bottom = s.gap * 0.6f), verticalAlignment = Alignment.CenterVertically) {
+        if (centred) Box(Modifier.padding(end = s.gap).weight(1f).height(1.dp).background(scheme.outline))
         Text(
             title.uppercase(), color = scheme.onSurfaceVariant, fontSize = s.tiny, fontWeight = FontWeight.Bold, letterSpacing = 0.08.em,
             modifier = Modifier.semantics { heading() },

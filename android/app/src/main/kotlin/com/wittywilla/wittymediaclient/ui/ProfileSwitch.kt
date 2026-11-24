@@ -207,7 +207,7 @@ fun WhoIsWatchingScreen(nav: Nav, s: Map<String, String>) {
                 }
                 // The same page as typing a profile's PIN: what this is, the PIN, then on.
                 DesignScreen(
-                    s["parentPinTitle"].orEmpty(), back, eyebrow = s["whoTitle"].orEmpty(), lead = s["parentPinLead"].orEmpty(),
+                    s["parentPinTitle"].orEmpty(), back, eyebrow = s["whoTitle"].orEmpty(), lead = s["parentPinLead"].orEmpty(), centred = true,
                     actions = { WittyButton(s["switchGo"].orEmpty(), submit, kind = ButtonKind.Primary, busy = busy, enabled = waiting == 0 && parentPin.length >= 4, focusKey = "parent-pin-go") },
                 ) {
                     DesignSection("") {
@@ -232,7 +232,7 @@ fun WhoIsWatchingScreen(nav: Nav, s: Map<String, String>) {
                 DesignScreen(
                     shown, back, eyebrow = s["whoTitle"].orEmpty(),
                     lead = s[if (needCode) "twoFactorHint" else if (picked.kind == "adult") "passwordHint" else "switchPinHint"].orEmpty(),
-                    foot = if (showsUsername(picked.displayName, picked.name)) "@${picked.name}" else "",
+                    foot = if (showsUsername(picked.displayName, picked.name)) "@${picked.name}" else "", centred = true,
                     actions = {
                         WittyButton(s["switchGo"].orEmpty(), submit, kind = ButtonKind.Primary, busy = busy, enabled = waiting == 0, focusKey = "switch-go")
                     },
@@ -300,13 +300,14 @@ fun WhoIsWatchingScreen(nav: Nav, s: Map<String, String>) {
                 }
                 // Design 2's page head and actions around W4's profile tiles.
                 DesignScreen(
-                    s["whoTitle"].orEmpty(), nav::pop,
+                    s["whoTitle"].orEmpty(), nav::pop, centred = true,
                     actions = { WittyButton(s["otherAccount"].orEmpty(), { leave() }, kind = ButtonKind.Secondary, focusKey = "other-account") },
                 ) {
                     DesignNote(problem, Modifier.padding(top = LocalDesignSizes.current.gap), error = true)
                     FlowRow(
                         Modifier.fillMaxWidth().padding(top = LocalDesignSizes.current.gap2).remoteRow(),
-                        horizontalArrangement = Arrangement.spacedBy(metrics.u(if (metrics.tv) 48 else 24)),
+                        // Faces centred with their names, as on the sign-in Who's watching (docs/APP-DESIGN.md, Avatar 5).
+                        horizontalArrangement = Arrangement.spacedBy(metrics.u(if (metrics.tv) 48 else 24), Alignment.CenterHorizontally),
                         verticalArrangement = Arrangement.spacedBy(metrics.u(20)),
                         maxItemsInEachRow = if (metrics.tv || metrics.tablet) Int.MAX_VALUE else 2,
                     ) {

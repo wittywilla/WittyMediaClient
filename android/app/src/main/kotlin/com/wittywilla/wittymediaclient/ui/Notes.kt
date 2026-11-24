@@ -16,6 +16,8 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -50,6 +52,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -143,11 +146,12 @@ fun CountDot(n: Int, modifier: Modifier, size: Dp, text: androidx.compose.ui.uni
     Box(
         modifier.heightIn(min = size).widthIn(min = size).clip(RoundedCornerShape(50)).background(MaterialTheme.colorScheme.primary).padding(horizontal = 4.dp),
         contentAlignment = Alignment.Center,
-    ) { Text(if (n > 99) "99+" else n.toString(), color = MaterialTheme.colorScheme.onPrimary, fontSize = text, fontWeight = FontWeight.Bold, maxLines = 1) }
+    ) { Text(if (n > 99) "99+" else n.toString(), color = MaterialTheme.colorScheme.onPrimary, fontSize = text, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis) }
 }
 
 // The list: newest first, unread ones marked, each opening what it's about. On a TV the remote moves through it; there are
 // no keys shown and no settings to change here (Settings is on a phone or a computer, as the website's TV mode says).
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun NotesScreen(nav: Nav) {
     val metrics = LocalMetrics.current
@@ -179,7 +183,8 @@ fun NotesScreen(nav: Nav) {
             item { Spacer(Space.S4) }
             item { Heading("Notifications") }
             item {
-                Row(horizontalArrangement = Arrangement.spacedBy(Space.S2)) {
+                // Wraps on a narrow phone or at a large text size, where three buttons in a row cut off Clear all.
+                FlowRow(horizontalArrangement = Arrangement.spacedBy(Space.S2), verticalArrangement = Arrangement.spacedBy(Space.S2)) {
                     ActionButton("Back", nav::back, requestFocus = list.isNullOrEmpty())
                     if (!list.isNullOrEmpty()) {
                         ActionButton("Mark all read", { act { api.markNotesRead(); list = list?.map { it.copy(read = true) }; NoteWatch.unread = 0 } }, enabled = NoteWatch.unread > 0)

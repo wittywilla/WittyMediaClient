@@ -35,6 +35,9 @@ jobs:
       # A button that is only an icon needs a name TalkBack and VoiceOver can say.
       - name: Every button has a name a screen reader can say
         run: python3 scripts/check-button-names.py
+      # A single-line Text with no overflow is cut mid-letter on a narrow phone or at a large text size.
+      - name: Single-line words end in an ellipsis
+        run: python3 scripts/check-layout-lint.py
 
   # The connect screen every app shows first, in Chromium at the sizes people use, desktop and TV: one card, centred
   # both ways, a logo and a name at its top, and no scrolling at 720 pixels tall or more (WittyMediaServer's

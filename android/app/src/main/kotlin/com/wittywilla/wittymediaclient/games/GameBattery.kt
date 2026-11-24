@@ -40,6 +40,7 @@ import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.delay
 import kotlin.math.roundToInt
+import androidx.compose.ui.text.style.TextOverflow
 
 // Batteries: the controllers' and this device's, as WittyPlay's website shows them (web/battery.ts): chips with the
 // level as text, "P1 72%" and "Battery 64%", "Low" in words at a fifth or less when not charging, and a notice said once,
@@ -164,7 +165,7 @@ fun BatteryChips(readings: List<BatteryReading>, size: TextUnit, modifier: Modif
                 verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp),
             ) {
                 BatteryIcon(r.level, ink)
-                Text(Batteries.text(r) + if (low) " · Low" else "", color = ink, fontSize = size, fontWeight = FontWeight.Medium, maxLines = 1)
+                Text(Batteries.text(r) + if (low) " · Low" else "", color = ink, fontSize = size, fontWeight = FontWeight.Medium, maxLines = 1, overflow = TextOverflow.Ellipsis)
             }
         }
     }

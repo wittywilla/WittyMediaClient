@@ -11,12 +11,14 @@ import WittyKit
 struct LegalNote: View {
     @Environment(\.palette) private var palette
     @Environment(\.metrics) private var metrics
+    @Environment(\.designCentred) private var centred
 
     var body: some View {
         Text(say("legalConnect"))
             .font(.caption)
             .foregroundStyle(palette.textHint)
-            .multilineTextAlignment(metrics.tv ? .leading : .center)
+            // Centred on a standalone page on every device, a TV's included; elsewhere a TV reads it from the start.
+            .multilineTextAlignment(centred || !metrics.tv ? .center : .leading)
             .fixedSize(horizontal: false, vertical: true)
             .padding(.top, Tokens.Space.s2)
     }

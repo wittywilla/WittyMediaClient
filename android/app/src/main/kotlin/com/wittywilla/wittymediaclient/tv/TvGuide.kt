@@ -927,7 +927,7 @@ private fun GuideBar(
         Text(
             dress.words(if (dress.capitals) "GUIDE" else "Guide", title.size, smallCaps = true),
             style = dress.font(title.size, title.weight, tracking = if (shape == TvShape.Receiver) 2.4f else 0f), color = titleColour,
-            maxLines = 1, modifier = Modifier.semantics { heading() },
+            maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.semantics { heading() },
         )
         Row(
             Modifier
@@ -951,7 +951,7 @@ private fun GuideBar(
             TvIconButton(dress, Symbols.Next, "Half an hour later", { onShift(GuideRules.SLOT) }, onBar = true)
             for (j in GuideRules.jumps(now, TimeZone.getDefault())) TvButton(dress, j.label, { onJump(j.at) }, kind = TvButtonKind.Link, onBar = true)
             // The day being shown, as words: choosing another is the Dock's Day.
-            Text(dayLabel, style = dress.font(21.25f, W.Medium), color = p.soft, maxLines = 1)
+            Text(dayLabel, style = dress.font(21.25f, W.Medium), color = p.soft, maxLines = 1, overflow = TextOverflow.Ellipsis)
         }
     }
 }
@@ -983,7 +983,7 @@ private fun GuidePager(dress: TvDress, store: GuideStore, onPage: (Int) -> Unit,
             TvButton(dress, "Previous page", { onPage(-1) }, enabled = GuidePaging.hasPrevious(store.pageOffset, store.pageSize))
         }
         Text(
-            GuidePaging.rangeWords(store.pageOffset, store.pageSize, total), style = dress.font(18.75f, tabular = true), color = p.soft, maxLines = 1,
+            GuidePaging.rangeWords(store.pageOffset, store.pageSize, total), style = dress.font(18.75f, tabular = true), color = p.soft, maxLines = 1, overflow = TextOverflow.Ellipsis,
             modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite },
         )
         if (store.paged) {
@@ -1076,8 +1076,8 @@ private fun Key(dress: TvDress, letter: String, words: String, colour: Color, ac
                 .size(dress.pt(26))
                 .background(colour, if (dress.shape == TvShape.Receiver || dress.shape == TvShape.Teletext) RectangleShape else CircleShape),
             contentAlignment = Alignment.Center,
-        ) { Text(letter, style = dress.font(15f, W.Bold), color = dress.paint.keyText, maxLines = 1) }
-        Text(if (dress.capitals) words.uppercase() else words, style = style, color = ink, maxLines = 1)
+        ) { Text(letter, style = dress.font(15f, W.Bold), color = dress.paint.keyText, maxLines = 1, overflow = TextOverflow.Ellipsis) }
+        Text(if (dress.capitals) words.uppercase() else words, style = style, color = ink, maxLines = 1, overflow = TextOverflow.Ellipsis)
     }
 }
 
@@ -1121,7 +1121,7 @@ private fun GuideToast(dress: TvDress, words: String) {
 fun TvEmptyMessage(title: String, detail: String) {
     Box(Modifier.fillMaxSize().padding(dress32()), contentAlignment = Alignment.Center) {
         Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy((8 * TV_UNIT).dp)) {
-            Text(title, color = MaterialTheme.colorScheme.onBackground, style = MaterialTheme.typography.section, modifier = Modifier.semantics { heading() })
+            Text(title, color = MaterialTheme.colorScheme.onBackground, style = MaterialTheme.typography.section, textAlign = TextAlign.Center, modifier = Modifier.semantics { heading() })
             Text(detail, color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.secondary, textAlign = TextAlign.Center)
         }
     }

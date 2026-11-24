@@ -202,7 +202,7 @@ fun TvDialog(title: String, message: String?, buttons: List<TvDialogButton>, onC
 @Composable
 private fun DialogButton(b: TvDialogButton, first: Boolean, modifier: Modifier) {
     val red = Color(0xFFFF453A)
-    Pressable(b.action, modifier, shape = Radius.FULL, ring = false, takeFocus = first, label = b.words) { active ->
+    Pressable(b.action, modifier, shape = Radius.FULL, ring = false, tvRing = false, takeFocus = first, label = b.words) { active ->
         Box(
             Modifier
                 .fillMaxWidth()

@@ -142,7 +142,12 @@ fun Pressable(
     pressScale: Float = PRESS_SCALE,
     pressAlpha: Float = PRESS_ALPHA,
     disabledAlpha: Float = DISABLED_ALPHA,
+    // Off means no ring on touch only: a TV always shows where focus is (see `tvRing`), as a phone-styled control drawn on
+    // a TV (See all, Notifications' Clear, the phone sheets) was otherwise marked by a slight growth alone.
     ring: Boolean = true,
+    // Off for something that paints its own focus on a TV (a key that fills, a profile tile's ringed avatar, a dialog
+    // button that turns white), so it doesn't get a second ring.
+    tvRing: Boolean = true,
     // Off for something whose own part reacts instead, as a profile tile's avatar does.
     grows: Boolean = true,
     // Off for something that draws outside itself, as a profile tile's lifted, ringed avatar does.
@@ -195,8 +200,11 @@ fun Pressable(
     val dim = (if (pressed) pressAlpha else 1f) * (if (enabled) 1f else disabledAlpha)
     val ringColour = MaterialTheme.colorScheme.onBackground
     val lift = if (showsFocus && !reduce && !filled) metrics.focusLift else 0.dp
+    // A TV always shows the ring unless the thing paints its own focus.
+    val ringShown = ring || (metrics.tv && tvRing)
     // On a TV the ring has room kept for it round the thing, and sits right against it, as Apple TV draws
-    // it: so a focused button and its neighbours never move, and both TVs measure the same.
+    // it: so a focused button and its neighbours never move, and both TVs measure the same. Only for things that asked
+    // for a ring: one that didn't keeps its size and has the ring drawn just outside it instead.
     val tvRoom = metrics.tv && ring
     Box(
         modifier
@@ -228,7 +236,7 @@ fun Pressable(
             .graphicsLayer { scaleX = grow; scaleY = grow; alpha = dim; translationY = -lift.toPx() }
             .then(if (tvRoom) Modifier.padding(metrics.focusRing) else Modifier)
             .then(
-                if (ring && showsFocus && !filled) Modifier.ringOutside(shape, ringColour, if (tvRoom) 0.dp else metrics.focusRing, metrics.focusRing)
+                if (ringShown && showsFocus && !filled) Modifier.ringOutside(shape, ringColour, if (tvRoom) 0.dp else metrics.focusRing, metrics.focusRing)
                 else Modifier,
             )
             .then(if (clip) Modifier.clip(shape) else Modifier)
@@ -312,7 +320,7 @@ fun WittyButton(
                 horizontalArrangement = Arrangement.spacedBy(metrics.u(8)),
             ) {
                 if (icon != null) Icon(icon, contentDescription = null, tint = shown, modifier = Modifier.size(metrics.u(if (metrics.tv) 30 else 20)))
-                Text(text, color = shown, style = style, textAlign = TextAlign.Center, maxLines = 1, softWrap = false)
+                Text(text, color = shown, style = style, textAlign = TextAlign.Center, maxLines = 1, overflow = TextOverflow.Ellipsis, softWrap = false)
             }
             if (busy) Spinner(shown, metrics.u(if (metrics.tv) 30 else 20))
         }
@@ -452,7 +460,7 @@ private fun TvTextField(
     val body = MaterialTheme.typography.body
     Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(metrics.u(8))) {
         Text(
-            label, color = if (isError) scheme.error else scheme.onSurfaceVariant, style = MaterialTheme.typography.secondary, maxLines = 1,
+            label, color = if (isError) scheme.error else scheme.onSurfaceVariant, style = MaterialTheme.typography.secondary, maxLines = 1, overflow = TextOverflow.Ellipsis,
         )
         Box(
             Modifier
@@ -539,7 +547,7 @@ private const val TOAST_MS = 3000L
 fun Tag(text: String, modifier: Modifier = Modifier) {
     val metrics = LocalMetrics.current
     Text(
-        text, color = MaterialTheme.colorScheme.onSurface, style = MaterialTheme.typography.caption, maxLines = 1,
+        text, color = MaterialTheme.colorScheme.onSurface, style = MaterialTheme.typography.caption, maxLines = 1, overflow = TextOverflow.Ellipsis,
         modifier = modifier.clip(Radius.FULL).background(MaterialTheme.colorScheme.outline).padding(horizontal = metrics.u(8), vertical = metrics.u(2)),
     )
 }
@@ -554,7 +562,7 @@ fun Avatar(name: String, size: Dp, modifier: Modifier = Modifier) {
     Box(modifier.size(size).clip(avatarShape(size, circle)).background(colour), contentAlignment = Alignment.Center) {
         Text(
             avatarInitial(name), color = Color.White, fontWeight = FontWeight.Bold, fontSize = type, lineHeight = type,
-            style = TextStyle.Default, maxLines = 1,
+            style = TextStyle.Default, maxLines = 1, overflow = TextOverflow.Ellipsis,
         )
     }
 }
@@ -594,7 +602,7 @@ fun ProfileTile(
     }.joinToString(", ")
     Pressable(
         onClick, modifier, shape = metrics.corner(10), label = spoken, focusKey = focusKey, requestFocus = requestFocus,
-        pressScale = 1f, pressAlpha = 1f, ring = false, grows = false, clip = false,
+        pressScale = 1f, pressAlpha = 1f, ring = false, tvRing = false, grows = false, clip = false,
     ) { active ->
         val gap = if (metrics.tv) metrics.focusRing else 3.dp
         val lift = if (metrics.tv) metrics.u(6) else 3.dp

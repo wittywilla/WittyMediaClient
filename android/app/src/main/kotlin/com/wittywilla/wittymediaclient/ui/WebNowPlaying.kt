@@ -199,7 +199,7 @@ internal fun NpChip(words: String, on: Boolean = false, icon: ImageVector? = nul
     Pressable(onClick, modifier.heightIn(min = high), shape = RoundedCornerShape(50), fill = if (on) Np.fg else Np.chip, label = label, selected = on, enabled = enabled, disabledAlpha = 0.45f, ring = LocalMetrics.current.tv) {
         Row(Modifier.heightIn(min = high).padding(horizontal = if (small) 12.dp else 16.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             if (icon != null) Icon(icon, null, tint = if (on) Color.Black else Np.fg, modifier = Modifier.size(iconSize))
-            Text(words, color = if (on) Color.Black else Np.fg, fontSize = if (small) 13.sp else 14.sp, fontWeight = FontWeight.SemiBold, maxLines = 1)
+            Text(words, color = if (on) Color.Black else Np.fg, fontSize = if (small) 13.sp else 14.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
             after?.invoke()
         }
     }
@@ -260,7 +260,7 @@ internal fun MenuRows(items: List<MenuItem>, close: () -> Unit) {
                 Row(Modifier.fillMaxWidth().heightIn(min = 44.dp).padding(horizontal = 12.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                     if (item.chosen) Text("✓", color = Np.fg, fontSize = 14.sp, fontWeight = FontWeight.Bold)
                     if (item.icon != null) Icon(item.icon, null, tint = Np.fg, modifier = Modifier.size(18.dp))
-                    Text(item.words, color = Np.fg, fontSize = 14.sp, fontWeight = if (item.chosen) FontWeight.Bold else FontWeight.Normal, maxLines = 1)
+                    Text(item.words, color = Np.fg, fontSize = 14.sp, fontWeight = if (item.chosen) FontWeight.Bold else FontWeight.Normal, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 }
             }
         }
@@ -439,7 +439,7 @@ fun WebNowPlaying(nav: Nav) {
             // Sleep, Queue, Like and More at the end. Between them on a tablet, what's playing and from where.
             val place: @Composable (Modifier) -> Unit = { m ->
                 Column(m.semantics(mergeDescendants = true) {}, horizontalAlignment = Alignment.CenterHorizontally) {
-                    Text(kind, color = Np.fg2, fontSize = 13.sp, fontWeight = FontWeight.SemiBold, maxLines = 1)
+                    Text(kind, color = Np.fg2, fontSize = 13.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
                     Text(about.albumTitle?.toString().orEmpty().ifEmpty { artistName }, color = Np.fg, fontSize = 14.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 }
             }
@@ -683,7 +683,7 @@ private fun Tools(
                         val chosen = style == id
                         Pressable({ pickStyle(id, name) }, Modifier.heightIn(min = 40.dp), shape = RoundedCornerShape(50), fill = if (chosen) Np.fg else Color.Transparent, label = name, selected = chosen, ring = false) {
                             Box(Modifier.heightIn(min = 40.dp).padding(horizontal = 16.dp), contentAlignment = Alignment.Center) {
-                                Text(name, color = if (chosen) Color.Black else Np.fg, fontSize = 14.sp, fontWeight = FontWeight.SemiBold, maxLines = 1)
+                                Text(name, color = if (chosen) Color.Black else Np.fg, fontSize = 14.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
                             }
                         }
                     }
@@ -793,7 +793,7 @@ private fun QueuePanel(nav: Nav, glow: Triple<Int, Int, Int>, wide: Boolean, anc
     val tint = Color(glow.first, glow.second, glow.third)
     Column(modifier.fillMaxWidth()) {
         NpSideHead(heading, "Close the ${heading.lowercase(Locale.ROOT)}", close) {
-            Text(if (after.isEmpty()) "Nothing after this" else "${after.size} to come · ${clock(after.sumOf { it.durationSec })}", color = Np.fg2, fontSize = 12.sp, maxLines = 1)
+            Text(if (after.isEmpty()) "Nothing after this" else "${after.size} to come · ${clock(after.sumOf { it.durationSec })}", color = Np.fg2, fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
         }
         if (!books) Row(Modifier.fillMaxWidth().padding(start = 16.dp, end = 16.dp, bottom = 8.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             NpRound(NpIcons.AddList, "Save the queue as a playlist", 44.dp, 20.dp, on = saving, modifier = anchor, onClick = save)

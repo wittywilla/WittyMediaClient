@@ -19,6 +19,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.text.TextAutoSize
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.safeDrawingPadding
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
@@ -118,7 +119,12 @@ fun ShowCard(nav: Nav, s: Show, requestFocus: Boolean = false, scope: String = "
 
 @Composable
 fun LoadFailed(nav: Nav, message: String, retry: () -> Unit) {
-    Column(Modifier.fillMaxSize().safeDrawingPadding().padding(Space.S8), verticalArrangement = Arrangement.spacedBy(Space.S3)) {
+    // In the phone shell, below its bar (safeDrawingPadding alone left the error under it); else clear of the system bars.
+    val shell = LocalTopRoom.current
+    Column(
+        Modifier.fillMaxSize().then(if (shell > 0.dp) Modifier.padding(top = shell).navigationBarsPadding() else Modifier.safeDrawingPadding()).padding(Space.S8),
+        verticalArrangement = Arrangement.spacedBy(Space.S3),
+    ) {
         ErrorText(message)
         ActionButton("Try again", retry, requestFocus = true)
         ActionButton("Change server", nav::changeServer)
@@ -245,7 +251,8 @@ fun ItemScreen(nav: Nav, s: Map<String, String>, id: Long) {
                     } else if (it.hasOwnScreen) {
                         // The server decides where Resume goes; 0 means start over.
                         val resume = (it.progress?.resumeSec ?: 0.0) > 0
-                        Row(Modifier.remoteRow(), horizontalArrangement = Arrangement.spacedBy(Space.S3)) {
+                        // Wraps: four pills at a TV's size are wider than the 640 column, and Play on… was cut off.
+                        FlowRow(Modifier.remoteRow(), horizontalArrangement = Arrangement.spacedBy(Space.S3), verticalArrangement = Arrangement.spacedBy(Space.S3)) {
                             ActionButton(if (resume) "Resume" else "Play",{ nav.push(Route.Player(it.id, false)) }, primary = true, pill = true, icon = Icons.Filled.PlayArrow, focusKey = "play", requestFocus = true)
                             if (resume) ActionButton("Start over", { nav.push(Route.Player(it.id, true)) }, pill = true, focusKey = "startover")
                             // Watch party and Play on…, where the server and this profile have them (RemoteScreens.kt).

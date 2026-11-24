@@ -26,7 +26,6 @@ import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawingPadding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
@@ -65,6 +64,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.core.graphics.toColorInt
 import androidx.core.net.toUri
@@ -270,13 +270,14 @@ fun YouScreen(nav: Nav, s: Map<String, String>) {
                 .fillMaxSize()
                 .verticalScroll(scroll)
                 // Under the shell's top bar or tabs where it has them (LocalTopRoom counts the status bar), else under the status bar.
-                .then(if (LocalTopRoom.current > 0.dp) Modifier.padding(top = LocalTopRoom.current) else Modifier.statusBarsPadding())
+                .pageTop()
                 .padding(horizontal = metrics.gutter)
                 .padding(top = Space.S6, bottom = LocalBottomRoom.current + Space.S4),
             verticalArrangement = Arrangement.spacedBy(metrics.u(24)),
         ) {
             YouHeader(nav, s, me, admin, showSignOut = false, modifier = Modifier.align(Alignment.CenterHorizontally))
-            ErrorText(nav.notice)
+            // Under the centred header, so centred with it (a notice after a profile switch, say).
+            ErrorText(nav.notice, Modifier.align(Alignment.CenterHorizontally), centred = true)
             list()
         }
     }
@@ -336,8 +337,8 @@ private fun ThisServer(nav: Nav, s: Map<String, String>, showSignOut: Boolean) {
         ) {
             ServerMark(metrics.u(40), nav.brandLogo)
             Column(Modifier.weight(1f)) {
-                Text(server.name, color = scheme.onSurface, style = MaterialTheme.typography.label.copy(fontWeight = FontWeight.SemiBold), maxLines = 1)
-                Text(server.url, color = scheme.onSurfaceVariant, style = MaterialTheme.typography.secondary, maxLines = 1)
+                Text(server.name, color = scheme.onSurface, style = MaterialTheme.typography.label.copy(fontWeight = FontWeight.SemiBold), maxLines = 1, overflow = TextOverflow.Ellipsis)
+                Text(server.url, color = scheme.onSurfaceVariant, style = MaterialTheme.typography.secondary, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 if (server.fingerprint.isNotEmpty()) {
                     Text("${s["fingerprintLabel"]}: ${server.fingerprint}", color = LocalExtraColours.current.hint, style = MaterialTheme.typography.caption)
                 }

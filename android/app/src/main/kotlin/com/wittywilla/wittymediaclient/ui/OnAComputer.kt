@@ -29,11 +29,12 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
-import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.min
 
@@ -66,8 +67,10 @@ fun OnAComputerCard(
             // The code is as large as the screen allows with the rest still showing: a 720p TV has the same room in
             // TV units as a 1080p one, a phone's window less.
             val qr: Dp = min(metrics.u(360), maxHeight * 0.34f)
+            // At least the screen's height inside the scroll, so a short card sits in the middle (a scrolling column is
+            // otherwise as tall as its content, and CenterVertically had nothing to centre in); a tall one still scrolls.
             Column(
-                Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = metrics.gutter, vertical = metrics.u(48)),
+                Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).heightIn(min = maxHeight).padding(horizontal = metrics.gutter, vertical = metrics.u(48)),
                 horizontalAlignment = Alignment.CenterHorizontally,
                 verticalArrangement = Arrangement.spacedBy(metrics.u(22), Alignment.CenterVertically),
             ) {
@@ -80,7 +83,7 @@ fun OnAComputerCard(
                     if (icon != null) Icon(icon, contentDescription = null, tint = LocalExtraColours.current.accentText, modifier = Modifier.size(metrics.u(64)))
                     Text(
                         title, color = scheme.onBackground, fontSize = sp(64), fontWeight = FontWeight.ExtraBold, textAlign = TextAlign.Center,
-                        lineHeight = sp(72), maxLines = 2,
+                        lineHeight = sp(72), maxLines = 2, overflow = TextOverflow.Ellipsis,
                     )
                 }
                 if (line.isNotEmpty()) {
@@ -88,7 +91,8 @@ fun OnAComputerCard(
                 }
                 if (address.isNotEmpty()) {
                     Box(Modifier.padding(top = metrics.u(6)).clip(metrics.corner(24)).background(Color.White).padding(metrics.u(28))) {
-                        QrCode(address, qr, Modifier.semantics { contentDescription = "$orOpen $address" })
+                        // Nothing for a screen reader: "or open" and the address are read from the words right under it.
+                        QrCode(address, qr, Modifier.clearAndSetSemantics { })
                     }
                     Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(metrics.u(4))) {
                         Text(orOpen, color = scheme.onSurfaceVariant, fontSize = sp(26), textAlign = TextAlign.Center)

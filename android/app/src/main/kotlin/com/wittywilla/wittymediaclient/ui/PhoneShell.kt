@@ -32,6 +32,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.grid.LazyGridState
 import androidx.compose.foundation.rememberScrollState
@@ -100,6 +101,14 @@ val LocalShellScroll = compositionLocalOf { ShellScroll() }
 
 // Room a page leaves at its top for the bar (status bar + 52 + 8), and at its bottom for the floating bar and docks.
 val LocalTopRoom = compositionLocalOf { 0.dp }
+
+// The room a page leaves at its top: the shell's bar or tabs where there is one (counting the status bar), else the
+// status bar alone. One helper, so a page that draws its own top can't land under the shell's bar.
+@Composable
+fun Modifier.pageTop(): Modifier {
+    val room = LocalTopRoom.current
+    return if (room > 0.dp) this.padding(top = room) else this.windowInsetsPadding(WindowInsets.statusBars)
+}
 
 // What a page has open over everything, its sheets: drawn after the bars, as the website's sit above its floating bar.
 class OverShell {
@@ -187,7 +196,9 @@ fun PhoneShell(nav: Nav, content: @Composable () -> Unit) {
         val side = isSideStyle(style)
         val overlay = nav.sduiNav?.shell?.overlay == true
         val sideRoom = 24.dp + inset + if (docked) DOCK_SPACE.dp else 0.dp
-        val tabsRoom = if (side) status + 8.dp else if (overlay) status else status + size + 8.dp
+        // Overlay tabs only change how solid the strip is: a page that opens with a hero already runs under it (its
+        // top room is 0, SduiRender and WebHome), so every other page still starts below the tabs, not under them.
+        val tabsRoom = if (side) status + 8.dp else status + size + 8.dp
         Box(Modifier.fillMaxSize().background(scheme.background).scene(LocalLook.current.sceneFor(LocalReduceMotion.current)).scanlines()) {
             RailPin.load(androidx.compose.ui.platform.LocalContext.current)
             val railOpen = if (style == "rail" || style == "railDrawer") RailPin.pinned else false
@@ -334,7 +345,7 @@ private fun LibraryStrip(nav: Nav, modifier: Modifier, overPicture: Boolean) {
                 Text(
                     // Over a picture the muted grey was lost on a light photo (#80): every name in the text colour, the current
                     // one told by its underline, with a soft glow of the page colour around the letters.
-                    entry.label, color = if (on || overPicture) scheme.onBackground else scheme.onSurfaceVariant, fontSize = 15.sp, fontWeight = FontWeight.Bold, maxLines = 1,
+                    entry.label, color = if (on || overPicture) scheme.onBackground else scheme.onSurfaceVariant, fontSize = 15.sp, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis,
                     style = if (overPicture) MaterialTheme.typography.body.copy(shadow = androidx.compose.ui.graphics.Shadow(scheme.background.copy(alpha = 0.85f), Offset(0f, 1f), 8f)) else MaterialTheme.typography.body,
                 )
             }

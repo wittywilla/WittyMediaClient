@@ -288,7 +288,7 @@ internal fun KaraokeScreen(nav: Nav, words: LyricsWords, title: String, artist: 
                         val on = sound.vocalCut == cut
                         Pressable({ listening.setSound { it.copy(vocalCut = cut) } }, Modifier.heightIn(min = 46.dp), shape = RoundedCornerShape(50), fill = if (on) Color.White else Color.Transparent, label = name, selected = on, ring = LocalMetrics.current.tv) {
                             Box(Modifier.heightIn(min = 46.dp).padding(horizontal = if (compact) 10.dp else 16.dp), contentAlignment = Alignment.Center) {
-                                Text(name, color = if (on) Color.Black else Color.White, fontSize = if (compact) 13.sp else 15.sp, fontWeight = FontWeight.SemiBold, maxLines = 1)
+                                Text(name, color = if (on) Color.Black else Color.White, fontSize = if (compact) 13.sp else 15.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
                             }
                         }
                     }
