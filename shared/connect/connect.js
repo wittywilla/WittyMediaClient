@@ -22,6 +22,17 @@
     invite: S.errInvite, 'invite-refused': S.errInviteRefused, 'p2p-missing': S.errAwayMissing, 'p2p-failed': S.errAwayFailed,
     // A code from a server's Connect a device (the desktop app; see its code.js).
     'code-format': S.errCodeFormat, 'code-not-found': S.errCodeNotFound, 'code-none': S.errCodeNone,
+    'code-used': S.errCodeUsed, 'code-liar': S.errCodeLiar,
+    // Which step of joining by an invite failed; {why} is the connection's own words (errorWords).
+    'join-invite': S.joinStepInvite, 'join-connect': S.joinStepConnect, 'join-signin': S.joinStepSignIn,
+  }
+
+  // An error's words. A {why} in them is filled with the connection's own words for what went wrong,
+  // or, when it said nothing, with what to check.
+  const errorWords = (r) => {
+    const words = r && ERRORS[r.error]
+    if (!words || !words.includes('{why}')) return words
+    return words.replace('{why}', (r.why && String(r.why).trim()) || S.joinNoPath)
   }
 
   // Without a native bridge: a plain web page on a smart TV.
@@ -547,7 +558,7 @@
       try { joined = await bridge.invite(value) } catch (e) { joined = { error: 'p2p-failed' } }
       if (turn !== screen || joined.ok) return
       setBusy(go, false, label)
-      say(joined.message || ERRORS[joined.error] || S.errInvite)
+      say(joined.message || errorWords(joined) || S.errInvite)
       input.focus()
       return
     }
@@ -559,7 +570,7 @@
     if (turn !== screen || r.ok || r.error === 'stopped') return
     setBusy(go, false, label)
     if (r.error === 'changed') { choose(only, S.identityChanged); return }
-    say(r.message || ERRORS[r.error] || S.errCodeNotFound)
+    say(r.message || errorWords(r) || S.errCodeNotFound)
     input.focus()
   }
 
@@ -603,7 +614,7 @@
         if (turn !== screen || r.ok) return
         setBusy(go, false, S.connect)
         if (r.error === 'changed') { choose(server.url, S.identityChanged); return }
-        say(r.message || ERRORS[r.error] || S.errInvalid)
+        say(r.message || errorWords(r) || S.errInvalid)
         input.focus()
         return
       }
@@ -637,18 +648,18 @@
       try { joined = await bridge.invite(input.value) } catch (e) { joined = { error: 'p2p-failed' } }
       if (turn !== screen || joined.ok) return
       setBusy(go, false, S.connect)
-      say(joined.message || ERRORS[joined.error] || S.errInvite)
+      say(joined.message || errorWords(joined) || S.errInvite)
       input.focus()
       return
     }
     const r = self.WittyAddress.normalizeAddress(input.value)
-    if (r.error) { say(ERRORS[r.error]); input.focus(); return }
+    if (r.error) { say(errorWords(r)); input.focus(); return }
     const turn = screen
     setBusy(go, true, S.connecting)
     const server = await ask(r.url)
     if (turn !== screen) return
     setBusy(go, false, S.connect)
-    if (server.error) { say(ERRORS[server.error]); input.focus(); return }
+    if (server.error) { say(errorWords(server)); input.focus(); return }
     next(server)
   }
 
@@ -680,7 +691,7 @@
       if (turn !== screen) return undefined
     }
     connecting = ''
-    if (server.error) return addressScreen(ERRORS[server.error], url)
+    if (server.error) return addressScreen(errorWords(server), url)
     return next(server, message)
   }
 
@@ -711,7 +722,7 @@
     try { r = await bridge.open(request) } catch (e) { r = { error: 'unreachable' } }
     if (turn !== screen || !r || !r.error) return undefined
     if (r.error === 'changed') return choose(request.url, S.identityChanged)
-    return addressScreen(ERRORS[r.error] || S.errInvalid, request.url)
+    return addressScreen(errorWords(r) || S.errInvalid, request.url)
   }
 
   const fingerprintOf = (server) => (server.identity && server.identity.fingerprint) || ''
@@ -779,7 +790,7 @@
       if (r.error === 'changed') { choose(server.url, S.identityChanged); return }
       code = ''
       progress.textContent = `0 ${S.codeEntered}`
-      said.say(r.message || ERRORS[r.error] || S.errInvalid)
+      said.say(r.message || errorWords(r) || S.errInvalid)
       // A wrong code shakes the boxes once, then they empty.
       if (reduceMotion()) { paintBoxes(); return }
       display.className = 'code shake'
@@ -899,7 +910,7 @@
       try { r = await bridge.pairPoll() } catch (e) { r = { status: 'lost' } }
       if (turn !== screen || mine !== round || r.ok) return // signed in: the app opens the server
       if (r.error === 'changed') { choose(server.url, S.identityChanged); return }
-      if (r.error) { ended(ERRORS[r.error] || S.errInvalid); return }
+      if (r.error) { ended(errorWords(r) || S.errInvalid); return }
       if (r.status === 'denied') { ended(S.pairDenied); return }
       if (r.status === 'expired') { ended(S.pairExpired); return }
       // A network that blinks is no reason to give up on a code that's still good.
@@ -919,7 +930,7 @@
       try { r = await bridge.pairStart(server.url) } catch (e) { r = { error: 'unreachable' } }
       if (turn !== screen || mine !== round) return
       if (r.error === 'changed') { choose(server.url, S.identityChanged); return }
-      if (!r.ok) { ended(r.message || ERRORS[r.error] || S.errInvalid); return }
+      if (!r.ok) { ended(r.message || errorWords(r) || S.errInvalid); return }
       where.textContent = r.approveAt
       shown.textContent = r.code
       spoken.textContent = r.code.replace(/[^A-Za-z0-9]/g, '').split('').join(' ') // letter by letter

@@ -15,6 +15,7 @@ const { spawn } = require('child_process')
 const { EventEmitter } = require('events')
 const fs = require('fs')
 const path = require('path')
+const { cleanCode } = require('./code.js')
 
 // A server's or a device's connection ID: an Ed25519 key, in the text form libp2p gives it.
 const ID = /^12D3KooW[1-9A-HJ-NP-Za-km-z]{44}$/
@@ -57,9 +58,12 @@ function cleanInfo(info) {
   return out
 }
 
-// An invite link: wittymedia://p2p/<server ID>?s=<secret>&n=<name>&a=<address>...
+// An invite link: wittymedia://p2p/<server ID>?s=<secret>&n=<name>&a=<address>...&h=<home>&c=<code>
 // Nothing in it is believed further than this: the ID is what gets dialled and proved, the
-// addresses are only places to try, and the name is only shown.
+// addresses are only places to try, and the name is only shown. h and c (from 0.8.5, in the QR
+// code on Connect a device) are the web address the server's page was opened at and the code
+// beside the QR code: asked there first, at home, where the server has to prove it made the code
+// (code.js). Both or neither.
 function parseInvite(text) {
   let u
   try { u = new URL(String(text).trim()) } catch { return null }
@@ -67,7 +71,24 @@ function parseInvite(text) {
   const id = u.pathname.replace(/^\/+|\/+$/g, '')
   const secret = u.searchParams.get('s') || ''
   if (!validId(id) || !SECRET.test(secret)) return null
-  return { serverId: id, secret, name: shownName(u.searchParams.get('n') || '', 80), hints: cleanHints(u.searchParams.getAll('a')) }
+  const home = inviteHome(u.searchParams.get('h') || '')
+  const code = cleanCode(u.searchParams.get('c') || '')
+  const both = !!home && !!code
+  return {
+    serverId: id, secret, name: shownName(u.searchParams.get('n') || '', 80), hints: cleanHints(u.searchParams.getAll('a')),
+    home: both ? home : '', code: both ? code : '',
+  }
+}
+
+// A web address fit for an invite's h: http or https, a host and maybe a port, nothing else (the
+// server's p2p.InviteHome). '' when it isn't one.
+function inviteHome(text) {
+  if (text.length > 200) return ''
+  let u
+  try { u = new URL(text) } catch { return '' }
+  if ((u.protocol !== 'http:' && u.protocol !== 'https:') || !u.hostname || u.username || u.password || u.search || u.hash) return ''
+  if (u.pathname !== '/') return ''
+  return `${u.protocol}//${u.host}`
 }
 
 // A name that came in a link, fit to show: no control characters, and none of the invisible ones
@@ -413,6 +434,6 @@ function pathWords(s) {
 }
 
 module.exports = {
-  Tunnel, JoinRun, cleanJoined, parseInvite, shownName, looksLikeInvite, originFor, isP2POrigin, cleanInfo, cleanHints, cleanState, connected, validId,
+  Tunnel, JoinRun, cleanJoined, parseInvite, inviteHome, shownName, looksLikeInvite, originFor, isP2POrigin, cleanInfo, cleanHints, cleanState, connected, validId,
   helperPath, loadKey, keyLocked, saveKey, forgetKey, makeKey, pathWords, COOKIE, HEADER,
 }

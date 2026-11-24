@@ -84,8 +84,10 @@ object PeerRules {
         mapOf("key" to JsonPrimitive(key), "code" to JsonPrimitive(code), "name" to JsonPrimitive(name.take(60)), "platform" to JsonPrimitive(platform.take(24))),
     ).toString()
 
-    // An invite link: wittymedia://p2p/<server ID>?s=<secret>&n=<name>&a=<address>… Nothing in it is believed further
-    // than this: the ID is what gets dialled and proved.
+    // An invite link: wittymedia://p2p/<server ID>?s=<secret>&n=<name>&a=<address>…&h=<home>&c=<code> Nothing in it is
+    // believed further than this: the ID is what gets dialled and proved. h and c (from 0.8.5, in the QR code on Connect
+    // a device) are the web address the server's page was opened at and the code beside the QR code: a device at
+    // home asks there with the code first (WebJoin), where the server has to prove it made the code.
     fun invite(text: String): PeerInvite? {
         val trimmed = text.trim()
         if (trimmed.length > 4096) return null
@@ -99,7 +101,23 @@ object PeerRules {
         val secret = items.firstOrNull { it.first == "s" }?.second.orEmpty()
         if (!isId(id) || secret.length !in 16..64 || !secret.all { it in SECRET_CHARS }) return null
         val name = shownName(items.firstOrNull { it.first == "n" }?.second.orEmpty(), 80)
-        return PeerInvite(id, secret, name, hints(items.filter { it.first == "a" }.map { it.second }))
+        // Both or neither: an address with no code, or a code with nowhere to use it, is no use.
+        val home = inviteHome(items.firstOrNull { it.first == "h" }?.second.orEmpty())
+        val code = WebJoin.clean(items.firstOrNull { it.first == "c" }?.second.orEmpty())
+        val both = home.isNotEmpty() && code.isNotEmpty()
+        return PeerInvite(id, secret, name, hints(items.filter { it.first == "a" }.map { it.second }), if (both) home else "", if (both) code else "")
+    }
+
+    // A web address fit for an invite's h: http or https, a host and maybe a port, nothing else (the server's
+    // p2p.InviteHome). "" when it isn't one.
+    fun inviteHome(text: String): String {
+        if (text.length > 200) return ""
+        val uri = runCatching { URI(text) }.getOrNull() ?: return ""
+        val scheme = uri.scheme?.lowercase() ?: return ""
+        val host = uri.host ?: return ""
+        if ((scheme != "http" && scheme != "https") || host.isEmpty() || uri.rawUserInfo != null || uri.rawQuery != null || uri.rawFragment != null) return ""
+        if (!uri.rawPath.isNullOrEmpty() && uri.rawPath != "/") return ""
+        return scheme + "://" + uri.rawAuthority
     }
 
     // Where a server reached only from away is kept in the list of servers: an address of its own per server that
@@ -215,7 +233,8 @@ data class PeerState(
         }
 }
 
-data class PeerInvite(val serverId: String, val secret: String, val name: String, val hints: List<String>)
+// home and code: where a device at home asks with the code first, and the code (both or neither; PeerRules.invite).
+data class PeerInvite(val serverId: String, val secret: String, val name: String, val hints: List<String>, val home: String = "", val code: String = "")
 
 data class PeerAnswer(
     val ok: Boolean = false,

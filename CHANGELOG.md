@@ -5,6 +5,22 @@ What changed in WittyMediaClient, newest first. What changed before it had a rep
 
 ## Unreleased
 
+**Connecting a phone with a code or a QR code (#141, wittywilla/WittyMediaServer#683)**
+
+- **Android has Enter a code.** **Join with a link or code** on a phone or tablet takes the code a server shows under
+  **Connect a device**, as the desktop app does: the servers on this network are asked, and the one that made it
+  proves it and signs the phone in. A code typed where an address goes is taken as a code too. Before, it was read as
+  an address, and failed. A TV still shows a code of its own, for a phone to type.
+- **A QR code scanned at home signs in through the server's own address.** From WittyMediaServer 0.8.5 the QR code
+  also holds the address its page was opened at, and the code. Android and desktop ask there first, with no
+  peer-to-peer connection needed. In Docker that's the only way a device at home finds the server. Away from home,
+  the invite goes peer to peer as before.
+- **A failed pairing says which step failed**, in place of "Couldn't reach your server from away": showing the server
+  the invite, reaching it once it has added the device (with the connection's own words, such as "a direct
+  connection through both routers couldn't be made"), the server proving who it is, or signing in.
+- **Android shows an invite at once**, as the desktop app does. Waiting for a path first meant a phone whose only way
+  in was the server's own WittyRelay never got to show it.
+
 ## 0.6.2
 
 Released 2026-11-24.

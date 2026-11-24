@@ -180,9 +180,20 @@ class PeerManager(private val app: WittyApp) {
 
     // The connector for this server, started (or kept, if it already is), until it connects or the time is up.
     private suspend fun open(info: PeerInfo, waitMs: Long): PeerState? = lock.withLock {
+        val started = startLocked(info) ?: return null
+        settleLocked(started, waitMs)
+    }
+
+    // What the connection last said was wrong when it was given up on (empty if it said nothing): words to show.
+    var lastProblem: String = ""
+        private set
+
+    // Under the lock: the connector for this server, started (or kept, if it already is). Null when it can't start.
+    private suspend fun startLocked(info: PeerInfo): PeerLink? {
         val native = PeerLibrary.native ?: return null
         val key = deviceKey() ?: return null
         deviceId() // for the logs' session id
+        lastProblem = ""
         if (link != null && linkInfo?.serverId != info.serverId) shut()
         val started = link ?: try {
             withContext(Dispatchers.IO) {
@@ -198,9 +209,17 @@ class PeerManager(private val app: WittyApp) {
         link = started
         linkInfo = info
         awayFor = info.serverId
+        return started
+    }
+
+    // Under the lock: waits until the connector connects, and then the app's requests go to its local address; or
+    // the time is up, and it is closed, keeping what it last said was wrong.
+    private suspend fun settleLocked(started: PeerLink, waitMs: Long): PeerState? {
+        var last = PeerState()
         val state = withTimeoutOrNull(waitMs) {
             var now = PeerRules.state(withContext(Dispatchers.IO) { started.state() })
             while (!now.connected) {
+                last = now
                 delay(POLL_MS)
                 now = PeerRules.state(withContext(Dispatchers.IO) { started.state() })
             }
@@ -208,11 +227,12 @@ class PeerManager(private val app: WittyApp) {
         }
         if (state == null) {
             ClientLog.warnSeldom("p2p", "The server wasn't reached from away in ${waitMs / 1000} s", session = logSession)
+            lastProblem = last.error
             shut()
             return null
         }
         PeerRoute.set(started.port, started.secret)
-        state
+        return state
     }
 
     // What the connector says, as it says it: shown, and acted on.
@@ -330,16 +350,23 @@ class PeerManager(private val app: WittyApp) {
 
     // MARK: joining
 
-    // From an invite link: connect to the server it names, show it the invite's secret, and get back a sign-in code
-    // to redeem over the connection.
+    // From an invite link: show the server it names the invite's secret, and get back a sign-in code to redeem over
+    // the connection. Null when the connection couldn't even start. The invite is shown at once, as the desktop app
+    // does: the library shows it with this device's own key as soon as it connects, or, if that doesn't happen
+    // within 20 s, through the server's own WittyRelay with the invite's key (the only way in for a device that has
+    // never been at home when that relay is the server's only way in). Waiting for a path first, as 0.6.2 did, never
+    // got there. Once listed, a path for the requests that follow: an answer with reason "unreachable" (and the
+    // connection's own words in lastProblem) when there is none.
     suspend fun join(invite: PeerInvite): PeerAnswer? {
-        val state = open(PeerInfo(invite.serverId, invite.hints), PeerRules.JOIN_WAIT_MS) ?: return null
-        val current = link ?: return null
+        val started = lock.withLock { startLocked(PeerInfo(invite.serverId, invite.hints)) } ?: return null
         val answer = withContext(Dispatchers.IO) {
-            runCatching { PeerRules.answer(current.enrol(invite.secret, app.deviceName, app.platformName)) }.getOrElse { PeerAnswer(error = it.message.orEmpty()) }
-        }
+            runCatching { PeerRules.answer(started.enrol(invite.secret, app.deviceName, app.platformName)) }.getOrElse { PeerAnswer(error = it.message.orEmpty()) }
+        }.let { it.copy(serverId = invite.serverId, serverName = it.serverName.ifEmpty { invite.name }, addrs = it.addrs.ifEmpty { invite.hints }) }
+        if (!answer.ok) return answer
+        val state = lock.withLock { if (link === started) settleLocked(started, PeerRules.JOIN_WAIT_MS) else null }
+            ?: return answer.copy(ok = false, reason = "unreachable")
         way = PeerWay.Away(state)
-        return answer.copy(serverId = invite.serverId, serverName = answer.serverName.ifEmpty { invite.name }, addrs = answer.addrs.ifEmpty { invite.hints })
+        return answer
     }
 
     // A code for a device that has never been at home with its server: someone signed in types it into the server.

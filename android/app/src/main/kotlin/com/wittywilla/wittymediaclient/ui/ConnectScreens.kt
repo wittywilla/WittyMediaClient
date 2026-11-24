@@ -86,6 +86,7 @@ import com.wittywilla.wittymediaclient.net.Probe
 import com.wittywilla.wittymediaclient.net.Profile
 import com.wittywilla.wittymediaclient.net.Profiles
 import com.wittywilla.wittymediaclient.net.ServerFinder
+import com.wittywilla.wittymediaclient.net.WebJoin
 import com.wittywilla.wittymediaclient.net.probeServer
 import com.wittywilla.wittymediaclient.net.problemWords
 import com.wittywilla.wittymediaclient.net.screenFor
@@ -221,6 +222,18 @@ fun ConnectScreen(nav: Nav, s: Map<String, String>, message: String) {
             problem = ""
             scope.launch {
                 nav.joinInvite(invite)?.let { problem = it }
+                connecting = null
+            }
+            return
+        }
+        // A Connect a device code typed where an address goes (0.6.2 took "K7QM-2XHD" for a computer's name): asked
+        // of the servers on this network, as Enter a code does.
+        if (WebJoin.looksLikeCode(address)) {
+            if (connecting != null) return
+            connecting = "code"
+            problem = ""
+            scope.launch {
+                nav.enterCode(address, found.map { it.url })?.let { problem = it }
                 connecting = null
             }
             return
