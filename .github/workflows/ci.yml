@@ -90,6 +90,7 @@ jobs:
           sparse-checkout: |
             themes
             pkg/sdui/data
+            pkg/connectsteps
       - name: Theme data is up to date
         env:
           WMS_THEMES: .server/themes
@@ -98,6 +99,10 @@ jobs:
         env:
           WMS_SDUI_DATA: .server/pkg/sdui/data
         run: node shared/scripts/sync-settings-menu.mjs --check
+      - name: Connect steps are the server's
+        env:
+          WMS_CONNECT_STEPS: .server/pkg/connectsteps
+        run: node shared/scripts/sync-connect-steps.mjs --check
       - name: Install
         working-directory: desktop
         run: npm ci --ignore-scripts --no-audit --no-fund
