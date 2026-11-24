@@ -76,7 +76,7 @@ android {
         minSdk = 23
         // Target 37 adds a local-network permission: raise this with discovery tested on a device.
         targetSdk = 36
-        versionName = "0.6.2"
+        versionName = "0.6.3"
         versionCode = versionCodeOf(versionName!!)
         // The screens' accessibility checks (src/androidTest), run by hand against a signed-in debug build.
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
