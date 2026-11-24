@@ -64,8 +64,17 @@ struct ChannelPlayer: View {
                             onInfo: { info = MoreInfoAsk(channel: key, start: live.info?.now?.start ?? Int64(Date().timeIntervalSince1970)) })
                     .frame(maxHeight: .infinity, alignment: .bottom)
             }
+            if live.inBreak != nil, live.key == key, !mini, !dockOpen {
+                // Remote words only: Right opens the Dock, where Skip break is first.
+                Text("Ad break · Right, then Skip break")
+                    .font(.wmLabel).foregroundStyle(.white).padding(.horizontal, 16).padding(.vertical, 8)
+                    .background(Capsule().fill(.black.opacity(0.6)))
+                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomTrailing).padding(.bottom, 152).padding(.trailing, 157)
+            }
             if let programme = live.fromStart, !mini, !dockOpen {
-                Text("From the start of \(programme.title) · Select, then Back to live")
+                Text(live.shiftFrom != nil && live.behind >= 60
+                     ? "\(programme.title) · \(Int((live.behind / 60).rounded())) min behind live · Right, then Back to live"
+                     : "From the start of \(programme.title) · Right, then Back to live")
                     .font(.wmLabel).foregroundStyle(.white).padding(.horizontal, 16).padding(.vertical, 8)
                     .background(Capsule().fill(.black.opacity(0.6)))
                     .frame(maxHeight: .infinity, alignment: .top).padding(.top, 60)

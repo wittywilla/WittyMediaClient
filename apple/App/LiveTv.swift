@@ -28,6 +28,15 @@ final class LiveTv: ObservableObject {
     @Published private(set) var behind: Double = 0
     /// The programme being watched from its start, from the channel's archive (`tv-catchup`); nil when it's live.
     @Published private(set) var fromStart: GuideProgramme?
+    /// On a library channel started over (server #648): the moment of the schedule this viewer's own stream started
+    /// from, the programme and breaks it is in, the moment the picture is at, and the break it is in, if any.
+    @Published private(set) var shiftFrom: Int64?
+    @Published private(set) var timeline: Timeline?
+    @Published private(set) var sched: Double?
+    @Published private(set) var inBreak: Span?
+    private var heardAt = Date()
+    private var askedEnd: Int64 = 0
+    private var pausedAt: (when: Date, sched: Double?)?
 
     private var client = WittyClient(base: "")
     /// One name for this player, so the server can tell when it has gone.
@@ -56,6 +65,65 @@ final class LiveTv: ObservableObject {
         let end = CMTimeGetSeconds(CMTimeRangeGetEnd(range))
         let at = CMTimeGetSeconds(player.currentTime())
         behind = end.isFinite && at.isFinite ? max(0, end - at) : 0
+        guard shiftFrom != nil else { inBreak = nil; return }
+        let s = schedNow()
+        sched = s
+        if let s { behind = max(0, liveNow() - s) }
+        inBreak = TimeShiftRules.breakAt(timeline?.breaks, s)
+        // Past the programme the timeline told of: what's on from there, and its breaks.
+        if let s, let t = timeline, s >= Double(t.programme.end), askedEnd != t.programme.end {
+            askedEnd = t.programme.end
+            let channel = key, using = client
+            Task {
+                if let next = try? await using.timeline(channel, at: Int64(s)), channel == self.key, self.shiftFrom != nil { self.timeline = next }
+            }
+        }
+    }
+
+    /// The moment of the schedule the picture is at, from the stream's program date-times.
+    func schedNow() -> Double? { player.currentItem?.currentDate()?.timeIntervalSince1970 }
+
+    /// Where live is now, by the server's clock.
+    private func liveNow() -> Double {
+        guard let t = info?.serverTime, t > 0 else { return Date().timeIntervalSince1970 }
+        return t + Date().timeIntervalSince(heardAt)
+    }
+
+    /// A library channel can go further back than its window, by starting over from there.
+    private var canShift: Bool { TimeShiftRules.isLibrary(key) && (shiftFrom != nil || info?.startOver == true) }
+
+    /// Whether Start over is offered now.
+    var canStartOver: Bool { fromStart == nil && TimeShiftRules.canStartOver(info, now: liveNow()) }
+
+    /// A moment of the schedule: within what's loaded, a seek; further back, this viewer's stream from there; at live,
+    /// the channel everyone shares.
+    func goTo(_ target: Double) {
+        guard let s = schedNow(), let range = player.currentItem?.seekableTimeRanges.last?.timeRangeValue else { return }
+        let cur = CMTimeGetSeconds(player.currentTime())
+        let live = liveNow()
+        switch TimeShiftRules.plan(target, sched: s, cur: cur, low: CMTimeGetSeconds(range.start), high: CMTimeGetSeconds(CMTimeRangeGetEnd(range)),
+                                   live: live, earliest: Double(timeline?.earliest ?? Int64(live - 6 * 3600))) {
+        case .live: backToLive()
+        case .within(let to): player.seek(to: CMTime(seconds: to, preferredTimescale: 600))
+        case .restart(let at): restart(at: at)
+        }
+    }
+
+    private func restart(at: Int64) {
+        guard !key.isEmpty, let programme = fromStart ?? info?.now else { return }
+        watchFromStart(key, programme, client: client, from: at)
+    }
+
+    /// The programme on now from its beginning: this viewer's own stream on a library channel, the archive on a tuner.
+    func startOver() {
+        guard canStartOver, let p = info?.now else { return }
+        watchFromStart(key, p, client: client)
+    }
+
+    /// Past the whole break the picture is in, in one press. Only on a start-over stream: live keeps its breaks.
+    func skipBreak() {
+        guard let b = inBreak else { return }
+        goTo(Double(b.end) + 0.5)
     }
 
     var muted: Bool {
@@ -93,17 +161,25 @@ final class LiveTv: ObservableObject {
 
     /// A programme from its start, from what the channel's source keeps. The same viewer as live, so the live
     /// stream of the same channel is left first, and leaving this stops it as leaving live does.
-    func watchFromStart(_ key: String, _ programme: GuideProgramme, client: WittyClient) {
+    /// On a library channel it is this viewer's own stream of the channel from `from` (the programme's start if nil).
+    func watchFromStart(_ key: String, _ programme: GuideProgramme, client: WittyClient, from: Int64? = nil) {
         self.client = client
-        let was = self.key
+        let was = self.key, wasShift = shiftFrom != nil
+        let shift = TimeShiftRules.isLibrary(key) ? (from ?? programme.start) : nil
         self.key = key
         fromStart = programme
+        shiftFrom = shift
+        timeline = nil
+        inBreak = nil
+        sched = nil
+        pausedAt = nil
         info = nil
         state = .tuning
         tuning?.cancel()
         player.replaceCurrentItem(with: nil)
         tuning = Task {
-            if !was.isEmpty { try? await client.leaveChannel(was, viewer: viewer) }
+            // A start-over stream replaced by one from a new moment is replaced by the server itself.
+            if !was.isEmpty, !(wasShift && shift != nil && was == key) { try? await client.leaveChannel(was, viewer: viewer, shift: wasShift) }
             await tune(key, from: programme)
         }
     }
@@ -111,14 +187,17 @@ final class LiveTv: ObservableObject {
     /// From watching from the start back to the channel as it is now.
     func backToLive() {
         guard fromStart != nil else { return }
-        let channel = key
+        let channel = key, wasShift = shiftFrom != nil
         fromStart = nil
+        shiftFrom = nil
+        timeline = nil
+        inBreak = nil
         info = nil
         state = .tuning
         tuning?.cancel()
         player.replaceCurrentItem(with: nil)
         tuning = Task {
-            try? await client.leaveChannel(channel, viewer: viewer)
+            try? await client.leaveChannel(channel, viewer: viewer, shift: wasShift)
             await tune(channel)
         }
     }
@@ -129,18 +208,41 @@ final class LiveTv: ObservableObject {
         tuning = nil
         player.pause()
         player.replaceCurrentItem(with: nil)
-        if !key.isEmpty { leave(key) }
+        if !key.isEmpty { leave(key, shift: shiftFrom != nil) }
         key = ""
         fromStart = nil
+        shiftFrom = nil
+        timeline = nil
+        inBreak = nil
         info = nil
         state = .idle
     }
 
-    func pause() { player.pause() }
-    func resume() { if !key.isEmpty, player.currentItem != nil { player.play() } }
+    func pause() {
+        if canShift, playing { pausedAt = (Date(), schedNow()) }
+        player.pause()
+    }
 
-    /// Back or on within what the server keeps of the channel.
+    func resume() {
+        // Back after longer than the server keeps: from where it paused, not whatever is left.
+        if let p = pausedAt, let at = p.sched, TimeShiftRules.restartAfterPause(pausedAt: p.when, now: Date(), bufferSec: info?.bufferSec ?? 300) {
+            pausedAt = nil
+            restart(at: Int64(at))
+            return
+        }
+        pausedAt = nil
+        if !key.isEmpty, player.currentItem != nil { player.play() }
+    }
+
+    /// Back or on within what the server keeps of the channel; on a library channel, further back by starting over.
     func seek(by seconds: Double) {
+        if canShift, let s = schedNow() {
+            let low = player.currentItem?.seekableTimeRanges.last.map { CMTimeGetSeconds($0.timeRangeValue.start) } ?? 0
+            if shiftFrom != nil || CMTimeGetSeconds(player.currentTime()) + seconds < low {
+                goTo(s + seconds)
+                return
+            }
+        }
         guard let range = player.currentItem?.seekableTimeRanges.last?.timeRangeValue else { return }
         let target = CMTimeAdd(player.currentTime(), CMTime(seconds: seconds, preferredTimescale: 600))
         let low = range.start, high = CMTimeRangeGetEnd(range)
@@ -153,26 +255,31 @@ final class LiveTv: ObservableObject {
         player.play()
     }
 
-    private func leave(_ key: String) {
+    private func leave(_ key: String, shift: Bool = false) {
         let leaving = client, name = viewer
-        Task { try? await leaving.leaveChannel(key, viewer: name) }
+        Task { try? await leaving.leaveChannel(key, viewer: name, shift: shift) }
     }
 
     private func tune(_ key: String, from programme: GuideProgramme? = nil) async {
         for _ in 0..<20 {
             do {
                 let tuned: Tuned
-                if let programme {
+                let shift = shiftFrom
+                if let programme, let shift {
+                    tuned = try await client.startOver(key, from: shift, viewer: viewer)
+                } else if let programme {
                     tuned = try await client.catchup(key, start: programme.start, end: programme.end, viewer: viewer)
                 } else {
                     tuned = try await client.tune(key, viewer: viewer)
                 }
-                if Task.isCancelled || key != self.key || programme != fromStart { return }
+                if Task.isCancelled || key != self.key || programme != fromStart || shift != shiftFrom { return }
                 guard let address = tuned.streamUrl ?? tuned.url, let url = client.mediaURL(address) else {
                     state = .failed("The server sent an address that can't be used.")
                     return
                 }
                 info = tuned
+                heardAt = Date()
+                timeline = tuned.timeline
                 player.replaceCurrentItem(with: AwayCookie.playerItem(url))
                 player.play()
                 return
@@ -180,6 +287,10 @@ final class LiveTv: ObservableObject {
                 // Still starting: the server says to wait and ask again.
                 try? await Task.sleep(nanoseconds: 1_000_000_000)
                 if Task.isCancelled || key != self.key { return }
+            } catch let problem as APIError where problem.status == 409 && shiftFrom != nil {
+                // That moment is live now: the channel everyone shares.
+                if !Task.isCancelled, key == self.key { backToLive() }
+                return
             } catch {
                 if Task.isCancelled || key != self.key { return }
                 // Screen time is up: with the channel on the whole screen, the time-up screen says so.
