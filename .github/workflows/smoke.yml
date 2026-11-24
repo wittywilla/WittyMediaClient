@@ -143,10 +143,13 @@ jobs:
             image: google_apis
             arch: x86_64
             profile: pixel_6
+            # Off, a never-ending animation redraws every frame, and uiautomator never sees the phone's Home settle.
+            animations: true
           - kind: tv
             image: android-tv
             arch: x86
             profile: tv_1080p
+            animations: false
     runs-on: ubuntu-latest
     timeout-minutes: 50
     steps:
@@ -229,7 +232,7 @@ jobs:
           profile: ${{ matrix.profile }}
           cores: 2
           ram-size: 4096M
-          disable-animations: true
+          disable-animations: ${{ !matrix.animations }}
           emulator-options: -no-window -gpu swiftshader_indirect -no-snapshot -noaudio -no-boot-anim
           script: python3 scripts/smoke/android.py "$(ls $RUNNER_TEMP/app/*.apk | head -1)" ${{ matrix.kind == 'tv' && '--tv' || '' }}
       - name: Stop the server
