@@ -6,6 +6,7 @@ import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
+import com.wittywilla.wittymediaclient.ui.factsLine
 
 // The server's media extras (docs/CLIENT-API.md, "Media extras"): where to skip in a video, the looping video behind a
 // song or a title, a song's separated parts, where else a title can be watched, and the jobs an administrator can
@@ -200,7 +201,7 @@ object WatchLook {
             "hevc", "h265" -> "HEVC"
             else -> version.videoCodec.uppercase()
         }
-        return listOf(version.label.ifEmpty { "Another copy" }, version.quality, codec, size).filter { it.isNotEmpty() }.joinToString(" · ")
+        return listOf(version.label.ifEmpty { "Another copy" }, version.quality, codec, size).filter { it.isNotEmpty() }.factsLine()
     }
 
     // "In your library · 1080p", for the copy whose page this is.
@@ -303,7 +304,7 @@ object TaskLook {
         task.state == "failed" -> listOf(task.error.ifEmpty { "It didn't work." }, task.fix).filter { it.isNotEmpty() }.joinToString(" ")
         else -> {
             val count = if (task.total > 0) "${task.done} of ${task.total}" + (if (task.unit.isNotEmpty()) " ${task.unit}" else "") else ""
-            listOf(task.phase, count).filter { it.isNotEmpty() }.joinToString(" · ").ifEmpty { "Working…" }
+            listOf(task.phase, count).filter { it.isNotEmpty() }.factsLine().ifEmpty { "Working…" }
         }
     }
 }

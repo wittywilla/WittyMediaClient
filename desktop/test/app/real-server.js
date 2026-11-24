@@ -6,7 +6,8 @@
 //   WMC_SERVER=http://10.0.2.2:8096 WMC_USER=me WMC_PASSWORD=... npm run test:real -- --tv
 //
 // The server needs a film in its first library. The password is only used to ask the server
-// for a security code, as someone would on its /pair page. WMC_SHOTS is a folder for pictures,
+// for a code, as someone would under Settings, Remote Access, Connect a device (or, on a TV, on its
+// /pair page). WMC_SHOTS is a folder for pictures,
 // and WMC_APP is an installed app.asar to test instead of this folder.
 const { app, session, webContents } = require('electron')
 const assert = require('node:assert')
@@ -114,6 +115,20 @@ async function securityCode() {
   return String((await invite.json()).code).replace(/\D/g, '')
 }
 
+// The code Connect a device shows (an administrator's takes the password again), as typed on a computer.
+async function connectCode() {
+  const headers = { 'Content-Type': 'application/json' }
+  const login = await fetch(`${SERVER}/api/login`, { method: 'POST', headers, body: JSON.stringify({ name: USER, password: PASSWORD }) })
+  assert.ok(login.ok, `the password wasn't accepted: ${login.status}`)
+  const { token } = await login.json()
+  const offer = await fetch(`${SERVER}/api/connect/offer`, { method: 'POST', headers: { ...headers, Authorization: `Bearer ${token}` }, body: JSON.stringify({ password: PASSWORD }) })
+  assert.ok(offer.ok, `no code was given: ${offer.status}`)
+  return String((await offer.json()).code)
+}
+
+// The address button: "Type an address" now, "Enter an address" in older copies of the app.
+const ADDRESS = "(el) => el.tagName === 'BUTTON' && /^(Type|Enter) an address/.test(el.textContent)"
+
 async function run() {
   await app.whenReady()
   await until('the connect page', () => page() && page().getURL().includes('connect'))
@@ -123,8 +138,8 @@ async function run() {
     await shot('01-connect')
   })
 
-  await step('the arrows reach "Enter an address", and an address can be typed', async () => {
-    await arrowTo('Enter an address', "(el) => el.tagName === 'BUTTON' && el.textContent.startsWith('Enter an address')")
+  await step('the arrows reach "Type an address", and an address can be typed', async () => {
+    await arrowTo('Type an address', ADDRESS)
     await press('Enter')
     await until('the address box', () => inPage("document.activeElement.id === 'address'"))
     for (const c of SERVER.replace(/^http:\/\//, '')) await press(c)
@@ -132,12 +147,15 @@ async function run() {
     await press('Enter')
   })
 
+  // A TV asks with its number pad (or a code shown to approve on a phone); a computer has one field for
+  // the code from the server's Connect a device.
   await step('the server is recognised, and asks for a code', async () => {
-    await until('the number pad', () => inPage("!!document.querySelector('.pad')"))
+    await until(TV ? 'the number pad' : 'the code field', () => inPage(TV ? "!!document.querySelector('.pad')" : "document.activeElement && document.activeElement.id === 'code'"))
     await shot('03-code')
   })
 
-  await step(PAIR ? 'a code and PIN shown here, approved as from a phone, sign in' : 'a real security code signs in', async () => {
+  await step(PAIR ? 'a code and PIN shown here, approved as from a phone, sign in' : TV ? 'a real security code signs in' : 'the code from Connect a device signs in', async () => {
+    if (PAIR && !TV) throw new Error('WMC_PAIR=1 is for --tv: a computer signs in with the code from Connect a device')
     if (PAIR) {
       // Secure pairing: the screen shows a code and a PIN that changes every 30 seconds; whoever
       // approves types both, as the server's /pair page does.
@@ -152,7 +170,12 @@ async function run() {
       const { token } = await login.json()
       const ok = await fetch(`${SERVER}/api/pair/approve`, { method: 'POST', headers: { ...headers, Authorization: `Bearer ${token}` }, body: JSON.stringify({ code, pin, password: PASSWORD }) })
       assert.ok(ok.ok, `the approval was refused: ${ok.status} ${await ok.text()}`)
-    } else for (const digit of await securityCode()) await press(digit)
+    } else if (TV) {
+      for (const digit of await securityCode()) await press(digit)
+    } else {
+      for (const c of await connectCode()) await press(c)
+      await press('Enter')
+    }
     await until('the server page', () => page().getURL().startsWith(SERVER))
     await until('the page to draw', () => inPage("!!document.querySelector('.content, main')"))
     await wait(1500)

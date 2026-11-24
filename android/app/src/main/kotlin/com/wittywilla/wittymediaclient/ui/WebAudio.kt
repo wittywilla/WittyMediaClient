@@ -132,7 +132,7 @@ private fun NarrowBar(nav: Nav, now: androidx.media3.common.MediaItem) {
     val about = now.mediaMetadata
     val place = rememberAudioPlace(listening)
     val duration = listening.durationSec()
-    val subtitle = listOf(about.artist?.toString().orEmpty().ifEmpty { about.albumArtist?.toString().orEmpty() }, about.albumTitle?.toString().orEmpty()).filter { it.isNotEmpty() }.joinToString(" · ")
+    val subtitle = listOf(about.artist?.toString().orEmpty().ifEmpty { about.albumArtist?.toString().orEmpty() }, about.albumTitle?.toString().orEmpty()).filter { it.isNotEmpty() }.factsLine()
     AnimatedVisibility(true, enter = fadeIn(tween(240))) {
         Box(Modifier.fillMaxWidth().height(66.dp)) {
             Row(
@@ -222,7 +222,7 @@ private fun WideBar(nav: Nav, now: androidx.media3.common.MediaItem, modifier: M
     val say = LocalSay.current
     val subtitle = when {
         listening.problem.isNotEmpty() -> listening.problem
-        else -> listOf(about.artist?.toString().orEmpty().ifEmpty { about.albumArtist?.toString().orEmpty() }, about.albumTitle?.toString().orEmpty()).filter { it.isNotEmpty() }.joinToString(" · ")
+        else -> listOf(about.artist?.toString().orEmpty().ifEmpty { about.albumArtist?.toString().orEmpty() }, about.albumTitle?.toString().orEmpty()).filter { it.isNotEmpty() }.factsLine()
     }
     fun open(queue: Boolean = false, visualizer: Boolean = false) {
         listening.screenWithQueue = queue

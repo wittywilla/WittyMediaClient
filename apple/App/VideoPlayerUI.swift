@@ -144,14 +144,14 @@ struct VideoPlayerView: View {
 
     private var subtitle: String {
         guard let item else { return "" }
-        let show = [item.showTitle, item.episodeLabel.isEmpty ? nil : item.episodeLabel].compactMap { $0 }.filter { !$0.isEmpty }.joined(separator: " · ")
+        let show = [item.showTitle, item.episodeLabel.isEmpty ? nil : item.episodeLabel].compactMap { $0 }.filter { !$0.isEmpty }.factsLine()
         let mode: String? = switch stream?.decision {
         case "direct": "Direct play"
         case "remux": "Rewrapped"
         case "transcode": "Transcoding"
         default: nil
         }
-        return [show.isEmpty ? item.year.map(String.init) : show, mode].compactMap { $0 }.filter { !$0.isEmpty }.joined(separator: " · ")
+        return [show.isEmpty ? item.year.map(String.init) : show, mode].compactMap { $0 }.filter { !$0.isEmpty }.factsLine()
     }
 
     var body: some View {
@@ -1000,7 +1000,7 @@ private struct WatchNextCard: View {
                         .clipShape(RoundedRectangle(cornerRadius: Tokens.Radius.sm, style: .continuous))
                     VStack(alignment: .leading, spacing: 2) {
                         Text(next.show?.title ?? next.item.showTitle ?? next.item.title).font(.system(size: 15, weight: .semibold)).foregroundStyle(PlayerInk.text).lineLimit(2)
-                        Text(episode ? [next.item.episodeLabel, next.item.title].filter { !$0.isEmpty }.joined(separator: " · ") : (next.item.year.map(String.init) ?? ""))
+                        Text(episode ? [next.item.episodeLabel, next.item.title].filter { !$0.isEmpty }.factsLine() : (next.item.year.map(String.init) ?? ""))
                             .font(.system(size: 12)).foregroundStyle(PlayerInk.hint).lineLimit(2)
                     }
                     Spacer(minLength: 0)
@@ -1032,7 +1032,7 @@ struct VideoDock: View {
 
     private var sub: String {
         guard let item = playback.item else { return "" }
-        if item.showTitle != nil { return [item.episodeLabel, item.title].filter { !$0.isEmpty }.joined(separator: " · ") }
+        if item.showTitle != nil { return [item.episodeLabel, item.title].filter { !$0.isEmpty }.factsLine() }
         return item.year.map(String.init) ?? ""
     }
 

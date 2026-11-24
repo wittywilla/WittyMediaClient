@@ -75,7 +75,7 @@ public struct SyncListing: Decodable, Equatable, Identifiable, Sendable {
         var parts: [String] = []
         if let hostName, !hostName.isEmpty { parts.append("Started by \(PlainWords.clean(hostName, limit: 60))") }
         if let members { parts.append("\(members) watching") }
-        return parts.joined(separator: " · ")
+        return parts.factsLine()
     }
 }
 

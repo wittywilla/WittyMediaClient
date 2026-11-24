@@ -352,7 +352,7 @@ public struct Track: Decodable, Identifiable, Equatable {
         if let title, !title.isEmpty { parts.append(title) }
         if let codec, !codec.isEmpty { parts.append(codec.uppercased()) }
         if let channels, channels > 0 { parts.append("\(channels)ch") }
-        return parts.joined(separator: " · ")
+        return parts.factsLine()
     }
 }
 

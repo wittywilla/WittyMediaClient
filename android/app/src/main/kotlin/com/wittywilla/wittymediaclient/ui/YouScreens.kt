@@ -888,7 +888,7 @@ private fun DevicesScreen(nav: Nav, s: Map<String, String>) {
                     else DateUtils.getRelativeTimeSpanString(d.lastSeen * 1000, now, DateUtils.MINUTE_IN_MILLIS).toString()
                     GroupRow(
                         title = d.device.ifEmpty { "?" },
-                        detail = listOf(where, seen).filter { it.isNotEmpty() }.joinToString(" · "),
+                        detail = listOf(where, seen).filter { it.isNotEmpty() }.factsLine(),
                         icon = when (deviceKind(d.device)) {
                             "tv" -> Symbols.Tv
                             "tablet" -> Symbols.Tablet
@@ -1032,7 +1032,7 @@ private fun SignInTvScreen(nav: Nav, s: Map<String, String>) {
                         IconTile(Symbols.Tv, Color(0xFFBD2F85))
                         Column {
                             Text(asking.device, color = MaterialTheme.colorScheme.onSurface, style = MaterialTheme.typography.label.copy(fontWeight = FontWeight.SemiBold))
-                            val facts = listOf(asking.platform, asking.ip).filter { it.isNotEmpty() }.joinToString(" · ")
+                            val facts = listOf(asking.platform, asking.ip).filter { it.isNotEmpty() }.factsLine()
                             if (facts.isNotEmpty()) Text(facts, color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.secondary)
                         }
                     }
