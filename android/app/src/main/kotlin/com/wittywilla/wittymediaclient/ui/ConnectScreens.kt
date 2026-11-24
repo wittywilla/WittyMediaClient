@@ -190,7 +190,13 @@ fun ConnectScreen(nav: Nav, s: Map<String, String>, message: String) {
                     val saved = recent.firstOrNull { it.url == url }
                     if (r.reason == "unreachable" && saved != null && nav.app.peers.info(saved) != null) {
                         problem = s["awayConnecting"].orEmpty()
-                        if (nav.tryFromAway(saved)) null else s["errAwayFailed"].orEmpty()
+                        if (nav.tryFromAway(saved)) null else {
+                            // Not at home, and not from away either: the steps, and what to do (ConnectCheckScreen).
+                            val run = com.wittywilla.wittymediaclient.net.ConnectRun("saved server", nav.app.peers.info(saved)?.serverId.orEmpty())
+                            run.pass("read")
+                            run.note("the server's own address didn't answer, so it was looked for from away")
+                            nav.checkFailed(run, nav.peerFailure("found"), s["errAwayFailed"], retry = { connect(url) }).orEmpty()
+                        }
                     } else if (r.reason == "not-set-up") {
                         notSetUp = url
                         null
