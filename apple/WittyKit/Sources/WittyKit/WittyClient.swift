@@ -730,6 +730,12 @@ public final class WittyClient: @unchecked Sendable {
         return try decoder.decode(Playback.self, from: try await call("POST", "/items/\(id)/playback", body: body))
     }
 
+    /// The player's speed changed: the server converts as far ahead as the new speed needs (PUT /hls/{id}/rate).
+    public func setStreamRate(_ streamId: String, rate: Double) async throws {
+        let body = try JSONEncoder().encode(["rate": rate])
+        _ = try await call("PUT", "/hls/(streamId)/rate", body: body)
+    }
+
     /// Stops the conversion at once when the viewer leaves.
     public func stopStream(_ streamId: String) async throws {
         _ = try await call("DELETE", "/hls/\(streamId)")

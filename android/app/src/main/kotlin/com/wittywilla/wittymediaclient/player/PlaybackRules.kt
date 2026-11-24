@@ -168,3 +168,13 @@ object TrackMatch {
     // The language to ask the player for, or null when there's none to go on.
     fun languageFor(track: Track?): String? = base(track?.language).ifEmpty { null }
 }
+
+// What the viewer is told when the server converts more slowly than the video plays.
+fun paceWords(speed: Double, rate: Double): String =
+    "This server converts this video at ${times(speed)}, slower than the ${times(rate)} it plays at, so it will stop now and then to catch up. " +
+        "A lower speed or quality plays smoothly."
+
+private fun times(n: Double): String {
+    val r = Math.round(n * 100) / 100.0
+    return (if (r == Math.floor(r)) r.toLong().toString() else r.toString()) + "×"
+}

@@ -189,12 +189,23 @@ final class PlaybackModel: ObservableObject {
         }
     }
 
+    /// How far ahead the player loads at a speed: the system's own choice (0) at normal speed or slower,
+    /// and 30 seconds of the viewer's time faster than that, as the website and the Android app keep.
+    nonisolated static func forwardBuffer(_ rate: Float) -> TimeInterval {
+        rate > 1 ? min(30 * Double(rate), 300) : 0
+    }
+
     /// Faster or slower without changing the pitch of voices, and kept when the stream is replaced.
     func setSpeed(_ rate: Float) {
         if steering?.steerSpeed(self, rate) == true { return }
         clockface.rate = rate
         player.defaultRate = rate
         if player.timeControlStatus != .paused { player.rate = rate }
+        // Faster uses up what was loaded faster: load further ahead, and have the server convert further ahead.
+        player.currentItem?.preferredForwardBufferDuration = Self.forwardBuffer(rate)
+        if let client, let id = stream?.streamId, !id.isEmpty, stream?.protocolName == "hls" {
+            Task.detached { try? await client.setStreamRate(id, rate: Double(rate)) }
+        }
     }
 
     /// The gear's Streaming choice: kept on this device, and the video asked for again at the same place.
@@ -265,7 +276,7 @@ final class PlaybackModel: ObservableObject {
         let (streaming, kbps): (String?, Double?) = (nil, nil)
         #endif
         let request = PlaybackRequest(profile: device.profile, capabilities: device.capabilities, audio: audio, subtitle: subtitle, startSec: startSec,
-                                      streaming: streaming, measuredKbps: kbps, quality: quality)
+                                      streaming: streaming, measuredKbps: kbps, quality: quality, rate: clockface.rate == 1 ? nil : Double(clockface.rate))
         do {
             let answer = try await client.playback(id, request)
             guard run == generation else {
@@ -302,6 +313,7 @@ final class PlaybackModel: ObservableObject {
 
     private func load(_ url: URL, startAt: Double?) {
         let next = AwayCookie.playerItem(url)
+        next.preferredForwardBufferDuration = Self.forwardBuffer(clockface.rate)
         #if !os(macOS)
         addMetadata(to: next)
         #endif

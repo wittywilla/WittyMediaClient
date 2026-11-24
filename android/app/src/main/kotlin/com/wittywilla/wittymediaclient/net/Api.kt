@@ -4,6 +4,7 @@ package com.wittywilla.wittymediaclient.net
 
 import com.wittywilla.wittymediaclient.data.SavedServer
 import com.wittywilla.wittymediaclient.diag.ClientLog
+import com.wittywilla.wittymediaclient.player.speedText
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.runInterruptible
@@ -231,6 +232,14 @@ class Api(val base: String, val token: String, private val quick: Boolean = fals
                 if (total < SPEEDTEST_MIN_BYTES || seconds <= 0) null else (total * 8 / 1000 / seconds).toInt()
             }
         }.getOrNull()
+    }
+
+    // How the server's conversion of a stream keeps up with the player (GET /hls/{id}/work, pace).
+    suspend fun streamPace(streamId: String): StreamPace? = runCatching { get<StreamWork>("/hls/${query(streamId)}/work").pace }.getOrNull()
+
+    // The player's speed changed: the server converts as far ahead as the new speed needs.
+    suspend fun setStreamRate(streamId: String, speed: Float) {
+        call("PUT", "/hls/${query(streamId)}/rate", "{\"rate\":${speedText(speed)}}")
     }
 
     // Stops the conversion at once when the viewer leaves.

@@ -161,8 +161,10 @@ private data class Ask(
 )
 
 @OptIn(UnstableApi::class)
-private fun newPlayer(context: Context): ExoPlayer =
+private fun newPlayer(context: Context, fetch: VideoFetch): ExoPlayer =
     ExoPlayer.Builder(context, DefaultRenderersFactory(context).setEnableDecoderFallback(true))
+        .setMediaSourceFactory(fetch.sources) // patient with a converting server, and says the speed (VideoFetch.kt)
+        .setLoadControl(videoLoadControl())
         // Other apps go quiet for this, and this goes quiet for a call. Pulling out headphones pauses
         // rather than playing to the room.
         .setAudioAttributes(AudioAttributes.Builder().setUsage(C.USAGE_MEDIA).setContentType(C.AUDIO_CONTENT_TYPE_MOVIE).build(), true)
@@ -206,7 +208,8 @@ fun PlayerScreen(nav: Nav, id: Long, startOver: Boolean) {
     val clock = remember { PlaybackClock() }
     val budget = remember { RetryBudget() }
     val rootFocus = remember { FocusRequester() }
-    val player = remember { newPlayer(context) }
+    val fetch = remember { VideoFetch(context) }
+    val player = remember { newPlayer(context, fetch) }
     // The system's now-playing card, media keys and voice control. One session per player, and only
     // while this screen is up: a film stops when the app is left. Sound has ListeningService.
     val session = remember { MediaSession.Builder(context, player).setId("witty-$id").build() }
@@ -266,7 +269,10 @@ fun PlayerScreen(nav: Nav, id: Long, startOver: Boolean) {
     DisposableEffect(player) {
         val listener = object : Player.Listener {
             // A watch party or another device may change the speed too: the menu shows what plays.
-            override fun onPlaybackParametersChanged(p: androidx.media3.common.PlaybackParameters) { speed = p.speed }
+            override fun onPlaybackParametersChanged(p: androidx.media3.common.PlaybackParameters) {
+                speed = p.speed
+                sayRate(fetch, p.speed, stream, nav.app.scope, api) // the server converts as far ahead as this speed needs
+            }
             override fun onIsPlayingChanged(isPlaying: Boolean) {
                 playing = isPlaying
                 // Saving on pause means a phone that dies during a pause loses nothing.
@@ -333,6 +339,7 @@ fun PlayerScreen(nav: Nav, id: Long, startOver: Boolean) {
                     forceTranscode = if (ask.convert) true else null,
                     flatten3d = if (ask.flatten3d) true else null,
                     quality = ask.quality,
+                    rate = player.playbackParameters.speed.takeIf { it != 1f },
                 ),
             )
             val before = stream

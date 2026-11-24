@@ -505,6 +505,8 @@ data class PlaybackRequest(
     val measuredKbps: Int? = null,
     // The viewer's choice of size and rate ("", "original", "h720-b4000"): docs/CLIENT-API.md, Quality.
     val quality: String? = null,
+    // The player's speed, so the stream is made far enough ahead from the start (left out at 1×).
+    val rate: Float? = null,
 )
 
 // The quality menu's easy sizes, from a video's /playback answer: the sizes at or below the picture's own and within
@@ -879,3 +881,18 @@ data class MusicVideoCard(
 
 @Serializable
 data class MusicVideoPage(val videos: List<MusicVideoCard> = emptyList(), val more: Boolean = false)
+
+// How a stream's conversion keeps up with its player: GET /hls/{id}/work (docs/CLIENT-API.md, Quality).
+@Serializable
+data class StreamPace(
+    // Seconds of the film made per second; 0 before it has been measured.
+    val speed: Double = 0.0,
+    val rate: Double = 1.0,
+    val leadSec: Double = 0.0,
+    val keepingUp: Boolean = true,
+    // The server's faster setting is already in use: only a lower quality or speed would help.
+    val fastest: Boolean = false,
+)
+
+@Serializable
+data class StreamWork(val encoder: String = "", val pace: StreamPace? = null)

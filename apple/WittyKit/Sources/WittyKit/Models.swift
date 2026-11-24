@@ -490,10 +490,13 @@ public struct PlaybackRequest: Encodable {
     public var measuredKbps: Double?
     /// The viewer's choice of size and rate ("", "original", "h720-b4000"): docs/CLIENT-API.md, Quality.
     public var quality: String?
+    /// The player's speed (2 for 2×), so the stream is made far enough ahead from its start. Nil at 1×.
+    public var rate: Double?
 
     public init(profile: String, capabilities: DeviceCapabilities? = nil, audio: Int? = nil, subtitle: Int? = nil, startSec: Double? = nil,
-                forceTranscode: Bool? = nil, streaming: String? = nil, measuredKbps: Double? = nil, quality: String? = nil) {
+                forceTranscode: Bool? = nil, streaming: String? = nil, measuredKbps: Double? = nil, quality: String? = nil, rate: Double? = nil) {
         self.quality = quality
+        self.rate = rate
         self.profile = profile
         self.capabilities = capabilities
         self.audio = audio
