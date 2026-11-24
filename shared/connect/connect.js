@@ -613,7 +613,7 @@
     show({
       back: () => listScreen(),
       lockup: false,
-      words: [el('h1', { textContent: S.codeSignInTitle }), serverPill(server), el('p', { id: 'code-hint', className: 'lead', textContent: S.signInHint })],
+      words: [serverPill(server), el('h1', { textContent: S.codeSignInTitle }), el('p', { id: 'code-hint', className: 'lead', textContent: S.signInHint })],
       actions: [field(input, S.signInCodeLabel, 'keypad'), error.node, go,
         el('div', { className: 'links' }, button(S.signInPassword, () => enter({ url: server.url, name: server.name }), { kind: 'quiet', className: 'use-password' }))],
       foot: [el('p', { className: 'fingerprint caption', textContent: `${S.fingerprintLabel}: ${fingerprintOf(server)}` })],
@@ -808,7 +808,7 @@
       back: () => listScreen(),
       className: 'compact',
       lockup: false,
-      words: [el('h1', { textContent: S.codeTitle }), serverPill(server), el('p', { className: 'lead', textContent: S.codeHint }), display, progress, said.node],
+      words: [serverPill(server), el('h1', { textContent: S.codeTitle }), el('p', { className: 'lead', textContent: S.codeHint }), display, progress, said.node],
       actions: [pad, links],
       foot: [el('p', { className: 'fingerprint caption', textContent: `${S.fingerprintLabel}: ${fingerprintOf(server)}` })],
       focus: pad.firstChild,
