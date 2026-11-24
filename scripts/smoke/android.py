@@ -69,9 +69,9 @@ def api(method, path, body=None, token=None):
 
 
 def nodes():
-    for _ in range(3):
-        sh('uiautomator dump /sdcard/u.xml', check=False)
-        xml = sh('cat /sdcard/u.xml', check=False)
+    for _ in range(4):
+        # The old picture goes first: a dump that fails (a screen still moving) must not leave it to be read.
+        xml = sh('rm -f /sdcard/u.xml; uiautomator dump /sdcard/u.xml >/dev/null && cat /sdcard/u.xml', check=False)
         try:
             root = ET.fromstring(xml[xml.index('<'):])
             break
@@ -184,8 +184,8 @@ def signed_in(secs, what):
 
 def past_welcome():
     """A new sign-in first asks for a layout, then colours: the first of each is fine."""
-    for _ in range(8):
-        if not find('Choose a layout|Choose colours|Your look is set'):
+    for _ in range(16):
+        if not find('Choose a layout|Choose colours|Your look is set| layout$|Themes$'):
             return
         btn = find('^(Use this|Continue|Next|Done)$')
         if btn:
