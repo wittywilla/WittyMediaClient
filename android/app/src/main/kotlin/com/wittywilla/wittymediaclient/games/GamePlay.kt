@@ -348,9 +348,14 @@ class GamePlay(
         }
         if (route.video == "webrtc") made.attachSurface(webrtcSurface)
         made.setVolume(settings.number("audio.volume", 1.0), settings.flag("audio.mute", false))
+        waitForPicture(serial, if (route.video == "webrtc") WEBRTC_PICTURE_MS else GameModes.FIRST_PICTURE_MS)
+    }
+
+    // A connection that hasn't shown a picture in time gives way to the next way of sending it.
+    private fun waitForPicture(serial: Int, ms: Long) {
         pictureTimer?.cancel()
         pictureTimer = scope.launch {
-            delay(if (route.video == "webrtc") WEBRTC_PICTURE_MS else GameModes.FIRST_PICTURE_MS)
+            delay(ms)
             if (serial == transportSerial && !gotPicture && !stopped) nextMode()
         }
     }
@@ -396,7 +401,12 @@ class GamePlay(
 
         override fun opened() {
             main.post {
-                if (current() && !gotPicture) stage = GameStage.Picture
+                if (current() && !gotPicture) {
+                    stage = GameStage.Picture
+                    // It's through: a slow server (a big game, no graphics card, an encoder starting) can take a while
+                    // for its first frame, and another way of connecting wouldn't make it come any sooner.
+                    waitForPicture(serial, GameModes.PICTURE_AFTER_CONNECTING_MS)
+                }
                 if (current()) input.setEnabled(menu == null && !away)
             }
         }

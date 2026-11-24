@@ -7,6 +7,7 @@ What changed in WittyMediaClient, newest first. What changed before it had a rep
 
 **Games on a phone or tablet**
 
+- **A slow first picture is waited for.** Once a game's connection is through, its first picture gets 45 seconds (a big game, or a server with no graphics card, can take a while) before the app tries another way, instead of giving up after 12.
 - **Games start when your server is reached from away.** A game stopped at "Waiting for the first picture" with a message about a hello, and leaving it showed a black page saying the address was for the app only. Both are fixed, and the games list and every server page now open from away too.
 - **Notes about a game are on its start screen**, short and readable, not in a long message over Cancel. Messages over a game are short, sit at the top on a touch screen, and never show the server's technical words.
 

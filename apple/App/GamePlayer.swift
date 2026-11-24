@@ -277,6 +277,8 @@ final class GamePlayerModel: ObservableObject {
     private var framesSeen = 0
     private var framesAt = Date()
     private var connectedAt = Date()
+    /// The stream described itself on this connection: it's through, and only the picture is slow.
+    private var described = false
     private var aspect = 4.0 / 3.0
     private var frame: (width: Double, height: Double) = (0, 0)
     private var turns = 0
@@ -567,6 +569,7 @@ final class GamePlayerModel: ObservableObject {
         self.transport = transport
         transport.setVolume(settings.number("audio.volume", 1), muted: settings.flag("audio.mute", false))
         connectedAt = Date()
+        described = false
         framesAt = Date()
         framesSeen = pipeline?.frames ?? 0
         transport.open()
@@ -612,7 +615,7 @@ final class GamePlayerModel: ObservableObject {
         if Date().timeIntervalSince(framesAt) > 60 {
             // The server keeps a game for a minute with nobody connected: past that, it's gone.
             finish(saying: "The game's picture stopped coming. Check the network, then start the game again: it saved where you were.")
-        } else if phase == .connecting, Date().timeIntervalSince(connectedAt) > GameModes.firstPictureWait(modes[min(modeAt, modes.count - 1)]) {
+        } else if phase == .connecting, Date().timeIntervalSince(connectedAt) > GameModes.firstPictureWait(modes[min(modeAt, modes.count - 1)], connected: described) {
             // No first picture: the next way of sending. A picture that stopped: the same way again.
             if !hadPicture, modeAt + 1 < modes.count {
                 modeAt += 1
@@ -684,6 +687,7 @@ final class GamePlayerModel: ObservableObject {
         case .stream(let s):
             // The second stream says the shape and turns as the session does, how many players the
             // game takes, and whose motion it reads.
+            described = true
             matchRefresh(fps: s.fps, width: s.width, height: s.height)
             if let shape = s.aspect, shape > 0 { aspect = shape }
             turns = s.turns
