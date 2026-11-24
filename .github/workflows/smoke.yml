@@ -207,6 +207,8 @@ jobs:
         env:
           SMOKE_OUT: ${{ runner.temp }}/smoke-out
           SMOKE_CORES: ${{ runner.temp }}/smoke-cache/cores
+          # Also on this machine's own address, which the test keeps using once 127.0.0.1 is shut for away.
+          SMOKE_LISTEN: 0.0.0.0
         run: |
           chmod +x "$RUNNER_TEMP"/smoke-build/bin/*
           bash .server/scripts/smoke/media.sh "$RUNNER_TEMP/smoke-media"

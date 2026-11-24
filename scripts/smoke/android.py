@@ -169,6 +169,34 @@ def launch(clear=False):
         sh(f'pm clear {PKG}')
     sh(f'monkey -p {PKG} -c android.intent.category.{"LEANBACK_LAUNCHER" if TV else "LAUNCHER"} 1', check=False)
     time.sleep(3)
+    past_welcome()
+
+
+def signed_in(secs, what):
+    """Waits for the server's home (its film shows), going through the welcome on the way."""
+    end = time.time() + secs
+    while not find('Smoke Film'):
+        past_welcome()
+        if time.time() > end:
+            raise RuntimeError(f'waited {secs}s for {what}; on screen: {texts()[:30]}')
+        time.sleep(1)
+
+
+def past_welcome():
+    """A new sign-in first asks for a layout, then colours: the first of each is fine."""
+    for _ in range(8):
+        if not find('Choose a layout|Choose colours|Your look is set'):
+            return
+        btn = find('^(Use this|Continue|Next|Done)$')
+        if btn:
+            b = btn['b']
+            sh(f'input tap {(b[0] + b[2]) // 2} {(b[1] + b[3]) // 2}')
+            log('welcome:', btn['text'])
+        elif TV:
+            sh('input keyevent KEYCODE_DPAD_DOWN')
+        else:
+            sh('input swipe 540 1800 540 600 300')
+        time.sleep(1.5)
 
 
 def streaming(via=None):
@@ -280,7 +308,7 @@ def address():
         log('entered:', [t for t in texts() if 'digits entered' in t])
     if find('^Sign in$'):
         tap('^Sign in$')
-    wait('Smoke Films|Smoke Film|Home', 90, 'the signed-in app')
+    signed_in(90, 'the signed-in app')
 
 
 def settings():
@@ -306,15 +334,21 @@ def film():
 
 
 def away():
-    adb('root', check=False)
-    time.sleep(3)
-    adb('wait-for-device')
+    global URL
     # The device takes itself onto the server's list by itself while at home; wait for that.
     until("this device on the server's peer-to-peer list", lambda: api('GET', '/api/p2p/devices'), 90)
-    sh(f'iptables -A OUTPUT -p tcp -d 10.0.2.2 --dport {PORT} -j REJECT')
-    log(sh('iptables -S OUTPUT', check=False))
+    # The emulator's 10.0.2.2 is this machine's 127.0.0.1: the server's web port there stops answering
+    # (this machine's firewall, as Android TV images don't allow adb root), and the test itself uses the
+    # machine's own address from now on. The peer-to-peer port is left alone.
+    lan = subprocess.run(['hostname', '-I'], capture_output=True, text=True).stdout.split()[0]
+    r = subprocess.run(['sudo', '-n', 'iptables', '-I', 'INPUT', '-i', 'lo', '-d', '127.0.0.1', '-p', 'tcp', '--dport', PORT, '-j', 'REJECT'],
+                       capture_output=True, text=True)
+    if r.returncode:
+        raise RuntimeError('could not shut the address: ' + r.stderr)
+    URL = f'http://{lan}:{PORT}'
+    log('away: 127.0.0.1:' + PORT, 'refused; the test now asks', URL)
     launch()
-    wait('Smoke Films|Smoke Film|Home', 120, 'the app signed in from away')
+    signed_in(120, 'the app signed in from away')
     tap('Smoke Film', 30)
     tap('^(Play|Resume)', 30)
     s = until('the server seeing this device stream from away (peer to peer)', lambda: streaming('p2p'), 90)
@@ -346,7 +380,7 @@ def link():
     sh('input keyevent KEYCODE_ENTER', check=False)
     if find('^(Join|Connect)$'):
         tap('^(Join|Connect)$')
-    wait('Smoke Films|Smoke Film|Home', 180, 'signed in with the link, from away')
+    signed_in(180, 'signed in with the link, from away')
 
 
 # Peer to peer on, straight to this machine: the emulator reaches it, and nothing else is needed.
