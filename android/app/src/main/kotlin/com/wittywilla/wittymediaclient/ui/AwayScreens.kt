@@ -240,13 +240,26 @@ private fun JoinAwayTvScreen(nav: Nav, s: Map<String, String>) {
             return@LaunchedEffect
         }
         code = made
+        // The steps, for the connection check if it fails (ConnectCheckScreen): the code is shown, so it is read.
+        val run = com.wittywilla.wittymediaclient.net.ConnectRun("code")
+        run.pass("read")
         val answer = peers.joinByCode(made)
         when {
             answer == null -> { words = s["joinAwayExpired"].orEmpty(); failed = true }
-            !answer.ok -> { words = if (answer.reason == "unreachable") s["errAwayFailed"].orEmpty() else s["joinAwayRefused"].orEmpty(); failed = true }
+            !answer.ok -> {
+                failed = true
+                words = if (answer.reason == "unreachable") {
+                    run.pass("found") // the server took the code: it was found, then couldn't be connected to
+                    nav.checkFailed(run, nav.peerFailure("secure"), s["errAwayFailed"], retry = { attempt++ }).orEmpty()
+                } else {
+                    nav.checkFailed(run, ConnectStepsData.get(nav.app).classify(answer.reason, answer.error, "signin"), s["joinAwayRefused"], retry = { attempt++ }).orEmpty()
+                }
+            }
             else -> {
                 words = s["joinAwayFinding"].orEmpty()
-                nav.joinedFromAway(answer)?.let { problem -> words = problem; failed = true }
+                run.pass("found")
+                run.pass("secure")
+                nav.joinedFromAway(answer, run)?.let { problem -> words = problem; failed = true }
             }
         }
     }

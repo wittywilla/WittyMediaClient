@@ -20,7 +20,7 @@
 // title bar of the system's. Ours is a local page, which on a Mac has the system's buttons on
 // it. Below it, the content view shows the connect screen and then the server's web UI, which
 // has no access to Node or to the app beyond reporting its theme colours and asking for Moonlight.
-const { app, BaseWindow, Menu, WebContentsView, clipboard, ipcMain, net, powerMonitor, powerSaveBlocker, protocol, safeStorage, session, shell, systemPreferences } = require('electron')
+const { app, BaseWindow, Menu, WebContentsView, clipboard, dialog, ipcMain, net, powerMonitor, powerSaveBlocker, protocol, safeStorage, session, shell, systemPreferences } = require('electron')
 const fs = require('fs')
 const os = require('os')
 const path = require('path')
@@ -37,6 +37,7 @@ const playback = require('./playback.js')
 const mac = require('./mac.js')
 const p2p = require('./p2p.js')
 const connectCode = require('./code.js')
+const connectSteps = require('./connect/steps.js').create(require('./connect/connect-steps.json'))
 
 const TITLE_BAR = 32
 const CONNECT_PAGE = guards.CONNECT_PAGE
@@ -320,7 +321,7 @@ async function check(url) {
   if (first.error === 'unreachable' && entry && entry.p2p) {
     // Not there: this device isn't at home. The other way to it, if it has one.
     const via = await reachFromAway(entry)
-    if (via.error) return { error: away ? via.error : 'unreachable' }
+    if (via.error) return { error: away ? via.error : 'unreachable', check: via.check }
     at = via.origin
     entry = via.entry
     first = await statusOf(at)
@@ -453,9 +454,12 @@ async function openTunnel(info) {
 // A server only ever reached like this is remembered by that address, which is renamed
 // here if the port it had last time was taken.
 async function reachFromAway(entry) {
+  const run = connectSteps.run('saved server', entry.p2p.id)
+  run.pass('read')
+  run.note("the server's own address didn't answer, so it was looked for from away")
   if (!(tunnel && tunnel.id === entry.p2p.id)) {
     const opened = await openTunnel(entry.p2p)
-    if (opened.error) return opened
+    if (opened.error) return checkFailed(opened, run, opened.error === 'p2p-missing' ? connectSteps.of('p2p-missing', 'read') : connectSteps.classify('', opened.message || '', 'found', cleanText))
   }
   const mine = tunnel
   const st = await mine.run.whenConnected(AWAY_CONNECT_MS)
@@ -463,7 +467,7 @@ async function reachFromAway(entry) {
   if (!p2p.connected(st)) {
     log.warn('p2p', `The server was not reached from away: ${st.error || st.path}`, { session: p2pSession(mine.deviceId) })
     closeTunnel()
-    return { error: 'p2p-failed' }
+    return checkFailed({ error: 'p2p-failed' }, run, tunnelFailure(st, 'found'))
   }
   if (p2p.isP2POrigin(entry.url) && entry.url !== mine.origin) {
     if (saved.server === entry.url) saved.server = mine.origin
@@ -531,6 +535,19 @@ function learnSoon() {
   }, LEARN_AFTER_MS)
 }
 
+// The connection check: a connection from away that failed says which step and what to do, on the connect screen
+// (connect.js, checkScreen) instead of only a line of words. The last one is kept for the page to ask for.
+let lastCheck = null
+const cleanText = (text) => log.clean(text)
+function checkFailed(result, run, failure) {
+  run.fail(failure)
+  log.warn('p2p', `Connecting from away failed at ${run.failure.step}: ${run.failure.code}`)
+  lastCheck = run.view(`WittyMediaClient desktop ${app.getVersion()}`, DEVICE, cleanText)
+  return { ...result, check: lastCheck }
+}
+// Why the helper didn't connect, at the step it was on.
+const tunnelFailure = (st, step) => connectSteps.classify(st && !st.error ? 'timeout' : '', (st && st.error) || '', step, cleanText)
+
 // An invite link, pasted on the connect screen: finds the server, shows it the invite,
 // which puts this device on its list, and signs in with the code that comes back. A failure says
 // which step it was (connect.js fills {why} with the connection's own words): the invite
@@ -545,12 +562,17 @@ async function joinByInvite(link) {
   // and the code beside it. At home that is asked first, as Enter a code does, with no connection from
   // away (in Docker it's the only way a device at home finds the server); away, it doesn't answer, and
   // the invite goes peer to peer.
+  log.addSecret(invite.secret)
   if (invite.home && invite.code) {
+    log.addSecret(invite.code)
     const atHome = await codeAtHome(invite.home, invite.code)
     if (atHome) return atHome
   }
+  const run = connectSteps.run('invite', invite.serverId)
+  run.pass('read')
+  run.note(`looking for the server, with ${(invite.hints || []).length} addresses from the invite`)
   const opened = await openTunnel({ id: invite.serverId, hints: invite.hints })
-  if (opened.error) return opened
+  if (opened.error) return checkFailed(opened, run, opened.error === 'p2p-missing' ? connectSteps.of('p2p-missing', 'read') : connectSteps.classify('', opened.message || '', 'found', cleanText))
   const mine = tunnel
   // Shown at once: the helper waits for this device's own connection, and when that can't get through
   // (the server's only way in is its own WittyRelay, which admits only listed devices), shows the invite
@@ -560,13 +582,24 @@ async function joinByInvite(link) {
   if (!answer.ok) {
     log.warn('p2p', `The invite was refused: ${answer.reason || answer.error}`)
     closeTunnel()
-    return answer.reason ? { error: 'invite-refused', message: guards.cleanMessage(answer.error) } : { error: 'join-invite', why: guards.cleanMessage(answer.error || '') }
+    // A reason is the server's answer, so it was found and reached; without one the invite never got there.
+    if (answer.reason) { run.pass('found'); run.pass('secure') }
+    const failure = connectSteps.classify(answer.reason, answer.error, answer.reason ? 'signin' : 'found', cleanText)
+    return checkFailed(answer.reason
+      ? { error: 'invite-refused', message: guards.cleanMessage(answer.error) }
+      : { error: 'join-invite', why: guards.cleanMessage(answer.error || '') }, run, failure)
   }
+  run.pass('found')
+  run.note('the server took the invite')
   // Listed now: this device's own key gets through, the relay having been told.
   const st = await mine.run.whenConnected(AWAY_CONNECT_MS + 15000)
   if (tunnel !== mine) return { error: 'p2p-failed' }
-  if (!p2p.connected(st)) { closeTunnel(); return { error: 'join-connect', why: guards.cleanMessage((st && st.error) || '') } }
-  return finishJoining(mine, { id: invite.serverId, hints: invite.hints }, answer, invite.name, 'the invite')
+  if (!p2p.connected(st)) {
+    closeTunnel()
+    return checkFailed({ error: 'join-connect', why: guards.cleanMessage((st && st.error) || '') }, run, tunnelFailure(st, 'secure'))
+  }
+  run.pass('secure')
+  return finishJoining(mine, { id: invite.serverId, hints: invite.hints }, answer, invite.name, 'the invite', run)
 }
 
 // The QR code's address at home and its code: the server there proves who it is, then that it made
@@ -602,14 +635,18 @@ async function codeAtHome(home, code) {
 // After the server has put this device on its list, by an invite or a code: who it is, proved
 // (the key it shows now is the one remembered from here on), signed in with the code that came
 // back, remembered, and opened.
-async function finishJoining(mine, where, answer, offeredName, how) {
+async function finishJoining(mine, where, answer, offeredName, how, run) {
   const known = (saved.recent || []).find((s) => s.p2p && s.p2p.id === where.id)
   const name = known ? known.url : mine.origin
   const identity = await identify(name, mine.origin)
   if (!['new', 'same', 'none'].includes(identity.state)) {
     closeTunnel()
     // Not reached through the connection (it found no way to carry requests): that step, in its words.
-    return identity.state === 'unreachable' ? { error: 'join-connect', why: identity.why || '' } : { error: 'identity' }
+    const result = identity.state === 'unreachable' ? { error: 'join-connect', why: identity.why || '' } : { error: 'identity' }
+    if (!run) return result
+    run.note(`the server didn't prove itself over the connection: ${identity.state}`)
+    return checkFailed(result, run,
+      identity.state === 'unreachable' ? connectSteps.classify('slow-path', identity.why || '', 'secure', cleanText) : connectSteps.of('identity-bad', 'signin'))
   }
   const info = { id: where.id, hints: where.hints, port: mine.port }
   const pinned = identity.publicKey && (saved.recent || []).find((s) => s.publicKey === identity.publicKey)
@@ -1250,6 +1287,11 @@ async function startUp() {
     if (tunnel === null || tunnel.origin !== at) return undefined // given up on while it was asked
     if (identity.state !== 'same' && !(identity.state === 'none' && !via.entry.publicKey)) {
       closeTunnel()
+      if (identity.state === 'unreachable') {
+        const run = connectSteps.run('saved server', entry.p2p.id)
+        ;['read', 'found', 'secure'].forEach(run.pass)
+        checkFailed({}, run, connectSteps.of('slow-path', 'secure'))
+      }
       return showConnect(identity.state === 'unreachable' ? { 'away-failed': '1' } : { mismatch: via.entry.url })
     }
     await dropUnfitSignIn(via.entry.url, identity, at)
@@ -1465,6 +1507,22 @@ ipcMain.handle('pair-poll', (e) => (fromConnect(e) ? pairPoll() : { status: 'exp
 ipcMain.handle('pair-pin', (e) => (fromConnect(e) ? pairPin() : { error: 'expired' }))
 ipcMain.on('pair-stop', (e) => { if (fromConnect(e)) pairing = null })
 ipcMain.handle('p2p-invite', (e, link) => (fromConnect(e) ? joinByInvite(String(link).slice(0, 4096)) : { error: 'invite' }))
+// The connection check (connect.js, checkScreen): the last failed connection from away, its details copied, or saved
+// to a file to send. The details were cleaned of keys and tokens when the check was made.
+ipcMain.handle('connect-check', (e) => (fromConnect(e) ? lastCheck : null))
+ipcMain.handle('connect-check-copy', (e) => {
+  if (!fromConnect(e) || !lastCheck) return false
+  clipboard.writeText(lastCheck.details)
+  return true
+})
+ipcMain.handle('connect-check-save', async (e) => {
+  if (!fromConnect(e) || !lastCheck) return false
+  const win = BaseWindow.getFocusedWindow() || undefined
+  const at = await dialog.showSaveDialog(win, { defaultPath: path.join(app.getPath('documents'), 'WittyMediaClient connection check.txt'), filters: [{ name: 'Text', extensions: ['txt'] }] })
+  if (at.canceled || !at.filePath) return false
+  await fs.promises.writeFile(at.filePath, `${lastCheck.details}\n`)
+  return true
+})
 ipcMain.handle('away-info', (e) => (fromConnect(e) ? awayInfo() : { available: false, server: false }))
 ipcMain.on('away-choice', (e, stop) => { if (fromConnect(e)) awayChoice(stop === true) })
 // Giving up on a server being reached from away: whatever comes of it isn't wanted now.

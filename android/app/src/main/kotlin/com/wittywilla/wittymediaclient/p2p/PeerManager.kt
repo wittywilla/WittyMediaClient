@@ -178,22 +178,26 @@ class PeerManager(private val app: WittyApp) {
         watchHome(server)
     }
 
+    // Why the last open() didn't connect, for the connection check: a reason the steps file knows ("p2p-missing",
+    // "timeout") and the connector's own words, as it last said them.
+    var lastReason = ""
+        private set
+    var lastError = ""
+        private set
+
     // The connector for this server, started (or kept, if it already is), until it connects or the time is up.
     private suspend fun open(info: PeerInfo, waitMs: Long): PeerState? = lock.withLock {
         val started = startLocked(info) ?: return null
         settleLocked(started, waitMs)
     }
 
-    // What the connection last said was wrong when it was given up on (empty if it said nothing): words to show.
-    var lastProblem: String = ""
-        private set
-
-    // Under the lock: the connector for this server, started (or kept, if it already is). Null when it can't start.
+    // Under the lock: the connector for this server, started (or kept, if it already is). Null when it can't start;
+    // lastReason / lastError say why.
     private suspend fun startLocked(info: PeerInfo): PeerLink? {
-        val native = PeerLibrary.native ?: return null
-        val key = deviceKey() ?: return null
+        lastReason = ""; lastError = ""
+        val native = PeerLibrary.native ?: run { lastReason = "p2p-missing"; return null }
+        val key = deviceKey() ?: run { lastError = "this device has no connection key"; return null }
         deviceId() // for the logs' session id
-        lastProblem = ""
         if (link != null && linkInfo?.serverId != info.serverId) shut()
         val started = link ?: try {
             withContext(Dispatchers.IO) {
@@ -204,6 +208,7 @@ class PeerManager(private val app: WittyApp) {
             }
         } catch (e: Exception) {
             ClientLog.warn("p2p", "The connection from away couldn't start: ${e.javaClass.simpleName}", session = logSession)
+            lastError = e.message.orEmpty()
             return null
         }
         link = started
@@ -213,21 +218,22 @@ class PeerManager(private val app: WittyApp) {
     }
 
     // Under the lock: waits until the connector connects, and then the app's requests go to its local address; or
-    // the time is up, and it is closed, keeping what it last said was wrong.
+    // the time is up, and it is closed, keeping what it last said was wrong (lastError / lastReason).
     private suspend fun settleLocked(started: PeerLink, waitMs: Long): PeerState? {
-        var last = PeerState()
+        var seen = PeerState()
         val state = withTimeoutOrNull(waitMs) {
             var now = PeerRules.state(withContext(Dispatchers.IO) { started.state() })
             while (!now.connected) {
-                last = now
+                seen = now
                 delay(POLL_MS)
                 now = PeerRules.state(withContext(Dispatchers.IO) { started.state() })
             }
             now
         }
         if (state == null) {
+            lastError = seen.error
+            if (seen.error.isEmpty()) lastReason = "timeout"
             ClientLog.warnSeldom("p2p", "The server wasn't reached from away in ${waitMs / 1000} s", session = logSession)
-            lastProblem = last.error
             shut()
             return null
         }
@@ -361,7 +367,7 @@ class PeerManager(private val app: WittyApp) {
     // within 20 s, through the server's own WittyRelay with the invite's key (the only way in for a device that has
     // never been at home when that relay is the server's only way in). Waiting for a path first, as 0.6.2 did, never
     // got there. Once listed, a path for the requests that follow: an answer with reason "unreachable" (and the
-    // connection's own words in lastProblem) when there is none.
+    // connection's own words in lastError) when there is none.
     suspend fun join(invite: PeerInvite): PeerAnswer? {
         val started = lock.withLock { startLocked(PeerInfo(invite.serverId, invite.hints)) } ?: return null
         val answer = withContext(Dispatchers.IO) {

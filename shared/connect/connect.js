@@ -557,6 +557,7 @@
       let joined
       try { joined = await bridge.invite(value) } catch (e) { joined = { error: 'p2p-failed' } }
       if (turn !== screen || joined.ok) return
+      if (joined.check) { checkScreen(joined.check, () => codeEntryScreen('', value)); return }
       setBusy(go, false, label)
       say(joined.message || errorWords(joined) || S.errInvite)
       input.focus()
@@ -647,6 +648,8 @@
       let joined
       try { joined = await bridge.invite(input.value) } catch (e) { joined = { error: 'p2p-failed' } }
       if (turn !== screen || joined.ok) return
+      const typed = input.value
+      if (joined.check) { checkScreen(joined.check, () => addressScreen('', typed, true)); return }
       setBusy(go, false, S.connect)
       say(joined.message || errorWords(joined) || S.errInvite)
       input.focus()
@@ -691,8 +694,46 @@
       if (turn !== screen) return undefined
     }
     connecting = ''
+    if (server.check) return checkScreen(server.check, () => choose(url, message))
     if (server.error) return addressScreen(errorWords(server), url)
     return next(server, message)
+  }
+
+  // A connection from away that didn't work: each step with a tick or a cross, one sentence on the step that failed
+  // and the next thing to try, and the details (already cleaned of keys and tokens by the app) to copy or save.
+  // The same screen as the phone and TV apps' (ConnectCheckScreen). Back goes to the list, never further.
+  function checkScreen(check, retry) {
+    const mark = { ok: '✓', fail: '✕', skip: '–' }
+    const word = { ok: S.checkStepDone, fail: S.checkStepFailed, skip: S.checkStepSkipped }
+    const f = check.failure || {}
+    const steps = el('ol', { className: 'check-steps' }, ...(check.steps || []).map((s) => el('li', { className: `check-step ${s.state}` },
+      el('span', { className: 'check-mark', 'aria-hidden': 'true', textContent: mark[s.state] || '' }),
+      el('span', { className: 'check-title', textContent: s.title }),
+      el('span', { className: 'check-word', textContent: word[s.state] || '' }),
+      ...(s.state === 'fail' && f.say ? [el('span', { className: 'check-say', textContent: f.say })] : []))))
+    const status = el('p', { className: 'lead check-status', role: 'status' })
+    const actions = []
+    if (retry) actions.push(button(S.checkTryAgain, retry, { kind: 'primary' }))
+    // A TV has nowhere to paste or send the details: they're on the screen instead.
+    if (!bridge.tv && bridge.connectCheckCopy) {
+      actions.push(button(S.checkCopy, async () => { if (await bridge.connectCheckCopy()) status.textContent = S.checkCopied }))
+      actions.push(button(S.checkShare, () => bridge.connectCheckSave()))
+    }
+    actions.push(button(S.checkOtherServer, () => listScreen()))
+    const details = el('details', { className: 'check-details' }, el('summary', { textContent: S.checkDetails }),
+      el('p', { className: 'hint', textContent: S.checkDetailsHint }), el('pre', { textContent: check.details || '' }))
+    if (bridge.tv) details.open = true
+    return show({
+      back: () => listScreen(),
+      className: 'check',
+      words: [
+        el('h1', { textContent: S.checkTitle }), el('p', { className: 'lead', textContent: S.checkLead }), steps,
+        ...(f.next ? [el('p', { className: 'check-next', textContent: S.checkNext.replace('{next}', f.next) })] : []),
+        status,
+      ],
+      actions,
+      foot: [details],
+    })
   }
 
   let knownIds = {} // each remembered address's server ID, as the list last had them
@@ -1045,5 +1086,7 @@
   else if (self.wittyClient && params.get('away')) waitScreen(S.awayConnecting, () => { if (bridge.awayStop) bridge.awayStop() })
   else if (self.wittyClient && params.get('manage')) refreshManaged().then(() => listScreen())
   else if (bridge.awayInfo && params.get('from-away')) fromAwayScreen()
-  else listScreen(params.get('certificate') ? S.errCertificate : params.get('lost') ? S.errLost : params.get('away-failed') ? S.errAwayFailed : '')
+  else if (bridge.connectCheck && params.get('away-failed')) {
+    bridge.connectCheck().then((c) => (c ? checkScreen(c, null) : listScreen(S.errAwayFailed)), () => listScreen(S.errAwayFailed))
+  } else listScreen(params.get('certificate') ? S.errCertificate : params.get('lost') ? S.errLost : params.get('away-failed') ? S.errAwayFailed : '')
 })()
