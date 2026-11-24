@@ -445,25 +445,27 @@ def film():
 
 
 def away():
-    global URL
     # The device takes itself onto the server's list by itself while at home; wait for that.
     until("this device on the server's peer-to-peer list", lambda: api('GET', '/api/p2p/devices'), 90)
-    # Away: the server's web port stops answering every program on this machine but root's, at every address
-    # (the emulator's 10.0.2.2, and the address it found the server at on the network). That's this machine's
-    # firewall, as Android TV images don't allow adb root. The test itself goes on through a forwarder run as
-    # root. The peer-to-peer port is left alone.
-    side = str(int(PORT) + 7)
-    subprocess.Popen(['sudo', '-n', 'socat', f'TCP-LISTEN:{side},bind=127.0.0.1,fork,reuseaddr', f'TCP:127.0.0.1:{PORT}'],
-                     stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-    time.sleep(1)
-    r = subprocess.run(['sudo', '-n', 'iptables', '-I', 'OUTPUT', '-p', 'tcp', '--dport', PORT, '-m', 'owner', '!', '--uid-owner', '0',
+    # Away: the server's web port stops answering the emulator, at every address (its 10.0.2.2, and the address it
+    # found the server at on the network). That's this machine's firewall (Android TV images don't allow adb root),
+    # aimed at the emulator alone: its process goes in a cgroup of its own, and only that cgroup is refused. The
+    # server, its modules' helpers (WittyPlay's restarts after a quiet spell, and talks to the server on that port)
+    # and this test are left alone, as is the peer-to-peer port.
+    pids = subprocess.run(['pgrep', '-f', 'qemu-system'], capture_output=True, text=True).stdout.split()
+    if not pids:
+        raise RuntimeError('no emulator process to send away')
+    cg = '/sys/fs/cgroup/smoke-emulator'
+    subprocess.run(['sudo', '-n', 'mkdir', '-p', cg], check=True)
+    for pid in pids:
+        subprocess.run(['sudo', '-n', 'sh', '-c', f'echo {pid} > {cg}/cgroup.procs'], check=True)
+    r = subprocess.run(['sudo', '-n', 'iptables', '-I', 'OUTPUT', '-p', 'tcp', '--dport', PORT, '-m', 'cgroup', '--path', 'smoke-emulator',
                         '-j', 'REJECT'], capture_output=True, text=True)
     if r.returncode:
         raise RuntimeError('could not shut the address: ' + r.stderr)
-    URL = f'http://127.0.0.1:{side}'
-    log('away: port', PORT, 'refused to everyone but root; the test now asks', URL)
-    if subprocess.run(['curl', '-s', '-m', '3', '-o', '/dev/null', f'http://127.0.0.1:{PORT}/api/health']).returncode == 0:
-        raise RuntimeError('the server still answers at home')
+    log('away: port', PORT, 'refused to the emulator (processes', ' '.join(pids) + ')')
+    if subprocess.run(['curl', '-s', '-m', '3', '-o', '/dev/null', f'http://127.0.0.1:{PORT}/api/health']).returncode != 0:
+        raise RuntimeError('the server stopped answering this machine too: the firewall caught more than the emulator')
     launch()
     signed_in(120, 'the app signed in from away')
     play_film()
@@ -482,14 +484,16 @@ def game():
     tap('adjustris', 60)
     since = time.strftime('%Y-%m-%dT%H:%M:%S', time.localtime(time.time() - 5))
     tap('^(Play|Resume)', 30)
-    for again in ('tap', 'enter'):
-        if until('playing', lambda: game_started(since), 15):
+    # WittyPlay's helper may be starting again after a quiet spell: wait for it before pressing again. No Enter on a
+    # phone: the focus can be on the page's "How to get back to the app", whose help would cover Play.
+    for again in range(2):
+        if until('playing', lambda: game_started(since), 30):
             break
-        log('the game has not started; pressing Play again by', again)
-        if again == 'tap' and find('^(Play|Resume)'):
+        log('the game has not started; pressing Play again')
+        if find('^(Play|Resume)'):
             tap('^(Play|Resume)', 5)
-        else:
-            sh('input keyevent KEYCODE_DPAD_CENTER' if TV else 'input keyevent KEYCODE_ENTER')
+        elif TV:
+            sh('input keyevent KEYCODE_DPAD_CENTER')
     until('the server sending this device frames of the game', lambda: game_frames(since), 120)
     time.sleep(3)  # for the picture
 
