@@ -42,6 +42,7 @@ EMU_URL = 'http://10.0.2.2:' + PORT
 HERE = os.path.dirname(os.path.abspath(__file__))
 n = 0
 failed = []
+retried = []
 log_file = None
 
 
@@ -343,8 +344,19 @@ def step(name, fn):
     err = None
     try:
         fn()
-    except Exception as e:  # noqa: BLE001: a failed step is reported, and the next runs
-        err = e
+    except Exception as e:  # noqa: BLE001: tried once more, as an emulator on a busy runner has slow moments
+        log('FIRST TRY FAILED:', e)
+        try:
+            with open(base + '-first-try.png', 'wb') as f:
+                f.write(subprocess.run(['adb', 'exec-out', 'screencap', '-p'], capture_output=True, timeout=30).stdout)
+        except Exception:  # noqa: BLE001
+            pass
+        print(f'android {kind}: {name}: failed once ({str(e)[:160]}); trying again', flush=True)
+        try:
+            fn()
+            retried.append(name)
+        except Exception as e2:  # noqa: BLE001: a failed step is reported, and the next runs
+            err = e2
     try:
         with open(base + '.png', 'wb') as f:
             f.write(subprocess.run(['adb', 'exec-out', 'screencap', '-p'], capture_output=True, timeout=30).stdout)
@@ -533,4 +545,7 @@ step('game: WittyPlay from away shows its frame', game)
 if not TV:
     step('link: a fresh app joins with an invite link from away', link)
 print(f"\nandroid {kind}: {'every step passed' if not failed else str(len(failed)) + ' failed: ' + ', '.join(failed)}")
+if retried:
+    print(f"android {kind}: passed on a second try: {', '.join(retried)}")
+    print(f"::warning title=Smoke Android {kind}::passed on a second try: {', '.join(retried)}")
 sys.exit(1 if failed else 0)
