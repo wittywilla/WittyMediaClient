@@ -93,8 +93,19 @@ jobs:
         with:
           name: smoke-server
           path: ${{ runner.temp }}/smoke-build
+      # FFmpeg: the server's pinned static build, cached (its scripts/smoke/ffmpeg.sh), else apt; the rest from apt.
+      # Every apt call has a time limit, as a stalled Ubuntu mirror once held a smoke job until its own limit.
+      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ${{ runner.temp }}/smoke-ffmpeg
+          key: smoke-ffmpeg-${{ hashFiles('.server/scripts/ffmpeg.lock', '.server/scripts/smoke/ffmpeg.sh') }}
       - name: FFmpeg, socat and a virtual screen
-        run: sudo apt-get update -qq && sudo apt-get install -y -qq ffmpeg socat xvfb >/dev/null
+        timeout-minutes: 10
+        run: |
+          apt() { sudo rm -f /var/lib/man-db/auto-update; timeout 300 sudo apt-get -o Acquire::Retries=3 -o Acquire::http::Timeout=30 "$@"; }
+          apt update -qq
+          apt install -y -qq socat xvfb >/dev/null
+          if [ -f .server/scripts/smoke/ffmpeg.sh ]; then bash .server/scripts/smoke/ffmpeg.sh "$RUNNER_TEMP/smoke-ffmpeg"; else apt install -y -qq ffmpeg >/dev/null; fi
       - name: The app
         working-directory: desktop
         run: |
@@ -203,8 +214,19 @@ jobs:
         with:
           name: smoke-server
           path: ${{ runner.temp }}/smoke-build
+      # FFmpeg: the server's pinned static build, cached (its scripts/smoke/ffmpeg.sh), else apt; the rest from apt.
+      # Every apt call has a time limit, as a stalled Ubuntu mirror once held a smoke job until its own limit.
+      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ${{ runner.temp }}/smoke-ffmpeg
+          key: smoke-ffmpeg-${{ hashFiles('.server/scripts/ffmpeg.lock', '.server/scripts/smoke/ffmpeg.sh') }}
       - name: FFmpeg and socat
-        run: sudo apt-get update -qq && sudo apt-get install -y -qq ffmpeg socat >/dev/null
+        timeout-minutes: 10
+        run: |
+          apt() { sudo rm -f /var/lib/man-db/auto-update; timeout 300 sudo apt-get -o Acquire::Retries=3 -o Acquire::http::Timeout=30 "$@"; }
+          apt update -qq
+          apt install -y -qq socat >/dev/null
+          if [ -f .server/scripts/smoke/ffmpeg.sh ]; then bash .server/scripts/smoke/ffmpeg.sh "$RUNNER_TEMP/smoke-ffmpeg"; else apt install -y -qq ffmpeg >/dev/null; fi
       - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: ${{ runner.temp }}/smoke-cache
