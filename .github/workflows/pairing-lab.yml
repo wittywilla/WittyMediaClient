@@ -102,12 +102,26 @@ jobs:
       - name: Build the server, WittyRelay and the lab
         if: steps.lab.outputs.have == 'yes'
         run: bash .server/scripts/pairing-lab/lab.sh build "$RUNNER_TEMP/plab" .server .relay
+      # The server won't start without FFmpeg: the server's pinned static build, kept between runs.
+      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        if: steps.lab.outputs.have == 'yes'
+        with:
+          path: ${{ runner.temp }}/smoke-ffmpeg
+          key: smoke-ffmpeg-${{ hashFiles('.server/scripts/ffmpeg.lock', '.server/scripts/smoke/ffmpeg.sh') }}
+      - name: FFmpeg
+        if: steps.lab.outputs.have == 'yes'
+        timeout-minutes: 8
+        run: bash .server/scripts/smoke/ffmpeg.sh "$RUNNER_TEMP/smoke-ffmpeg"
       - name: An emulator for the lab (it starts it itself, inside the phone's network)
         if: steps.lab.outputs.have == 'yes'
         run: |
           echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
           sudo udevadm control --reload-rules
           sudo udevadm trigger --name-match=kvm
+          # One place for the AVD, which the lab hands to the emulator it starts as this user under sudo.
+          echo "ANDROID_AVD_HOME=$HOME/.android/avd" >>"$GITHUB_ENV"
+          export ANDROID_AVD_HOME=$HOME/.android/avd
+          mkdir -p "$ANDROID_AVD_HOME"
           sm="$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager"
           yes | "$sm" "emulator" "platform-tools" "system-images;android-34;google_apis;x86_64" >/dev/null
           echo no | "$ANDROID_HOME/cmdline-tools/latest/bin/avdmanager" create avd -n plab-phone -k "system-images;android-34;google_apis;x86_64" -d pixel_6
@@ -120,8 +134,8 @@ jobs:
           # Through the owner's relay only, from a fresh install; a server on a public address; and the server
           # restarting between the invite and the claim, "Only paired devices" off.
           set -- ${CASES:-cone-relay.settled.on.fresh.link direct.settled.on.fresh.link symmetric-relay.fresh.off.fresh.link}
-          sudo env "PATH=$PATH" ANDROID_SDK_ROOT="$ANDROID_HOME" SUDO_USER="$USER" PL_PHONE=emulator PL_APK="$apk" \
-            PL_AVD=plab-phone PL_EMU_PORT=5770 PL_EMU_WIPE=1 PL_CASE_TIMEOUT=900 \
+          sudo env "PATH=$PATH" ANDROID_SDK_ROOT="$ANDROID_HOME" ANDROID_AVD_HOME="$ANDROID_AVD_HOME" SUDO_USER="$USER" \
+            PL_PHONE=emulator PL_APK="$apk" PL_AVD=plab-phone PL_EMU_PORT=5770 PL_EMU_WIPE=1 PL_EMU_BOOT=420 PL_CASE_TIMEOUT=1200 \
             bash .server/scripts/pairing-lab/lab.sh run "$RUNNER_TEMP/plab" "$RUNNER_TEMP/plab-results" "$@"
       - name: Results readable by the upload
         if: always()
