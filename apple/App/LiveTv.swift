@@ -97,16 +97,21 @@ final class LiveTv: ObservableObject {
 
     /// A moment of the schedule: within what's loaded, a seek; further back, this viewer's stream from there; at live,
     /// the channel everyone shares.
-    func goTo(_ target: Double) {
-        guard let s = schedNow(), let range = player.currentItem?.seekableTimeRanges.last?.timeRangeValue else { return }
+    /// False when there's nothing to do but stay within the window: live, on the channel everyone shares.
+    @discardableResult
+    func goTo(_ target: Double) -> Bool {
+        guard let s = schedNow(), let range = player.currentItem?.seekableTimeRanges.last?.timeRangeValue else { return false }
         let cur = CMTimeGetSeconds(player.currentTime())
         let live = liveNow()
         switch TimeShiftRules.plan(target, sched: s, cur: cur, low: CMTimeGetSeconds(range.start), high: CMTimeGetSeconds(CMTimeRangeGetEnd(range)),
                                    live: live, earliest: Double(timeline?.earliest ?? Int64(live - 6 * 3600))) {
-        case .live: backToLive()
+        case .live:
+            if shiftFrom == nil { return false }
+            backToLive()
         case .within(let to): player.seek(to: CMTime(seconds: to, preferredTimescale: 600))
         case .restart(let at): restart(at: at)
         }
+        return true
     }
 
     private func restart(at: Int64) {
@@ -238,10 +243,7 @@ final class LiveTv: ObservableObject {
     func seek(by seconds: Double) {
         if canShift, let s = schedNow() {
             let low = player.currentItem?.seekableTimeRanges.last.map { CMTimeGetSeconds($0.timeRangeValue.start) } ?? 0
-            if shiftFrom != nil || CMTimeGetSeconds(player.currentTime()) + seconds < low {
-                goTo(s + seconds)
-                return
-            }
+            if shiftFrom != nil || CMTimeGetSeconds(player.currentTime()) + seconds < low, goTo(s + seconds) { return }
         }
         guard let range = player.currentItem?.seekableTimeRanges.last?.timeRangeValue else { return }
         let target = CMTimeAdd(player.currentTime(), CMTime(seconds: seconds, preferredTimescale: 600))

@@ -256,10 +256,7 @@ object LiveTv {
         val length = p.duration
         if (canShift) {
             val s = schedNow()
-            if (s != null && (shiftFrom != null || p.currentPosition + by * 1000 < 0)) {
-                goTo(s + by)
-                return
-            }
+            if (s != null && (shiftFrom != null || p.currentPosition + by * 1000 < 0) && goTo(s + by)) return
         }
         if (length == C.TIME_UNSET) return
         p.seekTo((p.currentPosition + (by * 1000).toLong()).coerceIn(0, length))
@@ -284,17 +281,19 @@ object LiveTv {
 
     // A moment of the schedule: within what's loaded, a seek; further back, this viewer's stream from there; at live,
     // the channel everyone shares.
-    fun goTo(target: Double) {
-        val p = exo ?: return
-        val s = schedNow() ?: return
+    // False when there's nothing to do but stay within the window: live, on the channel everyone shares.
+    fun goTo(target: Double): Boolean {
+        val p = exo ?: return false
+        val s = schedNow() ?: return false
         val cur = p.currentPosition / 1000.0
         val end = if (p.duration == C.TIME_UNSET) cur else p.duration / 1000.0
         val live = liveNow()
         when (val plan = TimeShiftRules.plan(target, s, cur, 0.0, end, live, (timeline?.earliest ?: (live - 6 * 3600).toLong()).toDouble())) {
-            Seek.Live -> goLive()
+            Seek.Live -> if (shiftFrom == null) return false else goLive()
             is Seek.Within -> p.seekTo((plan.to * 1000).toLong())
             is Seek.Restart -> restartAt(plan.at)
         }
+        return true
     }
 
     private fun restartAt(at: Long) {
