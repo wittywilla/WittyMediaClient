@@ -30,18 +30,17 @@ device to confirm at run time. Report what each showed in the PR that ticks them
 - [ ] **5.** In the macOS desktop app (Electron), open the developer tools shortcut (Cmd-Alt-I) in the released
   build: nothing opens. Drag a web address onto the window: the app doesn't navigate to it.
 
-## Pictures the Windows PC couldn't take (2026-11-23)
+## Pictures the Windows PC couldn't take (2026-11-24)
 
-The README's and the server's pictures were retaken for 0.8.1-alpha on Windows, from a test server filled only with
-the openly licensed media in `D:\WittyDemoMedia` (its README says how to rebuild that server). Pictures of the apps
-themselves need a real window or a simulator, which that session couldn't open, so these are left:
+The README's pictures were retaken for 0.8.4-alpha and client 0.6.2 on Windows: Android TV and an Android phone in
+headless emulators, and the web pages in a headless browser, from a test server filled only with the openly licensed
+media in `D:\WittyDemoMedia` (its README says how to rebuild that server). These need a Mac or a real window:
 
-- [ ] **1.** `docs/images/client-home.webp` here and in the server's `docs/images/`: still the 0.8.0 desktop app.
-  Open the macOS desktop app, connect to a demo server built from the release's branch (never one with your own
-  media), and take Home at 1920 × 1080. Credit it as the old one is: "WittyMediaClient on a desktop, connected to a test server".
+- [ ] **1.** The macOS desktop app: open it, connect to a demo server built from the release's branch (never one with
+  your own media), and take Home at 1920 × 1080 as `docs/images/app-desktop-home.webp`. Add it to the README's pictures
+  and to `docs/images/CREDITS.md`. (The 0.8.0 desktop picture, `client-home.webp`, is gone: it showed the old interface.)
 - [ ] **2.** iPhone, iPad and Apple TV pictures, if the README or a store listing is to show them: Home, a film's page,
-  the TV guide with **Shortcuts** open, and an album's page (the 0.8.1 TV album page), from the simulators, signed in
-  to the same demo server. Add each to `docs/images/CREDITS.md`.
+  the TV guide with **Shortcuts** open, and an album's page, from the simulators, signed in to the same demo server.
 - [ ] **3.** Use made-up profile names only, and keep the menu bar, Dock and other apps out of the frame.
 
 ## WittyMediaClient 0.6.0: what's left for the owner (2026-11-23)
