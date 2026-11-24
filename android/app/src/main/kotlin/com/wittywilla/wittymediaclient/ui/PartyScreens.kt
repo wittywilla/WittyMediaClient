@@ -297,7 +297,7 @@ private fun PartyBody(nav: Nav, room: Room) {
             DesignRow(
                 m.name + if (mine) " (you)" else "",
                 onClick = if (room.isHost && !mine) ({ chosenMember = if (chosenMember == m.id) null else m.id }) else null,
-                value = listOfNotNull(if (m.host) "Host" else null, memberWords(m.state).ifEmpty { null }).joinToString(" · "),
+                value = listOfNotNull(if (m.host) "Host" else null, memberWords(m.state).ifEmpty { null }).factsLine(),
                 on = m.host, focusKey = "m-${m.id}",
             )
         }

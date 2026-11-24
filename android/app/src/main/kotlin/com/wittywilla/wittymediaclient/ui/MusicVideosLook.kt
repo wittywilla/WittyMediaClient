@@ -65,7 +65,7 @@ object MusicVideos {
 
     // "1.2K views · 3 weeks ago", as under a video tile.
     fun facts(card: MusicVideoCard, nowMs: Long = System.currentTimeMillis()): String =
-        listOf(if (allViews(card) > 0) "${shortCount(allViews(card))} views" else "", ago(card.uploadDate, nowMs)).filter { it.isNotEmpty() }.joinToString(" · ")
+        listOf(if (allViews(card) > 0) "${shortCount(allViews(card))} views" else "", ago(card.uploadDate, nowMs)).filter { it.isNotEmpty() }.factsLine()
 
     // Where to be in the other one (`placeIn`): the song's place in the video is the song's time plus where the song
     // starts in it. Null when they don't line up, or when that place is in the first second or the last two.

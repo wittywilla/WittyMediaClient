@@ -115,6 +115,7 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import java.util.Locale
+import com.wittywilla.wittymediaclient.ui.factsLine
 
 private const val CONTROLS_HIDE_MS = 5_000L
 private const val SEEK_COMMIT_MS = 800L
@@ -127,7 +128,7 @@ private fun trackName(t: Track): String {
     // A text subtitle's format means nothing to anyone. A picture-based one's does: it may have to be burned in.
     val codec = if (t.text) "" else t.codec.uppercase(Locale.ROOT)
     return listOf(language, t.title, codec, if (t.channels > 0) "${t.channels}ch" else "")
-        .filter { it.isNotEmpty() }.joinToString(" · ")
+        .filter { it.isNotEmpty() }.factsLine()
 }
 
 private enum class Picker { None, Audio, Subtitles, Quality }

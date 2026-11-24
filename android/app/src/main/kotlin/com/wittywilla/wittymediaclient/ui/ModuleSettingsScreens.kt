@@ -161,7 +161,7 @@ private fun SettingRows(
     save: (ModuleSettingRow, JsonElement?) -> Unit,
 ) {
     val canEdit = ModuleSettingsRules.editable(view, row)
-    val help = listOf(row.help, problem, if (!canEdit && row.kind != "info") s["moduleReadOnly"].orEmpty() else "").filter { it.isNotEmpty() }.joinToString(" · ")
+    val help = listOf(row.help, problem, if (!canEdit && row.kind != "info") s["moduleReadOnly"].orEmpty() else "").filter { it.isNotEmpty() }.factsLine()
     val key = "setting-${row.key.ifEmpty { row.label }}"
     when (row.kind) {
         "bool" -> {

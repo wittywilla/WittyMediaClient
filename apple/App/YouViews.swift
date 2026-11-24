@@ -742,7 +742,7 @@ struct DevicesView: View {
     /// "Sign out" on the trailing side says what pressing does, without a column of red.
     @ViewBuilder private func row(_ device: SignedInDevice) -> some View {
         let detail = [Self.whereWords(device.place), device.isThisDevice ? say("activeNow") : Self.seen(device.lastSeen)]
-            .filter { !$0.isEmpty }.joined(separator: " · ")
+            .filter { !$0.isEmpty }.factsLine()
         if device.isThisDevice {
             RowLabel(icon: Self.icon(device.kind), tint: RowTint.devices, title: device.name, detail: detail,
                      badge: say("thisDevice"), chevron: false)

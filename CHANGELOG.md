@@ -11,6 +11,12 @@ What changed in WittyMediaClient, newest first. What changed before it had a rep
   watching asks for it when switching away from such a profile to one without a password, and when signing out. A
   wrong PIN says so; the server counts the tries. The desktop app gets the same from the server's own pages.
 
+**Arabic and Hebrew**
+
+- **Latin titles keep their order on a phone set to Arabic or Hebrew.** Lines made of parts (a title's year and running
+  time, artist and album) keep each part's digits and dashes in place, and a Hebrew title among Latin ones keeps its
+  place too (wittywilla/WittyMediaServer#498).
+
 **Games on a phone or tablet**
 
 - **A slow first picture is waited for.** Once a game's connection is through, its first picture gets 45 seconds (a big game, or a server with no graphics card, can take a while) before the app tries another way, instead of giving up after 12.
