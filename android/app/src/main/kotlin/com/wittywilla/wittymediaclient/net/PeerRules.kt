@@ -33,6 +33,10 @@ object PeerRules {
     const val AWAY_WAIT_MS = 25_000L
     const val JOIN_WAIT_MS = 45_000L
 
+    // After joining through a public relay, how long a direct path (hole punching) is waited for before the first
+    // request: longer than the library's own 15 s wait, which then answers with its words for what failed.
+    const val USABLE_WAIT_MS = 20_000L
+
     // While away, how often home is tried again; and at most how often a failed request starts a new search.
     const val HOME_EVERY_MS = 45_000L
     const val TROUBLE_EVERY_MS = 5_000L
@@ -209,6 +213,10 @@ data class PeerState(
 ) {
     // Requests can be sent.
     val connected: Boolean get() = path == "local" || path == "direct" || path == "relayed"
+
+    // Requests get through, not only an invite: a public relay (not a community one) passes on a few kilobytes and
+    // the library sends no requests through it, waiting for a direct connection instead.
+    val usable: Boolean get() = path == "local" || path == "direct" || (path == "relayed" && community)
 
     // A relay's limits, short: "4 Mbit/s, 720p".
     val relayLimits: String

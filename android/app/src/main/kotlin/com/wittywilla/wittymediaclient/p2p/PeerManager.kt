@@ -252,8 +252,13 @@ class PeerManager(private val app: WittyApp) {
     private suspend fun keepAddrs() {
         val now = link ?: return
         val info = linkInfo ?: return
-        val learnt = PeerRules.knownAddrs(withContext(Dispatchers.IO) { runCatching { now.knownAddrs() }.getOrDefault("[]") })
-        if (learnt.isEmpty() || learnt == info.hints) return
+        val fresh = PeerRules.knownAddrs(withContext(Dispatchers.IO) { runCatching { now.knownAddrs() }.getOrDefault("[]") })
+        // Relay circuits (the owner's WittyRelay, from the invite) stay first, whatever was learnt over a direct
+        // connection at home: from away they are often the only way in, and a list of direct addresses would push
+        // them out (#141).
+        val circuits = info.hints.filter { "/p2p-circuit" in it && it !in fresh }.take(2)
+        val learnt = PeerRules.hints(circuits + fresh)
+        if (fresh.isEmpty() || learnt == info.hints) return
         val next = info.copy(hints = learnt)
         linkInfo = next
         app.store.recent.firstOrNull { it.serverId.isNotEmpty() && info(it)?.serverId == info.serverId }?.let { keep(it, next.copy(port = PeerRoute.port)) }
@@ -366,7 +371,21 @@ class PeerManager(private val app: WittyApp) {
         val state = lock.withLock { if (link === started) settleLocked(started, PeerRules.JOIN_WAIT_MS) else null }
             ?: return answer.copy(ok = false, reason = "unreachable")
         way = PeerWay.Away(state)
+        // Connected through a public relay, which carried the invite but carries no requests: the library is trying
+        // for a direct connection meanwhile. Waited for here, so the first request doesn't fail before that has
+        // had its chance (0.6.2's 5-second identity check did, every time).
+        if (!state.usable) usable(started, PeerRules.USABLE_WAIT_MS)?.let { way = PeerWay.Away(it) }
         return answer
+    }
+
+    // Waits for a path requests get through; null if none in time.
+    private suspend fun usable(started: PeerLink, waitMs: Long): PeerState? = withTimeoutOrNull(waitMs) {
+        var now = PeerRules.state(withContext(Dispatchers.IO) { started.state() })
+        while (!now.usable) {
+            delay(POLL_MS)
+            now = PeerRules.state(withContext(Dispatchers.IO) { started.state() })
+        }
+        now
     }
 
     // A code for a device that has never been at home with its server: someone signed in types it into the server.
