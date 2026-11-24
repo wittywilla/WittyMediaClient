@@ -47,6 +47,7 @@ import androidx.compose.ui.focus.focusProperties
 import androidx.compose.ui.focus.focusRestorer
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.graphics.compositeOver
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.graphics.vector.addPathNodes
 import androidx.compose.ui.platform.LocalConfiguration
@@ -112,7 +113,9 @@ fun MiniPlayer(nav: Nav, modifier: Modifier = Modifier) {
     val about = now.mediaMetadata
     val place = rememberPlace(listening)
     val duration = listening.durationSec()
-    Column(modifier.fillMaxWidth().background(scheme.surface)) {
+    // Solid whatever the theme: a panel colour that lets light through still gets the page's colour under it, so the
+    // page's words never read through the song's (WittyMediaServer #551).
+    Column(modifier.fillMaxWidth().background(scheme.surface.compositeOver(scheme.background))) {
         Box(Modifier.fillMaxWidth().height(2.dp).background(scheme.outline)) {
             val part = if (duration > 0) (place / duration).toFloat().coerceIn(0f, 1f) else 0f
             Box(Modifier.fillMaxWidth(part).fillMaxHeight().background(scheme.primary))

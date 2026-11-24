@@ -202,8 +202,8 @@ final class PlaybackModel: ObservableObject {
     }
 
     func choose(audio: Int? = nil, subtitle: Int? = nil) {
-        if let audio { self.audio = audio }
-        if let subtitle { self.subtitle = subtitle }
+        if let audio { self.audio = audio; rememberTrack(stream?.audio?.first { $0.index == audio }, "audio") }
+        if let subtitle { self.subtitle = subtitle; rememberTrack(stream?.subtitles?.first { $0.index == subtitle }, "subtitle") }
         playWhenReady = player.timeControlStatus != .paused
         let at = clock.saveable ?? clock.filmSeconds
         Task { await open(startSec: at) }
@@ -733,13 +733,13 @@ private struct PlayerHost: UIViewControllerRepresentable {
         context.coordinator.builtFrom = shape
         var menus: [UIMenuElement] = []
         if let audio = stream?.audio, audio.count > 1 {
-            menus.append(UIMenu(title: "Audio", image: UIImage(systemName: "speaker.wave.2"), children: audio.map { track in
+            menus.append(UIMenu(title: "Audio", image: UIImage(systemName: "speaker.wave.2"), children: ordered(audio, "audio").map { track in
                 UIAction(title: track.label, state: track.index == stream?.audioIndex ? .on : .off) { _ in playback.choose(audio: track.index) }
             }))
         }
         if let subtitles = stream?.subtitles, !subtitles.isEmpty {
             let off = UIAction(title: "Off", state: stream?.subtitleIndex == -1 ? .on : .off) { _ in playback.choose(subtitle: -1) }
-            menus.append(UIMenu(title: "Subtitles", image: UIImage(systemName: "captions.bubble"), children: [off] + subtitles.map { track in
+            menus.append(UIMenu(title: "Subtitles", image: UIImage(systemName: "captions.bubble"), children: [off] + ordered(subtitles, "subtitle").map { track in
                 UIAction(title: track.label, state: track.index == stream?.subtitleIndex ? .on : .off) { _ in playback.choose(subtitle: track.index) }
             }))
         }
@@ -801,7 +801,7 @@ private struct SystemPlayerScreen: View {
             }
             if let audio = playback.stream?.audio, audio.count > 1 {
                 Menu("Audio") {
-                    ForEach(uniqued(audio)) { track in
+                    ForEach(ordered(audio, "audio")) { track in
                         Button { playback.choose(audio: track.index) } label: {
                             if track.index == playback.stream?.audioIndex { Label(track.label, systemImage: "checkmark") } else { Text(track.label) }
                         }
@@ -814,7 +814,7 @@ private struct SystemPlayerScreen: View {
                     Button { playback.choose(subtitle: -1) } label: {
                         if playback.stream?.subtitleIndex == -1 { Label("Off", systemImage: "checkmark") } else { Text("Off") }
                     }
-                    ForEach(uniqued(subtitles)) { track in
+                    ForEach(ordered(subtitles, "subtitle")) { track in
                         Button { playback.choose(subtitle: track.index) } label: {
                             if track.index == playback.stream?.subtitleIndex { Label(track.label, systemImage: "checkmark") } else { Text(track.label) }
                         }
@@ -882,4 +882,17 @@ private struct SystemPlayerScreen: View {
         }
         .onDisappear { playback.stop() }
     }
+}
+
+/// The sound track and subtitle menus list this device's languages first, then the ones picked lately, then the rest
+/// by name, as the web app and the Android app do (WittyKit TrackOrder).
+private func ordered(_ tracks: [Track], _ kind: String) -> [Track] {
+    TrackOrder.order(uniqued(tracks), language: { $0.language }, title: { $0.label }, device: Locale.preferredLanguages,
+                     recent: UserDefaults.standard.stringArray(forKey: "tracks.recent." + kind) ?? [])
+}
+
+private func rememberTrack(_ track: Track?, _ kind: String) {
+    guard let track else { return }
+    let key = "tracks.recent." + kind
+    UserDefaults.standard.set(TrackOrder.remember(UserDefaults.standard.stringArray(forKey: key) ?? [], track.language), forKey: key)
 }
