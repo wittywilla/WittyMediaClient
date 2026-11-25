@@ -68,6 +68,7 @@ import com.wittywilla.wittymediaclient.net.DialRules
 import com.wittywilla.wittymediaclient.net.GuideChannel
 import com.wittywilla.wittymediaclient.net.GuideProgramme
 import com.wittywilla.wittymediaclient.net.GuideRules
+import com.wittywilla.wittymediaclient.net.TimeShiftRules
 import com.wittywilla.wittymediaclient.net.TvShape
 import com.wittywilla.wittymediaclient.net.Tuned
 import com.wittywilla.wittymediaclient.net.guidePage
@@ -333,7 +334,7 @@ fun ChannelScreen(nav: Nav, start: String) {
                 // Remote words only: Next skips the break, or Right opens the Dock with Skip break first.
                 Box(Modifier.fillMaxSize().padding(end = dress.pt(SIDE), bottom = dress.pt(BOTTOM)), contentAlignment = Alignment.BottomEnd) {
                     Text(
-                        "Ad break · Next ⏭ to skip it, or Right, then Skip break",
+                        "Ad break · Next ⏭ or Right, then Skip break",
                         style = MaterialTheme.typography.label, color = Color.White,
                         modifier = Modifier.background(Color.Black.copy(alpha = 0.6f), CircleShape).padding(horizontal = dress.pt(16), vertical = dress.pt(8)),
                     )
@@ -342,7 +343,8 @@ fun ChannelScreen(nav: Nav, start: String) {
             if (fromStart != null && !mini) {
                 Box(Modifier.fillMaxSize().padding(top = dress.pt(60)), contentAlignment = Alignment.TopCenter) {
                     Text(
-                        if (LiveTv.shiftFrom != null && LiveTv.behind >= 60) "${fromStart.title} · ${(LiveTv.behind / 60).roundToInt()} min behind live · Right, then Back to live"
+                        // A shifted stream always says how to get back to live, as the Dock does (#131).
+                        if (LiveTv.shiftFrom != null) TimeShiftRules.behindHint(fromStart.title, LiveTv.behind)
                         else "From the start of ${fromStart.title} · Left, then Live, for the channel as it is now",
                         style = MaterialTheme.typography.label, color = Color.White,
                         modifier = Modifier.background(Color.Black.copy(alpha = 0.6f), CircleShape).padding(horizontal = dress.pt(16), vertical = dress.pt(8)),

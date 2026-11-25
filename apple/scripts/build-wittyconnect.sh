@@ -68,6 +68,7 @@ if ! grep -q 'func StartJoin' "$source/pkg/wittyconnect/mobile/mobile.go" || ! g
   give "The WittyMediaServer checkout at $source is too old for these apps: it needs 0.8.0-alpha's pkg/wittyconnect, with Apple TV in its build script."
 fi
 command -v go >/dev/null 2>&1 || give "Go isn't installed, and the library is written in Go."
+bash ../shared/scripts/go-mod-download.sh "$source" || give "The server's Go modules couldn't be downloaded."
 command -v xcodebuild >/dev/null 2>&1 || give "Xcode isn't installed."
 
 mkdir -p "$out"

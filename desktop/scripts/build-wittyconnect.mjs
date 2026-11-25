@@ -44,6 +44,14 @@ const source = [process.env.WITTYMEDIASERVER_SRC, join(desktop, '..', '..', 'Wit
   .filter(Boolean).map((p) => resolve(p)).find((p) => existsSync(join(p, 'cmd', 'wittyconnect', 'main.go')))
 if (!source) give('WittyMediaServer\'s source wasn\'t found. Set WITTYMEDIASERVER_SRC to a checkout that has cmd/wittyconnect.')
 try { execFileSync('go', ['version'], { stdio: 'ignore' }) } catch { give('Go isn\'t installed, and the helper is a Go program.') }
+// The modules first, tried again if the network drops (CI often sees sum.golang.org end a stream).
+for (let attempt = 1; ; attempt++) {
+  try { execFileSync('go', ['mod', 'download'], { cwd: source, stdio: 'inherit', env: { ...process.env, GOWORK: 'off' } }); break } catch {
+    if (attempt === 4) give("The server's Go modules couldn't be downloaded, after four tries.")
+    console.log(`go mod download failed (try ${attempt} of 4); trying again in ${attempt * 15} s`)
+    execFileSync(process.execPath, ['-e', `setTimeout(() => {}, ${attempt * 15000})`])
+  }
+}
 
 const wanted = args.includes('--all') ? Object.keys(TARGETS).filter((t) => !t.startsWith('freebsd-')) : [args.find((a) => TARGETS[a]) || mine]
 for (const target of wanted) {
