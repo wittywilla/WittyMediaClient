@@ -38,6 +38,7 @@ done
 grep -q 'func (j \*Joining) Await' "$source"/pkg/wittyconnect/mobile/*.go 2>/dev/null ||
   give "The WittyMediaServer checkout at $source is too old for this app: its pkg/wittyconnect/mobile has no Android build of Joining."
 command -v go >/dev/null 2>&1 || give "Go isn't installed, and the library is written in Go."
+bash ../shared/scripts/go-mod-download.sh "$source" || give "The server's Go modules couldn't be downloaded."
 : "${ANDROID_HOME:=${ANDROID_SDK_ROOT:-$HOME/Library/Android/sdk}}"
 export ANDROID_HOME
 ls -d "$ANDROID_HOME"/ndk/* >/dev/null 2>&1 || [ -n "${ANDROID_NDK_HOME:-}" ] || give "No Android NDK. Install one: sdkmanager 'ndk;27.2.12479018'."
