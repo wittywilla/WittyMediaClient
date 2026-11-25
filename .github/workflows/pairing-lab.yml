@@ -1,0 +1,153 @@
+name: pairing-lab
+# The Android app pairing with a server from away, the first time: this change's app on an emulator
+# that sits behind its own simulated router, with the real server and WittyRelay on a pretend
+# internet. The lab lives in WittyMediaServer (scripts/pairing-lab, README.md there); the server is
+# built from its branch of the same name as this one when there is one, else the release branch
+# this one targets. The whole matrix (every network, server and phone state, both ways in) runs in
+# the server's repository nightly and before a release tag; here, on every pull request, the cases
+# that the app itself decides.
+on:
+  pull_request:
+    branches: ['v0.*']
+  push:
+    branches: ['v0.*']
+  workflow_dispatch:
+    inputs:
+      server_ref:
+        description: WittyMediaServer branch, tag or commit (one with scripts/pairing-lab)
+      cases:
+        description: Lab cases (network.server.only.phone.way), space-separated (empty, the usual three)
+      app_release:
+        description: Test this release of the Android app (a tag such as v0.6.2) instead of building it
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event_name == 'pull_request' && format('pr-{0}', github.event.pull_request.number) || github.run_id }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  android:
+    runs-on: ubuntu-latest
+    timeout-minutes: 75
+    steps:
+      - name: Which server branch
+        id: ref
+        env:
+          HEAD: ${{ github.head_ref || github.ref_name }}
+          BASE: ${{ github.base_ref || github.ref_name }}
+          PICK: ${{ inputs.server_ref }}
+        run: |
+          ref=$BASE
+          if [ -n "$PICK" ]; then echo "ref=$PICK" >>"$GITHUB_OUTPUT"; exit 0; fi
+          if [ -n "$HEAD" ] && git ls-remote --exit-code --heads https://github.com/wittywilla/WittyMediaServer "$HEAD" >/dev/null; then ref=$HEAD; fi
+          echo "ref=$ref" >>"$GITHUB_OUTPUT"
+          echo "::notice title=Server::WittyMediaServer at $ref"
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+          repository: wittywilla/WittyMediaServer
+          ref: ${{ steps.ref.outputs.ref }}
+          path: .server
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+          repository: wittywilla/WittyRelay
+          path: .relay
+      - name: Does the server have the lab
+        id: lab
+        run: |
+          if [ -f .server/scripts/pairing-lab/lab.sh ]; then echo "have=yes" >>"$GITHUB_OUTPUT"
+          else echo "have=no" >>"$GITHUB_OUTPUT"; echo "::notice::WittyMediaServer at ${{ steps.ref.outputs.ref }} has no scripts/pairing-lab yet: nothing to run"; fi
+      - uses: actions/setup-java@b843ebf9b913146b38da2eaa7aeddf76074ae1ad # v6.1.0
+        if: steps.lab.outputs.have == 'yes'
+        with:
+          distribution: temurin
+          java-version: 17
+      - uses: android-actions/setup-android@be39fa834029ff78f1a44aa3bb0819b8fc2bd8fd # v4.0.4
+        if: steps.lab.outputs.have == 'yes'
+      - uses: gradle/actions/setup-gradle@8da46b539cd8fe6ab27ca75128919a18d757604c # v6.4.1
+        if: steps.lab.outputs.have == 'yes'
+        with:
+          gradle-version: 9.8.2
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7
+        if: steps.lab.outputs.have == 'yes'
+        with:
+          go-version-file: .server/go.mod
+          cache: false
+      - name: Android NDK for the peer-to-peer library
+        if: steps.lab.outputs.have == 'yes' && inputs.app_release == ''
+        run: yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "ndk;27.2.12479018" >/dev/null
+      - name: Build Wittyconnect from the server's source
+        if: steps.lab.outputs.have == 'yes' && inputs.app_release == ''
+        env:
+          WITTYMEDIASERVER_SRC: .server
+        run: bash android/scripts/build-wittyconnect.sh
+      - name: Build the app
+        if: steps.lab.outputs.have == 'yes' && inputs.app_release == ''
+        working-directory: android
+        run: |
+          gradle --no-daemon :app:assembleDebug -Pp2p=required
+          mkdir -p "$RUNNER_TEMP/app" && cp app/build/outputs/apk/debug/app-x86_64-debug.apk "$RUNNER_TEMP/app/"
+      - name: The app from a release
+        if: steps.lab.outputs.have == 'yes' && inputs.app_release != ''
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ inputs.app_release }}
+        run: gh release download "$TAG" -R wittywilla/WittyMediaClient --pattern '*-android-x86_64.apk' -D "$RUNNER_TEMP/app"
+      - name: Build the server, WittyRelay and the lab
+        if: steps.lab.outputs.have == 'yes'
+        run: bash .server/scripts/pairing-lab/lab.sh build "$RUNNER_TEMP/plab" .server .relay
+      # The server won't start without FFmpeg: the server's pinned static build, kept between runs.
+      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        if: steps.lab.outputs.have == 'yes'
+        with:
+          path: ${{ runner.temp }}/smoke-ffmpeg
+          key: smoke-ffmpeg-${{ hashFiles('.server/scripts/ffmpeg.lock', '.server/scripts/smoke/ffmpeg.sh') }}
+      - name: FFmpeg
+        if: steps.lab.outputs.have == 'yes'
+        timeout-minutes: 8
+        run: bash .server/scripts/smoke/ffmpeg.sh "$RUNNER_TEMP/smoke-ffmpeg"
+      - name: An emulator for the lab (it starts it itself, inside the phone's network)
+        if: steps.lab.outputs.have == 'yes'
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+          # One place for the AVD, which the lab hands to the emulator it starts as this user under sudo.
+          echo "ANDROID_AVD_HOME=$HOME/.android/avd" >>"$GITHUB_ENV"
+          export ANDROID_AVD_HOME=$HOME/.android/avd
+          mkdir -p "$ANDROID_AVD_HOME"
+          sm="$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager"
+          yes | "$sm" "emulator" "platform-tools" "system-images;android-34;google_apis;x86_64" >/dev/null
+          echo no | "$ANDROID_HOME/cmdline-tools/latest/bin/avdmanager" create avd -n plab-phone -k "system-images;android-34;google_apis;x86_64" -d pixel_6
+      - name: Pairing from away, on the first try
+        if: steps.lab.outputs.have == 'yes'
+        env:
+          CASES: ${{ inputs.cases }}
+        run: |
+          apk=$(ls "$RUNNER_TEMP"/app/*.apk | head -1)
+          # Through the owner's relay only, from a fresh install; a server on a public address; and the server
+          # restarting between the invite and the claim, "Only paired devices" off.
+          set -- ${CASES:-cone-relay.settled.on.fresh.link direct.settled.on.fresh.link symmetric-relay.fresh.off.fresh.link}
+          sudo env "PATH=$PATH" ANDROID_SDK_ROOT="$ANDROID_HOME" ANDROID_AVD_HOME="$ANDROID_AVD_HOME" SUDO_USER="$USER" \
+            PL_PHONE=emulator PL_APK="$apk" PL_AVD=plab-phone PL_EMU_PORT=5770 PL_EMU_WIPE=1 PL_EMU_BOOT=420 PL_CASE_TIMEOUT=1200 \
+            bash .server/scripts/pairing-lab/lab.sh run "$RUNNER_TEMP/plab" "$RUNNER_TEMP/plab-results" "$@"
+      - name: Results readable by the upload
+        if: always()
+        run: sudo chmod -R a+rX "$RUNNER_TEMP/plab-results" 2>/dev/null || true
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        if: always()
+        with:
+          name: pairing-lab-android
+          path: |
+            ${{ runner.temp }}/plab-results/**/steps.jsonl
+            ${{ runner.temp }}/plab-results/**/result.json
+            ${{ runner.temp }}/plab-results/**/*.log
+            ${{ runner.temp }}/plab-results/**/emu-*
+            ${{ runner.temp }}/plab-results/summary.md
+          retention-days: 14
