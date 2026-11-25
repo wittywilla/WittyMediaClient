@@ -72,4 +72,32 @@ class ConnectStepsTest {
         assertTrue(out, out.contains("not-found") && out.contains("[!] Server found") && out.contains("[x] Code or link read"))
         assertFalse("the whole server ID isn't needed", out.contains("12D3KooWAbCdEfGhIjKlMnOpQrStUvWxYz"))
     }
+    @Test
+    fun whileConnectingTheStepBeingTriedIsNowWithItsWordsAndTheSlowHintComesLater() {
+        val run = ConnectRun("invite", "server")
+        assertEquals(listOf("now", "wait", "wait", "wait"), run.progress(steps).steps.map { it.second })
+        run.pass("read")
+        run.pass("found")
+        run.named("Living room")
+        var p = run.progress(steps)
+        assertEquals(listOf("ok", "ok", "now", "wait"), p.steps.map { it.second })
+        assertEquals("secure", p.step)
+        assertEquals("Looking for a way to reach your server…", p.doing)
+        assertEquals("Living room", run.name)
+        assertEquals("", p.slow)
+        p = run.progress(steps, System.currentTimeMillis() + 11_000)
+        assertEquals(steps.slow.say, p.slow)
+        assertEquals("0:11", p.clock)
+        run.fail(steps.of("slow-path", "secure"))
+        p = run.progress(steps, System.currentTimeMillis() + 11_000)
+        assertEquals(listOf("ok", "ok", "fail", "skip"), p.steps.map { it.second })
+        assertEquals("", p.doing)
+        assertEquals("", p.slow)
+    }
+
+    @Test
+    fun everyStepSaysWhatItIsDoing() {
+        for (step in steps.steps) assertTrue(step.id, step.doing.endsWith("…"))
+        assertTrue(steps.slow.after > 0 && steps.slow.say.endsWith("."))
+    }
 }

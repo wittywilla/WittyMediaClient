@@ -19,6 +19,8 @@ Steps, in order (name some to run only those):
              peer to peer, still signed in
   game       from away, WittyPlay's Adjustris starts and the server sends this device its frames
   link       a fresh app, still away: Join with a link or code, the invite link pasted, signed in
+  connecting the same on a slow network: from the link to signing in the app stays on the connecting screen, its
+             steps ticking off, and never shows the list of servers or the link's screen in between (#173)
 
 Only the standard library; adb must be on PATH.
 """
@@ -636,6 +638,50 @@ def link():
     signed_in(180, 'signed in with the link, from away')
 
 
+def connecting():
+    """WittyMediaClient#173: after a link is given the app stays on the connecting screen, with its steps ticking
+    off, until it is signed in; it never goes back to the list of servers (or the screen the link was typed on) to
+    wait. The emulator's network is slowed (as a phone far away, through a relay) so the screen is seen for a while."""
+    inv = api('POST', '/api/v1/p2p/invite', {'password': env['WMS_PASS']})
+    link = inv['link']
+    launch(clear=True)
+    tap('Join with a link or code|Connect from anywhere', 60)
+    if find('Connect from anywhere') and not find('Invite link'):
+        tap('Join with a link or code')
+    type_into('Invite link|link', link)
+    adb('emu', 'network', 'delay', 'gprs', check=False)
+    adb('emu', 'network', 'speed', 'edge', check=False)
+    since = time.time()
+    try:
+        sh('input keyevent KEYCODE_ENTER', check=False)
+        seen, done, end = 0, [], time.time() + 180
+        while True:
+            t = texts()
+            if 'Connecting to your server' in t:
+                seen += 1
+                done.append(sum(1 for x in t if x == 'Done'))
+            elif seen:
+                # Gone from the connecting screen: to the server's own screens, never back to where it came from.
+                back = [x for x in t if re.search(r'Choose a server|On your network|Used before|Join with a link or code|^Invite link', x)]
+                if back:
+                    raise RuntimeError(f'left the connecting screen for {back} before signing in; on screen: {t[:30]}')
+                break
+            elif find('^(Join|Connect)$') and time.time() - since > 10:
+                tap('^(Join|Connect)$')
+            if time.time() > end:
+                raise RuntimeError(f'still connecting after 180s; seen {seen} times; on screen: {t[:30]}')
+            time.sleep(0.5)
+        log('the connecting screen, seen', seen, 'times; steps done each time:', done)
+        if not seen:
+            raise RuntimeError('the connecting screen never showed')
+        if len(set(done)) < 2:
+            raise RuntimeError(f'the steps did not tick off on screen: {done}')
+        signed_in(180, 'signed in from the connecting screen', since=since)
+    finally:
+        adb('emu', 'network', 'delay', 'none', check=False)
+        adb('emu', 'network', 'speed', 'full', check=False)
+
+
 # Peer to peer on, straight to this machine: the emulator reaches it, and nothing else is needed.
 api('PUT', '/api/p2p/settings', {'accept': True, 'enabled': True, 'port': int(PORT) + 2, 'devicesOnly': True,
                                  'layers': {'dht': False, 'relay': False, 'holePunch': False, 'portMap': False, 'ipv6': False}})
@@ -650,6 +696,7 @@ step('away: from away, peer to peer, still signed in', away)
 step('game: WittyPlay from away shows its frame', game)
 if not TV:
     step('link: a fresh app joins with an invite link from away', link)
+    step('connecting: on a slow network, the connecting screen until signed in, never the list', connecting)
 print(f"\nandroid {kind}: {'every step passed' if not failed else str(len(failed)) + ' failed: ' + ', '.join(failed)}")
 if retried:
     print(f"android {kind}: passed on a second try: {', '.join(retried)}")

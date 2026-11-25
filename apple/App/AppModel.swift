@@ -182,6 +182,12 @@ final class AppModel: ObservableObject {
 
     /// A connection from away that didn't work, shown step by step (ConnectCheckView) until dismissed.
     @Published var connectCheck: ConnectRun?
+    /// Joining from an invite link or a TV's code, while it goes on (ConnectingView), and the words it ended with if it
+    /// ended without opening the server or showing the connection check.
+    @Published var connecting: ConnectRun?
+    @Published var connectingWords = ""
+    var connectingRetry: (() -> Void)?
+    var connectingTask: Task<Void, Never>?
     /// The address Try again connects to, when there is one (a server used before).
     var checkRetry: String?
     @Published var stage: Stage = .starting {

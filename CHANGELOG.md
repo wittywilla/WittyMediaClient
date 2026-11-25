@@ -5,6 +5,14 @@ What changed in WittyMediaClient, newest first. What changed before it had a rep
 
 ## Unreleased
 
+- **Connecting shows what it's doing** (#173). After a QR code is scanned, a code typed or an invite link given, the app
+  stays on a connecting screen until the server opens, instead of going back to the list of servers with nothing to
+  say: the server's name and logo once known, each step ticking off (code or link read, server found, encrypted
+  connection made, signed in), what the step being tried is doing ("Looking for a way to reach your server…"), the
+  time so far and Cancel. After ten seconds it adds that the first time from away can take up to a minute. A failure
+  shows the connection check, as before. On Android phones and TVs, the desktop app and Apple's apps; the words come
+  from the server's steps file (WittyMediaServer 0.8.7, `doing` and `slow`).
+
 ## 0.6.4
 
 Released 2026-11-25.

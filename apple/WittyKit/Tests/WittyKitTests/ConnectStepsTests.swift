@@ -60,4 +60,34 @@ final class ConnectStepsTests: XCTestCase {
         }
         XCTAssertTrue(out.contains("[!] Server found"))
     }
+
+    func testWhileConnectingTheStepBeingTriedIsNowWithItsWordsAndTheSlowHintComesLater() throws {
+        let steps = try ConnectSteps(json: try data())
+        let run = ConnectRun(kind: "invite", server: "server")
+        XCTAssertEqual(run.progress(steps).items.map(\.state), [.now, .wait, .wait, .wait])
+        run.pass("read")
+        run.pass("found")
+        run.named("Living room")
+        var p = run.progress(steps)
+        XCTAssertEqual(p.items.map(\.state), [.ok, .ok, .now, .wait])
+        XCTAssertEqual(p.step, "secure")
+        XCTAssertEqual(p.doing, "Looking for a way to reach your server…")
+        XCTAssertEqual(run.name, "Living room")
+        XCTAssertEqual(p.slow, "")
+        p = run.progress(steps, now: Date().addingTimeInterval(11))
+        XCTAssertEqual(p.slow, steps.slow.say)
+        XCTAssertEqual(p.clock, "0:11")
+        run.stop("That code isn't one any server here made.")
+        p = run.progress(steps, now: Date().addingTimeInterval(11))
+        XCTAssertEqual(p.items.map(\.state), [.ok, .ok, .fail, .skip])
+        XCTAssertEqual(p.failure?.say, "That code isn't one any server here made.")
+        XCTAssertEqual(p.doing, "")
+        XCTAssertEqual(p.slow, "")
+    }
+
+    func testEveryStepSaysWhatItIsDoing() throws {
+        let steps = try ConnectSteps(json: try data())
+        for s in steps.steps { XCTAssertTrue(s.doing.hasSuffix("…"), s.id) }
+        XCTAssertTrue(steps.slow.after > 0 && steps.slow.say.hasSuffix("."))
+    }
 }

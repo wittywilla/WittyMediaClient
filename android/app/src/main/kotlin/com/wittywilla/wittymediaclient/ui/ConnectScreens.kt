@@ -225,24 +225,17 @@ fun ConnectScreen(nav: Nav, s: Map<String, String>, message: String) {
         // An invite link from the server's Remote Access page, for connecting from away.
         PeerRules.invite(address)?.let { invite ->
             if (connecting != null) return
-            connecting = "invite"
             problem = ""
-            scope.launch {
-                nav.joinInvite(invite)?.let { problem = it }
-                connecting = null
-            }
+            nav.joinShown(invite)
             return
         }
         // A Connect a device code typed where an address goes (0.6.2 took "K7QM-2XHD" for a computer's name): asked
         // of the servers on this network, as Enter a code does.
         if (WebJoin.looksLikeCode(address)) {
             if (connecting != null) return
-            connecting = "code"
             problem = ""
-            scope.launch {
-                nav.enterCode(address, found.map { it.url })?.let { problem = it }
-                connecting = null
-            }
+            val have = found.map { it.url }
+            nav.codeShown(address) { serversForCode(context, have) }
             return
         }
         when (val r = Address.normalize(address)) {

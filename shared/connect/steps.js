@@ -10,6 +10,8 @@
     const codes = (file && file.codes) || []
     const steps = (file && file.steps) || []
     const unknown = codes.find((c) => c.code === 'unknown') || { code: 'unknown', step: '', say: 'Something went wrong.', next: '' }
+    // The hint while connecting takes a while, and after how many seconds (steps.json's "slow").
+    const slow = { after: Number(file && file.slow && file.slow.after) || 10, say: String((file && file.slow && file.slow.say) || '') }
 
     // The failure behind a server's reason ("expired") and an error's words: a reason first, then the words; with
     // neither known, "unknown" at `step`, the step being tried.
@@ -35,6 +37,7 @@
       const passed = []
       const log = []
       let failure = null
+      let name = ''
       const elapsed = () => `+${((Date.now() - started) / 1000).toFixed(1)}s`
       const r = {
         kind,
@@ -49,6 +52,21 @@
           return failure
         },
         get failure() { return failure },
+        // The server's name, once the invite or the server says it.
+        named(n) { if (n) name = String(n).slice(0, 80) },
+        get name() { return name },
+        // While connecting, for the connecting screen: each step done, being tried now, still to come, or failed;
+        // what the step being tried is doing; how long it has taken; and the slow hint once it has taken a while.
+        progress(now = Date.now()) {
+          const at = failure ? -1 : steps.findIndex((s) => !passed.includes(s.id))
+          const list = r.states().map((s, i) => ({ ...s, state: s.state !== 'skip' || failure ? s.state : i === at ? 'now' : 'wait' }))
+          const step = at >= 0 ? steps[at] : null
+          const ms = Math.max(0, now - started)
+          return {
+            kind, name, steps: list, step: step ? step.id : '', doing: step ? (step.doing || step.title) : '',
+            ms, clock: clock(ms), slow: !failure && slow.say && ms >= slow.after * 1000 ? slow.say : '', failure,
+          }
+        },
         states() {
           const at = steps.findIndex((s) => failure && s.id === failure.step)
           return steps.map((s, i) => ({
@@ -82,10 +100,16 @@
       return r
     }
 
-    return { steps, codes, classify, of: (code, step) => classify(code, '', step), run, ORDER }
+    return { steps, codes, slow, classify, of: (code, step) => classify(code, '', step), run, ORDER }
   }
 
-  const api = { create, ORDER }
+  // How long connecting has taken, as a clock: 0:07, 1:02.
+  function clock(ms) {
+    const s = Math.floor(Math.max(0, ms) / 1000)
+    return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`
+  }
+
+  const api = { create, ORDER, clock }
   if (typeof module !== 'undefined' && module.exports) module.exports = api
   else root.WittySteps = api
 })(typeof self !== 'undefined' ? self : this)

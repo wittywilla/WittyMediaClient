@@ -102,11 +102,8 @@ struct ConnectView: View {
     /// An invite link from the server's Remote Access page, in place of an address.
     private func join(_ invite: PeerConnect.Invite) async {
         guard !busy else { return }
-        busy = true
         error = ""
-        let problem = await model.join(invite)
-        busy = false
-        if let problem { error = problem }
+        model.joinShown(invite)
     }
 
     private func submit() {
@@ -369,8 +366,14 @@ struct ConnectView: View {
         }
         .serverUndo()
         // A connection from away that didn't work: each step and what to do, instead of only a line of words.
-        .sheet(item: $model.connectCheck) { run in
+        // Not while joining: the connecting screen shows the check in its own place.
+        .sheet(item: Binding(get: { model.connecting == nil ? model.connectCheck : nil }, set: { model.connectCheck = $0 })) { run in
             ConnectCheckView(run: run, retry: model.checkRetry.map { url in { Task { await connect(url) } } })
+                .environmentObject(model)
+        }
+        // Joining from a link or a TV's code: each step as it goes, never the list in between.
+        .connectingCover(item: $model.connecting) { run in
+            ConnectingView(run: run)
                 .environmentObject(model)
         }
         #if os(iOS)

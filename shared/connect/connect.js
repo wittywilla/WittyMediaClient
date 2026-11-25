@@ -534,7 +534,7 @@
       input.setAttribute('aria-invalid', text ? 'true' : 'false')
     }
     say(message || '')
-    const go = button(S.connect, () => submit(input, say, go), { kind: 'primary' })
+    const go = button(S.connect, () => submit(input, say, go, invite), { kind: 'primary' })
     input.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); go.click() } })
     show({
       back: listAvailable ? () => listScreen() : null,
@@ -548,31 +548,124 @@
 
   // A code from a server's Connect a device, sent to the servers this app can reach (or only to `only`).
   // While it is asked about, the button says so; a server that made it signs this device in and opens.
-  async function sendCode(value, only, input, say, go, label) {
+  // `back` is the screen it was typed on, for Cancel and Back on the connecting screen.
+  async function sendCode(value, only, input, say, go, label, back) {
     if (go.classList.contains('busy')) return
+    const from = back || (() => codeEntryScreen('', value))
     // A link pasted here instead: the app that can use one takes it.
-    if (!only && bridge.invite && /^\s*wittymedia:\/\/p2p\//i.test(value)) {
+    if (!only && bridge.invite && /^\s*wittymedia:\/\/p2p\//i.test(value)) return joinLink(value, from)
+    if (!bridge.joinProgress) {
+      // An app without the connecting screen: the button says it's asking, as before.
       const turn = screen
-      setBusy(go, true, S.inviteConnecting)
-      let joined
-      try { joined = await bridge.invite(value) } catch (e) { joined = { error: 'p2p-failed' } }
-      if (turn !== screen || joined.ok) return
-      if (joined.check) { checkScreen(joined.check, () => codeEntryScreen('', value)); return }
+      setBusy(go, true, S.codeLooking)
+      say('')
+      let r
+      try { r = await bridge.enterCode(value, only || '') } catch (e) { r = { error: 'code-not-found' } }
+      if (turn !== screen || r.ok || r.error === 'stopped') return
       setBusy(go, false, label)
-      say(joined.message || errorWords(joined) || S.errInvite)
+      if (r.error === 'changed') { choose(only, S.identityChanged); return }
+      say(r.message || errorWords(r) || S.errCodeNotFound)
       input.focus()
       return
     }
-    const turn = screen
-    setBusy(go, true, S.codeLooking)
-    say('')
+    return joinCode(value, only, from)
+  }
+
+  // An invite link, joined on the connecting screen.
+  function joinLink(link, back) {
+    return connectingScreen(() => bridge.invite(link), back, () => joinLink(link, back),
+      (r) => r.message || errorWords(r) || S.errInvite)
+  }
+
+  // A Connect a device code, asked of the servers this app can reach (or only of `only`), on the connecting screen.
+  async function joinCode(value, only, back) {
+    const r = await connectingScreen(() => bridge.enterCode(value, only || ''), back, () => joinCode(value, only, back),
+      (x) => (x.error === 'changed' ? null : x.message || errorWords(x) || S.errCodeNotFound))
+    if (r && r.error === 'changed') choose(only, S.identityChanged)
+  }
+
+  // Joining from a QR code, a code or a link: the connecting screen, from the moment it starts until the server
+  // opens, instead of the list or a busy button. One centred card with the server's name (and logo, once known), each
+  // step ticking off as it gets through, what the step being tried is doing, the time so far and Cancel; after a while
+  // a hint that it can take up to a minute. A failure shows the connection check in its place, or the step it stopped
+  // on and the words wordsOf gives (null: the caller deals with it). The same screen as the phone and TV apps'
+  // (ConnectingScreen). start is the join, back the screen it came from, retry tries again.
+  async function connectingScreen(start, back, retry, wordsOf) {
+    const mark = { ok: '✓', fail: '✕', wait: '·', skip: '–' }
+    const word = { ok: S.checkStepDone, fail: S.checkStepFailed, now: S.checkStepNow, wait: '', skip: S.checkStepSkipped }
+    const brand = el('div', { className: 'connecting-brand' }, lockup({ name: '', logo: '' }))
+    // The name is the lockup's, over the title, as on the sign-in screens: not said twice.
+    const title = el('h1', { textContent: S.connectingTitlePlain })
+    const list = el('ol', { className: 'check-steps connecting-steps' })
+    const doing = el('p', { className: 'lead connecting-doing', role: 'status' })
+    const slow = el('p', { className: 'connecting-slow' })
+    const clock = el('p', { className: 'caption connecting-clock' })
+    let stopped = false
+    const cancel = () => {
+      stopped = true
+      if (bridge.joinCancel) bridge.joinCancel()
+      back()
+    }
+    const cancelButton = button(S.cancel, cancel)
+    const actions = el('div', { className: 'connecting-actions' }, cancelButton)
+    const turn = show({ escape: cancel, className: 'centred connecting', lockup: false, words: [brand, title, list, doing, slow], actions: [actions], foot: [clock] })
+    let last = null
+    let named = null
+    let drawn = ''
+    const draw = (p, say) => {
+      last = p
+      if (p.name !== named) {
+        named = p.name
+        brand.textContent = ''
+        brand.appendChild(lockup({ name: p.name, logo: p.logo }))
+      }
+      // Drawn again only when a step changes, so the spinner keeps turning.
+      const key = (p.steps || []).map((x) => x.state).join() + (say || '')
+      if (key !== drawn) {
+        drawn = key
+        list.textContent = ''
+        for (const x of p.steps || []) {
+          list.appendChild(el('li', { className: `check-step ${x.state}`, 'data-step': x.id },
+            el('span', { className: 'check-mark', 'aria-hidden': 'true' }, x.state === 'now' ? spinner() : document.createTextNode(mark[x.state] || '')),
+            el('span', { className: 'check-title', textContent: x.title }),
+            el('span', { className: 'check-word', textContent: word[x.state] || '' }),
+            ...(x.state === 'fail' && say ? [el('span', { className: 'check-say', textContent: say })] : [])))
+        }
+      }
+      // Said when it changes (role status): what's happening now.
+      if (doing.textContent !== (p.doing || '')) doing.textContent = p.doing || ''
+      slow.textContent = p.slow || ''
+      clock.textContent = p.clock ? fill(S.connectingSoFar, { time: p.clock }) : ''
+    }
+    const tick = async () => {
+      if (turn !== screen || !bridge.joinProgress) return
+      let p = null
+      try { p = await bridge.joinProgress() } catch (e) { p = null }
+      if (p && turn === screen && !stopped) draw(p)
+    }
+    const timer = setInterval(tick, 300)
+    onLeave = () => clearInterval(timer)
+    tick()
     let r
-    try { r = await bridge.enterCode(value, only || '') } catch (e) { r = { error: 'code-not-found' } }
-    if (turn !== screen || r.ok || r.error === 'stopped') return
-    setBusy(go, false, label)
-    if (r.error === 'changed') { choose(only, S.identityChanged); return }
-    say(r.message || errorWords(r) || S.errCodeNotFound)
-    input.focus()
+    try { r = await start() } catch (e) { r = { error: 'p2p-failed' } }
+    clearInterval(timer)
+    // Opened (the app shows the server), cancelled, or another screen took this one's place.
+    if (turn !== screen || stopped || r.ok || r.error === 'stopped') return null
+    if (r.check) { checkScreen(r.check, retry); return null }
+    const words = wordsOf(r)
+    if (words === null) return r
+    // The step it stopped on, with the words, and Try again and Back in place of Cancel.
+    const p = last || { steps: [] }
+    const at = (p.steps || []).findIndex((x) => x.state === 'now')
+    draw({ ...p, doing: '', slow: '', clock: '', steps: (p.steps || []).map((x, i) => ({ ...x, state: i === at ? 'fail' : x.state === 'wait' ? 'skip' : x.state })) }, words)
+    if (at < 0) doing.textContent = words
+    actions.textContent = ''
+    const again = button(S.checkTryAgain, retry, { kind: 'primary' })
+    actions.appendChild(again)
+    actions.appendChild(button(S.back, back))
+    screenBack = back
+    again.focus()
+    return null
   }
 
   function codeInput(id, value) {
@@ -587,7 +680,7 @@
     const input = codeInput('code', value)
     const error = problem(message || '', 'code-error')
     const say = (text) => { error.say(text); input.setAttribute('aria-invalid', text ? 'true' : 'false') }
-    const go = button(S.connect, () => sendCode(input.value, '', input, say, go, S.connect), { kind: 'primary' })
+    const go = button(S.connect, () => sendCode(input.value, '', input, say, go, S.connect, () => codeEntryScreen('', input.value)), { kind: 'primary' })
     input.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); go.click() } })
     show({
       back: listAvailable ? () => listScreen() : null,
@@ -619,7 +712,7 @@
         input.focus()
         return
       }
-      sendCode(input.value, server.url, input, say, go, S.connect)
+      sendCode(input.value, server.url, input, say, go, S.connect, () => signInScreen(server))
     }, { kind: 'primary' })
     input.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); go.click() } })
     show({
@@ -637,11 +730,14 @@
     try { return await bridge.probe(url) } catch (e) { return { error: 'unreachable' } }
   }
 
-  async function submit(input, say, go) {
+  async function submit(input, say, go, invite) {
     if (go.classList.contains('busy')) return
+    const typed = input.value
+    const from = () => addressScreen('', typed, invite)
     // A code typed where a link or an address was asked for: it is taken as the code it is.
-    if (bridge.enterCode && looksLikeCode(input.value)) return sendCode(input.value, '', input, say, go, S.connect)
-    // An invite link instead of an address: the app that can use one takes it from here.
+    if (bridge.enterCode && looksLikeCode(input.value)) return sendCode(input.value, '', input, say, go, S.connect, from)
+    // An invite link instead of an address: the app that can use one takes it from here, on the connecting screen.
+    if (bridge.invite && bridge.joinProgress && /^\s*wittymedia:\/\/p2p\//i.test(input.value)) return joinLink(input.value, from)
     if (bridge.invite && /^\s*wittymedia:\/\/p2p\//i.test(input.value)) {
       const turn = screen
       setBusy(go, true, S.inviteConnecting)

@@ -42,6 +42,7 @@ import com.wittywilla.wittymediaclient.net.WebJoin
 import com.wittywilla.wittymediaclient.net.problemWords
 import com.wittywilla.wittymediaclient.p2p.PeerWay
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withTimeoutOrNull
 
@@ -131,6 +132,21 @@ fun JoinAwayScreen(nav: Nav, s: Map<String, String>) {
 // How long Enter a code waits for this network's servers to be found, when none have been yet.
 private const val FIND_FOR_CODE_MS = 10_000L
 
+// The servers on this network for a code: those already found, or, with none yet, a while of looking for them. On
+// the connecting screen, as the screen the code was typed on (and its finder) is left behind.
+suspend fun serversForCode(context: android.content.Context, have: List<String>): List<String> {
+    if (have.isNotEmpty()) return have
+    val got = kotlinx.coroutines.flow.MutableStateFlow(emptyList<FoundServer>())
+    val finder = ServerFinder(context) { got.value = it }
+    finder.start()
+    try {
+        withTimeoutOrNull(FIND_FOR_CODE_MS) { got.first { it.isNotEmpty() } }
+    } finally {
+        finder.stop()
+    }
+    return got.value.map { it.url }
+}
+
 @Composable
 private fun JoinWithCodeOrLinkScreen(nav: Nav, s: Map<String, String>) {
     val context = LocalContext.current
@@ -149,26 +165,20 @@ private fun JoinWithCodeOrLinkScreen(nav: Nav, s: Map<String, String>) {
         if (asking || code.isBlank()) return
         // A link pasted where the code goes: joined as the link it is.
         PeerRules.invite(code.trim())?.let { invite ->
-            asking = true
             codeProblem = ""
-            scope.launch {
-                nav.joinInvite(invite)?.let { codeProblem = it }
-                asking = false
-            }
+            nav.joinShown(invite)
             return
         }
         if (WebJoin.clean(code).isEmpty()) {
             codeProblem = s["errCodeFormat"].orEmpty()
             return
         }
-        asking = true
         codeProblem = ""
-        scope.launch {
-            // Servers on this network answer a few seconds after the screen opens: a code typed quickly waits for them.
-            if (found.isEmpty()) withTimeoutOrNull(FIND_FOR_CODE_MS) { while (found.isEmpty()) delay(250) }
-            nav.enterCode(code, found.map { it.url })?.let { codeProblem = it }
-            asking = false
-        }
+        // Servers on this network answer a few seconds after the screen opens: a code typed quickly waits for them,
+        // on the connecting screen.
+        val have = found.map { it.url }
+        val typed = code
+        nav.codeShown(typed) { serversForCode(context, have) }
     }
     var link by remember { mutableStateOf("") }
     var linkProblem by remember { mutableStateOf("") }
@@ -188,11 +198,8 @@ private fun JoinWithCodeOrLinkScreen(nav: Nav, s: Map<String, String>) {
             linkProblem = s["joinPasteNotInvite"].orEmpty()
             return
         }
-        joining = true
-        scope.launch {
-            nav.joinInvite(invite)?.let { linkProblem = it }
-            joining = false
-        }
+        linkProblem = ""
+        nav.joinShown(invite)
     }
     DesignScreen(
         s["inviteTitle"].orEmpty(), nav::pop, eyebrow = s["remoteTitle"].orEmpty(), tag = "join-code-or-link",
@@ -256,10 +263,11 @@ private fun JoinAwayTvScreen(nav: Nav, s: Map<String, String>) {
                 }
             }
             else -> {
-                words = s["joinAwayFinding"].orEmpty()
                 run.pass("found")
                 run.pass("secure")
-                nav.joinedFromAway(answer, run)?.let { problem -> words = problem; failed = true }
+                run.named(answer.serverName)
+                // The rest, on the connecting screen: the server proving who it is, and signing in.
+                nav.startJoining(run, null) { nav.joinedFromAway(answer, it) }
             }
         }
     }
@@ -272,11 +280,7 @@ private fun JoinAwayTvScreen(nav: Nav, s: Map<String, String>) {
         if (joining) return
         val invite = PeerRules.invite(link.trim())
         if (invite == null) { linkProblem = s["joinPasteNotInvite"].orEmpty(); return }
-        joining = true
-        scope.launch {
-            nav.joinInvite(invite)?.let { linkProblem = it }
-            joining = false
-        }
+        nav.joinShown(invite)
     }
     DesignScreen(
         s["joinAwayTitle"].orEmpty(), nav::pop, eyebrow = s["remoteTitle"].orEmpty(), lead = s["joinAwayHint"].orEmpty(), tag = "join-away", centred = true,
