@@ -722,7 +722,9 @@ struct GuideView: View {
         switch dress.look.preview {
         case "off": return ""
         case "last": return LastChannel.current.isEmpty ? (current?.canTune == true ? current!.key : "") : LastChannel.current
-        default: return current.map { $0.canTune ? $0.key : "" } ?? ""
+        // Until the rows have come there's no highlight: what is playing carries on. An empty answer here stopped
+        // it, and the highlight then tuned it again live: back from full screen, a programme started over jumped.
+        default: return current.map { $0.canTune ? $0.key : "" } ?? live.key
         }
     }
 
