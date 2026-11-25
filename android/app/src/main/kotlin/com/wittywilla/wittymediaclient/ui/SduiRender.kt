@@ -302,7 +302,9 @@ fun SduiPageView(
             }
             Column(Modifier.fillMaxSize()) {
             Box(Modifier.weight(1f).fillMaxWidth()) { when {
-                native != null -> Column(Modifier.fillMaxSize().padding(top = if (env.tv) 0.dp else topRoom)) {
+                // The guide on a phone is the website's page in a web view that keeps the shell's room itself
+                // (ServerPageScreen, inShell); room here as well left an empty band of about 120 under the bar (#160).
+                native != null -> Column(Modifier.fillMaxSize().padding(top = if (env.tv || native.view.props.str("view") == "guide") 0.dp else topRoom)) {
                     // What comes before the app's own view keeps its place above it; the view takes the rest.
                     rows.filter { it !is SduiRow.Native }.forEach { SduiRowView(it, gap) }
                     Box(Modifier.weight(1f).fillMaxWidth()) { SduiNativeView(native.view) }
