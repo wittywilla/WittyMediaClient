@@ -3,7 +3,20 @@
 What changed in WittyMediaClient, newest first. What changed before it had a repository of its own is in the
 [WittyMediaServer changelog](https://github.com/wittywilla/WittyMediaServer/blob/master/CHANGELOG.md).
 
-## Unreleased
+## 0.6.4
+
+Released 2026-11-25.
+
+Made for WittyMediaServer 0.8.6-alpha: WittyTV on a phone, the TVs' Live TV, playback from a slow server and the
+visualizer.
+
+**Playback from a slow server (wittywilla/WittyMediaServer#752)**
+
+- **Sound and picture lined up after a change of speed** on Android and Apple (#161): after each real change of speed
+  the player re-aligns them, as the web player does.
+- **A server that can't keep up at a speed** (#170): the app steps down to 720p once, then plays at the fastest speed
+  the server manages, says so, and caps the speed menu for that video, on a phone and Android TV (Apple in code; not
+  yet built on a Mac).
 
 **WittyTV on a phone (#160)**
 
