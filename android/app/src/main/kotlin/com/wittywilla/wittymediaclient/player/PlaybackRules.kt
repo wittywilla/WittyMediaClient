@@ -195,6 +195,10 @@ fun lowerHeight(height: Int): Int {
 fun stepDownWords(speed: Double, rate: Double, height: Int): String =
     "This server converts this video at ${times(speed)}, slower than the ${times(rate)} it plays at, so it goes on at ${height}p."
 
+// What the viewer is told when a speed other than 1× needs the sound decoded on this device rather than sent
+// as it is to the TV or receiver, which can't change its speed.
+const val PASSTHROUGH_SPEED = "At this speed the sound is decoded on this device instead of going straight to your TV or receiver, so it stays with the picture."
+
 // What the player does about a conversion that can't keep up (the website's pace.ts, tooSlow): a smaller
 // picture first; faster than 1× only once, to 720p, and then a lower speed the server keeps up with, rather
 // than a picture that stops and starts; at 1× with nothing smaller to ask for, it only says so.

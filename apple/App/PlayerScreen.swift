@@ -382,6 +382,9 @@ final class PlaybackModel: ObservableObject {
 
     private func load(_ url: URL, startAt: Double?) {
         let next = AwayCookie.playerItem(url)
+        // Faster or slower with voices at their own pitch, and the sound kept with the picture: the same
+        // stretching as music and watch parties use, rather than whatever this system's default is.
+        next.audioTimePitchAlgorithm = .timeDomain
         next.preferredForwardBufferDuration = Self.forwardBuffer(clockface.rate)
         #if !os(macOS)
         addMetadata(to: next)

@@ -43,6 +43,10 @@ data class Found(
     val maxChannels: Int = 0,
 )
 
+// What a device offers when the sound must be decoded here: none of what the output would take undecoded.
+fun withoutPassthrough(found: Found): Found =
+    found.copy(passthrough = emptySet(), audioMimes = found.audioMimes.filterTo(HashSet()) { AUDIO_NAMES[it] !in found.passthrough })
+
 // What the server should hear, given what was found. H.264 and AAC are always listed: a decoder
 // list that came back empty is more likely to be a broken list than a device with no decoders.
 fun capabilitiesFrom(found: Found): DeviceCapabilities {
@@ -64,10 +68,27 @@ object DeviceProfile {
     @Volatile
     private var cached: DeviceCapabilities? = null
 
+    @Volatile
+    private var found: Found? = null
+
     // Asked once. A receiver plugged in later is noticed by the system's own audio routing: Media3
     // still falls back to decoding, and the worst case is a little more work on the server.
-    fun capabilities(context: Context): DeviceCapabilities =
-        cached ?: capabilitiesFrom(find(context.applicationContext)).also { cached = it }
+    // faster: the viewer plays at a speed other than 1×. Sound the TV or a receiver takes as it is (AC-3,
+    // E-AC-3, DTS, TrueHD) can't be sped up: ExoPlayer stretches only sound it decodes, and Media3 hands
+    // those to the output undecoded whenever the output takes them. So they aren't offered then, and the
+    // server sends AAC, which plays at any speed with the picture.
+    fun capabilities(context: Context, faster: Boolean = false): DeviceCapabilities {
+        val f = found ?: find(context.applicationContext).also { found = it }
+        if (faster && f.passthrough.isNotEmpty()) return capabilitiesFrom(withoutPassthrough(f))
+        return cached ?: capabilitiesFrom(f).also { cached = it }
+    }
+
+    // This sound would go to the TV or receiver undecoded here, so a speed other than 1× can't apply to it.
+    fun passesThrough(context: Context, mime: String?): Boolean {
+        val name = AUDIO_NAMES[mime ?: return false] ?: return false
+        val f = found ?: find(context.applicationContext).also { found = it }
+        return name in f.passthrough
+    }
 
     // A metered connection asks for less, which makes the server convert.
     fun maxBitrateKbps(context: Context): Int? {
