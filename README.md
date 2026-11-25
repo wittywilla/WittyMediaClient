@@ -13,17 +13,33 @@ This is alpha software. WittyMediaClient 0.5.x goes with WittyMediaServer 0.8.0-
 
 <!-- pictures -->
 
-![The desktop app showing a server's home page](docs/images/client-home.webp)
+![WittyMediaClient on Android TV: Home, with the menu along the top and a film to play](docs/images/app-tv-home.webp)
 
-<sub>WittyMediaClient on a desktop, connected to a test server. From a test server. The server's [credits list](https://github.com/wittywilla/WittyMediaServer/blob/master/docs/images/CREDITS.md) names everything shown.</sub>
+<sub>WittyMediaClient 0.6.2 on Android TV, signed in as a made-up profile. From a test server filled only with openly licensed media; the server's [credits list](https://github.com/wittywilla/WittyMediaServer/blob/master/docs/images/CREDITS.md) names everything shown.</sub>
 
-![The big-screen view for a TV](docs/images/big-screen.webp)
+![The TV guide on Android TV, with its Shortcuts open](docs/images/app-tv-guide.webp)
 
-<sub>The big-screen view the app shows on a TV, here in a browser. From a test server. The server's [credits list](https://github.com/wittywilla/WittyMediaServer/blob/master/docs/images/CREDITS.md) names everything shown.</sub>
+<sub>The guide on Android TV, playing [Plan 9 from Outer Space](https://commons.wikimedia.org/wiki/File:Plan_9_from_Outer_Space_(1959_film).webm), Ed Wood, 1959, public domain. From a test server filled only with openly licensed media; the server's [credits list](https://github.com/wittywilla/WittyMediaServer/blob/master/docs/images/CREDITS.md) names everything shown.</sub>
+
+![Who's watching? on Android TV, with a tile for each profile](docs/images/app-tv-who.webp)
+
+<sub>Who's watching?, with made-up profiles.</sub>
+
+![WittyMediaClient on an Android phone: Home, with a film, the libraries and the menu along the bottom](docs/images/app-phone-home.webp)
+
+<sub>The same app on an Android phone, with [Wing It!](https://commons.wikimedia.org/wiki/File:WING_IT!_-_Blender_Open_Movie-full_movie.webm), Blender Studio, [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/). From a test server filled only with openly licensed media; the server's [credits list](https://github.com/wittywilla/WittyMediaServer/blob/master/docs/images/CREDITS.md) names everything shown.</sub>
+
+![Music on an Android phone: albums and artists](docs/images/app-phone-music.webp)
+
+<sub>Music on a phone. From a test server filled only with openly licensed media; the server's [credits list](https://github.com/wittywilla/WittyMediaServer/blob/master/docs/images/CREDITS.md) names everything shown.</sub>
+
+![TV mode: the server's libraries as large tiles, with Home, Live TV, Libraries, Books, More and Search along the top](docs/images/tv-mode.webp)
+
+<sub>TV mode in a browser, the layout the TV apps follow. From a test server filled only with openly licensed media; the server's [credits list](https://github.com/wittywilla/WittyMediaServer/blob/master/docs/images/CREDITS.md) names everything shown.</sub>
 
 ![The home page at phone width](docs/images/phone-home.webp)
 
-<sub>The server's pages at phone width, here in a browser. From a test server. The server's [credits list](https://github.com/wittywilla/WittyMediaServer/blob/master/docs/images/CREDITS.md) names everything shown.</sub>
+<sub>The server's pages at phone width, in a browser. From a test server filled only with openly licensed media; the server's [credits list](https://github.com/wittywilla/WittyMediaServer/blob/master/docs/images/CREDITS.md) names everything shown.</sub>
 
 <!-- /pictures -->
 
