@@ -224,10 +224,11 @@ fun ChannelScreen(nav: Nav, start: String) {
     DisposableEffect(Unit) {
         onDispose {
             LiveTv.muted = !TvLookStore.look.previewSound
-            // Back to the guide: the preview carries on with this channel, as it is now. Anywhere else: it stops.
+            // Back to the guide: the preview carries on with this channel exactly where it is, started over or gone
+            // back included (it used to jump to live). Anywhere else: it stops.
             view.post {
                 val toGuide = nav.current == Route.LiveTv || (nav.current as? TvRoute)?.screen == TvScreen.Guide || (nav.current as? TvRoute)?.screen is TvScreen.Channel
-                if (!toGuide) LiveTv.stop() else if (LiveTv.fromStart != null) LiveTv.goLive()
+                if (!toGuide) LiveTv.stop()
             }
         }
     }
@@ -262,11 +263,11 @@ fun ChannelScreen(nav: Nav, start: String) {
                         KeyEvent.KEYCODE_DPAD_LEFT -> { mini = true; true }
                         KeyEvent.KEYCODE_DPAD_RIGHT, KeyEvent.KEYCODE_MENU, KeyEvent.KEYCODE_BUTTON_X, KeyEvent.KEYCODE_BUTTON_START -> { dock = true; true }
                         KeyEvent.KEYCODE_MEDIA_REWIND -> { LiveTv.seek(-10.0); showBanner(); true }
-                        // Live TV never skips ahead (#688): Fast forward only shows where it is, and Next skips a whole
-                        // break on a programme started over. Back to live, in the Dock, is the way forward.
-                        KeyEvent.KEYCODE_MEDIA_FAST_FORWARD -> { showBanner(); true }
+                        // Fast forward goes on 30 seconds, never past live (LiveTv.seek); Next skips a whole break on a
+                        // programme started over, otherwise it goes on 30 seconds too.
+                        KeyEvent.KEYCODE_MEDIA_FAST_FORWARD -> { LiveTv.seek(30.0); showBanner(); true }
                         KeyEvent.KEYCODE_MEDIA_NEXT, KeyEvent.KEYCODE_MEDIA_SKIP_FORWARD -> {
-                            if (LiveTv.inBreak != null) LiveTv.skipBreak()
+                            if (LiveTv.inBreak != null) LiveTv.skipBreak() else LiveTv.seek(30.0)
                             showBanner()
                             true
                         }
