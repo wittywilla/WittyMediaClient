@@ -292,8 +292,8 @@ struct ConnectAnywherePanel<Buttons: View>: View {
                 }
             }
             .remoteSection()
+            // The picture above already says Encrypted: the promises add what it doesn't.
             FlowLayout(spacing: 8, rowSpacing: 8) {
-                promise("End to end encrypted")
                 promise("Nothing opened on your router")
                 promise("Invite only")
             }

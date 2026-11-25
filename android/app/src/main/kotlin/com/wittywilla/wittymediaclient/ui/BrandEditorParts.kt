@@ -175,8 +175,8 @@ fun BrandFrames(parts: List<BrandPart>, name: String, mark: BrandMarkChoice, log
             Row(Modifier.padding(horizontal = metrics.u(20), vertical = metrics.u(18)).padding(top = metrics.u(10)), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(metrics.u(20))) {
                 Text(text, fontSize = (22 * big).sp, fontWeight = FontWeight.ExtraBold, letterSpacing = (-0.4).sp, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false))
                 Text("Home", color = extra.accentText, fontSize = (14 * big).sp, modifier = Modifier.background(scheme.primary.copy(alpha = 0.16f), RoundedCornerShape(50)).padding(horizontal = metrics.u(14), vertical = metrics.u(6)))
-                Text("Libraries", color = scheme.onSurfaceVariant, fontSize = (14 * big).sp, maxLines = 1)
-                Text("Live TV", color = scheme.onSurfaceVariant, fontSize = (14 * big).sp, maxLines = 1)
+                Text("Libraries", color = scheme.onSurfaceVariant, fontSize = (14 * big).sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                Text("Live TV", color = scheme.onSurfaceVariant, fontSize = (14 * big).sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
             }
         }
         Frame("Rail header, when open", shown, scheme.surface, 80.dp) {

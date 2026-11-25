@@ -61,13 +61,17 @@ final class LiveTv: ObservableObject {
     }
 
     private func measure() {
-        guard let range = player.currentItem?.seekableTimeRanges.last?.timeRangeValue else { behind = 0; return }
-        let end = CMTimeGetSeconds(CMTimeRangeGetEnd(range))
-        let at = CMTimeGetSeconds(player.currentTime())
-        behind = end.isFinite && at.isFinite ? max(0, end - at) : 0
-        guard shiftFrom != nil else { inBreak = nil; return }
+        guard shiftFrom != nil else {
+            inBreak = nil
+            guard let range = player.currentItem?.seekableTimeRanges.last?.timeRangeValue else { behind = 0; return }
+            let end = CMTimeGetSeconds(CMTimeRangeGetEnd(range))
+            let at = CMTimeGetSeconds(player.currentTime())
+            behind = end.isFinite && at.isFinite ? max(0, end - at) : 0
+            return
+        }
         let s = schedNow()
         sched = s
+        // Mid-seek the picture's schedule time isn't known: keep the last measure, not the stream's edge (#131).
         if let s { behind = max(0, liveNow() - s) }
         inBreak = TimeShiftRules.breakAt(timeline?.breaks, s)
         // Past the programme the timeline told of: what's on from there, and its breaks.

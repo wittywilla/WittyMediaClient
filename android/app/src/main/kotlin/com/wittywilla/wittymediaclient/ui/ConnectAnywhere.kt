@@ -38,6 +38,7 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.em
@@ -134,7 +135,7 @@ fun ServerAvatar(name: String, logo: Any?, size: Dp, peer: Boolean) {
 fun PeerChip(text: String) {
     val s = LocalDesignSizes.current
     Text(
-        text, color = LocalExtraColours.current.accentText, fontSize = s.tiny, fontWeight = FontWeight.Bold, maxLines = 1,
+        text, color = LocalExtraColours.current.accentText, fontSize = s.tiny, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis,
         modifier = Modifier.background(MaterialTheme.colorScheme.primary.copy(alpha = 0.18f), RoundedCornerShape(50))
             .padding(horizontal = s.gap * 0.9f, vertical = 4.dp),
     )
@@ -176,7 +177,8 @@ fun ConnectAnywherePanel(words: Map<String, String>, buttons: @Composable Column
         ConnectionPicture(words)
         Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(s.gap * 0.8f)) { buttons() }
         FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            for (key in listOf("anywherePromiseEncrypted", "anywherePromiseRouter", "anywherePromiseInvite")) {
+            // The picture above already says Encrypted: the promises add what it doesn't.
+            for (key in listOf("anywherePromiseRouter", "anywherePromiseInvite")) {
                 Row(
                     Modifier.background(Color(0x24808080), RoundedCornerShape(50)).padding(horizontal = 10.dp, vertical = 6.dp),
                     verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(5.dp),
@@ -201,7 +203,7 @@ private fun ConnectionPicture(words: Map<String, String>) {
     fun node(icon: ImageVector, label: String) {
         Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(4.dp)) {
             Icon(icon, contentDescription = null, tint = scheme.onSurface, modifier = Modifier.size(s.body.value.dp * 1.6f))
-            Text(label, color = scheme.onSurfaceVariant, fontSize = s.tiny, fontWeight = FontWeight.SemiBold, maxLines = 1)
+            Text(label, color = scheme.onSurfaceVariant, fontSize = s.tiny, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
         }
     }
     @Composable
@@ -221,7 +223,7 @@ private fun ConnectionPicture(words: Map<String, String>) {
             verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp),
         ) {
             Icon(LineIcons.Lock, contentDescription = null, tint = extra.ok, modifier = Modifier.size(s.tiny.value.dp * 1.2f))
-            Text(words["anywhereEncrypted"].orEmpty(), color = extra.ok, fontSize = s.tiny, fontWeight = FontWeight.Bold, maxLines = 1)
+            Text(words["anywhereEncrypted"].orEmpty(), color = extra.ok, fontSize = s.tiny, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis)
         }
         dashes(Modifier.weight(1f))
         node(Symbols.Server, words["anywhereServer"].orEmpty())

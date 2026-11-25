@@ -343,10 +343,13 @@ object LiveTv {
             while (isActive) {
                 val p = exo
                 val length = p?.duration ?: C.TIME_UNSET
-                behind = if (p == null || length == C.TIME_UNSET || !p.isCurrentMediaItemDynamic) 0.0 else maxOf(0L, length - p.currentPosition) / 1000.0
-                if (shiftFrom != null) {
+                if (shiftFrom == null) {
+                    behind = if (p == null || length == C.TIME_UNSET || !p.isCurrentMediaItemDynamic) 0.0 else maxOf(0L, length - p.currentPosition) / 1000.0
+                    inBreak = null
+                } else {
                     val s = schedNow()
                     sched = s
+                    // Mid-seek the picture's schedule time isn't known: keep the last measure, not the stream's edge (#131).
                     if (s != null) behind = maxOf(0.0, liveNow() - s)
                     inBreak = TimeShiftRules.breakAt(timeline?.breaks, s)
                     // Past the programme the timeline told of: what's on from there, and its breaks.
@@ -356,8 +359,6 @@ object LiveTv {
                         val k = key
                         runCatching { api.timeline(k, s.toLong()) }.getOrNull()?.let { if (k == key && shiftFrom != null) timeline = it }
                     }
-                } else {
-                    inBreak = null
                 }
                 delay(1000)
             }

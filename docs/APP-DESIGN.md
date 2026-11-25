@@ -71,6 +71,14 @@ wittywilla/WittyMediaServer#609):
   them harder to read: server cards, grouped lists, a field and the problem under it, rows of facts.
 - Two kinds of row keep their ends: a list row (what it is at the start, its value or chevron at the end) and a
   step's Back and Continue.
+- **A setting's screen reads from one edge**: its title, what it's about, and what to change all start at the same
+  edge, as `SettingsPage` (Android) and `SettingsScreen` (Apple) draw them. The You screen's person stays a centred
+  group over the rows.
+- **Nothing is drawn under a top bar.** A page starts below the shell's bar or tabs (`LocalTopRoom` on Android, a
+  safe-area inset on Apple), and stays below it while it scrolls. Only a page over a picture runs its picture under
+  the bar.
+- **One label says one thing.** A picture that says Encrypted isn't followed by a chip that says it again
+  (wittywilla/WittyMediaServer#678).
 
 ## Foundations
 

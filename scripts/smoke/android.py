@@ -42,6 +42,7 @@ EMU_URL = 'http://10.0.2.2:' + PORT
 HERE = os.path.dirname(os.path.abspath(__file__))
 n = 0
 failed = []
+retried = []
 log_file = None
 
 
@@ -343,8 +344,19 @@ def step(name, fn):
     err = None
     try:
         fn()
-    except Exception as e:  # noqa: BLE001: a failed step is reported, and the next runs
-        err = e
+    except Exception as e:  # noqa: BLE001: tried once more, as an emulator on a busy runner has slow moments
+        log('FIRST TRY FAILED:', e)
+        try:
+            with open(base + '-first-try.png', 'wb') as f:
+                f.write(subprocess.run(['adb', 'exec-out', 'screencap', '-p'], capture_output=True, timeout=30).stdout)
+        except Exception:  # noqa: BLE001
+            pass
+        print(f'android {kind}: {name}: failed once ({str(e)[:160]}); trying again', flush=True)
+        try:
+            fn()
+            retried.append(name)
+        except Exception as e2:  # noqa: BLE001: a failed step is reported, and the next runs
+            err = e2
     try:
         with open(base + '.png', 'wb') as f:
             f.write(subprocess.run(['adb', 'exec-out', 'screencap', '-p'], capture_output=True, timeout=30).stdout)
@@ -445,25 +457,35 @@ def film():
 
 
 def away():
-    global URL
     # The device takes itself onto the server's list by itself while at home; wait for that.
     until("this device on the server's peer-to-peer list", lambda: api('GET', '/api/p2p/devices'), 90)
-    # Away: the server's web port stops answering every program on this machine but root's, at every address
-    # (the emulator's 10.0.2.2, and the address it found the server at on the network). That's this machine's
-    # firewall, as Android TV images don't allow adb root. The test itself goes on through a forwarder run as
-    # root. The peer-to-peer port is left alone.
-    side = str(int(PORT) + 7)
-    subprocess.Popen(['sudo', '-n', 'socat', f'TCP-LISTEN:{side},bind=127.0.0.1,fork,reuseaddr', f'TCP:127.0.0.1:{PORT}'],
-                     stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-    time.sleep(1)
-    r = subprocess.run(['sudo', '-n', 'iptables', '-I', 'OUTPUT', '-p', 'tcp', '--dport', PORT, '-m', 'owner', '!', '--uid-owner', '0',
+    # Away: the server's web port stops answering the emulator, at every address (its 10.0.2.2, and the address it
+    # found the server at on the network). That's this machine's firewall (Android TV images don't allow adb root),
+    # aimed at the emulator alone: its process goes in a cgroup of its own, and only that cgroup is refused. The
+    # server, its modules' helpers (WittyPlay's restarts after a quiet spell, and talks to the server on that port)
+    # and this test are left alone, as is the peer-to-peer port.
+    # Every emulator process: qemu, and netsimd, which carries a newer emulator's network.
+    pids = subprocess.run(['pgrep', '-f', 'qemu-system|netsimd|emulator/emulator'], capture_output=True, text=True).stdout.split()
+    pids = [p for p in pids if p != str(os.getpid())]
+    if not pids:
+        raise RuntimeError('no emulator process to send away')
+    cg = '/sys/fs/cgroup/smoke-emulator'
+    subprocess.run(['sudo', '-n', 'mkdir', '-p', cg], check=True)
+    for pid in pids:
+        subprocess.run(['sudo', '-n', 'sh', '-c', f'echo {pid} > {cg}/cgroup.procs'], check=True)
+    r = subprocess.run(['sudo', '-n', 'iptables', '-I', 'OUTPUT', '-p', 'tcp', '--dport', PORT, '-m', 'cgroup', '--path', 'smoke-emulator',
                         '-j', 'REJECT'], capture_output=True, text=True)
     if r.returncode:
         raise RuntimeError('could not shut the address: ' + r.stderr)
-    URL = f'http://127.0.0.1:{side}'
-    log('away: port', PORT, 'refused to everyone but root; the test now asks', URL)
-    if subprocess.run(['curl', '-s', '-m', '3', '-o', '/dev/null', f'http://127.0.0.1:{PORT}/api/health']).returncode == 0:
-        raise RuntimeError('the server still answers at home')
+    names = subprocess.run(['ps', '-o', 'pid=,comm=', '-p', ','.join(pids)], capture_output=True, text=True).stdout.split()
+    log('away: port', PORT, 'refused to the emulator:', ' '.join(names))
+    # From inside the emulator, the server's web port must not answer any more.
+    probe = sh(f'nc -w 3 10.0.2.2 {PORT} </dev/null && echo REACHED || echo REFUSED', check=False)
+    log('from the emulator:', probe.strip())
+    if 'REACHED' in probe:
+        raise RuntimeError("the emulator still reaches the server's web port: it isn't away")
+    if subprocess.run(['curl', '-s', '-m', '3', '-o', '/dev/null', f'http://127.0.0.1:{PORT}/api/health']).returncode != 0:
+        raise RuntimeError('the server stopped answering this machine too: the firewall caught more than the emulator')
     launch()
     signed_in(120, 'the app signed in from away')
     play_film()
@@ -482,14 +504,16 @@ def game():
     tap('adjustris', 60)
     since = time.strftime('%Y-%m-%dT%H:%M:%S', time.localtime(time.time() - 5))
     tap('^(Play|Resume)', 30)
-    for again in ('tap', 'enter'):
-        if until('playing', lambda: game_started(since), 15):
+    # WittyPlay's helper may be starting again after a quiet spell: wait for it before pressing again. No Enter on a
+    # phone: the focus can be on the page's "How to get back to the app", whose help would cover Play.
+    for again in range(2):
+        if until('playing', lambda: game_started(since), 30):
             break
-        log('the game has not started; pressing Play again by', again)
-        if again == 'tap' and find('^(Play|Resume)'):
+        log('the game has not started; pressing Play again')
+        if find('^(Play|Resume)'):
             tap('^(Play|Resume)', 5)
-        else:
-            sh('input keyevent KEYCODE_DPAD_CENTER' if TV else 'input keyevent KEYCODE_ENTER')
+        elif TV:
+            sh('input keyevent KEYCODE_DPAD_CENTER')
     until('the server sending this device frames of the game', lambda: game_frames(since), 120)
     time.sleep(3)  # for the picture
 
@@ -521,4 +545,7 @@ step('game: WittyPlay from away shows its frame', game)
 if not TV:
     step('link: a fresh app joins with an invite link from away', link)
 print(f"\nandroid {kind}: {'every step passed' if not failed else str(len(failed)) + ' failed: ' + ', '.join(failed)}")
+if retried:
+    print(f"android {kind}: passed on a second try: {', '.join(retried)}")
+    print(f"::warning title=Smoke Android {kind}::passed on a second try: {', '.join(retried)}")
 sys.exit(1 if failed else 0)
