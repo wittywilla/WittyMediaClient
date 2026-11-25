@@ -222,6 +222,15 @@ final class RulesTests: XCTestCase {
         XCTAssertEqual(clock.saveable, 700)
     }
 
+    func testBeforeTheFirstFrameItIsWhereTheStreamOpens() {
+        var clock = PlaybackClock()
+        clock.switching(startsAt: 628)
+        // Not ready yet: a quality change now asks for 628, not 0, and nothing is saved.
+        XCTAssertEqual(clock.filmSeconds, 628)
+        XCTAssertFalse(clock.tick(playerSeconds: 0, offset: 0, playing: true))
+        XCTAssertNil(clock.saveable)
+    }
+
     func testProgressIsSavedEveryTenSecondsAndNotInTheFirstFive() {
         var clock = PlaybackClock()
         clock.ready()
