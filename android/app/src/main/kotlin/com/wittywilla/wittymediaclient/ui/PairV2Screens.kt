@@ -296,7 +296,7 @@ fun PairWithQr(nav: Nav, s: Map<String, String>, onBack: () -> Unit, onUsePasswo
     }
     // Design 2's page under this server's lockup: the PIN and the code to scan, then the other ways in.
     DesignScreen(
-        s["pairQrTitle"].orEmpty(), onBack, lead = if (showing != null) s["pairQrHint"].orEmpty() else "", tag = "pairing",
+        s["pairQrTitle"].orEmpty(), onBack, lead = if (showing != null) s["pairQrHint"].orEmpty() else "", tag = "pairing", centred = true,
         top = { Lockup(nav.brandName, nav.brandLogo) },
         actions = { actionButtons() },
     ) {

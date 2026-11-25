@@ -86,6 +86,7 @@ import com.wittywilla.wittymediaclient.net.Probe
 import com.wittywilla.wittymediaclient.net.Profile
 import com.wittywilla.wittymediaclient.net.Profiles
 import com.wittywilla.wittymediaclient.net.ServerFinder
+import com.wittywilla.wittymediaclient.net.WebJoin
 import com.wittywilla.wittymediaclient.net.probeServer
 import com.wittywilla.wittymediaclient.net.problemWords
 import com.wittywilla.wittymediaclient.net.screenFor
@@ -94,6 +95,7 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
+import androidx.compose.ui.text.style.TextOverflow
 
 // The screens in docs/APP-DESIGN.md, "Signing in", numbered as there. The words are the shared ones in
 // shared/data/strings.en.json.
@@ -231,6 +233,18 @@ fun ConnectScreen(nav: Nav, s: Map<String, String>, message: String) {
             }
             return
         }
+        // A Connect a device code typed where an address goes (0.6.2 took "K7QM-2XHD" for a computer's name): asked
+        // of the servers on this network, as Enter a code does.
+        if (WebJoin.looksLikeCode(address)) {
+            if (connecting != null) return
+            connecting = "code"
+            problem = ""
+            scope.launch {
+                nav.enterCode(address, found.map { it.url })?.let { problem = it }
+                connecting = null
+            }
+            return
+        }
         when (val r = Address.normalize(address)) {
             is Address.Result.Ok -> connect(r.url)
             is Address.Result.Bad -> problem = reasonText(s, r.reason)
@@ -249,7 +263,7 @@ fun ConnectScreen(nav: Nav, s: Map<String, String>, message: String) {
 
     // Reading a QR code with the camera: an invite from the server's Remote Access page, or a server's address.
     if (scan != ConnectScan.Off) {
-        DesignScreen(s["remoteScanCard"].orEmpty(), { scan = ConnectScan.Off }, eyebrow = s["remoteTitle"].orEmpty(), tag = "scan-code",
+        DesignScreen(s["remoteScanCard"].orEmpty(), { scan = ConnectScan.Off }, eyebrow = s["remoteTitle"].orEmpty(), tag = "scan-code", centred = true,
             actions = { WittyButton(s["remoteAddressCard"].orEmpty(), { scan = ConnectScan.Off; showForm = true }, kind = ButtonKind.Secondary, tall = true) },
         ) {
             DesignSection("") {
@@ -329,7 +343,8 @@ fun ConnectScreen(nav: Nav, s: Map<String, String>, message: String) {
         // then the ways to reach a server that isn't here (peer to peer, a QR code, an address), then this device's servers.
         DesignPage(
             s["findTitle"].orEmpty(), lead = s["findSubtitle"].orEmpty(), foot = s["legalConnect"].orEmpty(), tag = "connect",
-            top = { Lockup("", null, app = true) }, centred = !tv,
+            // A standalone page: centred throughout on every device, a TV too (docs/APP-DESIGN.md, Centring).
+            top = { Lockup("", null, app = true) }, centred = true,
         ) {
             DesignNote(problem, Modifier.padding(top = LocalDesignSizes.current.gap), error = true)
             Notice(nav.pickerNotice, Modifier.padding(top = LocalDesignSizes.current.gap))
@@ -478,10 +493,11 @@ private fun SignInDesign(
     actions: (@Composable FlowRowScope.() -> Unit)? = null,
     content: @Composable ColumnScope.() -> Unit,
 ) {
+    // A sign-in screen is a standalone page: centred throughout, with or without Back.
     if (onBack != null) {
-        DesignScreen(title, onBack, eyebrow = eyebrow, lead = lead, foot = foot, actions = actions, top = top, content = content)
+        DesignScreen(title, onBack, eyebrow = eyebrow, lead = lead, foot = foot, actions = actions, top = top, centred = true, content = content)
     } else {
-        DesignPage(title, eyebrow = eyebrow, lead = lead, foot = foot, actions = actions, top = top, content = content)
+        DesignPage(title, eyebrow = eyebrow, lead = lead, foot = foot, actions = actions, top = top, centred = true, content = content)
     }
 }
 
@@ -521,7 +537,7 @@ private fun AddressScreen(
     val field = remember { FocusRequester() }
     LaunchedEffect(Unit) { runCatching { field.requestFocus() } }
     DesignScreen(
-        s["addressTitle"].orEmpty(), onBack, eyebrow = APP_NAME, lead = s["addressHint"].orEmpty(), foot = s["legalConnect"].orEmpty(), tag = "address",
+        s["addressTitle"].orEmpty(), onBack, eyebrow = APP_NAME, lead = s["addressHint"].orEmpty(), foot = s["legalConnect"].orEmpty(), tag = "address", centred = true,
         actions = { WittyButton(s["connect"].orEmpty(), onSubmit, kind = ButtonKind.Primary, busy = busy, tall = true) },
     ) {
         DesignSection("") {
@@ -544,7 +560,7 @@ fun MismatchScreen(nav: Nav, s: Map<String, String>, server: SavedServer) {
     // The server this device remembers here, which this one isn't: after a reinstall, that's the one to remove.
     val oldOne = remember(server) { oldEntryFor(server, nav.app.store.recent) }
     DesignScreen(
-        s["identityTitle"].orEmpty(), nav::pop, eyebrow = hostAndPort(server.url), lead = s["identityHint"].orEmpty(), tag = "mismatch",
+        s["identityTitle"].orEmpty(), nav::pop, eyebrow = hostAndPort(server.url), lead = s["identityHint"].orEmpty(), tag = "mismatch", centred = true,
         actions = {
             WittyButton(s["back"].orEmpty(), nav::pop, kind = ButtonKind.Primary, tall = true, requestFocus = true)
             if (oldOne != null) {
@@ -617,7 +633,7 @@ fun CodeScreen(nav: Nav, s: Map<String, String>, server: SavedServer) {
     val fingerprint = if (server.fingerprint.isEmpty()) "" else "${s["fingerprintLabel"]}: ${server.fingerprint}"
     Box(Modifier.digitKeys(::press, ::erase)) {
         DesignScreen(
-            s["codeTitle"].orEmpty(), nav::pop, eyebrow = server.name.ifEmpty { "WittyMediaServer" }, lead = s[if (LocalMetrics.current.tv) "codeHint" else "codeHintPhone"].orEmpty(), foot = fingerprint, tag = "code",
+            s["codeTitle"].orEmpty(), nav::pop, eyebrow = server.name.ifEmpty { "WittyMediaServer" }, lead = s[if (LocalMetrics.current.tv) "codeHint" else "codeHintPhone"].orEmpty(), foot = fingerprint, tag = "code", centred = true,
             actions = {
                 WittyButton(s["usePassword"].orEmpty(), { nav.signInTo(server, SignInWay.Password) }, kind = ButtonKind.Secondary)
                 WittyButton(s["showCodeInstead"].orEmpty(), { nav.signInTo(server, SignInWay.ShownCode) }, kind = ButtonKind.Secondary)
@@ -700,7 +716,7 @@ private fun PairScreen(nav: Nav, s: Map<String, String>, onBack: () -> Unit, onU
 
     val ended = code.isEmpty() && problem.isNotEmpty()
     DesignScreen(
-        s["pairTitle"].orEmpty(), onBack, lead = if (code.isNotEmpty()) s["pairHint"].orEmpty() else "", tag = "pair",
+        s["pairTitle"].orEmpty(), onBack, lead = if (code.isNotEmpty()) s["pairHint"].orEmpty() else "", tag = "pair", centred = true,
         top = { ServerLockup(nav) },
         actions = {
             if (ended) {
@@ -955,14 +971,15 @@ private fun WhoStep(
         return
     }
     DesignPage(
-        s["whoTitle"].orEmpty(), tag = "who", top = { ServerLockup(nav) },
+        s["whoTitle"].orEmpty(), tag = "who", top = { ServerLockup(nav) }, centred = true,
         actions = { CodeLinks(nav, s, onUseCode, onOtherAccount) },
     ) {
         DesignSection("") {
             // Wrapping rather than scrolling, so nothing clips a lifted, ringed avatar.
             FlowRow(
                 Modifier.fillMaxWidth().remoteRow().padding(vertical = metrics.u(8)),
-                horizontalArrangement = Arrangement.spacedBy(metrics.u(if (metrics.tv) 48 else 24)),
+                // Faces centred with their names (docs/APP-DESIGN.md, Avatar 5), as the TV's and Apple's pickers have them.
+                horizontalArrangement = Arrangement.spacedBy(metrics.u(if (metrics.tv) 48 else 24), Alignment.CenterHorizontally),
                 verticalArrangement = Arrangement.spacedBy(metrics.u(28)),
                 maxItemsInEachRow = if (metrics.tv || metrics.tablet) Int.MAX_VALUE else 2,
             ) {
@@ -1000,7 +1017,7 @@ private fun PasswordStep(
     val shown = avatarName(who.displayName, who.name)
     // The face, then its name as the title, and the username over it where the name isn't it.
     DesignScreen(
-        shown, onBack, eyebrow = if (showsUsername(who.displayName, who.name)) "@${who.name}" else "", lead = s["passwordHint"].orEmpty(), tag = "password",
+        shown, onBack, eyebrow = if (showsUsername(who.displayName, who.name)) "@${who.name}" else "", lead = s["passwordHint"].orEmpty(), tag = "password", centred = true,
         top = { ProfileFace(shown, who.avatar, metrics.u(if (metrics.tv) 160 else 96)) },
         actions = {
             WittyButton(s["signIn"].orEmpty(), onSubmit, kind = ButtonKind.Primary, busy = busy, tall = true)
@@ -1024,7 +1041,7 @@ fun FaceWithNames(who: Profile, size: androidx.compose.ui.unit.Dp, modifier: Mod
     val shown = avatarName(who.displayName, who.name)
     Column(modifier.width(IntrinsicSize.Max).widthIn(min = size), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(metrics.u(8))) {
         ProfileFace(shown, who.avatar, size, Modifier.padding(bottom = metrics.u(if (metrics.tv) 8 else 0)))
-        Text(shown, color = MaterialTheme.colorScheme.onBackground, style = MaterialTheme.typography.headline, textAlign = TextAlign.Center, maxLines = 1)
+        Text(shown, color = MaterialTheme.colorScheme.onBackground, style = MaterialTheme.typography.headline, textAlign = TextAlign.Center, maxLines = 1, overflow = TextOverflow.Ellipsis)
         if (showsUsername(who.displayName, who.name)) {
             Text("@${who.name}", color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.secondary, textAlign = TextAlign.Center)
         }
@@ -1115,7 +1132,7 @@ private fun TwoFactorStep(
     Box(if (useRecovery) Modifier else Modifier.digitKeys(press, erase)) {
         DesignScreen(
             s[if (useRecovery) "recoveryTitle" else "twoFactorTitle"].orEmpty(), onBack,
-            lead = s[if (useRecovery) "recoveryHint" else "twoFactorHint"].orEmpty(), tag = "two-factor",
+            lead = s[if (useRecovery) "recoveryHint" else "twoFactorHint"].orEmpty(), tag = "two-factor", centred = true,
             top = {
                 if (who != null) ProfileFace(avatarName(who.displayName, who.name), who.avatar, metrics.u(if (metrics.tv) 160 else 96))
                 else ServerLockup(nav)
@@ -1197,7 +1214,7 @@ fun OnPhoneScreen(nav: Nav, s: Map<String, String>, title: String, path: String)
 @Composable
 fun SetupRequiredScreen(s: Map<String, String>, address: String, retry: () -> Unit, back: () -> Unit) {
     DesignScreen(
-        s["setupNeededTitle"].orEmpty(), back, eyebrow = hostAndPort(address), lead = s["setupNeededDetail"].orEmpty(), tag = "setup-needed",
+        s["setupNeededTitle"].orEmpty(), back, eyebrow = hostAndPort(address), lead = s["setupNeededDetail"].orEmpty(), tag = "setup-needed", centred = true,
         actions = {
             WittyButton(s["setupNeededRetry"].orEmpty(), retry, kind = ButtonKind.Primary, tall = true, requestFocus = true, focusKey = "setup-retry")
             WittyButton(s["back"].orEmpty(), back, kind = ButtonKind.Secondary, tall = true, focusKey = "setup-back")

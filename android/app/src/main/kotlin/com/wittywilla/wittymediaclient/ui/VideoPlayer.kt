@@ -29,6 +29,10 @@ import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.WindowInsetsSides
+import androidx.compose.foundation.layout.displayCutout
+import androidx.compose.foundation.layout.only
+import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
@@ -236,7 +240,7 @@ private fun SmallButton(
             horizontalArrangement = Arrangement.spacedBy(6.dp, Alignment.CenterHorizontally),
         ) {
             if (icon != null) Icon(icon, contentDescription = null, tint = ink, modifier = Modifier.size(16.dp))
-            if (words != null) Text(words, color = ink, fontSize = size.sp, fontWeight = FontWeight.SemiBold, maxLines = 1)
+            if (words != null) Text(words, color = ink, fontSize = size.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
         }
     }
 }
@@ -369,6 +373,8 @@ fun VideoPlayerScreen(nav: Nav, route: Route.Player) {
                     .fillMaxWidth()
                     .background(TOP_GRADIENT)
                     .clickable(remember { MutableInteractionSource() }, null) {}
+                    // In landscape, Back and Mini player clear a cutout at the side; the shade still runs under it.
+                    .windowInsetsPadding(WindowInsets.displayCutout.only(WindowInsetsSides.Horizontal))
                     .padding(
                         start = if (compact) 10.dp else 20.dp, end = if (compact) 10.dp else 20.dp,
                         top = if (compact) maxOf(10.dp, top) else maxOf(16.dp, top), bottom = if (compact) 10.dp else 40.dp,
@@ -463,6 +469,8 @@ private fun BottomBar(session: VideoSession, fit: Fit, open: Open, toggle: (Open
                 .fillMaxWidth()
                 .background(Brush.verticalGradient(0f to Color.Transparent, 0.7f to Color(0xD1000000), 1f to Color(0xD1000000)))
                 .clickable(remember { MutableInteractionSource() }, null) {}
+                // Clear of a cutout at the side in landscape, as the top bar is.
+                .windowInsetsPadding(WindowInsets.displayCutout.only(WindowInsetsSides.Horizontal))
                 .padding(start = if (compact) 10.dp else 20.dp, end = if (compact) 10.dp else 20.dp, top = if (compact) 18.dp else 40.dp, bottom = maxOf(12.dp, bottom)),
             verticalArrangement = Arrangement.spacedBy(4.dp),
         ) {
@@ -481,7 +489,7 @@ private fun BottomBar(session: VideoSession, fit: Fit, open: Open, toggle: (Open
                         colors = SliderDefaults.colors(thumbColor = Color.White, activeTrackColor = MaterialTheme.colorScheme.primary, inactiveTrackColor = Color(0x47F1F2F5)),
                     )
                 }
-                if (!compact) Text(time, color = Dark.fg, fontSize = 13.sp, fontWeight = FontWeight.Medium, modifier = Modifier.padding(start = 8.dp).widthIn(min = if (wide) 110.dp else 0.dp), maxLines = 1)
+                if (!compact) Text(time, color = Dark.fg, fontSize = 13.sp, fontWeight = FontWeight.Medium, modifier = Modifier.padding(start = 8.dp).widthIn(min = if (wide) 110.dp else 0.dp), maxLines = 1, overflow = TextOverflow.Ellipsis)
                 Spacer(Modifier.weight(1f))
                 SmallButton("${trimmed(session.speed.toDouble())}×", null, "Playback speed", { toggle(Open.Speed) }, fill = Color(0x1AFFFFFF), padding = if (compact) 8.dp else 12.dp, minWidth = if (compact) 0.dp else 46.dp)
                 if ((stream?.chapters?.size ?: 0) > 1) PlayerIcon(WebIcons.Chapters, "Scenes", icon, 24.dp, { toggle(Open.Scenes) }, on = open == Open.Scenes)
@@ -509,7 +517,7 @@ private fun BottomBar(session: VideoSession, fit: Fit, open: Open, toggle: (Open
         // On a narrow phone the time sits in the band above the seek bar.
         if (compact) Text(
             "${clock(session.filmSec)} / ${clock(session.durationSec)}", color = Dark.fg, fontSize = 11.sp, fontWeight = FontWeight.Medium,
-            modifier = Modifier.padding(start = 14.dp).height(18.dp).align(Alignment.TopStart), maxLines = 1, lineHeight = 18.sp,
+            modifier = Modifier.padding(start = 14.dp).height(18.dp).align(Alignment.TopStart), maxLines = 1, overflow = TextOverflow.Ellipsis, lineHeight = 18.sp,
         )
         if (open == Open.Speed) SpeedList(session, Modifier.align(Alignment.BottomEnd).padding(end = 20.dp, bottom = 64.dp)) { toggle(Open.Speed) }
         if (open == Open.Quality) QualityList(session, Modifier.align(Alignment.BottomEnd).padding(end = 20.dp, bottom = 64.dp)) { toggle(Open.Quality) }
@@ -600,7 +608,7 @@ private fun ScenesPanel(session: VideoSession, fit: Fit, modifier: Modifier, clo
                         }
                     }
                     Row(Modifier.padding(top = 6.dp)) {
-                        Text("${i + 1}. ", color = Dark.fg3, fontSize = 13.sp, maxLines = 1)
+                        Text("${i + 1}. ", color = Dark.fg3, fontSize = 13.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
                         Text(c.title.ifEmpty { "Scene ${i + 1}" }, color = if (now) Color.White else Dark.fg, fontSize = 13.sp, fontWeight = if (now) FontWeight.SemiBold else FontWeight.Normal, maxLines = 1, overflow = TextOverflow.Ellipsis)
                     }
                 }

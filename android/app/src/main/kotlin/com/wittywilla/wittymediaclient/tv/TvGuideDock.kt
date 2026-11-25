@@ -25,6 +25,7 @@ import androidx.compose.ui.input.key.type
 import androidx.compose.ui.input.key.key
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.text.style.TextOverflow
 
 // WittyTV's Dock, the third of its four fixed places (docs/plans/DESIGN-2.md, section 4): one row under the grid that
 // never moves and holds, in this order, Look, Day, Channels, Filter, Recordings and Record. Every theme draws it in its
@@ -88,7 +89,7 @@ fun GuideDock(
                 dress, e.action, kind = TvButtonKind.Button, enabled = e.enabled, label = e.label,
                 focusRequester = if (i == 0) first else null,
             ) { ink, style ->
-                Text(if (dress.capitals) e.label.uppercase() else e.label, style = style, color = ink, maxLines = 1)
+                Text(if (dress.capitals) e.label.uppercase() else e.label, style = style, color = ink, maxLines = 1, overflow = TextOverflow.Ellipsis)
             }
         }
     }

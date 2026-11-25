@@ -67,8 +67,13 @@ wittywilla/WittyMediaServer#609):
   server's pill, a problem for a whole screen, the legal line.
 - **Things side by side are centred as a group**: a code beside its QR code, a row of buttons or links, the six code
   boxes. On a TV the words and what to do keep their two halves side by side, each centred in its half.
+- **A standalone screen is centred throughout** (Choose a server, sign in, Who's watching, a profile's password,
+  two-step, joining with an invite, a pairing code, setup needed): everything that is words (the head, section
+  labels, notes, errors, the foot) is centred, a section label with a hairline on both sides, and cards, rows and
+  fields are full width. Android's `DesignPage(centred = true)` (read by its parts through `LocalDesignCentred`),
+  Apple's `designCentred` environment value and the desktop's `main.choose` all follow it.
 - **Long reading text, lists and forms read from the start** inside the centred column where centring would make
-  them harder to read: server cards, grouped lists, a field and the problem under it, rows of facts.
+  them harder to read: grouped lists, rows of facts, the words inside a card or a field.
 - Two kinds of row keep their ends: a list row (what it is at the start, its value or chevron at the end) and a
   step's Back and Continue.
 - **A setting's screen reads from one edge**: its title, what it's about, and what to change all start at the same

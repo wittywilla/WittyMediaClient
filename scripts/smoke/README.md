@@ -4,6 +4,16 @@ End-to-end checks of the apps against a real server, on every pull request into 
 
 The server is built from WittyMediaServer's branch of **the same name as this pull request's branch** when one exists, so a change made in both repositories is tested together; otherwise from the release branch the pull request targets. Its setup (an administrator, a film, an album, a Game Boy game, WittyPlay, WittyTuner's demo tuner) and the tiny media are the server repository's `scripts/smoke` (see its README). The web app and remote access through a WittyRelay are tested there.
 
+Two traps with that choice:
+- **A merged server branch of the same name goes stale.** Once the server pull request merges, its branch still
+  exists, falls behind the release branch, and keeps being picked. The client is then tested against an old server.
+  For example, a QR code at home held a peer-to-peer link where the newer server puts the home address. Delete the
+  server branch after it merges (or turn on "Automatically delete head branches"), or bring it up to the release
+  branch.
+- **"Re-run failed jobs" reuses the server the run already built.** Only the failed jobs run again, against the
+  `smoke-server` artifact from the first attempt, so a fix to the server branch isn't picked up. Use "Re-run all
+  jobs" (`gh run rerun <id>` without `--failed`) after changing which server should be built.
+
 ## Desktop app (`desktop`)
 
 The real Electron app under a virtual screen, with the harnesses in `desktop/test/app`:

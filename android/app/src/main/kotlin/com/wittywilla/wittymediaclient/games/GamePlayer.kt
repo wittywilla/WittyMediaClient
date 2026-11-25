@@ -558,11 +558,11 @@ private fun SlotGrid(play: GamePlay, saving: Boolean, columns: Int, first: Focus
                     }
                     Text(
                         if (asking) "Replace ${GameWords.slotName(slot).lowercase()}?" else GameWords.slotName(slot),
-                        color = if (asking) Color(0xFFFFD27F) else Color(0xFFF2F4F8), fontSize = look.small, fontWeight = FontWeight.SemiBold, maxLines = 1,
+                        color = if (asking) Color(0xFFFFD27F) else Color(0xFFF2F4F8), fontSize = look.small, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis,
                     )
                     Text(
                         if (asking) "Press again to replace it" else save?.let { GameWords.ago(it.updatedAt) } ?: "Empty",
-                        color = Color(0xFFAAB1C0), fontSize = look.small, maxLines = 1,
+                        color = Color(0xFFAAB1C0), fontSize = look.small, maxLines = 1, overflow = TextOverflow.Ellipsis,
                     )
                 }
             }

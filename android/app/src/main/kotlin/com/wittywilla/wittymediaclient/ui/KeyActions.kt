@@ -38,6 +38,7 @@ import com.wittywilla.wittymediaclient.net.KeyHint
 import com.wittywilla.wittymediaclient.net.KeyLegend
 import com.wittywilla.wittymediaclient.net.KeyMap
 import com.wittywilla.wittymediaclient.net.KeyPress
+import androidx.compose.ui.text.style.TextOverflow
 
 // The input model's wiring (docs/plans/DESIGN-2.md, section 3): which kind of input the person last used, the key legend
 // that follows it, and the keys every screen answers the same (the rules are in net/InputRules.kt).
@@ -108,8 +109,8 @@ fun KeyHintView(hint: KeyHint) {
                 .border(metrics.u(if (metrics.tv) 2 else 1), scheme.outline, RoundedCornerShape(metrics.u(if (metrics.tv) 8 else 5)))
                 .padding(horizontal = metrics.u(if (metrics.tv) 8 else 5)),
             contentAlignment = Alignment.Center,
-        ) { Text(hint.glyph, color = scheme.onBackground, fontSize = metrics.u(size).value.sp, fontWeight = androidx.compose.ui.text.font.FontWeight.SemiBold, maxLines = 1) }
-        Text(hint.words, color = scheme.onSurfaceVariant, fontSize = metrics.u(size).value.sp, maxLines = 1)
+        ) { Text(hint.glyph, color = scheme.onBackground, fontSize = metrics.u(size).value.sp, fontWeight = androidx.compose.ui.text.font.FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis) }
+        Text(hint.words, color = scheme.onSurfaceVariant, fontSize = metrics.u(size).value.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
     }
 }
 

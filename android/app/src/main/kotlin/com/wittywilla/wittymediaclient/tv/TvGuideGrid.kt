@@ -116,7 +116,7 @@ fun GuideTimes(dress: TvDress, from: Long, now: Long, slots: Int) {
             val day = GuideRules.dayWord(from, now)
             Text(
                 dress.words(if (upper) day.uppercase() else day, size, smallCaps = true), style = dress.font(size, W.Bold, tracking = tracking),
-                color = cornerColour, maxLines = 1, softWrap = false,
+                color = cornerColour, maxLines = 1, overflow = TextOverflow.Ellipsis, softWrap = false,
             )
             val at = tvClock(from)
             Text(
@@ -174,7 +174,7 @@ fun GuideNowLine(dress: TvDress, x: Dp, now: Long, modifier: Modifier = Modifier
             Text(
                 tvClock(now),
                 style = dress.font(if (shape == TvShape.Compact) 13.75f else 15f, W.Bold, italic = shape == TvShape.Listings),
-                color = p.accentText, maxLines = 1, softWrap = false,
+                color = p.accentText, maxLines = 1, overflow = TextOverflow.Ellipsis, softWrap = false,
                 modifier = Modifier
                     .background(p.accent, RoundedCornerShape(dress.pt(if (pill) 20f else dress.radius)))
                     .padding(horizontal = dress.pt(if (pill) 8 else if (shape == TvShape.Compact) 4 else 6), vertical = dress.pt(if (pill) 2 else 1)),
@@ -307,7 +307,7 @@ private fun RowHeader(dress: TvDress, index: Int, channel: GuideChannel?, curren
                         channel.number,
                         style = dress.font(n.size, n.weight, digits = shape == TvShape.Receiver, italic = shape == TvShape.Listings, tabular = true),
                         color = if (lit) p.hiText else if (shape == TvShape.Modern) p.soft else p.accent,
-                        textAlign = TextAlign.End, maxLines = 1, softWrap = false,
+                        textAlign = TextAlign.End, maxLines = 1, overflow = TextOverflow.Ellipsis, softWrap = false,
                         modifier = Modifier.widthIn(min = dress.pt(if (shape == TvShape.Compact) 28 else 56)),
                     )
                     if (hasLogo(dress, channel)) {
@@ -461,7 +461,7 @@ private fun CellBody(
                 if (cell.kind == GuideCell.Kind.Group) {
                     Text(
                         "${cell.group.size}", style = dress.font(13.75f, W.Bold).copy(fontFamily = null), color = ink, textAlign = TextAlign.Center,
-                        maxLines = 1, softWrap = false, modifier = Modifier.fillMaxWidth(),
+                        maxLines = 1, overflow = TextOverflow.Ellipsis, softWrap = false, modifier = Modifier.fillMaxWidth(),
                     )
                 }
             } else {

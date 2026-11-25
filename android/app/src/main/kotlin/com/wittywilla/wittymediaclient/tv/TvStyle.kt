@@ -548,7 +548,7 @@ fun TvIconButton(dress: TvDress, icon: ImageVector, label: String, onClick: () -
 @Composable
 fun TvGlyphButton(dress: TvDress, glyph: String, label: String, onClick: () -> Unit, enabled: Boolean = true) {
     TvButton(dress, onClick, kind = TvButtonKind.Icon, enabled = enabled, label = label) { ink, style ->
-        Text(glyph, style = style, color = ink, maxLines = 1)
+        Text(glyph, style = style, color = ink, maxLines = 1, overflow = TextOverflow.Ellipsis)
     }
 }
 

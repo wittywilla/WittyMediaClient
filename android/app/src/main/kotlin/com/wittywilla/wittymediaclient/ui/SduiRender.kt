@@ -16,6 +16,8 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
+import androidx.compose.material3.pulltorefresh.PullToRefreshDefaults
+import androidx.compose.material3.pulltorefresh.rememberPullToRefreshState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
@@ -310,8 +312,21 @@ fun SduiPageView(
                 env.tv -> CompositionLocalProvider(LocalSduiRowSpec provides LocalBringIntoViewSpec.current, LocalBringIntoViewSpec provides NearestEdge) {
                     LazyColumn(Modifier.fillMaxSize(), state = list, contentPadding = PaddingValues(top = topRoom, bottom = bottomRoom), content = content)
                 }
-                else -> PullToRefreshBox(refreshing, onRefresh, Modifier.fillMaxSize()) {
-                    LazyColumn(Modifier.fillMaxSize(), state = list, contentPadding = PaddingValues(top = topRoom, bottom = bottomRoom), content = content)
+                else -> {
+                    // The spinner comes down below the shell's bar, where the list starts, not behind the status bar and
+                    // the bar's buttons; a page that opens with a hero has no top room of its own, so the bar's is used.
+                    val pull = rememberPullToRefreshState()
+                    PullToRefreshBox(
+                        refreshing, onRefresh, Modifier.fillMaxSize(), state = pull,
+                        indicator = {
+                            PullToRefreshDefaults.Indicator(
+                                state = pull, isRefreshing = refreshing,
+                                modifier = Modifier.align(Alignment.TopCenter).padding(top = if (topRoom > 0.dp) topRoom else LocalTopRoom.current),
+                            )
+                        },
+                    ) {
+                        LazyColumn(Modifier.fillMaxSize(), state = list, contentPadding = PaddingValues(top = topRoom, bottom = bottomRoom), content = content)
+                    }
                 }
             } }
             if (dock != null && !hintsUnder) SduiScoped(dock, null) { SduiDockBar(dock, side) }
@@ -440,7 +455,7 @@ fun SduiTrouble(nav: Nav, words: String, gone: Boolean, retry: () -> Unit) {
         Modifier.fillMaxSize().padding(horizontal = Space.S8).padding(top = if (tv) Space.S8 else LocalTopRoom.current + Space.S8),
         horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(Space.S3),
     ) {
-        Text(if (gone) "This isn't available" else "Couldn't load this page", color = MaterialTheme.colorScheme.onBackground, style = MaterialTheme.typography.section, modifier = Modifier.semantics { heading() })
+        Text(if (gone) "This isn't available" else "Couldn't load this page", color = MaterialTheme.colorScheme.onBackground, style = MaterialTheme.typography.section, textAlign = TextAlign.Center, modifier = Modifier.semantics { heading() })
         if (!gone) Text(words, color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.secondary, textAlign = TextAlign.Center)
         if (gone) WittyButton("Home", { nav.reset(Route.Home) }, kind = ButtonKind.Primary, requestFocus = true, focusKey = "~home")
         else WittyButton("Try again", retry, kind = ButtonKind.Primary, requestFocus = true, focusKey = "~retry")

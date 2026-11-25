@@ -270,7 +270,7 @@ private fun WideBar(nav: Nav, now: androidx.media3.common.MediaItem, modifier: M
                 }
             }
             Row(horizontalArrangement = Arrangement.spacedBy(2.dp), verticalAlignment = Alignment.CenterVertically) {
-                if (roomy) Text("${clock(place)} / ${clock(duration)}", color = scheme.onSurfaceVariant, fontSize = 12.sp, maxLines = 1, style = TextStyle(fontFeatureSettings = "tnum"), modifier = Modifier.padding(horizontal = 8.dp))
+                if (roomy) Text("${clock(place)} / ${clock(duration)}", color = scheme.onSurfaceVariant, fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis, style = TextStyle(fontFeatureSettings = "tnum"), modifier = Modifier.padding(horizontal = 8.dp))
                 Box {
                     val silent = listening.sound.muted || listening.sound.volume == 0.0
                     BarButton(if (silent) WebIcons.Mute else WebIcons.Volume, "Volume", on = volume, iconSize = 20.dp) { volume = !volume }
@@ -285,7 +285,7 @@ private fun WideBar(nav: Nav, now: androidx.media3.common.MediaItem, modifier: M
                             verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp),
                         ) {
                             Icon(NpIcons.Visualizer, null, tint = extra.accentText, modifier = Modifier.size(18.dp))
-                            if (roomy) Text("Visualizer", color = scheme.onBackground, fontSize = 13.sp, fontWeight = FontWeight.SemiBold, maxLines = 1)
+                            if (roomy) Text("Visualizer", color = scheme.onBackground, fontSize = 13.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
                         }
                     }
                 }

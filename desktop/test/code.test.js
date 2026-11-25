@@ -58,6 +58,13 @@ test('asking servers about a code', async () => {
   assert.deepStrictEqual(await ask(other), { here: false })
   assert.strictEqual(other.seen.length, 1)
 
+  // The server that made it, restarted since (0.8.5 ends codes on a restart): its words, and nothing more sent.
+  const words = 'This code expired because the server restarted. Show a new code on the server.'
+  let asked = 0
+  const restarted = { post: async () => { asked++; return { status: 404, data: { reason: 'restarted', error: words } } } }
+  assert.deepStrictEqual(await ask(restarted), { here: false, restarted: words })
+  assert.strictEqual(asked, 1)
+
   // One that claims it did but can't prove it, or proves it under another key: no answer is sent.
   for (const liar of [standIn({ made: 'K7QM2XHD', lie: true }), standIn({ made: 'K7QM2XHD', key: 'another-key' })]) {
     assert.deepStrictEqual(await ask(liar), { error: 'liar' })

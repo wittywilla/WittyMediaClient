@@ -149,7 +149,7 @@ internal fun SheetRow(
                 Icon(if (tick) TvSymbols.Ticked else TvSymbols.Unticked, contentDescription = null, tint = scheme.primary, modifier = Modifier.size(metrics.u(40)))
             }
             Text(words, style = MaterialTheme.typography.label, color = scheme.onBackground, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
-            if (detail.isNotEmpty()) Text(detail, style = MaterialTheme.typography.secondary, color = scheme.onSurfaceVariant, maxLines = 1)
+            if (detail.isNotEmpty()) Text(detail, style = MaterialTheme.typography.secondary, color = scheme.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
             if (chosen) Icon(TvSymbols.Chosen, contentDescription = null, tint = scheme.primary, modifier = Modifier.size(metrics.u(40)))
         }
     }

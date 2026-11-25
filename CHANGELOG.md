@@ -3,12 +3,76 @@
 What changed in WittyMediaClient, newest first. What changed before it had a repository of its own is in the
 [WittyMediaServer changelog](https://github.com/wittywilla/WittyMediaServer/blob/master/CHANGELOG.md).
 
-## Unreleased
+## 0.6.3
+
+Released 2026-11-25.
+
+Made for WittyMediaServer 0.8.5-alpha, the NAS and Docker release: pairing with a server in Docker, playback from a
+slow server, and the connection check need it.
+
+**Playback from a NAS or other slow server (wittywilla/WittyMediaServer#752)**
+
+- **Android no longer gives up** with "Lost contact with your server" while a slow server is still converting: segment
+  fetches wait up to 75 seconds, and "not ready yet, try again" from the server is retried, not taken as an error.
+- **The apps tell the server the playback speed** and buffer more at higher speeds, so the server converts ahead at
+  the speed you're watching.
+- **Android and Apple step down to a smaller picture by themselves** when the server can't convert as fast as the video
+  plays, as the web player does.
+
+**Check connection (#139, #144)**
+
+- **A failed connection from away shows each step and what to do**, on a phone, a TV, Apple devices and the desktop,
+  with Copy details and Share log. The steps are the server's own list, public-relay-only included.
+
+**Time-shift on TVs (#131, #132)**
+
+- **Android TV and Apple TV keep a steady time-shift hint** while seeking, and the ad-break pill's text is shorter.
+
+**Connecting a phone with a code or a QR code (#141, wittywilla/WittyMediaServer#683)**
+
+- **Android has Enter a code.** **Join with a link or code** on a phone or tablet takes the code a server shows under
+  **Connect a device**, as the desktop app does: the servers on this network are asked, and the one that made it
+  proves it and signs the phone in. A code typed where an address goes is taken as a code too. Before, it was read as
+  an address, and failed. A TV still shows a code of its own, for a phone to type.
+- **A QR code scanned at home signs in through the server's own address.** From WittyMediaServer 0.8.5 the QR code
+  also holds the address its page was opened at, and the code. Android and desktop ask there first, with no
+  peer-to-peer connection needed. In Docker that's the only way a device at home finds the server. Away from home,
+  the invite goes peer to peer as before.
+- **A failed pairing says which step failed**, in place of "Couldn't reach your server from away": showing the server
+  the invite, reaching it once it has added the device (with the connection's own words, such as "a direct
+  connection through both routers couldn't be made"), the server proving who it is, or signing in.
+- **Android shows an invite at once**, as the desktop app does. Waiting for a path first meant a phone whose only way
+  in was the server's own WittyRelay never got to show it.
 
 - **Choose a server says Encrypted once** (#136). Connect from anywhere's picture already says it, so the chip under
   the buttons that said "End to end encrypted" is gone, on Android and Apple.
 - **docs/APP-DESIGN.md, Centring:** a setting's screen reads from one edge, nothing is drawn under a top bar, and one
   label says one thing, as the server's Settings pages now do (wittywilla/WittyMediaServer#678).
+
+**No skipping ahead on live TV (wittywilla/WittyMediaServer#688)**
+
+- Android TV: Fast forward and Next (outside an ad break) no longer move a live channel on.
+- Apple TV: the Dock no longer has On 10.
+- Both TVs refuse forward seeks on live, a phone steering the TV included, and both Docks offer Back to live whenever the
+  picture is behind, not only after Start over. The Android phone uses the server's web player, changed there.
+
+**Layout outside Settings (#137)**
+
+- **Choose a server is centred throughout.** Its title and lead were centred, but "On this network", "No servers
+  found…", errors and the legal line started at the left. Now every line of words on it is centred, on phones, TVs,
+  Apple and the desktop app, and each section label sits between two hairlines. The cards still fill the width.
+  The same goes for signing in, Who's watching, a profile's password, two-step, joining with an invite, a pairing
+  code and Setup needed, and Who's watching's faces are centred on phones as they were on TV.
+- **Nothing starts under the phone's top bar.** With the top tabs over the page, a page without a picture (a library,
+  Search, You, an error) used to start under the tabs. The Games tab's own bar sat under the app's bar, with two Back
+  buttons. The Games list, a load error and a game page started under it too, and pull to refresh spun behind it.
+- **A TV always shows where focus is.** "See all", Notifications' Clear and other phone-style buttons drawn on a TV get
+  the focus ring, and Clear is at least 48 tall. A page's tabs on a TV start at the edge, like its title.
+- **Words that don't fit end in "…"** instead of being cut mid-letter, in about 110 places. A check in CI keeps it so.
+- **Smaller fixes.** Notifications' buttons wrap on a narrow phone. The player keeps clear of the camera in landscape.
+  A TV title's buttons wrap. Karaoke lines up with the controls on a TV. The You header's notice is centred. "On a
+  computer" is read aloud once and sits in the middle of the screen. Error titles stay centred when they wrap. The
+  desktop title bar keeps Close in the window when it's narrow.
 
 ## 0.6.2
 

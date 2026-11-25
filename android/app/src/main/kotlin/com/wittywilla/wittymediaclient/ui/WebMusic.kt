@@ -757,7 +757,7 @@ private fun PopItem(words: String, icon: ImageVector?, enabled: Boolean = true, 
     Pressable(run, Modifier.fillMaxWidth().heightIn(min = 44.dp), shape = RoundedCornerShape(10.dp), fill = Color.Transparent, label = words, enabled = enabled, pressScale = 1f, disabledAlpha = 0.45f, ring = false) {
         Row(Modifier.fillMaxWidth().heightIn(min = 44.dp).padding(horizontal = 12.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
             if (icon != null) Icon(icon, null, tint = scheme.onSurface, modifier = Modifier.size(18.dp))
-            Text(words, color = scheme.onSurface, fontSize = 14.sp, maxLines = 1)
+            Text(words, color = scheme.onSurface, fontSize = 14.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
         }
     }
 }

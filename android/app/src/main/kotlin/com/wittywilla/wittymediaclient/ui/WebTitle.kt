@@ -81,6 +81,7 @@ import com.wittywilla.wittymediaclient.net.isListening
 import com.wittywilla.wittymediaclient.net.notice
 import java.util.Date
 import java.util.Locale
+import androidx.compose.ui.text.style.TextOverflow
 
 // The pieces an item's and a show's page share at phone size, as the website draws them (styles.css's detail rules,
 // player.css's seasons, episodes and playlist, components/edit/titlepage.css and brandlogo.css). The words are
@@ -190,7 +191,7 @@ fun MetaWords(words: String) {
 fun MetaPill(words: String) {
     val scheme = MaterialTheme.colorScheme
     Box(Modifier.heightIn(min = 20.dp).border(1.dp, scheme.onBackground.copy(alpha = 0.2f), RoundedCornerShape(4.dp)).padding(horizontal = 8.dp), contentAlignment = Alignment.Center) {
-        Text(words, color = scheme.onSurfaceVariant, fontSize = 11.sp, fontWeight = FontWeight.SemiBold, letterSpacing = 0.02.em, maxLines = 1)
+        Text(words, color = scheme.onSurfaceVariant, fontSize = 11.sp, fontWeight = FontWeight.SemiBold, letterSpacing = 0.02.em, maxLines = 1, overflow = TextOverflow.Ellipsis)
     }
 }
 
@@ -301,7 +302,7 @@ fun TitleBackLink(words: String, modifier: Modifier = Modifier, go: () -> Unit) 
     Pressable(go, modifier.offset(x = (-4).dp).heightIn(min = 44.dp), shape = RoundedCornerShape(50), fill = Color.Transparent, label = words, ring = false) {
         Row(Modifier.heightIn(min = 44.dp).padding(start = 4.dp, end = 12.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
             Icon(WebIcons.Left, null, tint = scheme.onSurfaceVariant, modifier = Modifier.size(18.dp))
-            Text(words, color = scheme.onSurfaceVariant, fontSize = 14.sp, fontWeight = FontWeight.SemiBold, maxLines = 1)
+            Text(words, color = scheme.onSurfaceVariant, fontSize = 14.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
         }
     }
 }
@@ -339,7 +340,7 @@ private fun TagChip(words: String, open: () -> Unit) {
     val scheme = MaterialTheme.colorScheme
     Pressable(open, Modifier.heightIn(min = 44.dp), shape = RoundedCornerShape(50), fill = Color.Transparent, label = words, pressScale = 0.975f, ring = false) {
         Box(Modifier.heightIn(min = 44.dp).border(1.dp, scheme.onBackground.copy(alpha = 0.2f), RoundedCornerShape(50)).padding(horizontal = 12.dp), contentAlignment = Alignment.Center) {
-            Text(words, color = scheme.onSurfaceVariant, fontSize = 13.sp, fontWeight = FontWeight.Medium, maxLines = 1)
+            Text(words, color = scheme.onSurfaceVariant, fontSize = 13.sp, fontWeight = FontWeight.Medium, maxLines = 1, overflow = TextOverflow.Ellipsis)
         }
     }
 }

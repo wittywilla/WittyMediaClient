@@ -13,6 +13,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
@@ -33,11 +34,16 @@ import androidx.compose.ui.text.input.ImeAction
 import com.wittywilla.wittymediaclient.data.SavedServer
 import com.wittywilla.wittymediaclient.data.fill
 import com.wittywilla.wittymediaclient.net.ApiError
+import com.wittywilla.wittymediaclient.net.FoundServer
 import com.wittywilla.wittymediaclient.net.PairRefusal
 import com.wittywilla.wittymediaclient.net.PeerRules
+import com.wittywilla.wittymediaclient.net.ServerFinder
+import com.wittywilla.wittymediaclient.net.WebJoin
 import com.wittywilla.wittymediaclient.net.problemWords
 import com.wittywilla.wittymediaclient.p2p.PeerWay
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withTimeoutOrNull
 
 // "From away", under You, This device: how this device reaches its server when it isn't at home, in the same words
 // and rows as Apple's apps (AwayViews.swift there). Shown only where the connector library is in the app.
@@ -114,10 +120,109 @@ fun AwayScreen(nav: Nav, s: Map<String, String>) {
     }
 }
 
-// "Join from away", from the list of servers: for a device that has never been at home with its server. It shows a
-// code; someone signed in types it into the server; the server is found, connected to, and signed in to.
+// "Join with a link or code", from the list of servers. A phone, tablet or Chromebook types the code a server shows
+// under Connect a device, or pastes its invite link (its QR code is Scan a QR code, beside this). A TV has no
+// keyboard to speak of: it shows a code of its own, which someone signed in types on a phone (You, From away).
 @Composable
 fun JoinAwayScreen(nav: Nav, s: Map<String, String>) {
+    if (LocalMetrics.current.tv) JoinAwayTvScreen(nav, s) else JoinWithCodeOrLinkScreen(nav, s)
+}
+
+// How long Enter a code waits for this network's servers to be found, when none have been yet.
+private const val FIND_FOR_CODE_MS = 10_000L
+
+@Composable
+private fun JoinWithCodeOrLinkScreen(nav: Nav, s: Map<String, String>) {
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
+    // The servers on this network, which a code is asked of: looked for only while this screen is open.
+    var found by remember { mutableStateOf(emptyList<FoundServer>()) }
+    DisposableEffect(Unit) {
+        val finder = ServerFinder(context) { found = it }
+        finder.start()
+        onDispose { finder.stop() }
+    }
+    var code by remember { mutableStateOf("") }
+    var codeProblem by remember { mutableStateOf("") }
+    var asking by remember { mutableStateOf(false) }
+    fun askCode() {
+        if (asking || code.isBlank()) return
+        // A link pasted where the code goes: joined as the link it is.
+        PeerRules.invite(code.trim())?.let { invite ->
+            asking = true
+            codeProblem = ""
+            scope.launch {
+                nav.joinInvite(invite)?.let { codeProblem = it }
+                asking = false
+            }
+            return
+        }
+        if (WebJoin.clean(code).isEmpty()) {
+            codeProblem = s["errCodeFormat"].orEmpty()
+            return
+        }
+        asking = true
+        codeProblem = ""
+        scope.launch {
+            // Servers on this network answer a few seconds after the screen opens: a code typed quickly waits for them.
+            if (found.isEmpty()) withTimeoutOrNull(FIND_FOR_CODE_MS) { while (found.isEmpty()) delay(250) }
+            nav.enterCode(code, found.map { it.url })?.let { codeProblem = it }
+            asking = false
+        }
+    }
+    var link by remember { mutableStateOf("") }
+    var linkProblem by remember { mutableStateOf("") }
+    var joining by remember { mutableStateOf(false) }
+    fun joinLink() {
+        if (joining) return
+        val typed = link.trim()
+        // A code pasted where the link goes: asked as a code.
+        if (PeerRules.invite(typed) == null && WebJoin.looksLikeCode(typed)) {
+            code = typed
+            link = ""
+            askCode()
+            return
+        }
+        val invite = PeerRules.invite(typed)
+        if (invite == null) {
+            linkProblem = s["joinPasteNotInvite"].orEmpty()
+            return
+        }
+        joining = true
+        scope.launch {
+            nav.joinInvite(invite)?.let { linkProblem = it }
+            joining = false
+        }
+    }
+    DesignScreen(
+        s["inviteTitle"].orEmpty(), nav::pop, eyebrow = s["remoteTitle"].orEmpty(), tag = "join-code-or-link",
+        actions = { WittyButton(s["back"].orEmpty(), nav::pop, kind = ButtonKind.Secondary, tall = true, focusKey = "join-back") },
+    ) {
+        DesignSection(s["codeEnterTitle"].orEmpty()) {
+            DesignNote(s["codeEnterHint"].orEmpty())
+            // Long enough for a link pasted here instead (askCode takes it as one).
+            WittyField(code, { code = it.take(4096); codeProblem = "" }, s["codeEnterLabel"].orEmpty(), imeAction = ImeAction.Go, onAction = ::askCode, isError = codeProblem.isNotEmpty())
+            // Said aloud as it changes: looking, or what went wrong, naming the step.
+            DesignNote(if (asking) s["codeLooking"].orEmpty() else codeProblem, busy = asking, error = !asking && codeProblem.isNotEmpty())
+            DesignActions {
+                WittyButton(s["connect"].orEmpty(), ::askCode, kind = ButtonKind.Primary, busy = asking, enabled = code.isNotBlank(), focusKey = "join-code")
+            }
+        }
+        DesignSection(s["joinPasteTitle"].orEmpty()) {
+            DesignNote(s["linkHint"].orEmpty())
+            WittyField(link, { link = it; linkProblem = "" }, s["joinPasteField"].orEmpty(), kind = FieldKind.Address, imeAction = ImeAction.Go, onAction = ::joinLink, isError = linkProblem.isNotEmpty())
+            DesignNote(if (joining) s["awayConnecting"].orEmpty() else linkProblem, busy = joining, error = !joining && linkProblem.isNotEmpty())
+            DesignActions {
+                WittyButton(s["joinPasteButton"].orEmpty(), ::joinLink, kind = ButtonKind.Primary, busy = joining, enabled = link.isNotBlank(), focusKey = "join-link")
+            }
+        }
+    }
+}
+
+// On a TV: for a device that has never been at home with its server. It shows a code; someone signed in types it
+// on a phone (You, From away, A TV that shows a code); the server is found, connected to, and signed in to.
+@Composable
+private fun JoinAwayTvScreen(nav: Nav, s: Map<String, String>) {
     val peers = nav.app.peers
     val metrics = LocalMetrics.current
     var attempt by remember { mutableIntStateOf(0) }
@@ -174,7 +279,7 @@ fun JoinAwayScreen(nav: Nav, s: Map<String, String>) {
         }
     }
     DesignScreen(
-        s["joinAwayTitle"].orEmpty(), nav::pop, eyebrow = s["remoteTitle"].orEmpty(), lead = s["joinAwayHint"].orEmpty(), tag = "join-away",
+        s["joinAwayTitle"].orEmpty(), nav::pop, eyebrow = s["remoteTitle"].orEmpty(), lead = s["joinAwayHint"].orEmpty(), tag = "join-away", centred = true,
         actions = {
             if (failed) WittyButton(s["pairNew"].orEmpty(), { attempt++ }, kind = ButtonKind.Primary, tall = true, requestFocus = true, focusKey = "join-new")
             WittyButton(s["back"].orEmpty(), nav::pop, kind = ButtonKind.Secondary, tall = true, requestFocus = !failed, focusKey = "join-back")

@@ -255,7 +255,7 @@ private fun ChannelLine(dress: TvDress, channel: GuideChannel?) {
             Text(
                 channel.number,
                 style = dress.font(n.size, n.weight, digits = shape == TvShape.Receiver, italic = shape == TvShape.Listings, tracking = if (shape == TvShape.Receiver) 2f else 0f, tabular = true),
-                color = if (shape == TvShape.Modern) p.text else p.accent, maxLines = 1,
+                color = if (shape == TvShape.Modern) p.text else p.accent, maxLines = 1, overflow = TextOverflow.Ellipsis,
                 modifier = Modifier
                     .then(if (shape == TvShape.Receiver) Modifier.border(dress.pt(1), p.accent) else Modifier)
                     .padding(horizontal = dress.pt(if (shape == TvShape.Receiver) 8 else 0)),
@@ -351,11 +351,11 @@ private fun HeroMeta(dress: TvDress, channel: GuideChannel?, programme: GuidePro
             Text(sub, style = dress.font(dress.heroFacts, weight, italic = shape == TvShape.Listings).copy(shadow = shadow), color = colour, maxLines = 1, overflow = TextOverflow.Ellipsis,
                 modifier = Modifier.weight(1f, fill = false))
         }
-        programme?.year?.let { Text(it.toString(), style = facts, color = p.soft, maxLines = 1) }
-        programme?.genre?.takeIf { it.isNotEmpty() }?.let { Text(it, style = facts, color = p.soft, maxLines = 1) }
+        programme?.year?.let { Text(it.toString(), style = facts, color = p.soft, maxLines = 1, overflow = TextOverflow.Ellipsis) }
+        programme?.genre?.takeIf { it.isNotEmpty() }?.let { Text(it, style = facts, color = p.soft, maxLines = 1, overflow = TextOverflow.Ellipsis) }
         for (tag in tags) {
             Text(
-                tag, style = dress.font(15f, W.Bold), color = p.soft, maxLines = 1,
+                tag, style = dress.font(15f, W.Bold), color = p.soft, maxLines = 1, overflow = TextOverflow.Ellipsis,
                 modifier = Modifier
                     .border(dress.pt(1), p.soft, RoundedCornerShape(dress.pt(dress.radius)))
                     .padding(horizontal = dress.pt(5)),
@@ -381,7 +381,7 @@ private fun HeroWhen(dress: TvDress, programme: GuideProgramme, now: Long, shado
         Text(
             (if (later) GuideRules.dayName(programme.start) + ", " else "") + GuideRules.span(programme.start, programme.end),
             style = dress.font(dress.heroFacts, if (shape == TvShape.Listings || shape == TvShape.Outline) W.Regular else W.Bold).copy(shadow = shadow),
-            color = p.text, maxLines = 1,
+            color = p.text, maxLines = 1, overflow = TextOverflow.Ellipsis,
         )
         if (on) {
             val share = if (programme.end > programme.start) ((now - programme.start).toFloat() / (programme.end - programme.start)).coerceIn(0f, 1f) else 0f
@@ -397,7 +397,7 @@ private fun HeroWhen(dress: TvDress, programme: GuideProgramme, now: Long, shado
             ) {
                 Box(Modifier.fillMaxWidth(share).height(dress.pt(barHeight)).background(p.accent))
             }
-            Text(GuideRules.left(programme.end - maxOf(now, programme.start)) + " left", style = dress.font(dress.heroFacts).copy(shadow = shadow), color = p.soft, maxLines = 1)
+            Text(GuideRules.left(programme.end - maxOf(now, programme.start)) + " left", style = dress.font(dress.heroFacts).copy(shadow = shadow), color = p.soft, maxLines = 1, overflow = TextOverflow.Ellipsis)
         }
     }
 }
@@ -476,12 +476,12 @@ private fun HeroClock(dress: TvDress, now: Long) {
     Column(horizontalAlignment = Alignment.End) {
         Text(
             tvClock(now), style = dress.font(big, if (shape == TvShape.Box) W.Bold else W.Regular, digits = shape == TvShape.Receiver, italic = shape == TvShape.Listings, tabular = true),
-            color = p.accent, maxLines = 1,
+            color = p.accent, maxLines = 1, overflow = TextOverflow.Ellipsis,
         )
         val day = GuideRules.dayName(now)
         Text(
             if (shape == TvShape.Receiver) day.uppercase() else day, style = dress.font(if (shape == TvShape.Receiver) 16.25f else 25f, tracking = if (shape == TvShape.Receiver) 1.3f else 0f),
-            color = p.soft, maxLines = 1,
+            color = p.soft, maxLines = 1, overflow = TextOverflow.Ellipsis,
         )
     }
 }

@@ -37,6 +37,11 @@ private struct DesignSizesKey: EnvironmentKey {
 
 private struct DesignRowDrawnKey: EnvironmentKey { static let defaultValue = false }
 
+/// A standalone page (Choose a server): everything that is words (the head, section labels, notes, errors, the foot) is
+/// centred, while cards, rows and fields stay full width. Text-only parts read it, so a page can't centre its head and
+/// leave the rest at the start. The twin of Android's LocalDesignCentred.
+private struct DesignCentredKey: EnvironmentKey { static let defaultValue = false }
+
 /// What a card shows over its title instead of its swatches, for a picture a screen draws itself. A look's layout comes
 /// with the card's own `wire` (W6's LayoutThumb). Nil, or a nil answer, keeps the card's own swatches or symbol.
 struct DesignCardPreview {
@@ -56,6 +61,12 @@ extension EnvironmentValues {
     var designCardPreview: DesignCardPreview? {
         get { self[DesignCardPreviewKey.self] }
         set { self[DesignCardPreviewKey.self] = newValue }
+    }
+
+    /// On a standalone page, centred throughout (see `DesignCentredKey`).
+    var designCentred: Bool {
+        get { self[DesignCentredKey.self] }
+        set { self[DesignCentredKey.self] = newValue }
     }
 
     /// Inside a `DesignRowButton`, which draws the row's surface: a row view inside it draws none of its own.
@@ -162,15 +173,18 @@ private struct DesignActions<Content: View>: View {
 struct DesignSection<Content: View>: View {
     @Environment(\.palette) private var palette
     @Environment(\.designSizes) private var sizes
+    @Environment(\.designCentred) private var centred
     let title: String
     @ViewBuilder let content: () -> Content
 
     var body: some View {
-        VStack(alignment: .leading, spacing: sizes.gap) {
+        VStack(alignment: centred ? .center : .leading, spacing: sizes.gap) {
             if !title.isEmpty {
                 Text(title)
                     .font(.wm(size: sizes.body, weight: .heavy))
                     .foregroundStyle(palette.text)
+                    .multilineTextAlignment(centred ? .center : .leading)
+                    .frame(maxWidth: .infinity, alignment: centred ? .center : .leading)
                     .accessibilityAddTraits(.isHeader)
             }
             content()
@@ -386,6 +400,7 @@ private struct DesignChipStyle: ButtonStyle {
 struct DesignNote: View {
     @Environment(\.palette) private var palette
     @Environment(\.designSizes) private var sizes
+    @Environment(\.designCentred) private var centred
     let text: String
     var tone = false
 
@@ -393,9 +408,12 @@ struct DesignNote: View {
         Text(text)
             .font(.wm(size: sizes.small))
             .foregroundStyle(tone ? palette.text : palette.textSecondary)
+            .multilineTextAlignment(centred ? .center : .leading)
             .fixedSize(horizontal: false, vertical: true)
             .padding(tone ? sizes.gap * 1.2 : sizes.gap * 0.4)
-            .frame(maxWidth: .infinity, alignment: .leading)
+            // Centred, a plain note takes its own width so a spinner beside it stays next to the words; a toned one
+            // keeps its panel across the page.
+            .frame(maxWidth: centred && !tone ? nil : CGFloat.infinity, alignment: centred ? .center : .leading)
             .background(RoundedRectangle(cornerRadius: Tokens.Radius.md * 0.7, style: .continuous)
                 .fill(tone ? palette.accent.opacity(0.12) : .clear))
     }

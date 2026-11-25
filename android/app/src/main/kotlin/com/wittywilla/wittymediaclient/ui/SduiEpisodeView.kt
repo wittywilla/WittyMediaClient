@@ -90,7 +90,7 @@ internal fun SduiEpisodeLayout(season: SduiView, side: Dp) {
                     state = if (on) "Selected" else null, focusKey = (season.id + "~layout~" + v).takeIf { env.tv }, ring = env.tv,
                 ) {
                     Box(Modifier.heightIn(min = env.pt(if (env.tv) 56 else 38)).padding(horizontal = env.pt(if (env.tv) 28 else 14)), contentAlignment = Alignment.Center) {
-                        Text(words, color = if (on) scheme.onBackground else scheme.onSurfaceVariant, fontSize = env.size("caption"), fontWeight = if (on) FontWeight.SemiBold else FontWeight.Medium, maxLines = 1)
+                        Text(words, color = if (on) scheme.onBackground else scheme.onSurfaceVariant, fontSize = env.size("caption"), fontWeight = if (on) FontWeight.SemiBold else FontWeight.Medium, maxLines = 1, overflow = TextOverflow.Ellipsis)
                     }
                 }
             }

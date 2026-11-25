@@ -262,10 +262,11 @@ fun ChannelScreen(nav: Nav, start: String) {
                         KeyEvent.KEYCODE_DPAD_LEFT -> { mini = true; true }
                         KeyEvent.KEYCODE_DPAD_RIGHT, KeyEvent.KEYCODE_MENU, KeyEvent.KEYCODE_BUTTON_X, KeyEvent.KEYCODE_BUTTON_START -> { dock = true; true }
                         KeyEvent.KEYCODE_MEDIA_REWIND -> { LiveTv.seek(-10.0); showBanner(); true }
-                        KeyEvent.KEYCODE_MEDIA_FAST_FORWARD -> { LiveTv.seek(30.0); showBanner(); true }
-                        // Next skips a whole break on a programme started over; otherwise it goes on 30 seconds.
+                        // Live TV never skips ahead (#688): Fast forward only shows where it is, and Next skips a whole
+                        // break on a programme started over. Back to live, in the Dock, is the way forward.
+                        KeyEvent.KEYCODE_MEDIA_FAST_FORWARD -> { showBanner(); true }
                         KeyEvent.KEYCODE_MEDIA_NEXT, KeyEvent.KEYCODE_MEDIA_SKIP_FORWARD -> {
-                            if (LiveTv.inBreak != null) LiveTv.skipBreak() else LiveTv.seek(30.0)
+                            if (LiveTv.inBreak != null) LiveTv.skipBreak()
                             showBanner()
                             true
                         }
@@ -304,7 +305,8 @@ fun ChannelScreen(nav: Nav, start: String) {
                         dress, onLook = { lookOpen = true }, onMenu = { dockMenu = it }, onClose = ::closeDock,
                         onStartOver = if (LiveTv.canStartOver && LiveTv.key == key) ({ closeDock(); LiveTv.startOver(); showBanner() }) else null,
                         onSkipBreak = if (LiveTv.inBreak != null && LiveTv.key == key) ({ closeDock(); LiveTv.skipBreak() }) else null,
-                        onLive = if (fromStart != null) ({ closeDock(); LiveTv.goLive(); showBanner() }) else null,
+                        // Behind live, however it got there: with no skipping ahead on live TV, this is the way forward (#688).
+                        onLive = if (fromStart != null || (LiveTv.behind > 20 && LiveTv.key == key)) ({ closeDock(); LiveTv.goLive(); showBanner() }) else null,
                     )
                 } else if (mini) {
                     MiniGuide(dress, key, onTune = ::tune, onClose = ::closeMini, onFull = ::toGuide, fromStart = fromStart != null, onLive = { closeMini(); LiveTv.goLive(); showBanner() })
@@ -463,7 +465,7 @@ fun ChannelBanner(dress: TvDress, channel: GuideChannel?, info: Tuned?, now: Lon
             verticalArrangement = Arrangement.spacedBy(dress.pt(2)),
         ) {
             if (channel != null) ChannelLogo(dress, channel, androidx.compose.ui.geometry.Size(80f, 40f), highlighted = false)
-            Text(info?.number ?: channel?.number.orEmpty(), style = dress.font(37.5f, W.Bold, digits = shape == TvShape.Receiver), color = p.accent, maxLines = 1)
+            Text(info?.number ?: channel?.number.orEmpty(), style = dress.font(37.5f, W.Bold, digits = shape == TvShape.Receiver), color = p.accent, maxLines = 1, overflow = TextOverflow.Ellipsis)
             Text(
                 info?.name ?: channel?.name.orEmpty(), style = dress.font(17.5f, W.Bold), color = p.text, maxLines = 2, textAlign = TextAlign.Center,
                 overflow = TextOverflow.Ellipsis, modifier = Modifier.widthIn(max = dress.pt(140)),
@@ -482,16 +484,16 @@ fun ChannelBanner(dress: TvDress, channel: GuideChannel?, info: Tuned?, now: Lon
                     else programme?.sub ?: if (info == null) "Tuning…" else if (programme == null) "No guide data" else "",
                 style = dress.font(18.75f, W.Bold), color = p.accent, maxLines = 1, overflow = TextOverflow.Ellipsis,
             )
-            if (fromStart) Text("Watching from the start", style = dress.font(16.25f, W.Bold), color = p.accent, maxLines = 1)
+            if (fromStart) Text("Watching from the start", style = dress.font(16.25f, W.Bold), color = p.accent, maxLines = 1, overflow = TextOverflow.Ellipsis)
             if (programme != null && !fromStart) {
                 val small = dress.font(16.25f)
                 Row(Modifier.padding(top = dress.pt(4)), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(dress.pt(8))) {
-                    Text(tvClock(programme.start), style = small, color = p.soft, maxLines = 1)
+                    Text(tvClock(programme.start), style = small, color = p.soft, maxLines = 1, overflow = TextOverflow.Ellipsis)
                     val share = if (programme.end > programme.start) ((now - programme.start).toFloat() / (programme.end - programme.start)).coerceIn(0f, 1f) else 0f
                     Box(Modifier.weight(1f).height(dress.pt(8)).background(Color.Black.copy(alpha = 0.5f)).strokeInside(p.line, dress.pt(1), dress.pt(0))) {
                         Box(Modifier.fillMaxWidth(share).height(dress.pt(8)).background(p.accent))
                     }
-                    Text(tvClock(programme.end), style = small, color = p.soft, maxLines = 1)
+                    Text(tvClock(programme.end), style = small, color = p.soft, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 }
             }
             (if (slate) null else upcoming)?.let { Text("Next: ${it.title} · ${GuideRules.span(it.start, it.end)}", style = dress.font(16.25f), color = p.soft, maxLines = 1, overflow = TextOverflow.Ellipsis) }
@@ -499,7 +501,7 @@ fun ChannelBanner(dress: TvDress, channel: GuideChannel?, info: Tuned?, now: Lon
             (info?.notices ?: channel?.notices).orEmpty().forEach { Text(it, style = dress.font(16.25f), color = p.accent, maxLines = 2, overflow = TextOverflow.Ellipsis) }
             Text("Select: now and next · ▲▼ channel · Back: the guide", style = dress.font(15f), color = p.soft, modifier = Modifier.padding(top = dress.pt(4)))
         }
-        Text(tvClock(now), style = dress.font(25f, W.Bold, digits = shape == TvShape.Receiver, tabular = true), color = p.accent, maxLines = 1)
+        Text(tvClock(now), style = dress.font(25f, W.Bold, digits = shape == TvShape.Receiver, tabular = true), color = p.accent, maxLines = 1, overflow = TextOverflow.Ellipsis)
     }
 }
 
@@ -610,7 +612,7 @@ private fun MiniRow(dress: TvDress, channel: GuideChannel, on: GuideProgramme?, 
                 on?.title ?: if (channel.kind == "library") "Off air" else "No guide data", style = text.copy(fontWeight = FontWeight.Bold),
                 color = if (focused) p.hiText else p.text, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.alignByBaseline().weight(1f, fill = false),
             )
-            if (on != null) Text(GuideRules.left(on.end - now) + " left", style = small, color = if (focused) p.hiText else p.soft, maxLines = 1, softWrap = false, modifier = Modifier.alignByBaseline())
+            if (on != null) Text(GuideRules.left(on.end - now) + " left", style = small, color = if (focused) p.hiText else p.soft, maxLines = 1, overflow = TextOverflow.Ellipsis, softWrap = false, modifier = Modifier.alignByBaseline())
         }
         Text(
             next?.let { tvClock(it.start) + " " + it.title } ?: "", style = small, color = if (focused) p.hiText else p.soft, maxLines = 1, overflow = TextOverflow.Ellipsis,
@@ -627,7 +629,7 @@ fun DialBox(dress: TvDress, typed: String, miss: String) {
     Text(
         if (typed.isNotEmpty()) typed + "–" else miss,
         style = dress.font(if (typed.isNotEmpty()) 50f else 25f, W.Bold, digits = dress.shape == TvShape.Receiver, tabular = true),
-        color = if (typed.isNotEmpty()) p.accent else p.text, maxLines = 1,
+        color = if (typed.isNotEmpty()) p.accent else p.text, maxLines = 1, overflow = TextOverflow.Ellipsis,
         modifier = Modifier
             .clip(corner)
             .background(p.bg)

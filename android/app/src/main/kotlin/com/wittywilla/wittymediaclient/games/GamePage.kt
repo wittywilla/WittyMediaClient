@@ -160,7 +160,8 @@ fun GamePageScreen(nav: GamesNav, gameId: Long, inShell: Boolean = false) {
                 GamePicture(heroUrl, g.title, Modifier.fillMaxWidth().height(heroHeight).graphicsLayer { alpha = if (look.tv) 0.24f else 0.9f }, contentScale = ContentScale.Crop)
                 Box(Modifier.fillMaxWidth().height(heroHeight).background(Brush.verticalGradient(0.55f to Color.Transparent, 1f to GameColours.background)))
             }
-            Column(Modifier.fillMaxWidth().windowInsetsPadding(WindowInsets.statusBars)) {
+            // In the shell, below its bar whatever its height (tabs, a tablet's); alone, below the status bar.
+            Column(Modifier.fillMaxWidth().then(if (inShell) Modifier.padding(top = com.wittywilla.wittymediaclient.ui.LocalTopRoom.current) else Modifier.windowInsetsPadding(WindowInsets.statusBars))) {
                 if (!look.tv && !inShell) {
                     Pressable(nav.back, Modifier.padding(start = look.gutter, top = 8.dp).size(40.dp), radius = 20.dp, label = "Back", fill = GameColours.background.copy(alpha = 0.7f)) {
                         Icon(GameIcons.Back, null, Modifier.align(Alignment.Center).size(22.dp), tint = GameColours.text)
@@ -259,7 +260,7 @@ fun GamePageScreen(nav: GamesNav, gameId: Long, inShell: Boolean = false) {
                         }
                     } else {
                         // A phone, as Apple's: the cover small at the left over the picture, the console beside it, then the rest.
-                        Column(Modifier.fillMaxWidth().padding(top = if (heroUrl != null) (if (inShell) 168.dp else 120.dp) else if (inShell) 48.dp else 0.dp), verticalArrangement = Arrangement.spacedBy(20.dp)) {
+                        Column(Modifier.fillMaxWidth().padding(top = if (heroUrl != null) 120.dp else 0.dp), verticalArrangement = Arrangement.spacedBy(20.dp)) {
                             Row(verticalAlignment = Alignment.Bottom, horizontalArrangement = Arrangement.spacedBy(16.dp)) {
                                 cover(Modifier.width(narrowCover))
                                 console?.let { Text(it.shortName, color = GameColours.secondary, fontSize = 15.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.padding(bottom = 8.dp)) }
@@ -328,8 +329,8 @@ fun GamePageScreen(nav: GamesNav, gameId: Long, inShell: Boolean = false) {
                                         }
                                         Row(verticalAlignment = Alignment.CenterVertically) {
                                             Column(Modifier.weight(1f)) {
-                                                Text(momentName(s.slot), color = GameColours.text, fontSize = look.small, fontWeight = FontWeight.SemiBold, maxLines = 1)
-                                                Text(GameWords.ago(s.updatedAt), color = GameColours.hint, fontSize = look.small, maxLines = 1)
+                                                Text(momentName(s.slot), color = GameColours.text, fontSize = look.small, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                                                Text(GameWords.ago(s.updatedAt), color = GameColours.hint, fontSize = look.small, maxLines = 1, overflow = TextOverflow.Ellipsis)
                                             }
                                             val asking = deleting == s.slot
                                             Pressable({

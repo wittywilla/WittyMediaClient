@@ -15,9 +15,11 @@ body {
   user-select: none;
 }
 .title { flex: 1; min-width: 0; align-self: center; padding: 0 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.tools { display: flex; align-items: stretch; flex: none; }
+/* The tools give way in a narrow window (the path first, cut with an ellipsis) so Close is never pushed off the edge;
+   the window controls themselves never shrink (.ctl). */
+.tools { display: flex; align-items: stretch; flex: 0 1 auto; min-width: 0; }
 /* How a server away from home is being reached: said, not hidden behind a colour. */
-.path { align-self: center; padding: 0 10px; white-space: nowrap; opacity: .75; }
+.path { align-self: center; min-width: 0; padding: 0 10px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; opacity: .75; }
 .path[hidden] { display: none; }
 button {
   -webkit-app-region: no-drag;
@@ -32,7 +34,7 @@ button {
 button[hidden] { display: none; }
 button:hover { background: color-mix(in srgb, var(--fg) 14%, transparent); }
 button:focus-visible { outline: 2px solid var(--fg); outline-offset: -2px; }
-.ctl { width: 46px; padding: 0; display: grid; place-items: center; }
+.ctl { flex: none; width: 46px; padding: 0; display: grid; place-items: center; }
 svg { width: 10px; height: 10px; fill: currentColor; }
 .when-maximized { display: none; }
 .is-maximized .when-maximized { display: block; }

@@ -303,7 +303,7 @@ fun GameChip(text: String, chosen: Boolean, onClick: () -> Unit, modifier: Modif
         ) {
             val ink = if (chosen) GameColours.background else GameColours.secondary
             if (icon != null) Icon(icon, null, Modifier.size(look.icon * 0.9f), tint = ink)
-            Text(text, color = ink, fontSize = if (look.tv) tvText(25) else 13.sp, fontWeight = FontWeight.Medium, maxLines = 1)
+            Text(text, color = ink, fontSize = if (look.tv) tvText(25) else 13.sp, fontWeight = FontWeight.Medium, maxLines = 1, overflow = TextOverflow.Ellipsis)
         }
     }
 }

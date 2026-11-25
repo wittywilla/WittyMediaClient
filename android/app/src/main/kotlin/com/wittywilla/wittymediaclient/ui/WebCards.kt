@@ -288,15 +288,18 @@ fun WebButton(
         WebButtonKind.Secondary -> scheme.surfaceVariant to scheme.onBackground
         WebButtonKind.Ghost -> Color.Transparent to scheme.onBackground
     }
-    Pressable(onClick, modifier.heightIn(min = 44.dp).then(if (square) Modifier.widthIn(min = 44.dp) else Modifier), shape = RoundedCornerShape(10.dp), fill = fill, label = spoken ?: words, enabled = enabled, pressScale = 0.975f, disabledAlpha = 0.45f, ring = false) {
+    // A TV's targets are at least its own minimum (48 or more), not a touch screen's 44.
+    val metrics = LocalMetrics.current
+    val least = if (metrics.tv) maxOf(metrics.minTarget, 48.dp) else 44.dp
+    Pressable(onClick, modifier.heightIn(min = least).then(if (square) Modifier.widthIn(min = least) else Modifier), shape = RoundedCornerShape(10.dp), fill = fill, label = spoken ?: words, enabled = enabled, pressScale = 0.975f, disabledAlpha = 0.45f, ring = false) {
         Row(
-            Modifier.heightIn(min = 44.dp).then(if (square) Modifier.widthIn(min = 44.dp) else Modifier)
+            Modifier.heightIn(min = least).then(if (square) Modifier.widthIn(min = least) else Modifier)
                 .then(if (kind == WebButtonKind.Ghost) Modifier.border(1.dp, scheme.onBackground.copy(alpha = 0.2f), RoundedCornerShape(10.dp)) else Modifier)
                 .padding(horizontal = if (square) 0.dp else if (small) 12.dp else 16.dp),
             verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(if (small) 6.dp else 8.dp, Alignment.CenterHorizontally),
         ) {
             if (icon != null) Icon(icon, null, tint = ink, modifier = Modifier.size(if (small) 16.dp else 18.dp))
-            if (!square) Text(words, color = ink, fontSize = if (small) 13.sp else 14.sp, fontWeight = FontWeight.SemiBold, maxLines = 1)
+            if (!square) Text(words, color = ink, fontSize = if (small) 13.sp else 14.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
         }
     }
 }

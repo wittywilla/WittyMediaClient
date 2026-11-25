@@ -83,6 +83,7 @@ import com.wittywilla.wittymediaclient.net.sessionCookie
 import com.wittywilla.wittymediaclient.net.themeSyncScript
 import com.wittywilla.wittymediaclient.net.staysInWebPlayer
 import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
+import androidx.compose.ui.text.style.TextOverflow
 
 private const val CANT_OPEN = "This page couldn't open. Check the server is on, then try again."
 private const val NO_WEB_VIEW = "This device has no working web view, which this page needs."
@@ -442,7 +443,7 @@ fun ServerPageScreen(
                     verticalAlignment = androidx.compose.ui.Alignment.CenterVertically,
                 ) {
                     BackArrow(nav::pop, Modifier.padding(Space.S1))
-                    Text(title, color = MaterialTheme.colorScheme.onBackground, style = MaterialTheme.typography.section, maxLines = 1)
+                    Text(title, color = MaterialTheme.colorScheme.onBackground, style = MaterialTheme.typography.section, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 }
                 Box(Modifier.weight(1f).fillMaxWidth()) {
                     AndroidView(factory = { web }, modifier = Modifier.fillMaxSize())
