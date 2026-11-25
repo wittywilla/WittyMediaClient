@@ -5,6 +5,10 @@ What changed in WittyMediaClient, newest first. What changed before it had a rep
 
 ## Unreleased
 
+- **Android: the music visualizer on every server.** Bars, Waves and Drift are the app's own, drawn from the sound it
+  plays, but Now Playing hid them, and the wide bar's Visualizer button, on a server without the WittyVisualizer module
+  (a new install, a NAS in Docker). They now show whether or not the server has it.
+
 ## 0.6.3
 
 Released 2026-11-25.
