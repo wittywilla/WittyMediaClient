@@ -592,6 +592,11 @@ public struct StreamPace: Decodable, Equatable {
 /// Playing faster than the server converts: the next size down, and the words for the viewer (as the
 /// website's pace.ts and the Android app's PlaybackRules.kt).
 public enum PaceRules {
+    /// A change of speed big enough to line the sound and picture up again after (the website's speed.ts).
+    public static func realignNeeded(from: Float, to: Float) -> Bool {
+        from > 0 && to > 0 && abs(to - from) >= 0.5
+    }
+
     static let steps = [2160, 1440, 1080, 720, 480, 360]
 
     /// The next size down from what plays now, or 0 when there's none to go to.
