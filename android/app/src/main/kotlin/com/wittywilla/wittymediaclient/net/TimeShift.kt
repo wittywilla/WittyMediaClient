@@ -33,6 +33,11 @@ object TimeShiftRules {
 
     fun isLibrary(key: String) = key.startsWith("lib-")
 
+    // The TV hint on a shifted stream: how far behind, when known, and always the Dock's way back to live (#131).
+    fun behindHint(title: String, behindSec: Double): String =
+        if (behindSec >= 60) "$title · ${kotlin.math.round(behindSec / 60).toInt()} min behind live · Right, then Back to live"
+        else "$title · Right, then Back to live"
+
     // The break the picture is in at moment t, if any.
     fun breakAt(breaks: List<Span>?, t: Double?): Span? {
         if (t == null || breaks == null) return null
