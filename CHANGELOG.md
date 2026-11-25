@@ -3,7 +3,30 @@
 What changed in WittyMediaClient, newest first. What changed before it had a repository of its own is in the
 [WittyMediaServer changelog](https://github.com/wittywilla/WittyMediaServer/blob/master/CHANGELOG.md).
 
-## Unreleased
+## 0.6.3
+
+Released 2026-11-25.
+
+Made for WittyMediaServer 0.8.5-alpha, the NAS and Docker release: pairing with a server in Docker, playback from a
+slow server, and the connection check need it.
+
+**Playback from a NAS or other slow server (wittywilla/WittyMediaServer#752)**
+
+- **Android no longer gives up** with "Lost contact with your server" while a slow server is still converting: segment
+  fetches wait up to 75 seconds, and "not ready yet, try again" from the server is retried, not taken as an error.
+- **The apps tell the server the playback speed** and buffer more at higher speeds, so the server converts ahead at
+  the speed you're watching.
+- **Android and Apple step down to a smaller picture by themselves** when the server can't convert as fast as the video
+  plays, as the web player does.
+
+**Check connection (#139, #144)**
+
+- **A failed connection from away shows each step and what to do**, on a phone, a TV, Apple devices and the desktop,
+  with Copy details and Share log. The steps are the server's own list, public-relay-only included.
+
+**Time-shift on TVs (#131, #132)**
+
+- **Android TV and Apple TV keep a steady time-shift hint** while seeking, and the ad-break pill's text is shorter.
 
 **Connecting a phone with a code or a QR code (#141, wittywilla/WittyMediaServer#683)**
 
