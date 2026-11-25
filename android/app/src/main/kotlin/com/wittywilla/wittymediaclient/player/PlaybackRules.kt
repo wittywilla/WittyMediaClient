@@ -19,8 +19,11 @@ class PlaybackClock {
     private var settled = false
     private var everSettled = false
 
-    fun switching() {
+    // startsAt: where the new stream opens in the film. Until its first frame that is where the viewer is, so a
+    // change asked for before then (a size down while a slow server makes the first part) keeps the place.
+    fun switching(startsAt: Double? = null) {
         settled = false
+        if (startsAt != null && startsAt.isFinite() && startsAt > 0) filmSec = startsAt
     }
 
     fun ready() {

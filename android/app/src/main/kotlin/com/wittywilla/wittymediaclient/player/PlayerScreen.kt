@@ -343,7 +343,8 @@ fun PlayerScreen(nav: Nav, id: Long, startOver: Boolean) {
         var behind = 0
         while (true) {
             kotlinx.coroutines.delay(5_000)
-            if (!playing) { behind = 0; continue }
+            // Wanted playing, not playing: a server that can't keep up stalls the player, and a stall isn't a pause.
+            if (!player.playWhenReady) { behind = 0; continue }
             val p = api.streamPace(s.streamId)
             behind = if (p != null && !p.keepingUp && p.speed > 0) behind + 1 else 0
             if (p == null || !p.fastest || behind < 2) continue
@@ -407,7 +408,7 @@ fun PlayerScreen(nav: Nav, id: Long, startOver: Boolean) {
             stream = answer
             ClientLog.session = answer.streamId
             if (changed) {
-                clock.switching()
+                clock.switching(answer.timeOffsetSec + answer.startAtSec)
                 val current = item
                 val media = MediaItem.Builder()
                     .setUri(api.mediaUrl(answer.url))
