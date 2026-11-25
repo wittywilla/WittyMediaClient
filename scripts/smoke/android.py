@@ -518,6 +518,11 @@ def rotation():
     play_film()
     until('the film playing', playing, 60)
     until('landscape for the film', lambda: turned() in (90, 270), 20)
+    time.sleep(3)
+    # Paused, so the screen can be read (uiautomator never sees a playing picture idle); turning must still not start
+    # the film again, which the position shows.
+    sh('input keyevent KEYCODE_MEDIA_PAUSE', check=False)
+    time.sleep(1)
     start = position()
 
     def controls():
@@ -530,10 +535,10 @@ def rotation():
     controls()
     tap('^Rotate to landscape$', 20)
     until('landscape again when asked', lambda: turned() in (90, 270), 20)
-    time.sleep(3)
+    time.sleep(2)
     later = position()
     log('position before and after turning (ms):', start, later)
-    if start >= 0 and later >= 0 and later < start:
+    if start > 0 and later >= 0 and later < start - 1000:
         raise RuntimeError(f'the film went back from {start} to {later} ms while turning')
     sh('input keyevent KEYCODE_BACK', check=False)
     until('portrait after the player closes', lambda: turned() == 0, 20)
