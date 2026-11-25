@@ -286,6 +286,13 @@ async function identify(url, at = url) {
     const res = await postJson(at + API + '/identity', { nonce })
     if (res.status === 404) return { state: judgeMissing(url, saved.recent) }
     if (!res.ok) {
+      // This device's own connection from away answered for the server: it found no way to carry the
+      // request. Unreachable, in its own words, not a server that failed its check.
+      if (p2p.isP2POrigin(at) && res.headers.get('x-witty-connect-error')) {
+        const said = await guards.readJson(res).catch(() => null)
+        log.warn('network', `The connection from away couldn't carry the identity check: ${res.status}`, { where: url })
+        return { state: 'unreachable', why: guards.cleanMessage((said && said.error) || ''), reason: said && said.reason === 'public-relay-only' ? said.reason : '' }
+      }
       log.warn('network', `The identity check was answered with ${res.status}`, { where: url })
       return { state: 'bad' }
     }
@@ -542,13 +549,25 @@ function checkFailed(result, run, failure) {
 const tunnelFailure = (st, step) => connectSteps.classify(st && !st.error ? 'timeout' : '', (st && st.error) || '', step, cleanText)
 
 // An invite link, pasted on the connect screen: finds the server, shows it the invite,
-// which puts this device on its list, and signs in with the code that comes back.
+// which puts this device on its list, and signs in with the code that comes back. A failure says
+// which step it was (connect.js fills {why} with the connection's own words): the invite
+// (join-invite), reaching the server after it took this device (join-connect), the server proving
+// who it is (identity), or the invite refused (in the server's own words).
 async function joinByInvite(link) {
   pairing = null
   await finishForgetting()
   const invite = p2p.parseInvite(link)
   if (!invite) return { error: 'invite' }
+  // A QR code from a 0.8.5 server's Connect a device also holds the web address its page was opened at
+  // and the code beside it. At home that is asked first, as Enter a code does, with no connection from
+  // away (in Docker it's the only way a device at home finds the server); away, it doesn't answer, and
+  // the invite goes peer to peer.
   log.addSecret(invite.secret)
+  if (invite.home && invite.code) {
+    log.addSecret(invite.code)
+    const atHome = await codeAtHome(invite.home, invite.code)
+    if (atHome) return atHome
+  }
   const run = connectSteps.run('invite', invite.serverId)
   run.pass('read')
   run.note(`looking for the server, with ${(invite.hints || []).length} addresses from the invite`)
@@ -566,16 +585,51 @@ async function joinByInvite(link) {
     // A reason is the server's answer, so it was found and reached; without one the invite never got there.
     if (answer.reason) { run.pass('found'); run.pass('secure') }
     const failure = connectSteps.classify(answer.reason, answer.error, answer.reason ? 'signin' : 'found', cleanText)
-    return checkFailed(answer.reason ? { error: 'invite-refused', message: guards.cleanMessage(answer.error) } : { error: 'p2p-failed' }, run, failure)
+    return checkFailed(answer.reason
+      ? { error: 'invite-refused', message: guards.cleanMessage(answer.error) }
+      : { error: 'join-invite', why: guards.cleanMessage(answer.error || '') }, run, failure)
   }
   run.pass('found')
   run.note('the server took the invite')
   // Listed now: this device's own key gets through, the relay having been told.
   const st = await mine.run.whenConnected(AWAY_CONNECT_MS + 15000)
   if (tunnel !== mine) return { error: 'p2p-failed' }
-  if (!p2p.connected(st)) { closeTunnel(); return checkFailed({ error: 'p2p-failed' }, run, tunnelFailure(st, 'secure')) }
+  if (!p2p.connected(st)) {
+    closeTunnel()
+    return checkFailed({ error: 'join-connect', why: guards.cleanMessage((st && st.error) || '') }, run, tunnelFailure(st, 'secure'))
+  }
   run.pass('secure')
   return finishJoining(mine, { id: invite.serverId, hints: invite.hints }, answer, invite.name, 'the invite', run)
+}
+
+// The QR code's address at home and its code: the server there proves who it is, then that it made
+// the code (code.js), and signs this device in. null when nothing answers there (away from home).
+async function codeAtHome(home, code) {
+  const r = normalizeAddress(home)
+  if (r.error) return null
+  const identity = await identify(r.url)
+  if (identity.state === 'unreachable') return null
+  if (!identity.publicKey || identity.state === 'bad' || identity.state === 'different') return { error: 'identity' }
+  const post = async (path, body) => {
+    const res = await postJson(r.url + API + path, body)
+    return { status: res.status, data: await guards.readJson(res).catch(() => null) }
+  }
+  let answer
+  try {
+    answer = await connectCode.askServer({ post, identityKey: identity.publicKey, keys: connectCode.derive(code), device: deviceName(), platform: OS_NAME })
+  } catch (err) {
+    log.noteError('info', 'network', 'The address in a QR code could not be asked about its code', err, { where: r.url })
+    return null
+  }
+  if (answer.here === false) return answer.restarted !== undefined ? { error: 'code-used', message: guards.cleanMessage(answer.restarted) } : { error: 'code-used' }
+  if (answer.error === 'liar') {
+    log.warn('network', 'A server answered about a code without proving it made it, and was told nothing', { where: r.url })
+    return { error: 'code-liar' }
+  }
+  if (!answer.ok) return { error: 'code-refused', message: guards.cleanMessage(answer.message || '') }
+  if (!guards.validToken(answer.token)) return { error: 'code-used' }
+  log.info('network', 'A QR code signed this device in at home', { where: r.url })
+  return keepSignIn({ url: r.url, at: r.url, name: guards.cleanName(answer.name), identity }, answer.token)
 }
 
 // After the server has put this device on its list, by an invite or a code: who it is, proved
@@ -587,10 +641,12 @@ async function finishJoining(mine, where, answer, offeredName, how, run) {
   const identity = await identify(name, mine.origin)
   if (!['new', 'same', 'none'].includes(identity.state)) {
     closeTunnel()
-    if (!run) return { error: 'identity' }
+    // Not reached through the connection (it found no way to carry requests): that step, in its words.
+    const result = identity.state === 'unreachable' ? { error: 'join-connect', why: identity.why || '' } : { error: 'identity' }
+    if (!run) return result
     run.note(`the server didn't prove itself over the connection: ${identity.state}`)
-    return checkFailed({ error: identity.state === 'unreachable' ? 'p2p-failed' : 'identity' }, run,
-      identity.state === 'unreachable' ? connectSteps.of('slow-path', 'secure') : connectSteps.of('identity-bad', 'signin'))
+    return checkFailed(result, run,
+      identity.state === 'unreachable' ? connectSteps.classify(identity.reason || 'slow-path', identity.why || '', 'secure', cleanText) : connectSteps.of('identity-bad', 'signin'))
   }
   const info = { id: where.id, hints: where.hints, port: mine.port }
   const pinned = identity.publicKey && (saved.recent || []).find((s) => s.publicKey === identity.publicKey)
@@ -956,6 +1012,7 @@ async function enterCode(typed, only) {
   }
   log.info('network', `Asking ${urls.length === 1 ? 'one server' : `${urls.length} servers`} about a code`)
   let refused = null
+  let restarted = null
   let changed = false
   const tries = urls.map(async (url) => {
     // The server chosen on screen is held to the key the person was shown there, as a typed code
@@ -984,6 +1041,8 @@ async function enterCode(typed, only) {
     }
     if (answer.error === 'liar') log.warn('network', 'A server answered about a code without proving it made it, and was told nothing', { where: url })
     if (answer.error === 'refused') refused = answer
+    // Said only if no other server takes the code: one server's restart doesn't end another's code.
+    if (answer.here === false && answer.restarted !== undefined) restarted = answer.restarted
     if (!answer.ok) return null
     if (!guards.validToken(answer.token)) return null
     return { url, at, identity, token: answer.token, name: name || guards.cleanName(answer.name) }
@@ -999,6 +1058,7 @@ async function enterCode(typed, only) {
   if (!won) {
     if (changed) return { error: 'changed' }
     if (refused) return { error: 'code-refused', message: guards.cleanMessage(refused.message), reason: guards.cleanMessage(refused.reason) }
+    if (restarted !== null) return { error: 'code-used', message: guards.cleanMessage(restarted) }
     return { error: 'code-not-found' }
   }
   log.info('network', 'A code signed this device in', { where: won.url })

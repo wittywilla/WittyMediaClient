@@ -262,10 +262,11 @@ fun ChannelScreen(nav: Nav, start: String) {
                         KeyEvent.KEYCODE_DPAD_LEFT -> { mini = true; true }
                         KeyEvent.KEYCODE_DPAD_RIGHT, KeyEvent.KEYCODE_MENU, KeyEvent.KEYCODE_BUTTON_X, KeyEvent.KEYCODE_BUTTON_START -> { dock = true; true }
                         KeyEvent.KEYCODE_MEDIA_REWIND -> { LiveTv.seek(-10.0); showBanner(); true }
-                        KeyEvent.KEYCODE_MEDIA_FAST_FORWARD -> { LiveTv.seek(30.0); showBanner(); true }
-                        // Next skips a whole break on a programme started over; otherwise it goes on 30 seconds.
+                        // Live TV never skips ahead (#688): Fast forward only shows where it is, and Next skips a whole
+                        // break on a programme started over. Back to live, in the Dock, is the way forward.
+                        KeyEvent.KEYCODE_MEDIA_FAST_FORWARD -> { showBanner(); true }
                         KeyEvent.KEYCODE_MEDIA_NEXT, KeyEvent.KEYCODE_MEDIA_SKIP_FORWARD -> {
-                            if (LiveTv.inBreak != null) LiveTv.skipBreak() else LiveTv.seek(30.0)
+                            if (LiveTv.inBreak != null) LiveTv.skipBreak()
                             showBanner()
                             true
                         }
@@ -304,7 +305,8 @@ fun ChannelScreen(nav: Nav, start: String) {
                         dress, onLook = { lookOpen = true }, onMenu = { dockMenu = it }, onClose = ::closeDock,
                         onStartOver = if (LiveTv.canStartOver && LiveTv.key == key) ({ closeDock(); LiveTv.startOver(); showBanner() }) else null,
                         onSkipBreak = if (LiveTv.inBreak != null && LiveTv.key == key) ({ closeDock(); LiveTv.skipBreak() }) else null,
-                        onLive = if (fromStart != null) ({ closeDock(); LiveTv.goLive(); showBanner() }) else null,
+                        // Behind live, however it got there: with no skipping ahead on live TV, this is the way forward (#688).
+                        onLive = if (fromStart != null || (LiveTv.behind > 20 && LiveTv.key == key)) ({ closeDock(); LiveTv.goLive(); showBanner() }) else null,
                     )
                 } else if (mini) {
                     MiniGuide(dress, key, onTune = ::tune, onClose = ::closeMini, onFull = ::toGuide, fromStart = fromStart != null, onLive = { closeMini(); LiveTv.goLive(); showBanner() })

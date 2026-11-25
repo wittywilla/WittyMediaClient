@@ -68,6 +68,8 @@ import com.wittywilla.wittymediaclient.net.Identity
 import com.wittywilla.wittymediaclient.net.IdentityState
 import com.wittywilla.wittymediaclient.net.PeerAnswer
 import com.wittywilla.wittymediaclient.net.PeerInvite
+import com.wittywilla.wittymediaclient.net.WebJoin
+import com.wittywilla.wittymediaclient.data.fill
 import com.wittywilla.wittymediaclient.net.PeerRoute
 import com.wittywilla.wittymediaclient.net.PeerRules
 import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
@@ -174,6 +176,9 @@ sealed interface Route {
 // How long a saved server's ID is looked for when its address stops answering.
 private const val FIND_AGAIN_MS = 6000L
 private const val REMEMBERED_SCREENS = 24
+
+// The most servers asked about one Connect a device code (Enter a code): those found here, then those used here.
+private const val MAX_CODE_SERVERS = 16
 
 // The app's state and its screen stack. Back pops one screen, and only leaves
 // the app from the top level.
@@ -995,36 +1000,63 @@ class Nav(val app: WittyApp, private val s: Map<String, String>) {
         return words
     }
 
-    // An invite link typed or pasted where an address goes. Answers words to show on failure.
+    // An invite link typed, pasted or scanned. Answers words to show on failure, which say which step it was: the
+    // connection starting, the invite, reaching the server afterwards, the server proving who it is, or signing in;
+    // the connection check (checkFailed) shows the same step.
     suspend fun joinInvite(invite: PeerInvite): String? {
         val run = com.wittywilla.wittymediaclient.net.ConnectRun("invite", invite.serverId)
         com.wittywilla.wittymediaclient.diag.Redact.addSecret(invite.secret)
         val retry = { app.scope.launch { joinInvite(invite) }; Unit }
+        // A QR code from Connect a device (0.8.5 servers) also holds the web address the server's page was opened at
+        // and the code beside it. At home that is asked first, as Enter a code does, and needs no connection from away;
+        // in Docker it is the only way a device at home finds the server at all. Away, it doesn't answer, and the
+        // invite goes peer to peer.
+        if (invite.home.isNotEmpty() && invite.code.isNotEmpty()) {
+            com.wittywilla.wittymediaclient.diag.Redact.addSecret(invite.code)
+            when (val tried = tryCode(invite.home, WebJoin.derive(invite.code))) {
+                CodeTry.Done -> return null
+                CodeTry.NotHere -> return s["errCodeUsed"]
+                is CodeTry.Restarted -> return tried.words.ifEmpty { s["errCodeUsed"].orEmpty() }
+                CodeTry.Liar -> return s["errCodeLiar"]
+                is CodeTry.Words -> return tried.words
+                CodeTry.NotReached -> run.note("the address at home in the QR code didn't answer: away, so peer to peer")
+            }
+        }
         if (!app.peers.available) return checkFailed(run, connectSteps.of("p2p-missing", "read"), s["errAwayMissing"])
         run.pass("read")
         run.note("looking for the server, with ${invite.hints.size} addresses from the invite")
-        val answer = app.peers.join(invite) ?: return checkFailed(run, peerFailure("found"), s["errAwayFailed"], retry)
+        val answer = app.peers.join(invite) ?: return checkFailed(run, peerFailure("found"), s["joinStepStart"], retry)
+        if (!answer.ok) {
+            val problem = app.peers.lastError
+            app.peers.leave()
+            return when {
+                // Listed, but no path for requests afterwards: the connection's own words.
+                answer.reason == "unreachable" -> checkFailed(run, peerFailure("secure"), fill(s["joinStepConnect"], "why" to problem.ifEmpty { s["joinNoPath"].orEmpty() }), retry)
+                // Refused (used, run out, not right): the server's own words say which.
+                answer.reason.isNotEmpty() -> checkFailed(run, connectSteps.classify(answer.reason, answer.error, "signin"), answer.error.ifEmpty { s["errInviteRefused"].orEmpty() }, retry)
+                // The invite never reached the server.
+                else -> checkFailed(run, connectSteps.classify("", answer.error, "found"), fill(s["joinStepInvite"], "why" to answer.error.ifEmpty { s["joinNoPath"].orEmpty() }), retry)
+            }
+        }
         run.pass("found")
         run.pass("secure")
-        if (!answer.ok) {
-            app.peers.leave()
-            return checkFailed(run, connectSteps.classify(answer.reason, answer.error, "signin"), s["errInviteRefused"], retry)
-        }
         run.note("the server took the invite")
         return joinedFromAway(answer, run)
     }
 
     // The connector has reached a server that took this device's invite or code: it proves its key, goes in the list
     // of servers (under its own address if this device knows it, else one for away only), and the sign-in code that
-    // came back is redeemed over the connection. Answers words to show on failure.
+    // came back is redeemed over the connection. Answers words to show on failure, naming the step.
     suspend fun joinedFromAway(answer: PeerAnswer, run: com.wittywilla.wittymediaclient.net.ConnectRun = com.wittywilla.wittymediaclient.net.ConnectRun("code", answer.serverId).apply { pass("read"); pass("found"); pass("secure") }): String? {
         val proof = identify(PeerRoute.base, app.store.recent)
         if (proof.state != IdentityState.New && proof.state != IdentityState.Same) {
             val trouble = (app.peers.way as? com.wittywilla.wittymediaclient.p2p.PeerWay.Away)?.state
             run.note("the server didn't prove itself over the connection: ${proof.state}" + (trouble?.let { ", path ${it.path}" + if (it.community) " (community relay)" else "" } ?: ""))
+            val problem = proof.why.ifEmpty { trouble?.error.orEmpty() }
             app.peers.leave()
-            val failure = if (proof.state == IdentityState.Unreachable) connectSteps.classify("slow-path", trouble?.error.orEmpty(), "secure") else connectSteps.of("identity-bad", "signin")
-            return checkFailed(run, failure, s[if (proof.state == IdentityState.Unreachable) "errAwayFailed" else "identityBad"])
+            return if (proof.state == IdentityState.Unreachable) {
+                checkFailed(run, connectSteps.classify(proof.reason.ifEmpty { "slow-path" }, problem, "secure"), fill(s["joinStepConnect"], "why" to problem.ifEmpty { s["joinNoPath"].orEmpty() }))
+            } else checkFailed(run, connectSteps.of("identity-bad", "signin"), s["identityBad"])
         }
         val known = app.store.recent.firstOrNull { it.publicKey.isNotEmpty() && it.publicKey == proof.publicKey }
         val url = known?.url ?: PeerRules.awayOnlyUrl(answer.serverId)
@@ -1044,12 +1076,83 @@ class Nav(val app: WittyApp, private val s: Map<String, String>) {
             signedIn(result.token, result.user)
             null
         } catch (e: ApiError) {
-            checkFailed(run, connectSteps.classify("", e.message.orEmpty(), "signin"), e.message)
+            if (e.connector) checkFailed(run, connectSteps.classify(WebJoin.reasonOf(e.body).ifEmpty { "slow-path" }, e.message.orEmpty(), "secure"), fill(s["joinStepConnect"], "why" to e.message.orEmpty()))
+            else checkFailed(run, connectSteps.classify("", e.message.orEmpty(), "signin"), fill(s["joinStepSignIn"], "why" to e.message.orEmpty()))
         } catch (e: IOException) {
-            checkFailed(run, connectSteps.classify("", e.message ?: "timeout", "signin"), s["errAwayFailed"])
+            checkFailed(run, connectSteps.classify("", e.message ?: "timeout", "signin"), fill(s["joinStepConnect"], "why" to app.peers.lastError.ifEmpty { s["joinNoPath"].orEmpty() }))
         } catch (_: SerializationException) {
             s["errInvalid"]
         }
+    }
+
+    // How asking one web address about a Connect a device code went.
+    private sealed interface CodeTry {
+        data object Done : CodeTry // the server made it, proved it, and this device is signed in to it
+        data object NotReached : CodeTry // nothing answered there
+        data object NotHere : CodeTry // a server answered, but doesn't know the code
+        data class Restarted(val words: String) : CodeTry // the server made it but restarted since, which ends codes
+        data object Liar : CodeTry // something answered that couldn't prove it made the code: it got nothing more
+        data class Words(val words: String) : CodeTry // the server that made it refused: its words, or this app's
+    }
+
+    // Asks the server at this web address about a code (WebJoin): it proves who it is first, as at any address, and
+    // then that it made the code. Done means it is open now, and this device signed in to it.
+    private suspend fun tryCode(url: String, keys: WebJoin.Keys): CodeTry {
+        val proof = identify(url, app.store.recent)
+        when (proof.state) {
+            IdentityState.Unreachable -> return CodeTry.NotReached
+            IdentityState.New, IdentityState.Same -> Unit
+            // Another key where a server this device knows was: no code goes to it.
+            else -> return CodeTry.Words(s["identityBad"].orEmpty())
+        }
+        val answer = try {
+            WebJoin.ask(Api(url, "", quick = true), keys, proof.publicKey, app.deviceName, app.platformName)
+        } catch (_: IOException) {
+            return CodeTry.NotReached
+        } catch (_: SerializationException) {
+            return CodeTry.Words(s["errInvalid"].orEmpty())
+        }
+        return when (answer) {
+            WebJoin.Answer.NotHere -> CodeTry.NotHere
+            is WebJoin.Answer.Restarted -> CodeTry.Restarted(answer.words)
+            WebJoin.Answer.Liar -> CodeTry.Liar
+            is WebJoin.Answer.Refused -> CodeTry.Words(answer.words.ifEmpty { s["errInviteRefused"].orEmpty() })
+            is WebJoin.Answer.SignedIn -> {
+                val known = app.store.recent.firstOrNull { it.publicKey.isNotEmpty() && it.publicKey == proof.publicKey }
+                val saved = proof.savedAs(url, known?.name ?: answer.serverName.ifEmpty { "WittyMediaServer" }).copy(lastSeen = System.currentTimeMillis())
+                app.store.remember(saved)
+                finishForget()
+                forgetScreens()
+                openServer(saved)
+                signedIn(answer.token, answer.user)
+                CodeTry.Done
+            }
+        }
+    }
+
+    // Enter a code: a Connect a device code typed on this device. The servers found on this network, then the ones
+    // this device has used at home, are asked in turn; the one that made it proves it and signs this device in.
+    // Answers words to show on failure.
+    suspend fun enterCode(typed: String, found: List<String>): String? {
+        val clean = WebJoin.clean(typed)
+        if (clean.isEmpty()) return s["errCodeFormat"]
+        val urls = (found + app.store.recent.map { it.url }.filter { !PeerRules.isAwayOnlyUrl(it) }).distinct().take(MAX_CODE_SERVERS)
+        if (urls.isEmpty()) return s["errCodeNone"]
+        val keys = WebJoin.derive(clean)
+        var liar = false
+        var restarted = ""
+        for (url in urls) {
+            when (val tried = tryCode(url, keys)) {
+                CodeTry.Done -> return null
+                CodeTry.Liar -> liar = true
+                // Said only if no other server takes the code: a restart there doesn't end another server's code.
+                is CodeTry.Restarted -> restarted = tried.words.ifEmpty { s["errCodeUsed"].orEmpty() }
+                is CodeTry.Words -> return tried.words
+                CodeTry.NotHere, CodeTry.NotReached -> Unit
+            }
+        }
+        if (restarted.isNotEmpty()) return restarted
+        return s[if (liar) "errCodeLiar" else "errCodeNotFound"]
     }
 
     // The server's own address didn't answer: the connection from away, if this device has one for it. Then the

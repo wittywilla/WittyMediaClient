@@ -4,6 +4,7 @@ package com.wittywilla.wittymediaclient.net
 
 import com.wittywilla.wittymediaclient.data.SavedServer
 import com.wittywilla.wittymediaclient.diag.ClientLog
+import com.wittywilla.wittymediaclient.player.speedText
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.runInterruptible
@@ -33,6 +34,8 @@ import javax.net.ssl.SSLException
 // twoFactor: the password was right, or a code was wrong, and the server wants its authenticator code.
 // code: the server's word for programs ("screen-time", "feature-off", "offline", "stale"), when the refusal has one.
 // body: the whole refusal, for the few that carry more (screenTime, room), cut to what a refusal can sensibly be.
+// connector: the answer came from this device's own connection from away (the peer-to-peer library), not from the
+// server: the message is the connection's own words for what went wrong, such as no path that can carry it.
 class ApiError(
     val status: Int,
     message: String,
@@ -41,6 +44,7 @@ class ApiError(
     val code: String = "",
     val body: String = "",
     val retryAfterSec: Int = 0,
+    val connector: Boolean = false,
 ) : Exception(message)
 
 val json = Json {
@@ -59,7 +63,7 @@ private const val SPEEDTEST_CUTOFF_NS = 1_500_000_000L
 private const val SPEEDTEST_MIN_BYTES = 32L * 1024
 private val shared = OkHttpClient() // connections and threads are reused across servers
 
-private data class Answer(val status: Int, val text: String, val requestId: String, val location: String, val retryAfter: Int = 0)
+private data class Answer(val status: Int, val text: String, val requestId: String, val location: String, val retryAfter: Int = 0, val connector: Boolean = false)
 
 // One connection to one server. The token only ever goes to that server, in a
 // header, so it stays out of URLs and logs. Redirects are never followed. Quick is
@@ -106,7 +110,11 @@ class Api(val base: String, val token: String, private val quick: Boolean = fals
             .build()
         http.newCall(request).execute().use { res ->
             // Cut off at the limit, an answer that's too long can't be read as JSON either.
-            Answer(res.code, res.peekBody(if (quick) QUICK_MAX_BYTES else MAX_BYTES).string(), res.header("X-Request-Id").orEmpty(), res.header("Location").orEmpty(), res.header("Retry-After")?.toIntOrNull() ?: 0)
+            Answer(
+                res.code, res.peekBody(if (quick) QUICK_MAX_BYTES else MAX_BYTES).string(), res.header("X-Request-Id").orEmpty(), res.header("Location").orEmpty(),
+                res.header("Retry-After")?.toIntOrNull() ?: 0,
+                connector = res.header(PeerRules.ERROR_HEADER) != null && PeerRoute.matches(res.request.url.host, res.request.url.port),
+            )
         }
     }
 
@@ -133,6 +141,7 @@ class Api(val base: String, val token: String, private val quick: Boolean = fals
             throw ApiError(
                 answer.status, message, answer.location, twoFactor = asksForCode(answer.status, answer.text),
                 code = errorCode(answer.text), body = answer.text.take(MAX_REFUSAL_CHARS), retryAfterSec = answer.retryAfter,
+                connector = answer.connector,
             )
         }
         return answer.text
@@ -231,6 +240,14 @@ class Api(val base: String, val token: String, private val quick: Boolean = fals
                 if (total < SPEEDTEST_MIN_BYTES || seconds <= 0) null else (total * 8 / 1000 / seconds).toInt()
             }
         }.getOrNull()
+    }
+
+    // How the server's conversion of a stream keeps up with the player (GET /hls/{id}/work, pace).
+    suspend fun streamPace(streamId: String): StreamPace? = runCatching { get<StreamWork>("/hls/${query(streamId)}/work").pace }.getOrNull()
+
+    // The player's speed changed: the server converts as far ahead as the new speed needs.
+    suspend fun setStreamRate(streamId: String, speed: Float) {
+        call("PUT", "/hls/${query(streamId)}/rate", "{\"rate\":${speedText(speed)}}")
     }
 
     // Stops the conversion at once when the viewer leaves.
@@ -570,15 +587,24 @@ suspend fun plainHttpStaysLocal(url: String): Boolean = withContext(Dispatchers.
 suspend fun identify(url: String, saved: List<SavedServer>): ServerProof {
     if (!plainHttpStaysLocal(url)) return ServerProof(IdentityState.Bad)
     val nonce = Identity.newNonce()
+    // Through this device's connection from away the answer may wait for a path to be found (the library gives up
+    // after about 15 s and says why): no quick timeout there, or its words never arrive.
+    val parsed = url.toHttpUrlOrNull()
+    val viaConnector = parsed != null && PeerRoute.matches(parsed.host, parsed.port)
     return try {
-        val answer = Api(url, "", quick = true).identity(nonce)
+        val answer = Api(url, "", quick = !viaConnector).identity(nonce)
         val state = withContext(Dispatchers.Default) { Identity.judge(answer, nonce, url, saved) }
         if (state == IdentityState.Bad) ServerProof(state)
         else ServerProof(state, answer.serverId, answer.publicKey, Identity.fingerprint(answer.publicKey))
     } catch (_: IOException) {
         ServerProof(IdentityState.Unreachable)
     } catch (e: ApiError) {
-        ServerProof(if (e.status == 404) Identity.unanswered(url, saved) else IdentityState.Bad)
+        when {
+            // The connection's own refusal (no usable path): unreachable, in its words, not a server that lied.
+            e.connector -> ServerProof(IdentityState.Unreachable, why = e.message.orEmpty(), reason = WebJoin.reasonOf(e.body))
+            e.status == 404 -> ServerProof(Identity.unanswered(url, saved))
+            else -> ServerProof(IdentityState.Bad)
+        }
     } catch (_: SerializationException) {
         ServerProof(IdentityState.Bad)
     }

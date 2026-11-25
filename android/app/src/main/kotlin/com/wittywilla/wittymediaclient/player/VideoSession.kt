@@ -78,8 +78,10 @@ private const val COUNTDOWN_FROM = 8
 private const val TICK_MS = 250L
 
 @OptIn(UnstableApi::class)
-private fun newVideoPlayer(context: Context): ExoPlayer =
+private fun newVideoPlayer(context: Context, fetch: VideoFetch): ExoPlayer =
     ExoPlayer.Builder(context, DefaultRenderersFactory(context).setEnableDecoderFallback(true))
+        .setMediaSourceFactory(fetch.sources) // patient with a converting server, and says the speed (VideoFetch.kt)
+        .setLoadControl(videoLoadControl())
         .setAudioAttributes(AudioAttributes.Builder().setUsage(C.USAGE_MEDIA).setContentType(C.AUDIO_CONTENT_TYPE_MOVIE).build(), true)
         .setHandleAudioBecomingNoisy(true)
         .build()
@@ -93,7 +95,8 @@ data class NetNote(val text: String, val lost: Boolean = false, val at: Long = S
 class VideoSession(private val nav: Nav, val id: Long, private val startAt: Double?) : VideoTarget {
     private val app = nav.app
     private val api get() = app.api
-    val player: ExoPlayer = newVideoPlayer(app)
+    private val fetch = VideoFetch(app)
+    val player: ExoPlayer = newVideoPlayer(app, fetch)
     override val exo: ExoPlayer get() = player
     override val itemId: Long get() = id
 
@@ -164,6 +167,8 @@ class VideoSession(private val nav: Nav, val id: Long, private val startAt: Doub
     val nextId: Long? get() = stream?.nextId ?: item?.nextId
 
     private val listener = object : Player.Listener {
+        // The server converts as far ahead as this speed needs (VideoFetch.kt).
+        override fun onPlaybackParametersChanged(p: PlaybackParameters) = sayRate(fetch, p.speed, stream, scope, api)
         override fun onIsPlayingChanged(isPlaying: Boolean) {
             playing = isPlaying
             activity++
@@ -203,6 +208,7 @@ class VideoSession(private val nav: Nav, val id: Long, private val startAt: Doub
         if (Build.VERSION.SDK_INT >= 24) runCatching { network?.registerDefaultNetworkCallback(networkBack) }
         scope.launch { runCatching { maxSpeed = api.playerPrefs().maxSpeed } }
         scope.launch { snapshotFlow { ask }.collectLatest { open(it) } }
+        scope.launch { watchPace() }
         scope.launch { tick() }
         scope.launch { snapshotFlow { countdown }.collectLatest { left -> runCountdown(left) } }
         app.remote.adopt(this)
@@ -277,6 +283,38 @@ class VideoSession(private val nav: Nav, val id: Long, private val startAt: Doub
         countdown = null
     }
 
+    // A conversion slower than the speed this plays at stops every few seconds to catch up. The server goes
+    // on with a faster setting by itself first; when that is not enough either, the player asks for the next
+    // size down at the same place and says why, as the website does. A quality the viewer chose themself is
+    // kept, and they are told what would play smoothly instead (paceWords).
+    private var autoQuality: String? = null
+
+    private suspend fun watchPace() {
+        var behind = 0
+        var told = ""
+        while (true) {
+            kotlinx.coroutines.delay(5_000)
+            val s = stream ?: continue
+            if (s.decision != "transcode" || !playing || s.streamId.isEmpty() || told == s.streamId) { behind = 0; continue }
+            val p = api.streamPace(s.streamId)
+            behind = if (p != null && !p.keepingUp && p.speed > 0) behind + 1 else 0
+            if (p != null && p.fastest && behind >= 2) {
+                told = s.streamId
+                behind = 0
+                val height = s.output?.height ?: 0
+                val chosen = !ask.quality.isNullOrEmpty() && ask.quality != "auto" && ask.quality != autoQuality
+                val lower = lowerHeight(height)
+                if (!chosen && lower > 0) {
+                    autoQuality = "h$lower"
+                    note(stepDownWords(p.speed, p.rate, lower))
+                    chooseQuality("h$lower")
+                } else {
+                    note(paceWords(p.speed, p.rate))
+                }
+            }
+        }
+    }
+
     fun note(text: String, lost: Boolean = false) {
         note = NetNote(text, lost)
         notes.add(text)
@@ -310,6 +348,7 @@ class VideoSession(private val nav: Nav, val id: Long, private val startAt: Doub
                     streaming = streaming.takeIf { it != "auto" },
                     measuredKbps = robustKbps(streaming),
                     quality = want.quality,
+                    rate = player.playbackParameters.speed.takeIf { it != 1f },
                 ),
             )
             val before = stream

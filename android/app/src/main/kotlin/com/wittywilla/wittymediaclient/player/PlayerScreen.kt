@@ -161,8 +161,10 @@ private data class Ask(
 )
 
 @OptIn(UnstableApi::class)
-private fun newPlayer(context: Context): ExoPlayer =
+private fun newPlayer(context: Context, fetch: VideoFetch): ExoPlayer =
     ExoPlayer.Builder(context, DefaultRenderersFactory(context).setEnableDecoderFallback(true))
+        .setMediaSourceFactory(fetch.sources) // patient with a converting server, and says the speed (VideoFetch.kt)
+        .setLoadControl(videoLoadControl())
         // Other apps go quiet for this, and this goes quiet for a call. Pulling out headphones pauses
         // rather than playing to the room.
         .setAudioAttributes(AudioAttributes.Builder().setUsage(C.USAGE_MEDIA).setContentType(C.AUDIO_CONTENT_TYPE_MOVIE).build(), true)
@@ -201,12 +203,16 @@ fun PlayerScreen(nav: Nav, id: Long, startOver: Boolean) {
     var interactions by remember { mutableIntStateOf(0) }
     var countdown by remember { mutableStateOf<Int?>(null) }
     var waitingForNetwork by remember { mutableStateOf(false) }
+    // What the player says about a server converting slower than the video plays (shown for a few seconds).
+    var paceNote by remember { mutableStateOf("") }
+    val autoQuality = remember { mutableStateOf<String?>(null) }
     var watchNextShown by remember { mutableStateOf(false) }
     var showInfo by remember { mutableStateOf(false) }
     val clock = remember { PlaybackClock() }
     val budget = remember { RetryBudget() }
     val rootFocus = remember { FocusRequester() }
-    val player = remember { newPlayer(context) }
+    val fetch = remember { VideoFetch(context) }
+    val player = remember { newPlayer(context, fetch) }
     // The system's now-playing card, media keys and voice control. One session per player, and only
     // while this screen is up: a film stops when the app is left. Sound has ListeningService.
     val session = remember { MediaSession.Builder(context, player).setId("witty-$id").build() }
@@ -266,7 +272,10 @@ fun PlayerScreen(nav: Nav, id: Long, startOver: Boolean) {
     DisposableEffect(player) {
         val listener = object : Player.Listener {
             // A watch party or another device may change the speed too: the menu shows what plays.
-            override fun onPlaybackParametersChanged(p: androidx.media3.common.PlaybackParameters) { speed = p.speed }
+            override fun onPlaybackParametersChanged(p: androidx.media3.common.PlaybackParameters) {
+                speed = p.speed
+                sayRate(fetch, p.speed, stream, nav.app.scope, api) // the server converts as far ahead as this speed needs
+            }
             override fun onIsPlayingChanged(isPlaying: Boolean) {
                 playing = isPlaying
                 // Saving on pause means a phone that dies during a pause loses nothing.
@@ -317,6 +326,33 @@ fun PlayerScreen(nav: Nav, id: Long, startOver: Boolean) {
 
     // Ask the server what to play, and switch only if the answer is another address. A new `ask`
     // cancels this, which is why being cancelled is not a problem to show.
+    // A conversion slower than this speed: the server goes faster first; then the next size down at the same
+    // place, said in words, as on the phone and the website. A quality the viewer chose is kept (paceWords).
+    LaunchedEffect(stream?.streamId) {
+        val s = stream ?: return@LaunchedEffect
+        if (s.decision != "transcode" || s.streamId.isEmpty()) return@LaunchedEffect
+        var behind = 0
+        while (true) {
+            kotlinx.coroutines.delay(5_000)
+            if (!playing) { behind = 0; continue }
+            val p = api.streamPace(s.streamId)
+            behind = if (p != null && !p.keepingUp && p.speed > 0) behind + 1 else 0
+            if (p == null || !p.fastest || behind < 2) continue
+            val lower = lowerHeight(s.output?.height ?: 0)
+            val chosen = !ask.quality.isNullOrEmpty() && ask.quality != "auto" && ask.quality != autoQuality.value
+            if (!chosen && lower > 0) {
+                autoQuality.value = "h$lower"
+                paceNote = stepDownWords(p.speed, p.rate, lower)
+                ask = ask.copy(quality = "h$lower", startSec = clock.lastPlace() ?: currentFilmSec(), reload = true, waitMs = 0, attempt = ask.attempt + 1)
+            } else {
+                paceNote = paceWords(p.speed, p.rate)
+            }
+            kotlinx.coroutines.delay(8_000)
+            paceNote = ""
+            return@LaunchedEffect
+        }
+    }
+
     LaunchedEffect(ask) {
         try {
             if (ask.waitMs > 0) delay(ask.waitMs)
@@ -333,6 +369,7 @@ fun PlayerScreen(nav: Nav, id: Long, startOver: Boolean) {
                     forceTranscode = if (ask.convert) true else null,
                     flatten3d = if (ask.flatten3d) true else null,
                     quality = ask.quality,
+                    rate = player.playbackParameters.speed.takeIf { it != 1f },
                 ),
             )
             val before = stream
@@ -584,6 +621,10 @@ fun PlayerScreen(nav: Nav, id: Long, startOver: Boolean) {
         // What the More menu offers besides 3D and leaving, where the server and this profile have them (player/RemoteHub.kt).
         val partyAction: (() -> Unit)? = if (nav.has(SYNCPLAY_FEATURE) && (item?.kind ?: "video") == "video") ({ if (nav.app.remote.party.room != null) partyOpen = true else nav.push(com.wittywilla.wittymediaclient.ui.RemoteRoute.Party(id)) }) else null
         val playOnAction: (() -> Unit)? = if (nav.app.remote.canControl) ({ nav.app.remote.sourcePlayingVideo()?.let { nav.push(com.wittywilla.wittymediaclient.ui.RemoteRoute.PlayOn(it)) } }) else null
+        if (paceNote.isNotEmpty()) {
+            Text(paceNote, color = Color.White, style = MaterialTheme.typography.bodyLarge,
+                modifier = Modifier.align(Alignment.TopCenter).safeDrawingPadding().padding(Space.S6).widthIn(max = 720.dp).background(Color(0xCC101114), Radius.LG).padding(Space.S3))
+        }
         if (problem.isNotEmpty()) {
             Column(Modifier.align(Alignment.Center).safeDrawingPadding().padding(Space.S8), verticalArrangement = Arrangement.spacedBy(Space.S3)) {
                 ErrorText(problem)

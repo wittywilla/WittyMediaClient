@@ -168,3 +168,26 @@ object TrackMatch {
     // The language to ask the player for, or null when there's none to go on.
     fun languageFor(track: Track?): String? = base(track?.language).ifEmpty { null }
 }
+
+// What the viewer is told when the server converts more slowly than the video plays.
+fun paceWords(speed: Double, rate: Double): String =
+    "This server converts this video at ${times(speed)}, slower than the ${times(rate)} it plays at, so it will stop now and then to catch up. " +
+        "A lower speed or quality plays smoothly."
+
+private fun times(n: Double): String {
+    val r = Math.round(n * 100) / 100.0
+    return (if (r == Math.floor(r)) r.toLong().toString() else r.toString()) + "×"
+}
+
+// The sizes a conversion steps down through when the server can't keep up, largest first (as the website's pace.ts).
+private val STEP_HEIGHTS = listOf(2160, 1440, 1080, 720, 480, 360)
+
+// The next size down from what plays now, or 0 when there's none to go to.
+fun lowerHeight(height: Int): Int {
+    if (height <= 0 || height <= STEP_HEIGHTS.last()) return 0
+    return STEP_HEIGHTS.firstOrNull { it < height - 8 } ?: 0
+}
+
+// What the viewer is told when the player asks for a smaller picture because the server can't keep up.
+fun stepDownWords(speed: Double, rate: Double, height: Int): String =
+    "This server converts this video at ${times(speed)}, slower than the ${times(rate)} it plays at, so it goes on at ${height}p."

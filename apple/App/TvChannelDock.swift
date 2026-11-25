@@ -72,17 +72,17 @@ struct ChannelDock: View {
                     Button { live.skipBreak(); onClose() } label: { Label("Skip break", systemImage: "forward.end") }
                         .buttonStyle(TvButtonStyle(dress: dress, on: true, onBar: true)).accessibilityIdentifier("tv.player.skipBreak")
                 }
-                if live.fromStart != nil {
-                    Button { live.backToLive(); onClose() } label: { Label("Back to live", systemImage: "dot.radiowaves.left.and.right") }
+                // Behind live, however it got there: with no skipping ahead on live TV, this is the way forward (#688).
+                if live.fromStart != nil || live.behind > 20 {
+                    Button { if live.fromStart != nil { live.backToLive() } else { live.goLive() }; onClose() } label: { Label("Back to live", systemImage: "dot.radiowaves.left.and.right") }
                         .buttonStyle(TvButtonStyle(dress: dress, onBar: true)).accessibilityIdentifier("tv.player.live")
-                } else if live.canStartOver {
+                }
+                if live.fromStart == nil, live.canStartOver {
                     Button { live.startOver(); onClose() } label: { Label("Start over", systemImage: "backward.end") }
                         .buttonStyle(TvButtonStyle(dress: dress, onBar: true)).accessibilityIdentifier("tv.player.startOver")
                 }
                 Button { live.seek(by: -10) } label: { Label("Back 10", systemImage: "gobackward.10") }
                     .buttonStyle(TvButtonStyle(dress: dress, onBar: true)).focused($focused, equals: "back")
-                Button { live.seek(by: 10) } label: { Label("On 10", systemImage: "goforward.10") }
-                    .buttonStyle(TvButtonStyle(dress: dress, onBar: true))
                 if audio.count > 1 {
                     Button { choosing = ("Audio", .audible, audio) } label: { Label("Audio", systemImage: "speaker.wave.2") }
                         .buttonStyle(TvButtonStyle(dress: dress, onBar: true)).focused($focused, equals: "audio")
