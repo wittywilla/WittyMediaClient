@@ -271,6 +271,13 @@ fun PlayerScreen(nav: Nav, id: Long, startOver: Boolean) {
     // The system would stop the music for a film sooner or later. This is sooner.
     LaunchedEffect(Unit) { nav.app.listening.pauseForVideo() }
 
+    // Sound and picture lined up again after a change of speed (KeepInStep.kt).
+    DisposableEffect(player) {
+        val inStep = KeepInStep(player)
+        player.addListener(inStep)
+        onDispose { inStep.release() }
+    }
+
     DisposableEffect(player) {
         val listener = object : Player.Listener {
             // A watch party or another device may change the speed too: the menu shows what plays.

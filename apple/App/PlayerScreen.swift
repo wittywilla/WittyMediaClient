@@ -205,8 +205,26 @@ final class PlaybackModel: ObservableObject {
         if player.timeControlStatus != .paused { player.rate = rate }
         // Faster uses up what was loaded faster: load further ahead, and have the server convert further ahead.
         player.currentItem?.preferredForwardBufferDuration = Self.forwardBuffer(rate)
+        keepInStep(rate)
         if let client, let id = stream?.streamId, !id.isEmpty, stream?.protocolName == "hls" {
             Task.detached { try? await client.setStreamRate(id, rate: Double(rate)) }
+        }
+    }
+
+    /// A change of speed can leave the sound and the picture apart for good (the owner's "4× then back to
+    /// normal"): a seek to where it is lines them up again. Once the speed has stayed put for a moment,
+    /// and only for a real change, as the website and the Android app do (KeepInStep).
+    private var settledRate: Float = 1
+    private var realignTask: Task<Void, Never>?
+
+    private func keepInStep(_ rate: Float) {
+        realignTask?.cancel()
+        realignTask = Task { @MainActor [weak self] in
+            try? await Task.sleep(nanoseconds: 400_000_000)
+            guard let self, !Task.isCancelled, PaceRules.realignNeeded(from: self.settledRate, to: rate) else { return }
+            self.settledRate = rate
+            guard self.player.timeControlStatus == .playing, let item = self.player.currentItem else { return }
+            item.seek(to: self.player.currentTime(), toleranceBefore: .zero, toleranceAfter: .zero, completionHandler: nil)
         }
     }
 

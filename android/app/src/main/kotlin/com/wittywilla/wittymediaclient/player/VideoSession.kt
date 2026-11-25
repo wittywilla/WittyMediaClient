@@ -97,6 +97,7 @@ class VideoSession(private val nav: Nav, val id: Long, private val startAt: Doub
     private val api get() = app.api
     private val fetch = VideoFetch(app)
     val player: ExoPlayer = newVideoPlayer(app, fetch)
+    private val inStep = KeepInStep(player)
     override val exo: ExoPlayer get() = player
     override val itemId: Long get() = id
 
@@ -206,6 +207,7 @@ class VideoSession(private val nav: Nav, val id: Long, private val startAt: Doub
 
     init {
         player.addListener(listener)
+        player.addListener(inStep) // sound and picture lined up again after a change of speed
         // Music stops for a film, as the website's player pauses it whenever /play is open.
         app.listening.pauseForVideo()
         if (Build.VERSION.SDK_INT >= 24) runCatching { network?.registerDefaultNetworkCallback(networkBack) }
@@ -570,6 +572,7 @@ class VideoSession(private val nav: Nav, val id: Long, private val startAt: Doub
         runCatching { network?.unregisterNetworkCallback(networkBack) }
         scope.cancel()
         player.removeListener(listener)
+        inStep.release()
         media.release()
         player.release()
     }

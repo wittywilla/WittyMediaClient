@@ -14,6 +14,13 @@ final class PaceRulesTests: XCTestCase {
         XCTAssertEqual(PaceRules.lowerHeight(0), 0)
     }
 
+    func testRealignAfterARealChangeOfSpeed() {
+        XCTAssertTrue(PaceRules.realignNeeded(from: 4, to: 1))
+        XCTAssertTrue(PaceRules.realignNeeded(from: 1, to: 2))
+        XCTAssertFalse(PaceRules.realignNeeded(from: 1, to: 1.25))
+        XCTAssertFalse(PaceRules.realignNeeded(from: 0, to: 1))
+    }
+
     func testWords() {
         XCTAssertTrue(PaceRules.steppedDown(speed: 0.7, rate: 2, height: 720).hasSuffix("so it goes on at 720p."))
         XCTAssertTrue(PaceRules.tooSlow(speed: 0.666, rate: 2).contains("0.67×"))
