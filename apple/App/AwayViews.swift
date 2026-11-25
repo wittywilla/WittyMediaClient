@@ -221,12 +221,9 @@ struct JoinAwayPanel: View {
             problem = say("joinAwayExpired")
             return
         }
+        // The rest on the connecting screen: the server proving who it is, and signing in.
         finding = true
-        if let words = await model.joined(answer) {
-            finding = false
-            code = ""
-            problem = words
-        }
+        model.joinedShown(answer)
     }
 
     var body: some View {
@@ -264,6 +261,14 @@ struct JoinAwayPanel: View {
         .onRemoteBack(back)
         .focusRoot(scope)
         .task(id: round) { await run() }
+        // The connecting screen closed without opening the server (cancelled, or it didn't work): a new code from here.
+        .onChange(of: model.connecting == nil) { ended in
+            if ended && finding {
+                finding = false
+                code = ""
+                problem = say("errAwayFailed")
+            }
+        }
         .onChange(of: problem) { if !$0.isEmpty { mainAction = true } }
     }
 }

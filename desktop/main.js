@@ -539,6 +539,35 @@ function learnSoon() {
 // (connect.js, checkScreen) instead of only a line of words. The last one is kept for the page to ask for.
 let lastCheck = null
 const cleanText = (text) => log.clean(text)
+
+// The join going on now, for the connecting screen (connect.js, connectingScreen): its run, ticked off as it goes, and
+// read by the page a few times a second. Cancel marks it cancelled: it stops at its next step, keeps nothing and opens
+// nothing, and the connection it opened is closed.
+let joining = null
+function startJoining(kind, serverId) {
+  joining = { run: connectSteps.run(kind, serverId), serverId: serverId || '', tunnel: null }
+  return joining
+}
+const cancelled = (j) => j !== joining || j.cancelled
+function joinProgress() {
+  if (!joining) return null
+  const p = joining.run.progress()
+  const known = joining.serverId && (saved.recent || []).find((s) => s.p2p && s.p2p.id === joining.serverId)
+  return {
+    name: p.name || (known && known.name) || '', logo: known && known.logo ? known.logo.data : '',
+    steps: p.steps, step: p.step, doing: p.doing, clock: p.clock, slow: p.slow, failure: p.failure,
+  }
+}
+function cancelJoining() {
+  const j = joining
+  if (!j) return
+  j.cancelled = true
+  j.run.cancelled = true
+  j.run.note('cancelled')
+  codeTurn++
+  if (j.tunnel && tunnel === j.tunnel) closeTunnel()
+  joining = null
+}
 function checkFailed(result, run, failure) {
   run.fail(failure)
   log.warn('p2p', `Connecting from away failed at ${run.failure.step}: ${run.failure.code}`)
@@ -558,6 +587,9 @@ async function joinByInvite(link) {
   await finishForgetting()
   const invite = p2p.parseInvite(link)
   if (!invite) return { error: 'invite' }
+  const j = startJoining('invite', invite.serverId)
+  const run = j.run
+  run.named(invite.name)
   // A QR code from a 0.8.5 server's Connect a device also holds the web address its page was opened at
   // and the code beside it. At home that is asked first, as Enter a code does, with no connection from
   // away (in Docker it's the only way a device at home finds the server); away, it doesn't answer, and
@@ -565,15 +597,17 @@ async function joinByInvite(link) {
   log.addSecret(invite.secret)
   if (invite.home && invite.code) {
     log.addSecret(invite.code)
-    const atHome = await codeAtHome(invite.home, invite.code)
+    const atHome = await codeAtHome(invite.home, invite.code, j)
+    if (cancelled(j)) return { error: 'stopped' }
     if (atHome) return atHome
   }
-  const run = connectSteps.run('invite', invite.serverId)
   run.pass('read')
   run.note(`looking for the server, with ${(invite.hints || []).length} addresses from the invite`)
   const opened = await openTunnel({ id: invite.serverId, hints: invite.hints })
+  if (cancelled(j)) { if (!opened.error) closeTunnel(); return { error: 'stopped' } }
   if (opened.error) return checkFailed(opened, run, opened.error === 'p2p-missing' ? connectSteps.of('p2p-missing', 'read') : connectSteps.classify('', opened.message || '', 'found', cleanText))
   const mine = tunnel
+  j.tunnel = mine
   // Shown at once: the helper waits for this device's own connection, and when that can't get through
   // (the server's only way in is its own WittyRelay, which admits only listed devices), shows the invite
   // with the invite's own key instead, which the server lists with its relay while the invite is open.
@@ -604,11 +638,12 @@ async function joinByInvite(link) {
 
 // The QR code's address at home and its code: the server there proves who it is, then that it made
 // the code (code.js), and signs this device in. null when nothing answers there (away from home).
-async function codeAtHome(home, code) {
+async function codeAtHome(home, code, j) {
   const r = normalizeAddress(home)
   if (r.error) return null
   const identity = await identify(r.url)
   if (identity.state === 'unreachable') return null
+  if (j) j.run.note('the address at home in the QR code answered')
   if (!identity.publicKey || identity.state === 'bad' || identity.state === 'different') return { error: 'identity' }
   const post = async (path, body) => {
     const res = await postJson(r.url + API + path, body)
@@ -628,6 +663,10 @@ async function codeAtHome(home, code) {
   }
   if (!answer.ok) return { error: 'code-refused', message: guards.cleanMessage(answer.message || '') }
   if (!guards.validToken(answer.token)) return { error: 'code-used' }
+  if (j) {
+    if (cancelled(j)) return null
+    for (const step of connectSteps.ORDER) j.run.pass(step)
+  }
   log.info('network', 'A QR code signed this device in at home', { where: r.url })
   return keepSignIn({ url: r.url, at: r.url, name: guards.cleanName(answer.name), identity }, answer.token)
 }
@@ -651,6 +690,11 @@ async function finishJoining(mine, where, answer, offeredName, how, run) {
   const info = { id: where.id, hints: where.hints, port: mine.port }
   const pinned = identity.publicKey && (saved.recent || []).find((s) => s.publicKey === identity.publicKey)
   const url = pinned ? pinned.url : name
+  if (run) {
+    run.named(answer.serverName || offeredName || (pinned && pinned.name))
+    // Cancelled meanwhile: nothing is kept or opened.
+    if (run.cancelled) { closeTunnel(); return { error: 'stopped' } }
+  }
   try {
     if (answer.code) {
       const res = await postJson(mine.origin + API + '/pair/redeem', { code: answer.code, device: deviceName(), platform: OS_NAME })
@@ -992,6 +1036,8 @@ async function enterCode(typed, only) {
   const clean = connectCode.cleanCode(typed)
   if (!clean) return { error: 'code-format' }
   const turn = ++codeTurn
+  const j = startJoining('code at home', '')
+  j.run.pass('read')
   const keys = connectCode.derive(clean)
   const urls = []
   const add = (u) => {
@@ -1055,6 +1101,10 @@ async function enterCode(typed, only) {
     }
   })
   if (turn !== codeTurn) return { error: 'stopped' }
+  if (won) {
+    j.run.named(won.name)
+    for (const step of connectSteps.ORDER) j.run.pass(step)
+  }
   if (!won) {
     if (changed) return { error: 'changed' }
     if (refused) return { error: 'code-refused', message: guards.cleanMessage(refused.message), reason: guards.cleanMessage(refused.reason) }
@@ -1511,6 +1561,9 @@ ipcMain.handle('pair-poll', (e) => (fromConnect(e) ? pairPoll() : { status: 'exp
 ipcMain.handle('pair-pin', (e) => (fromConnect(e) ? pairPin() : { error: 'expired' }))
 ipcMain.on('pair-stop', (e) => { if (fromConnect(e)) pairing = null })
 ipcMain.handle('p2p-invite', (e, link) => (fromConnect(e) ? joinByInvite(String(link).slice(0, 4096)) : { error: 'invite' }))
+// The connecting screen: how the join going on now is getting on, and Cancel.
+ipcMain.handle('join-progress', (e) => (fromConnect(e) ? joinProgress() : null))
+ipcMain.on('join-cancel', (e) => { if (fromConnect(e)) cancelJoining() })
 // The connection check (connect.js, checkScreen): the last failed connection from away, its details copied, or saved
 // to a file to send. The details were cleaned of keys and tokens when the check was made.
 ipcMain.handle('connect-check', (e) => (fromConnect(e) ? lastCheck : null))

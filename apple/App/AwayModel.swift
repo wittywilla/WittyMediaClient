@@ -350,13 +350,64 @@ extension AppModel {
         return words
     }
 
+    // MARK: The connecting screen
+
+    /// Starts a join on the connecting screen (ConnectingView). `join` answers words when it ends without opening the
+    /// server or showing the connection check: the screen then shows them on the step it stopped at.
+    func startJoining(_ run: ConnectRun, retry: (() -> Void)?, _ join: @escaping @MainActor (AppModel) async -> String?) {
+        connectingTask?.cancel()
+        connectingWords = ""
+        connectingRetry = retry
+        connecting = run
+        connectingTask = Task { @MainActor [weak self] in
+            guard let self else { return }
+            let words = await join(self)
+            guard !Task.isCancelled, self.connecting === run else { return }
+            // The connection check shows in its place.
+            if self.connectCheck === run { return }
+            if let words {
+                run.stop(words)
+                self.connectingWords = words
+            } else {
+                self.connecting = nil // opened
+            }
+        }
+    }
+
+    /// Cancel, or Back once it has ended: the join stops, and the screen it came from shows again.
+    func stopJoining() {
+        let going = connecting != nil && connectingWords.isEmpty && connectCheck !== connecting
+        connectingTask?.cancel()
+        connectingTask = nil
+        if going { peers.close() }
+        if let run = connecting, connectCheck === run { connectCheck = nil }
+        connecting = nil
+        connectingWords = ""
+        connectingRetry = nil
+    }
+
+    /// An invite link typed, pasted or scanned, on the connecting screen.
+    func joinShown(_ invite: PeerConnect.Invite) {
+        let run = ConnectRun(kind: "invite", server: invite.serverID)
+        run.named(invite.name)
+        startJoining(run, retry: { [weak self] in self?.joinShown(invite) }) { model in await model.join(invite, run: run) }
+    }
+
+    /// The server took the code a TV showed: the rest on the connecting screen.
+    func joinedShown(_ answer: PeerConnect.Enrolment) {
+        let run = ConnectRun(kind: "code", server: answer.serverID)
+        run.named(answer.serverName)
+        startJoining(run, retry: nil) { model in await model.joined(answer, run: run) }
+    }
+
     // MARK: An invite
 
     /// An invite link, typed or pasted on the connect screen: finds the server, shows it the
     /// invite, which puts this device on its list, and signs in with the code that comes back.
     /// Answers words to show if it didn't work.
-    func join(_ invite: PeerConnect.Invite) async -> String? {
-        let run = ConnectRun(kind: "invite", server: invite.serverID)
+    func join(_ invite: PeerConnect.Invite, run given: ConnectRun? = nil) async -> String? {
+        let run = given ?? ConnectRun(kind: "invite", server: invite.serverID)
+        run.named(invite.name)
         Redact.addSecret(invite.secret)
         guard PeerLibrary.available else { return checkFailed(run, connectSteps?.of("p2p-missing", step: "read"), say("awayNotHere")) }
         guard let key = deviceKey() else { return checkFailed(run, connectSteps?.of("no-key", step: "read"), say("notKept")) }
@@ -387,8 +438,9 @@ extension AppModel {
     }
 
     /// The server took the code this device showed, and has put it on its list.
-    func joined(_ answer: PeerConnect.Enrolment) async -> String? {
-        let run = ConnectRun(kind: "code", server: answer.serverID)
+    func joined(_ answer: PeerConnect.Enrolment, run given: ConnectRun? = nil) async -> String? {
+        let run = given ?? ConnectRun(kind: "code", server: answer.serverID)
+        run.named(answer.serverName)
         run.pass("read")
         guard answer.ok, !answer.serverID.isEmpty else {
             return checkFailed(run, connectSteps?.classify(reason: answer.reason, text: answer.error, step: "signin"), say("joinAwayRefused"))
@@ -438,6 +490,12 @@ extension AppModel {
                                unreachable ? say("errAwayFailed") : say("identityBad"))
         }
         let shown = PlainWords.clean(answer.serverName.isEmpty ? name : answer.serverName, limit: 80)
+        run.named(shown.isEmpty ? (known?.name ?? "") : shown)
+        // Cancelled meanwhile: nothing is kept or opened.
+        if Task.isCancelled {
+            peers.close()
+            return nil
+        }
         let server = proof.saved(url: home, name: shown.isEmpty ? (known?.name ?? "WittyMediaServer") : shown, brandLogo: known?.brandLogo ?? "")
         defaults.removeObject(forKey: awayOffKey(server))
         keepAway(PeerInfo(serverID: serverID, hints: hints, port: peers.route.current?.port ?? 0), for: server)
