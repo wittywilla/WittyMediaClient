@@ -410,10 +410,12 @@ public struct Playback: Decodable, Equatable {
     public let chapters: [Chapter]?
     /// The quality menu, for a video the server can offer one for: docs/CLIENT-API.md, Quality.
     public var quality: QualityMenu? = nil
+    /// The stream as it reaches the player: its size, for stepping down when the server can't keep up.
+    public var output: StreamOutput? = nil
 
     private enum CodingKeys: String, CodingKey {
         case decision, url, streamId, durationSec, seek, startAtSec, timeOffsetSec, audio, subtitles
-        case audioIndex, subtitleIndex, subtitleDelivery, intro, nextId, explain, stereo, chapters, quality
+        case audioIndex, subtitleIndex, subtitleDelivery, intro, nextId, explain, stereo, chapters, quality, output
         case protocolName = "protocol"
     }
 
@@ -490,10 +492,13 @@ public struct PlaybackRequest: Encodable {
     public var measuredKbps: Double?
     /// The viewer's choice of size and rate ("", "original", "h720-b4000"): docs/CLIENT-API.md, Quality.
     public var quality: String?
+    /// The player's speed (2 for 2×), so the stream is made far enough ahead from its start. Nil at 1×.
+    public var rate: Double?
 
     public init(profile: String, capabilities: DeviceCapabilities? = nil, audio: Int? = nil, subtitle: Int? = nil, startSec: Double? = nil,
-                forceTranscode: Bool? = nil, streaming: String? = nil, measuredKbps: Double? = nil, quality: String? = nil) {
+                forceTranscode: Bool? = nil, streaming: String? = nil, measuredKbps: Double? = nil, quality: String? = nil, rate: Double? = nil) {
         self.quality = quality
+        self.rate = rate
         self.profile = profile
         self.capabilities = capabilities
         self.audio = audio
@@ -566,4 +571,45 @@ public struct PairPoll: Decodable, Equatable {
     public let status: String
     public let token: String?
     public let intervalSec: Int?
+}
+
+/// The stream as it reaches the player: /playback's `output`.
+public struct StreamOutput: Decodable, Equatable {
+    public var width: Int?
+    public var height: Int?
+}
+
+/// How a stream's conversion keeps up with its player: GET /hls/{id}/work's `pace` (docs/CLIENT-API.md, Playback speed).
+public struct StreamPace: Decodable, Equatable {
+    /// Seconds of the film made per second; 0 before it has been measured.
+    public var speed: Double
+    public var rate: Double
+    public var keepingUp: Bool
+    /// The server's faster setting is already in use: only a lower quality or speed would help.
+    public var fastest: Bool
+}
+
+/// Playing faster than the server converts: the next size down, and the words for the viewer (as the
+/// website's pace.ts and the Android app's PlaybackRules.kt).
+public enum PaceRules {
+    static let steps = [2160, 1440, 1080, 720, 480, 360]
+
+    /// The next size down from what plays now, or 0 when there's none to go to.
+    public static func lowerHeight(_ height: Int) -> Int {
+        guard height > steps.last! else { return 0 }
+        return steps.first { $0 < height - 8 } ?? 0
+    }
+
+    public static func times(_ n: Double) -> String {
+        let r = (n * 100).rounded() / 100
+        return (r == r.rounded() ? String(Int(r)) : String(r)) + "×"
+    }
+
+    public static func steppedDown(speed: Double, rate: Double, height: Int) -> String {
+        "This server converts this video at \(times(speed)), slower than the \(times(rate)) it plays at, so it goes on at \(height)p."
+    }
+
+    public static func tooSlow(speed: Double, rate: Double) -> String {
+        "This server converts this video at \(times(speed)), slower than the \(times(rate)) it plays at, so it will stop now and then to catch up. A lower speed or quality plays smoothly."
+    }
 }
