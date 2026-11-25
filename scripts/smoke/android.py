@@ -529,11 +529,22 @@ def rotation():
         # A short drag shows the player's controls without the tap that would pause the film.
         sh('input swipe 700 700 780 700 150', check=False)
         time.sleep(0.5)
-    controls()
-    tap('^Rotate to portrait$', 20)
+
+    def press(label):
+        # The controls fade, and a dump can come back empty on a busy emulator: shown again and looked for again.
+        for _ in range(8):
+            controls()
+            x = find('^' + label + '$')
+            if x:
+                b = x['b']
+                sh(f'input tap {(b[0] + b[2]) // 2} {(b[1] + b[3]) // 2}')
+                log('tapped', label)
+                return
+            time.sleep(2)
+        raise RuntimeError(f'{label!r} never showed in the player; on screen: {texts()[:20]}')
+    press('Rotate to portrait')
     until('portrait when asked', lambda: turned() == 0, 20)
-    controls()
-    tap('^Rotate to landscape$', 20)
+    press('Rotate to landscape')
     until('landscape again when asked', lambda: turned() in (90, 270), 20)
     time.sleep(2)
     later = position()
