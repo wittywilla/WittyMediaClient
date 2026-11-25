@@ -657,6 +657,17 @@ main.with-back { padding-top: calc(var(--sp-8) + var(--sp-4)); }
 .check-status { text-align: start; margin: 0 0 var(--sp-2); }
 .check-status:empty { display: none; }
 .check-details { margin-top: var(--sp-6); text-align: start; }
+/* The connecting screen (connect.js, connectingScreen): the connection check's steps, the one being tried with a
+   spinner for its mark, those still to come quiet; what it's doing, then a hint once it has taken a while. */
+.connecting .check-step.now { box-shadow: inset 3px 0 0 var(--accent); }
+.connecting .check-step.now .check-title { font-weight: 700; }
+.connecting .check-step.wait .check-title { color: var(--fg-2); font-weight: 400; }
+.connecting .check-mark .spinner { width: 1em; height: 1em; display: inline-block; vertical-align: -.125em; }
+.connecting-doing { margin: 0 0 var(--sp-2); }
+.connecting-doing:empty, .connecting-slow:empty, .connecting-clock:empty { display: none; }
+.connecting-slow { margin: 0 0 var(--sp-2); color: var(--fg-2); }
+.connecting-clock { color: var(--fg-2); font-variant-numeric: tabular-nums; }
+.connecting-actions { display: flex; flex-wrap: wrap; gap: var(--sp-2); justify-content: center; }
 .check-details summary { cursor: pointer; color: var(--fg-2); }
 .check-details .hint { color: var(--fg-2); font-size: var(--text-secondary); margin: var(--sp-2) 0; }
 .check-details pre { white-space: pre-wrap; overflow-wrap: anywhere; max-height: 16em; overflow: auto; margin: 0; padding: var(--sp-3); border-radius: var(--r-sm); background: var(--bg-2); color: var(--fg-2); font-size: var(--text-secondary); }

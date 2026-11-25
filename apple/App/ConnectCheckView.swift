@@ -22,7 +22,11 @@ struct ConnectCheckView: View {
         run.details(steps, app: "WittyMediaClient \(model.platformName) \(WittyClient.appVersion)", device: model.deviceName)
     }
 
-    private func close() { model.connectCheck = nil }
+    private func close() {
+        model.connectCheck = nil
+        // Shown on the connecting screen: that goes too.
+        if model.connecting === run { model.stopJoining() }
+    }
 
     var body: some View {
         DesignPage(eyebrow: say("rowAway"), title: say("checkTitle"), lead: say("checkLead"), identifier: "connectCheck") {
