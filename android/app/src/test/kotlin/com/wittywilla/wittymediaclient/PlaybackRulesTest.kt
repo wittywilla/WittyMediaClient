@@ -39,6 +39,16 @@ class PlaybackRulesTest {
     }
 
     @Test
+    fun beforeTheFirstFrameItIsWhereTheStreamOpens() {
+        val c = PlaybackClock()
+        c.switching(628.0)
+        // Not ready yet: a quality change now must ask for 628, not 0, and nothing is saved.
+        assertEquals(628.0, c.filmSec, 0.0)
+        assertFalse(c.tick(0.0, 0.0, playing = true))
+        assertEquals(null, c.lastPlace())
+    }
+
+    @Test
     fun savesEveryTenSecondsAndNotInTheFirstFive() {
         val c = PlaybackClock()
         c.ready()

@@ -151,7 +151,11 @@ fun SduiPageScreen(nav: Nav, page: String, params: Map<String, String>, top: Boo
     var chosen by rememberSaveable(stateSaver = paramsSaver) { mutableStateOf(emptyMap()) }
     val asked = remember(params, chosen) { (params + chosen).filterValues { it.isNotEmpty() } }
     val held = remember(client) { nav.remembered<SduiHeld>(memoryKey)?.takeIf { it.client === client } }
-    var model by remember(client) { mutableStateOf(held?.page) }
+    // Turning the phone sizes the pages again (a new client for the new screen): the page already on screen stays there
+    // until the new one comes, instead of a spinner in its place, so what is in it isn't torn down. A channel playing in
+    // Live TV's web view kept reloading and stopping, full screen too (WittyMediaClient#160).
+    val before = remember(client) { if (held == null) nav.remembered<SduiHeld>(memoryKey)?.page else null }
+    var model by remember(client) { mutableStateOf(held?.page ?: before) }
     var shownFor by remember(client) { mutableStateOf(held?.asked) }
     var problem by remember { mutableStateOf<SduiProblem?>(null) }
     var offline by remember { mutableStateOf(false) }

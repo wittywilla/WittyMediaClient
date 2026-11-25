@@ -77,18 +77,6 @@ class Listening(private val app: WittyApp) {
         prefs.edit { putBoolean(KEY_COLLAPSED, collapsed) }
     }
 
-    // Whether the server has the music player's visualizer, for the wide bar's button: asked once for each sign-in.
-    var visualizerHere by mutableStateOf(true)
-        private set
-    private var visualizerAsked = false
-
-    fun askAboutVisualizer() {
-        if (visualizerAsked) return
-        visualizerAsked = true
-        val api = app.api
-        app.scope.launch { runCatching { api.playerPrefs() }.onSuccess { visualizerHere = it.visualizer != false }.onFailure { visualizerAsked = false } }
-    }
-
     // How Now Playing opens from the wide bar: with the queue, or with the visualizer turned on.
     var screenWithQueue = false
     var screenWithVisualizer = false
@@ -483,8 +471,6 @@ class Listening(private val app: WittyApp) {
         liked.clear()
         likesAsked.clear()
         heldLyrics.clear()
-        visualizerAsked = false
-        visualizerHere = true
         return app.scope.launch { sent?.join() }
     }
 
