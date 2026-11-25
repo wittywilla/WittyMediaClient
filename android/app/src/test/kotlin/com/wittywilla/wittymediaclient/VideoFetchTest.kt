@@ -5,6 +5,8 @@ package com.wittywilla.wittymediaclient
 import com.wittywilla.wittymediaclient.player.BUFFER_MAX_MS
 import com.wittywilla.wittymediaclient.player.BUFFER_MIN_MS
 import com.wittywilla.wittymediaclient.player.bufferForSpeed
+import com.wittywilla.wittymediaclient.player.lowerHeight
+import com.wittywilla.wittymediaclient.player.stepDownWords
 import com.wittywilla.wittymediaclient.player.paceWords
 import com.wittywilla.wittymediaclient.player.retryAfter503
 import com.wittywilla.wittymediaclient.player.speedText
@@ -33,6 +35,17 @@ class VideoFetchTest {
     @Test fun speedsAsTheServerReadsThem() {
         assertEquals("2", speedText(2f))
         assertEquals("1.5", speedText(1.5f))
+    }
+
+    // The same sizes as the website steps through (web/src/player/pace.ts).
+    @Test fun nextSizeDown() {
+        assertEquals(1440, lowerHeight(2160))
+        assertEquals(720, lowerHeight(1080))
+        assertEquals(720, lowerHeight(800))
+        assertEquals(480, lowerHeight(720))
+        assertEquals(0, lowerHeight(360))
+        assertEquals(0, lowerHeight(0))
+        assertTrue(stepDownWords(0.7, 2.0, 720).endsWith("so it goes on at 720p."))
     }
 
     @Test fun slowServerInPlainWords() {

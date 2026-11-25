@@ -736,6 +736,13 @@ public final class WittyClient: @unchecked Sendable {
         _ = try await call("PUT", "/hls/(streamId)/rate", body: body)
     }
 
+    /// How the server's conversion of a stream keeps up with the player (GET /hls/{id}/work, pace); nil if it can't say.
+    public func streamPace(_ streamId: String) async -> StreamPace? {
+        struct Work: Decodable { var pace: StreamPace? }
+        let work: Work? = try? await get("/hls/(streamId)/work")
+        return work?.pace
+    }
+
     /// Stops the conversion at once when the viewer leaves.
     public func stopStream(_ streamId: String) async throws {
         _ = try await call("DELETE", "/hls/\(streamId)")

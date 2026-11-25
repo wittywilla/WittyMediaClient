@@ -284,8 +284,11 @@ class VideoSession(private val nav: Nav, val id: Long, private val startAt: Doub
     }
 
     // A conversion slower than the speed this plays at stops every few seconds to catch up. The server goes
-    // on with a faster setting by itself first; when that is not enough either, the viewer is told why, once
-    // a stream, and what would play smoothly (paceWords).
+    // on with a faster setting by itself first; when that is not enough either, the player asks for the next
+    // size down at the same place and says why, as the website does. A quality the viewer chose themself is
+    // kept, and they are told what would play smoothly instead (paceWords).
+    private var autoQuality: String? = null
+
     private suspend fun watchPace() {
         var behind = 0
         var told = ""
@@ -297,7 +300,17 @@ class VideoSession(private val nav: Nav, val id: Long, private val startAt: Doub
             behind = if (p != null && !p.keepingUp && p.speed > 0) behind + 1 else 0
             if (p != null && p.fastest && behind >= 2) {
                 told = s.streamId
-                note(paceWords(p.speed, p.rate))
+                behind = 0
+                val height = s.output?.height ?: 0
+                val chosen = !ask.quality.isNullOrEmpty() && ask.quality != "auto" && ask.quality != autoQuality
+                val lower = lowerHeight(height)
+                if (!chosen && lower > 0) {
+                    autoQuality = "h$lower"
+                    note(stepDownWords(p.speed, p.rate, lower))
+                    chooseQuality("h$lower")
+                } else {
+                    note(paceWords(p.speed, p.rate))
+                }
             }
         }
     }

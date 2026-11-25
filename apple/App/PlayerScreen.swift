@@ -34,6 +34,8 @@ final class PlaybackModel: ObservableObject {
     @Published var item: Item?
     @Published var stream: Playback?
     @Published var error = ""
+    /// What the player says about a server converting slower than the video plays, for a few seconds.
+    @Published var paceNote = ""
     /// Inside the intro: where to skip to.
     @Published var introEnd: Double?
     /// The last thirty seconds, with something to go on to.
@@ -240,6 +242,40 @@ final class PlaybackModel: ObservableObject {
         Task { await open(startSec: at) }
     }
 
+    /// A conversion slower than this speed stops every few seconds to catch up. The server goes faster by
+    /// itself first; then the player asks for the next size down at the same place and says why, as the
+    /// website and the Android app do. A quality the viewer chose is kept, and they are told instead.
+    private var paceWatch: Task<Void, Never>?
+    private var autoQuality: String?
+
+    private func watchPace(_ answer: Playback, client: WittyClient) {
+        paceWatch?.cancel()
+        guard answer.decision == "transcode", let id = answer.streamId, !id.isEmpty else { return }
+        paceWatch = Task { @MainActor [weak self] in
+            var behind = 0
+            while !Task.isCancelled {
+                try? await Task.sleep(nanoseconds: 5_000_000_000)
+                guard let self, !Task.isCancelled else { return }
+                guard self.player.timeControlStatus == .playing else { behind = 0; continue }
+                guard let p = await client.streamPace(id) else { continue }
+                behind = (!p.keepingUp && p.speed > 0) ? behind + 1 : 0
+                guard p.fastest, behind >= 2 else { continue }
+                let lower = PaceRules.lowerHeight(answer.output?.height ?? 0)
+                let chosen = !(self.quality ?? "").isEmpty && self.quality != "auto" && self.quality != self.autoQuality
+                if !chosen && lower > 0 {
+                    self.autoQuality = "h(lower)"
+                    self.paceNote = PaceRules.steppedDown(speed: p.speed, rate: p.rate, height: lower)
+                    self.choose(quality: "h(lower)")
+                } else {
+                    self.paceNote = PaceRules.tooSlow(speed: p.speed, rate: p.rate)
+                }
+                try? await Task.sleep(nanoseconds: 8_000_000_000)
+                self.paceNote = ""
+                return
+            }
+        }
+    }
+
     /// The quality menu's choice ("" for Auto, "original", or a size): the stream is asked for again at the same place.
     func choose(quality: String) {
         self.quality = quality
@@ -287,6 +323,7 @@ final class PlaybackModel: ObservableObject {
             let before = stream
             stream = answer
             skips.opened(item: id, stream: answer, client: client)
+            watchPace(answer, client: client)
             ClientLog.shared.session = answer.streamId ?? ""
             error = ""
             if replace || answer.url != before?.url {
@@ -566,6 +603,7 @@ final class PlaybackModel: ObservableObject {
         monitor?.cancel()
         monitor = nil
         ClientLog.shared.session = ""
+        paceWatch?.cancel()
         player.replaceCurrentItem(with: nil)
         deactivateAudio()
         // Stops the conversion straight away instead of letting it run on.
@@ -899,6 +937,15 @@ private struct SystemPlayerScreen: View {
             if playback.error.isEmpty {
                 // No label of its own: the system's player already speaks for itself and its controls.
                 PlayerHost(playback: playback, skips: playback.skips).ignoresSafeArea()
+                if !playback.paceNote.isEmpty {
+                    Text(playback.paceNote)
+                        .foregroundStyle(.white)
+                        .padding(12)
+                        .background(Color.black.opacity(0.8), in: RoundedRectangle(cornerRadius: 10))
+                        .padding()
+                        .frame(maxWidth: 720)
+                        .frame(maxWidth: .infinity, alignment: .top)
+                }
             } else {
                 // The player is always dark, whatever the theme. There's a way out here on any
                 // device: on a TV there would otherwise be nothing to focus at all.
@@ -908,7 +955,6 @@ private struct SystemPlayerScreen: View {
             if let left = playback.countdown {
                 VStack(spacing: Tokens.Space.s4) {
                     Text("\(say("nextEpisodeIn")) \(left)").font(.title2).foregroundStyle(.white)
-                        .accessibilityAddTraits(.updatesFrequently)
                     Button("Play now") { playback.playNext() }.focused($onCountdown)
                     Button(say("cancel")) { playback.cancelCountdown() }
                 }

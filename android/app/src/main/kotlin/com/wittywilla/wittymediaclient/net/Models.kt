@@ -443,6 +443,8 @@ data class Playback(
     // A file with several pictures lists them; videoIndex is the one playing.
     val videos: List<VideoStream> = emptyList(),
     val videoIndex: Int = 0,
+    // What reaches the player: its size, among other things (the server's `output`).
+    val output: StreamOutput? = null,
 )
 
 @Serializable
@@ -896,3 +898,7 @@ data class StreamPace(
 
 @Serializable
 data class StreamWork(val encoder: String = "", val pace: StreamPace? = null)
+
+// The stream as it reaches the player: /playback's `output`.
+@Serializable
+data class StreamOutput(val width: Int = 0, val height: Int = 0, val videoCodec: String = "", val encoder: String = "")
