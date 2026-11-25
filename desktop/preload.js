@@ -84,6 +84,9 @@ if (location.protocol === 'wittymedia-app:') {
     pairStop: () => ipcRenderer.send('pair-stop'),
     // An invite link to a server away from home, and giving up on reaching one.
     invite: (link) => ipcRenderer.invoke('p2p-invite', link),
+    // The connecting screen: how the join going on now is getting on, and Cancel.
+    joinProgress: () => ipcRenderer.invoke('join-progress'),
+    joinCancel: () => ipcRenderer.send('join-cancel'),
     // The connection check: the last failed connection from away, and its details copied or saved.
     connectCheck: () => ipcRenderer.invoke('connect-check'),
     connectCheckCopy: () => ipcRenderer.invoke('connect-check-copy'),

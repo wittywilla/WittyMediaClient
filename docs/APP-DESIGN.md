@@ -716,6 +716,21 @@ The connect screen has a Quiet `joinAway` under Enter an address: a sign-in page
 `joinAwayHint`, the code in Display monospaced in a `panel` card (as the code a TV shows at home), a spinner with
 `joinAwayWaiting`, and Back. A code that ran out gives a Problem line and Primary `pairNew`.
 
+### Connecting
+
+From the moment a QR code is scanned, a code typed or an invite link given until the server opens, every app shows the
+connecting screen, never the list of servers to wait on (#173). It is a standalone page: the server's lockup (its name
+and logo once known, the plain mark and WittyMediaServer before), Title `connectingTitlePlain`, then the steps of
+connecting from `shared/data/connect-steps.json` as the connection check's rows: done with a tick and `checkStepDone`,
+the one being tried with a spinner and `checkStepNow`, the rest quiet. Under them, with a spinner and said aloud as it
+changes, the step's own `doing` ("Looking for a way to reach your server…"); after the file's `slow.after` seconds its
+`slow.say` in Body. A Secondary `cancel` stops the join and goes back to where it was started; the foot is
+`connectingSoFar` with the time so far. On success the server opens. A failure shows the connection check in the
+screen's place; one with words alone (a code no server made) marks the step it stopped at with those words, with
+Primary `checkTryAgain` and Secondary `back`. Android `ConnectingScreen`, Apple `ConnectingView`, the desktop's
+`connectingScreen` (shared/connect/connect.js); `shared/connect/e2e/connecting.spec.js` and the Android smoke test's
+`connecting` step hold it to this.
+
 ### On a tablet and a TV
 
 A tablet uses the same page at 640 wide. A TV puts the header on the left third (avatar 200, names, `switchProfile`,
