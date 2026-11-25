@@ -456,6 +456,109 @@ def film():
     sh('input keyevent KEYCODE_BACK', check=False)
 
 
+def wittytv():
+    """Live TV on a phone (WittyMediaClient#160): the website's guide in the shell's web view, laid out round the app's
+    bars, and its Watch full screen over them. Measured from the screen dump, in dp."""
+    launch()
+    tap('^Live TV$', 30)
+    wait('^Watch full screen$', 90, "Live TV's guide")
+    dp = int(re.findall(r'\d+', sh('wm density'))[-1]) / 160
+    tall = int(re.findall(r'(\d+)x(\d+)', sh('wm size'))[-1][1])
+
+    def page():
+        webs = [x for x in nodes() if x['cls'] == 'android.webkit.WebView' and x['b'][3] > x['b'][1]]
+        if not webs:
+            raise RuntimeError('no web view on screen')
+        return max(webs, key=lambda x: (x['b'][2] - x['b'][0]) * (x['b'][3] - x['b'][1]))['b']
+    b = page()
+    log('web view (dp):', [round(v / dp) for v in b], 'screen', round(tall / dp))
+    # Right under the shell's bar or tabs (status bar, 52 and 8): no empty band, which was about 120 more.
+    if b[1] / dp > 140:
+        raise RuntimeError(f'the guide starts {b[1] / dp:.0f} dp down, an empty band under the bar')
+    # Clear of the system's navigation bar at the foot.
+    if b[3] >= tall - 8 * dp:
+        raise RuntimeError('the guide runs under the navigation bar')
+    # The programme's buttons wrap instead of scrolling out of sight.
+    for label in ('Channel up', 'More about this programme', 'The whole day on this channel'):
+        x = find('^' + label + '$')
+        if not x or x['b'][2] - x['b'][0] < 40 * dp or x['b'][3] - x['b'][1] < 40 * dp:
+            raise RuntimeError(f'{label!r} is not on screen at its full size: {x and x["b"]}')
+    # Watch full screen has the whole screen, over the shell's top strip and floating bar.
+    tap('^Watch full screen$', 30)
+    time.sleep(4)
+    if find('^Got it$'):
+        tap('^Got it$', 10)
+    # The screen can't be dumped while the picture plays (uiautomator never sees it idle), so the window says it: the
+    # system's bars hidden for the player, and the phone turned to landscape for it (WatchOrientation.kt).
+    def full_screen():
+        win = sh('dumpsys window displays', check=False)
+        bars = re.search(r'type=statusBars[^\n]*visible=(true|false)', win)
+        turned = re.search(r'mRotation=ROTATION_(\d+)', win)
+        return (bars and bars.group(1) == 'false') and turned and int(turned.group(1)) in (90, 270)
+    until('the player over the whole screen, in landscape', full_screen, 30)
+    log('full screen: system bars hidden, landscape')
+    # Back comes back to the guide, not out of the app.
+    sh('input keyevent KEYCODE_BACK', check=False)
+    wait('^Watch full screen$', 30, 'the guide again after Back')
+
+
+def rotation():
+    """A phone turns to landscape for a film and back to portrait when the player closes; the player's Rotate button
+    turns it either way, and none of it starts the film again (WittyMediaClient#160)."""
+    def turned():
+        m = re.search(r'mRotation=ROTATION_(\d+)', sh('dumpsys window displays', check=False))
+        return int(m.group(1)) if m else -1
+
+    def position():
+        m = re.search(r'position=(\d+)', sh('dumpsys media_session', check=False))
+        return int(m.group(1)) if m else -1
+    sh('settings put system accelerometer_rotation 0', check=False)
+    sh('settings put system user_rotation 0', check=False)
+    launch()
+    play_film()
+    until('the film playing', playing, 60)
+    until('landscape for the film', lambda: turned() in (90, 270), 20)
+    time.sleep(3)
+    # Paused, so the screen can be read (uiautomator never sees a playing picture idle); turning must still not start
+    # the film again, which the position shows.
+    sh('input keyevent KEYCODE_MEDIA_PAUSE', check=False)
+    time.sleep(1)
+    start = position()
+
+    def paused():
+        m = re.search(r'state=(\w+)\(', sh('dumpsys media_session', check=False))
+        return bool(m) and m.group(1) == 'PAUSED'
+
+    def press(label):
+        # Paused, the player keeps its controls on screen. Nothing touches the picture to show them: a touch there,
+        # even a drag, plays or pauses, and once playing the controls fade while the screen is read, so a tap meant
+        # for Rotate lands on the picture and only pauses it again. A dump can also come back empty on a busy
+        # emulator: looked for again.
+        for _ in range(8):
+            if not paused():
+                sh('input keyevent KEYCODE_MEDIA_PAUSE', check=False)
+                until('the film paused', paused, 10)
+            x = find('^' + label + '$')
+            if x:
+                b = x['b']
+                sh(f'input tap {(b[0] + b[2]) // 2} {(b[1] + b[3]) // 2}')
+                log('tapped', label)
+                return
+            time.sleep(2)
+        raise RuntimeError(f'{label!r} never showed in the player; on screen: {texts()[:20]}')
+    press('Rotate to portrait')
+    until('portrait when asked', lambda: turned() == 0, 20)
+    press('Rotate to landscape')
+    until('landscape again when asked', lambda: turned() in (90, 270), 20)
+    time.sleep(2)
+    later = position()
+    log('position before and after turning (ms):', start, later)
+    if start > 0 and later >= 0 and later < start - 1000:
+        raise RuntimeError(f'the film went back from {start} to {later} ms while turning')
+    sh('input keyevent KEYCODE_BACK', check=False)
+    until('portrait after the player closes', lambda: turned() == 0, 20)
+
+
 def away():
     # The device takes itself onto the server's list by itself while at home; wait for that.
     until("this device on the server's peer-to-peer list", lambda: api('GET', '/api/p2p/devices'), 90)
@@ -540,6 +643,9 @@ step('found: the server found on the network, and its security code', found)
 step('address: Enter an address and a security code', address)
 step('settings: Settings opens', settings)
 step('film: the film plays', film)
+if not TV:
+    step('wittytv: Live TV on a phone, round the app bars, and full screen over them', wittytv)
+    step('rotation: a film turns to landscape, Rotate turns it, closing turns back to portrait', rotation)
 step('away: from away, peer to peer, still signed in', away)
 step('game: WittyPlay from away shows its frame', game)
 if not TV:

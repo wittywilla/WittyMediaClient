@@ -137,11 +137,39 @@ struct VideoPlayerView: View {
     }
 
     private func toggleLandscape() {
+        turn(landscape: !landscape)
+    }
+
+    /// Landscape (either side, as the phone is held) or portrait, whatever the rotation lock says.
+    private func turn(landscape on: Bool) {
         guard let scene = UIApplication.shared.connectedScenes.first(where: { $0.activationState == .foregroundActive }) as? UIWindowScene else { return }
-        landscape.toggle()
+        landscape = on
         #if os(iOS)
-        scene.requestGeometryUpdate(.iOS(interfaceOrientations: landscape ? .landscapeRight : .portrait)) { _ in }
+        scene.requestGeometryUpdate(.iOS(interfaceOrientations: on ? .landscape : .portrait)) { _ in }
         #endif
+    }
+
+    /// A phone opens a video in landscape, as video apps do, and goes back to portrait at its end or when the player
+    /// closes; Rotate asks for portrait for this video (WittyMediaClient#160). Not a video taller than wide, not an
+    /// iPad. Waits for the picture's size first, so a tall one never turns.
+    private var isPhone: Bool {
+        #if os(iOS)
+        return UIDevice.current.userInterfaceIdiom == .phone
+        #else
+        return false
+        #endif
+    }
+
+    private func turnForVideo() async {
+        guard isPhone else { return }
+        for _ in 0..<40 {
+            if let size = playback.player.currentItem?.presentationSize, size.width > 0, size.height > 0 {
+                if size.width >= size.height, !landscape { turn(landscape: true) }
+                return
+            }
+            try? await Task.sleep(nanoseconds: 250_000_000)
+            if Task.isCancelled { return }
+        }
     }
 
     private var subtitle: String {
@@ -236,8 +264,12 @@ struct VideoPlayerView: View {
             withAnimation(reduceMotion ? nil : .easeOut(duration: Tokens.Motion.appear)) { shown = false }
         }
         .task(id: "\(nearEnd || playback.ended)|\(playback.id)") { await findNext() }
+        .task(id: playback.id) { await turnForVideo() }
+        .onChange(of: playback.ended) { ended in
+            if ended, landscape { turn(landscape: false) }
+        }
         .onDisappear {
-            if landscape { toggleLandscape() }
+            if landscape { turn(landscape: false) }
         }
     }
 
@@ -428,7 +460,12 @@ struct VideoPlayerView: View {
                     .accessibilityLabel("Keyboard shortcuts")
                 }
                 #if os(iOS)
-                PlayerIconButton(symbol: landscape ? "arrow.down.right.and.arrow.up.left" : "arrow.up.left.and.arrow.down.right", label: "Fullscreen") { touched(); toggleLandscape() }
+                if isPhone {
+                    PlayerIconButton(symbol: "rectangle.portrait.rotate", label: landscape ? "Rotate to portrait" : "Rotate to landscape") { touched(); toggleLandscape() }
+                        .frame(minWidth: 48, minHeight: 48)
+                } else {
+                    PlayerIconButton(symbol: landscape ? "arrow.down.right.and.arrow.up.left" : "arrow.up.left.and.arrow.down.right", label: "Fullscreen") { touched(); toggleLandscape() }
+                }
                 #endif
             }
         }

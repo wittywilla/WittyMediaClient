@@ -43,6 +43,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.safeDrawingPadding
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -84,6 +85,11 @@ import com.wittywilla.wittymediaclient.net.themeSyncScript
 import com.wittywilla.wittymediaclient.net.staysInWebPlayer
 import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.WindowInsetsSides
+import androidx.compose.foundation.layout.navigationBars
+import androidx.compose.foundation.layout.only
+import androidx.compose.foundation.layout.windowInsetsPadding
 
 private const val CANT_OPEN = "This page couldn't open. Check the server is on, then try again."
 private const val NO_WEB_VIEW = "This device has no working web view, which this page needs."
@@ -414,6 +420,9 @@ fun ServerPageScreen(
                         web.dispatchKeyEvent(KeyEvent(KeyEvent.ACTION_UP, KeyEvent.KEYCODE_ESCAPE))
                     }
                     web.canGoBack() -> web.goBack()
+                    // Live TV's Watch full screen in the shell is the page's own route, with nothing to go back to: Back
+                    // comes back to the page the shell opened (the guide), not out of the tab, which closed the app (#160).
+                    inShell && fills && !pageFillsScreen(path) -> web.loadUrl(api.mediaUrl(pageAddress(path, nav.app.isTv)))
                     else -> out?.invoke() ?: nav.pop()
                 }
             }
@@ -427,14 +436,27 @@ fun ServerPageScreen(
                 ActionButton("Back", nav::pop, requestFocus = true)
             }
         } else if (inShell && !fills) {
-            // Inside the app's shell: under its 52-high bar, and down to the foot, where the page keeps room for the floating bar.
-            val top = with(androidx.compose.ui.platform.LocalDensity.current) { WindowInsets.statusBars.getTop(this).toDp() }
-            Box(Modifier.fillMaxSize().padding(top = top + 52.dp)) {
-                AndroidView(factory = { web }, modifier = Modifier.fillMaxSize())
+            // Inside the app's shell: under its bar or tabs (the room the shell keeps, pageTop), clear of the system's
+            // navigation bar at the foot and the sides, and the page keeps room at its foot for the floating bar
+            // (web/src/shell.css, data-app). The web view ran under the gesture bar, and on its side under the buttons
+            // on the right (#160). A camera's cut-out is not kept clear: a phone on its side left a 39 dp strip of
+            // nothing beside the page for a hole a few dp across, which the page's own edge clears.
+            Box(Modifier.fillMaxSize().pageTop().windowInsetsPadding(WindowInsets.navigationBars.only(WindowInsetsSides.Horizontal + WindowInsetsSides.Bottom))) {
+                AndroidView(factory = { web.also { (it.parent as? ViewGroup)?.removeView(it) } }, modifier = Modifier.fillMaxSize())
                 if (!showing) Loading()
             }
+            // Full screen covers the shell's bars too: it goes in the layer drawn over them (OverShell), not under the
+            // top strip and the floating bar, which hid the player's time and buttons (#160).
+            val over = LocalOverShell.current
             fullScreen?.let { view ->
-                AndroidView(factory = { view.also { it.requestFocus() } }, modifier = Modifier.fillMaxSize())
+                if (over == null) AndroidView(factory = { view.also { it.requestFocus() } }, modifier = Modifier.fillMaxSize())
+                else DisposableEffect(view) {
+                    val sheet: @Composable () -> Unit = {
+                        AndroidView(factory = { view.also { (it.parent as? ViewGroup)?.removeView(it); it.requestFocus() } }, modifier = Modifier.fillMaxSize().background(androidx.compose.ui.graphics.Color.Black))
+                    }
+                    over.sheets.add(sheet)
+                    onDispose { over.sheets.remove(sheet) }
+                }
             }
         } else if (title.isNotEmpty() && !fills) {
             Column(Modifier.fillMaxSize().safeDrawingPadding()) {
@@ -453,6 +475,43 @@ fun ServerPageScreen(
             fullScreen?.let { view ->
                 AndroidView(factory = { view.also { it.requestFocus() } }, modifier = Modifier.fillMaxSize())
             }
+        } else if (inShell && LocalOverShell.current != null) {
+            // A page in the shell that fills the screen (Live TV's Watch full screen goes to the watch page) has all of
+            // it: the web view moves to the layer drawn over the shell's top strip and floating bar, which covered the
+            // player's time and buttons (#160), and comes back under them when the page stops filling it.
+            val over = LocalOverShell.current!!
+            // A phone turns to landscape for the channel, as for any video, with a Rotate button over the page's
+            // top corner for portrait instead (WatchOrientation.kt, #160).
+            val phone = isPhoneForVideo(nav.app.isTv)
+            var portraitChosen by remember { mutableStateOf(false) }
+            WatchOrientation(on = phone, portrait = portraitChosen)
+            DisposableEffect(web) {
+                val sheet: @Composable () -> Unit = {
+                    Box(Modifier.fillMaxSize().background(androidx.compose.ui.graphics.Color.Black)) {
+                        AndroidView(factory = { web.also { (it.parent as? ViewGroup)?.removeView(it); it.requestFocus() } }, modifier = Modifier.fillMaxSize().imePadding())
+                        if (!showing) Loading()
+                        if (phone) {
+                            val label = if (portraitChosen) "Rotate to landscape" else "Rotate to portrait"
+                            androidx.compose.material3.IconButton(
+                                onClick = { portraitChosen = !portraitChosen },
+                                modifier = Modifier.align(androidx.compose.ui.Alignment.TopEnd).padding(8.dp).size(48.dp)
+                                    .background(androidx.compose.ui.graphics.Color.Black.copy(alpha = 0.45f), androidx.compose.foundation.shape.CircleShape),
+                            ) { androidx.compose.material3.Icon(WebIcons.Rotate, contentDescription = label, tint = androidx.compose.ui.graphics.Color.White) }
+                        }
+                    }
+                }
+                over.sheets.add(sheet)
+                onDispose { over.sheets.remove(sheet) }
+            }
+            fullScreen?.let { view ->
+                DisposableEffect(view) {
+                    val sheet: @Composable () -> Unit = {
+                        AndroidView(factory = { view.also { (it.parent as? ViewGroup)?.removeView(it); it.requestFocus() } }, modifier = Modifier.fillMaxSize().background(androidx.compose.ui.graphics.Color.Black))
+                    }
+                    over.sheets.add(sheet)
+                    onDispose { over.sheets.remove(sheet) }
+                }
+            }
         } else {
             val room = if (fills) Modifier.imePadding() else Modifier.safeDrawingPadding()
             AndroidView(factory = { web }, modifier = Modifier.fillMaxSize().then(room))
@@ -465,4 +524,4 @@ fun ServerPageScreen(
 }
 
 // Marks the page as inside the app, and adds the website's rules for it when the server is older than them.
-private const val MARKS_THE_APP = "(function(){var d=document.documentElement;if(!d)return;d.dataset.app='wittymediaclient';if(!document.adoptedStyleSheets||window.__wmcApp)return;window.__wmcApp=1;var a='html[data-app=\"wittymediaclient\"]';var s=new CSSStyleSheet();s.replaceSync('@media (max-width:700px){'+a+' :is(.tabbar,.section-row,.section-row-brand,.top-back){display:none}'+a+' .topbar .act-btn{margin-left:auto}'+a+' .app .topbar::before,'+a+' .app .topbar::after{display:none}'+a+' .app .topbar:not(:has(.act-btn)){display:none}}');document.adoptedStyleSheets=document.adoptedStyleSheets.concat([s]);})();"
+private const val MARKS_THE_APP = "(function(){var d=document.documentElement;if(!d)return;d.dataset.app='wittymediaclient';if(!document.adoptedStyleSheets||window.__wmcApp)return;window.__wmcApp=1;var a='html[data-app=\"wittymediaclient\"]';var s=new CSSStyleSheet();s.replaceSync('@media (max-width:700px),(max-height:500px){'+a+' :is(.tabbar,.section-row,.section-row-brand,.top-back){display:none}'+a+' .topbar .act-btn{margin-left:auto}'+a+' .app .topbar::before,'+a+' .app .topbar::after{display:none}'+a+' .app .topbar:not(:has(.act-btn)){display:none}}');document.adoptedStyleSheets=document.adoptedStyleSheets.concat([s]);})();"
