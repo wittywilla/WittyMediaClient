@@ -135,6 +135,8 @@ object WebIcons {
     val Info: ImageVector by lazy { webIcon("info", "M11 7h2v2h-2zm0 4h2v6h-2zm1-9a10 10 0 100 20 10 10 0 000-20z") }
     val Remote: ImageVector by lazy { webIcon("remote", "M15 2H9a3 3 0 00-3 3v14a3 3 0 003 3h6a3 3 0 003-3V5a3 3 0 00-3-3zm-3 3a2.5 2.5 0 110 5 2.5 2.5 0 010-5zM9.5 13h1.5v1.5H9.5zm3.5 0h1.5v1.5H13zm-3.5 3h1.5v1.5H9.5zm3.5 0h1.5v1.5H13z") }
     val Mini: ImageVector by lazy { webIcon("mini", "M19 11h-8v6h8zm4 8V5a2 2 0 00-2-2H3a2 2 0 00-2 2v14a2 2 0 002 2h18a2 2 0 002-2zm-2 0H3V5h18z") }
+    // Turn the picture between landscape and portrait (Material's screen rotation, Apache 2.0).
+    val Rotate: ImageVector by lazy { webIcon("rotate", "M16.48 2.52c3.27 1.55 5.61 4.72 5.97 8.48h1.5C23.44 4.84 18.29 0 12 0l-.66.03 3.81 3.81 1.33-1.32zm-6.25-.77c-.59-.59-1.54-.59-2.12 0L1.75 8.11c-.59.59-.59 1.54 0 2.12l12.02 12.02c.59.59 1.54.59 2.12 0l6.36-6.36c.59-.59.59-1.54 0-2.12L10.23 1.75zm4.6 19.44L2.81 9.170l6.36-6.36 12.02 12.02-6.36 6.36zm-7.31.29C4.25 19.94 1.91 16.76 1.55 13H.05C.56 19.16 5.71 24 12 24l.66-.03-3.81-3.81-1.33 1.32z") }
     val Expand: ImageVector by lazy { webIcon("expand", "M4 4h7v2H7.4l4.3 4.3-1.4 1.4L6 7.4V11H4zm16 16h-7v-2h3.6l-4.3-4.3 1.4-1.4 4.3 4.3V13h2z") }
 
     // The music player's own (web/src/audio/icons.tsx), which the music pages use too. Its "⋯" sits a little wider.
