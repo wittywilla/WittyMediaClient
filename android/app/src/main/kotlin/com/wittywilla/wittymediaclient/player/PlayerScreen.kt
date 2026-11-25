@@ -221,6 +221,8 @@ fun PlayerScreen(nav: Nav, id: Long, startOver: Boolean) {
     var partyOpen by remember { mutableStateOf(false) }
     var speed by remember { mutableFloatStateOf(1f) }
     var maxSpeed by remember { mutableDoubleStateOf(4.0) }
+    // The fastest speed this video plays at when the server can't convert it fast enough for more (PaceStep.Slower).
+    var speedCap by remember { mutableDoubleStateOf(Double.MAX_VALUE) }
     var subtitleSize by remember { mutableDoubleStateOf(ViewPrefsStore.subtitleSize(context)) }
     LaunchedEffect(Unit) { runCatching { maxSpeed = api.playerPrefs().maxSpeed.takeIf { it > 0 } ?: 4.0 } }
 
@@ -345,18 +347,30 @@ fun PlayerScreen(nav: Nav, id: Long, startOver: Boolean) {
             val p = api.streamPace(s.streamId)
             behind = if (p != null && !p.keepingUp && p.speed > 0) behind + 1 else 0
             if (p == null || !p.fastest || behind < 2) continue
-            val lower = lowerHeight(s.output?.height ?: 0)
+            val height = s.output?.height ?: 0
             val chosen = !ask.quality.isNullOrEmpty() && ask.quality != "auto" && ask.quality != autoQuality.value
-            if (!chosen && lower > 0) {
-                autoQuality.value = "h$lower"
-                paceNote = stepDownWords(p.speed, p.rate, lower)
-                ask = ask.copy(quality = "h$lower", startSec = clock.lastPlace() ?: currentFilmSec(), reload = true, waitMs = 0, attempt = ask.attempt + 1)
-            } else {
-                paceNote = paceWords(p.speed, p.rate)
+            val step = paceStep(p.speed, p.rate, height, chosen)
+            when (step) {
+                PaceStep.Lower -> {
+                    val lower = lowerHeight(height)
+                    autoQuality.value = "h$lower"
+                    paceNote = stepDownWords(p.speed, p.rate, lower)
+                    ask = ask.copy(quality = "h$lower", startSec = clock.lastPlace() ?: currentFilmSec(), reload = true, waitMs = 0, attempt = ask.attempt + 1)
+                }
+                PaceStep.Slower -> {
+                    // Even 720p can't keep up at this speed: the fastest speed it can, and no faster in the menu.
+                    val to = sustainableRate(p.speed, p.rate)
+                    speedCap = to
+                    remoteTarget.askSpeed(to.toFloat())
+                    paceNote = slowerWords(p.rate, to)
+                }
+                PaceStep.Tell -> paceNote = paceWords(p.speed, p.rate)
             }
             kotlinx.coroutines.delay(8_000)
             paceNote = ""
-            return@LaunchedEffect
+            // Slowed down: watch on, in case even this speed is too much. Otherwise this stream is done with.
+            if (step != PaceStep.Slower) return@LaunchedEffect
+            behind = 0
         }
     }
 
@@ -696,7 +710,7 @@ fun PlayerScreen(nav: Nav, id: Long, startOver: Boolean) {
             }
         } else if (picker == Picker.Speed) {
             PlayerMenu("Playback speed", Modifier.align(Alignment.CenterEnd)) {
-                SPEEDS.filter { it <= maxSpeed }.forEach { s ->
+                SPEEDS.filter { it <= maxSpeed && it <= speedCap }.forEach { s ->
                     MenuChoice(speedWords(s), if (s > 4.0) "May be muted" else "", "", speed.toDouble() == s) {
                         remoteTarget.askSpeed(s.toFloat())
                         picker = Picker.None

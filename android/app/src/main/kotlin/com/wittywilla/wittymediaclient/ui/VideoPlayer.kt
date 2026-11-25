@@ -556,7 +556,7 @@ private fun PanelHead(words: String) {
 
 @Composable
 private fun SpeedList(session: VideoSession, modifier: Modifier, close: () -> Unit) {
-    val choices = SPEEDS.filter { it <= session.maxSpeed }
+    val choices = SPEEDS.filter { it <= session.maxSpeed && it <= session.speedCap }
     Column(modifier.widthIn(min = 220.dp).heightIn(max = 420.dp).playerPanel().verticalScroll(rememberScrollState()).padding(8.dp)) {
         PanelHead("Playback speed")
         choices.forEach { s ->

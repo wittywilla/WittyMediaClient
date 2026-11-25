@@ -278,13 +278,25 @@ final class PlaybackModel: ObservableObject {
                 guard let p = await client.streamPace(id) else { continue }
                 behind = (!p.keepingUp && p.speed > 0) ? behind + 1 : 0
                 guard p.fastest, behind >= 2 else { continue }
-                let lower = PaceRules.lowerHeight(answer.output?.height ?? 0)
+                let height = answer.output?.height ?? 0
+                let lower = PaceRules.lowerHeight(height)
                 let chosen = !(self.quality ?? "").isEmpty && self.quality != "auto" && self.quality != self.autoQuality
-                if !chosen && lower > 0 {
-                    self.autoQuality = "h(lower)"
+                switch PaceRules.step(speed: p.speed, rate: p.rate, height: height, viewerChose: chosen) {
+                case .lower:
+                    self.autoQuality = "h\(lower)"
                     self.paceNote = PaceRules.steppedDown(speed: p.speed, rate: p.rate, height: lower)
-                    self.choose(quality: "h(lower)")
-                } else {
+                    self.choose(quality: "h\(lower)")
+                case .slower:
+                    // The speed it keeps up with, and the menu stops there for this video (the next one asks the server again).
+                    let to = PaceRules.sustainableRate(speed: p.speed, rate: p.rate)
+                    self.speeds = self.speeds.filter { $0 <= to }
+                    self.setSpeed(Float(to))
+                    self.paceNote = PaceRules.slower(rate: p.rate, to: to)
+                    behind = 0
+                    try? await Task.sleep(nanoseconds: 8_000_000_000)
+                    self.paceNote = ""
+                    continue
+                case .tell:
                     self.paceNote = PaceRules.tooSlow(speed: p.speed, rate: p.rate)
                 }
                 try? await Task.sleep(nanoseconds: 8_000_000_000)
