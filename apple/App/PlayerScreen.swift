@@ -256,7 +256,8 @@ final class PlaybackModel: ObservableObject {
             while !Task.isCancelled {
                 try? await Task.sleep(nanoseconds: 5_000_000_000)
                 guard let self, !Task.isCancelled else { return }
-                guard self.player.timeControlStatus == .playing else { behind = 0; continue }
+                // Paused by the viewer, not waiting for the stream: a server that can't keep up stalls the player.
+                guard self.player.timeControlStatus != .paused else { behind = 0; continue }
                 guard let p = await client.streamPace(id) else { continue }
                 behind = (!p.keepingUp && p.speed > 0) ? behind + 1 : 0
                 guard p.fastest, behind >= 2 else { continue }
@@ -334,6 +335,7 @@ final class PlaybackModel: ObservableObject {
             }
             let before = stream
             stream = answer
+            clock.switching(startsAt: answer.offset + (answer.startAtSec ?? 0))
             skips.opened(item: id, stream: answer, client: client)
             watchPace(answer, client: client)
             ClientLog.shared.session = answer.streamId ?? ""

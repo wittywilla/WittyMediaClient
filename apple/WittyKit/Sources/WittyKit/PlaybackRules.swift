@@ -20,7 +20,12 @@ public struct PlaybackClock: Equatable {
     public init() {}
 
     /// A new stream was asked for. The old one's clock is no use from here.
-    public mutating func switching() { settled = false }
+    /// startsAt: where the new stream opens in the film. Until its first frame that is where the viewer is, so a
+    /// change asked for before then (a size down while a slow server makes the first part) keeps the place.
+    public mutating func switching(startsAt: Double? = nil) {
+        settled = false
+        if let startsAt, startsAt.isFinite, startsAt > 0 { filmSeconds = startsAt }
+    }
 
     /// The new stream is ready and has been seeked to where it should start.
     public mutating func ready() {

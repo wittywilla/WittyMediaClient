@@ -298,7 +298,8 @@ class VideoSession(private val nav: Nav, val id: Long, private val startAt: Doub
         while (true) {
             kotlinx.coroutines.delay(5_000)
             val s = stream ?: continue
-            if (s.decision != "transcode" || !playing || s.streamId.isEmpty() || told == s.streamId) { behind = 0; continue }
+            // playWhenReady, not playing: a server that can't keep up stalls the player, and a stall isn't a pause.
+            if (s.decision != "transcode" || !player.playWhenReady || s.streamId.isEmpty() || told == s.streamId) { behind = 0; continue }
             val p = api.streamPace(s.streamId)
             behind = if (p != null && !p.keepingUp && p.speed > 0) behind + 1 else 0
             if (p != null && p.fastest && behind >= 2) {
@@ -378,7 +379,7 @@ class VideoSession(private val nav: Nav, val id: Long, private val startAt: Doub
             stream = answer
             ClientLog.session = answer.streamId
             if (changed) {
-                clock.switching()
+                clock.switching(answer.timeOffsetSec + answer.startAtSec)
                 val builder = MediaItem.Builder()
                     .setUri(api.mediaUrl(answer.url))
                     .setMediaMetadata(MediaMetadata.Builder().setTitle(current.showTitle?.ifEmpty { null } ?: current.title).setSubtitle(current.title).build())
