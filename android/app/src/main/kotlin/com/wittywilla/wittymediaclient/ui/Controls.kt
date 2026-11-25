@@ -757,7 +757,7 @@ private fun GroupRowView(row: GroupRow, modifier: Modifier = Modifier) {
             if (row.value.isNotEmpty()) {
                 Text(
                     row.value, color = if (row.valueColour == Color.Unspecified) scheme.onSurfaceVariant else row.valueColour,
-                    style = MaterialTheme.typography.secondary, maxLines = 1,
+                    style = MaterialTheme.typography.secondary, maxLines = 1, overflow = TextOverflow.Ellipsis,
                 )
             }
             row.trailing?.invoke()
