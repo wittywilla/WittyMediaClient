@@ -456,6 +456,45 @@ def film():
     sh('input keyevent KEYCODE_BACK', check=False)
 
 
+def wittytv():
+    """Live TV on a phone (WittyMediaClient#160): the website's guide in the shell's web view, laid out round the app's
+    bars, and its Watch full screen over them. Measured from the screen dump, in dp."""
+    launch()
+    tap('^Live TV$', 30)
+    wait('^Watch full screen$', 90, "Live TV's guide")
+    dp = int(re.findall(r'\d+', sh('wm density'))[-1]) / 160
+    tall = int(re.findall(r'(\d+)x(\d+)', sh('wm size'))[-1][1])
+
+    def page():
+        webs = [x for x in nodes() if x['cls'] == 'android.webkit.WebView' and x['b'][3] > x['b'][1]]
+        if not webs:
+            raise RuntimeError('no web view on screen')
+        return max(webs, key=lambda x: (x['b'][2] - x['b'][0]) * (x['b'][3] - x['b'][1]))['b']
+    b = page()
+    log('web view (dp):', [round(v / dp) for v in b], 'screen', round(tall / dp))
+    # Right under the shell's bar or tabs (status bar, 52 and 8): no empty band, which was about 120 more.
+    if b[1] / dp > 140:
+        raise RuntimeError(f'the guide starts {b[1] / dp:.0f} dp down, an empty band under the bar')
+    # Clear of the system's navigation bar at the foot.
+    if b[3] >= tall - 8 * dp:
+        raise RuntimeError('the guide runs under the navigation bar')
+    # The programme's buttons wrap instead of scrolling out of sight.
+    for label in ('Channel up', 'More about this programme', 'The whole day on this channel'):
+        x = find('^' + label + '$')
+        if not x or x['b'][2] - x['b'][0] < 40 * dp or x['b'][3] - x['b'][1] < 40 * dp:
+            raise RuntimeError(f'{label!r} is not on screen at its full size: {x and x["b"]}')
+    # Watch full screen has the whole screen, over the shell's top strip and floating bar.
+    tap('^Watch full screen$', 30)
+    time.sleep(4)
+    if find('^Got it$'):
+        tap('^Got it$', 10)
+    full = until('the player over the whole screen', lambda: (lambda w: w if w[1] <= 2 and w[3] >= tall - 2 else None)(page()), 30)
+    log('full screen (dp):', [round(v / dp) for v in full])
+    # Back comes back to the guide, not out of the app.
+    sh('input keyevent KEYCODE_BACK', check=False)
+    wait('^Watch full screen$', 30, 'the guide again after Back')
+
+
 def away():
     # The device takes itself onto the server's list by itself while at home; wait for that.
     until("this device on the server's peer-to-peer list", lambda: api('GET', '/api/p2p/devices'), 90)
@@ -540,6 +579,8 @@ step('found: the server found on the network, and its security code', found)
 step('address: Enter an address and a security code', address)
 step('settings: Settings opens', settings)
 step('film: the film plays', film)
+if not TV:
+    step('wittytv: Live TV on a phone, round the app bars, and full screen over them', wittytv)
 step('away: from away, peer to peer, still signed in', away)
 step('game: WittyPlay from away shows its frame', game)
 if not TV:

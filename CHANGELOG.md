@@ -5,6 +5,20 @@ What changed in WittyMediaClient, newest first. What changed before it had a rep
 
 ## Unreleased
 
+**WittyTV on a phone (#160)**
+
+- **No empty band under the bar.** Live TV's guide, the server's page in the app's web view, got the shell's room at
+  its top twice, which left about 120 dp empty (more since 0.6.3 counted the top tabs) and about 150 for the whole
+  page on its side.
+- **Watch full screen has the whole screen.** It was drawn under the app's top strip and floating bar, which hid the
+  player's time, settings and full-screen buttons. A page in the shell that fills the screen now goes over them, and
+  Back from it comes back to the guide instead of closing the app.
+- **Clear of the navigation bar**, at the foot and, on its side, the buttons on the right.
+- **Turning the phone no longer reloads the page** and stops the channel, full screen included: the page already on
+  screen stays until the one for the new size comes.
+- **A smoke test on the phone emulator** checks the guide starts under the bar, stops above the navigation bar, shows
+  every programme button at full size, and that Watch full screen covers the screen and Back returns to the guide.
+
 - **Live TV: +30 is back on the TVs, up to live.** At the owner's request (wittywilla/WittyMediaServer#688 had removed it):
   Android TV's Fast forward, and Next outside an ad break, go on 30 seconds again; Apple TV's Dock has On 30, greyed out at
   the live edge. Neither goes past live. The Android phone uses the server's web player, changed there.
