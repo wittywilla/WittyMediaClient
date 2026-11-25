@@ -5,6 +5,11 @@ What changed in WittyMediaClient, newest first. What changed before it had a rep
 
 ## Unreleased
 
+- **Choose a server says Encrypted once** (#136). Connect from anywhere's picture already says it, so the chip under
+  the buttons that said "End to end encrypted" is gone, on Android and Apple.
+- **docs/APP-DESIGN.md, Centring:** a setting's screen reads from one edge, nothing is drawn under a top bar, and one
+  label says one thing, as the server's Settings pages now do (wittywilla/WittyMediaServer#678).
+
 **Layout outside Settings (#137)**
 
 - **Choose a server is centred throughout.** Its title and lead were centred, but "On this network", "No servers
