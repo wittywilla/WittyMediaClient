@@ -224,10 +224,11 @@ fun ChannelScreen(nav: Nav, start: String) {
     DisposableEffect(Unit) {
         onDispose {
             LiveTv.muted = !TvLookStore.look.previewSound
-            // Back to the guide: the preview carries on with this channel, as it is now. Anywhere else: it stops.
+            // Back to the guide: the preview carries on with this channel exactly where it is, started over or gone
+            // back included (it used to jump to live). Anywhere else: it stops.
             view.post {
                 val toGuide = nav.current == Route.LiveTv || (nav.current as? TvRoute)?.screen == TvScreen.Guide || (nav.current as? TvRoute)?.screen is TvScreen.Channel
-                if (!toGuide) LiveTv.stop() else if (LiveTv.fromStart != null) LiveTv.goLive()
+                if (!toGuide) LiveTv.stop()
             }
         }
     }

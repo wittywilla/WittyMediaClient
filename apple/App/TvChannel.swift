@@ -159,9 +159,8 @@ struct ChannelPlayer: View {
         }
         .onDisappear {
             live.muted = !looks.look.previewSound
-            // The guide's preview is always live: from the start ends with the player.
-            if live.fromStart != nil { live.stop() }
-            // Back to the guide: the preview carries on with this channel. Anywhere else: it stops.
+            // Back to the guide: the preview carries on with this channel exactly where it is, started over or gone
+            // back included (a programme from its start used to end with the player). Anywhere else: it stops.
             DispatchQueue.main.async {
                 if !model.path.contains(.guide) { live.stop() }
             }

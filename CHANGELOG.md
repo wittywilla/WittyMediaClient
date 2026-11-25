@@ -26,6 +26,11 @@ What changed in WittyMediaClient, newest first. What changed before it had a rep
   every programme button at full size, and that Watch full screen covers the screen and Back returns to the guide; and
   that a film opens in landscape, Rotate turns it both ways, closing goes back to portrait, and the film never restarts.
 
+- **Live TV on Android TV and Apple TV: leaving full screen keeps the channel where it was.** A programme started over,
+  or watched from its start, used to jump to live (Android TV) or start again live (Apple TV) when going back to the
+  guide; the guide's preview now carries on with it exactly where it was. The web, desktop and Android phone side is
+  wittywilla/WittyMediaServer#768.
+
 - **Live TV: +30 is back on the TVs, up to live.** At the owner's request (wittywilla/WittyMediaServer#688 had removed it):
   Android TV's Fast forward, and Next outside an ad break, go on 30 seconds again; Apple TV's Dock has On 30, greyed out at
   the live edge. Neither goes past live. The Android phone uses the server's web player, changed there.
