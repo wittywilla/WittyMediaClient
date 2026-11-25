@@ -149,6 +149,8 @@ internal fun speedWords(s: Double): String = if (s == 1.0) "Normal" else "${if (
 // address may well be the same and the player has given up on it, so it has to open it again.
 private data class Ask(
     val audio: Int? = null,
+    // The sound is asked for as AAC, not as the TV or receiver would take it undecoded: for a speed other than 1×.
+    val faster: Boolean = false,
     val subtitle: Int? = null,
     val startSec: Double? = null,
     val convert: Boolean = false,
@@ -205,6 +207,8 @@ fun PlayerScreen(nav: Nav, id: Long, startOver: Boolean) {
     var waitingForNetwork by remember { mutableStateOf(false) }
     // What the player says about a server converting slower than the video plays (shown for a few seconds).
     var paceNote by remember { mutableStateOf("") }
+    // The speed the viewer chose, which Media3 may have put back to 1× while the sound went to the TV undecoded.
+    var wantedSpeed by remember { mutableFloatStateOf(1f) }
     val autoQuality = remember { mutableStateOf<String?>(null) }
     var watchNextShown by remember { mutableStateOf(false) }
     var showInfo by remember { mutableStateOf(false) }
@@ -359,7 +363,7 @@ fun PlayerScreen(nav: Nav, id: Long, startOver: Boolean) {
             if (item == null) item = api.item(id)
             // Reading the device's decoders can take seconds the first time, so never on the main thread: a remote's
             // keys would wait behind it (VideoSession does the same).
-            val capabilities = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Default) { DeviceProfile.capabilities(context) }
+            val capabilities = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Default) { DeviceProfile.capabilities(context, faster = ask.faster) }
             val answer = api.playback(
                 id,
                 PlaybackRequest(
@@ -406,6 +410,8 @@ fun PlayerScreen(nav: Nav, id: Long, startOver: Boolean) {
                 }
                 player.setMediaItem(media.build(), (answer.startAtSec * 1000).toLong())
                 player.prepare()
+                // Asked again so the sound can change speed: the speed Media3 had put back to 1×.
+                if (ask.faster && wantedSpeed != 1f) player.setPlaybackParameters(androidx.media3.common.PlaybackParameters(wantedSpeed))
                 player.playWhenReady = true
             }
             // Tracks the player can switch itself: embedded, renditions and sidecars.
@@ -691,8 +697,16 @@ fun PlayerScreen(nav: Nav, id: Long, startOver: Boolean) {
             PlayerMenu("Playback speed", Modifier.align(Alignment.CenterEnd)) {
                 SPEEDS.filter { it <= maxSpeed }.forEach { s ->
                     MenuChoice(speedWords(s), if (s > 4.0) "May be muted" else "", "", speed.toDouble() == s) {
+                        wantedSpeed = s.toFloat()
                         remoteTarget.askSpeed(s.toFloat())
                         picker = Picker.None
+                        // Sound going to the TV or receiver undecoded keeps its own speed (Media3 puts the player
+                        // back to 1×): the same place again, with the sound converted so it plays at this speed.
+                        if (s != 1.0 && !ask.faster && DeviceProfile.passesThrough(context, player.audioFormat?.sampleMimeType)) {
+                            paceNote = PASSTHROUGH_SPEED
+                            ask = ask.copy(faster = true, startSec = clock.lastPlace() ?: currentFilmSec(), reload = true, waitMs = 0, attempt = ask.attempt + 1)
+                            nav.app.scope.launch { kotlinx.coroutines.delay(8_000); if (paceNote == PASSTHROUGH_SPEED) paceNote = "" }
+                        }
                     }
                 }
             }

@@ -55,6 +55,8 @@ import kotlinx.coroutines.withContext
 // What to ask the server for. A new value opens or changes the stream.
 private data class VideoAsk(
     val audio: Int? = null,
+    // The sound is asked for as AAC, not as the TV or receiver would take it undecoded: for a speed other than 1×.
+    val faster: Boolean = false,
     val subtitle: Int? = null,
     val burn: Boolean = false,
     val video: Int? = null,
@@ -334,7 +336,7 @@ class VideoSession(private val nav: Nav, val id: Long, private val startAt: Doub
             val start = want.startSec ?: current.progress?.resumeSec?.takeIf { it > 0 } ?: 0.0
             val streaming = ViewPrefsStore.streaming(app)
             // Reading the device's decoders can take seconds the first time, so never on the main thread.
-            val capabilities = withContext(Dispatchers.Default) { DeviceProfile.capabilities(app) }
+            val capabilities = withContext(Dispatchers.Default) { DeviceProfile.capabilities(app, faster = want.faster || speed != 1f) }
             val answer = api.playback(
                 id,
                 PlaybackRequest(
@@ -495,6 +497,12 @@ class VideoSession(private val nav: Nav, val id: Long, private val startAt: Doub
         if (steering?.speed(value) == true) return
         speed = value
         player.setPlaybackParameters(PlaybackParameters(value))
+        // Sound going to the TV or receiver undecoded keeps its own speed, and the picture would follow it
+        // there: the same place again, with the sound converted so it plays at this speed.
+        if (value != 1f && !ask.faster && DeviceProfile.passesThrough(app, player.audioFormat?.sampleMimeType)) {
+            note(PASSTHROUGH_SPEED)
+            ask = ask.copy(faster = true, startSec = filmSec, reload = true, waitMs = 0)
+        }
     }
 
     // Choosing a track asks again from the same place, as the website does.
