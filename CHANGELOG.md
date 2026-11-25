@@ -29,6 +29,10 @@ What changed in WittyMediaClient, newest first. What changed before it had a rep
   Android TV's Fast forward, and Next outside an ad break, go on 30 seconds again; Apple TV's Dock has On 30, greyed out at
   the live edge. Neither goes past live. The Android phone uses the server's web player, changed there.
 
+- **Android: the music visualizer on every server.** Bars, Waves and Drift are the app's own, drawn from the sound it
+  plays, but Now Playing hid them, and the wide bar's Visualizer button, on a server without the WittyVisualizer module
+  (a new install, a NAS in Docker). They now show whether or not the server has it.
+
 ## 0.6.3
 
 Released 2026-11-25.
