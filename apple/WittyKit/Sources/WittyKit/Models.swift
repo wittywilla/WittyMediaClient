@@ -609,6 +609,27 @@ public enum PaceRules {
         "This server converts this video at \(times(speed)), slower than the \(times(rate)) it plays at, so it goes on at \(height)p."
     }
 
+    public enum Step: Equatable { case lower, slower, tell }
+
+    /// What to do when the conversion falls behind (the website's tooSlow): faster than 1×, a size down once,
+    /// to 720p at most; then the fastest speed it keeps up with; and only then words.
+    public static func step(speed: Double, rate: Double, height: Int, viewerChose: Bool) -> Step {
+        let fast = rate > 1
+        if viewerChose || lowerHeight(height) == 0 || (fast && height <= 720) {
+            return fast && sustainableRate(speed: speed, rate: rate) < rate ? .slower : .tell
+        }
+        return .lower
+    }
+
+    /// The fastest of the menu's speeds, 1× or more and below the one asked for, the server converts with a tenth to spare.
+    public static func sustainableRate(speed: Double, rate: Double) -> Double {
+        PlayerSpeeds.all.filter { $0 >= 1 && $0 <= rate && $0 * 1.1 <= speed }.max() ?? 1
+    }
+
+    public static func slower(rate: Double, to: Double) -> String {
+        "This server can’t keep up at \(times(rate)) for this video, so it plays at \(times(to))."
+    }
+
     public static func tooSlow(speed: Double, rate: Double) -> String {
         "This server converts this video at \(times(speed)), slower than the \(times(rate)) it plays at, so it will stop now and then to catch up. A lower speed or quality plays smoothly."
     }

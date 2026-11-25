@@ -125,6 +125,9 @@ class VideoSession(private val nav: Nav, val id: Long, private val startAt: Doub
         private set
     var maxSpeed by mutableDoubleStateOf(4.0)
         private set
+    // The fastest speed this video plays at when the server can't convert it fast enough for more (PaceStep.Slower).
+    var speedCap by mutableDoubleStateOf(Double.MAX_VALUE)
+        private set
     var prefs by mutableStateOf(ViewPrefsStore.load(app, id))
         private set
     var mini by mutableStateOf(false)
@@ -303,13 +306,22 @@ class VideoSession(private val nav: Nav, val id: Long, private val startAt: Doub
                 behind = 0
                 val height = s.output?.height ?: 0
                 val chosen = !ask.quality.isNullOrEmpty() && ask.quality != "auto" && ask.quality != autoQuality
-                val lower = lowerHeight(height)
-                if (!chosen && lower > 0) {
-                    autoQuality = "h$lower"
-                    note(stepDownWords(p.speed, p.rate, lower))
-                    chooseQuality("h$lower")
-                } else {
-                    note(paceWords(p.speed, p.rate))
+                when (paceStep(p.speed, p.rate, height, chosen)) {
+                    PaceStep.Lower -> {
+                        val lower = lowerHeight(height)
+                        autoQuality = "h$lower"
+                        note(stepDownWords(p.speed, p.rate, lower))
+                        chooseQuality("h$lower")
+                    }
+                    PaceStep.Slower -> {
+                        // Even 720p can't keep up at this speed: the fastest speed it can, and no faster in the menu.
+                        val to = sustainableRate(p.speed, p.rate)
+                        speedCap = to
+                        changeSpeed(to.toFloat())
+                        told = ""
+                        note(slowerWords(p.rate, to))
+                    }
+                    PaceStep.Tell -> note(paceWords(p.speed, p.rate))
                 }
             }
         }
