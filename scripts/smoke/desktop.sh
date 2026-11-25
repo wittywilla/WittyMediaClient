@@ -12,6 +12,7 @@
 #   from away       p2p-real.js: at home (TV mode), then the address stops answering and the app finds the
 #                   server peer to peer, still signed in; then the device is removed and shut out
 #   invite link     p2p-real.js --phase=invite: Paste a link, from a fresh app
+#   QR code         add-server-real.js --way=qr: the QR code's link at home signs in at the server's address
 #
 # real-server.js and p2p-real.js sign in with the number pad, which only TV mode has since the desktop's
 # Add a server screen, so they run in TV mode; add-server-real.js covers the desktop's own screens.
@@ -75,4 +76,9 @@ WMC_SERVER=http://127.0.0.1:$fport WMC_DIRECT=$WMS_URL electron p2p-revoked test
 
 step "Desktop: Paste a link, from a fresh app"
 WMC_SERVER=http://127.0.0.1:$fport WMC_DIRECT=$WMS_URL electron p2p-invite test/app/p2p-real.js --phase=invite >>"$LOG" 2>&1 || fail "see the log"
+
+# With peer to peer on, Connect a device has a QR code; opened at the server's address on this network, it holds
+# that address and the code, and a fresh app signs in there with them, peer to peer not needed (#141).
+step "Desktop: Add a server, the QR code at home"
+WMC_SERVER=$lan_url WMC_DIRECT=$WMS_URL electron way-qr test/app/add-server-real.js --way=qr >>"$LOG" 2>&1 || fail "see the log"
 finish

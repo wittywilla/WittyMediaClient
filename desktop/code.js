@@ -54,11 +54,15 @@ const fromB64 = (s) => { try { return Buffer.from(String(s || ''), 'base64') } c
 // the code. post(path, body) sends JSON there and resolves { status, data }. Answers
 //   { ok: true, token, name }       the server made the code, proved it, and signed this device in
 //   { here: false }                 it didn't make the code (the usual answer from other servers)
+//   { here: false, restarted }      it made it, but restarted since, which ends codes: its words
 //   { error, message?, reason? }    it made it, but no sign-in: refused, a wrong proof, or a liar
 async function askServer({ post, identityKey, keys, device, platform }) {
   const deviceNonce = crypto.randomBytes(NONCE_BYTES)
   const find = Buffer.from(keys.find).toString('hex')
   const hello = await post('/connect/hello', { v: 1, find, nonce: b64(deviceNonce) })
+  if (hello.status === 404 && hello.data && hello.data.reason === 'restarted') {
+    return { here: false, restarted: typeof hello.data.error === 'string' ? hello.data.error : '' }
+  }
   if (hello.status === 404 || hello.status === 405) return { here: false }
   const h = hello.data && typeof hello.data === 'object' ? hello.data : {}
   if (hello.status !== 200) return { error: 'refused', message: typeof h.error === 'string' ? h.error : '', reason: typeof h.reason === 'string' ? h.reason : '' }

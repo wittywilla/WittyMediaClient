@@ -135,4 +135,17 @@ class PeerRulesTest {
         assertNull(PeerRules.secretCookie(""))
         assertNull("nothing that could add another cookie", PeerRules.secretCookie("a; b=c"))
     }
+
+    // Connected through a public relay carries an invite, not requests (#141): the app waits for a usable path
+    // before its first request rather than failing it.
+    @Test
+    fun aPublicRelayIsConnectedButNotUsable() {
+        val viaPublic = PeerRules.state("""{"path":"relayed","relay":"12D3KooWD8PWB8C8WmfLx4KZELLzAQbUpRQxbVJVHt94e8zKt8qj"}""")
+        assertTrue(viaPublic.connected)
+        assertFalse(viaPublic.usable)
+        assertTrue(PeerRules.state("""{"path":"relayed","community":true}""").usable)
+        assertTrue(PeerRules.state("""{"path":"direct"}""").usable)
+        assertTrue(PeerRules.state("""{"path":"local"}""").usable)
+        assertFalse(PeerRules.state("""{"path":"connecting"}""").usable)
+    }
 }

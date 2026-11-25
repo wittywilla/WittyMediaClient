@@ -39,13 +39,32 @@ const tick = () => new Promise((resolve) => setImmediate(resolve))
 
 test('an invite link is read, and nothing else is taken for one', () => {
   const link = `wittymedia://p2p/${SERVER}?s=abcdefghijklmnopqrstuv&n=Home+server&a=%2Fip4%2F203.0.113.4%2Fudp%2F4100%2Fquic-v1&a=rubbish`
-  assert.deepStrictEqual(p2p.parseInvite(link), { serverId: SERVER, secret: 'abcdefghijklmnopqrstuv', name: 'Home server', hints: ['/ip4/203.0.113.4/udp/4100/quic-v1'] })
+  assert.deepStrictEqual(p2p.parseInvite(link), { serverId: SERVER, secret: 'abcdefghijklmnopqrstuv', name: 'Home server', hints: ['/ip4/203.0.113.4/udp/4100/quic-v1'], home: '', code: '' })
   assert.ok(p2p.looksLikeInvite(`  ${link}`))
   for (const bad of [
     '', 'http://192.168.1.20', `https://p2p/${SERVER}?s=abcdefghijklmnopqrstuv`, `wittymedia://item/12`,
     `wittymedia://p2p/${SERVER}`, `wittymedia://p2p/${SERVER}?s=short`, `wittymedia://p2p/not-an-id?s=abcdefghijklmnopqrstuv`,
     `wittymedia://p2p/${SERVER}?s=abcdefghijklmnop<script>`,
   ]) assert.strictEqual(p2p.parseInvite(bad), null, bad)
+})
+
+// The QR code on a 0.8.5 server's Connect a device also holds the web address its page was opened at and
+// the code beside it, for a device at home (main.js codeAtHome). Both or neither, and a plain web address only.
+test('a QR code holds the address at home and the code', () => {
+  const base = `wittymedia://p2p/${SERVER}?s=abcdefghijklmnopqrstuv`
+  const qr = p2p.parseInvite(`${base}&h=${encodeURIComponent('http://192.168.1.50:9797')}&c=k7qm-2xhd`)
+  assert.strictEqual(qr.home, 'http://192.168.1.50:9797')
+  assert.strictEqual(qr.code, 'K7QM2XHD')
+  assert.strictEqual(p2p.parseInvite(`${base}&h=${encodeURIComponent('https://nas.local/')}&c=K7QM2XHD`).home, 'https://nas.local')
+  for (const q of [
+    `&h=${encodeURIComponent('http://192.168.1.50:9797')}`, '&c=K7QM2XHD', `&h=${encodeURIComponent('http://192.168.1.50:9797')}&c=hello`,
+    `&h=${encodeURIComponent('ftp://192.168.1.50')}&c=K7QM2XHD`, `&h=${encodeURIComponent('http://me:pw@192.168.1.50')}&c=K7QM2XHD`,
+    `&h=${encodeURIComponent('http://192.168.1.50:9797/settings')}&c=K7QM2XHD`, `&h=${encodeURIComponent('javascript:alert(1)')}&c=K7QM2XHD`,
+  ]) {
+    const got = p2p.parseInvite(base + q)
+    assert.strictEqual(got.home, '', q)
+    assert.strictEqual(got.code, '', q)
+  }
 })
 
 test('addresses that could hide something are dropped', () => {

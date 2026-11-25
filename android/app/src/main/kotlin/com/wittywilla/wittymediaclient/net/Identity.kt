@@ -32,11 +32,16 @@ data class IdentityAnswer(
 // Different    we remembered another key here: possibly a look-alike
 enum class IdentityState { Unreachable, Bad, New, Same, Different }
 
+// why: for Unreachable through this device's connection from away, that connection's own words for what failed
+// (no path that can carry it, say), to show in place of a plain "couldn't reach".
 data class ServerProof(
     val state: IdentityState,
     val serverId: String = "",
     val publicKey: String = "",
     val fingerprint: String = "",
+    val why: String = "",
+    // Its reason, when the connection gave one ("public-relay-only": found only through a relay that carries no requests).
+    val reason: String = "",
 ) {
     fun savedAs(url: String, name: String) = SavedServer(url, name, serverId, publicKey, fingerprint)
 }

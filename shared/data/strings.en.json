@@ -747,5 +747,12 @@
   "signInHint": "Type the code the server shows under Connect a device (Settings, then Remote Access), or sign in with your password.",
   "signInCodeLabel": "Code from the server",
   "signInPassword": "Sign in with a password instead",
-  "codeSignInTitle": "Sign in to this server"
+  "codeSignInTitle": "Sign in to this server",
+  "errCodeUsed": "Your server doesn't know that code any more: it was used, it ran out, the server restarted, or a newer one replaced it. Show a new code on the server.",
+  "errCodeLiar": "Something answered there, but couldn't prove it made the code, so nothing more was sent to it.",
+  "joinStepStart": "This app couldn't start its connection for reaching your server from away. Try again, and reinstall the app if it keeps happening.",
+  "joinStepInvite": "This device couldn't show your server the invite: {why}",
+  "joinStepConnect": "Your server added this device to its list, but this device can't reach it from here: {why}",
+  "joinStepSignIn": "Your server added this device to its list, but signing in didn't work: {why}",
+  "joinNoPath": "no way through to it was found. If your server runs in Docker, its peer-to-peer port has to be published too (its Connect a device card says which). On the same network as the server, its QR code works without that."
 }
