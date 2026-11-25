@@ -216,7 +216,6 @@ private fun WideBar(nav: Nav, now: androidx.media3.common.MediaItem, modifier: M
     val trackId = now.mediaId.toLongOrNull() ?: 0L
     val library = about.extras?.getLong(com.wittywilla.wittymediaclient.player.EXTRA_LIBRARY) ?: 0L
     LaunchedEffect(library) { if (!books) listening.loadLikes(library) }
-    LaunchedEffect(Unit) { listening.askAboutVisualizer() }
     var adding by remember { mutableStateOf(false) }
     var volume by remember { mutableStateOf(false) }
     val say = LocalSay.current
@@ -277,16 +276,15 @@ private fun WideBar(nav: Nav, now: androidx.media3.common.MediaItem, modifier: M
                     if (volume) PopPanel({ volume = false }) { VolumeCard(listening, onBlack = false) }
                 }
                 BarButton(if (books) WebIcons.Chapters else NpIcons.List, if (books) "Chapters" else "Queue", iconSize = 20.dp) { open(queue = true) }
-                if (listening.visualizerHere) {
-                    // Easy to see: a word beside the icon (over 1240), on the accent's tint.
-                    Pressable({ open(visualizer = true) }, Modifier.padding(horizontal = 2.dp).heightIn(min = 40.dp), shape = RoundedCornerShape(50), fill = scheme.primary.copy(alpha = 0.14f), label = "Visualizer", pressScale = 0.94f, ring = false) {
-                        Row(
-                            Modifier.heightIn(min = 40.dp).border(1.5.dp, scheme.primary.copy(alpha = 0.4f), RoundedCornerShape(50)).padding(horizontal = if (roomy) 12.dp else 10.dp),
-                            verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp),
-                        ) {
-                            Icon(NpIcons.Visualizer, null, tint = extra.accentText, modifier = Modifier.size(18.dp))
-                            if (roomy) Text("Visualizer", color = scheme.onBackground, fontSize = 13.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                        }
+                // Bars, Waves and Drift are the app's own: shown whether or not the server has WittyVisualizer (WebNowPlaying).
+                // Easy to see: a word beside the icon (over 1240), on the accent's tint.
+                Pressable({ open(visualizer = true) }, Modifier.padding(horizontal = 2.dp).heightIn(min = 40.dp), shape = RoundedCornerShape(50), fill = scheme.primary.copy(alpha = 0.14f), label = "Visualizer", pressScale = 0.94f, ring = false) {
+                    Row(
+                        Modifier.heightIn(min = 40.dp).border(1.5.dp, scheme.primary.copy(alpha = 0.4f), RoundedCornerShape(50)).padding(horizontal = if (roomy) 12.dp else 10.dp),
+                        verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    ) {
+                        Icon(NpIcons.Visualizer, null, tint = extra.accentText, modifier = Modifier.size(18.dp))
+                        if (roomy) Text("Visualizer", color = scheme.onBackground, fontSize = 13.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
                     }
                 }
                 BarButton(WebIcons.Expand, "Full screen", iconSize = 20.dp) { open() }

@@ -327,8 +327,7 @@ fun WebNowPlaying(nav: Nav) {
     var filled by remember { mutableStateOf(false) }
     androidx.compose.runtime.DisposableEffect(Unit) { onDispose { if (filled) activity?.let { showBars(it, true) } } }
     var maxSpeed by remember { mutableStateOf(4.0) }
-    // The visualizer: whether the server has it, and this person's choices.
-    var vizHere by remember { mutableStateOf(true) }
+    // The visualizer: this person's choices.
     var viz by remember { mutableStateOf(VisualizerPrefs()) }
     var vizLoaded by remember { mutableStateOf(false) }
     // What Styles is showing now, while it changes by itself.
@@ -339,7 +338,9 @@ fun WebNowPlaying(nav: Nav) {
         listening.screenWithVisualizer = false
         val prefs = runCatching { api.playerPrefs() }.getOrNull()
         maxSpeed = prefs?.maxSpeed ?: 4.0
-        vizHere = prefs?.visualizer != false
+        // Bars, Waves and Drift are this app's own, drawn from the sound it plays: they don't need the server's
+        // WittyVisualizer module (prefs.visualizer), which only the website's effects come from. A server without it
+        // (a new install, a NAS) still gets them.
         runCatching { VisualizerPrefs.read(api.musicPlayerChoice()) }.getOrNull()?.let { viz = if (wantsViz) it.copy(viz = true) else it }
         vizLoaded = true
     }
@@ -430,8 +431,8 @@ fun WebNowPlaying(nav: Nav) {
                 drawContent()
             },
     ) {
-        // Behind everything but the glow: the visualizer, when the server has it and it's on.
-        if (vizHere && vizLoaded && viz.viz) VisualizerBackground(style, viz.slow, tint, listening.isPlaying)
+        // Behind everything but the glow: the visualizer, when it's on.
+        if (vizLoaded && viz.viz) VisualizerBackground(style, viz.slow, tint, listening.isPlaying)
         // Or the song's canvas, dimmed so the words stay readable, when it has one and this device may play it.
         else CanvasBackdrop(nav, trackId, Modifier.fillMaxSize().graphicsLayer { alpha = 0.45f })
         Column(Modifier.fillMaxSize()) {
@@ -536,7 +537,7 @@ fun WebNowPlaying(nav: Nav) {
                     NpSeek(nav)
                     Transport(nav, books, playSize, taller, tall, transportGap)
                     Tools(
-                        compact, vizHere && vizLoaded, viz, style, tint, listening.speed,
+                        compact, vizLoaded, viz, style, tint, listening.speed,
                         setViz = ::setViz, pickStyle = ::pickStyle,
                         shuffleAnchor = Modifier.anchor(NpMenu.Shuffle), speedAnchor = Modifier.anchor(NpMenu.Speed),
                         shuffleOpen = menu == NpMenu.Shuffle, openShuffle = { toggle(NpMenu.Shuffle) }, openSpeed = { toggle(NpMenu.Speed) },
@@ -648,7 +649,7 @@ fun WebNowPlaying(nav: Nav) {
 // and its styles, then Slow, Styles and the speed. Wider, the visualizer's group comes first, a rule, then the words.
 @Composable
 private fun Tools(
-    compact: Boolean, vizHere: Boolean, viz: VisualizerPrefs, style: String, tint: Color, speed: Float,
+    compact: Boolean, vizReady: Boolean, viz: VisualizerPrefs, style: String, tint: Color, speed: Float,
     setViz: ((VisualizerPrefs) -> VisualizerPrefs) -> Unit, pickStyle: (String, String) -> Unit,
     shuffleAnchor: Modifier, speedAnchor: Modifier, shuffleOpen: Boolean, openShuffle: () -> Unit, openSpeed: () -> Unit,
     words: @Composable () -> Unit = {},
@@ -660,7 +661,7 @@ private fun Tools(
         itemVerticalAlignment = Alignment.CenterVertically,
     ) {
         if (compact) words()
-        if (vizHere) {
+        if (vizReady) {
             // Easy to see: larger, with a word beside the icon, and lit with the artwork's colour when on.
             val on = viz.viz
             Pressable({ setViz { it.copy(viz = !it.viz) } }, Modifier.heightIn(min = if (compact) 44.dp else 48.dp), shape = RoundedCornerShape(50), fill = if (on) tint.copy(alpha = 0.45f) else Np.plate, label = "Visualizer", selected = on, ring = false) {
@@ -691,11 +692,11 @@ private fun Tools(
             }
         }
         if (!compact) {
-            if (vizHere && viz.viz) VizExtras(viz, setViz, shuffleAnchor, shuffleOpen, openShuffle)
-            if (vizHere) Box(Modifier.padding(horizontal = 4.dp).size(1.dp, 30.dp).background(Np.line))
+            if (vizReady && viz.viz) VizExtras(viz, setViz, shuffleAnchor, shuffleOpen, openShuffle)
+            if (vizReady) Box(Modifier.padding(horizontal = 4.dp).size(1.dp, 30.dp).background(Np.line))
             words()
         }
-        if (compact && vizHere && viz.viz) VizExtras(viz, setViz, shuffleAnchor, shuffleOpen, openShuffle)
+        if (compact && vizReady && viz.viz) VizExtras(viz, setViz, shuffleAnchor, shuffleOpen, openShuffle)
         // The speed, as the website's select: 44 high, 10 inside, with its small arrow.
         Pressable(openSpeed, speedAnchor.heightIn(min = 44.dp), shape = RoundedCornerShape(50), fill = Np.chip, label = "Playback speed, ${com.wittywilla.wittymediaclient.player.speedWords(speed)}", ring = false) {
             Row(Modifier.heightIn(min = 44.dp).padding(horizontal = 10.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
