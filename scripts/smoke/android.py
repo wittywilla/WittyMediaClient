@@ -488,8 +488,15 @@ def wittytv():
     time.sleep(4)
     if find('^Got it$'):
         tap('^Got it$', 10)
-    full = until('the player over the whole screen', lambda: (lambda w: w if w[1] <= 2 and w[3] >= tall - 2 else None)(page()), 30)
-    log('full screen (dp):', [round(v / dp) for v in full])
+    # The screen can't be dumped while the picture plays (uiautomator never sees it idle), so the window says it: the
+    # system's bars hidden for the player, and the phone turned to landscape for it (WatchOrientation.kt).
+    def full_screen():
+        win = sh('dumpsys window displays', check=False)
+        bars = re.search(r'type=statusBars[^\n]*visible=(true|false)', win)
+        turned = re.search(r'mRotation=ROTATION_(\d+)', win)
+        return (bars and bars.group(1) == 'false') and turned and int(turned.group(1)) in (90, 270)
+    until('the player over the whole screen, in landscape', full_screen, 30)
+    log('full screen: system bars hidden, landscape')
     # Back comes back to the guide, not out of the app.
     sh('input keyevent KEYCODE_BACK', check=False)
     wait('^Watch full screen$', 30, 'the guide again after Back')
