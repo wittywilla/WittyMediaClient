@@ -3,6 +3,8 @@
 What changed in WittyMediaClient, newest first. What changed before it had a repository of its own is in the
 [WittyMediaServer changelog](https://github.com/wittywilla/WittyMediaServer/blob/master/CHANGELOG.md).
 
+## Unreleased
+
 ## 0.6.3
 
 Released 2026-11-25.
