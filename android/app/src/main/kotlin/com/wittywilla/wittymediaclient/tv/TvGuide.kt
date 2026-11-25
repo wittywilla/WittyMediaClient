@@ -597,7 +597,9 @@ fun GuideScreen(nav: Nav, embedded: Boolean = false) {
     val previewWanted = when (dress.look.preview) {
         "off" -> ""
         "last" -> LastChannel.current(context).ifEmpty { if (current?.canTune == true) current.key else "" }
-        else -> current?.let { if (it.canTune) it.key else "" } ?: ""
+        // Until the rows have come there's no highlight: what is playing carries on. An empty answer here stopped
+        // it, and the highlight then tuned it again live: back from full screen, a programme started over jumped.
+        else -> current?.let { if (it.canTune) it.key else "" } ?: LiveTv.key
     }
     // Each channel the preview shows runs a stream, so it waits for the highlight to settle, and one that was only
     // flicked past isn't tuned at all.
