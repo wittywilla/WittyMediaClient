@@ -1012,7 +1012,7 @@ private fun BarButton(
     ) {
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Space.S2)) {
             if (icon != null) androidx.compose.material3.Icon(icon, contentDescription = null, tint = ink, modifier = Modifier.size(if (big) 30.dp else 24.dp))
-            if (shown != null) Text(shown, color = ink, style = MaterialTheme.typography.labelLarge, fontWeight = androidx.compose.ui.text.font.FontWeight.SemiBold, maxLines = 1)
+            if (shown != null) Text(shown, color = ink, style = MaterialTheme.typography.labelLarge, fontWeight = androidx.compose.ui.text.font.FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
         }
     }
 }
@@ -1124,7 +1124,7 @@ private fun MenuChoice(title: String, sub: String, detail: String, chosen: Boole
                 Text(title, color = Color.White, style = MaterialTheme.typography.titleMedium, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 if (sub.isNotEmpty()) Text(sub, color = Color(0xFFD0D0D8), style = MaterialTheme.typography.bodyMedium, maxLines = 2, overflow = TextOverflow.Ellipsis)
             }
-            if (detail.isNotEmpty()) Text(detail, color = Color(0xFFB4B9C6), style = MaterialTheme.typography.bodyMedium, maxLines = 1)
+            if (detail.isNotEmpty()) Text(detail, color = Color(0xFFB4B9C6), style = MaterialTheme.typography.bodyMedium, maxLines = 1, overflow = TextOverflow.Ellipsis)
         }
     }
 }

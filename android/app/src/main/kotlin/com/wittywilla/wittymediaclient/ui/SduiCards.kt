@@ -104,7 +104,7 @@ private const val CARD_RADIUS = 10
 private fun Plate(words: String, modifier: Modifier, fill: Color = LocalExtraColours.current.scrim.copy(alpha = 0.68f), ink: Color = ON_IMAGE) {
     val env = LocalSdui.current
     Box(modifier.heightIn(min = env.pt(if (env.tv) 34 else 20)).widthIn(min = env.pt(if (env.tv) 34 else 20)).clip(RoundedCornerShape(env.pt(if (env.tv) 8 else 4))).background(fill).padding(horizontal = env.pt(if (env.tv) 10 else 6)), contentAlignment = Alignment.Center) {
-        Text(words, color = ink, fontSize = env.size(if (env.layout.text.containsKey("badge")) "badge" else "caption"), fontWeight = FontWeight.Bold, letterSpacing = 0.02.em, maxLines = 1)
+        Text(words, color = ink, fontSize = env.size(if (env.layout.text.containsKey("badge")) "badge" else "caption"), fontWeight = FontWeight.Bold, letterSpacing = 0.02.em, maxLines = 1, overflow = TextOverflow.Ellipsis)
     }
 }
 
@@ -217,7 +217,7 @@ fun SduiCard(view: SduiView, parent: SduiView?, width: Dp, modifier: Modifier = 
                             if (image != null) Box(Modifier.fillMaxSize().background(Brush.verticalGradient(0.4f to Color.Transparent, 1f to extra.scrim.copy(alpha = 0.8f))))
                             Column(Modifier.align(Alignment.BottomStart).padding(env.pt(if (env.tv) 24 else 12))) {
                                 view.text["title"]?.let { Text(it, color = if (image != null) ON_IMAGE else scheme.onBackground, fontSize = env.size("body"), fontWeight = FontWeight.SemiBold, maxLines = view.line("title", 1), overflow = TextOverflow.Ellipsis) }
-                                view.text["count"]?.let { Text(countWords(it, p.str("kind")), color = if (image != null) ON_IMAGE.copy(alpha = 0.8f) else extra.hint, fontSize = env.size("caption"), maxLines = 1) }
+                                view.text["count"]?.let { Text(countWords(it, p.str("kind")), color = if (image != null) ON_IMAGE.copy(alpha = 0.8f) else extra.hint, fontSize = env.size("caption"), maxLines = 1, overflow = TextOverflow.Ellipsis) }
                             }
                         }
                         if (over) {

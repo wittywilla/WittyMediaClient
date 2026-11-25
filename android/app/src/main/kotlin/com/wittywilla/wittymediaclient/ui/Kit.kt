@@ -202,13 +202,18 @@ fun Secondary(text: String, modifier: Modifier = Modifier, maxLines: Int = Int.M
 
 // What went wrong: said aloud when it appears, and marked by more than its colour.
 @Composable
-fun ErrorText(text: String, modifier: Modifier = Modifier) {
+fun ErrorText(text: String, modifier: Modifier = Modifier, centred: Boolean = false) {
     if (text.isEmpty()) return
     Row(modifier.semantics { liveRegion = LiveRegionMode.Polite }, horizontalArrangement = Arrangement.spacedBy(Space.S2)) {
         Box(Modifier.width(Space.S5).aspectRatio(1f).clip(CircleShape).background(MaterialTheme.colorScheme.error), contentAlignment = Alignment.Center) {
             Text("!", color = MaterialTheme.colorScheme.background, style = MaterialTheme.typography.labelMedium)
         }
-        Text(text, color = MaterialTheme.colorScheme.onBackground, style = MaterialTheme.typography.bodyLarge)
+        // Under something centred (the You header), a line that wraps stays centred and within the width.
+        Text(
+            text, color = MaterialTheme.colorScheme.onBackground, style = MaterialTheme.typography.bodyLarge,
+            textAlign = if (centred) androidx.compose.ui.text.style.TextAlign.Center else null,
+            modifier = if (centred) Modifier.weight(1f, fill = false) else Modifier,
+        )
     }
 }
 

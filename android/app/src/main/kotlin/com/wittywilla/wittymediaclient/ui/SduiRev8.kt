@@ -137,7 +137,7 @@ fun GlyphChip(glyph: String, modifier: Modifier = Modifier) {
     Box(
         modifier.size(env.pt(if (env.tv) 40 else 24)).border(env.pt(if (env.tv) 2 else 1), scheme.outline, CircleShape).clearAndSetSemantics { },
         contentAlignment = Alignment.Center,
-    ) { Text(glyph.uppercase(), color = scheme.onBackground, fontSize = env.size("caption"), fontWeight = FontWeight.Bold, maxLines = 1) }
+    ) { Text(glyph.uppercase(), color = scheme.onBackground, fontSize = env.size("caption"), fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis) }
 }
 
 // The panel under a row for the chosen card: its title large, its subtitle as one line, and its actions as buttons that
@@ -189,7 +189,7 @@ private fun SduiGlyphButton(card: SduiView, button: SduiCardAction) {
             verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(env.space("xs")),
         ) {
             if (button.glyph.isNotEmpty()) GlyphChip(button.glyph)
-            Text(button.label, color = scheme.onBackground, fontSize = env.size("body"), fontWeight = FontWeight.Medium, maxLines = 1)
+            Text(button.label, color = scheme.onBackground, fontSize = env.size("body"), fontWeight = FontWeight.Medium, maxLines = 1, overflow = TextOverflow.Ellipsis)
         }
     }
 }
@@ -251,14 +251,14 @@ fun SduiControlLine(view: SduiView, spec: SduiControlSpec) {
                     Text(view.text["title"].orEmpty(), color = scheme.onBackground, fontSize = env.size("body"), maxLines = view.line("title", 1), overflow = TextOverflow.Ellipsis)
                     view.text["subtitle"]?.let { Text(it, color = hint, fontSize = env.size("caption"), maxLines = view.line("subtitle", 2), overflow = TextOverflow.Ellipsis) }
                 }
-                view.text["trailing"]?.let { Text(it, color = hint, fontSize = env.size("caption"), maxLines = 1) }
+                view.text["trailing"]?.let { Text(it, color = hint, fontSize = env.size("caption"), maxLines = 1, overflow = TextOverflow.Ellipsis) }
                 when (spec.type) {
                     "switch" -> Switch(on, null, enabled = enabled)
                     "select" -> {
-                        Text(spec.options.firstOrNull { it.first == (shown as? JsonPrimitive)?.content }?.second ?: (shown as? JsonPrimitive)?.content.orEmpty(), color = hint, fontSize = env.size("caption"), maxLines = 1)
+                        Text(spec.options.firstOrNull { it.first == (shown as? JsonPrimitive)?.content }?.second ?: (shown as? JsonPrimitive)?.content.orEmpty(), color = hint, fontSize = env.size("caption"), maxLines = 1, overflow = TextOverflow.Ellipsis)
                         Icon(WebIcons.Down, null, tint = hint, modifier = Modifier.size(env.pt(if (env.tv) 32 else 16)))
                     }
-                    "slider" -> Text(sliderWords(spec, (shown as? JsonPrimitive)?.content?.toDoubleOrNull() ?: spec.number), color = hint, fontSize = env.size("caption"), maxLines = 1)
+                    "slider" -> Text(sliderWords(spec, (shown as? JsonPrimitive)?.content?.toDoubleOrNull() ?: spec.number), color = hint, fontSize = env.size("caption"), maxLines = 1, overflow = TextOverflow.Ellipsis)
                 }
             }
         }
@@ -462,12 +462,12 @@ private fun SduiStatusBar(nav: Nav, state: SduiRegionsState) {
                 "profile" -> Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(metrics.u(10))) {
                     Avatar(user.ifEmpty { "?" }, metrics.u(if (metrics.tv) 44 else 32))
                     Column {
-                    Text(user, color = scheme.onSurface, style = MaterialTheme.typography.label, maxLines = 1)
-                    SduiRegionText.fill(item.text, user, server).takeIf { it.isNotEmpty() }?.let { Text(it, color = scheme.onSurfaceVariant, style = MaterialTheme.typography.caption, maxLines = 1) }
+                    Text(user, color = scheme.onSurface, style = MaterialTheme.typography.label, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    SduiRegionText.fill(item.text, user, server).takeIf { it.isNotEmpty() }?.let { Text(it, color = scheme.onSurfaceVariant, style = MaterialTheme.typography.caption, maxLines = 1, overflow = TextOverflow.Ellipsis) }
                     }
                 }
-                "server" -> Text(com.wittywilla.wittymediaclient.ui.brandAnnotated(server, nav.brandParts, scheme.onSurface, LocalExtraColours.current.brandAccent), style = MaterialTheme.typography.label, maxLines = 1)
-                else -> Text(SduiRegionText.fill(item.text, user, server), color = scheme.onSurface, style = MaterialTheme.typography.label, maxLines = 1)
+                "server" -> Text(com.wittywilla.wittymediaclient.ui.brandAnnotated(server, nav.brandParts, scheme.onSurface, LocalExtraColours.current.brandAccent), style = MaterialTheme.typography.label, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                else -> Text(SduiRegionText.fill(item.text, user, server), color = scheme.onSurface, style = MaterialTheme.typography.label, maxLines = 1, overflow = TextOverflow.Ellipsis)
             }
         }
         Spacer(Modifier.weight(1f))
@@ -477,7 +477,7 @@ private fun SduiStatusBar(nav: Nav, state: SduiRegionsState) {
             { nav.regions = null; nav.reset(Route.Home) }, shape = CircleShape, fill = scheme.primary.copy(alpha = 0.22f),
             label = "Return To Server", focusKey = "status~return".takeIf { metrics.tv },
         ) {
-            Text("Return To Server", color = scheme.onSurface, style = MaterialTheme.typography.label, maxLines = 1,
+            Text("Return To Server", color = scheme.onSurface, style = MaterialTheme.typography.label, maxLines = 1, overflow = TextOverflow.Ellipsis,
                 modifier = Modifier.padding(horizontal = metrics.u(12), vertical = metrics.u(6)))
         }
     }
@@ -489,7 +489,7 @@ private fun StatusClock() {
     val context = androidx.compose.ui.platform.LocalContext.current
     var now by remember { mutableStateOf(System.currentTimeMillis()) }
     LaunchedEffect(Unit) { while (true) { now = System.currentTimeMillis(); kotlinx.coroutines.delay(15_000) } }
-    Text(android.text.format.DateFormat.getTimeFormat(context).format(java.util.Date(now)), color = scheme.onSurface, style = MaterialTheme.typography.label, maxLines = 1)
+    Text(android.text.format.DateFormat.getTimeFormat(context).format(java.util.Date(now)), color = scheme.onSurface, style = MaterialTheme.typography.label, maxLines = 1, overflow = TextOverflow.Ellipsis)
 }
 
 // Up to seven round buttons; the one whose route is the page showing carries its label under it.
@@ -526,7 +526,7 @@ private fun SduiSystemDock(nav: Nav, state: SduiRegionsState, vertical: Boolean)
                         Icon(sduiIcon(b.icon), null, tint = if (current) scheme.onPrimary else scheme.onSurface, modifier = Modifier.size(size / 2))
                     }
                 }
-                if (current) Text(b.label, color = scheme.onBackground, style = MaterialTheme.typography.caption, maxLines = 1)
+                if (current) Text(b.label, color = scheme.onBackground, style = MaterialTheme.typography.caption, maxLines = 1, overflow = TextOverflow.Ellipsis)
             }
         }
     }

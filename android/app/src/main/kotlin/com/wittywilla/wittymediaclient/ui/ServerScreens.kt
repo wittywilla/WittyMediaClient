@@ -44,6 +44,7 @@ import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.IntOffset
 import com.wittywilla.wittymediaclient.data.LogoCache
 import com.wittywilla.wittymediaclient.data.STALE_CHOICES
@@ -123,12 +124,15 @@ fun Notice(text: String, modifier: Modifier = Modifier) {
     if (text.isEmpty()) return
     val ok = LocalExtraColours.current.ok
     val metrics = LocalMetrics.current
+    // On a centred page (Choose a server) it sits in the middle, as the page's other words do.
+    val centred = LocalDesignCentred.current
     Row(
-        modifier.semantics(mergeDescendants = true) { liveRegion = LiveRegionMode.Polite },
-        verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(metrics.u(8)),
+        modifier.then(if (centred) Modifier.fillMaxWidth() else Modifier).semantics(mergeDescendants = true) { liveRegion = LiveRegionMode.Polite },
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(metrics.u(8), if (centred) Alignment.CenterHorizontally else Alignment.Start),
     ) {
         Icon(Symbols.Check, contentDescription = null, tint = ok, modifier = Modifier.size(metrics.u(if (metrics.tv) 30 else 20)))
-        Text(text, color = ok, style = MaterialTheme.typography.body)
+        Text(text, color = ok, style = MaterialTheme.typography.body, textAlign = if (centred) TextAlign.Center else null, modifier = Modifier.weight(1f, fill = false))
     }
 }
 

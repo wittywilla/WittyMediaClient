@@ -279,7 +279,7 @@ private fun JoinAwayTvScreen(nav: Nav, s: Map<String, String>) {
         }
     }
     DesignScreen(
-        s["joinAwayTitle"].orEmpty(), nav::pop, eyebrow = s["remoteTitle"].orEmpty(), lead = s["joinAwayHint"].orEmpty(), tag = "join-away",
+        s["joinAwayTitle"].orEmpty(), nav::pop, eyebrow = s["remoteTitle"].orEmpty(), lead = s["joinAwayHint"].orEmpty(), tag = "join-away", centred = true,
         actions = {
             if (failed) WittyButton(s["pairNew"].orEmpty(), { attempt++ }, kind = ButtonKind.Primary, tall = true, requestFocus = true, focusKey = "join-new")
             WittyButton(s["back"].orEmpty(), nav::pop, kind = ButtonKind.Secondary, tall = true, requestFocus = !failed, focusKey = "join-back")

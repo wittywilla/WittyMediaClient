@@ -109,7 +109,7 @@ fun Wordmark(brandName: String, modifier: Modifier = Modifier, app: Boolean = fa
             withStyle(SpanStyle(color = ink)) { append(last) }
         }
     }
-    Text(words, style = style, maxLines = 1, modifier = modifier)
+    Text(words, style = style, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = modifier)
 }
 
 // Mark then wordmark: 32 and 10 apart on a phone, 72 and 20 apart on a TV. The app's own (WittyMediaClient, with

@@ -24,7 +24,6 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.lazy.LazyColumn
@@ -76,6 +75,8 @@ import kotlin.math.abs
 import kotlin.math.min
 import kotlin.math.sign
 import com.wittywilla.wittymediaclient.ui.factsLine
+import com.wittywilla.wittymediaclient.ui.LocalTopRoom
+import com.wittywilla.wittymediaclient.ui.pageTop
 
 // The game library in couch mode, as the website's (the server's web/src/pages/games/Couch.tsx and Library.tsx):
 // covers at the top, one at the front and the rest turned away; what's being played; the consoles; shelves; then
@@ -154,15 +155,18 @@ fun GamesLibraryScreen(nav: GamesNav, libraryId: Long, startConsole: String = ""
 private fun CouchBar(nav: GamesNav, libraries: List<GamesLibraryRef>, current: Long, tab: CouchTab, pick: (CouchTab, Long?) -> Unit) {
     val look = gameLook()
     val words = look.tv || look.tablet
+    // In the phone shell (the Games tab) the shell's bar already has Back; a second one under it would be a duplicate.
+    val inShell = LocalTopRoom.current > 0.dp
     Row(
         Modifier
             .fillMaxWidth()
-            .windowInsetsPadding(WindowInsets.statusBars)
+            // Below the phone shell's bar on the Games tab, else below the status bar.
+            .pageTop()
             .padding(horizontal = if (look.tv) look.gutter else look.gutter, vertical = if (look.tv) 12.dp else 8.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(if (look.tv) 8.dp else 4.dp),
     ) {
-        if (!look.tv) {
+        if (!look.tv && !inShell) {
             Pressable(nav.back, Modifier.size(40.dp), radius = 20.dp, label = "Back", fill = GameColours.card.copy(alpha = 0.7f)) {
                 Icon(GameIcons.Back, null, Modifier.align(Alignment.Center).size(22.dp), tint = GameColours.text)
             }
@@ -195,7 +199,7 @@ private fun Tab(name: String, icon: androidx.compose.ui.graphics.vector.ImageVec
             horizontalArrangement = Arrangement.spacedBy(8.dp),
         ) {
             Icon(icon, null, Modifier.size(if (look.tv) 14.dp else 20.dp), tint = ink)
-            if (words) Text(name, color = ink, fontSize = look.label, fontWeight = FontWeight.SemiBold, maxLines = 1)
+            if (words) Text(name, color = ink, fontSize = look.label, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
         }
     }
 }
@@ -558,7 +562,7 @@ private fun ConsolesPage(consoles: List<GameConsole>, open: (String) -> Unit) {
                             radius = 14.dp, fill = GameColours.panel, label = "${c.name}: ${c.count} games",
                         ) {
                             Column(Modifier.align(Alignment.Center).padding(12.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-                                Text(c.shortName, color = GameColours.text, fontSize = look.title, fontWeight = FontWeight.Bold, maxLines = 1)
+                                Text(c.shortName, color = GameColours.text, fontSize = look.title, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis)
                                 Text("${c.count} ${if (c.count == 1) "game" else "games"}", color = GameColours.secondary, fontSize = look.small)
                             }
                         }

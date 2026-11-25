@@ -145,7 +145,8 @@ main::before { content: ""; flex: 1 1 0; }
 main::after { content: ""; flex: 2 1 0; }
 .words, .actions, .foot { width: 100%; min-width: 0; }
 /* Every screen's words (the lockup, title, lead, server pill) are centred over its column, the same on every screen,
-   on a TV too (docs/APP-DESIGN.md, Centring). Fields, lists and server cards under them read from the start. */
+   on a TV too (docs/APP-DESIGN.md, Centring). Fields, lists and server cards under them fill the column; on Choose a
+   server its section labels and notes are centred as well (main.choose, below). */
 .words { text-align: center; }
 p { margin: 0; }
 h1 {
@@ -392,6 +393,11 @@ h2.section {
   color: var(--fg-2); font-size: var(--text-caption); font-weight: 700; letter-spacing: .08em; text-transform: uppercase;
 }
 h2.section::after { content: ""; flex: 1; height: 1px; margin-left: var(--sp-3); background: var(--bg-4); }
+/* Choose a server is a standalone page: everything that is words is centred, section labels (with a hairline on
+   both sides) and notes too, while the cards fill the column (docs/APP-DESIGN.md, Centring). */
+main.choose h2.section { justify-content: center; text-align: center; }
+main.choose h2.section::before { content: ""; flex: 1; height: 1px; margin-right: var(--sp-3); background: var(--bg-4); }
+main.choose .note { justify-content: center; text-align: center; }
 .server .avatar {
   position: relative; display: flex; flex: none; align-items: center; justify-content: center;
   width: var(--card-mark); height: var(--card-mark); margin-right: var(--sp-3); border-radius: 50%; background: var(--accent);

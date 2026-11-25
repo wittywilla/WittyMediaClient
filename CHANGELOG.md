@@ -33,6 +33,24 @@ What changed in WittyMediaClient, newest first. What changed before it had a rep
 - Both TVs refuse forward seeks on live, a phone steering the TV included, and both Docks offer Back to live whenever the
   picture is behind, not only after Start over. The Android phone uses the server's web player, changed there.
 
+**Layout outside Settings (#137)**
+
+- **Choose a server is centred throughout.** Its title and lead were centred, but "On this network", "No servers
+  found…", errors and the legal line started at the left. Now every line of words on it is centred, on phones, TVs,
+  Apple and the desktop app, and each section label sits between two hairlines. The cards still fill the width.
+  The same goes for signing in, Who's watching, a profile's password, two-step, joining with an invite, a pairing
+  code and Setup needed, and Who's watching's faces are centred on phones as they were on TV.
+- **Nothing starts under the phone's top bar.** With the top tabs over the page, a page without a picture (a library,
+  Search, You, an error) used to start under the tabs. The Games tab's own bar sat under the app's bar, with two Back
+  buttons. The Games list, a load error and a game page started under it too, and pull to refresh spun behind it.
+- **A TV always shows where focus is.** "See all", Notifications' Clear and other phone-style buttons drawn on a TV get
+  the focus ring, and Clear is at least 48 tall. A page's tabs on a TV start at the edge, like its title.
+- **Words that don't fit end in "…"** instead of being cut mid-letter, in about 110 places. A check in CI keeps it so.
+- **Smaller fixes.** Notifications' buttons wrap on a narrow phone. The player keeps clear of the camera in landscape.
+  A TV title's buttons wrap. Karaoke lines up with the controls on a TV. The You header's notice is centred. "On a
+  computer" is read aloud once and sits in the middle of the screen. Error titles stay centred when they wrap. The
+  desktop title bar keeps Close in the window when it's narrow.
+
 ## 0.6.2
 
 Released 2026-11-24.

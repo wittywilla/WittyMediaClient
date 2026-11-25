@@ -23,6 +23,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawingPadding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.layout.wrapContentWidth
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
@@ -47,6 +48,7 @@ import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.TextUnit
@@ -84,6 +86,11 @@ data class DesignSizes(
 
 val LocalDesignSizes = compositionLocalOf { DesignSizes.of(PhoneMetrics, 390f) }
 
+// A standalone screen (Choose a server, sign in, Who's watching, a pairing code) is centred throughout: everything that
+// is words (the head, section labels, notes, errors, the foot) follows the head, while cards, rows and fields stay full
+// width. Text-only parts read this rather than each taking a flag, so a page can't centre its head and forget the rest.
+val LocalDesignCentred = compositionLocalOf { false }
+
 /** A part's id from its words, for tests and for a screen's focus memory: "Show saved servers first" → show-saved-servers-first. */
 fun designId(words: String): String = com.wittywilla.wittymediaclient.net.DesignPageSpec.slug(words)
 
@@ -103,7 +110,8 @@ fun DesignPage(
     actions: (@Composable FlowRowScope.() -> Unit)? = null,
     // Above the eyebrow: a server's lockup (its logo and coloured name) or a person's face, on the sign-in screens.
     top: (@Composable () -> Unit)? = null,
-    // The top, title and lead centred over the page, as Design 2's Choose a server has them.
+    // A standalone screen: the top, title, lead, section labels, notes and foot centred over the page, as Design 2's
+    // Choose a server has them. Cards, rows and fields stay full width.
     centred: Boolean = false,
     content: @Composable ColumnScope.() -> Unit,
 ) {
@@ -111,7 +119,7 @@ fun DesignPage(
     val pageScroll = rememberScrollState()
     BoxWithConstraints(modifier.fillMaxSize().background(MaterialTheme.colorScheme.background).then(if (tag.isNotEmpty()) Modifier.testTag("design.$tag") else Modifier)) {
         val sizes = DesignSizes.of(metrics, maxWidth.value)
-        CompositionLocalProvider(LocalDesignSizes provides sizes) {
+        CompositionLocalProvider(LocalDesignSizes provides sizes, LocalDesignCentred provides centred) {
             Column(
                 // Clear of the status and navigation bars when nothing around it is (DesignScreen already is, and
                 // what it took is used up, so nothing is padded twice); the background still runs under them.
@@ -119,7 +127,12 @@ fun DesignPage(
                     .padding(horizontal = if (metrics.tv) metrics.u(DesignTokens.Tv.gutter.toInt()) else metrics.gutter, vertical = if (metrics.tv) metrics.u(60) else Space.S6),
                 horizontalAlignment = Alignment.CenterHorizontally,
             ) {
-                Column(Modifier.fillMaxWidth().then(if (metrics.tv) Modifier else Modifier.widthIn(max = 760.dp))) {
+                // Centred, a part that isn't full width (a code, a spinner, a face) sits in the middle too; cards, rows
+                // and fields fill the width either way.
+                Column(
+                    Modifier.fillMaxWidth().then(if (metrics.tv) Modifier else Modifier.widthIn(max = 760.dp)),
+                    horizontalAlignment = if (centred) Alignment.CenterHorizontally else Alignment.Start,
+                ) {
                     if (top != null) Box(Modifier.fillMaxWidth().padding(bottom = sizes.gap * 1.6f), contentAlignment = if (centred) Alignment.Center else Alignment.TopStart) { top() }
                     DesignHead(title, eyebrow, lead, if (centred) Modifier.fillMaxWidth() else Modifier, centred = centred)
                     content()
@@ -145,16 +158,18 @@ fun DesignScreen(
     tag: String = "",
     actions: (@Composable FlowRowScope.() -> Unit)? = null,
     top: (@Composable () -> Unit)? = null,
+    // A standalone screen with a Back (sign in, two-step, a pairing code): centred throughout, as [DesignPage]'s.
+    centred: Boolean = false,
     content: @Composable ColumnScope.() -> Unit,
 ) {
     BackHandler { onBack() }
     if (LocalMetrics.current.tv) {
-        DesignPage(title, eyebrow = eyebrow, lead = lead, foot = foot, tag = tag, actions = actions, top = top, content = content)
+        DesignPage(title, eyebrow = eyebrow, lead = lead, foot = foot, tag = tag, actions = actions, top = top, centred = centred, content = content)
         return
     }
     Column(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background).safeDrawingPadding().imePadding()) {
         BackArrow(onBack, Modifier.padding(Space.S1))
-        DesignPage(title, Modifier.weight(1f), eyebrow = eyebrow, lead = lead, foot = foot, tag = tag, actions = actions, top = top, content = content)
+        DesignPage(title, Modifier.weight(1f), eyebrow = eyebrow, lead = lead, foot = foot, tag = tag, actions = actions, top = top, centred = centred, content = content)
     }
 }
 
@@ -201,14 +216,20 @@ fun DesignHead(title: String, eyebrow: String = "", lead: String = "", modifier:
 @Composable
 fun DesignActions(foot: String = "", actions: (@Composable FlowRowScope.() -> Unit)? = null) {
     val s = LocalDesignSizes.current
+    val centred = LocalDesignCentred.current
     if (actions != null) {
         FlowRow(
             Modifier.fillMaxWidth().padding(top = s.gap2).remoteRow(),
-            horizontalArrangement = Arrangement.spacedBy(s.gap), verticalArrangement = Arrangement.spacedBy(s.gap),
+            horizontalArrangement = Arrangement.spacedBy(s.gap, if (centred) Alignment.CenterHorizontally else Alignment.Start),
+            verticalArrangement = Arrangement.spacedBy(s.gap),
         ) { actions() }
     }
     if (foot.isNotEmpty()) {
-        Text(foot, color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = s.small, lineHeight = s.small * 1.5f, modifier = Modifier.padding(top = s.gap2 * 0.6f))
+        Text(
+            foot, color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = s.small, lineHeight = s.small * 1.5f,
+            textAlign = if (LocalDesignCentred.current) TextAlign.Center else null,
+            modifier = Modifier.fillMaxWidth().padding(top = s.gap2 * 0.6f),
+        )
     }
 }
 
@@ -216,14 +237,19 @@ fun DesignActions(foot: String = "", actions: (@Composable FlowRowScope.() -> Un
 @Composable
 fun DesignSection(title: String, modifier: Modifier = Modifier, content: @Composable ColumnScope.() -> Unit) {
     val s = LocalDesignSizes.current
+    val centred = LocalDesignCentred.current
     Column(modifier.fillMaxWidth().padding(top = s.gap2)) {
         if (title.isNotEmpty()) {
             Text(
                 title, color = MaterialTheme.colorScheme.onBackground, fontSize = s.body, fontWeight = FontWeight.ExtraBold,
-                modifier = Modifier.padding(bottom = s.gap).semantics { heading() },
+                textAlign = if (centred) TextAlign.Center else null,
+                modifier = Modifier.fillMaxWidth().padding(bottom = s.gap).semantics { heading() },
             )
         }
-        Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(5.dp)) { content() }
+        Column(
+            Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(5.dp),
+            horizontalAlignment = if (centred) Alignment.CenterHorizontally else Alignment.Start,
+        ) { content() }
     }
 }
 
@@ -354,14 +380,19 @@ fun DesignNote(text: String, modifier: Modifier = Modifier, tone: Boolean = fals
     val s = LocalDesignSizes.current
     val metrics = LocalMetrics.current
     val scheme = MaterialTheme.colorScheme
+    // On a centred page the note sits in the middle, its lines centred too; the block keeps its readable width.
+    val centred = LocalDesignCentred.current
+    val place = if (centred) Modifier.fillMaxWidth().wrapContentWidth(Alignment.CenterHorizontally) else Modifier
     // Still waiting (looking for servers, for an answer): a spinner before the words, which are said when they change.
     if (busy) {
         Row(
-            modifier.semantics(mergeDescendants = true) { liveRegion = LiveRegionMode.Polite },
-            verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(s.gap),
+            modifier.then(if (centred) Modifier.fillMaxWidth() else Modifier).semantics(mergeDescendants = true) { liveRegion = LiveRegionMode.Polite },
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(s.gap, if (centred) Alignment.CenterHorizontally else Alignment.Start),
         ) {
             Spinner(scheme.onSurfaceVariant, s.small.value.dp * 1.2f)
-            DesignNote(text, tone = tone, error = error)
+            // Inside the row the words take only their own width; the row does the centring.
+            CompositionLocalProvider(LocalDesignCentred provides false) { DesignNote(text, tone = tone, error = error) }
         }
         return
     }
@@ -372,7 +403,8 @@ fun DesignNote(text: String, modifier: Modifier = Modifier, tone: Boolean = fals
     }
     Text(
         (if (error) "! " else "") + text, color = if (error) scheme.onBackground else scheme.onSurfaceVariant, fontSize = s.small, lineHeight = s.small * 1.5f,
-        modifier = modifier.widthIn(max = s.leadWidth).background(fill, RoundedCornerShape(metrics.u(metrics.themeRadius * 0.7f)))
+        textAlign = if (centred) TextAlign.Center else null,
+        modifier = modifier.then(place).widthIn(max = s.leadWidth).background(fill, RoundedCornerShape(metrics.u(metrics.themeRadius * 0.7f)))
             .padding(if (tone || error) s.gap else 0.dp)
             .then(if (error) Modifier.semantics { liveRegion = LiveRegionMode.Polite } else Modifier),
     )

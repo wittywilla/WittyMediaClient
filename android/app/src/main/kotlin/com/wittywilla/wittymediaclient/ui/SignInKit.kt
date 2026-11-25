@@ -280,7 +280,7 @@ fun ServerCard(
                 trailing != null -> trailing()
                 connecting -> Spinner(extra.hint, metrics.u(if (metrics.tv) 30 else 20))
                 peerChip.isNotEmpty() -> PeerChip(peerChip)
-                lastUsed -> Text(words["lastUsed"].orEmpty(), color = extra.accentText, fontSize = s.small, fontWeight = FontWeight.Bold, maxLines = 1)
+                lastUsed -> Text(words["lastUsed"].orEmpty(), color = extra.accentText, fontSize = s.small, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis)
             }
         }
     }
@@ -397,7 +397,7 @@ private fun PadKey(key: Int, keys: List<FocusRequester>, requestFocus: Boolean, 
             padMove(key, PadMove.Right)?.let { right = keys[it] }
         },
         shape = LocalMetrics.current.corner(14), focusRequester = keys[key], requestFocus = requestFocus,
-        label = if (delete) LocalWords.current["codeDelete"] else null, ring = false,
+        label = if (delete) LocalWords.current["codeDelete"] else null, ring = false, tvRing = false,
     ) { active ->
         val lit = active && metrics.tv
         val ink = if (lit) scheme.background else scheme.onSurface

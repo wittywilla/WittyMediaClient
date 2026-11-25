@@ -682,7 +682,7 @@ fun SduiDetailHeader(view: SduiView) {
                         Pressable({ env.act(button.action) }, Modifier.widthIn(min = 72.dp).heightIn(min = 56.dp), shape = RoundedCornerShape(10.dp), fill = Color.Transparent, label = button.label, ring = false) {
                             Column(Modifier.padding(horizontal = 8.dp, vertical = 6.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(4.dp)) {
                                 Icon(sduiIcon(button.icon), null, tint = scheme.onBackground, modifier = Modifier.size(22.dp))
-                                Text(button.label, color = scheme.onSurfaceVariant, fontSize = env.size("caption"), maxLines = 1)
+                                Text(button.label, color = scheme.onSurfaceVariant, fontSize = env.size("caption"), maxLines = 1, overflow = TextOverflow.Ellipsis)
                             }
                         }
                     }
@@ -776,7 +776,7 @@ private fun SduiChoicePill(words: String, focusKey: String, on: Boolean = false,
                 Modifier.heightIn(min = 36.dp).clip(Radius.FULL).background(if (on) scheme.primary.copy(alpha = 0.14f) else scheme.surfaceVariant).padding(horizontal = 14.dp),
                 verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp),
             ) {
-                Text(words, color = if (on) LocalExtraColours.current.accentText else scheme.onBackground, fontSize = env.size("caption") * 1.08f, fontWeight = FontWeight.Medium, maxLines = 1)
+                Text(words, color = if (on) LocalExtraColours.current.accentText else scheme.onBackground, fontSize = env.size("caption") * 1.08f, fontWeight = FontWeight.Medium, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 Icon(WebIcons.Down, null, tint = scheme.onSurfaceVariant, modifier = Modifier.size(16.dp))
             }
         }
@@ -842,7 +842,9 @@ fun SduiTabs(view: SduiView, side: Dp, withContent: Boolean) {
     Column(Modifier.fillMaxWidth()) {
         Row(
             (if (env.tv) Modifier.remoteRow() else Modifier).fillMaxWidth().horizontalScroll(rememberScrollState()).padding(horizontal = side).semantics { role = Role.Tab },
-            horizontalArrangement = if (env.tv) Arrangement.spacedBy(env.pt(16), Alignment.CenterHorizontally) else Arrangement.spacedBy(if (segments) 0.dp else 20.dp),
+            // Start-aligned on a TV too, as the page's title and sections are there. (A scrolling row wraps its content,
+            // so CenterHorizontally never centred them anyway.)
+            horizontalArrangement = if (env.tv) Arrangement.spacedBy(env.pt(16)) else Arrangement.spacedBy(if (segments) 0.dp else 20.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
             val strip = if (segments && !env.tv) Modifier.clip(RoundedCornerShape(10.dp)).background(scheme.surfaceVariant).padding(2.dp) else Modifier
@@ -851,22 +853,22 @@ fun SduiTabs(view: SduiView, side: Dp, withContent: Boolean) {
                     val on = tab.props.isOn("selected")
                     val words = tab.text["title"].orEmpty()
                     when {
-                        // A TV's are pills, centred above what they show.
+                        // A TV's are pills, at the start above what they show, in line with the page's title.
                         // Chosen as focus rests on it, as Android TV's tabs are: after a moment, so passing over one on the way
                         // to another doesn't ask the server for each page between.
                         env.tv -> Pressable({ if (!on) env.act(tab.node.action) }, Modifier.chooseOnRest(on) { env.act(tab.node.action) }, shape = Radius.FULL, fill = if (on) scheme.primary.copy(alpha = 0.14f) else Color.Transparent, label = words, selected = on, state = if (on) "Selected" else null, focusKey = tab.id) {
-                            Box(Modifier.heightIn(min = env.pt(66)).padding(horizontal = env.pt(32)), contentAlignment = Alignment.Center) { Text(words, color = if (on) accentText else scheme.onSurfaceVariant, fontSize = env.size("body"), fontWeight = FontWeight.Medium, maxLines = 1) }
+                            Box(Modifier.heightIn(min = env.pt(66)).padding(horizontal = env.pt(32)), contentAlignment = Alignment.Center) { Text(words, color = if (on) accentText else scheme.onSurfaceVariant, fontSize = env.size("body"), fontWeight = FontWeight.Medium, maxLines = 1, overflow = TextOverflow.Ellipsis) }
                         }
                         // Views of the same thing: a segmented control.
                         segments -> Pressable({ env.act(tab.node.action) }, Modifier.heightIn(min = 44.dp), shape = RoundedCornerShape(8.dp), fill = if (on) scheme.background else Color.Transparent, label = words, selected = on, state = if (on) "Selected" else null, ring = false) {
-                            Box(Modifier.heightIn(min = 40.dp).padding(horizontal = 18.dp), contentAlignment = Alignment.Center) { Text(words, color = if (on) scheme.onBackground else scheme.onSurfaceVariant, fontSize = env.size("caption") * 1.08f, fontWeight = FontWeight.SemiBold, maxLines = 1) }
+                            Box(Modifier.heightIn(min = 40.dp).padding(horizontal = 18.dp), contentAlignment = Alignment.Center) { Text(words, color = if (on) scheme.onBackground else scheme.onSurfaceVariant, fontSize = env.size("caption") * 1.08f, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis) }
                         }
                         // Sections of a page: words with a line under the chosen one.
                         else -> Pressable({ env.act(tab.node.action) }, Modifier.heightIn(min = 44.dp), shape = RoundedCornerShape(0.dp), fill = Color.Transparent, label = words, selected = on, state = if (on) "Selected" else null, ring = false) {
                             Box(
                                 Modifier.heightIn(min = 44.dp).drawBehind { if (on) drawRect(accentText, Offset(0f, size.height - 2.dp.toPx()), Size(size.width, 2.dp.toPx())) },
                                 contentAlignment = Alignment.Center,
-                            ) { Text(words, color = if (on) scheme.onBackground else scheme.onSurfaceVariant, fontSize = env.size("body"), fontWeight = FontWeight.Bold, maxLines = 1) }
+                            ) { Text(words, color = if (on) scheme.onBackground else scheme.onSurfaceVariant, fontSize = env.size("body"), fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis) }
                         }
                     }
                 }
@@ -937,7 +939,7 @@ fun SduiSeasons(view: SduiView, side: Dp) {
         if (seasons.size > 1) Row(Modifier.remoteRow().fillMaxWidth().horizontalScroll(rememberScrollState()).padding(horizontal = side).padding(bottom = env.space("xs")), horizontalArrangement = Arrangement.spacedBy(env.pt(16))) {
             seasons.forEachIndexed { i, (title, url, on) ->
                 Pressable({ if (!on) env.season(view.id, url) }, shape = Radius.FULL, fill = if (on) scheme.primary.copy(alpha = 0.14f) else Color.Transparent, label = title, selected = on, state = if (on) "Selected" else null, focusKey = view.id + "~season~" + i) {
-                    Box(Modifier.heightIn(min = env.pt(66)).padding(horizontal = env.pt(32)), contentAlignment = Alignment.Center) { Text(title, color = if (on) LocalExtraColours.current.accentText else scheme.onSurfaceVariant, fontSize = env.size("body"), fontWeight = FontWeight.Medium, maxLines = 1) }
+                    Box(Modifier.heightIn(min = env.pt(66)).padding(horizontal = env.pt(32)), contentAlignment = Alignment.Center) { Text(title, color = if (on) LocalExtraColours.current.accentText else scheme.onSurfaceVariant, fontSize = env.size("body"), fontWeight = FontWeight.Medium, maxLines = 1, overflow = TextOverflow.Ellipsis) }
                 }
             }
         }
@@ -1075,7 +1077,7 @@ fun SduiLine(view: SduiView, parent: SduiView) {
                         Text(view.text["title"].orEmpty(), color = scheme.onBackground, fontSize = env.size("body"), maxLines = view.line("title", 1), overflow = TextOverflow.Ellipsis)
                         view.text["subtitle"]?.let { Text(it, color = hint, fontSize = env.size("caption"), maxLines = view.line("subtitle", 1), overflow = TextOverflow.Ellipsis) }
                     }
-                    view.text["trailing"]?.let { Text(it, color = hint, fontSize = env.size("caption"), maxLines = 1) }
+                    view.text["trailing"]?.let { Text(it, color = hint, fontSize = env.size("caption"), maxLines = 1, overflow = TextOverflow.Ellipsis) }
                     if (press) Icon(WebIcons.Right, null, tint = hint, modifier = Modifier.size(env.pt(if (env.tv) 32 else 16)))
                 }
             }
@@ -1112,7 +1114,7 @@ fun SduiBanner(view: SduiView, side: Dp) {
                     view.text["title"]?.let { Text(it, color = scheme.onBackground, fontSize = env.size("title"), fontWeight = FontWeight.SemiBold, maxLines = view.line("title", 2), overflow = TextOverflow.Ellipsis) }
                     view.text["text"]?.let { Text(it, color = scheme.onSurfaceVariant, fontSize = env.size("caption"), maxLines = view.line("text", 2), overflow = TextOverflow.Ellipsis) }
                 }
-                view.text["button"]?.let { Text(it, color = extra.accentText, fontSize = env.size("caption"), fontWeight = FontWeight.SemiBold, maxLines = 1) }
+                view.text["button"]?.let { Text(it, color = extra.accentText, fontSize = env.size("caption"), fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis) }
             }
         } else {
             val tall = if (env.tv) env.pt(300) else if (env.tablet) wide * 9f / 21f else wide * 9f / 16f
@@ -1129,7 +1131,7 @@ fun SduiBanner(view: SduiView, side: Dp) {
                     view.text["text"]?.let { Text(it, color = scheme.onSurfaceVariant, fontSize = env.size("body"), maxLines = view.line("text", 2), overflow = TextOverflow.Ellipsis) }
                     view.text["button"]?.let {
                         Box(Modifier.padding(top = env.space("xs")).clip(Radius.FULL).background(scheme.primary).heightIn(min = env.pt(if (env.tv) 56 else 36)).padding(horizontal = env.pt(if (env.tv) 28 else 16)), contentAlignment = Alignment.Center) {
-                            Text(it, color = scheme.onPrimary, fontSize = env.size(if (env.tv) "body" else "caption") * (if (env.tv) 1f else 1.08f), fontWeight = FontWeight.SemiBold, maxLines = 1)
+                            Text(it, color = scheme.onPrimary, fontSize = env.size(if (env.tv) "body" else "caption") * (if (env.tv) 1f else 1.08f), fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
                         }
                     }
                 }
@@ -1421,7 +1423,7 @@ fun SduiCredits(view: SduiView, side: Dp) {
     fun Chip(words: String, spoken: String, key: String, onClick: () -> Unit) = Pressable(
         onClick, shape = Radius.FULL, fill = scheme.surface, label = spoken, focusKey = key.takeIf { env.tv }, ring = env.tv,
     ) {
-        Text(words, color = scheme.onBackground, fontSize = env.size("body"), maxLines = 1, modifier = Modifier.padding(horizontal = if (env.tv) env.pt(24) else 12.dp, vertical = if (env.tv) env.pt(12) else 8.dp))
+        Text(words, color = scheme.onBackground, fontSize = env.size("body"), maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(horizontal = if (env.tv) env.pt(24) else 12.dp, vertical = if (env.tv) env.pt(12) else 8.dp))
     }
     @Composable
     fun Chips(label: String, content: @Composable () -> Unit) {

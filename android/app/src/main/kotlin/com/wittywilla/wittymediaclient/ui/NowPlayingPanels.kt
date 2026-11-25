@@ -320,7 +320,7 @@ internal fun LyricsPanel(nav: Nav, words: LyricsWords, trackId: Long, title: Str
                         if (lyrics.creditUrl.isNotEmpty()) withLink(LinkAnnotation.Url(lyrics.creditUrl, TextLinkStyles(SpanStyle(textDecoration = TextDecoration.Underline)))) { append(lyrics.sourceName) }
                         else append(lyrics.sourceName)
                     }
-                    Text(credit, color = Np.fg2, fontSize = 12.sp, maxLines = 1)
+                    Text(credit, color = Np.fg2, fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 }
             }
             if (words.loading) NpHint("Looking for the words…")
@@ -491,7 +491,7 @@ private fun FixLyrics(nav: Nav, trackId: Long, title: String, artist: String, ru
                 val on = tab == which
                 Pressable({ tab = which }, Modifier.heightIn(min = 40.dp), shape = RoundedCornerShape(50), fill = if (on) Np.fg else Np.chip, label = words, selected = on, ring = false) {
                     Box(Modifier.heightIn(min = 40.dp).padding(horizontal = 14.dp), contentAlignment = Alignment.Center) {
-                        Text(words, color = if (on) Color.Black else Np.fg, fontSize = 13.sp, fontWeight = FontWeight.SemiBold, maxLines = 1)
+                        Text(words, color = if (on) Color.Black else Np.fg, fontSize = 13.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
                     }
                 }
             }
@@ -768,7 +768,7 @@ internal fun <T> NpSelect(label: String, choices: List<Pair<T, String>>, chosen:
                     Modifier.heightIn(min = 44.dp).border(1.dp, Np.control, RoundedCornerShape(10.dp)).padding(horizontal = 10.dp),
                     verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp),
                 ) {
-                    Text(shown, color = Np.fg, fontSize = 13.sp, maxLines = 1)
+                    Text(shown, color = Np.fg, fontSize = 13.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
                     androidx.compose.foundation.Canvas(Modifier.size(10.dp, 5.dp)) {
                         drawPath(androidx.compose.ui.graphics.Path().apply { moveTo(0f, 0f); lineTo(size.width, 0f); lineTo(size.width / 2, size.height); close() }, Np.fg)
                     }

@@ -57,6 +57,7 @@ import androidx.compose.ui.graphics.BlendMode
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.IntOffset
+import androidx.compose.ui.unit.dp
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.layout.positionInParent
 import androidx.compose.ui.layout.onGloballyPositioned
@@ -350,10 +351,10 @@ private fun TvTabPill(nav: Nav, tab: TvTab, requester: FocusRequester, modifier:
                 // Material Symbols leave more room round their shapes than SF Symbols, so the box is larger for the
                 // same size of icon as Apple TV's.
                 Icon(tab.icon, contentDescription = null, tint = shown, modifier = Modifier.size(metrics.u(BAR_ICON)))
-                Text(tab.title, color = shown, style = MaterialTheme.typography.label, maxLines = 1)
+                Text(tab.title, color = shown, style = MaterialTheme.typography.label, maxLines = 1, overflow = TextOverflow.Ellipsis)
             } else {
                 ProfileFace(person.ifEmpty { "?" }, nav.me?.avatar, metrics.u(28))
-                Text(person.ifEmpty { tab.title }, color = shown, style = MaterialTheme.typography.label, maxLines = 1)
+                Text(person.ifEmpty { tab.title }, color = shown, style = MaterialTheme.typography.label, maxLines = 1, overflow = TextOverflow.Ellipsis)
             }
         }
     }
@@ -388,7 +389,7 @@ private fun TvEmpty(title: String, detail: String) {
     val metrics = LocalMetrics.current
     Box(Modifier.fillMaxSize().padding(metrics.u(32)), contentAlignment = Alignment.Center) {
         Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(metrics.u(8))) {
-            Text(title, color = MaterialTheme.colorScheme.onBackground, style = MaterialTheme.typography.section, modifier = Modifier.semantics { heading() })
+            Text(title, color = MaterialTheme.colorScheme.onBackground, style = MaterialTheme.typography.section, textAlign = TextAlign.Center, modifier = Modifier.semantics { heading() })
             Text(detail, color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.secondary, textAlign = TextAlign.Center)
         }
     }
@@ -507,7 +508,11 @@ fun GamesTabScreen(nav: Nav, s: Map<String, String>) {
             val metrics = LocalMetrics.current
             LazyColumn(
                 Modifier.fillMaxSize(),
-                contentPadding = PaddingValues(top = metrics.u(24), bottom = metrics.u(24)),
+                // A phone's first shelf starts below the shell's bar and the last clears the floating bar; a TV's bar is above.
+                contentPadding = PaddingValues(
+                    top = if (metrics.tv) metrics.u(24) else LocalTopRoom.current + 8.dp,
+                    bottom = if (metrics.tv) metrics.u(24) else LocalBottomRoom.current + 8.dp,
+                ),
                 verticalArrangement = Arrangement.spacedBy(metrics.u(20)),
             ) {
                 items(games, key = { it.id }) { GamesShelf(nav, s, it) }

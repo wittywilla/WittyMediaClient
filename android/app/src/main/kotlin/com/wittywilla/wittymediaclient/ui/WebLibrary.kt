@@ -108,7 +108,7 @@ fun Chip(words: String, chosen: Boolean, count: Int? = null, onClick: () -> Unit
             verticalAlignment = Alignment.CenterVertically,
         ) {
             val ink = if (chosen) scheme.background else scheme.onSurfaceVariant
-            Text(words, color = ink, fontSize = 13.sp, fontWeight = FontWeight.Medium, maxLines = 1)
+            Text(words, color = ink, fontSize = 13.sp, fontWeight = FontWeight.Medium, maxLines = 1, overflow = TextOverflow.Ellipsis)
             if (count != null) Text("$count", color = ink.copy(alpha = 0.7f), fontSize = 12.sp, modifier = Modifier.padding(start = 8.dp))
         }
     }

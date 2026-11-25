@@ -274,7 +274,7 @@ private fun TabItem(style: String, label: String, on: Boolean, at: Int, onClick:
     ) {
         val bevel = if (style == "bevelBar") Modifier.border(1.dp, Color(0xFF8A93A0), shape) else Modifier
         Text(
-            if (style == "teleKeys") label.uppercase() else label, color = ink, fontSize = if (style == "crossbar" && on) 17.sp else 15.sp, fontWeight = FontWeight.SemiBold, maxLines = 1,
+            if (style == "teleKeys") label.uppercase() else label, color = ink, fontSize = if (style == "crossbar" && on) 17.sp else 15.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis,
             modifier = bevel.padding(horizontal = 14.dp, vertical = 8.dp),
         )
     }

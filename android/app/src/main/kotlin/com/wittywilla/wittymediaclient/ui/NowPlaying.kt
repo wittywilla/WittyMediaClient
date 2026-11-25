@@ -139,7 +139,7 @@ fun MiniPlayer(nav: Nav, modifier: Modifier = Modifier) {
                         if (listening.problem.isNotEmpty()) {
                             Text(listening.problem, color = scheme.onSurfaceVariant, style = MaterialTheme.typography.bodySmall, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite })
                         } else if (listening.isLoading) {
-                            Text("Loading…", color = scheme.onSurfaceVariant, style = MaterialTheme.typography.bodySmall, maxLines = 1, modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite })
+                            Text("Loading…", color = scheme.onSurfaceVariant, style = MaterialTheme.typography.bodySmall, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite })
                         } else if (!about.artist.isNullOrEmpty()) {
                             Text(about.artist.toString(), color = scheme.onSurfaceVariant, style = MaterialTheme.typography.bodySmall, maxLines = 1, overflow = TextOverflow.Ellipsis)
                         }
@@ -309,7 +309,8 @@ fun NowPlayingScreen(nav: Nav) {
                         Box(Modifier.weight(1f)) { Words(center = false) }
                     }
                     Controls(listening, playOnFor(nav))
-                    if (music && metrics.tv) Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.Center) {
+                    // At the start, under the start-aligned cover, words and controls.
+                    if (music && metrics.tv) Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.Start) {
                         WittyButton("Karaoke", { karaoke = true }, kind = ButtonKind.Secondary, pill = true, focusKey = "np-karaoke")
                     }
                 }

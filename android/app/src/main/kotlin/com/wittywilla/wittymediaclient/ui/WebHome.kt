@@ -316,9 +316,9 @@ private fun HeroFactsRow(facts: List<HeroFact>, modifier: Modifier) {
         facts.forEachIndexed { at, fact ->
             Box(Modifier.heightIn(min = 22.dp), contentAlignment = Alignment.CenterStart) {
                 when (fact) {
-                    is HeroFact.Words -> Text(fact.words, color = scheme.onSurfaceVariant, fontSize = 14.sp, maxLines = 1)
+                    is HeroFact.Words -> Text(fact.words, color = scheme.onSurfaceVariant, fontSize = 14.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
                     is HeroFact.Rating -> Box(Modifier.heightIn(min = 20.dp).border(1.dp, scheme.onBackground.copy(alpha = 0.2f), RoundedCornerShape(4.dp)).padding(horizontal = 8.dp), contentAlignment = Alignment.Center) {
-                        Text(fact.rating, color = scheme.onSurfaceVariant, fontSize = 11.sp, fontWeight = FontWeight.SemiBold, letterSpacing = 0.02.em, maxLines = 1)
+                        Text(fact.rating, color = scheme.onSurfaceVariant, fontSize = 11.sp, fontWeight = FontWeight.SemiBold, letterSpacing = 0.02.em, maxLines = 1, overflow = TextOverflow.Ellipsis)
                     }
                     is HeroFact.Score -> Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(3.dp)) {
                         Icon(WebIcons.Star, null, tint = extra.warn, modifier = Modifier.size(14.dp))
