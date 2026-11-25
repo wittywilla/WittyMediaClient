@@ -262,11 +262,11 @@ fun ChannelScreen(nav: Nav, start: String) {
                         KeyEvent.KEYCODE_DPAD_LEFT -> { mini = true; true }
                         KeyEvent.KEYCODE_DPAD_RIGHT, KeyEvent.KEYCODE_MENU, KeyEvent.KEYCODE_BUTTON_X, KeyEvent.KEYCODE_BUTTON_START -> { dock = true; true }
                         KeyEvent.KEYCODE_MEDIA_REWIND -> { LiveTv.seek(-10.0); showBanner(); true }
-                        // Live TV never skips ahead (#688): Fast forward only shows where it is, and Next skips a whole
-                        // break on a programme started over. Back to live, in the Dock, is the way forward.
-                        KeyEvent.KEYCODE_MEDIA_FAST_FORWARD -> { showBanner(); true }
+                        // Fast forward goes on 30 seconds, never past live (LiveTv.seek); Next skips a whole break on a
+                        // programme started over, otherwise it goes on 30 seconds too.
+                        KeyEvent.KEYCODE_MEDIA_FAST_FORWARD -> { LiveTv.seek(30.0); showBanner(); true }
                         KeyEvent.KEYCODE_MEDIA_NEXT, KeyEvent.KEYCODE_MEDIA_SKIP_FORWARD -> {
-                            if (LiveTv.inBreak != null) LiveTv.skipBreak()
+                            if (LiveTv.inBreak != null) LiveTv.skipBreak() else LiveTv.seek(30.0)
                             showBanner()
                             true
                         }
