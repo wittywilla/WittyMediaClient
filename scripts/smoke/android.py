@@ -495,6 +495,43 @@ def wittytv():
     wait('^Watch full screen$', 30, 'the guide again after Back')
 
 
+def rotation():
+    """A phone turns to landscape for a film and back to portrait when the player closes; the player's Rotate button
+    turns it either way, and none of it starts the film again (WittyMediaClient#160)."""
+    def turned():
+        m = re.search(r'mRotation=ROTATION_(\d+)', sh('dumpsys window displays', check=False))
+        return int(m.group(1)) if m else -1
+
+    def position():
+        m = re.search(r'position=(\d+)', sh('dumpsys media_session', check=False))
+        return int(m.group(1)) if m else -1
+    sh('settings put system accelerometer_rotation 0', check=False)
+    sh('settings put system user_rotation 0', check=False)
+    launch()
+    play_film()
+    until('the film playing', playing, 60)
+    until('landscape for the film', lambda: turned() in (90, 270), 20)
+    start = position()
+
+    def controls():
+        # A short drag shows the player's controls without the tap that would pause the film.
+        sh('input swipe 700 700 780 700 150', check=False)
+        time.sleep(0.5)
+    controls()
+    tap('^Rotate to portrait$', 20)
+    until('portrait when asked', lambda: turned() == 0, 20)
+    controls()
+    tap('^Rotate to landscape$', 20)
+    until('landscape again when asked', lambda: turned() in (90, 270), 20)
+    time.sleep(3)
+    later = position()
+    log('position before and after turning (ms):', start, later)
+    if start >= 0 and later >= 0 and later < start:
+        raise RuntimeError(f'the film went back from {start} to {later} ms while turning')
+    sh('input keyevent KEYCODE_BACK', check=False)
+    until('portrait after the player closes', lambda: turned() == 0, 20)
+
+
 def away():
     # The device takes itself onto the server's list by itself while at home; wait for that.
     until("this device on the server's peer-to-peer list", lambda: api('GET', '/api/p2p/devices'), 90)
@@ -581,6 +618,7 @@ step('settings: Settings opens', settings)
 step('film: the film plays', film)
 if not TV:
     step('wittytv: Live TV on a phone, round the app bars, and full screen over them', wittytv)
+    step('rotation: a film turns to landscape, Rotate turns it, closing turns back to portrait', rotation)
 step('away: from away, peer to peer, still signed in', away)
 step('game: WittyPlay from away shows its frame', game)
 if not TV:

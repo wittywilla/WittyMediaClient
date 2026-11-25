@@ -16,6 +16,12 @@ What changed in WittyMediaClient, newest first. What changed before it had a rep
 - **Clear of the navigation bar**, at the foot and, on its side, the buttons on the right.
 - **Turning the phone no longer reloads the page** and stops the channel, full screen included: the page already on
   screen stays until the one for the new size comes.
+- **Live TV runs to the edges on its side.** The camera's cut-out isn't kept clear any more: it left a 39 dp strip of
+  nothing beside the page for a hole a few dp across.
+- **A phone turns to landscape for a video** in the big player (films, episodes, Live TV full screen), and back to
+  portrait at its end or when the player closes, even with the rotation lock on. A video taller than wide stays
+  upright. A new **Rotate** button in the player turns it to portrait (or back) for that video. Tablets and TVs are
+  never turned. On iPhone too (requestGeometryUpdate; built by the macOS CI only). Turning never restarts the video.
 - **A smoke test on the phone emulator** checks the guide starts under the bar, stops above the navigation bar, shows
   every programme button at full size, and that Watch full screen covers the screen and Back returns to the guide.
 

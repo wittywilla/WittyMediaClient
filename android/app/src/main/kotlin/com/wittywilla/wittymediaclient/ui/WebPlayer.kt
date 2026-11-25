@@ -43,6 +43,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.safeDrawingPadding
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -86,10 +87,8 @@ import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.WindowInsetsSides
-import androidx.compose.foundation.layout.displayCutout
 import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.only
-import androidx.compose.foundation.layout.union
 import androidx.compose.foundation.layout.windowInsetsPadding
 
 private const val CANT_OPEN = "This page couldn't open. Check the server is on, then try again."
@@ -438,10 +437,11 @@ fun ServerPageScreen(
             }
         } else if (inShell && !fills) {
             // Inside the app's shell: under its bar or tabs (the room the shell keeps, pageTop), clear of the system's
-            // navigation bar and a camera's cut-out at the foot and the sides, and the page keeps room at its foot for
-            // the floating bar (web/src/shell.css, data-app). The web view ran under the gesture bar, and on its side
-            // under the buttons on the right (#160).
-            Box(Modifier.fillMaxSize().pageTop().windowInsetsPadding(WindowInsets.navigationBars.union(WindowInsets.displayCutout).only(WindowInsetsSides.Horizontal + WindowInsetsSides.Bottom))) {
+            // navigation bar at the foot and the sides, and the page keeps room at its foot for the floating bar
+            // (web/src/shell.css, data-app). The web view ran under the gesture bar, and on its side under the buttons
+            // on the right (#160). A camera's cut-out is not kept clear: a phone on its side left a 39 dp strip of
+            // nothing beside the page for a hole a few dp across, which the page's own edge clears.
+            Box(Modifier.fillMaxSize().pageTop().windowInsetsPadding(WindowInsets.navigationBars.only(WindowInsetsSides.Horizontal + WindowInsetsSides.Bottom))) {
                 AndroidView(factory = { web.also { (it.parent as? ViewGroup)?.removeView(it) } }, modifier = Modifier.fillMaxSize())
                 if (!showing) Loading()
             }
@@ -480,11 +480,24 @@ fun ServerPageScreen(
             // it: the web view moves to the layer drawn over the shell's top strip and floating bar, which covered the
             // player's time and buttons (#160), and comes back under them when the page stops filling it.
             val over = LocalOverShell.current!!
+            // A phone turns to landscape for the channel, as for any video, with a Rotate button over the page's
+            // top corner for portrait instead (WatchOrientation.kt, #160).
+            val phone = isPhoneForVideo(nav.app.isTv)
+            var portraitChosen by remember { mutableStateOf(false) }
+            WatchOrientation(on = phone, portrait = portraitChosen)
             DisposableEffect(web) {
                 val sheet: @Composable () -> Unit = {
                     Box(Modifier.fillMaxSize().background(androidx.compose.ui.graphics.Color.Black)) {
                         AndroidView(factory = { web.also { (it.parent as? ViewGroup)?.removeView(it); it.requestFocus() } }, modifier = Modifier.fillMaxSize().imePadding())
                         if (!showing) Loading()
+                        if (phone) {
+                            val label = if (portraitChosen) "Rotate to landscape" else "Rotate to portrait"
+                            androidx.compose.material3.IconButton(
+                                onClick = { portraitChosen = !portraitChosen },
+                                modifier = Modifier.align(androidx.compose.ui.Alignment.TopEnd).padding(8.dp).size(48.dp)
+                                    .background(androidx.compose.ui.graphics.Color.Black.copy(alpha = 0.45f), androidx.compose.foundation.shape.CircleShape),
+                            ) { androidx.compose.material3.Icon(WebIcons.Rotate, contentDescription = label, tint = androidx.compose.ui.graphics.Color.White) }
+                        }
                     }
                 }
                 over.sheets.add(sheet)
