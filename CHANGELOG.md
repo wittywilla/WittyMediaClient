@@ -3,6 +3,12 @@
 What changed in WittyMediaClient, newest first. What changed before it had a repository of its own is in the
 [WittyMediaServer changelog](https://github.com/wittywilla/WittyMediaServer/blob/master/CHANGELOG.md).
 
+## Unreleased
+
+- **Live TV: +30 is back on the TVs, up to live.** At the owner's request (wittywilla/WittyMediaServer#688 had removed it):
+  Android TV's Fast forward, and Next outside an ad break, go on 30 seconds again; Apple TV's Dock has On 30, greyed out at
+  the live edge. Neither goes past live. The Android phone uses the server's web player, changed there.
+
 ## 0.6.3
 
 Released 2026-11-25.

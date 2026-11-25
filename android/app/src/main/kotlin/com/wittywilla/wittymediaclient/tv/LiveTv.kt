@@ -251,9 +251,9 @@ object LiveTv {
     private val canShift: Boolean get() = TimeShiftRules.isLibrary(key) && (shiftFrom != null || info?.startOver == true)
 
     // Back or on within what the server keeps of the channel; on a library channel, further back by starting over.
-    // Back only: live TV never skips ahead (#688), whatever asks (a key, a phone steering this TV).
+    // Back, or on no further than live: the live window ends at the live edge, and a start-over stream's
+    // plan goes back to the shared channel there.
     fun seek(by: Double) {
-        if (by > 0) return
         val p = exo ?: return
         val length = p.duration
         if (canShift) {

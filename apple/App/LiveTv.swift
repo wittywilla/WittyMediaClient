@@ -244,9 +244,9 @@ final class LiveTv: ObservableObject {
     }
 
     /// Back within what the server keeps of the channel; on a library channel, further back by starting over.
-    /// Never on: live TV doesn't skip ahead (#688), whatever asks (a key, a phone steering this TV).
+    /// On no further than live: the seekable range ends at the live edge, and a start-over stream's plan goes back
+    /// to the shared channel there.
     func seek(by seconds: Double) {
-        guard seconds <= 0 else { return }
         if canShift, let s = schedNow() {
             let low = player.currentItem?.seekableTimeRanges.last.map { CMTimeGetSeconds($0.timeRangeValue.start) } ?? 0
             if shiftFrom != nil || CMTimeGetSeconds(player.currentTime()) + seconds < low, goTo(s + seconds) { return }
