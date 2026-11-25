@@ -307,6 +307,24 @@ fun VideoPlayerScreen(nav: Nav, route: Route.Player) {
         fullScreen(view, full)
         onDispose { if (full) fullScreen(view, false) }
     }
+    // A phone turns to landscape for the video, and back to portrait at its end or when the player closes; Rotate asks
+    // for portrait for this video instead (WatchOrientation.kt, #160). Not for a video taller than wide, which waits
+    // for its size before anything turns, nor in the mini player.
+    val phone = isPhoneForVideo(nav.app.isTv)
+    var portraitChosen by remember(route) { mutableStateOf(false) }
+    var shape by remember(session) { mutableStateOf(session.player.videoSize.let { it.width to it.height }) }
+    var ended by remember(session) { mutableStateOf(session.player.playbackState == androidx.media3.common.Player.STATE_ENDED) }
+    DisposableEffect(session) {
+        val listener = object : androidx.media3.common.Player.Listener {
+            override fun onVideoSizeChanged(videoSize: androidx.media3.common.VideoSize) { shape = videoSize.width to videoSize.height }
+            override fun onPlaybackStateChanged(playbackState: Int) { ended = playbackState == androidx.media3.common.Player.STATE_ENDED }
+        }
+        session.player.addListener(listener)
+        onDispose { session.player.removeListener(listener) }
+    }
+    val tall = shape.second > shape.first && shape.first > 0
+    val turns = phone && shape.first > 0 && !tall && !ended && !session.mini
+    WatchOrientation(on = turns, portrait = portraitChosen)
     var open by remember { mutableStateOf(Open.None) }
     // The controls: shown on any touch, and by playing or pausing; hidden after the chosen time while playing.
     var shown by remember { mutableStateOf(true) }
@@ -403,6 +421,8 @@ fun VideoPlayerScreen(nav: Nav, route: Route.Player) {
                         padding = if (fit == Fit.Wide) 12.dp else 9.dp, size = if (fit == Fit.Wide) 13 else 12,
                     )
                 }
+                // Landscape or portrait for this video, even with the phone's rotation lock on (#160).
+                if (turns) PlayerIcon(WebIcons.Rotate, if (portraitChosen) "Rotate to landscape" else "Rotate to portrait", 48.dp, 24.dp, { portraitChosen = !portraitChosen })
                 PlayerIcon(WebIcons.Mini, "Mini player", 44.dp, 24.dp, nav::minimizeVideo)
             }
         }
@@ -536,7 +556,7 @@ private fun PanelHead(words: String) {
 
 @Composable
 private fun SpeedList(session: VideoSession, modifier: Modifier, close: () -> Unit) {
-    val choices = SPEEDS.filter { it <= session.maxSpeed }
+    val choices = SPEEDS.filter { it <= session.maxSpeed && it <= session.speedCap }
     Column(modifier.widthIn(min = 220.dp).heightIn(max = 420.dp).playerPanel().verticalScroll(rememberScrollState()).padding(8.dp)) {
         PanelHead("Playback speed")
         choices.forEach { s ->

@@ -26,6 +26,18 @@ final class PaceRulesTests: XCTestCase {
         XCTAssertTrue(PaceRules.tooSlow(speed: 0.666, rate: 2).contains("0.67×"))
     }
 
+    func testLowerOnceThenSlower() {
+        XCTAssertEqual(PaceRules.step(speed: 1.4, rate: 4, height: 1080, viewerChose: false), .lower)
+        XCTAssertEqual(PaceRules.step(speed: 1.4, rate: 4, height: 720, viewerChose: false), .slower)
+        XCTAssertEqual(PaceRules.step(speed: 1.4, rate: 4, height: 1080, viewerChose: true), .slower)
+        XCTAssertEqual(PaceRules.step(speed: 0.8, rate: 1, height: 720, viewerChose: false), .lower)
+        XCTAssertEqual(PaceRules.step(speed: 1.05, rate: 1.25, height: 720, viewerChose: false), .slower)
+        XCTAssertEqual(PaceRules.step(speed: 0.5, rate: 1, height: 360, viewerChose: false), .tell)
+        XCTAssertEqual(PaceRules.sustainableRate(speed: 1.4, rate: 4), 1.25)
+        XCTAssertEqual(PaceRules.sustainableRate(speed: 2.3, rate: 4), 2)
+        XCTAssertEqual(PaceRules.slower(rate: 4, to: 1.25), "This server can’t keep up at 4× for this video, so it plays at 1.25×.")
+    }
+
     func testPaceDecodes() throws {
         let json = #"{"encoder":"libx264","pace":{"speed":0.8,"rate":2,"leadSec":4,"keepingUp":false,"fastest":true}}"#
         struct Work: Decodable { var pace: StreamPace? }

@@ -19,8 +19,11 @@ class PlaybackClock {
     private var settled = false
     private var everSettled = false
 
-    fun switching() {
+    // startsAt: where the new stream opens in the film. Until its first frame that is where the viewer is, so a
+    // change asked for before then (a size down while a slow server makes the first part) keeps the place.
+    fun switching(startsAt: Double? = null) {
         settled = false
+        if (startsAt != null && startsAt.isFinite() && startsAt > 0) filmSec = startsAt
     }
 
     fun ready() {
@@ -191,3 +194,27 @@ fun lowerHeight(height: Int): Int {
 // What the viewer is told when the player asks for a smaller picture because the server can't keep up.
 fun stepDownWords(speed: Double, rate: Double, height: Int): String =
     "This server converts this video at ${times(speed)}, slower than the ${times(rate)} it plays at, so it goes on at ${height}p."
+
+// What the player does about a conversion that can't keep up (the website's pace.ts, tooSlow): a smaller
+// picture first; faster than 1× only once, to 720p, and then a lower speed the server keeps up with, rather
+// than a picture that stops and starts; at 1× with nothing smaller to ask for, it only says so.
+enum class PaceStep { Lower, Slower, Tell }
+
+fun paceStep(speed: Double, rate: Double, height: Int, viewerChose: Boolean): PaceStep {
+    val fast = rate > 1.0
+    if (viewerChose || lowerHeight(height) == 0 || (fast && height <= 720)) {
+        return if (fast && sustainableRate(speed, rate) < rate) PaceStep.Slower else PaceStep.Tell
+    }
+    return PaceStep.Lower
+}
+
+// The playback speeds a viewer can pick (as the website's speed menu).
+private val SPEED_STEPS = listOf(0.5, 0.75, 1.0, 1.25, 1.5, 1.75, 2.0, 2.5, 3.0, 3.5, 4.0, 5.0, 6.0, 8.0, 10.0, 12.0, 16.0)
+
+// The fastest speed a conversion making `speed` seconds of film a second keeps up with, a tenth to spare, never
+// below 1×: what the player slows to, and the top of its speed menu for that video.
+fun sustainableRate(speed: Double, rate: Double): Double =
+    SPEED_STEPS.filter { it >= 1.0 && it <= rate && it * 1.1 <= speed }.maxOrNull() ?: 1.0
+
+// What the viewer is told when the player slows down for the server.
+fun slowerWords(rate: Double, to: Double): String = "This server can’t keep up at ${times(rate)} for this video, so it plays at ${times(to)}."

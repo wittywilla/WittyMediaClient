@@ -3,6 +3,36 @@
 What changed in WittyMediaClient, newest first. What changed before it had a repository of its own is in the
 [WittyMediaServer changelog](https://github.com/wittywilla/WittyMediaServer/blob/master/CHANGELOG.md).
 
+## Unreleased
+
+**WittyTV on a phone (#160)**
+
+- **No empty band under the bar.** Live TV's guide, the server's page in the app's web view, got the shell's room at
+  its top twice, which left about 120 dp empty (more since 0.6.3 counted the top tabs) and about 150 for the whole
+  page on its side.
+- **Watch full screen has the whole screen.** It was drawn under the app's top strip and floating bar, which hid the
+  player's time, settings and full-screen buttons. A page in the shell that fills the screen now goes over them, and
+  Back from it comes back to the guide instead of closing the app.
+- **Clear of the navigation bar**, at the foot and, on its side, the buttons on the right.
+- **Turning the phone no longer reloads the page** and stops the channel, full screen included: the page already on
+  screen stays until the one for the new size comes.
+- **Live TV runs to the edges on its side.** The camera's cut-out isn't kept clear any more: it left a 39 dp strip of
+  nothing beside the page for a hole a few dp across.
+- **A phone turns to landscape for a video** in the big player (films, episodes, Live TV full screen), and back to
+  portrait at its end or when the player closes, even with the rotation lock on. A video taller than wide stays
+  upright. A new **Rotate** button in the player turns it to portrait (or back) for that video. Tablets and TVs are
+  never turned. On iPhone too (requestGeometryUpdate; built by the macOS CI only). Turning never restarts the video.
+- **A smoke test on the phone emulator** checks the guide starts under the bar, stops above the navigation bar, shows
+  every programme button at full size, and that Watch full screen covers the screen and Back returns to the guide.
+
+- **Live TV: +30 is back on the TVs, up to live.** At the owner's request (wittywilla/WittyMediaServer#688 had removed it):
+  Android TV's Fast forward, and Next outside an ad break, go on 30 seconds again; Apple TV's Dock has On 30, greyed out at
+  the live edge. Neither goes past live. The Android phone uses the server's web player, changed there.
+
+- **Android: the music visualizer on every server.** Bars, Waves and Drift are the app's own, drawn from the sound it
+  plays, but Now Playing hid them, and the wide bar's Visualizer button, on a server without the WittyVisualizer module
+  (a new install, a NAS in Docker). They now show whether or not the server has it.
+
 ## 0.6.3
 
 Released 2026-11-25.
