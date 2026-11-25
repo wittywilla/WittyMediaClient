@@ -83,6 +83,9 @@ struct ChannelDock: View {
                 }
                 Button { live.seek(by: -10) } label: { Label("Back 10", systemImage: "gobackward.10") }
                     .buttonStyle(TvButtonStyle(dress: dress, onBar: true)).focused($focused, equals: "back")
+                // On 30, up to live: off at the live edge.
+                Button { live.seek(by: 30) } label: { Label("On 30", systemImage: "goforward.30") }
+                    .buttonStyle(TvButtonStyle(dress: dress, onBar: true)).disabled(live.fromStart == nil && live.behind < 1)
                 if audio.count > 1 {
                     Button { choosing = ("Audio", .audible, audio) } label: { Label("Audio", systemImage: "speaker.wave.2") }
                         .buttonStyle(TvButtonStyle(dress: dress, onBar: true)).focused($focused, equals: "audio")
