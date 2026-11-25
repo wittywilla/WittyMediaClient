@@ -525,15 +525,19 @@ def rotation():
     time.sleep(1)
     start = position()
 
-    def controls():
-        # A short drag shows the player's controls without the tap that would pause the film.
-        sh('input swipe 700 700 780 700 150', check=False)
-        time.sleep(0.5)
+    def paused():
+        m = re.search(r'state=(\w+)\(', sh('dumpsys media_session', check=False))
+        return bool(m) and m.group(1) == 'PAUSED'
 
     def press(label):
-        # The controls fade, and a dump can come back empty on a busy emulator: shown again and looked for again.
+        # Paused, the player keeps its controls on screen. Nothing touches the picture to show them: a touch there,
+        # even a drag, plays or pauses, and once playing the controls fade while the screen is read, so a tap meant
+        # for Rotate lands on the picture and only pauses it again. A dump can also come back empty on a busy
+        # emulator: looked for again.
         for _ in range(8):
-            controls()
+            if not paused():
+                sh('input keyevent KEYCODE_MEDIA_PAUSE', check=False)
+                until('the film paused', paused, 10)
             x = find('^' + label + '$')
             if x:
                 b = x['b']
